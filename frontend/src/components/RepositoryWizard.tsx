@@ -51,6 +51,8 @@ interface RepositoryWizardProps {
   mode: 'create' | 'edit' | 'import'
   repository?: Repository
   onSubmit: (data: RepositoryData, keyfile?: File | null) => void | Promise<void>
+  canUseManagedAgents?: boolean
+  canUseRclone?: boolean
 }
 
 interface SSHConnection {
@@ -194,7 +196,15 @@ function isCachedRcloneRepositoryRecord(repository?: Repository): boolean {
   )
 }
 
-const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: RepositoryWizardProps) => {
+const RepositoryWizard = ({
+  open,
+  onClose,
+  mode,
+  repository,
+  onSubmit,
+  canUseManagedAgents = true,
+  canUseRclone = true,
+}: RepositoryWizardProps) => {
   const { track, trackRepository, EventCategory, EventAction } = useAnalytics()
   const { t } = useTranslation()
   const [activeStep, setActiveStep] = useState(0)
@@ -310,12 +320,16 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
   }, [steps.length])
 
   // Load selectable remote execution targets.
-  const loadWizardData = async () => {
+  const loadWizardData = React.useCallback(async () => {
     const [connectionsRes, agentsRes, statusRes, remotesRes] = await Promise.allSettled([
       sshKeysAPI.getSSHConnections(),
-      managedAgentsAPI.listAgents(),
-      rcloneAPI.getStatus(),
-      rcloneAPI.listRemotes(),
+      canUseManagedAgents ? managedAgentsAPI.listAgents() : Promise.resolve({ data: [] }),
+      canUseRclone
+        ? rcloneAPI.getStatus()
+        : Promise.resolve({
+            data: { available: false, error: t('wizard.location.rcloneRequiresPro') },
+          }),
+      canUseRclone ? rcloneAPI.listRemotes() : Promise.resolve({ data: { remotes: [] } }),
     ])
 
     if (connectionsRes.status === 'fulfilled') {
@@ -348,7 +362,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       console.error('Failed to load rclone remotes:', remotesRes.reason)
       setRcloneRemotes([])
     }
-  }
+  }, [canUseManagedAgents, canUseRclone, t])
 
   // Populate form data for edit mode
   const populateEditData = React.useCallback(() => {
@@ -445,6 +459,12 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
   const handleStateChange = (updates: Partial<WizardState>) => {
     setWizardState((prev) => {
       const nextUpdates = { ...updates }
+
+      if (nextUpdates.repositoryLocation === 'rclone' && !canUseRclone) return prev
+      if (nextUpdates.executionTarget === 'agent' && !canUseManagedAgents) return prev
+      if (nextUpdates.cloudMirrorEnabled && !canUseRclone) {
+        nextUpdates.cloudMirrorEnabled = false
+      }
 
       // When borg version changes, reset encryption to a sensible default for that version
       if (nextUpdates.borgVersion !== undefined && nextUpdates.borgVersion !== prev.borgVersion) {
@@ -634,7 +654,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         resetForm()
       }
     }
-  }, [open, mode, repository, populateEditData])
+  }, [open, mode, repository, populateEditData, loadWizardData])
 
   // Auto-select SSH connection for edit mode
   useEffect(() => {
@@ -682,6 +702,8 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       case 'location':
         if (!wizardState.name.trim()) return false
         if (!wizardState.path.trim()) return false
+        if (wizardState.repositoryLocation === 'rclone' && !canUseRclone) return false
+        if (wizardState.executionTarget === 'agent' && !canUseManagedAgents) return false
         if (
           wizardState.repositoryLocation === 'rclone' &&
           (wizardState.borgVersion !== 2 || !wizardState.path.trim().startsWith('rclone:'))
@@ -694,6 +716,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
 
       case 'cloudMirror':
         if (!wizardState.cloudMirrorEnabled) return true
+        if (!canUseRclone) return false
         if (!isCloudMirrorEligible(wizardState)) return false
         if (rcloneStatus?.available !== true) return false
         if (!wizardState.rcloneRemoteId || !wizardState.rcloneRemotePath.trim()) return false
@@ -738,6 +761,10 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
   }
 
   const handleSubmit = async () => {
+    if (wizardState.repositoryLocation === 'rclone' && !canUseRclone) return
+    if (wizardState.cloudMirrorEnabled && !canUseRclone) return
+    if (wizardState.executionTarget === 'agent' && !canUseManagedAgents) return
+
     const storageBackend = isCachedRcloneRepositoryEdit
       ? 'rclone'
       : wizardState.repositoryLocation === 'rclone'
@@ -876,6 +903,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
   }
 
   const handleCreateRcloneRemote = async (data: CreateRcloneRemoteRequest) => {
+    if (!canUseRclone) return
     setIsCreatingRcloneRemote(true)
     setRcloneRemoteCreateError(null)
     try {
@@ -927,6 +955,8 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
             agentMachines={agentMachines}
             rcloneStatus={rcloneStatus}
             rcloneRemotes={rcloneRemotes}
+            canUseManagedAgents={canUseManagedAgents}
+            canUseRclone={canUseRclone}
             dataSource={wizardState.dataSource}
             sourceSshConnectionId={wizardState.sourceSshConnectionId}
             onChange={(updates) => {
@@ -972,6 +1002,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
             eligible={isCloudMirrorEligible(wizardState)}
             primaryLocation={cloudMirrorPrimaryLocation}
             storageMode={isCachedRcloneRepositoryEdit ? 'cachedRepository' : 'mirror'}
+            canUseRclone={canUseRclone}
             onChange={handleStateChange}
             onAddRcloneRemote={() => {
               setRcloneRemoteCreateError(null)

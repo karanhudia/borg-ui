@@ -17,7 +17,7 @@ import {
   Chip,
   Stack,
 } from '@mui/material'
-import { Cloud } from 'lucide-react'
+import { Cloud, Lock } from 'lucide-react'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import { useTranslation } from 'react-i18next'
 import PlanGate from '../shared/PlanGate'
@@ -85,6 +85,8 @@ interface WizardStepLocationProps {
   rcloneStatus?: RcloneStatus | null
   dataSource?: 'local' | 'remote'
   sourceSshConnectionId?: number | ''
+  canUseManagedAgents?: boolean
+  canUseRclone?: boolean
   onChange: (data: Partial<LocationStepData>) => void
   onBrowsePath: () => void
   onBrowseDirectRclonePath?: () => void
@@ -99,6 +101,8 @@ export default function WizardStepLocation({
   rcloneStatus = null,
   dataSource,
   sourceSshConnectionId,
+  canUseManagedAgents = true,
+  canUseRclone = true,
   onChange,
   onBrowsePath,
   onBrowseDirectRclonePath,
@@ -134,7 +138,20 @@ export default function WizardStepLocation({
     (agent) => agent.status !== 'revoked' && agent.status !== 'disabled'
   )
 
-  const destinations = getDestinations({ t, isRemoteLocationDisabled, isAgentLocationDisabled })
+  const destinations = getDestinations({
+    t,
+    isRemoteLocationDisabled,
+    isAgentLocationDisabled: isAgentLocationDisabled || !canUseManagedAgents,
+  }).map((destination) =>
+    destination.key === 'agent' && !canUseManagedAgents
+      ? {
+          ...destination,
+          icon: <Lock size={16} />,
+          description: t('wizard.location.managedAgentRequiresPro'),
+          disabled: true,
+        }
+      : destination
+  )
 
   const selectedDestinationKey: DestinationKey = isAgentExecution
     ? 'agent'
@@ -144,7 +161,7 @@ export default function WizardStepLocation({
 
   const handleDestinationChange = (key: DestinationKey) => {
     if (key === 'ssh' && isRemoteLocationDisabled) return
-    if (key === 'agent' && isAgentLocationDisabled) return
+    if (key === 'agent' && (isAgentLocationDisabled || !canUseManagedAgents)) return
 
     if (key === 'agent') {
       onChange({
@@ -164,6 +181,7 @@ export default function WizardStepLocation({
   }
 
   const handleDirectRcloneChange = (checked: boolean) => {
+    if (checked && !canUseRclone) return
     onChange({
       borgVersion: 2,
       repositoryLocation: checked ? 'rclone' : 'local',
@@ -355,7 +373,7 @@ export default function WizardStepLocation({
       )}
 
       {/* Agent sub-form */}
-      {isAgentExecution && !isDirectRclone && (
+      {isAgentExecution && !isDirectRclone && canUseManagedAgents && (
         <Stack spacing={1.25}>
           <ManagedAgentSelect
             value={agentMachineId}
@@ -369,6 +387,12 @@ export default function WizardStepLocation({
             {t('wizard.location.agentStorageNote')}
           </Typography>
         </Stack>
+      )}
+
+      {isAgentExecution && !isDirectRclone && !canUseManagedAgents && (
+        <Alert severity="info" icon={<Lock size={18} />}>
+          {t('wizard.location.managedAgentRequiresPro')}
+        </Alert>
       )}
 
       {/* SSH sub-form */}
@@ -412,6 +436,7 @@ export default function WizardStepLocation({
             control={
               <Checkbox
                 checked={isDirectRclone}
+                disabled={!canUseRclone}
                 onChange={(event) => handleDirectRcloneChange(event.target.checked)}
               />
             }
@@ -426,6 +451,11 @@ export default function WizardStepLocation({
               </Box>
             }
           />
+          {!canUseRclone && (
+            <Alert severity="info" icon={<Lock size={18} />} sx={{ mt: 0.5 }}>
+              {t('wizard.location.rcloneRequiresPro')}
+            </Alert>
+          )}
         </Box>
       )}
 

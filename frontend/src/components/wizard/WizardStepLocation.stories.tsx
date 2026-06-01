@@ -143,6 +143,26 @@ export const DirectBorg2Rclone: Story = {
   ),
 }
 
+export const CommunityPlanLockedDestinations: Story = {
+  args: {
+    ...baseArgs,
+    data: {
+      ...baseArgs.data,
+      name: 'Community Repository',
+      borgVersion: 2,
+    },
+    canUseManagedAgents: false,
+    canUseRclone: false,
+    rcloneStatus: { available: false, error: 'rclone repositories require Pro.' },
+    rcloneRemotes,
+  },
+  render: (args) => (
+    <Box sx={{ width: 720, maxWidth: 'calc(100vw - 32px)' }}>
+      <WizardStepLocation {...args} />
+    </Box>
+  ),
+}
+
 export const AgentDestinationEmpty: Story = {
   args: {
     ...baseArgs,

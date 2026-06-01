@@ -190,6 +190,8 @@ interface SourceSelectionDialogProps {
   initialSelectedDatabase?: SourceDiscoveryDatabase
   /** Open the scan sub-dialog on mount. Used by Storybook to capture stacked states. */
   initialScanDialogOpen?: boolean
+  canUseManagedAgents?: boolean
+  canUseMixedSourceTypes?: boolean
 }
 
 function scriptPayload(draft: SourceDiscoveryScriptDraft, name: string): SourceScriptCreateInput {
@@ -309,6 +311,10 @@ function cleanLocations(locations: SourceLocation[]): SourceLocation[] {
       return cleaned
     })
     .filter((location) => location.paths.length > 0)
+}
+
+function hasMixedSourceTypes(locations: SourceLocation[]): boolean {
+  return new Set(locations.map((location) => location.source_type)).size > 1
 }
 
 function locationsFromWizardState(wizardState: WizardState): SourceLocation[] {
@@ -496,6 +502,8 @@ export function SourceSelectionDialog({
   initialCaptureModeExpanded = false,
   initialSelectedDatabase,
   initialScanDialogOpen = false,
+  canUseManagedAgents = true,
+  canUseMixedSourceTypes = true,
 }: SourceSelectionDialogProps) {
   const [view, setView] = useState<SourceChoiceView>(initialView)
   const [scanDialogOpen, setScanDialogOpen] = useState(initialScanDialogOpen)
@@ -983,6 +991,7 @@ export function SourceSelectionDialog({
         }
       })
     )
+    if (!canUseMixedSourceTypes && hasMixedSourceTypes(sourceLocations)) return
     setApplying(true)
     try {
       const sourceLocationsWithScripts = await resolveDatabaseSourceScripts(sourceLocations)
@@ -1006,6 +1015,10 @@ export function SourceSelectionDialog({
   const selectedAgent = selectedSourceKey.startsWith('agent:')
     ? agentMachines.find((agent) => selectedSourceKey === `agent:${agent.id}`) || null
     : null
+  // Only real source groups should affect Apply state and mixed-source gating.
+  const cleanedDraftSourceLocations = cleanLocations(draftSourceLocations)
+  const mixedSourceTypesBlocked =
+    !canUseMixedSourceTypes && hasMixedSourceTypes(cleanedDraftSourceLocations)
 
   const selectedSourceSshConfig = selectedSourceConnection
     ? {
@@ -1032,7 +1045,7 @@ export function SourceSelectionDialog({
     const hasRemoteOptions = sshConnections.length > 0
     const hasAgentOptions = agentMachines.length > 0
     const remoteDisabled = sourceKind === 'remote' && !hasRemoteOptions
-    const agentDisabled = sourceKind === 'agent' && !hasAgentOptions
+    const agentDisabled = sourceKind === 'agent' && (!canUseManagedAgents || !hasAgentOptions)
     const selectedSnapshotCapability =
       snapshotDraft.provider === 'none'
         ? null
@@ -1063,7 +1076,7 @@ export function SourceSelectionDialog({
         return
       }
       if (key === 'agent') {
-        if (!hasAgentOptions) return
+        if (!canUseManagedAgents || !hasAgentOptions) return
         if (agentRepoConstraint) {
           selectSourceKey(`agent:${agentRepoConstraint.agentId}`)
           return
@@ -1103,12 +1116,14 @@ export function SourceSelectionDialog({
       },
       {
         key: 'agent',
-        icon: <Laptop size={16} />,
+        icon: !canUseManagedAgents ? <Lock size={16} /> : <Laptop size={16} />,
         label: t('backupPlans.sourceChooser.managedAgent'),
-        description: hasAgentOptions
-          ? t('backupPlans.sourceChooser.managedAgentDescription')
-          : t('backupPlans.sourceChooser.noManagedAgents'),
-        disabled: !hasAgentOptions,
+        description: !canUseManagedAgents
+          ? t('backupPlans.sourceChooser.managedAgentRequiresPro')
+          : hasAgentOptions
+            ? t('backupPlans.sourceChooser.managedAgentDescription')
+            : t('backupPlans.sourceChooser.noManagedAgents'),
+        disabled: !canUseManagedAgents || !hasAgentOptions,
       },
     ]
 
@@ -1142,7 +1157,10 @@ export function SourceSelectionDialog({
             emptyMessage={t('backupPlans.sourceChooser.noRemoteMachines')}
             hideEmptyAlert
           />
-        ) : sourceKind === 'agent' && hasAgentOptions && agentRepoConstraint ? (
+        ) : sourceKind === 'agent' &&
+          canUseManagedAgents &&
+          hasAgentOptions &&
+          agentRepoConstraint ? (
           <Box
             sx={{
               border: 1,
@@ -1164,7 +1182,7 @@ export function SourceSelectionDialog({
               })}
             </Typography>
           </Box>
-        ) : sourceKind === 'agent' && hasAgentOptions ? (
+        ) : sourceKind === 'agent' && canUseManagedAgents && hasAgentOptions ? (
           <ManagedAgentSelect
             value={selectedAgentIdNum || ''}
             onChange={(id) => selectSourceKey(`agent:${id}`)}
@@ -1192,7 +1210,11 @@ export function SourceSelectionDialog({
             {sourceKind === 'agent' ? <Laptop size={14} /> : <HardDrive size={14} />}
             <Typography variant="body2" color="text.secondary">
               {agentDisabled
-                ? t('backupPlans.sourceChooser.noManagedAgents')
+                ? t(
+                    canUseManagedAgents
+                      ? 'backupPlans.sourceChooser.noManagedAgents'
+                      : 'backupPlans.sourceChooser.managedAgentRequiresPro'
+                  )
                 : remoteDisabled
                   ? t('backupPlans.sourceChooser.noRemoteMachines')
                   : t('backupPlans.sourceChooser.readingFromLocal')}
@@ -1410,6 +1432,16 @@ export function SourceSelectionDialog({
               </Stack>
             </AccordionDetails>
           </Accordion>
+        )}
+
+        {mixedSourceTypesBlocked && (
+          <Alert
+            severity="info"
+            icon={<Lock size={18} />}
+            sx={{ py: 0.5, '& .MuiAlert-message': { py: 0.5 } }}
+          >
+            {t('backupPlans.sourceChooser.mixedSourceTypesRequiresPro')}
+          </Alert>
         )}
 
         <Box>
@@ -2156,7 +2188,8 @@ export function SourceSelectionDialog({
               onClick={applyPaths}
               disabled={
                 applying ||
-                cleanLocations(draftSourceLocations).length === 0 ||
+                cleanedDraftSourceLocations.length === 0 ||
+                mixedSourceTypesBlocked ||
                 !areSnapshotDraftsValid(
                   draftSourceLocations,
                   snapshotDraftsBySourceKey,

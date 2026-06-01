@@ -50,10 +50,12 @@ import {
   managedAgentsAPI,
 } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
+import { usePlan } from '../hooks/usePlan'
 import { getApiErrorDetail } from '../utils/apiErrors'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import PageTabs from '../components/PageTabs'
 import PageHeader from '../components/PageHeader'
+import PlanGate from '../components/shared/PlanGate'
 import LogViewerDialog, { type LogViewerFetchLogs } from '../components/shared/LogViewerDialog'
 import AddAgentDialog from './managed-agents/AddAgentDialog'
 import { resolveAgentServerUrl } from './managed-agents/agentServerUrl'
@@ -132,6 +134,7 @@ function formatBorgBinary(binary: Record<string, unknown>): string {
 export default function ManagedAgents() {
   const queryClient = useQueryClient()
   const { hasGlobalPermission } = useAuth()
+  const { can } = usePlan()
   const canManageAgents = hasGlobalPermission('settings.ssh.manage')
   const [activeTab, setActiveTab] = useState<PageTab>('agents')
   const [addAgentDialogOpen, setAddAgentDialogOpen] = useState(false)
@@ -142,7 +145,8 @@ export default function ManagedAgents() {
     []
   )
 
-  const canUseManagedAgents = canManageAgents
+  const hasManagedAgentsPlan = can('managed_agents')
+  const canUseManagedAgents = canManageAgents && hasManagedAgentsPlan
 
   const agentsQuery = useQuery({
     queryKey: ['managed-agents'],
@@ -247,6 +251,20 @@ export default function ManagedAgents() {
 
   if (!canManageAgents) {
     return <Navigate to="/dashboard" replace />
+  }
+
+  if (!hasManagedAgentsPlan) {
+    return (
+      <Box>
+        <PageHeader
+          title="Managed Agents"
+          subtitle="Lightweight machines connected to this Borg UI server"
+        />
+        <PlanGate feature="managed_agents">
+          <Box />
+        </PlanGate>
+      </Box>
+    )
   }
 
   const handleCopy = async (value: string) => {

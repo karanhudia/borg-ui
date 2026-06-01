@@ -163,6 +163,9 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.agentFallback': 'Agent #{{id}}',
   'backupPlans.sourceChooser.localSourceDescription': 'This Borg UI server',
   'backupPlans.sourceChooser.sshSourceDescription': 'Remote machine',
+  'backupPlans.sourceChooser.managedAgentRequiresPro': 'Managed-agent sources require Pro.',
+  'backupPlans.sourceChooser.mixedSourceTypesRequiresPro':
+    'Mixed source types require Pro. Multiple paths from the same source type are still available.',
   'backupPlans.sourceChooser.snapshotChip': '{{provider}} snapshot',
   'backupPlans.sourceChooser.showLessPaths': 'Show less',
   'backupPlans.sourceChooser.inPrefix': 'in',
@@ -186,9 +189,15 @@ const t = (key: string, options?: Record<string, unknown>) => {
 
 interface RenderArgs {
   wizardState: WizardState
+  canUseManagedAgents?: boolean
+  canUseMixedSourceTypes?: boolean
 }
 
-function renderStep({ wizardState }: RenderArgs) {
+function renderStep({
+  wizardState,
+  canUseManagedAgents = true,
+  canUseMixedSourceTypes = true,
+}: RenderArgs) {
   return (
     <Box sx={{ width: 680, maxWidth: 'calc(100vw - 32px)' }}>
       <SourceStep
@@ -198,6 +207,8 @@ function renderStep({ wizardState }: RenderArgs) {
         fullRepositories={[]}
         scripts={[]}
         loadingScripts={false}
+        canUseManagedAgents={canUseManagedAgents}
+        canUseMixedSourceTypes={canUseMixedSourceTypes}
         updateState={() => {}}
         openExcludeExplorer={() => {}}
         onCreateScript={async () => ({ id: 1 })}
@@ -228,6 +239,15 @@ export const SingleLocalGroup: Story = {
 
 export const MixedSourceGroups: Story = {
   render: () => renderStep({ wizardState: mixedSourceState }),
+}
+
+export const CommunityMixedSourcesLocked: Story = {
+  render: () =>
+    renderStep({
+      wizardState: mixedSourceState,
+      canUseManagedAgents: false,
+      canUseMixedSourceTypes: false,
+    }),
 }
 
 export const DatabaseDumpSource: Story = {

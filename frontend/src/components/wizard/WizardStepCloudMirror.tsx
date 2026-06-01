@@ -11,7 +11,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
-import { Cloud, Plus } from 'lucide-react'
+import { Cloud, Lock, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import PathSelectorField from '../shared/PathSelectorField'
 import SchedulePicker from '../shared/SchedulePicker'
@@ -48,6 +48,7 @@ interface WizardStepCloudMirrorProps {
   eligible: boolean
   primaryLocation?: 'local' | 'ssh' | 'agent'
   storageMode?: 'mirror' | 'cachedRepository'
+  canUseRclone?: boolean
   onChange: (data: Partial<CloudMirrorStepData>) => void
   onAddRcloneRemote?: () => void
   onBrowseRemotePath?: () => void
@@ -60,6 +61,7 @@ export default function WizardStepCloudMirror({
   eligible,
   primaryLocation = 'local',
   storageMode = 'mirror',
+  canUseRclone = true,
   onChange,
   onAddRcloneRemote,
   onBrowseRemotePath,
@@ -67,7 +69,7 @@ export default function WizardStepCloudMirror({
   const { t } = useTranslation()
   const isRcloneAvailable = rcloneStatus?.available === true
   const isCachedRepositoryMode = storageMode === 'cachedRepository'
-  const controlsDisabled = !eligible || !isRcloneAvailable
+  const controlsDisabled = !eligible || !isRcloneAvailable || !canUseRclone
   const ineligibleMessage = t('wizard.cloudMirror.unsupportedPrimary')
   const routePreview = isCachedRepositoryMode
     ? t('wizard.cloudMirror.cachedRepositoryRoutePreview')
@@ -89,9 +91,10 @@ export default function WizardStepCloudMirror({
         control={
           <Checkbox
             checked={data.cloudMirrorEnabled}
-            disabled={!eligible || isCachedRepositoryMode}
+            disabled={!eligible || isCachedRepositoryMode || !canUseRclone}
             onChange={(event) => {
               if (isCachedRepositoryMode) return
+              if (event.target.checked && !canUseRclone) return
               onChange({
                 cloudMirrorEnabled: event.target.checked,
                 rcloneRemotePathVerified: false,
@@ -112,6 +115,11 @@ export default function WizardStepCloudMirror({
       />
 
       {!eligible && <Alert severity="info">{ineligibleMessage}</Alert>}
+      {!canUseRclone && (
+        <Alert severity="info" icon={<Lock size={18} />}>
+          {t('wizard.cloudMirror.requiresPro')}
+        </Alert>
+      )}
 
       {data.cloudMirrorEnabled && (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

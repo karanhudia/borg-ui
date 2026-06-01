@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.core.authorization import authorize_request
+from app.core.features import require_feature
 from app.core.security import (
     decrypt_secret,
     encrypt_secret,
@@ -35,7 +36,10 @@ from app.services.rclone_service import RcloneUnavailable, rclone_service
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["rclone"], dependencies=[Depends(authorize_request)])
+router = APIRouter(
+    tags=["rclone"],
+    dependencies=[Depends(authorize_request), require_feature("rclone")],
+)
 public_router = APIRouter(tags=["rclone"])
 
 RCLONE_REMOTE_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")

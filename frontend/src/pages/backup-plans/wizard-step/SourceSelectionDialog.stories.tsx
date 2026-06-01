@@ -416,6 +416,9 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.remoteMachineDescription': 'Pull from an SSH connection',
   'backupPlans.sourceChooser.managedAgent': 'Managed agent',
   'backupPlans.sourceChooser.managedAgentDescription': 'Read paths from an enrolled agent',
+  'backupPlans.sourceChooser.managedAgentRequiresPro': 'Managed-agent sources require Pro.',
+  'backupPlans.sourceChooser.mixedSourceTypesRequiresPro':
+    'Mixed source types require Pro. Multiple paths from the same source type are still available.',
   'backupPlans.sourceChooser.selectManagedAgent': 'Select a managed agent',
   'backupPlans.sourceChooser.noManagedAgents': 'No managed agents available',
   'backupPlans.sourceChooser.agentFallback': 'Agent #{{id}}',
@@ -555,6 +558,8 @@ interface DialogStoryArgs {
   initialCaptureModeExpanded?: boolean
   initialSelectedDatabase?: SourceDiscoveryDatabase
   initialScanDialogOpen?: boolean
+  canUseManagedAgents?: boolean
+  canUseMixedSourceTypes?: boolean
   scrollToText?: string
 }
 
@@ -566,6 +571,8 @@ function DialogStory({
   initialCaptureModeExpanded,
   initialSelectedDatabase,
   initialScanDialogOpen,
+  canUseManagedAgents = true,
+  canUseMixedSourceTypes = true,
   scrollToText,
 }: DialogStoryArgs) {
   useMockedDiscovery(mockOptions)
@@ -619,6 +626,8 @@ function DialogStory({
         initialCaptureModeExpanded={initialCaptureModeExpanded}
         initialSelectedDatabase={initialSelectedDatabase}
         initialScanDialogOpen={initialScanDialogOpen}
+        canUseManagedAgents={canUseManagedAgents}
+        canUseMixedSourceTypes={canUseMixedSourceTypes}
       />
     </Box>
   )
@@ -706,6 +715,25 @@ export const PathPickerMixedSinglePathGroups: Story = {
       description: {
         story:
           'Two source groups, each with a single path — exercises the inline single-line group layout.',
+      },
+    },
+  },
+}
+
+export const CommunityMixedSourcesLocked: Story = {
+  render: () => (
+    <DialogStory
+      wizardState={mixedSinglePathState}
+      mockOptions={{ scanStatus: 'detected' }}
+      canUseManagedAgents={false}
+      canUseMixedSourceTypes={false}
+    />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Community plan lock state: managed-agent source is disabled and mixed local + SSH source groups cannot be applied.',
       },
     },
   },

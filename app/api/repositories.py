@@ -46,7 +46,12 @@ from app.core.security import get_current_user, check_repo_access, decrypt_secre
 from app.core.borg import BorgInterface
 from app.core.borg_router import BorgRouter
 from app.core.borg_errors import is_lock_error
-from app.core.features import FEATURES, get_current_plan, plan_includes
+from app.core.features import (
+    FEATURES,
+    get_current_plan,
+    plan_includes,
+    require_feature_access,
+)
 from app.config import settings
 from app.services.mqtt_service import mqtt_service
 from app.services.restore_check_service import restore_check_service
@@ -114,6 +119,8 @@ V2_ONLY_ENCRYPTION_MODES = {
 AGENT_RCLONE_SYNC_CAPABILITY = "repository.rclone_sync"
 AGENT_REPOSITORY_INIT_CAPABILITY = "repository.init"
 DIRECT_RCLONE_STORAGE_BACKEND = "rclone_direct"
+RCLONE_FEATURE = "rclone"
+MANAGED_AGENTS_FEATURE = "managed_agents"
 
 # Initialize Borg interface
 borg = BorgInterface()
@@ -1003,6 +1010,22 @@ def _is_rclone_payload(data: Union[RepositoryCreate, RepositoryImport]) -> bool:
     return (getattr(data, "storage_backend", "local") or "local") == "rclone"
 
 
+def _payload_uses_rclone(data: Union[RepositoryCreate, RepositoryImport]) -> bool:
+    return (
+        _is_rclone_payload(data)
+        or _is_direct_rclone_payload(data)
+        or getattr(data, "cloud_mirror_enabled", False) is True
+    )
+
+
+def _require_rclone_feature(db: Session) -> None:
+    require_feature_access(db, RCLONE_FEATURE)
+
+
+def _require_managed_agents_feature(db: Session) -> None:
+    require_feature_access(db, MANAGED_AGENTS_FEATURE)
+
+
 def _is_direct_rclone_payload(
     data: Union[RepositoryCreate, RepositoryImport, RepositoryUpdate],
 ) -> bool:
@@ -1294,6 +1317,37 @@ def _strip_disabled_rclone_noop_update_fields(update_data: dict[str, Any]) -> No
         [],
     ):
         update_data.pop("rclone_extra_flags", None)
+
+
+def _rclone_feature_gate_updates(
+    repo_data: RepositoryUpdate,
+    update_data: dict[str, Any],
+    requested_rclone_updates: set[str],
+) -> set[str]:
+    if repo_data.cloud_mirror_enabled is not False:
+        return requested_rclone_updates
+
+    exempt_updates = {"cloud_mirror_enabled"}
+    if update_data.get("storage_backend") in (None, "local", "ssh", "agent_local"):
+        exempt_updates.add("storage_backend")
+
+    default_values = {
+        "rclone_remote_id": {None},
+        "rclone_remote_path": {None, ""},
+        "rclone_remote_path_verified": {None, False},
+        "rclone_sync_policy": {None, "after_success"},
+        "rclone_sync_cron_expression": {None, ""},
+        "rclone_sync_timezone": {None, ""},
+        "rclone_cache_path": {None, ""},
+    }
+    for key, allowed_values in default_values.items():
+        if key in update_data and update_data[key] in allowed_values:
+            exempt_updates.add(key)
+
+    if update_data.get("rclone_extra_flags") in (None, []):
+        exempt_updates.add("rclone_extra_flags")
+
+    return requested_rclone_updates - exempt_updates
 
 
 def _raise_rclone_schedule_error(exc: Exception) -> None:
@@ -2673,6 +2727,10 @@ async def create_repository(
     """Create a new repository"""
     try:
         executor_type = _normalize_repository_executor(repo_data)
+        if _payload_uses_rclone(repo_data):
+            _require_rclone_feature(db)
+        if executor_type == "agent":
+            _require_managed_agents_feature(db)
         if _is_direct_rclone_payload(repo_data):
             return await _create_direct_rclone_repository_record(
                 repo_data, current_user, db
@@ -3072,6 +3130,10 @@ async def import_repository(
     """Import an existing Borg repository"""
     try:
         executor_type = _normalize_repository_executor(repo_data)
+        if _payload_uses_rclone(repo_data):
+            _require_rclone_feature(db)
+        if executor_type == "agent":
+            _require_managed_agents_feature(db)
         if _is_direct_rclone_payload(repo_data):
             return await _import_direct_rclone_repository_record(
                 repo_data, current_user, db
@@ -3429,6 +3491,7 @@ async def get_repository_rclone_status(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    _require_rclone_feature(db)
     repository = _load_repository_with_access(repo_id, current_user, db, "viewer")
     try:
         return _serialize_rclone_storage(repository, db) or {}
@@ -3445,6 +3508,7 @@ async def sync_repository_rclone(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    _require_rclone_feature(db)
     repository = _load_repository_with_access(repo_id, current_user, db, "operator")
 
     async def _operation():
@@ -3468,6 +3532,7 @@ async def hydrate_repository_rclone(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    _require_rclone_feature(db)
     repository = _load_repository_with_access(repo_id, current_user, db, "operator")
 
     async def _operation():
@@ -3794,6 +3859,15 @@ async def update_repository(
             _validate_direct_rclone_update(repo_data, update_data)
             _strip_direct_rclone_noop_update_fields(update_data)
             requested_rclone_updates = set()
+        rclone_gate_updates = _rclone_feature_gate_updates(
+            repo_data, update_data, requested_rclone_updates
+        )
+        if rclone_gate_updates or (
+            existing_direct_rclone_repository and bool(update_data)
+        ):
+            _require_rclone_feature(db)
+        if target_executor_type == "agent":
+            _require_managed_agents_feature(db)
         sync_cloud_mirror_after_update = False
         if requested_rclone_updates:
             storage = existing_rclone_storage
@@ -3823,6 +3897,7 @@ async def update_repository(
                 db.delete(storage)
                 existing_rclone_storage = None
                 storage = None
+                _strip_disabled_rclone_noop_update_fields(update_data)
 
             should_enable_or_update_mirror = not is_direct_rclone_repository and (
                 repo_data.cloud_mirror_enabled is True

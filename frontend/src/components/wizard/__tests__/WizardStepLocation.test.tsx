@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import WizardStepLocation from '../WizardStepLocation'
@@ -424,6 +424,64 @@ describe('WizardStepLocation', () => {
         expect.objectContaining({
           executionTarget: 'agent',
         })
+      )
+    })
+
+    it('disables managed-agent destination when the plan cannot use managed agents', async () => {
+      const user = userEvent.setup()
+      const onChange = vi.fn()
+
+      render(
+        <WizardStepLocation
+          mode="create"
+          data={defaultData}
+          sshConnections={[]}
+          agentMachines={[
+            { id: 7, name: 'Workstation', hostname: 'workstation.local', status: 'online' },
+          ]}
+          canUseManagedAgents={false}
+          onChange={onChange}
+          onBrowsePath={vi.fn()}
+        />
+      )
+
+      await openDestinationSelect(user)
+      const listbox = await screen.findByRole('listbox')
+      const agentOption = within(listbox).getByRole('option', { name: /Managed Agent/i })
+
+      expect(agentOption).toHaveAttribute('aria-disabled', 'true')
+      fireEvent.click(agentOption)
+      expect(onChange).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          executionTarget: 'agent',
+        })
+      )
+    })
+  })
+
+  describe('Plan Gates', () => {
+    it('disables direct rclone mode when the plan cannot use rclone', () => {
+      const onChange = vi.fn()
+
+      render(
+        <WizardStepLocation
+          mode="create"
+          data={{ ...defaultData, borgVersion: 2 }}
+          sshConnections={[]}
+          canUseRclone={false}
+          onChange={onChange}
+          onBrowsePath={vi.fn()}
+        />
+      )
+
+      const directRcloneToggle = screen.getByRole('checkbox', {
+        name: /Use direct Borg 2 rclone repository/i,
+      })
+
+      expect(directRcloneToggle).toBeDisabled()
+      fireEvent.click(directRcloneToggle)
+      expect(onChange).not.toHaveBeenCalledWith(
+        expect.objectContaining({ repositoryLocation: 'rclone' })
       )
     })
   })
