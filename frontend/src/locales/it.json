@@ -1024,6 +1024,7 @@
         "preSourceScript": "Pre",
         "postSourceScript": "Post",
         "autoFilledSourceParameters": "Compilato automaticamente dalla sorgente",
+        "viewAutoFilledSourceParameters": "Visualizza valori sorgente compilati automaticamente per {{database}}",
         "loading": "Caricamento script..."
       },
       "schedule": {

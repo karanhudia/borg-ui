@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
 import { createInitialState } from '../state'
@@ -21,12 +22,22 @@ const translations: Record<string, string> = {
   'backupPlans.wizard.scripts.preSourceScript': 'Pre',
   'backupPlans.wizard.scripts.postSourceScript': 'Post',
   'backupPlans.wizard.scripts.autoFilledSourceParameters': 'Auto-filled from source',
+  'backupPlans.wizard.scripts.viewAutoFilledSourceParameters':
+    'View auto-filled source values for {{database}}',
 }
 
-const t = (key: string) => translations[key] || key
+const t = (key: string, options?: Record<string, string>) => {
+  const template = translations[key] || key
+  return Object.entries(options || {}).reduce(
+    (text, [name, value]) => text.replace(`{{${name}}}`, value),
+    template
+  )
+}
 
 describe('ScriptsStep', () => {
-  it('summarizes database source scripts separately from plan scripts', () => {
+  it('summarizes database source scripts separately from plan scripts', async () => {
+    const user = userEvent.setup()
+
     render(
       <ScriptsStep
         wizardState={{
@@ -53,7 +64,9 @@ describe('ScriptsStep', () => {
                 pre_backup_script_parameters: {
                   SQLITE_DATABASE_PATH: '/home/app/state.sqlite',
                 },
-                post_backup_script_parameters: {},
+                post_backup_script_parameters: {
+                  SQLITE_DUMP_PATH: '/var/tmp/borg-ui/database-dumps/sqlite',
+                },
                 script_execution_order: 1,
               },
             },
@@ -102,6 +115,23 @@ describe('ScriptsStep', () => {
     expect(screen.getByText(/Generic MySQL prepare/)).toBeInTheDocument()
     expect(screen.getByText(/Generic MySQL cleanup/)).toBeInTheDocument()
     expect(screen.getAllByText('Auto-filled from source')).toHaveLength(2)
+    const sqliteValuesButton = screen.getByRole('button', {
+      name: 'View auto-filled source values for SQLite database',
+    })
+    expect(
+      screen.queryByRole('button', {
+        name: 'View auto-filled source values for MySQL database',
+      })
+    ).not.toBeInTheDocument()
+
+    await user.hover(sqliteValuesButton)
+
+    expect(
+      await screen.findByText('Pre: SQLITE_DATABASE_PATH=/home/app/state.sqlite')
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('Post: SQLITE_DUMP_PATH=/var/tmp/borg-ui/database-dumps/sqlite')
+    ).toBeInTheDocument()
     expect(screen.getByText('Plan script selector')).toBeInTheDocument()
   })
 })
