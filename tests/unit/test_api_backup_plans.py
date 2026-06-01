@@ -487,6 +487,7 @@ class TestBackupPlanRoutes:
     def test_create_plan_supports_multiple_source_locations(
         self, test_client: TestClient, admin_headers, test_db
     ):
+        _set_plan(test_db, "pro")
         repo = _create_repo(test_db, "Primary", "/repos/primary")
         source_a = _create_ssh_connection(
             test_db, host="server-a.example", username="backup-a", port=22
@@ -548,6 +549,7 @@ class TestBackupPlanRoutes:
     def test_create_plan_supports_agent_source_for_same_agent_repo(
         self, test_client: TestClient, admin_headers, test_db
     ):
+        _set_plan(test_db, "pro")
         agent = AgentMachine(
             name="Pi Agent",
             agent_id="agt_plan_pi",
@@ -591,6 +593,123 @@ class TestBackupPlanRoutes:
         body = response.json()
         assert body["source_type"] == "agent"
         assert body["source_locations"] == source_locations
+
+    def test_community_plan_rejects_mixed_source_types(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _set_plan(test_db, "community")
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        source_connection = _create_ssh_connection(test_db)
+        source_locations = [
+            {
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "agent_machine_id": None,
+                "paths": ["/srv/app"],
+            },
+            {
+                "source_type": "remote",
+                "source_ssh_connection_id": source_connection.id,
+                "agent_machine_id": None,
+                "paths": ["/home/app/data"],
+            },
+        ]
+
+        response = test_client.post(
+            "/api/backup-plans/",
+            json=_payload(
+                [repo.id],
+                source_type="mixed",
+                source_ssh_connection_id=None,
+                source_directories=["/srv/app", "/home/app/data"],
+                source_locations=source_locations,
+            ),
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 403
+        assert response.json()["detail"]["feature"] == "backup_plan_mixed_sources"
+
+    def test_community_plan_allows_multiple_locations_of_same_source_type(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _set_plan(test_db, "community")
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        source_locations = [
+            {
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "agent_machine_id": None,
+                "paths": ["/srv/app"],
+            },
+            {
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "agent_machine_id": None,
+                "paths": ["/var/lib/service"],
+            },
+        ]
+
+        response = test_client.post(
+            "/api/backup-plans/",
+            json=_payload(
+                [repo.id],
+                source_type="mixed",
+                source_ssh_connection_id=None,
+                source_directories=["/srv/app", "/var/lib/service"],
+                source_locations=source_locations,
+            ),
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 201
+        assert response.json()["source_locations"] == source_locations
+
+    def test_community_plan_rejects_agent_source(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _set_plan(test_db, "community")
+        agent = AgentMachine(
+            name="Pi Agent",
+            agent_id="agt_plan_community_pi",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+        repo = _create_repo(
+            test_db,
+            "Agent Repo",
+            "/repos/agent",
+            executor_type="agent",
+            execution_target="agent",
+            agent_machine_id=agent.id,
+        )
+        source_locations = [
+            {
+                "source_type": "agent",
+                "source_ssh_connection_id": None,
+                "agent_machine_id": agent.id,
+                "paths": ["/home/pi"],
+            }
+        ]
+
+        response = test_client.post(
+            "/api/backup-plans/",
+            json=_payload(
+                [repo.id],
+                source_type="agent",
+                source_ssh_connection_id=None,
+                source_directories=["/home/pi"],
+                source_locations=source_locations,
+            ),
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 403
+        assert response.json()["detail"]["feature"] == "managed_agents"
 
     def test_create_plan_rejects_server_source_to_agent_repo(
         self, test_client: TestClient, admin_headers, test_db
@@ -893,6 +1012,69 @@ class TestBackupPlanRoutes:
         assert decision.feature == "backup_plan_multi_repository"
         assert decision.reason == "parallel"
 
+    def test_backup_plan_policy_denies_community_mixed_source_types(self, test_db):
+        from app.services.backup_plan_policy import (
+            evaluate_backup_plan_feature_access,
+        )
+
+        _set_plan(test_db, "community")
+
+        decision = evaluate_backup_plan_feature_access(
+            test_db,
+            enabled_repository_count=1,
+            repository_run_mode="series",
+            source_locations=[
+                {
+                    "source_type": "local",
+                    "source_ssh_connection_id": None,
+                    "agent_machine_id": None,
+                    "paths": ["/srv/app"],
+                },
+                {
+                    "source_type": "remote",
+                    "source_ssh_connection_id": 1,
+                    "agent_machine_id": None,
+                    "paths": ["/home/app/data"],
+                },
+            ],
+        )
+
+        assert decision.allowed is False
+        assert decision.feature == "backup_plan_mixed_sources"
+        assert decision.reason == "mixed_source_types"
+
+    def test_backup_plan_policy_allows_community_same_source_type_locations(
+        self, test_db
+    ):
+        from app.services.backup_plan_policy import (
+            evaluate_backup_plan_feature_access,
+        )
+
+        _set_plan(test_db, "community")
+
+        decision = evaluate_backup_plan_feature_access(
+            test_db,
+            enabled_repository_count=1,
+            repository_run_mode="series",
+            source_locations=[
+                {
+                    "source_type": "local",
+                    "source_ssh_connection_id": None,
+                    "agent_machine_id": None,
+                    "paths": ["/srv/app"],
+                },
+                {
+                    "source_type": "local",
+                    "source_ssh_connection_id": None,
+                    "agent_machine_id": None,
+                    "paths": ["/var/lib/service"],
+                },
+            ],
+        )
+
+        assert decision.allowed is True
+        assert decision.reason is None
+
     def test_create_plan_can_clear_legacy_source_settings_for_selected_repository(
         self, test_client: TestClient, admin_headers, test_db
     ):
@@ -1056,6 +1238,48 @@ class TestBackupPlanRoutes:
 
         assert response.status_code == 403
         assert response.json()["detail"]["feature"] == "backup_plan_multi_repository"
+
+    def test_community_cannot_run_existing_mixed_source_plan_after_downgrade(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _set_plan(test_db, "pro")
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        source_connection = _create_ssh_connection(test_db)
+        source_locations = [
+            {
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "agent_machine_id": None,
+                "paths": ["/srv/app"],
+            },
+            {
+                "source_type": "remote",
+                "source_ssh_connection_id": source_connection.id,
+                "agent_machine_id": None,
+                "paths": ["/home/app/data"],
+            },
+        ]
+        create_response = test_client.post(
+            "/api/backup-plans/",
+            json=_payload(
+                [repo.id],
+                source_type="mixed",
+                source_ssh_connection_id=None,
+                source_directories=["/srv/app", "/home/app/data"],
+                source_locations=source_locations,
+            ),
+            headers=admin_headers,
+        )
+        assert create_response.status_code == 201
+        plan_id = create_response.json()["id"]
+        _set_plan(test_db, "community")
+
+        response = test_client.post(
+            f"/api/backup-plans/{plan_id}/run", headers=admin_headers
+        )
+
+        assert response.status_code == 403
+        assert response.json()["detail"]["feature"] == "backup_plan_mixed_sources"
 
     def test_community_can_update_existing_pro_plan_back_to_single_series(
         self, test_client: TestClient, admin_headers, test_db

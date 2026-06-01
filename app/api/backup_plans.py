@@ -751,6 +751,7 @@ def _validate_payload(
             1 for link in payload.repositories if link.enabled
         ),
         repository_run_mode=payload.repository_run_mode,
+        source_locations=source_locations,
     )
     return repos
 

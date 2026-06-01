@@ -76,6 +76,19 @@ export const Enabled: Story = {
   ),
 }
 
+export const RequiresPro: Story = {
+  args: {
+    ...baseArgs,
+    canUseRclone: false,
+    rcloneStatus: { available: false, error: 'Cloud mirroring with rclone requires Pro.' },
+  },
+  render: (args) => (
+    <Box sx={{ width: 720, maxWidth: 'calc(100vw - 32px)' }}>
+      <WizardStepCloudMirror {...args} />
+    </Box>
+  ),
+}
+
 export const Scheduled: Story = {
   args: {
     ...baseArgs,

@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, Mock, vi } from 'vitest'
+import type { ComponentProps } from 'react'
 import RepositoryWizard from '../RepositoryWizard'
 import { managedAgentsAPI, rcloneAPI, sshKeysAPI } from '../../services/api'
 
@@ -188,7 +189,8 @@ const renderWizard = (
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   repository?: any,
   onSubmit = vi.fn(),
-  onClose = vi.fn()
+  onClose = vi.fn(),
+  wizardProps: Partial<ComponentProps<typeof RepositoryWizard>> = {}
 ) => {
   const queryClient = createQueryClient()
   return {
@@ -200,6 +202,7 @@ const renderWizard = (
           mode={mode}
           repository={repository}
           onSubmit={onSubmit}
+          {...wizardProps}
         />
       </QueryClientProvider>
     ),
@@ -387,6 +390,32 @@ describe('RepositoryWizard', () => {
 
       expect(screen.getByRole('button', { name: /Next/i })).toBeDisabled()
     })
+
+    it('disables paid repository destinations when plan features are unavailable', async () => {
+      const user = userEvent.setup()
+      renderWizard('create', undefined, vi.fn(), vi.fn(), {
+        canUseManagedAgents: false,
+        canUseRclone: false,
+      })
+
+      await waitForLocationStep()
+      const destinationSelect = screen.getByRole('combobox', {
+        name: /Where should backups be stored/i,
+      })
+      await user.click(destinationSelect)
+      const listbox = await screen.findByRole('listbox')
+      expect(within(listbox).getByRole('option', { name: /Managed Agent/i })).toHaveAttribute(
+        'aria-disabled',
+        'true'
+      )
+
+      await user.keyboard('{Escape}')
+      await user.click(screen.getByRole('button', { name: /v2/i }))
+      const directRcloneToggle = await screen.findByRole('checkbox', {
+        name: /Use direct Borg 2 rclone repository/i,
+      })
+      expect(directRcloneToggle).toBeDisabled()
+    }, 60000)
 
     it('submits a local storage target without legacy backup sources', async () => {
       const user = userEvent.setup()

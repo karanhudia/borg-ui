@@ -50,15 +50,24 @@ def _enable_borg_v2(test_db):
         settings_row = SystemSettings()
         test_db.add(settings_row)
 
+    _set_plan(test_db, "pro")
+
+
+def _set_plan(test_db, plan: str) -> None:
     state = test_db.query(LicensingState).first()
     if state is None:
         state = LicensingState(instance_id="test-instance-v2-repository-api")
         test_db.add(state)
 
-    state.plan = "pro"
+    state.plan = plan
     state.status = "active"
     state.is_trial = False
     test_db.commit()
+
+
+@pytest.fixture(autouse=True)
+def _enable_paid_repository_features(test_db):
+    _set_plan(test_db, "pro")
 
 
 def _base_repository_payload(**overrides):
@@ -488,6 +497,56 @@ class TestRepositoriesCreate:
         assert repo.executor_type == "agent"
         assert repo.agent_machine_id == agent.id
         assert repo.path == "/agent/repo"
+
+    def test_create_agent_repository_requires_pro_plan(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _set_plan(test_db, "community")
+        agent = AgentMachine(
+            name="Laptop",
+            agent_id="agt_laptop_community",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+            capabilities=["repository.init"],
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ) as initialize,
+            patch(
+                "app.api.repositories.wait_for_agent_repository_operation_job",
+                new=AsyncMock(return_value={"status": "completed"}),
+            ),
+            patch(
+                "app.api.repositories.dispatch_agent_job_best_effort",
+                new=AsyncMock(return_value=True),
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Agent Repo",
+                    "path": "/agent/repo",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "source_directories": ["/home/user/docs"],
+                    "execution_target": "agent",
+                    "agent_machine_id": agent.id,
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 403
+        assert response.json()["detail"]["feature"] == "managed_agents"
+        initialize.assert_not_awaited()
+        assert test_db.query(Repository).filter_by(name="Agent Repo").first() is None
 
     def test_create_agent_repository_init_failure_deletes_record(
         self, test_client: TestClient, admin_headers, test_db

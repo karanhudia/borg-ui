@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 
@@ -281,6 +282,9 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.localSourceDescription': 'This Borg UI server',
   'backupPlans.sourceChooser.managedAgent': 'Managed agent',
   'backupPlans.sourceChooser.managedAgentDescription': 'Read paths from an enrolled managed agent',
+  'backupPlans.sourceChooser.managedAgentRequiresPro': 'Managed-agent sources require Pro.',
+  'backupPlans.sourceChooser.mixedSourceTypesRequiresPro':
+    'Mixed source types require Pro. Multiple paths from the same source type are still available.',
   'backupPlans.sourceChooser.selectManagedAgent': 'Select a managed agent',
   'backupPlans.sourceChooser.noManagedAgents': 'No managed agents available',
   'backupPlans.sourceChooser.agentFallback': 'Agent #{{id}}',
@@ -440,6 +444,8 @@ function StatefulSourceStep({
   initialState = createInitialState(),
   sshConnections = [],
   agentMachines = [],
+  canUseManagedAgents = true,
+  canUseMixedSourceTypes = true,
 }: {
   initialState?: ReturnType<typeof createInitialState>
   sshConnections?: Array<{
@@ -462,6 +468,8 @@ function StatefulSourceStep({
     created_at: string
     updated_at: string
   }>
+  canUseManagedAgents?: boolean
+  canUseMixedSourceTypes?: boolean
 }) {
   const [wizardState, setWizardState] = useState(initialState)
 
@@ -473,6 +481,8 @@ function StatefulSourceStep({
       fullRepositories={[]}
       scripts={[]}
       loadingScripts={false}
+      canUseManagedAgents={canUseManagedAgents}
+      canUseMixedSourceTypes={canUseMixedSourceTypes}
       updateState={(updates) => setWizardState((current) => ({ ...current, ...updates }))}
       openExcludeExplorer={vi.fn()}
       onCreateScript={vi.fn(async () => ({ id: 101 }))}
@@ -530,7 +540,7 @@ describe('SourceStep', () => {
     expect(
       screen.queryByRole('button', { name: /scan a database instead/i })
     ).not.toBeInTheDocument()
-  })
+  }, 45000)
 
   it('keeps a files and folders summary after selecting paths on a scripted plan', async () => {
     apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
@@ -626,6 +636,81 @@ describe('SourceStep', () => {
     expect(screen.getByText('backup-a@server-a.example')).toBeInTheDocument()
     expect(screen.getByText('backup-b@server-b.example')).toBeInTheDocument()
     expect(screen.getAllByText('1 path')).toHaveLength(3)
+  }, 45000)
+
+  it('locks managed-agent sources when the plan cannot use managed agents', async () => {
+    const user = userEvent.setup()
+    apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
+    const agentMachines = [
+      {
+        id: 77,
+        name: 'pi',
+        agent_id: 'agt_pi',
+        hostname: 'pi.local',
+        default_path: '/home/pi',
+        status: 'online',
+        created_at: '2026-05-21T00:00:00.000Z',
+        updated_at: '2026-05-21T00:00:00.000Z',
+      },
+    ]
+    render(<StatefulSourceStep agentMachines={agentMachines} canUseManagedAgents={false} />)
+
+    await user.click(screen.getByRole('button', { name: /choose source/i }))
+    await screen.findByRole('tab', { name: /^database$/i })
+
+    await user.click(screen.getByRole('combobox', { name: /where are the files/i }))
+    const listbox = await screen.findByRole('listbox')
+    const agentOption = within(listbox).getByRole('option', { name: /managed agent/i })
+
+    expect(agentOption).toHaveAttribute('aria-disabled', 'true')
+    expect(agentOption).toHaveTextContent('Managed-agent sources require Pro.')
+
+    await user.keyboard('{Escape}')
+    await waitFor(() => {
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    })
+  })
+
+  it('blocks applying mixed source types when the plan cannot use mixed sources', async () => {
+    apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
+    const updateState = vi.fn()
+    const sshConnections = [
+      {
+        id: 11,
+        host: 'server-a.example',
+        username: 'backup-a',
+        port: 22,
+        ssh_key_id: 1,
+        default_path: '/home/backup-a',
+        status: 'connected',
+      },
+    ]
+    renderSourceStep({
+      sshConnections,
+      updateState,
+      canUseMixedSourceTypes: false,
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
+    await screen.findByRole('tab', { name: /^database$/i })
+
+    await selectSourceKind(/borg ui server/i)
+    fireEvent.change(screen.getByLabelText(/source path/i), {
+      target: { value: '/srv/app' },
+    })
+    clickExistingTextButton(/add path/i)
+
+    await selectRemoteMachine(/backup-a@server-a.example/i)
+    fireEvent.change(screen.getByLabelText(/source path/i), {
+      target: { value: '/home/app/data' },
+    })
+    clickExistingTextButton(/add path/i)
+
+    expect(screen.getByText(/Mixed source types require Pro/i)).toBeInTheDocument()
+    const applyButton = screen.getByRole('button', { name: /use these paths/i })
+    expect(applyButton).toBeDisabled()
+    fireEvent.click(applyButton)
+    expect(updateState).not.toHaveBeenCalled()
   }, 45000)
 
   it('applies btrfs snapshot metadata for a local source group', async () => {

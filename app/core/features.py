@@ -20,6 +20,9 @@ _RANK = {Plan.COMMUNITY: 0, Plan.PRO: 1, Plan.ENTERPRISE: 2}
 FEATURES: dict[str, Plan] = {
     "borg_v2": Plan.PRO,
     "backup_plan_multi_repository": Plan.PRO,
+    "backup_plan_mixed_sources": Plan.PRO,
+    "rclone": Plan.PRO,
+    "managed_agents": Plan.PRO,
     "multi_user": Plan.COMMUNITY,  # up to 5 users
     "extra_users": Plan.PRO,  # >5 users (up to 10 on Pro)
     "rbac": Plan.ENTERPRISE,  # role-based access control
@@ -41,25 +44,31 @@ def get_current_plan(db: Session) -> Plan:
     return Plan(get_effective_plan_value(db))
 
 
+def require_feature_access(
+    db: Session, feature: str, *, status_code: int = status.HTTP_403_FORBIDDEN
+) -> None:
+    current = get_current_plan(db)
+    required = FEATURES.get(feature)
+    if required is None:
+        raise ValueError(
+            f"Unknown feature: {feature!r}. Valid features: {list(FEATURES)}"
+        )
+    if not plan_includes(current, required):
+        raise HTTPException(
+            status_code=status_code,
+            detail={
+                "key": "backend.errors.plan.featureNotAvailable",
+                "feature": feature,
+                "required": required.value,
+                "current": current.value,
+            },
+        )
+
+
 def require_feature(feature: str):
     """FastAPI dependency factory. Usage: dependencies=[require_feature("borg_v2")]"""
 
     def _check(db: Session = Depends(get_db)):
-        current = get_current_plan(db)
-        required = FEATURES.get(feature)
-        if required is None:
-            raise ValueError(
-                f"Unknown feature: {feature!r}. Valid features: {list(FEATURES)}"
-            )
-        if not plan_includes(current, required):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail={
-                    "key": "backend.errors.plan.featureNotAvailable",
-                    "feature": feature,
-                    "required": required.value,
-                    "current": current.value,
-                },
-            )
+        require_feature_access(db, feature)
 
     return Depends(_check)

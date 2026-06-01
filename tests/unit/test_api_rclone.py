@@ -34,15 +34,24 @@ def _enable_borg_v2(test_db):
         settings_row = SystemSettings()
         test_db.add(settings_row)
 
+    _set_plan(test_db, "pro")
+
+
+def _set_plan(test_db, plan: str) -> None:
     state = test_db.query(LicensingState).first()
     if state is None:
         state = LicensingState(instance_id="test-rclone-direct-borg2")
         test_db.add(state)
 
-    state.plan = "pro"
+    state.plan = plan
     state.status = "active"
     state.is_trial = False
     test_db.commit()
+
+
+@pytest.fixture(autouse=True)
+def _enable_paid_rclone_features(test_db):
+    _set_plan(test_db, "pro")
 
 
 class FakeRcloneStdout:
@@ -92,6 +101,18 @@ def test_rclone_status_reports_unavailable_binary(
         "version": None,
         "error": "rclone binary not found",
     }
+
+
+@pytest.mark.unit
+def test_rclone_management_requires_pro_plan(
+    test_client: TestClient, admin_headers, test_db
+):
+    _set_plan(test_db, "community")
+
+    response = test_client.get("/api/rclone/status", headers=admin_headers)
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["feature"] == "rclone"
 
 
 @pytest.mark.unit
@@ -1202,6 +1223,30 @@ def test_create_and_list_rclone_remote(
 
 
 @pytest.mark.unit
+def test_create_rclone_remote_requires_pro_plan(
+    test_client: TestClient, admin_headers, test_db, tmp_path, monkeypatch
+):
+    _set_plan(test_db, "community")
+    monkeypatch.setattr(
+        "app.api.rclone.settings.rclone_config_root", str(tmp_path / "rclone")
+    )
+
+    response = test_client.post(
+        "/api/rclone/remotes",
+        headers=admin_headers,
+        json={
+            "name": "prod-s3",
+            "provider": "s3",
+            "config_source": "managed",
+            "redacted_config": {"type": "s3", "provider": "AWS"},
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["feature"] == "rclone"
+
+
+@pytest.mark.unit
 def test_list_rclone_remotes_includes_repository_usage_count(
     test_client: TestClient, admin_headers, test_db
 ):
@@ -1406,6 +1451,7 @@ def test_create_managed_rclone_remote_removes_config_file_on_commit_failure(
 ):
     config_root = tmp_path / "rclone"
     monkeypatch.setattr("app.api.rclone.settings.rclone_config_root", str(config_root))
+    monkeypatch.setattr("app.core.features.get_effective_plan_value", lambda _db: "pro")
     original_commit = test_db.commit
     state = {"failed": False}
 
@@ -2270,7 +2316,7 @@ def test_create_agent_repository_cloud_mirror_rejects_soft_deleted_agent(test_db
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_agent_repository_borg2_requires_plan_feature(
+async def test_create_agent_repository_requires_managed_agents_plan_feature(
     admin_user, test_db, monkeypatch
 ):
     from app.api.repositories import RepositoryCreate, create_repository
@@ -2286,6 +2332,7 @@ async def test_create_agent_repository_borg2_requires_plan_feature(
     test_db.add(agent)
     test_db.commit()
     test_db.refresh(agent)
+    _set_plan(test_db, "community")
 
     async def unexpected_agent_create(*_args, **_kwargs):
         return {"success": True}
@@ -2313,6 +2360,7 @@ async def test_create_agent_repository_borg2_requires_plan_feature(
 
     assert exc_info.value.status_code == 403
     assert exc_info.value.detail["key"] == "backend.errors.plan.featureNotAvailable"
+    assert exc_info.value.detail["feature"] == "managed_agents"
     assert (
         test_db.query(Repository).filter(Repository.name == "Agent Borg2 App").first()
         is None
@@ -3322,6 +3370,43 @@ def test_update_direct_borg2_rclone_repository_rejects_mirror_fields(
 
 
 @pytest.mark.unit
+def test_create_rclone_repository_requires_pro_plan(
+    test_client: TestClient, admin_headers, test_db, tmp_path, monkeypatch
+):
+    _set_plan(test_db, "community")
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    test_db.add(remote)
+    test_db.commit()
+    test_db.refresh(remote)
+    monkeypatch.setattr(
+        "app.api.repositories.rclone_repository_service.cache_root",
+        str(tmp_path / "cache"),
+    )
+    monkeypatch.setattr(
+        "app.api.repositories.initialize_borg_repository",
+        AsyncMock(return_value={"success": True, "already_existed": False}),
+    )
+
+    response = test_client.post(
+        "/api/repositories/",
+        headers=admin_headers,
+        json={
+            "name": "App",
+            "path": "/client/ignored",
+            "encryption": "none",
+            "storage_backend": "rclone",
+            "rclone_remote_id": remote.id,
+            "rclone_remote_path": "borg-ui/repositories/app",
+            "rclone_sync_policy": "manual",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["feature"] == "rclone"
+    assert test_db.query(Repository).filter(Repository.name == "App").first() is None
+
+
+@pytest.mark.unit
 def test_create_rclone_repository_persists_sync_failure_state(
     test_client: TestClient, admin_headers, test_db, tmp_path, monkeypatch
 ):
@@ -3787,6 +3872,68 @@ def test_update_local_repository_ignores_disabled_rclone_defaults_from_edit_payl
     )
     assert repository.name == "Local Repo Updated"
     assert repository.repository_type == "local"
+    assert storage is None
+
+
+@pytest.mark.unit
+def test_community_can_disable_cloud_mirror_with_default_edit_payload(
+    test_client: TestClient, admin_headers, test_db
+):
+    _set_plan(test_db, "community")
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    repository = Repository(
+        name="Local Repo",
+        path="/repositories/local",
+        encryption="none",
+        compression="lz4",
+        repository_type="local",
+        borg_version=1,
+        executor_type="server",
+        execution_target="local",
+    )
+    test_db.add_all([remote, repository])
+    test_db.commit()
+    test_db.refresh(remote)
+    test_db.refresh(repository)
+    storage = RepositoryStorage(
+        repository_id=repository.id,
+        backend="rclone",
+        rclone_remote_id=remote.id,
+        rclone_remote_path="borg-ui/repositories/local",
+        cache_path="/repositories/local",
+        sync_policy="after_success",
+        sync_status="current",
+        extra_flags=[],
+    )
+    test_db.add(storage)
+    test_db.commit()
+
+    response = test_client.put(
+        f"/api/repositories/{repository.id}",
+        headers=admin_headers,
+        json={
+            "name": "Local Repo Updated",
+            "path": "/repositories/local",
+            "storage_backend": "local",
+            "cloud_mirror_enabled": False,
+            "rclone_remote_id": None,
+            "rclone_remote_path": None,
+            "rclone_remote_path_verified": False,
+            "rclone_sync_policy": "after_success",
+            "rclone_sync_cron_expression": None,
+            "rclone_sync_timezone": None,
+            "rclone_extra_flags": [],
+        },
+    )
+
+    assert response.status_code == 200
+    test_db.refresh(repository)
+    storage = (
+        test_db.query(RepositoryStorage)
+        .filter(RepositoryStorage.repository_id == repository.id)
+        .first()
+    )
+    assert repository.name == "Local Repo Updated"
     assert storage is None
 
 
