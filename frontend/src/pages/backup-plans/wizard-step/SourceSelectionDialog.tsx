@@ -720,15 +720,18 @@ export function SourceSelectionDialog({
     }
   }, [open])
 
-  // When the dialog opens for a plan that already has a database template
-  // recorded, rehydrate selectedDatabase from the fetched template list as
-  // soon as it lands. We restore the saved pre/post script names + bodies
-  // from wizardState so the editor reflects what the user previously saved.
+  // When a story or direct entry opens the dialog on a database detail, enrich
+  // the initial selection from the fetched template list as soon as it lands.
+  // Do not run this for normal edit sessions: a plan-level databaseTemplateId
+  // can belong to an already queued database, and must not overwrite a new
+  // scan/template choice the user is actively configuring.
   useEffect(() => {
     if (!open) return
+    if (initialView !== 'database-detail') return
     const hydratedTemplateId = wizardState.databaseTemplateId ?? null
     if (!hydratedTemplateId || hydratedTemplateId === 'sqlite') return
-    if (selectedDatabase?.id === hydratedTemplateId) return
+    if (!selectedDatabase || selectedDatabase.id !== hydratedTemplateId) return
+    if (databaseDetectedPath(selectedDatabase)) return
     const match = fallbackTemplates.find((tpl) => tpl.id === hydratedTemplateId)
     if (!match) return
     setSelectedDatabase(match)
@@ -739,6 +742,7 @@ export function SourceSelectionDialog({
     setScriptMode(hydratedDatabaseLocation?.database?.pre_backup_script_id ? 'reuse' : 'create')
   }, [
     open,
+    initialView,
     wizardState.databaseTemplateId,
     hydratedDatabaseLocation,
     fallbackTemplates,

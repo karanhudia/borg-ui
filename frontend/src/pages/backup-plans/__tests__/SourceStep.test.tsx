@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
@@ -314,9 +314,6 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.noRemoteMachines': 'No SSH connections available',
   'backupPlans.sourceChooser.scanTarget': 'Scan where?',
   'backupPlans.sourceChooser.pathsToScan': 'Paths to scan',
-  'backupPlans.sourceChooser.rootScanSuggestion':
-    'Not sure where the database lives? Add root (/) to scan broadly.',
-  'backupPlans.sourceChooser.addRootScanPath': 'Add /',
   'backupPlans.sourceChooser.noScanPaths': 'Add at least one path to scan.',
   'backupPlans.sourceChooser.scanning': 'Scanning...',
   'backupPlans.sourceChooser.rescan': 'Re-scan',
@@ -324,7 +321,7 @@ const translations: Record<string, string> = {
     "Database scanning isn't available on this server yet. Open templates to configure manually.",
   'backupPlans.sourceChooser.nothingFoundTitle': 'No databases found on {{target}}',
   'backupPlans.sourceChooser.nothingFoundBody':
-    'Add another path above, search from root, or open templates to set one up manually.',
+    'Add another path above, or open templates to set one up manually.',
   'backupPlans.sourceChooser.checkedPaths': 'Checked:',
   'backupPlans.sourceChooser.detectedSection': 'Detected',
   'backupPlans.sourceChooser.detectedBadge': 'Detected',
@@ -1138,7 +1135,52 @@ describe('SourceStep', () => {
     ).toBeTruthy()
   })
 
+  it('does not promote broad root database scans by default', async () => {
+    apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
+    render(<StatefulSourceStep />)
+
+    fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
+    const databaseTab = await screen.findByRole('tab', { name: /^database$/i })
+    fireEvent.click(databaseTab)
+    fireEvent.click(await screen.findByRole('button', { name: /scan for databases/i }))
+
+    const scanDialogs = screen
+      .getAllByRole('dialog')
+      .filter((dialog) => within(dialog).queryByRole('heading', { name: /scan for databases/i }))
+    expect(scanDialogs.length).toBeGreaterThan(0)
+    const scanDialog = scanDialogs[scanDialogs.length - 1]!
+
+    expect(within(scanDialog).getByText('/var/lib/postgresql')).toBeInTheDocument()
+    expect(within(scanDialog).getByText('/var/lib/mysql')).toBeInTheDocument()
+    expect(within(scanDialog).queryByText('/')).not.toBeInTheDocument()
+    expect(
+      within(scanDialog).queryByRole('button', { name: /addRootScanPath|add \//i })
+    ).not.toBeInTheDocument()
+    expect(
+      within(scanDialog).queryByText(/rootScanSuggestion|add root|scan broadly/i)
+    ).not.toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(apiMocks.scanDatabases).toHaveBeenCalled()
+    })
+    expect(apiMocks.scanDatabases.mock.calls[0]?.[0].paths).toEqual([
+      '/var/lib/postgresql',
+      '/var/lib/mysql',
+      '/var/lib/mongodb',
+      '/var/lib/redis',
+    ])
+    expect(apiMocks.scanDatabases.mock.calls[0]?.[0].ignore_patterns).toEqual(
+      expect.arrayContaining(['usr', 'bin', 'sbin', 'tmp'])
+    )
+    expect(
+      await within(scanDialog).findByText(
+        'Add another path above, or open templates to set one up manually.'
+      )
+    ).toBeInTheDocument()
+  })
+
   it('shows every detected database instance from a scan', async () => {
+    const user = userEvent.setup()
     apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
     apiMocks.scanDatabases.mockResolvedValue({
       data: {
@@ -1216,8 +1258,14 @@ describe('SourceStep', () => {
     fireEvent.click(databaseTab)
     fireEvent.click(await screen.findByRole('button', { name: /scan for databases/i }))
 
-    expect(await screen.findByText('/srv/app/state.sqlite')).toBeInTheDocument()
+    const stateSqlitePath = await screen.findByText('/srv/app/state.sqlite')
     expect(screen.getByText('/srv/app/cache.sqlite3')).toBeInTheDocument()
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
+
+    await user.hover(stateSqlitePath)
+
+    const tooltip = await screen.findByRole('tooltip')
+    expect(within(tooltip).getByText('/srv/app/state.sqlite')).toBeInTheDocument()
   })
 
   it('keeps a detected SQLite filesystem path visible in the detail view', async () => {
@@ -1359,6 +1407,107 @@ describe('SourceStep', () => {
           location.database.pre_backup_script_parameters.SQLITE_DATABASE_PATH
       )
     ).toEqual(['/srv/app/state.sqlite', '/srv/app/cache.sqlite3'])
+  })
+
+  it('does not let existing template hydration overwrite a detected database choice', async () => {
+    let resolveDatabases: ((value: { data: typeof discoveryResponse }) => void) | undefined
+    apiMocks.databases.mockReturnValue(
+      new Promise((resolve) => {
+        resolveDatabases = resolve
+      })
+    )
+    apiMocks.scanDatabases.mockResolvedValue({
+      data: {
+        scan_target: {
+          source_type: 'local',
+          source_ssh_connection_id: null,
+          label: 'This Borg UI server',
+        },
+        scanned_paths: ['/srv'],
+        detections: [sqliteScanDetection('/srv/app/index.db')],
+        templates: discoveryResponse.templates,
+        warnings: [],
+      },
+    })
+    const existingMysqlState = {
+      ...createInitialState(),
+      sourceType: 'local',
+      sourceDirectories: ['/var/tmp/borg-ui/database-dumps/mysql'],
+      sourceLocations: [
+        {
+          source_type: 'local',
+          source_ssh_connection_id: null,
+          paths: ['/var/tmp/borg-ui/database-dumps/mysql'],
+          database: {
+            template_id: 'mysql',
+            engine: 'MySQL',
+            display_name: 'MySQL database',
+            backup_strategy: 'logical_dump',
+            detected_source_path: '/var/lib/mysql',
+            detection_label: 'This Borg UI server',
+            capture_mode: 'dump',
+            dump_path: '/var/tmp/borg-ui/database-dumps/mysql',
+            backup_paths: ['/var/tmp/borg-ui/database-dumps/mysql'],
+            script_execution_target: 'source',
+          },
+        },
+      ],
+      databaseTemplateId: 'mysql',
+    }
+
+    const updateState = vi.fn()
+    renderSourceStep({ wizardState: existingMysqlState, updateState })
+
+    fireEvent.click(screen.getByRole('button', { name: /edit/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /scan for databases/i }))
+
+    const detectedSqlite = await screen.findByText('/srv/app/index.db')
+    fireEvent.click(detectedSqlite.closest('button') || detectedSqlite)
+
+    expect(await screen.findByRole('heading', { name: /^sqlite database$/i })).toBeInTheDocument()
+    expect(
+      screen.getByDisplayValue('/var/tmp/borg-ui/database-dumps/sqlite/index')
+    ).toBeInTheDocument()
+
+    await act(async () => {
+      resolveDatabases?.({ data: discoveryResponse })
+    })
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /^sqlite database$/i })).toBeInTheDocument()
+    })
+    expect(
+      screen.getByDisplayValue('/var/tmp/borg-ui/database-dumps/sqlite/index')
+    ).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /add database/i }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/\/var\/tmp\/borg-ui\/database-dumps\/sqlite\/index/)
+      ).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /use these paths/i }))
+
+    await waitFor(() => {
+      expect(updateState).toHaveBeenCalled()
+    })
+    const updatePayload = updateState.mock.calls[0][0]
+    expect(
+      updatePayload.sourceLocations.map(
+        (location: { database: { template_id: string } }) => location.database.template_id
+      )
+    ).toEqual(['mysql', 'sqlite'])
+    expect(
+      updatePayload.sourceLocations.map(
+        (location: { database: { display_name: string } }) => location.database.display_name
+      )
+    ).toEqual(['MySQL database', 'SQLite database'])
+    expect(updatePayload.sourceDirectories).toEqual([
+      '/var/tmp/borg-ui/database-dumps/mysql',
+      '/var/tmp/borg-ui/database-dumps/sqlite/index',
+    ])
   })
 
   it('queues database templates in the database tab without closing the modal', async () => {

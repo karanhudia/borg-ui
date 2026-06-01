@@ -1,4 +1,4 @@
-import { Box, Card, CardActionArea, Stack, Typography, alpha } from '@mui/material'
+import { Box, Card, CardActionArea, Stack, Tooltip, Typography, alpha } from '@mui/material'
 import { SiMariadb, SiMongodb, SiMysql, SiPostgresql, SiRedis, SiSqlite } from 'react-icons/si'
 import type { IconType } from 'react-icons'
 
@@ -107,21 +107,36 @@ export function DatabaseBrandTile({ database, detectedLabel, onClick }: Database
               </Stack>
             )}
             {detectionSource && (
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                title={detectionSource}
-                sx={{
-                  fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace',
-                  fontSize: '0.6875rem',
-                  lineHeight: 1.25,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
+              <Tooltip
+                arrow
+                title={
+                  <Typography
+                    component="span"
+                    variant="caption"
+                    sx={{
+                      fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace',
+                      overflowWrap: 'anywhere',
+                    }}
+                  >
+                    {detectionSource}
+                  </Typography>
+                }
               >
-                {detectionSource}
-              </Typography>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{
+                    fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace',
+                    fontSize: '0.6875rem',
+                    lineHeight: 1.25,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {detectionSource}
+                </Typography>
+              </Tooltip>
             )}
           </Stack>
         </Stack>

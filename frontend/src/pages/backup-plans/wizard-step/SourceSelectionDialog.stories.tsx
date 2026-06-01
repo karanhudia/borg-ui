@@ -216,7 +216,11 @@ const detectedScanResponse = {
   detections: [
     { ...postgresqlTemplate, detected: true, detection_source: '/var/lib/postgresql' },
     { ...mysqlTemplate, detected: true, detection_source: '/var/lib/mysql' },
-    { ...sqliteTemplate, detected: true, detection_source: '/srv/app/state.sqlite' },
+    {
+      ...sqliteTemplate,
+      detected: true,
+      detection_source: '/srv/compose/vaultwarden/data/db.sqlite3',
+    },
     { ...sqliteTemplate, detected: true, detection_source: '/srv/app/cache.sqlite3' },
   ],
   templates: allTemplates,
@@ -593,9 +597,6 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.hideTemplates': 'Hide templates',
   'backupPlans.sourceChooser.scanTarget': 'Scan where?',
   'backupPlans.sourceChooser.pathsToScan': 'Paths to scan',
-  'backupPlans.sourceChooser.rootScanSuggestion':
-    'Not sure where the database lives? Add root (/) to scan broadly.',
-  'backupPlans.sourceChooser.addRootScanPath': 'Add /',
   'backupPlans.sourceChooser.noScanPaths': 'Add at least one path to scan.',
   'backupPlans.sourceChooser.scanning': 'Scanning…',
   'backupPlans.sourceChooser.rescan': 'Re-scan',
@@ -619,7 +620,7 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.scanEndpointMissing':
     "Database scanning isn't available on this server yet. Open templates to configure manually.",
   'backupPlans.sourceChooser.nothingFoundBody':
-    'Add another path above, search from root, or open templates to set one up manually.',
+    'Add another path above, or open templates to set one up manually.',
   'backupPlans.sourceChooser.checkedPaths': 'Checked:',
   'backupPlans.sourceChooser.detectedSection': 'Detected',
   'backupPlans.sourceChooser.detectedBadge': 'Detected',
@@ -878,7 +879,7 @@ export const DatabaseScanDetected: Story = {
     docs: {
       description: {
         story:
-          'Scan sub-dialog open over the Database tab. Mocked endpoint returns detected engines including multiple SQLite files; the dialog shows the scan target picker, paths, and detected tiles.',
+          'Scan sub-dialog open over the Database tab. Mocked endpoint returns detected engines including multiple SQLite files; the dialog shows the scan target picker, paths, detected tiles, and truncated detected paths that reveal the full path on hover.',
       },
     },
   },
@@ -955,6 +956,25 @@ export const DatabaseQueuedSelection: Story = {
       description: {
         story:
           'Database tab with an already queued PostgreSQL selection. The tab badge and selected database summary persist when the dialog is reopened.',
+      },
+    },
+  },
+}
+
+export const DatabaseQueuedSelectionWithScanOpen: Story = {
+  render: () => (
+    <DialogStory
+      wizardState={databaseQueuedState}
+      mockOptions={{ scanStatus: 'detected' }}
+      initialView="database"
+      initialScanDialogOpen
+    />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Database tab reopened with an existing queued database while the scan sub-dialog is open. New detections can be added without the saved template overwriting the active choice.',
       },
     },
   },

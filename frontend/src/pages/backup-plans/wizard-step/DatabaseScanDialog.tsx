@@ -18,7 +18,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
-import { ChevronDown, HardDrive, Info, Plus, RefreshCw, Server, Sliders, X } from 'lucide-react'
+import { ChevronDown, HardDrive, Plus, RefreshCw, Server, Sliders, X } from 'lucide-react'
 import type { TFunction } from 'i18next'
 
 import DestinationSelect, {
@@ -69,6 +69,15 @@ const DEFAULT_SCAN_IGNORE_PATTERNS = [
   'build',
   '__pycache__',
   'overlay2',
+  'bin',
+  'boot',
+  'dev',
+  'proc',
+  'run',
+  'sbin',
+  'sys',
+  'tmp',
+  'usr',
 ]
 
 function classifyScanError(err: unknown): ScanErrorState {
@@ -224,7 +233,6 @@ export function DatabaseScanDialog({
   const detections = scanResult?.detections || []
   const hasRemoteOptions = sshConnections.length > 0
   const remoteDisabled = scanTarget.type === 'remote' && !hasRemoteOptions
-  const rootScanPathQueued = scanPaths.some((path) => path.trim() === '/')
   const scanCompleted = scanResult !== null
   const nothingFound = !scanLoading && !scanError && scanCompleted && detections.length === 0
   const awaitingFirstScan = !scanCompleted && !scanError
@@ -475,36 +483,6 @@ export function DatabaseScanDialog({
                   </Typography>
                 )}
               </Stack>
-              {!rootScanPathQueued && !remoteDisabled && (
-                <Stack
-                  direction={{ xs: 'column', sm: 'row' }}
-                  spacing={{ xs: 0.5, sm: 0.75 }}
-                  alignItems={{ xs: 'flex-start', sm: 'center' }}
-                  sx={{ mt: 0.75, color: 'text.secondary' }}
-                >
-                  <Stack direction="row" spacing={0.5} alignItems="center" sx={{ minWidth: 0 }}>
-                    <Info size={13} />
-                    <Typography variant="caption" color="text.secondary">
-                      {t('backupPlans.sourceChooser.rootScanSuggestion')}
-                    </Typography>
-                  </Stack>
-                  <Button
-                    size="small"
-                    variant="text"
-                    onClick={() => addScanPaths(['/'])}
-                    sx={{
-                      minWidth: 0,
-                      p: 0,
-                      lineHeight: 1.4,
-                      textTransform: 'none',
-                      fontWeight: 500,
-                      '&:hover': { bgcolor: 'transparent', textDecoration: 'underline' },
-                    }}
-                  >
-                    {t('backupPlans.sourceChooser.addRootScanPath')}
-                  </Button>
-                </Stack>
-              )}
             </Box>
 
             {/* Advanced scan options: collapsed by default; users who need to

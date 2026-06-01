@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -19,7 +19,9 @@ const translations: Record<string, string> = {
   'backupPlans.wizard.scripts.postSourceScript': 'Post',
   'backupPlans.wizard.scripts.autoFilledSourceParameters': 'Auto-filled from source',
   'backupPlans.wizard.scripts.viewAutoFilledSourceParameters':
-    'View auto-filled source values for {{database}}',
+    'View auto-filled source parameter details for {{database}}',
+  'backupPlans.wizard.scripts.noAutoFilledSourceParameters':
+    'No parameter values were auto-filled from this source.',
   'backupPlans.wizard.scripts.preBackupScripts': 'Pre-backup scripts',
   'backupPlans.wizard.scripts.postBackupScripts': 'Post-backup scripts',
   'backupPlans.wizard.scripts.addPreBackupScript': 'Add pre-backup script',
@@ -130,14 +132,17 @@ describe('ScriptsStep', () => {
     expect(screen.getByText(/Generic MySQL prepare/)).toBeInTheDocument()
     expect(screen.getByText(/Generic MySQL cleanup/)).toBeInTheDocument()
     expect(screen.getAllByText('Auto-filled from source')).toHaveLength(2)
+
     const sqliteValuesButton = screen.getByRole('button', {
-      name: 'View auto-filled source values for SQLite database',
+      name: 'View auto-filled source parameter details for SQLite database',
     })
-    expect(
-      screen.queryByRole('button', {
-        name: 'View auto-filled source values for MySQL database',
-      })
-    ).not.toBeInTheDocument()
+    const mysqlValuesButton = screen.getByRole('button', {
+      name: 'View auto-filled source parameter details for MySQL database',
+    })
+    const mysqlTriggerGroup = mysqlValuesButton.parentElement
+    expect(mysqlTriggerGroup).not.toBeNull()
+    expect(within(mysqlTriggerGroup!).getByText('Auto-filled from source')).toBeInTheDocument()
+    expect(within(mysqlTriggerGroup!).queryByText('MySQL database')).not.toBeInTheDocument()
 
     await user.hover(sqliteValuesButton)
 
@@ -146,6 +151,13 @@ describe('ScriptsStep', () => {
     ).toBeInTheDocument()
     expect(
       screen.getByText('Post: SQLITE_DUMP_PATH=/var/tmp/borg-ui/database-dumps/sqlite')
+    ).toBeInTheDocument()
+
+    await user.unhover(sqliteValuesButton)
+    await user.hover(mysqlValuesButton)
+
+    expect(
+      await screen.findByText('No parameter values were auto-filled from this source.')
     ).toBeInTheDocument()
     expect(screen.getByText('Pre-backup scripts')).toBeInTheDocument()
     expect(screen.getByText('Post-backup scripts')).toBeInTheDocument()

@@ -24,7 +24,8 @@ and stories already cover the database source script summary state.
 - Preserve the existing `Auto-filled from source` chip so users still understand
   the parameter source.
 - Show only non-empty parameter values. Empty parameter maps should keep the
-  existing chip with no misleading value list.
+  existing chip and tooltip affordance, with copy that explains no parameter
+  values were auto-filled from the source.
 
 ## Goals
 
@@ -44,14 +45,17 @@ and stories already cover the database source script summary state.
 
 ## Approach
 
-Add a small tooltip affordance next to the `Auto-filled from source` chip when a
-database source row has non-empty `pre_backup_script_parameters` or
-`post_backup_script_parameters`.
+Add a small tooltip affordance next to every `Auto-filled from source` chip.
+When a database source row has non-empty `pre_backup_script_parameters` or
+`post_backup_script_parameters`, the tooltip lists those values. When a row has
+no values, the tooltip explains that no parameter values were auto-filled from
+the source.
 
 The tooltip title will list `KEY=value` pairs, grouped by pre and post script
 when both exist. The trigger will be a focusable, icon-only MUI `IconButton`
-with an accessible label. The icon appears only when there are values to verify;
-rows with empty parameter maps continue to render only the existing chip.
+with an accessible label. The icon appears for every database source script row
+that renders the chip and is grouped with the chip so it cannot wrap onto its
+own line on narrow screens.
 
 The visible row copy remains unchanged except for the small verification icon.
 This avoids implying that values are editable or user-entered.
@@ -61,10 +65,10 @@ This avoids implying that values are editable or user-entered.
 - Auto-filled database source script rows expose non-empty resolved parameter
   values through a hover and keyboard-focus tooltip.
 - The existing `Auto-filled from source` chip remains visible.
-- Rows with empty or missing auto-filled parameter maps do not show an empty
-  value tooltip.
-- The focused component test proves values are discoverable and empty values
-  are not exposed.
+- Rows with empty or missing auto-filled parameter maps show an explanatory
+  tooltip instead of an empty value list.
+- The focused component test proves values are discoverable and empty-value
+  rows still expose a meaningful tooltip.
 - The Storybook story includes auto-filled values so Argos can capture the
   changed state in CI.
 

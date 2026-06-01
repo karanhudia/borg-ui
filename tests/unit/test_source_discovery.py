@@ -626,6 +626,36 @@ class TestSourceDiscovery:
         assert "mysql" in ids
         assert "postgresql" not in ids
 
+    def test_database_scan_default_prunes_system_dirs_for_broad_scan(
+        self, test_client, admin_headers, tmp_path, monkeypatch
+    ):
+        monkeypatch.setattr(source_discovery, "which", lambda command: None)
+        noisy_sqlite = tmp_path / "usr" / "bin" / "tool.db"
+        noisy_sqlite.parent.mkdir(parents=True)
+        noisy_sqlite.write_bytes(b"SQLite format 3\x00")
+        app_sqlite = tmp_path / "etc" / "pihole" / "gravity.db"
+        app_sqlite.parent.mkdir(parents=True)
+        app_sqlite.write_bytes(b"SQLite format 3\x00")
+
+        response = test_client.post(
+            "/api/source-discovery/databases/scan",
+            json={
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "paths": [str(tmp_path)],
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        sqlite_sources = [
+            detection["detection_source"]
+            for detection in response.json()["detections"]
+            if detection["id"] == "sqlite"
+        ]
+        assert str(app_sqlite) in sqlite_sources
+        assert str(noisy_sqlite) not in sqlite_sources
+
     def test_database_scan_rejects_out_of_range_max_depth(
         self, test_client, admin_headers
     ):
