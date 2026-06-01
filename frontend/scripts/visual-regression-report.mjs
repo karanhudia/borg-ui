@@ -12,9 +12,40 @@ const { PNG } = pngjs
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const frontendRoot = path.resolve(__dirname, '..')
+const repoRoot = path.resolve(frontendRoot, '..')
 
 function normalizeFileName(fileName) {
   return fileName.split(path.sep).join('/')
+}
+
+function normalizeRelativePath(fileName) {
+  return normalizeFileName(fileName).replace(/^\.\//, '')
+}
+
+function storyTitleToSnapshotPrefix(title) {
+  return title
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+function snapshotMatchesPrefix(fileName, prefix) {
+  const snapshotName = fileName.endsWith('.png') ? fileName.slice(0, -4) : fileName
+  return snapshotName === prefix || snapshotName.startsWith(`${prefix}--`)
+}
+
+function parseThreshold(value, fallback = 0) {
+  if (value === undefined || value === '') {
+    return fallback
+  }
+
+  const parsed = Number.parseFloat(value)
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return fallback
+  }
+
+  return parsed
 }
 
 function escapeHtml(value) {
@@ -74,6 +105,73 @@ async function listPngFiles(rootDir, currentDir = rootDir) {
 
 async function readPng(filePath) {
   return PNG.sync.read(await readFile(filePath))
+}
+
+async function readLines(filePath) {
+  if (!filePath) {
+    return []
+  }
+
+  const content = await readFile(filePath, 'utf8')
+  return content
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+}
+
+async function readStoryTitle(storyPath) {
+  try {
+    const storySource = await readFile(storyPath, 'utf8')
+    return storySource.match(/title:\s*['"`]([^'"`]+)['"`]/)?.[1] || ''
+  } catch (error) {
+    if (error && error.code === 'ENOENT') {
+      return ''
+    }
+
+    throw error
+  }
+}
+
+async function snapshotPrefixForChangedFile(fileName, sourceRoot) {
+  const relativeFileName = normalizeRelativePath(fileName)
+
+  if (!relativeFileName.startsWith('frontend/src/')) {
+    return ''
+  }
+
+  const sourcePath = path.join(sourceRoot, relativeFileName)
+  const extension = path.extname(relativeFileName)
+  const basename = path.basename(relativeFileName, extension)
+  const candidateStoryPaths = relativeFileName.includes('.stories.')
+    ? [sourcePath]
+    : ['.tsx', '.ts', '.jsx', '.js'].map((storyExtension) =>
+        path.join(path.dirname(sourcePath), `${basename}.stories${storyExtension}`)
+      )
+
+  for (const storyPath of candidateStoryPaths) {
+    const title = await readStoryTitle(storyPath)
+
+    if (title) {
+      return storyTitleToSnapshotPrefix(title)
+    }
+  }
+
+  return ''
+}
+
+async function resolveRelevantSnapshotPrefixes({ changedFiles, changedFilesPath, sourceRoot }) {
+  const fileNames = [...(changedFiles || []), ...(await readLines(changedFilesPath))]
+  const prefixes = new Set()
+
+  for (const fileName of fileNames) {
+    const prefix = await snapshotPrefixForChangedFile(fileName, sourceRoot)
+
+    if (prefix) {
+      prefixes.add(prefix)
+    }
+  }
+
+  return prefixes
 }
 
 async function copySnapshot(sourceRoot, outputDir, kind, fileName) {
@@ -483,6 +581,10 @@ export async function compareVisualSnapshots({
   outputDir,
   reportUrl = '',
   metadata = {},
+  sourceRoot = repoRoot,
+  changedFiles = [],
+  changedFilesPath = '',
+  unrelatedDiffThreshold = 0,
 } = {}) {
   if (!baselineDir) {
     throw new Error('compareVisualSnapshots requires a baselineDir.')
@@ -504,6 +606,12 @@ export async function compareVisualSnapshots({
   const changed = []
   const removed = []
   const unchanged = []
+  const relevantSnapshotPrefixes = await resolveRelevantSnapshotPrefixes({
+    changedFiles,
+    changedFilesPath,
+    sourceRoot,
+  })
+  const relevantSnapshotPrefixList = Array.from(relevantSnapshotPrefixes)
 
   await rm(outputDir, { force: true, recursive: true })
   await mkdir(outputDir, { recursive: true })
@@ -532,8 +640,18 @@ export async function compareVisualSnapshots({
     const baseline = await readPng(baselinePath)
     const actual = await readPng(actualPath)
     const { diff, diffPixels, dimensionsChanged, totalPixels } = makeDiffPng(baseline, actual)
+    const diffRatio = totalPixels === 0 ? 0 : diffPixels / totalPixels
+    const isRelevantSnapshot = relevantSnapshotPrefixList.some((prefix) =>
+      snapshotMatchesPrefix(fileName, prefix)
+    )
+    const isTinyUnrelatedDiff =
+      unrelatedDiffThreshold > 0 &&
+      !isRelevantSnapshot &&
+      !dimensionsChanged &&
+      diffPixels > 0 &&
+      diffRatio <= unrelatedDiffThreshold
 
-    if (diffPixels === 0 && !dimensionsChanged) {
+    if ((diffPixels === 0 && !dimensionsChanged) || isTinyUnrelatedDiff) {
       unchanged.push({ fileName })
       continue
     }
@@ -551,7 +669,7 @@ export async function compareVisualSnapshots({
       diffPath,
       diffPixels,
       totalPixels,
-      diffRatio: totalPixels === 0 ? 0 : diffPixels / totalPixels,
+      diffRatio,
       dimensionsChanged,
       baseline: {
         width: baseline.width,
@@ -604,6 +722,13 @@ function cliOptions(args = process.argv.slice(2), env = process.env) {
       readCliValue(args, '--output-dir') ||
       env.VISUAL_REPORT_DIR ||
       path.resolve(frontendRoot, 'visual-report'),
+    sourceRoot: readCliValue(args, '--source-root') || env.VISUAL_SOURCE_ROOT || repoRoot,
+    changedFilesPath:
+      readCliValue(args, '--changed-files-path') || env.VISUAL_CHANGED_FILES_PATH || '',
+    unrelatedDiffThreshold: parseThreshold(
+      readCliValue(args, '--unrelated-diff-threshold') || env.VISUAL_UNRELATED_DIFF_THRESHOLD,
+      0
+    ),
     reportUrl: readCliValue(args, '--report-url') || env.VISUAL_REPORT_URL || '',
     metadata: {
       title: readCliValue(args, '--title') || env.VISUAL_REPORT_TITLE || 'Visual regression report',
