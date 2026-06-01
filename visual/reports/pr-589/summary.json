@@ -1,112 +1,21 @@
 {
-  "generatedAt": "2026-06-01T15:48:08.817Z",
+  "generatedAt": "2026-06-01T15:59:34.692Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #589 visual report",
-    "commitSha": "c9cee300cc79",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26765529432"
+    "commitSha": "710619203ed6",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26766118730"
   },
   "totals": {
     "baseline": 238,
     "actual": 238,
     "compared": 238,
-    "changed": 5,
+    "changed": 0,
     "added": 0,
     "removed": 0,
-    "unchanged": 233
+    "unchanged": 238
   },
-  "changed": [
-    {
-      "fileName": "backup-plans-sourceselectiondialog--database-queued-selection--mobile.png",
-      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--database-queued-selection--mobile.png",
-      "actualPath": "images/actual/backup-plans-sourceselectiondialog--database-queued-selection--mobile.png",
-      "diffPath": "images/diff/backup-plans-sourceselectiondialog--database-queued-selection--mobile.png",
-      "diffPixels": 3,
-      "totalPixels": 329160,
-      "diffRatio": 0.00000911410864017499,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-local-selections--mobile.png",
-      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--path-picker-with-local-selections--mobile.png",
-      "actualPath": "images/actual/backup-plans-sourceselectiondialog--path-picker-with-local-selections--mobile.png",
-      "diffPath": "images/diff/backup-plans-sourceselectiondialog--path-picker-with-local-selections--mobile.png",
-      "diffPixels": 63,
-      "totalPixels": 329160,
-      "diffRatio": 0.0001913962814436748,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "components-rcloneremoteselect--configured-remote.png",
-      "baselinePath": "images/baseline/components-rcloneremoteselect--configured-remote.png",
-      "actualPath": "images/actual/components-rcloneremoteselect--configured-remote.png",
-      "diffPath": "images/diff/components-rcloneremoteselect--configured-remote.png",
-      "diffPixels": 38,
-      "totalPixels": 1024000,
-      "diffRatio": 0.000037109375,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "components-wizard-repository-location--direct-borg-2-rclone--mobile.png",
-      "baselinePath": "images/baseline/components-wizard-repository-location--direct-borg-2-rclone--mobile.png",
-      "actualPath": "images/actual/components-wizard-repository-location--direct-borg-2-rclone--mobile.png",
-      "diffPath": "images/diff/components-wizard-repository-location--direct-borg-2-rclone--mobile.png",
-      "diffPixels": 23,
-      "totalPixels": 329160,
-      "diffRatio": 0.00006987483290800826,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "components-wizard-repository-location--filesystem-destinations--mobile.png",
-      "baselinePath": "images/baseline/components-wizard-repository-location--filesystem-destinations--mobile.png",
-      "actualPath": "images/actual/components-wizard-repository-location--filesystem-destinations--mobile.png",
-      "diffPath": "images/diff/components-wizard-repository-location--filesystem-destinations--mobile.png",
-      "diffPixels": 8,
-      "totalPixels": 329160,
-      "diffRatio": 0.00002430428970713331,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    }
-  ],
+  "changed": [],
   "added": [],
   "removed": [],
   "unchanged": [
@@ -181,6 +90,9 @@
     },
     {
       "fileName": "backup-plans-sourceselectiondialog--database-queued-multiple-sqlite-selection.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-queued-selection--mobile.png"
     },
     {
       "fileName": "backup-plans-sourceselectiondialog--database-queued-selection.png"
@@ -268,6 +180,9 @@
     },
     {
       "fileName": "backup-plans-sourceselectiondialog--path-picker-with-incomplete-zfs-snapshot.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-local-selections--mobile.png"
     },
     {
       "fileName": "backup-plans-sourceselectiondialog--path-picker-with-local-selections.png"
@@ -448,6 +363,9 @@
     },
     {
       "fileName": "components-rcloneremoteselect--configured-remote--mobile.png"
+    },
+    {
+      "fileName": "components-rcloneremoteselect--configured-remote.png"
     },
     {
       "fileName": "components-rcloneremoteselect--disabled-control--mobile.png"
@@ -648,7 +566,13 @@
       "fileName": "components-wizard-repository-location--community-plan-locked-destinations.png"
     },
     {
+      "fileName": "components-wizard-repository-location--direct-borg-2-rclone--mobile.png"
+    },
+    {
       "fileName": "components-wizard-repository-location--direct-borg-2-rclone.png"
+    },
+    {
+      "fileName": "components-wizard-repository-location--filesystem-destinations--mobile.png"
     },
     {
       "fileName": "components-wizard-repository-location--filesystem-destinations.png"
