@@ -1,13 +1,36 @@
-import { Alert, Box, Chip, Stack, Typography } from '@mui/material'
-import { Database as DatabaseIcon } from 'lucide-react'
+import { Alert, Box, Chip, IconButton, Stack, Tooltip, Typography } from '@mui/material'
+import { Database as DatabaseIcon, Info as InfoIcon } from 'lucide-react'
 
 import ScriptSelectorSection from '../../../components/ScriptSelectorSection'
+import type { SourceDatabaseSelection } from '../../../types'
 import type { BackupPlanWizardStepProps } from './types'
 
 type ScriptsStepProps = Pick<
   BackupPlanWizardStepProps,
   'wizardState' | 'scripts' | 'loadingScripts' | 'updateState' | 't'
 >
+
+function parameterValues(parameters?: Record<string, string> | null) {
+  return Object.entries(parameters || {})
+    .map(([name, value]) => [name.trim(), String(value).trim()] as const)
+    .filter(([name, value]) => name.length > 0 && value.length > 0)
+    .sort(([leftName], [rightName]) => leftName.localeCompare(rightName))
+    .map(([name, value]) => `${name}=${value}`)
+}
+
+function autoFilledParameterLines(
+  database: SourceDatabaseSelection,
+  labels: { pre: string; post: string }
+) {
+  return [
+    ...parameterValues(database.pre_backup_script_parameters).map(
+      (value) => `${labels.pre}: ${value}`
+    ),
+    ...parameterValues(database.post_backup_script_parameters).map(
+      (value) => `${labels.post}: ${value}`
+    ),
+  ]
+}
 
 export function ScriptsStep({
   wizardState,
@@ -20,6 +43,8 @@ export function ScriptsStep({
     if (!scriptId) return null
     return scripts.find((script) => script.id === scriptId)?.name || `Script #${scriptId}`
   }
+  const preSourceScriptLabel = String(t('backupPlans.wizard.scripts.preSourceScript'))
+  const postSourceScriptLabel = String(t('backupPlans.wizard.scripts.postSourceScript'))
   const databaseSourceScripts = (wizardState.sourceLocations || [])
     .filter((location) => location.database)
     .map((location, index) => ({
@@ -27,6 +52,10 @@ export function ScriptsStep({
       order: location.database?.script_execution_order || index + 1,
       preScriptName: scriptName(location.database?.pre_backup_script_id),
       postScriptName: scriptName(location.database?.post_backup_script_id),
+      autoFilledParameterLines: autoFilledParameterLines(location.database!, {
+        pre: preSourceScriptLabel,
+        post: postSourceScriptLabel,
+      }),
     }))
     .filter((row) => row.preScriptName || row.postScriptName)
 
@@ -84,15 +113,51 @@ export function ScriptsStep({
                             variant="outlined"
                             label={t('backupPlans.wizard.scripts.autoFilledSourceParameters')}
                           />
+                          {row.autoFilledParameterLines.length > 0 && (
+                            <Tooltip
+                              arrow
+                              title={
+                                <Stack spacing={0.25}>
+                                  {row.autoFilledParameterLines.map((line) => (
+                                    <Typography
+                                      key={line}
+                                      component="span"
+                                      variant="caption"
+                                      sx={{ fontFamily: 'monospace', lineHeight: 1.45 }}
+                                    >
+                                      {line}
+                                    </Typography>
+                                  ))}
+                                </Stack>
+                              }
+                            >
+                              <IconButton
+                                size="small"
+                                aria-label={String(
+                                  t('backupPlans.wizard.scripts.viewAutoFilledSourceParameters', {
+                                    database: row.database.display_name,
+                                  })
+                                )}
+                                sx={{
+                                  color: 'text.secondary',
+                                  width: 24,
+                                  height: 24,
+                                  p: 0.25,
+                                }}
+                              >
+                                <InfoIcon size={14} aria-hidden="true" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
                         </Stack>
                         {row.preScriptName && (
                           <Typography variant="body2" color="text.secondary">
-                            {t('backupPlans.wizard.scripts.preSourceScript')}: {row.preScriptName}
+                            {preSourceScriptLabel}: {row.preScriptName}
                           </Typography>
                         )}
                         {row.postScriptName && (
                           <Typography variant="body2" color="text.secondary">
-                            {t('backupPlans.wizard.scripts.postSourceScript')}: {row.postScriptName}
+                            {postSourceScriptLabel}: {row.postScriptName}
                           </Typography>
                         )}
                       </Stack>

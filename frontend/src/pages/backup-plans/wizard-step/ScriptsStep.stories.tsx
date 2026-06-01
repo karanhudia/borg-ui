@@ -38,7 +38,9 @@ const databaseSourceState: WizardState = {
         pre_backup_script_parameters: {
           SQLITE_DATABASE_PATH: '/home/app/state.sqlite',
         },
-        post_backup_script_parameters: {},
+        post_backup_script_parameters: {
+          SQLITE_DUMP_PATH: '/var/tmp/borg-ui/database-dumps/sqlite',
+        },
         script_execution_order: 1,
       },
     },
@@ -59,6 +61,8 @@ const translations: Record<string, string> = {
   'backupPlans.wizard.scripts.preSourceScript': 'Pre',
   'backupPlans.wizard.scripts.postSourceScript': 'Post',
   'backupPlans.wizard.scripts.autoFilledSourceParameters': 'Auto-filled from source',
+  'backupPlans.wizard.scripts.viewAutoFilledSourceParameters':
+    'View auto-filled source values for {{database}}',
   'scriptSelector.preBackupScript': 'Pre-Backup Script',
   'scriptSelector.postBackupScript': 'Post-Backup Script',
   'scriptSelector.selectPreBackup': 'Select pre-backup script',
@@ -70,7 +74,13 @@ const translations: Record<string, string> = {
   'scriptSelector.scheduledOnly': 'Scheduled only',
 }
 
-const t = (key: string) => translations[key] || key
+const t = (key: string, options?: Record<string, string>) => {
+  const template = translations[key] || key
+  return Object.entries(options || {}).reduce(
+    (text, [name, value]) => text.replace(`{{${name}}}`, value),
+    template
+  )
+}
 
 function renderStep(wizardState: WizardState = databaseSourceState) {
   return (
