@@ -1,5 +1,5 @@
 import { createWriteStream } from 'node:fs'
-import { mkdir, mkdtemp, readFile, stat } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 
@@ -27,6 +27,20 @@ const white = [255, 255, 255, 255]
 const black = [0, 0, 0, 255]
 const red = [255, 0, 0, 255]
 const blue = [0, 0, 255, 255]
+
+function filledPixels(color, width, height) {
+  return Array.from({ length: width * height }, () => color)
+}
+
+function pixelsWithChanges(baseColor, changedColor, changedPixels, width, height) {
+  const pixels = filledPixels(baseColor, width, height)
+
+  for (let index = 0; index < changedPixels; index += 1) {
+    pixels[index] = changedColor
+  }
+
+  return pixels
+}
 
 describe('compareVisualSnapshots', () => {
   it('classifies changed, added, removed, and unchanged screenshots', async () => {
@@ -97,5 +111,121 @@ describe('compareVisualSnapshots', () => {
       fileName: 'resized.png',
       dimensionsChanged: true,
     })
+  })
+
+  it('ignores tiny unrelated drift while keeping screenshots linked to changed stories', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'borg-visual-relevance-'))
+    const baselineDir = path.join(root, 'baseline')
+    const actualDir = path.join(root, 'actual')
+    const outputDir = path.join(root, 'report')
+    const sourceRoot = path.join(root, 'source')
+    const storyPath = path.join(sourceRoot, 'frontend/src/components/Thing.stories.tsx')
+
+    await mkdir(path.dirname(storyPath), { recursive: true })
+    await writeFile(storyPath, "export default { title: 'Components/Thing' }\n")
+
+    await writePng(
+      path.join(baselineDir, 'components-thing--minor-icon.png'),
+      filledPixels(white, 100, 100),
+      100,
+      100
+    )
+    await writePng(
+      path.join(actualDir, 'components-thing--minor-icon.png'),
+      pixelsWithChanges(white, red, 1, 100, 100),
+      100,
+      100
+    )
+
+    await writePng(
+      path.join(baselineDir, 'components-other--tiny-drift.png'),
+      filledPixels(white, 100, 100),
+      100,
+      100
+    )
+    await writePng(
+      path.join(actualDir, 'components-other--tiny-drift.png'),
+      pixelsWithChanges(white, blue, 1, 100, 100),
+      100,
+      100
+    )
+
+    await writePng(
+      path.join(baselineDir, 'components-other--large-change.png'),
+      filledPixels(white, 100, 100),
+      100,
+      100
+    )
+    await writePng(
+      path.join(actualDir, 'components-other--large-change.png'),
+      pixelsWithChanges(white, red, 20, 100, 100),
+      100,
+      100
+    )
+
+    const summary = await compareVisualSnapshots({
+      baselineDir,
+      actualDir,
+      outputDir,
+      sourceRoot,
+      changedFiles: ['frontend/src/components/Thing.stories.tsx'],
+      unrelatedDiffThreshold: 0.001,
+    })
+
+    expect(summary.changed.map((item) => item.fileName)).toEqual([
+      'components-other--large-change.png',
+      'components-thing--minor-icon.png',
+    ])
+    expect(summary.unchanged).toContainEqual({ fileName: 'components-other--tiny-drift.png' })
+    expect(summary.totals.changed).toBe(2)
+    expect(summary.totals.unchanged).toBe(1)
+  })
+
+  it('uses the tiny drift threshold when no changed story can be mapped', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'borg-visual-unmapped-'))
+    const baselineDir = path.join(root, 'baseline')
+    const actualDir = path.join(root, 'actual')
+    const outputDir = path.join(root, 'report')
+
+    await writePng(
+      path.join(baselineDir, 'components-one--tiny-drift.png'),
+      filledPixels(white, 100, 100),
+      100,
+      100
+    )
+    await writePng(
+      path.join(actualDir, 'components-one--tiny-drift.png'),
+      pixelsWithChanges(white, blue, 1, 100, 100),
+      100,
+      100
+    )
+
+    await writePng(
+      path.join(baselineDir, 'components-two--large-change.png'),
+      filledPixels(white, 100, 100),
+      100,
+      100
+    )
+    await writePng(
+      path.join(actualDir, 'components-two--large-change.png'),
+      pixelsWithChanges(white, red, 20, 100, 100),
+      100,
+      100
+    )
+
+    const summary = await compareVisualSnapshots({
+      baselineDir,
+      actualDir,
+      outputDir,
+      changedFiles: ['frontend/scripts/visual-regression-report.mjs'],
+      unrelatedDiffThreshold: 0.001,
+    })
+
+    expect(summary.changed.map((item) => item.fileName)).toEqual([
+      'components-two--large-change.png',
+    ])
+    expect(summary.unchanged).toContainEqual({ fileName: 'components-one--tiny-drift.png' })
+    expect(summary.totals.changed).toBe(1)
+    expect(summary.totals.unchanged).toBe(1)
   })
 })

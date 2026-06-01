@@ -3,7 +3,7 @@ name: GitHub Pages Visual Regression
 on:
   pull_request:
     branches: [main, develop]
-    types: [opened, synchronize, reopened, labeled]
+    types: [opened, synchronize, reopened, closed]
     paths:
       - "frontend/.storybook/**"
       - "frontend/scripts/**"
@@ -28,8 +28,8 @@ on:
         type: string
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-visual-state
+  cancel-in-progress: false
 
 env:
   NODE_VERSION: "22"
@@ -38,7 +38,7 @@ env:
 jobs:
   visuals:
     name: Storybook Visual Report
-    if: ${{ github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'run-visuals') && github.event.pull_request.head.repo.full_name == github.repository) }}
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -48,19 +48,16 @@ jobs:
       pull-requests: write
 
     steps:
-      - name: Checkout source
-        uses: actions/checkout@v5
-        with:
-          path: source
-          persist-credentials: false
-
       - name: Resolve visual mode
         id: visual_mode
         env:
+          EVENT_ACTION: ${{ github.event.action || '' }}
           EVENT_NAME: ${{ github.event_name }}
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number || '' }}
         run: |
-          if [ "$EVENT_NAME" = "pull_request" ] || [ -n "$PR_NUMBER" ]; then
+          if [ "$EVENT_NAME" = "pull_request" ] && [ "$EVENT_ACTION" = "closed" ]; then
+            mode="cleanup"
+          elif [ "$EVENT_NAME" = "pull_request" ] || [ -n "$PR_NUMBER" ]; then
             mode="pr"
           else
             mode="baseline"
@@ -69,7 +66,15 @@ jobs:
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
           echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
 
+      - name: Checkout source
+        if: ${{ steps.visual_mode.outputs.mode != 'cleanup' }}
+        uses: actions/checkout@v5
+        with:
+          path: source
+          persist-credentials: false
+
       - name: Set up Node.js ${{ env.NODE_VERSION }}
+        if: ${{ steps.visual_mode.outputs.mode != 'cleanup' }}
         uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -77,14 +82,17 @@ jobs:
           cache-dependency-path: source/frontend/package-lock.json
 
       - name: Install frontend dependencies
+        if: ${{ steps.visual_mode.outputs.mode != 'cleanup' }}
         working-directory: source/frontend
         run: npm ci
 
       - name: Install Playwright Chromium
+        if: ${{ steps.visual_mode.outputs.mode != 'cleanup' }}
         working-directory: source/frontend
         run: PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install --with-deps chromium
 
       - name: Capture Storybook snapshots
+        if: ${{ steps.visual_mode.outputs.mode != 'cleanup' }}
         working-directory: source/frontend
         run: npm run visual:screenshots
         env:
@@ -115,6 +123,15 @@ jobs:
 
           mkdir -p visual/baseline visual/reports
 
+      - name: Resolve pull request changed files
+        if: ${{ steps.visual_mode.outputs.mode == 'pr' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.visual_mode.outputs.pr_number }}
+        run: |
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" --jq '.[].filename' > "$GITHUB_WORKSPACE/visual-pr-files.txt"
+
       - name: Generate pull request visual report
         if: ${{ steps.visual_mode.outputs.mode == 'pr' }}
         working-directory: source/frontend
@@ -122,9 +139,11 @@ jobs:
         env:
           VISUAL_BASELINE_DIR: ${{ github.workspace }}/visual-state/visual/baseline
           VISUAL_ACTUAL_DIR: ${{ github.workspace }}/visual-actual
+          VISUAL_CHANGED_FILES_PATH: ${{ github.workspace }}/visual-pr-files.txt
           VISUAL_REPORT_DIR: ${{ github.workspace }}/visual-state/visual/reports/pr-${{ steps.visual_mode.outputs.pr_number }}
           VISUAL_REPORT_TITLE: "PR #${{ steps.visual_mode.outputs.pr_number }} visual report"
           VISUAL_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          VISUAL_UNRELATED_DIFF_THRESHOLD: "0.001"
 
       - name: Update main visual baseline
         if: ${{ steps.visual_mode.outputs.mode == 'baseline' }}
@@ -132,6 +151,11 @@ jobs:
           rm -rf visual-state/visual/baseline
           mkdir -p visual-state/visual/baseline
           cp -R visual-actual/. visual-state/visual/baseline/
+
+      - name: Remove closed pull request visual report
+        if: ${{ steps.visual_mode.outputs.mode == 'cleanup' }}
+        run: |
+          rm -rf visual-state/visual/reports/pr-${{ steps.visual_mode.outputs.pr_number }}
 
       - name: Commit visual state
         working-directory: visual-state
