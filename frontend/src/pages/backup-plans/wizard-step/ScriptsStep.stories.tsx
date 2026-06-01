@@ -8,6 +8,8 @@ import { ScriptsStep } from './ScriptsStep'
 const scripts = [
   { id: 101, name: 'Prepare SQLite source dump' },
   { id: 102, name: 'Clean SQLite source dump' },
+  { id: 111, name: 'Prepare MySQL source dump' },
+  { id: 112, name: 'Clean MySQL source dump' },
   { id: 201, name: 'Notify backup window' },
 ]
 
@@ -44,6 +46,29 @@ const databaseSourceState: WizardState = {
         script_execution_order: 1,
       },
     },
+    {
+      source_type: 'local',
+      source_ssh_connection_id: null,
+      agent_machine_id: null,
+      paths: ['/var/tmp/borg-ui/database-dumps/mysql'],
+      database: {
+        template_id: 'mysql',
+        engine: 'MySQL',
+        display_name: 'MySQL or MariaDB database',
+        backup_strategy: 'logical_dump',
+        detected_source_path: '/var/lib/mysql',
+        detection_label: 'Borg UI server',
+        capture_mode: 'dump',
+        dump_path: '/var/tmp/borg-ui/database-dumps/mysql',
+        backup_paths: ['/var/tmp/borg-ui/database-dumps/mysql'],
+        script_execution_target: 'source',
+        pre_backup_script_id: 111,
+        post_backup_script_id: 112,
+        pre_backup_script_parameters: {},
+        post_backup_script_parameters: {},
+        script_execution_order: 2,
+      },
+    },
   ],
 }
 
@@ -62,7 +87,9 @@ const translations: Record<string, string> = {
   'backupPlans.wizard.scripts.postSourceScript': 'Post',
   'backupPlans.wizard.scripts.autoFilledSourceParameters': 'Auto-filled from source',
   'backupPlans.wizard.scripts.viewAutoFilledSourceParameters':
-    'View auto-filled source values for {{database}}',
+    'View auto-filled source parameter details for {{database}}',
+  'backupPlans.wizard.scripts.noAutoFilledSourceParameters':
+    'No parameter values were auto-filled from this source.',
   'scriptSelector.preBackupScript': 'Pre-Backup Script',
   'scriptSelector.postBackupScript': 'Post-Backup Script',
   'scriptSelector.selectPreBackup': 'Select pre-backup script',

@@ -887,8 +887,6 @@
       "inPrefix": "in",
       "scanTarget": "Scan where?",
       "pathsToScan": "Paths to scan",
-      "rootScanSuggestion": "Not sure where the database lives? Add root (/) to scan broadly.",
-      "addRootScanPath": "Add /",
       "noScanPaths": "Add at least one path to scan.",
       "scanning": "Scanning…",
       "rescan": "Re-scan",
@@ -915,7 +913,7 @@
       "scanFailedBody": "Check the connection or try again.",
       "scanEndpointMissing": "Database scanning isn't available on this server yet. Open templates to configure manually.",
       "nothingFoundTitle": "No databases found on {{target}}",
-      "nothingFoundBody": "Add another path above, search from root, or open templates to set one up manually.",
+      "nothingFoundBody": "Add another path above, or open templates to set one up manually.",
       "checkedPaths": "Checked:",
       "detectedSection": "Detected",
       "orPickTemplate": "Or pick a template",
@@ -1024,7 +1022,8 @@
         "preSourceScript": "Pre",
         "postSourceScript": "Post",
         "autoFilledSourceParameters": "Compilato automaticamente dalla sorgente",
-        "viewAutoFilledSourceParameters": "Visualizza valori sorgente compilati automaticamente per {{database}}",
+        "viewAutoFilledSourceParameters": "Visualizza dettagli dei parametri sorgente compilati automaticamente per {{database}}",
+        "noAutoFilledSourceParameters": "Nessun valore parametro è stato compilato automaticamente da questa sorgente.",
         "loading": "Caricamento script..."
       },
       "schedule": {

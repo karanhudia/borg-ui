@@ -56,6 +56,15 @@ DEFAULT_SCAN_IGNORE_PATTERNS = [
     "build",
     "__pycache__",
     "overlay2",  # /var/lib/docker/overlay2 image layer storage
+    "bin",
+    "boot",
+    "dev",
+    "proc",
+    "run",
+    "sbin",
+    "sys",
+    "tmp",
+    "usr",
 ]
 
 # Ignore patterns are matched against directory basenames during the walk.

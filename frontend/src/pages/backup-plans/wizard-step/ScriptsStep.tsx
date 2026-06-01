@@ -108,27 +108,56 @@ export function ScriptsStep({
                           <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                             {row.database.display_name}
                           </Typography>
-                          <Chip
-                            size="small"
-                            variant="outlined"
-                            label={t('backupPlans.wizard.scripts.autoFilledSourceParameters')}
-                          />
-                          {row.autoFilledParameterLines.length > 0 && (
+                          <Box
+                            component="span"
+                            sx={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 0.5,
+                              minWidth: 0,
+                              maxWidth: '100%',
+                              flexShrink: 0,
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            <Chip
+                              size="small"
+                              variant="outlined"
+                              label={t('backupPlans.wizard.scripts.autoFilledSourceParameters')}
+                              sx={{
+                                minWidth: 0,
+                                maxWidth: 'calc(100% - 28px)',
+                                '& .MuiChip-label': {
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                },
+                              }}
+                            />
                             <Tooltip
                               arrow
                               title={
-                                <Stack spacing={0.25}>
-                                  {row.autoFilledParameterLines.map((line) => (
-                                    <Typography
-                                      key={line}
-                                      component="span"
-                                      variant="caption"
-                                      sx={{ fontFamily: 'monospace', lineHeight: 1.45 }}
-                                    >
-                                      {line}
-                                    </Typography>
-                                  ))}
-                                </Stack>
+                                row.autoFilledParameterLines.length > 0 ? (
+                                  <Stack spacing={0.25}>
+                                    {row.autoFilledParameterLines.map((line) => (
+                                      <Typography
+                                        key={line}
+                                        component="span"
+                                        variant="caption"
+                                        sx={{ fontFamily: 'monospace', lineHeight: 1.45 }}
+                                      >
+                                        {line}
+                                      </Typography>
+                                    ))}
+                                  </Stack>
+                                ) : (
+                                  <Typography
+                                    component="span"
+                                    variant="caption"
+                                    sx={{ lineHeight: 1.45 }}
+                                  >
+                                    {t('backupPlans.wizard.scripts.noAutoFilledSourceParameters')}
+                                  </Typography>
+                                )
                               }
                             >
                               <IconButton
@@ -140,6 +169,7 @@ export function ScriptsStep({
                                 )}
                                 sx={{
                                   color: 'text.secondary',
+                                  flex: '0 0 auto',
                                   width: 24,
                                   height: 24,
                                   p: 0.25,
@@ -148,7 +178,7 @@ export function ScriptsStep({
                                 <InfoIcon size={14} aria-hidden="true" />
                               </IconButton>
                             </Tooltip>
-                          )}
+                          </Box>
                         </Stack>
                         {row.preScriptName && (
                           <Typography variant="body2" color="text.secondary">
