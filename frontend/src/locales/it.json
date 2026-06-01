@@ -4133,7 +4133,7 @@
         "remotePathNotVerified": "Questo percorso remoto rclone non è vuoto. Sfoglia e conferma il percorso di destinazione prima della sincronizzazione.",
         "remotePathPreflightFailed": "Impossibile verificare questo percorso remoto rclone",
         "cachePathServerOwned": "Il percorso cache rclone è gestito dal server",
-
+        "remoteRequired": "Seleziona un remoto rclone",
         "remotePathRequired": "Inserisci un percorso remoto rclone relativo",
         "invalidSyncPolicy": "Policy di sincronizzazione rclone non valida",
         "invalidPayload": "Impostazioni repository rclone non valide",
