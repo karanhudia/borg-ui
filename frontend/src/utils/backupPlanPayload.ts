@@ -69,7 +69,8 @@ function normalizePlanScriptHooks(state: BackupPlanPayloadState): BackupPlanScri
       .map((hook, index) => ({
         ...hook,
         script_id: Number(hook.script_id),
-        execution_order: Number(hook.execution_order) > 0 ? Number(hook.execution_order) : index + 1,
+        execution_order:
+          Number(hook.execution_order) > 0 ? Number(hook.execution_order) : index + 1,
         enabled: hook.enabled !== false,
         continue_on_error: Boolean(hook.continue_on_error),
         skip_on_failure: Boolean(hook.skip_on_failure),
