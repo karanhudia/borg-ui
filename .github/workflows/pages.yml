@@ -5,8 +5,8 @@ on:
     branches:
       - main
     paths:
-      - 'docs/**'
-      - '.github/workflows/pages.yml'
+      - "docs/**"
+      - ".github/workflows/pages.yml"
   workflow_dispatch:
 
 permissions:
@@ -40,6 +40,34 @@ jobs:
       - name: Build docs
         working-directory: docs
         run: npm run build
+
+      - name: Restore visual reports
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          rm -rf visual-state
+          git init visual-state
+          cd visual-state
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          if git ls-remote --exit-code --heads origin visual-regression-state >/dev/null 2>&1; then
+            git fetch --depth=1 origin visual-regression-state
+            git checkout -B visual-regression-state FETCH_HEAD
+            cd ..
+            if [ -d visual-state/visual ]; then
+              rm -rf docs/.vitepress/dist/visual
+              mkdir -p docs/.vitepress/dist
+              cp -R visual-state/visual docs/.vitepress/dist/visual
+            fi
+          else
+            remote_status=$?
+            if [ "$remote_status" -eq 2 ]; then
+              echo "No visual-regression-state branch found; skipping visual report restore."
+            else
+              exit "$remote_status"
+            fi
+          fi
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

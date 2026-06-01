@@ -31,16 +31,18 @@ npm run build
 
 ### Storybook Visual Regression
 
-Storybook visual snapshots are handled by the `Argos Visual Regression` GitHub
-Actions workflow on pull requests and `main` pushes that touch frontend source,
-stories, Storybook config, frontend scripts, or frontend package metadata.
+Storybook visual snapshots are handled by the `GitHub Pages Visual Regression`
+workflow. Same-repository pull request runs are opt-in: add the `run-visuals`
+label to a PR, or rerun the workflow manually with the PR number. The workflow
+also runs on `main` pushes that touch frontend source, stories, Storybook
+config, frontend scripts, or frontend package metadata.
 
-The workflow builds Storybook, captures screenshots with Playwright, and uploads
-the ignored `frontend/argos-screenshots/` directory to Argos. The repository must
-be connected to an Argos project; the workflow uses Argos GitHub tokenless
-authentication by default, passes `GITHUB_TOKEN` so Argos can resolve pull
-request metadata, and also passes `ARGOS_TOKEN` from repository secrets when the
-project requires token authentication.
+The workflow builds Storybook, captures screenshots with Playwright, compares
+them against the baseline stored on the `visual-regression-state` branch, and
+publishes a static report under `/visual/reports/pr-<number>/` on GitHub Pages.
+The PR description is updated with the report link plus changed, added, and
+removed screenshot lists. Merging to `main` refreshes the baseline under
+`/visual/baseline/` for future PRs.
 
 For local proof runs:
 
@@ -49,7 +51,7 @@ cd frontend
 npm run snapshots
 ```
 
-Do not commit generated PNGs from `frontend/argos-screenshots/` or
+Do not commit generated PNGs from `frontend/visual-screenshots/` or
 `frontend/storybook-snapshots/`.
 
 ## Backend
@@ -79,10 +81,10 @@ Some smoke tests require host capabilities or external setup:
 
 ## What To Run
 
-| Change | Minimum check |
-| --- | --- |
-| Docs only | `cd docs && npm run build` |
-| Frontend UI | frontend typecheck, lint, tests |
-| Backend API | backend lint and relevant pytest |
+| Change              | Minimum check                        |
+| ------------------- | ------------------------------------ |
+| Docs only           | `cd docs && npm run build`           |
+| Frontend UI         | frontend typecheck, lint, tests      |
+| Backend API         | backend lint and relevant pytest     |
 | Backup/restore core | relevant unit tests plus smoke tests |
-| Docker/runtime | build image and run smoke tests |
+| Docker/runtime      | build image and run smoke tests      |
