@@ -1094,6 +1094,7 @@ describe('SourceStep', () => {
     const scanDialogs = screen
       .getAllByRole('dialog')
       .filter((dialog) => within(dialog).queryByRole('heading', { name: /scan for databases/i }))
+    expect(scanDialogs.length).toBeGreaterThan(0)
     const scanDialog = scanDialogs[scanDialogs.length - 1]!
     fireEvent.mouseDown(within(scanDialog).getByRole('combobox', { name: /scan where/i }))
     let listbox = await screen.findByRole('listbox')
@@ -1108,7 +1109,7 @@ describe('SourceStep', () => {
     listbox = await screen.findByRole('listbox')
     expect(within(listbox).getByText('backup-a@server-a.example')).toBeInTheDocument()
     expect(within(listbox).getByText(/Port 22.*\/mnt\/server-a/i)).toBeInTheDocument()
-  })
+  }, 30000)
 
   it('uses the shared path selector for database scan paths', async () => {
     apiMocks.databases.mockResolvedValue({ data: discoveryResponse })

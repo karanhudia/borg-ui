@@ -16,7 +16,7 @@ from urllib.parse import urlencode, urlparse
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.responses import HTMLResponse, RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -452,6 +452,27 @@ class RcloneOAuthCredentialUpdate(BaseModel):
     client_id: str | None = None
     client_secret: str | None = None
     clear_client_secret: bool = False
+
+    @model_validator(mode="after")
+    def validate_paired_credentials(self) -> "RcloneOAuthCredentialUpdate":
+        if self.clear_client_secret:
+            return self
+
+        credential_fields = {"client_id", "client_secret"}
+        provided_credentials = set(self.model_fields_set) & credential_fields
+        if provided_credentials and provided_credentials != credential_fields:
+            raise ValueError(
+                "client_id and client_secret must both be provided or both be empty"
+            )
+
+        if provided_credentials == credential_fields:
+            client_id_set = bool((self.client_id or "").strip())
+            client_secret_set = bool((self.client_secret or "").strip())
+            if client_id_set != client_secret_set:
+                raise ValueError(
+                    "client_id and client_secret must both be provided or both be empty"
+                )
+        return self
 
 
 def _require_admin(user: User) -> None:
