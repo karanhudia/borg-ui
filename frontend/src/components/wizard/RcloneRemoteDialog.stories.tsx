@@ -224,3 +224,29 @@ export const BorgUiOAuthCredentialsMissing: Story = {
   },
   render: renderDialog,
 }
+
+export const BorgUiOAuthCredentialsPartiallySaved: Story = {
+  args: {
+    ...CreateManagedRemote.args,
+    initialRemote: {
+      name: 'gdrive-prod',
+      provider: 'drive',
+      config_source: 'managed',
+      redacted_config: { type: 'drive', scope: 'drive', token: '' },
+    },
+    providers: providers.map((provider) =>
+      provider.type === 'drive'
+        ? {
+            ...provider,
+            oauth_configured: false,
+            oauth_callback_url: 'https://backups.example.com/api/rclone/oauth/callback/drive',
+            oauth_setup_key: 'backend.errors.rclone.oauthProviderCredentialsRequired',
+            oauth_credentials_source: 'database',
+            oauth_client_id_set: true,
+            oauth_client_secret_set: false,
+          }
+        : provider
+    ),
+  },
+  render: renderDialog,
+}
