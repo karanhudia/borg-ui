@@ -1,6 +1,6 @@
 {
   "name": "borg-web-ui-frontend",
-  "version": "2.1.0",
+  "version": "2.2.0-alpha.1",
   "type": "module",
   "description": "React frontend for Borg Web UI",
   "license": "AGPL-3.0",
@@ -34,7 +34,6 @@
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
-    "@argos-ci/cli": "^4.3.1",
     "@storybook/addon-docs": "^10.4.0",
     "@storybook/react-vite": "^10.4.0",
     "@testing-library/jest-dom": "^6.9.1",
@@ -72,10 +71,9 @@
     "preview": "vite preview",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build -o storybook-static",
-    "snapshots": "npm run argos:screenshots",
-    "argos:screenshots": "npm run build-storybook && node scripts/generate-storybook-snapshots.mjs",
-    "argos:upload": "node scripts/upload-argos-snapshots.mjs",
-    "argos:ci": "npm run argos:screenshots && npm run argos:upload",
+    "snapshots": "npm run visual:screenshots",
+    "visual:screenshots": "npm run build-storybook && node scripts/generate-storybook-snapshots.mjs",
+    "visual:report": "node scripts/visual-regression-report.mjs",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",

@@ -3,12 +3,11 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { resolveSnapshotOutputDir } from './snapshot-output-config.mjs'
-import { buildArgosUploadArgs } from './upload-argos-snapshots.mjs'
 
 describe('resolveSnapshotOutputDir', () => {
-  it('defaults to the ignored Argos screenshots directory', () => {
+  it('defaults to the ignored visual screenshots directory', () => {
     expect(resolveSnapshotOutputDir('/repo/frontend', {})).toBe(
-      path.join('/repo/frontend', 'argos-screenshots')
+      path.join('/repo/frontend', 'visual-screenshots')
     )
   })
 
@@ -26,21 +25,5 @@ describe('resolveSnapshotOutputDir', () => {
         STORYBOOK_SNAPSHOTS_DIR: '/tmp/storybook-screenshots',
       })
     ).toBe('/tmp/storybook-screenshots')
-  })
-})
-
-describe('buildArgosUploadArgs', () => {
-  it('uploads the same directory selected by the snapshot output resolver', () => {
-    expect(
-      buildArgosUploadArgs('/repo/frontend', {
-        STORYBOOK_SNAPSHOTS_DIR: 'tmp/storybook-screenshots',
-      })
-    ).toEqual([
-      'exec',
-      '--',
-      'argos',
-      'upload',
-      path.join('/repo/frontend', 'tmp/storybook-screenshots'),
-    ])
   })
 })
