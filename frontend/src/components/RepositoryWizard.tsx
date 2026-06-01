@@ -20,6 +20,7 @@ import { formatDirectRcloneUrl, parseDirectRcloneUrl } from './wizard/directRclo
 import type {
   AgentMachineResponse,
   CreateRcloneRemoteRequest,
+  RcloneProvider,
   RcloneRemote,
   RcloneStatus,
 } from '../services/api'
@@ -213,6 +214,7 @@ const RepositoryWizard = ({
   const [agentMachines, setAgentMachines] = useState<AgentMachineResponse[]>([])
   const [rcloneStatus, setRcloneStatus] = useState<RcloneStatus | null>(null)
   const [rcloneRemotes, setRcloneRemotes] = useState<RcloneRemote[]>([])
+  const [rcloneProviders, setRcloneProviders] = useState<RcloneProvider[]>([])
   const [showRcloneRemoteDialog, setShowRcloneRemoteDialog] = useState(false)
   const [isCreatingRcloneRemote, setIsCreatingRcloneRemote] = useState(false)
   const [rcloneRemoteCreateError, setRcloneRemoteCreateError] = useState<string | null>(null)
@@ -321,16 +323,18 @@ const RepositoryWizard = ({
 
   // Load selectable remote execution targets.
   const loadWizardData = React.useCallback(async () => {
-    const [connectionsRes, agentsRes, statusRes, remotesRes] = await Promise.allSettled([
-      sshKeysAPI.getSSHConnections(),
-      canUseManagedAgents ? managedAgentsAPI.listAgents() : Promise.resolve({ data: [] }),
-      canUseRclone
-        ? rcloneAPI.getStatus()
-        : Promise.resolve({
-            data: { available: false, error: t('wizard.location.rcloneRequiresPro') },
-          }),
-      canUseRclone ? rcloneAPI.listRemotes() : Promise.resolve({ data: { remotes: [] } }),
-    ])
+    const [connectionsRes, agentsRes, statusRes, remotesRes, providersRes] =
+      await Promise.allSettled([
+        sshKeysAPI.getSSHConnections(),
+        canUseManagedAgents ? managedAgentsAPI.listAgents() : Promise.resolve({ data: [] }),
+        canUseRclone
+          ? rcloneAPI.getStatus()
+          : Promise.resolve({
+              data: { available: false, error: t('wizard.location.rcloneRequiresPro') },
+            }),
+        canUseRclone ? rcloneAPI.listRemotes() : Promise.resolve({ data: { remotes: [] } }),
+        canUseRclone ? rcloneAPI.getProviders() : Promise.resolve({ data: { providers: [] } }),
+      ])
 
     if (connectionsRes.status === 'fulfilled') {
       const connections = connectionsRes.value.data?.connections || []
@@ -361,6 +365,15 @@ const RepositoryWizard = ({
     } else {
       console.error('Failed to load rclone remotes:', remotesRes.reason)
       setRcloneRemotes([])
+    }
+
+    if (providersRes.status === 'fulfilled') {
+      setRcloneProviders(
+        Array.isArray(providersRes.value.data?.providers) ? providersRes.value.data.providers : []
+      )
+    } else {
+      console.error('Failed to load rclone providers:', providersRes.reason)
+      setRcloneProviders([])
     }
   }, [canUseManagedAgents, canUseRclone, t])
 
@@ -1225,6 +1238,7 @@ const RepositoryWizard = ({
         open={showRcloneRemoteDialog}
         isCreating={isCreatingRcloneRemote}
         error={rcloneRemoteCreateError}
+        providers={rcloneProviders}
         onClose={() => {
           if (!isCreatingRcloneRemote) {
             setShowRcloneRemoteDialog(false)
