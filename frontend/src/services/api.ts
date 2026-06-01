@@ -157,7 +157,10 @@ export interface RcloneOAuthCredentialStatus {
   configured: boolean
   credential_source: 'database' | 'environment' | 'unset' | 'unsupported'
   client_id: string | null
+  client_id_set: boolean
   client_secret_set: boolean
+  callback_url?: string | null
+  setup_key?: string | null
 }
 
 export interface RcloneOAuthTokenStatus {

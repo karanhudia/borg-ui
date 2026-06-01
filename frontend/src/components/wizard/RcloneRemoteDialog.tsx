@@ -29,6 +29,7 @@ import {
   Pencil,
   Plus,
   RefreshCcw,
+  Trash2,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import CodeEditor from '../shared/CodeEditor'
@@ -163,6 +164,7 @@ export default function RcloneRemoteDialog({
   const [credentialsExpanded, setCredentialsExpanded] = useState(false)
   const oauthRequestIdRef = useRef(0)
   const resolvedProviderRef = useRef('local')
+  const initializedRemoteKeyRef = useRef<string | null>(null)
 
   const providerOptions = providers.length ? providers : DEFAULT_PROVIDERS
   const selectedProvider =
@@ -191,6 +193,9 @@ export default function RcloneRemoteDialog({
     () => !!selectedProvider.oauth_client_id_set && !!selectedProvider.oauth_client_secret_set,
     [selectedProvider.oauth_client_id_set, selectedProvider.oauth_client_secret_set]
   )
+  const canClearOAuthCredentials =
+    selectedProvider.oauth_credentials_source === 'database' &&
+    (!!selectedProvider.oauth_client_id_set || !!selectedProvider.oauth_client_secret_set)
 
   useEffect(() => {
     setCredentialsExpanded(!bothOAuthCredsSaved)
@@ -224,6 +229,15 @@ export default function RcloneRemoteDialog({
 
   useEffect(() => {
     if (!open) return
+    const initialRemoteKey = JSON.stringify({
+      mode,
+      name: initialRemote?.name || '',
+      provider: initialRemote?.provider || '',
+      redacted_config: initialRemote?.redacted_config || null,
+    })
+    if (initializedRemoteKeyRef.current === initialRemoteKey) return
+    initializedRemoteKeyRef.current = initialRemoteKey
+
     const nextProvider = initialRemote?.provider || 'local'
     const providerIsKnown = providerOptions.some((provider) => provider.type === nextProvider)
     const nextProviderType = providerIsKnown ? nextProvider : 'custom'
@@ -234,10 +248,11 @@ export default function RcloneRemoteDialog({
     setLocalError(null)
     resetOAuthState()
     resetOAuthCredentialForm()
-  }, [initialRemote, open, providerOptions, resetOAuthCredentialForm, resetOAuthState])
+  }, [initialRemote, mode, open, providerOptions, resetOAuthCredentialForm, resetOAuthState])
 
   useEffect(() => {
     if (open) return
+    initializedRemoteKeyRef.current = null
     setName('')
     setProviderType('local')
     setCustomProvider('')
@@ -395,18 +410,7 @@ export default function RcloneRemoteDialog({
     const clientId = oauthClientId.trim()
     const clientSecret = oauthClientSecret.trim()
     if (!clientId && !clientSecret) {
-      setOauthCredentialsError(null)
-      setIsSavingOAuthCredentials(true)
-      try {
-        await onSaveOAuthCredentials(resolvedProvider, {
-          client_id: null,
-          client_secret: null,
-        })
-      } catch {
-        setOauthCredentialsError(t('wizard.location.rcloneOAuthCredentialsSaveFailed'))
-      } finally {
-        setIsSavingOAuthCredentials(false)
-      }
+      setOauthCredentialsError(t('wizard.location.rcloneOAuthCredentialsRequired'))
       return
     }
     if (!clientId || !clientSecret) {
@@ -422,6 +426,23 @@ export default function RcloneRemoteDialog({
         client_secret: clientSecret || null,
       })
       setOauthClientSecret('')
+    } catch {
+      setOauthCredentialsError(t('wizard.location.rcloneOAuthCredentialsSaveFailed'))
+    } finally {
+      setIsSavingOAuthCredentials(false)
+    }
+  }
+
+  const handleClearOAuthCredentials = async () => {
+    if (!onSaveOAuthCredentials || !resolvedProvider) return
+    setOauthCredentialsError(null)
+    setIsSavingOAuthCredentials(true)
+    try {
+      await onSaveOAuthCredentials(resolvedProvider, {
+        client_id: null,
+        client_secret: null,
+      })
+      resetOAuthCredentialForm()
     } catch {
       setOauthCredentialsError(t('wizard.location.rcloneOAuthCredentialsSaveFailed'))
     } finally {
@@ -798,24 +819,44 @@ export default function RcloneRemoteDialog({
                         {oauthCredentialsError}
                       </Alert>
                     ) : null}
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      onClick={handleSaveOAuthCredentials}
-                      disabled={!onSaveOAuthCredentials || isCreating || isSavingOAuthCredentials}
-                      startIcon={
-                        isSavingOAuthCredentials ? (
-                          <CircularProgress size={14} color="inherit" />
-                        ) : (
-                          <KeyRound size={14} />
-                        )
-                      }
+                    <Stack
+                      direction={{ xs: 'column', sm: 'row' }}
+                      spacing={1}
+                      alignItems={{ xs: 'stretch', sm: 'center' }}
                       sx={{ mt: 1.5 }}
                     >
-                      {isSavingOAuthCredentials
-                        ? t('wizard.location.rcloneOAuthCredentialsSaving')
-                        : t('wizard.location.rcloneOAuthCredentialsSave')}
-                    </Button>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={handleSaveOAuthCredentials}
+                        disabled={!onSaveOAuthCredentials || isCreating || isSavingOAuthCredentials}
+                        startIcon={
+                          isSavingOAuthCredentials ? (
+                            <CircularProgress size={14} color="inherit" />
+                          ) : (
+                            <KeyRound size={14} />
+                          )
+                        }
+                      >
+                        {isSavingOAuthCredentials
+                          ? t('wizard.location.rcloneOAuthCredentialsSaving')
+                          : t('wizard.location.rcloneOAuthCredentialsSave')}
+                      </Button>
+                      {canClearOAuthCredentials ? (
+                        <Button
+                          size="small"
+                          variant="text"
+                          color="error"
+                          onClick={handleClearOAuthCredentials}
+                          disabled={
+                            !onSaveOAuthCredentials || isCreating || isSavingOAuthCredentials
+                          }
+                          startIcon={<Trash2 size={14} />}
+                        >
+                          {t('wizard.location.rcloneOAuthCredentialsClear')}
+                        </Button>
+                      ) : null}
+                    </Stack>
                   </Box>
                 </Collapse>
               </Box>

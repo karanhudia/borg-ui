@@ -36,6 +36,7 @@ import {
 } from 'lucide-react'
 import { rcloneAPI } from '../services/api'
 import type {
+  RcloneOAuthCredentialStatus,
   RcloneOAuthCredentialUpdate,
   RcloneOAuthSession,
   RcloneOAuthTokenStatus,
@@ -47,6 +48,7 @@ import { getApiErrorDetail } from '../utils/apiErrors'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import RcloneRemoteDialog from '../components/wizard/RcloneRemoteDialog'
 import type { RcloneRemoteCreateInput } from '../components/wizard/RcloneRemoteDialog'
+import EmptyStateCard from '../components/EmptyStateCard'
 import OperationalCard from '../components/OperationalCard'
 import PageHeader from '../components/PageHeader'
 import ListToolbar from '../components/ListToolbar'
@@ -55,6 +57,24 @@ import { joinBrowserPath, normalizeBrowserPath } from '../utils/storageBrowserPa
 import { useAnalytics } from '../hooks/useAnalytics'
 
 const CLOUD_STORAGE_ANALYTICS_SECTION = 'cloud_storage'
+
+const applyOAuthCredentialStatusToProviders = (
+  providers: RcloneProvider[] | undefined,
+  status: RcloneOAuthCredentialStatus
+) =>
+  providers?.map((provider) =>
+    provider.type === status.provider
+      ? {
+          ...provider,
+          oauth_configured: status.configured,
+          oauth_callback_url: status.callback_url ?? null,
+          oauth_setup_key: status.setup_key ?? null,
+          oauth_credentials_source: status.credential_source,
+          oauth_client_id_set: status.client_id_set,
+          oauth_client_secret_set: status.client_secret_set,
+        }
+      : provider
+  )
 
 interface BrowseEntry {
   name: string
@@ -831,7 +851,7 @@ export function CloudStorageContent({
       ) : null}
 
       {isLoading ? (
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' }, gap: 2 }}>
+        <Stack spacing={2}>
           {[0, 1].map((item) => (
             <Paper key={item} variant="outlined" sx={{ borderRadius: 1, p: 2 }}>
               <Skeleton width="35%" />
@@ -839,50 +859,37 @@ export function CloudStorageContent({
               <Skeleton height={44} sx={{ mt: 2 }} />
             </Paper>
           ))}
-        </Box>
+        </Stack>
       ) : !hasUnfilteredRemotes ? (
-        <Paper
-          variant="outlined"
-          sx={{
-            borderRadius: 1,
-            p: 3,
-            textAlign: 'center',
-            bgcolor: 'background.paper',
-          }}
-        >
-          <Cloud size={34} />
-          <Typography variant="h6" sx={{ mt: 1 }}>
-            {t('cloudStorage.emptyTitle')}
-          </Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-            {t('cloudStorage.emptyDescription')}
-          </Typography>
-        </Paper>
+        <EmptyStateCard
+          centered={false}
+          icon={<Cloud size={48} />}
+          title={t('cloudStorage.emptyTitle')}
+          description={t('cloudStorage.emptyDescription')}
+        />
       ) : totalAfterFilter === 0 ? (
-        <Paper
-          variant="outlined"
-          sx={{ borderRadius: 1, p: 3, textAlign: 'center', bgcolor: 'background.paper' }}
-        >
-          <Cloud size={34} />
-          <Typography variant="h6" sx={{ mt: 1 }}>
-            {t('cloudStorage.noMatch.title', { defaultValue: 'No matching remotes' })}
-          </Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-            {searchQuery
+        <EmptyStateCard
+          centered={false}
+          icon={<Cloud size={48} />}
+          title={t('cloudStorage.noMatch.title', { defaultValue: 'No matching remotes' })}
+          description={
+            searchQuery
               ? t('cloudStorage.noMatch.message', {
                   search: searchQuery,
                   defaultValue: `No remotes match "${searchQuery}".`,
                 })
               : t('cloudStorage.noMatch.fallback', {
                   defaultValue: 'No remotes match the current filters.',
-                })}
-          </Typography>
-          {searchQuery ? (
-            <Button variant="outlined" sx={{ mt: 2 }} onClick={() => setSearchQuery('')}>
-              {t('cloudStorage.noMatch.clearSearch', { defaultValue: 'Clear search' })}
-            </Button>
-          ) : null}
-        </Paper>
+                })
+          }
+          actions={
+            searchQuery ? (
+              <Button variant="outlined" onClick={() => setSearchQuery('')}>
+                {t('cloudStorage.noMatch.clearSearch', { defaultValue: 'Clear search' })}
+              </Button>
+            ) : null
+          }
+        />
       ) : (
         <Stack spacing={3}>
           {processedRemotes.groups.map((group, groupIndex) => (
@@ -1118,9 +1125,11 @@ export default function CloudStorage() {
   const updateOAuthCredentialsMutation = useMutation({
     mutationFn: ({ provider, data }: { provider: string; data: RcloneOAuthCredentialUpdate }) =>
       rcloneAPI.updateOAuthCredentials(provider, data),
-    onSuccess: () => {
+    onSuccess: (response) => {
+      queryClient.setQueryData<RcloneProvider[]>(['rclone-providers'], (current) =>
+        applyOAuthCredentialStatusToProviders(current, response.data)
+      )
       toast.success(t('cloudStorage.oauthCredentialsSaved'))
-      queryClient.invalidateQueries({ queryKey: ['rclone-providers'] })
     },
     onError: (error: unknown) => {
       toast.error(getApiMessage(error, t('cloudStorage.oauthCredentialsSaveFailed')))

@@ -205,11 +205,15 @@ describe('CloudStorage', () => {
     } as AxiosResponse)
     vi.mocked(rcloneAPI.updateOAuthCredentials).mockResolvedValue({
       data: {
-        ...providers[0],
-        oauth_configured: true,
-        oauth_credentials_source: 'database',
-        oauth_client_id_set: true,
-        oauth_client_secret_set: true,
+        provider: 'drive',
+        label: 'Google Drive',
+        configured: true,
+        credential_source: 'database',
+        client_id: 'drive-client-id',
+        client_id_set: true,
+        client_secret_set: true,
+        callback_url: 'https://backups.example.com/api/rclone/oauth/callback/drive',
+        setup_key: null,
       },
     } as AxiosResponse)
     vi.mocked(rcloneAPI.startOAuthSession).mockResolvedValue({
@@ -501,6 +505,8 @@ describe('CloudStorage', () => {
         client_secret: 'drive-secret',
       })
     })
+    expect(await screen.findByText(/Stored in Borg UI/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Start Borg UI OAuth/i })).toBeEnabled()
   }, 60000)
 
   it('shows a validation error when only one OAuth credential field is filled', async () => {
@@ -538,6 +544,32 @@ describe('CloudStorage', () => {
   }, 60000)
 
   it('clears provider OAuth app credentials from the guided setup panel', async () => {
+    const databaseOAuthProviders = providers.map((provider) =>
+      provider.type === 'drive'
+        ? {
+            ...provider,
+            oauth_credentials_source: 'database',
+            oauth_client_id_set: true,
+            oauth_client_secret_set: true,
+          }
+        : provider
+    )
+    vi.mocked(rcloneAPI.getProviders).mockResolvedValue({
+      data: { providers: databaseOAuthProviders },
+    } as AxiosResponse)
+    vi.mocked(rcloneAPI.updateOAuthCredentials).mockResolvedValue({
+      data: {
+        provider: 'drive',
+        label: 'Google Drive',
+        configured: false,
+        credential_source: 'unset',
+        client_id: null,
+        client_id_set: false,
+        client_secret_set: false,
+        callback_url: 'https://backups.example.com/api/rclone/oauth/callback/drive',
+        setup_key: 'backend.errors.rclone.oauthProviderCredentialsRequired',
+      },
+    } as AxiosResponse)
     const user = userEvent.setup()
     renderWithProviders(<CloudStorage />, { initialRoute: '/cloud-storage' })
 
@@ -548,6 +580,10 @@ describe('CloudStorage', () => {
 
     await user.click(await screen.findByRole('button', { name: /^Edit$/i }))
     await user.click(screen.getByRole('button', { name: /Save OAuth credentials/i }))
+    expect(screen.getByText(/Enter both a client ID and client secret/i)).toBeInTheDocument()
+    expect(rcloneAPI.updateOAuthCredentials).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: /Clear saved credentials/i }))
 
     await waitFor(() => {
       expect(rcloneAPI.updateOAuthCredentials).toHaveBeenCalledWith('drive', {
