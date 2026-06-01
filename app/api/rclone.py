@@ -16,7 +16,7 @@ from urllib.parse import urlencode, urlparse
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.responses import HTMLResponse, RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -448,6 +448,27 @@ class RcloneOAuthCredentialUpdate(BaseModel):
     client_id: str | None = None
     client_secret: str | None = None
     clear_client_secret: bool = False
+
+    @model_validator(mode="after")
+    def validate_paired_credentials(self) -> "RcloneOAuthCredentialUpdate":
+        if self.clear_client_secret:
+            return self
+        payload_fields = getattr(self, "model_fields_set", None)
+        if payload_fields is None:
+            payload_fields = getattr(self, "__fields_set__", set())
+        client_id_present = "client_id" in payload_fields
+        client_secret_present = "client_secret" in payload_fields
+        if client_id_present != client_secret_present:
+            raise ValueError(
+                "client_id and client_secret must both be provided or both be empty"
+            )
+        client_id_set = bool((self.client_id or "").strip())
+        client_secret_set = bool((self.client_secret or "").strip())
+        if client_id_set != client_secret_set:
+            raise ValueError(
+                "client_id and client_secret must both be provided or both be empty"
+            )
+        return self
 
 
 def _require_admin(user: User) -> None:
@@ -1722,13 +1743,25 @@ async def update_oauth_credentials(
     if payload_fields is None:
         payload_fields = getattr(payload, "__fields_set__", set())
 
-    if "client_id" in payload_fields:
-        setattr(settings_row, client_id_field, _strip_optional(payload.client_id))
-    if payload.clear_client_secret or "client_secret" in payload_fields:
-        stripped_secret = _strip_optional(payload.client_secret)
+    client_id_stripped = _strip_optional(payload.client_id)
+    secret_stripped = _strip_optional(payload.client_secret)
+
+    if payload.clear_client_secret:
+        # Explicit secret-only clear compatibility path; validator bypassed.
+        if "client_id" in payload_fields:
+            setattr(settings_row, client_id_field, client_id_stripped)
         setattr(settings_row, client_secret_field, None)
-        if stripped_secret and not payload.clear_client_secret:
-            setattr(settings_row, client_secret_field, encrypt_secret(stripped_secret))
+    elif "client_id" in payload_fields and "client_secret" in payload_fields:
+        if not client_id_stripped and not secret_stripped:
+            setattr(settings_row, client_id_field, None)
+            setattr(settings_row, client_secret_field, None)
+        else:
+            setattr(settings_row, client_id_field, client_id_stripped)
+            setattr(
+                settings_row,
+                client_secret_field,
+                encrypt_secret(secret_stripped) if secret_stripped else None,
+            )
 
     db.commit()
     db.refresh(settings_row)
