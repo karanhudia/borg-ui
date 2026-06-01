@@ -19,6 +19,8 @@ Replace paid Argos uploads with a GitHub-only visual regression workflow that:
 - No user should need to download a workflow artifact to review visual changes.
 - The report must show before, after, and diff images for changed screenshots,
   plus added and removed screenshots.
+- PR reports should suppress tiny unrelated pixel drift below 0.1% while keeping
+  small changes in screenshots tied to files touched by the PR.
 - The existing docs site must remain intact when visual reports are deployed.
 - The workflow should use GitHub Actions, GitHub Pages, and repository storage
   only. No Argos, Chromatic, Percy, or other paid visual SaaS.
@@ -29,7 +31,8 @@ Replace paid Argos uploads with a GitHub-only visual regression workflow that:
 
 - `frontend/scripts/visual-regression-report.mjs` compares baseline and actual
   PNG directories, emits `summary.json`, copies review images, creates diff
-  PNGs, and writes a static `index.html` report.
+  PNGs, filters low-ratio drift outside changed Storybook areas, and writes a
+  static `index.html` report.
 - `frontend/scripts/visual-pr-description.mjs` builds and replaces a marked PR
   body section using the report summary and deployed Pages URL.
 - `.github/workflows/visual-regression.yml` runs on `main`, same-repository PRs,

@@ -47,6 +47,9 @@ describe('GitHub Pages visual regression workflow', () => {
     expect(workflow).toContain('npx playwright install --with-deps chromium')
     expect(workflow).toContain('npm run visual:screenshots')
     expect(workflow).toContain('npm run visual:report')
+    expect(workflow).toContain('Resolve pull request changed files')
+    expect(workflow).toContain('VISUAL_CHANGED_FILES_PATH')
+    expect(workflow).toContain('VISUAL_UNRELATED_DIFF_THRESHOLD: "0.001"')
     expect(workflow).toContain('node scripts/visual-pr-description.mjs')
     expect(workflow).toContain('mode="cleanup"')
     expect(workflow).toContain(

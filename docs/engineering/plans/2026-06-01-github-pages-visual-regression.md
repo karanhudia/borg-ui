@@ -34,6 +34,8 @@ Vitest, `pngjs`, Storybook, Playwright.
       changed, added, removed, and unchanged summary counts.
 - [x] Implement `visual-regression-report.mjs` with `compareVisualSnapshots()`,
       diff PNG output, `summary.json`, and static `index.html`.
+- [x] Filter tiny unrelated PR drift while preserving small diffs for touched
+      Storybook snapshots.
 - [x] Run `cd frontend && npm run test -- scripts/visual-regression-report.test.mjs --run`.
 
 ### Task 2: PR Body Section
