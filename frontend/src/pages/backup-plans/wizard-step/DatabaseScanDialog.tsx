@@ -323,11 +323,13 @@ export function DatabaseScanDialog({
       onClose={onClose}
       maxWidth="md"
       fullWidth
-      // Match the parent SourceSelectionDialog height so the scan sub-modal
-      // sits as a peer surface, not a smaller pop-up. DialogContent below
-      // owns the internal scroll. Mobile uses auto height; ResponsiveDialog's
-      // own 90vh cap governs the swipeable drawer.
-      PaperProps={{ sx: { height: { xs: 'auto', md: 'min(860px, calc(100vh - 64px))' } } }}
+      // Sized at 80vh on desktop so the scan sub-modal doesn't waste vertical
+      // space below the detected-database list when the viewport is tall, but
+      // stays a hair taller than FileExplorerDialog (75vh) to fit the extra
+      // header rows (scan-where picker + paths chip strip). DialogContent
+      // below owns the internal scroll. Mobile uses auto height;
+      // ResponsiveDialog's own 90vh cap governs the swipeable drawer.
+      PaperProps={{ sx: { height: { xs: 'auto', md: '80vh' } } }}
     >
       <DialogTitle sx={{ pr: 6 }}>
         {t('backupPlans.sourceChooser.scanForDatabasesTitle')}
