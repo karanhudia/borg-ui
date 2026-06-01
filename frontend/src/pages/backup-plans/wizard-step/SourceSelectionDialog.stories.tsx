@@ -97,6 +97,22 @@ const mysqlTemplate: SourceDiscoveryDatabase = {
   display_name: 'MySQL or MariaDB database',
   source_directories: ['/var/tmp/borg-ui/database-dumps/mysql'],
   client_commands: ['mysqldump'],
+  documentation_url: 'https://dev.mysql.com/doc/refman/8.0/en/mysqldump.html',
+  notes: ['Uses mysqldump with a Borg-managed staging directory.'],
+  script_drafts: {
+    pre_backup: {
+      name: 'Prepare MySQL dump',
+      description: 'Create a MySQL dump.',
+      content: '#!/usr/bin/env bash\nset -euo pipefail\nmysqldump --all-databases\n',
+      timeout: 900,
+    },
+    post_backup: {
+      name: 'Clean MySQL dump',
+      description: 'Remove transient MySQL dump files.',
+      content: '#!/usr/bin/env bash\nset -euo pipefail\nrm -rf /var/tmp/borg-ui/mysql\n',
+      timeout: 120,
+    },
+  },
 }
 
 const mongoTemplate: SourceDiscoveryDatabase = {
@@ -986,14 +1002,14 @@ export const DatabaseTemplateDetail: Story = {
       wizardState={emptyWizardState}
       mockOptions={{ scanStatus: 'detected' }}
       initialView="database-detail"
-      initialSelectedDatabase={postgresqlTemplate}
+      initialSelectedDatabase={mysqlTemplate}
     />
   ),
   parameters: {
     docs: {
       description: {
         story:
-          'Database template detail view after selecting PostgreSQL. The header shows the template title without a redundant Back button because Cancel is already available in the footer.',
+          'Database template detail view after selecting MySQL. The header uses the template-specific title, while the body keeps useful notes visible without engine or backup-strategy metadata chips.',
       },
     },
   },
