@@ -12,6 +12,7 @@ import {
 
 import {
   ReviewAttrRow,
+  ReviewAttrStack,
   ReviewCodePill,
   ReviewCount,
   ReviewKicker,
@@ -19,7 +20,7 @@ import {
   ReviewSectionGrid,
   ReviewStatus,
 } from '../../../components/wizard/WizardReviewComponents'
-import type { Repository } from '../../../types'
+import type { Repository, SourceLocation } from '../../../types'
 import { buildRoutePreviews, routeExecutorLabelKey } from '../routePreview'
 import { formatSshConnectionLabel, getPathBasename } from './helpers'
 import type { BackupPlanWizardStepProps } from './types'
@@ -65,9 +66,20 @@ export function ReviewStep({
   const routePreviewByRepositoryId = new Map(
     routePreviews.map((preview) => [preview.repository.id, preview])
   )
-  const visibleSourceDirectories = wizardState.sourceDirectories.slice(0, 6)
+  const sourceLocations = wizardState.sourceLocations || []
+  const databaseSourceLocations = sourceLocations.filter((location) => Boolean(location.database))
+  const hasDatabaseSourceLocations = databaseSourceLocations.length > 0
+  const fileSourceDirectories = hasDatabaseSourceLocations
+    ? sourceLocations.filter((location) => !location.database).flatMap((location) => location.paths)
+    : wizardState.sourceDirectories
+  const visibleDatabaseSourceLocations = databaseSourceLocations.slice(0, 4)
+  const hiddenDatabaseSourceCount = Math.max(
+    databaseSourceLocations.length - visibleDatabaseSourceLocations.length,
+    0
+  )
+  const visibleSourceDirectories = fileSourceDirectories.slice(0, 6)
   const hiddenSourceDirectoryCount = Math.max(
-    wizardState.sourceDirectories.length - visibleSourceDirectories.length,
+    fileSourceDirectories.length - visibleSourceDirectories.length,
     0
   )
   const visibleExcludePatterns = wizardState.excludePatterns.slice(0, 4)
@@ -175,15 +187,48 @@ export function ReviewStep({
                 minWidth: 0,
               }}
             >
-              {visibleSourceDirectories.map((sourcePath) => (
-                <ReviewCodePill key={sourcePath} tooltip={sourcePath} maxChars={22}>
-                  {getPathBasename(sourcePath)}
-                </ReviewCodePill>
-              ))}
-              {hiddenSourceDirectoryCount > 0 && (
-                <ReviewCount>
-                  {t('repositories.moreCount', { count: hiddenSourceDirectoryCount })}
-                </ReviewCount>
+              {hasDatabaseSourceLocations ? (
+                <Stack spacing={0.75} sx={{ width: '100%', minWidth: 0 }}>
+                  {visibleDatabaseSourceLocations.map((location, index) => (
+                    <DatabaseSourceReviewItem
+                      key={`${location.source_type}:${location.source_ssh_connection_id || 'local'}:${location.database?.template_id || index}`}
+                      location={location}
+                      t={t}
+                    />
+                  ))}
+                  {hiddenDatabaseSourceCount > 0 && (
+                    <ReviewCount>
+                      {t('repositories.moreCount', { count: hiddenDatabaseSourceCount })}
+                    </ReviewCount>
+                  )}
+                  {visibleSourceDirectories.length > 0 && (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, minWidth: 0 }}>
+                      {visibleSourceDirectories.map((sourcePath) => (
+                        <ReviewCodePill key={sourcePath} tooltip={sourcePath} maxChars={22}>
+                          {getPathBasename(sourcePath)}
+                        </ReviewCodePill>
+                      ))}
+                      {hiddenSourceDirectoryCount > 0 && (
+                        <ReviewCount>
+                          {t('repositories.moreCount', { count: hiddenSourceDirectoryCount })}
+                        </ReviewCount>
+                      )}
+                    </Box>
+                  )}
+                </Stack>
+              ) : (
+                <>
+                  {visibleSourceDirectories.map((sourcePath) => (
+                    <ReviewCodePill key={sourcePath} tooltip={sourcePath} maxChars={22}>
+                      {getPathBasename(sourcePath)}
+                    </ReviewCodePill>
+                  ))}
+                  {hiddenSourceDirectoryCount > 0 && (
+                    <ReviewCount>
+                      {t('repositories.moreCount', { count: hiddenSourceDirectoryCount })}
+                    </ReviewCount>
+                  )}
+                </>
               )}
             </Box>
           </Box>
@@ -467,5 +512,69 @@ export function ReviewStep({
         </ReviewSectionCard>
       </ReviewSectionGrid>
     </Box>
+  )
+}
+
+function DatabaseSourceReviewItem({
+  location,
+  t,
+}: {
+  location: SourceLocation
+  t: ReviewStepProps['t']
+}) {
+  const database = location.database
+  if (!database) return null
+
+  const livePath = database.detected_source_path?.trim()
+  const backupPaths = database.backup_paths?.filter((path) => path.trim().length > 0) || []
+  const backupPathLabel = (backupPaths.length > 0 ? backupPaths : location.paths).join(', ')
+
+  return (
+    <Box
+      sx={{
+        border: '1px solid',
+        borderColor: 'divider',
+        borderRadius: 1,
+        bgcolor: 'background.paper',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 0.6,
+        minWidth: 0,
+        px: 1,
+        py: 0.85,
+      }}
+    >
+      <Typography
+        variant="body2"
+        sx={{
+          color: 'text.primary',
+          fontSize: '0.78rem',
+          fontWeight: 700,
+          lineHeight: 1.35,
+        }}
+      >
+        {database.display_name}
+      </Typography>
+      {livePath && (
+        <ReviewDatabasePath
+          label={t('backupPlans.sourceChooser.databaseLivePath')}
+          value={livePath}
+        />
+      )}
+      <ReviewDatabasePath
+        label={t('backupPlans.sourceChooser.databaseBackupPaths')}
+        value={backupPathLabel}
+      />
+    </Box>
+  )
+}
+
+function ReviewDatabasePath({ label, value }: { label: string; value: string }) {
+  return (
+    <ReviewAttrStack label={label}>
+      <ReviewCodePill tooltip={value} maxChars={38}>
+        {value}
+      </ReviewCodePill>
+    </ReviewAttrStack>
   )
 }

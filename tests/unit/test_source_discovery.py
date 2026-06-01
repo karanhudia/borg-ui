@@ -245,6 +245,34 @@ class TestSourceDiscovery:
         assert [detection["id"] for detection in detections] == ["sqlite"]
         assert detections[0]["detection_source"] == str(sqlite_db)
 
+    def test_database_scan_detects_multiple_local_sqlite_files(
+        self, test_client, admin_headers, tmp_path, monkeypatch
+    ):
+        monkeypatch.setattr(source_discovery, "which", lambda command: None)
+        first_db = tmp_path / "app.sqlite3"
+        second_db = tmp_path / "cache.db"
+        first_db.write_bytes(b"SQLite format 3\x00")
+        second_db.write_bytes(b"SQLite format 3\x00")
+
+        response = test_client.post(
+            "/api/source-discovery/databases/scan",
+            json={
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "paths": [str(tmp_path)],
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        sqlite_sources = [
+            detection["detection_source"]
+            for detection in response.json()["detections"]
+            if detection["id"] == "sqlite"
+        ]
+        assert len(sqlite_sources) == 2
+        assert set(sqlite_sources) == {str(first_db), str(second_db)}
+
     def test_database_scan_detects_cli_when_path_probe_is_negative(
         self, test_client, admin_headers, tmp_path, monkeypatch
     ):

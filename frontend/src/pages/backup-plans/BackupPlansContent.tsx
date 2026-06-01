@@ -1,4 +1,4 @@
-import type { Dispatch, SetStateAction } from 'react'
+import { memo, type Dispatch, type SetStateAction } from 'react'
 import { alpha, Box, Button, Chip, Divider, Stack, Typography, useTheme } from '@mui/material'
 import FilterListIcon from '@mui/icons-material/FilterList'
 import { Database, ListChecks, Plus, RefreshCw } from 'lucide-react'
@@ -55,7 +55,7 @@ interface BackupPlansContentProps {
   t: TFunction
 }
 
-export function BackupPlansContent({
+function BackupPlansContentImpl({
   loadingPlans,
   backupPlans,
   processedPlans,
@@ -541,3 +541,10 @@ export function BackupPlansContent({
     </>
   )
 }
+
+// React.memo with default shallow compare. The wizard above this component
+// re-renders BackupPlans on every keystroke; without this gate, every plan
+// card in the list would re-render too. Handler props must stay
+// reference-stable for the memo to actually skip work (BackupPlans.tsx
+// passes mutation.mutate and useState setters directly).
+export const BackupPlansContent = memo(BackupPlansContentImpl)

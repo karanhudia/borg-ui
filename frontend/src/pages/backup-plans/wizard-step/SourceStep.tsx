@@ -171,6 +171,7 @@ export function SourceStep({
                 const groupKey = sourceLocationKey(location)
                 const isExpanded = expandedGroups[groupKey] ?? false
                 const commonPrefix = commonDirectoryPrefix(location.paths)
+                const databaseLivePath = location.database?.detected_source_path?.trim()
                 const toggle = () =>
                   setExpandedGroups((prev) => ({ ...prev, [groupKey]: !isExpanded }))
 
@@ -230,6 +231,14 @@ export function SourceStep({
                           count: location.paths.length,
                         })}
                       </Typography>
+                      {location.database && (
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          label={location.database.display_name}
+                          sx={{ height: 20, flexShrink: 0 }}
+                        />
+                      )}
                       {location.snapshot && (
                         <Chip
                           size="small"
@@ -240,7 +249,28 @@ export function SourceStep({
                           sx={{ height: 20, flexShrink: 0 }}
                         />
                       )}
-                      {commonPrefix && (
+                      {databaseLivePath ? (
+                        <>
+                          <Typography variant="caption" sx={{ flexShrink: 0 }}>
+                            {t('backupPlans.sourceChooser.databaseLivePath')}
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            title={databaseLivePath}
+                            sx={{
+                              fontFamily:
+                                'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+                              color: 'text.primary',
+                              minWidth: 0,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {databaseLivePath}
+                          </Typography>
+                        </>
+                      ) : commonPrefix ? (
                         <>
                           <Typography variant="caption" sx={{ flexShrink: 0 }}>
                             {t('backupPlans.sourceChooser.inPrefix')}
@@ -263,7 +293,7 @@ export function SourceStep({
                             {commonPrefix}
                           </Typography>
                         </>
-                      )}
+                      ) : null}
                       <Box sx={{ flex: 1 }} />
                       {isExpanded ? (
                         <ChevronUp size={14} style={{ flexShrink: 0 }} />
@@ -273,29 +303,33 @@ export function SourceStep({
                     </Box>
                     {isExpanded && (
                       <Box sx={{ borderTop: 1, borderColor: 'divider', px: 1.25, py: 1 }}>
-                        <Stack spacing={0.25} sx={{ pl: 3 }}>
-                          {location.paths.map((path) => {
-                            const display = commonPrefix
-                              ? path.slice(commonPrefix.length) || path
-                              : path
-                            return (
-                              <Typography
-                                key={path}
-                                variant="body2"
-                                title={path}
-                                sx={{
-                                  fontSize: '0.8125rem',
-                                  color: 'text.primary',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap',
-                                }}
-                              >
-                                {display}
-                              </Typography>
-                            )
-                          })}
-                        </Stack>
+                        {location.database ? (
+                          <DatabaseSourcePathDetails location={location} t={t} />
+                        ) : (
+                          <Stack spacing={0.25} sx={{ pl: 3 }}>
+                            {location.paths.map((path) => {
+                              const display = commonPrefix
+                                ? path.slice(commonPrefix.length) || path
+                                : path
+                              return (
+                                <Typography
+                                  key={path}
+                                  variant="body2"
+                                  title={path}
+                                  sx={{
+                                    fontSize: '0.8125rem',
+                                    color: 'text.primary',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {display}
+                                </Typography>
+                              )
+                            })}
+                          </Stack>
+                        )}
                       </Box>
                     )}
                   </Box>
@@ -400,4 +434,66 @@ function sourceLocationLabel(
     : t('backupPlans.wizard.review.connectionFallback', {
         id: location.source_ssh_connection_id,
       })
+}
+
+function databaseBackupPathLabel(location: SourceLocation) {
+  const backupPaths =
+    location.database?.backup_paths?.filter((path) => path.trim().length > 0) || []
+  return (backupPaths.length > 0 ? backupPaths : location.paths).join(', ')
+}
+
+function DatabaseSourcePathDetails({
+  location,
+  t,
+}: {
+  location: SourceLocation
+  t: SourceStepProps['t']
+}) {
+  const database = location.database
+  if (!database) return null
+
+  const livePath = database.detected_source_path?.trim()
+  const backupPathLabel = databaseBackupPathLabel(location)
+
+  return (
+    <Stack spacing={0.75} sx={{ pl: 3, minWidth: 0 }}>
+      <Typography variant="subtitle2" sx={{ fontSize: '0.8125rem', fontWeight: 700 }}>
+        {database.display_name}
+      </Typography>
+      {livePath && (
+        <DatabasePathLine
+          label={t('backupPlans.sourceChooser.databaseLivePath')}
+          value={livePath}
+        />
+      )}
+      <DatabasePathLine
+        label={t('backupPlans.sourceChooser.databaseBackupPaths')}
+        value={backupPathLabel}
+      />
+    </Stack>
+  )
+}
+
+function DatabasePathLine({ label, value }: { label: string; value: string }) {
+  return (
+    <Stack spacing={0.15} sx={{ minWidth: 0 }}>
+      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+        {label}
+      </Typography>
+      <Typography
+        variant="body2"
+        title={value}
+        sx={{
+          color: 'text.primary',
+          fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+          fontSize: '0.8125rem',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {value}
+      </Typography>
+    </Stack>
+  )
 }

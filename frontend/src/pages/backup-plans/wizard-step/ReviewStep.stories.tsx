@@ -104,6 +104,8 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.borgUiServer': 'Borg UI server',
   'backupPlans.sourceChooser.managedAgent': 'Managed agent',
   'backupPlans.sourceChooser.mixedSources': 'Multiple sources',
+  'backupPlans.sourceChooser.databaseLivePath': 'Live database path',
+  'backupPlans.sourceChooser.databaseBackupPaths': 'Final Borg paths',
   'backupPlans.wizard.review.sources': 'Sources',
   'backupPlans.wizard.review.repositories': 'Repositories',
   'backupPlans.wizard.review.compression': 'Compression',
@@ -185,6 +187,39 @@ export const ServerSourceToServerRepo: Story = {
         [serverRepo.id],
         [{ source_type: 'local', source_ssh_connection_id: null, paths: ['/srv/app'] }]
       ),
+      [serverRepo]
+    ),
+}
+
+export const DatabaseSourceToServerRepo: Story = {
+  render: () =>
+    renderReview(
+      {
+        ...stateWith(
+          [serverRepo.id],
+          [
+            {
+              source_type: 'local',
+              source_ssh_connection_id: null,
+              paths: ['/var/tmp/borg-ui/database-dumps/sqlite'],
+              database: {
+                template_id: 'sqlite',
+                engine: 'SQLite',
+                display_name: 'SQLite database',
+                backup_strategy: 'online_backup',
+                detected_source_path: '/home/app/state.sqlite',
+                detection_label: 'Borg UI server',
+                capture_mode: 'dump',
+                dump_path: '/var/tmp/borg-ui/database-dumps/sqlite',
+                backup_paths: ['/var/tmp/borg-ui/database-dumps/sqlite'],
+                script_execution_target: 'source',
+              },
+            },
+          ]
+        ),
+        name: 'SQLite database backup',
+        databaseTemplateId: 'sqlite',
+      },
       [serverRepo]
     ),
 }

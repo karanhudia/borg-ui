@@ -99,6 +99,10 @@ function resolveInitialScanTarget(
   return resolvedId ? { type: 'remote', sshId: resolvedId } : { type: 'local', sshId: '' }
 }
 
+function detectionKey(database: SourceDiscoveryDatabase, index: number) {
+  return JSON.stringify([database.id, database.detection_source || '', index])
+}
+
 export interface DatabaseScanChoice {
   database: SourceDiscoveryDatabase
   scanTarget: ScanTargetState
@@ -738,9 +742,9 @@ export function DatabaseScanDialog({
                   },
                 }}
               >
-                {detections.map((database) => (
+                {detections.map((database, index) => (
                   <DatabaseBrandTile
-                    key={database.id}
+                    key={detectionKey(database, index)}
                     database={database}
                     detectedLabel={t('backupPlans.sourceChooser.detectedBadge')}
                     onClick={() => handleChoose(database)}

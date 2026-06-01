@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -444,7 +444,10 @@ export default function BackupPlans() {
     },
   })
 
-  const openCreateWizard = () => {
+  // useCallback deps list every setter used so React Compiler-aware lint is
+  // satisfied. State setters are reference-stable, so listing them does not
+  // cause the callback to be recreated; it just lets the linter verify deps.
+  const openCreateWizard = useCallback(() => {
     setEditingPlan(null)
     setWizardState(createInitialState())
     setBasicRepositoryState(createInitialBasicRepositoryState())
@@ -455,25 +458,47 @@ export default function BackupPlans() {
     setLegacySourceReviewOpen(false)
     setActiveStep(0)
     setWizardOpen(true)
-  }
+  }, [
+    setEditingPlan,
+    setWizardState,
+    setBasicRepositoryState,
+    setBasicRepositoryOpen,
+    setShowSourceExplorer,
+    setShowExcludeExplorer,
+    setShowBasicRepositoryPathExplorer,
+    setLegacySourceReviewOpen,
+    setActiveStep,
+    setWizardOpen,
+  ])
 
-  const clearRepositoryFilter = () => {
+  const clearRepositoryFilter = useCallback(() => {
     const nextParams = new URLSearchParams(searchParams)
     nextParams.delete('repositoryId')
     setSearchParams(nextParams, { replace: true })
-  }
+  }, [searchParams, setSearchParams])
 
-  const openEditWizard = async (plan: BackupPlan) => {
-    const response = await backupPlansAPI.get(plan.id)
-    const detailedPlan = response.data as BackupPlan
-    setEditingPlan(detailedPlan)
-    setWizardState(planToState(detailedPlan))
-    setBasicRepositoryState(createInitialBasicRepositoryState())
-    setBasicRepositoryOpen(false)
-    setLegacySourceReviewOpen(false)
-    setActiveStep(0)
-    setWizardOpen(true)
-  }
+  const openEditWizard = useCallback(
+    async (plan: BackupPlan) => {
+      const response = await backupPlansAPI.get(plan.id)
+      const detailedPlan = response.data as BackupPlan
+      setEditingPlan(detailedPlan)
+      setWizardState(planToState(detailedPlan))
+      setBasicRepositoryState(createInitialBasicRepositoryState())
+      setBasicRepositoryOpen(false)
+      setLegacySourceReviewOpen(false)
+      setActiveStep(0)
+      setWizardOpen(true)
+    },
+    [
+      setEditingPlan,
+      setWizardState,
+      setBasicRepositoryState,
+      setBasicRepositoryOpen,
+      setLegacySourceReviewOpen,
+      setActiveStep,
+      setWizardOpen,
+    ]
+  )
 
   const updateState = (updates: Partial<WizardState>) => {
     setWizardState((prev) => ({ ...prev, ...updates }))
@@ -698,10 +723,35 @@ export default function BackupPlans() {
 
   const isSubmitting =
     createMutation.isPending || updateMutation.isPending || createScriptMutation.isPending
-  const formatStatusLabel = (status?: string) =>
-    status
-      ? t(`backupPlans.statuses.${status}`, { defaultValue: formatRunStatus(status) })
-      : t('backupPlans.statuses.unknown')
+
+  // Stable handler references so the memoized BackupPlansContent below can
+  // skip re-rendering its plan list on every wizard keystroke. mutation.mutate
+  // and useState setters are already reference-stable; the inline arrows below
+  // would defeat React.memo's shallow comparison without useCallback.
+  const handleRunPlan = useCallback((planId: number) => runMutation.mutate(planId), [runMutation])
+  const handleCancelRun = useCallback(
+    (runId: number) => cancelRunMutation.mutate(runId),
+    [cancelRunMutation]
+  )
+  const handleTogglePlan = useCallback(
+    (planId: number) => toggleMutation.mutate(planId),
+    [toggleMutation]
+  )
+  const handleDeletePlan = useCallback(
+    (planId: number) => deleteMutation.mutate(planId),
+    [deleteMutation]
+  )
+  const handleViewRepositories = useCallback(
+    (planId: number) => navigate(`/repositories?backupPlanId=${planId}`),
+    [navigate]
+  )
+  const formatStatusLabel = useCallback(
+    (status?: string) =>
+      status
+        ? t(`backupPlans.statuses.${status}`, { defaultValue: formatRunStatus(status) })
+        : t('backupPlans.statuses.unknown'),
+    [t]
+  )
 
   return (
     <Box>
@@ -727,14 +777,14 @@ export default function BackupPlans() {
         togglePending={toggleMutation.isPending}
         toggleVariables={toggleMutation.variables}
         openCreateWizard={openCreateWizard}
-        onRunPlan={(planId) => runMutation.mutate(planId)}
-        onCancelRun={(runId) => cancelRunMutation.mutate(runId)}
-        onViewLogs={(job) => setLogJob(job)}
-        onTogglePlan={(planId) => toggleMutation.mutate(planId)}
+        onRunPlan={handleRunPlan}
+        onCancelRun={handleCancelRun}
+        onViewLogs={setLogJob}
+        onTogglePlan={handleTogglePlan}
         onEditPlan={openEditWizard}
-        onDeletePlan={(planId) => deleteMutation.mutate(planId)}
-        onViewHistory={(planId) => setHistoryPlanId(planId)}
-        onViewRepositories={(planId) => navigate(`/repositories?backupPlanId=${planId}`)}
+        onDeletePlan={handleDeletePlan}
+        onViewHistory={setHistoryPlanId}
+        onViewRepositories={handleViewRepositories}
         formatStatusLabel={formatStatusLabel}
         t={t}
       />

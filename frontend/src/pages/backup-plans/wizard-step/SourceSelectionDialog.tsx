@@ -1665,6 +1665,12 @@ export function SourceSelectionDialog({
                 const hasSourceScript =
                   Boolean(database.pre_backup_script_id || database.post_backup_script_id) ||
                   Boolean(queuedDatabaseScriptDrafts[key])
+                const livePath = database.detected_source_path?.trim()
+                const backupPaths =
+                  database.backup_paths?.filter((path) => path.trim().length > 0) || []
+                const backupPathLabel = (
+                  backupPaths.length > 0 ? backupPaths : location.paths
+                ).join(', ')
                 return (
                   <Paper
                     key={key}
@@ -1673,14 +1679,13 @@ export function SourceSelectionDialog({
                   >
                     <Stack direction="row" spacing={1.25} alignItems="center" sx={{ minWidth: 0 }}>
                       <DatabaseIcon size={16} />
-                      <Stack spacing={0.25} sx={{ minWidth: 0, flex: 1 }}>
+                      <Stack spacing={0.2} sx={{ minWidth: 0, flex: 1 }}>
                         <Typography variant="subtitle2" noWrap>
                           {database.display_name}
                         </Typography>
                         <Typography
                           variant="caption"
                           color="text.secondary"
-                          title={database.backup_paths.join(', ')}
                           sx={{
                             fontFamily:
                               'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
@@ -1689,8 +1694,37 @@ export function SourceSelectionDialog({
                             whiteSpace: 'nowrap',
                           }}
                         >
-                          {sourceLocationLabel(location, sshConnections, agentMachines, t)} ·{' '}
-                          {database.backup_paths.join(', ')}
+                          {sourceLocationLabel(location, sshConnections, agentMachines, t)}
+                        </Typography>
+                        {livePath && (
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            title={livePath}
+                            sx={{
+                              fontFamily:
+                                'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {t('backupPlans.sourceChooser.databaseLivePath')}: {livePath}
+                          </Typography>
+                        )}
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          title={backupPathLabel}
+                          sx={{
+                            fontFamily:
+                              'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {t('backupPlans.sourceChooser.databaseBackupPaths')}: {backupPathLabel}
                         </Typography>
                       </Stack>
                       <Chip

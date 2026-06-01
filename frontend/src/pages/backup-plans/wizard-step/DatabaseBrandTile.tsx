@@ -36,6 +36,8 @@ interface DatabaseBrandTileProps {
 export function DatabaseBrandTile({ database, detectedLabel, onClick }: DatabaseBrandTileProps) {
   const brand = brandFor(database.engine)
   const BrandIcon = brand.Icon
+  const detectionSource =
+    database.detected && database.detection_source?.trim() ? database.detection_source.trim() : null
 
   return (
     <Card
@@ -53,7 +55,13 @@ export function DatabaseBrandTile({ database, detectedLabel, onClick }: Database
       <CardActionArea
         component="button"
         onClick={onClick}
-        sx={{ height: '100%', p: 1.25, display: 'flex', justifyContent: 'flex-start' }}
+        sx={{
+          height: '100%',
+          minHeight: detectionSource ? 78 : 64,
+          p: 1.25,
+          display: 'flex',
+          justifyContent: 'flex-start',
+        }}
       >
         <Stack
           direction="row"
@@ -78,7 +86,7 @@ export function DatabaseBrandTile({ database, detectedLabel, onClick }: Database
           >
             <BrandIcon size={20} />
           </Box>
-          <Stack spacing={0.25} sx={{ minWidth: 0, textAlign: 'left' }}>
+          <Stack spacing={0.25} sx={{ minWidth: 0, flex: 1, textAlign: 'left' }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 600, lineHeight: 1.2 }} noWrap>
               {database.engine}
             </Typography>
@@ -97,6 +105,23 @@ export function DatabaseBrandTile({ database, detectedLabel, onClick }: Database
                   {detectedLabel}
                 </Typography>
               </Stack>
+            )}
+            {detectionSource && (
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                title={detectionSource}
+                sx={{
+                  fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace',
+                  fontSize: '0.6875rem',
+                  lineHeight: 1.25,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {detectionSource}
+              </Typography>
             )}
           </Stack>
         </Stack>

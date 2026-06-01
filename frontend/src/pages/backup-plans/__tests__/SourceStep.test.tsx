@@ -520,6 +520,45 @@ describe('SourceStep', () => {
     expect(screen.queryByTestId('wizard-data-source')).not.toBeInTheDocument()
   })
 
+  it('shows the live database path in the selected source summary', () => {
+    renderSourceStep({
+      wizardState: {
+        ...createInitialState(),
+        name: 'PostgreSQL nightly',
+        sourceType: 'local',
+        sourceDirectories: ['/var/tmp/borg-ui/database-dumps/postgresql'],
+        sourceLocations: [
+          {
+            source_type: 'local',
+            source_ssh_connection_id: null,
+            paths: ['/var/tmp/borg-ui/database-dumps/postgresql'],
+            database: {
+              template_id: 'postgresql',
+              engine: 'PostgreSQL',
+              display_name: 'PostgreSQL database',
+              backup_strategy: 'logical_dump',
+              detected_source_path: '/var/lib/postgresql',
+              detection_label: 'Borg UI server',
+              capture_mode: 'dump',
+              dump_path: '/var/tmp/borg-ui/database-dumps/postgresql',
+              backup_paths: ['/var/tmp/borg-ui/database-dumps/postgresql'],
+              script_execution_target: 'source',
+            },
+          },
+        ],
+      },
+    })
+
+    expect(screen.getByText('/var/lib/postgresql')).toBeInTheDocument()
+    expect(screen.getByText('PostgreSQL database')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { expanded: false }))
+
+    expect(screen.getAllByText('Live database path').length).toBeGreaterThan(0)
+    expect(screen.getByText('Final Borg paths')).toBeInTheDocument()
+    expect(screen.getByText('/var/tmp/borg-ui/database-dumps/postgresql')).toBeInTheDocument()
+  })
+
   it('opens straight into the path picker with the source-kind pivot', async () => {
     apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
     renderSourceStep()
@@ -1058,6 +1097,88 @@ describe('SourceStep', () => {
     expect(
       sourcePathControl.compareDocumentPosition(selectedPath) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy()
+  })
+
+  it('shows every detected database instance from a scan', async () => {
+    apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
+    apiMocks.scanDatabases.mockResolvedValue({
+      data: {
+        scan_target: {
+          source_type: 'local',
+          source_ssh_connection_id: null,
+          label: 'This Borg UI server',
+        },
+        scanned_paths: ['/srv'],
+        detections: [
+          {
+            id: 'sqlite',
+            engine: 'SQLite',
+            display_name: 'SQLite database',
+            backup_strategy: 'online_backup',
+            source_directories: ['/var/tmp/borg-ui/database-dumps/sqlite'],
+            client_commands: ['sqlite3'],
+            documentation_url: 'https://www.sqlite.org/backup.html',
+            detected: true,
+            detection_source: '/srv/app/state.sqlite',
+            notes: ['Uses sqlite3 .backup.'],
+            script_drafts: {
+              pre_backup: {
+                name: 'Prepare SQLite backup',
+                description: 'Create a SQLite backup.',
+                content:
+                  '#!/usr/bin/env bash\nset -euo pipefail\nsqlite3 "$SQLITE_DATABASE_PATH"\n',
+                timeout: 300,
+              },
+              post_backup: {
+                name: 'Clean SQLite backup',
+                description: 'Remove transient SQLite backup files.',
+                content: '#!/usr/bin/env bash\nset -euo pipefail\nrm -rf /var/tmp/borg-ui/sqlite\n',
+                timeout: 120,
+              },
+            },
+          },
+          {
+            id: 'sqlite',
+            engine: 'SQLite',
+            display_name: 'SQLite database',
+            backup_strategy: 'online_backup',
+            source_directories: ['/var/tmp/borg-ui/database-dumps/sqlite'],
+            client_commands: ['sqlite3'],
+            documentation_url: 'https://www.sqlite.org/backup.html',
+            detected: true,
+            detection_source: '/srv/app/cache.sqlite3',
+            notes: ['Uses sqlite3 .backup.'],
+            script_drafts: {
+              pre_backup: {
+                name: 'Prepare SQLite backup',
+                description: 'Create a SQLite backup.',
+                content:
+                  '#!/usr/bin/env bash\nset -euo pipefail\nsqlite3 "$SQLITE_DATABASE_PATH"\n',
+                timeout: 300,
+              },
+              post_backup: {
+                name: 'Clean SQLite backup',
+                description: 'Remove transient SQLite backup files.',
+                content: '#!/usr/bin/env bash\nset -euo pipefail\nrm -rf /var/tmp/borg-ui/sqlite\n',
+                timeout: 120,
+              },
+            },
+          },
+        ],
+        templates: discoveryResponse.templates,
+        warnings: [],
+      },
+    })
+
+    renderSourceStep()
+
+    fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
+    const databaseTab = await screen.findByRole('tab', { name: /^database$/i })
+    fireEvent.click(databaseTab)
+    fireEvent.click(await screen.findByRole('button', { name: /scan for databases/i }))
+
+    expect(await screen.findByText('/srv/app/state.sqlite')).toBeInTheDocument()
+    expect(screen.getByText('/srv/app/cache.sqlite3')).toBeInTheDocument()
   })
 
   it('queues database templates in the database tab without closing the modal', async () => {

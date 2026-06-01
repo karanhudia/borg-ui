@@ -744,6 +744,28 @@ def _path_probe_match_score(template_id: str, probe: PathProbe) -> int:
     return 1
 
 
+def _matching_probes_for_template(
+    template_id: str, probes: list[PathProbe]
+) -> list[PathProbe]:
+    scored_probes = [
+        (probe, score)
+        for probe in probes
+        if (score := _path_probe_match_score(template_id, probe)) > 0
+    ]
+    if not scored_probes:
+        return []
+
+    best_score = max(score for _, score in scored_probes)
+    seen_paths: set[str] = set()
+    matches: list[PathProbe] = []
+    for probe, score in scored_probes:
+        if score != best_score or probe.path in seen_paths:
+            continue
+        seen_paths.add(probe.path)
+        matches.append(probe)
+    return matches
+
+
 def _detect_templates_from_probes(
     templates: list[DatabaseCandidate],
     probes: list[PathProbe],
@@ -751,16 +773,7 @@ def _detect_templates_from_probes(
 ) -> list[DatabaseCandidate]:
     detections: list[DatabaseCandidate] = []
     for template in templates:
-        matching_probe = max(
-            probes,
-            key=lambda probe: _path_probe_match_score(template.id, probe),
-            default=None,
-        )
-        if (
-            matching_probe is not None
-            and _path_probe_match_score(template.id, matching_probe) == 0
-        ):
-            matching_probe = None
+        matching_probes = _matching_probes_for_template(template.id, probes)
         available_command = next(
             (
                 command
@@ -770,20 +783,26 @@ def _detect_templates_from_probes(
             None,
         )
 
-        if not matching_probe and not available_command:
+        if not matching_probes and not available_command:
             continue
 
-        detection_source = (
-            matching_probe.path
-            if matching_probe
-            else f"{available_command} available on PATH"
-        )
+        if matching_probes:
+            for matching_probe in matching_probes:
+                detections.append(
+                    template.model_copy(
+                        update={
+                            "detected": True,
+                            "detection_source": matching_probe.path,
+                        }
+                    )
+                )
+            continue
 
         detections.append(
             template.model_copy(
                 update={
                     "detected": True,
-                    "detection_source": detection_source,
+                    "detection_source": f"{available_command} available on PATH",
                 }
             )
         )
