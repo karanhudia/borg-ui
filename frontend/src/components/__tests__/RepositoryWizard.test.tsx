@@ -22,6 +22,7 @@ vi.mock('../../services/api', () => ({
   },
   rcloneAPI: {
     getStatus: vi.fn(),
+    getProviders: vi.fn(),
     listRemotes: vi.fn(),
     createRemote: vi.fn(),
     browseRemote: vi.fn(),
@@ -177,6 +178,46 @@ const mockRcloneRemotes = [
   },
 ]
 
+const mockRcloneProviders = [
+  {
+    type: 'local',
+    label: 'Local filesystem',
+    description: 'Local path remote.',
+    auth_type: 'none',
+    type_editable: false,
+    docs_url: 'https://rclone.org/local/',
+    config_template: { type: 'local' },
+    fields: [],
+  },
+  {
+    type: 's3',
+    label: 'Amazon S3 / S3-compatible',
+    description: 'AWS S3, MinIO, Wasabi, Cloudflare R2, and compatible object stores.',
+    auth_type: 'access_key',
+    type_editable: false,
+    docs_url: 'https://rclone.org/s3/',
+    config_template: {
+      type: 's3',
+      provider: 'AWS',
+      access_key_id: '',
+      secret_access_key: '',
+      region: '',
+      endpoint: '',
+    },
+    fields: [],
+  },
+  {
+    type: 'custom',
+    label: 'Custom rclone backend',
+    description: 'Manual setup for any rclone backend.',
+    auth_type: 'manual',
+    type_editable: true,
+    docs_url: 'https://rclone.org/docs/',
+    config_template: { type: '' },
+    fields: [],
+  },
+]
+
 const createQueryClient = () =>
   new QueryClient({
     defaultOptions: {
@@ -309,6 +350,9 @@ describe('RepositoryWizard', () => {
     })
     ;(rcloneAPI.getStatus as Mock).mockResolvedValue({
       data: { available: true, version: 'rclone v1.66.0', error: null },
+    })
+    ;(rcloneAPI.getProviders as Mock).mockResolvedValue({
+      data: { providers: mockRcloneProviders },
     })
     ;(rcloneAPI.listRemotes as Mock).mockResolvedValue({
       data: { remotes: mockRcloneRemotes },
@@ -983,6 +1027,16 @@ describe('RepositoryWizard', () => {
       await user.click(screen.getByRole('button', { name: /Next/i }))
       await user.click(screen.getByRole('checkbox', { name: /Mirror this repository/i }))
       await user.click(screen.getByRole('button', { name: /Add remote/i }))
+
+      await waitFor(() => {
+        expect(rcloneAPI.getProviders).toHaveBeenCalled()
+      })
+      await user.click(screen.getByRole('combobox', { name: /^Provider/i }))
+      const providerListbox = await screen.findByRole('listbox')
+      expect(
+        within(providerListbox).getByRole('option', { name: /Amazon S3 \/ S3-compatible/i })
+      ).toBeInTheDocument()
+      await user.click(within(providerListbox).getByRole('option', { name: /Local filesystem/i }))
 
       setInputValue(screen.getByLabelText(/Remote name/i), 'local-test')
       expect(screen.getByRole('combobox', { name: /^Provider/i })).toHaveTextContent(
