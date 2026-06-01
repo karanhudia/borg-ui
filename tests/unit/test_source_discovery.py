@@ -1,3 +1,8 @@
+import os
+import shutil
+import sqlite3
+import subprocess
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -72,12 +77,61 @@ class TestSourceDiscovery:
         pre_backup = sqlite["script_drafts"]["pre_backup"]["content"]
         post_backup = sqlite["script_drafts"]["post_backup"]["content"]
         assert "sqlite3" in pre_backup
+        assert "python3" in pre_backup
         assert "BORG_UI_DB_SOURCE_PATH" in pre_backup
         assert "SQLITE_DATABASE_PATH" in pre_backup
         assert "SQLITE_DATABASE_NAME" not in pre_backup
         assert parse_script_parameters(pre_backup) == []
         assert "/var/tmp/borg-ui/database-dumps/sqlite" in pre_backup
         assert "/var/tmp/borg-ui/database-dumps/sqlite" in post_backup
+
+    def test_sqlite_backup_script_uses_python_fallback_without_sqlite_cli(
+        self, test_client, admin_headers, tmp_path
+    ):
+        response = test_client.get(
+            "/api/source-discovery/databases", headers=admin_headers
+        )
+
+        sqlite_template = next(
+            template
+            for template in response.json()["templates"]
+            if template["id"] == "sqlite"
+        )
+        pre_backup = sqlite_template["script_drafts"]["pre_backup"]["content"]
+
+        source_db = tmp_path / "source.sqlite3"
+        with sqlite3.connect(source_db) as connection:
+            connection.execute("CREATE TABLE items (name TEXT NOT NULL)")
+            connection.execute("INSERT INTO items (name) VALUES ('alpha')")
+
+        script_path = tmp_path / "prepare-sqlite.sh"
+        script_path.write_text(pre_backup)
+        script_path.chmod(0o700)
+
+        temp_bin = tmp_path / "bin"
+        temp_bin.mkdir()
+        for command in ("mkdir", "rm"):
+            command_path = shutil.which(command)
+            assert command_path
+            (temp_bin / command).symlink_to(command_path)
+        (temp_bin / "python3").symlink_to(sys.executable)
+
+        result = subprocess.run(
+            ["/bin/bash", str(script_path)],
+            env={
+                **os.environ,
+                "PATH": str(temp_bin),
+                "BORG_UI_DB_SOURCE_PATH": str(source_db),
+                "BORG_UI_DB_DUMP_DIR": str(tmp_path / "dump"),
+            },
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+        assert result.returncode == 0, result.stderr
+        with sqlite3.connect(tmp_path / "dump" / "database.sqlite3") as connection:
+            assert connection.execute("SELECT name FROM items").fetchone() == ("alpha",)
 
     def test_database_templates_include_editable_script_drafts(
         self, test_client, admin_headers

@@ -391,7 +391,7 @@ def _sqlite_template() -> DatabaseCandidate:
         client_commands=["sqlite3"],
         documentation_url="https://www.sqlite.org/backup.html",
         notes=[
-            "Uses the SQLite Online Backup API through sqlite3 .backup.",
+            "Uses the SQLite Online Backup API through sqlite3, or Python 3 as a fallback.",
             "Set SQLITE_DATABASE_PATH to the source database file.",
         ],
         script_drafts=DatabaseScriptDrafts(
@@ -421,9 +421,39 @@ def _sqlite_template() -> DatabaseCandidate:
                     mkdir -p "$DUMP_DIR"
                     rm -f "$DUMP_FILE"
 
-                    sqlite3 "$SQLITE_DATABASE_PATH" <<SQL
+                    if command -v sqlite3 >/dev/null 2>&1; then
+                      sqlite3 "$SQLITE_DATABASE_PATH" <<SQL
                     .backup '$DUMP_FILE'
                     SQL
+                    elif command -v python3 >/dev/null 2>&1; then
+                      python3 - "$SQLITE_DATABASE_PATH" "$DUMP_FILE" <<'PY'
+                    import sys
+
+                    try:
+                        import sqlite3
+                    except ImportError:
+                        print(
+                            "Python 3 is installed, but its sqlite3 module is unavailable. "
+                            "Install sqlite3 or Python sqlite3 support on the source machine.",
+                            file=sys.stderr,
+                        )
+                        raise SystemExit(127)
+
+                    source_path, dump_file = sys.argv[1], sys.argv[2]
+                    source = sqlite3.connect("file:" + source_path + "?mode=ro", uri=True)
+                    try:
+                        destination = sqlite3.connect(dump_file)
+                        try:
+                            source.backup(destination)
+                        finally:
+                            destination.close()
+                    finally:
+                        source.close()
+                    PY
+                    else
+                      echo "SQLite backup requires sqlite3 or python3 with sqlite3 support on the source machine." >&2
+                      exit 127
+                    fi
                     """
                 ),
             ),
