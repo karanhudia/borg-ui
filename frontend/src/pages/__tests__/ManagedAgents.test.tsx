@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import { QueryClient } from '@tanstack/react-query'
 import ManagedAgents, {
   AgentList,
@@ -16,6 +16,10 @@ import { AgentJobResponse, AgentMachineResponse, managedAgentsAPI } from '../../
 import type { AxiosResponse } from 'axios'
 import { buildAgentReinstallCommand } from '../managed-agents/agentInstallCommandText'
 
+const { mockTrackSystem } = vi.hoisted(() => ({
+  mockTrackSystem: vi.fn(),
+}))
+
 vi.mock('../../services/api', () => ({
   managedAgentsAPI: {
     listAgents: vi.fn(),
@@ -30,6 +34,21 @@ vi.mock('../../services/api', () => ({
     createBackupJob: vi.fn(),
     cancelJob: vi.fn(),
   },
+}))
+
+vi.mock('../../hooks/useAnalytics', () => ({
+  useAnalytics: () => ({
+    trackSystem: mockTrackSystem,
+    EventAction: {
+      CREATE: 'Create',
+      EDIT: 'Edit',
+      DELETE: 'Delete',
+      VIEW: 'View',
+      START: 'Start',
+      STOP: 'Stop',
+      FILTER: 'Filter',
+    },
+  }),
 }))
 
 vi.mock('../../hooks/useAuth', () => ({
@@ -162,6 +181,61 @@ describe('ManagedAgents', () => {
 
     expect(await screen.findByText('online')).toBeInTheDocument()
   })
+
+  it('tracks managed-agent workflow analytics', async () => {
+    const user = userEvent.setup()
+    vi.mocked(managedAgentsAPI.createEnrollmentToken).mockResolvedValue({
+      data: {
+        id: 1,
+        name: 'Client laptop',
+        token: 'agent-token-secret',
+        token_prefix: 'agent-token-secret',
+        expires_at: '2026-05-28T00:00:00.000Z',
+        created_at: '2026-05-21T00:00:00.000Z',
+      },
+    } as AxiosResponse)
+
+    renderWithProviders(<ManagedAgents />, { initialRoute: '/managed-agents' })
+
+    await screen.findByText('Managed Agents')
+    await user.click(screen.getByRole('button', { name: /^refresh$/i }))
+    expect(mockTrackSystem).toHaveBeenCalledWith('Start', {
+      section: 'managed_agents',
+      operation: 'refresh',
+    })
+
+    await user.click(screen.getByRole('tab', { name: /jobs/i }))
+    expect(mockTrackSystem).toHaveBeenCalledWith('Filter', {
+      section: 'managed_agents',
+      operation: 'change_tab',
+      tab: 'jobs',
+    })
+
+    await user.click(screen.getByRole('button', { name: /add agent/i }))
+    expect(mockTrackSystem).toHaveBeenCalledWith('View', {
+      section: 'managed_agents',
+      operation: 'open_add_agent_dialog',
+    })
+
+    await screen.findByRole('dialog', { name: /add agent/i })
+    await user.clear(screen.getByLabelText(/server url/i))
+    await user.type(screen.getByLabelText(/server url/i), 'http://192.168.0.29:8083')
+    await user.click(screen.getByRole('button', { name: /next/i }))
+    await user.clear(screen.getByLabelText(/agent name/i))
+    await user.type(screen.getByLabelText(/agent name/i), 'Client laptop')
+    await user.click(screen.getByRole('button', { name: /generate install command/i }))
+
+    await waitFor(() => {
+      expect(mockTrackSystem).toHaveBeenCalledWith(
+        'Create',
+        expect.objectContaining({
+          section: 'managed_agents',
+          operation: 'create_enrollment_token',
+          has_default_path: false,
+        })
+      )
+    })
+  }, 60000)
 
   it('keeps setup help detailed without duplicating token creation inside the guide', async () => {
     const user = userEvent.setup()

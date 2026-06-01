@@ -12,6 +12,26 @@ import {
 import CloudStorage from '../CloudStorage'
 import { rcloneAPI } from '../../services/api'
 
+const { mockTrackSystem } = vi.hoisted(() => ({
+  mockTrackSystem: vi.fn(),
+}))
+
+vi.mock('../../hooks/useAnalytics', () => ({
+  useAnalytics: () => ({
+    trackSystem: mockTrackSystem,
+    EventAction: {
+      CREATE: 'Create',
+      EDIT: 'Edit',
+      DELETE: 'Delete',
+      VIEW: 'View',
+      START: 'Start',
+      TEST: 'Test',
+      SEARCH: 'Search',
+      FILTER: 'Filter',
+    },
+  }),
+}))
+
 vi.mock('../../services/api', () => ({
   rcloneAPI: {
     getStatus: vi.fn(),
@@ -290,6 +310,70 @@ describe('CloudStorage', () => {
       })
     })
   }, 60000)
+
+  it('tracks cloud storage remote workflow analytics', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<CloudStorage />, { initialRoute: '/cloud-storage' })
+
+    await screen.findByText('prod-s3')
+    await user.click(screen.getByRole('button', { name: /Add remote/i }))
+
+    expect(mockTrackSystem).toHaveBeenCalledWith('View', {
+      section: 'cloud_storage',
+      operation: 'open_create_remote_dialog',
+    })
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /Provider/i }))
+    fireEvent.click(await screen.findByRole('option', { name: /Google Drive/i }))
+    await user.click(screen.getByRole('button', { name: /Start Borg UI OAuth/i }))
+
+    await waitFor(() => {
+      expect(mockTrackSystem).toHaveBeenCalledWith(
+        'Start',
+        expect.objectContaining({
+          section: 'cloud_storage',
+          operation: 'start_oauth',
+          provider: 'drive',
+          mode: 'borg_ui',
+          status: 'awaiting_callback',
+        })
+      )
+    })
+
+    await user.clear(screen.getByLabelText(/Remote name/i))
+    await user.type(screen.getByLabelText(/Remote name/i), 'gdrive-prod')
+    await user.click(screen.getByRole('button', { name: /Create remote/i }))
+
+    await waitFor(() => {
+      expect(mockTrackSystem).toHaveBeenCalledWith(
+        'Create',
+        expect.objectContaining({
+          section: 'cloud_storage',
+          operation: 'create_remote',
+          provider: 'drive',
+          config_source: 'managed',
+        })
+      )
+    })
+  }, 60000)
+
+  it('tracks cloud storage search result counts with the submitted query', async () => {
+    renderWithProviders(<CloudStorage />, { initialRoute: '/cloud-storage' })
+
+    await screen.findByText('prod-s3')
+    fireEvent.change(screen.getByPlaceholderText(/Search cloud storage/i), {
+      target: { value: 'missing' },
+    })
+
+    expect(mockTrackSystem).toHaveBeenCalledWith('Search', {
+      section: 'cloud_storage',
+      operation: 'search_remotes',
+      query_length: 7,
+      sort_by: 'name-asc',
+      group_by: 'none',
+      result_count: 0,
+    })
+  })
 
   it('loads guided providers and creates a Google Drive remote from the template', async () => {
     const user = userEvent.setup()

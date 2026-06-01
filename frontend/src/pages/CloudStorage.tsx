@@ -52,6 +52,9 @@ import PageHeader from '../components/PageHeader'
 import ListToolbar from '../components/ListToolbar'
 import StorageBrowserDialog, { type StorageBrowserItem } from '../components/StorageBrowserDialog'
 import { joinBrowserPath, normalizeBrowserPath } from '../utils/storageBrowserPaths'
+import { useAnalytics } from '../hooks/useAnalytics'
+
+const CLOUD_STORAGE_ANALYTICS_SECTION = 'cloud_storage'
 
 interface BrowseEntry {
   name: string
@@ -571,6 +574,7 @@ export function CloudStorageContent({
   onCloseBrowse,
 }: CloudStorageContentProps) {
   const { t } = useTranslation()
+  const { trackSystem, EventAction } = useAnalytics()
   const isAvailable = status?.available !== false
 
   const [searchQuery, setSearchQuery] = useState('')
@@ -581,13 +585,39 @@ export function CloudStorageContent({
     () => localStorage.getItem('cloud_storage_group') || 'none'
   )
 
+  const getRemoteResultCount = (queryValue: string) => {
+    const query = queryValue.trim().toLowerCase()
+    if (!query) return remotes.length
+
+    return remotes.filter(
+      (remote) =>
+        remote.name.toLowerCase().includes(query) || remote.provider.toLowerCase().includes(query)
+    ).length
+  }
+
   const handleSortChange = (value: string) => {
     setSortBy(value)
     localStorage.setItem('cloud_storage_sort', value)
+    trackSystem(EventAction.FILTER, {
+      section: CLOUD_STORAGE_ANALYTICS_SECTION,
+      operation: 'change_sort',
+      sort_by: value,
+      group_by: groupBy,
+      query_length: searchQuery.trim().length,
+      result_count: getRemoteResultCount(searchQuery),
+    })
   }
   const handleGroupChange = (value: string) => {
     setGroupBy(value)
     localStorage.setItem('cloud_storage_group', value)
+    trackSystem(EventAction.FILTER, {
+      section: CLOUD_STORAGE_ANALYTICS_SECTION,
+      operation: 'change_group',
+      sort_by: sortBy,
+      group_by: value,
+      query_length: searchQuery.trim().length,
+      result_count: getRemoteResultCount(searchQuery),
+    })
   }
 
   const statusRank: Record<string, number> = {
@@ -669,6 +699,20 @@ export function CloudStorageContent({
   }, [remotes, searchQuery, sortBy, groupBy, t])
 
   const totalAfterFilter = processedRemotes.groups.reduce((sum, g) => sum + g.remotes.length, 0)
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value)
+    const trimmed = value.trim()
+    if (!trimmed) return
+
+    trackSystem(EventAction.SEARCH, {
+      section: CLOUD_STORAGE_ANALYTICS_SECTION,
+      operation: 'search_remotes',
+      query_length: trimmed.length,
+      sort_by: sortBy,
+      group_by: groupBy,
+      result_count: getRemoteResultCount(value),
+    })
+  }
   const hasUnfilteredRemotes = remotes.length > 0
   const showToolbar = isLoading || hasUnfilteredRemotes
   const browseItems = useMemo<StorageBrowserItem[] | null>(() => {
@@ -691,7 +735,13 @@ export function CloudStorageContent({
         actions={
           <>
             <IconButton
-              onClick={onRefresh}
+              onClick={() => {
+                trackSystem(EventAction.START, {
+                  section: CLOUD_STORAGE_ANALYTICS_SECTION,
+                  operation: 'refresh',
+                })
+                onRefresh?.()
+              }}
               disabled={isRefreshing}
               aria-label={t('common.buttons.refresh')}
               title={t('common.buttons.refresh')}
@@ -702,7 +752,13 @@ export function CloudStorageContent({
               variant="contained"
               startIcon={<Plus size={18} />}
               disabled={!isAvailable || isLoading}
-              onClick={onAddRemote}
+              onClick={() => {
+                trackSystem(EventAction.VIEW, {
+                  section: CLOUD_STORAGE_ANALYTICS_SECTION,
+                  operation: 'open_create_remote_dialog',
+                })
+                onAddRemote?.()
+              }}
               sx={{ width: { xs: '100%', md: 'auto' } }}
             >
               {t('cloudStorage.addRemote')}
@@ -726,7 +782,7 @@ export function CloudStorageContent({
       {showToolbar ? (
         <ListToolbar
           searchValue={searchQuery}
-          onSearchChange={setSearchQuery}
+          onSearchChange={handleSearchChange}
           searchPlaceholder={t('cloudStorage.search', {
             defaultValue: 'Search cloud storage...',
           })}
@@ -859,10 +915,40 @@ export function CloudStorageContent({
                     remote={remote}
                     testingRemoteId={testingRemoteId}
                     isBrowsing={isBrowsing}
-                    onTestRemote={onTestRemote}
-                    onBrowseRemote={onBrowseRemote}
-                    onEditRemote={onEditRemote}
-                    onRequestDeleteRemote={onRequestDeleteRemote}
+                    onTestRemote={(remote) => {
+                      trackSystem(EventAction.START, {
+                        section: CLOUD_STORAGE_ANALYTICS_SECTION,
+                        operation: 'test_remote',
+                        provider: remote.provider,
+                      })
+                      onTestRemote?.(remote)
+                    }}
+                    onBrowseRemote={(remote) => {
+                      trackSystem(EventAction.VIEW, {
+                        section: CLOUD_STORAGE_ANALYTICS_SECTION,
+                        operation: 'browse_remote',
+                        provider: remote.provider,
+                      })
+                      onBrowseRemote?.(remote)
+                    }}
+                    onEditRemote={(remote) => {
+                      trackSystem(EventAction.VIEW, {
+                        section: CLOUD_STORAGE_ANALYTICS_SECTION,
+                        operation: 'open_edit_remote_dialog',
+                        provider: remote.provider,
+                        config_source: remote.config_source || 'managed',
+                      })
+                      onEditRemote?.(remote)
+                    }}
+                    onRequestDeleteRemote={(remote) => {
+                      trackSystem(EventAction.VIEW, {
+                        section: CLOUD_STORAGE_ANALYTICS_SECTION,
+                        operation: 'open_delete_remote_dialog',
+                        provider: remote.provider,
+                        usage_count: remote.usage_count ?? 0,
+                      })
+                      onRequestDeleteRemote?.(remote)
+                    }}
                   />
                 ))}
               </Box>
@@ -920,7 +1006,15 @@ export function CloudStorageContent({
           <Button
             color="error"
             variant="contained"
-            onClick={onConfirmDeleteRemote}
+            onClick={() => {
+              trackSystem(EventAction.DELETE, {
+                section: CLOUD_STORAGE_ANALYTICS_SECTION,
+                operation: 'confirm_delete_remote',
+                provider: deleteRemote?.provider,
+                usage_count: deleteRemote?.usage_count ?? 0,
+              })
+              onConfirmDeleteRemote?.()
+            }}
             disabled={isDeleting}
             startIcon={isDeleting ? <CircularProgress size={16} color="inherit" /> : null}
           >
@@ -943,6 +1037,12 @@ export function CloudStorageContent({
         maxWidth="md"
         onClose={() => onCloseBrowse?.()}
         onNavigate={(path) => {
+          trackSystem(EventAction.VIEW, {
+            section: CLOUD_STORAGE_ANALYTICS_SECTION,
+            operation: 'browse_remote_path',
+            provider: browseState?.remote.provider,
+            path_depth: path.split('/').filter(Boolean).length,
+          })
           if (browseState) {
             onBrowseRemote?.(browseState.remote, path)
           }
@@ -954,6 +1054,7 @@ export function CloudStorageContent({
 
 export default function CloudStorage() {
   const { t } = useTranslation()
+  const { trackSystem, EventAction } = useAnalytics()
   const queryClient = useQueryClient()
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [editingRemote, setEditingRemote] = useState<RcloneRemote | null>(null)
@@ -1048,8 +1149,14 @@ export default function CloudStorage() {
     onMutate: (remote) => {
       setTestingRemoteId(remote.id)
     },
-    onSuccess: () => {
+    onSuccess: (response, remote) => {
       toast.success(t('cloudStorage.remoteTestSucceeded'))
+      trackSystem(EventAction.TEST, {
+        section: CLOUD_STORAGE_ANALYTICS_SECTION,
+        operation: 'test_remote_complete',
+        provider: remote.provider,
+        status: response.data?.status || 'unknown',
+      })
       queryClient.invalidateQueries({ queryKey: ['rclone-remotes'] })
     },
     onError: (error: unknown) => {
@@ -1073,6 +1180,13 @@ export default function CloudStorage() {
     },
     onSuccess: ({ remote, path, entries }) => {
       const normalizedPath = normalizeBrowserPath(path)
+      trackSystem(EventAction.VIEW, {
+        section: CLOUD_STORAGE_ANALYTICS_SECTION,
+        operation: 'browse_remote_complete',
+        provider: remote.provider,
+        path_depth: normalizedPath.split('/').filter(Boolean).length,
+        item_count: entries.length,
+      })
       setBrowseState((current) => {
         if (
           !current ||
@@ -1144,9 +1258,22 @@ export default function CloudStorage() {
       }}
       onCreateRemote={async (data) => {
         await createRemoteMutation.mutateAsync(data)
+        trackSystem(EventAction.CREATE, {
+          section: CLOUD_STORAGE_ANALYTICS_SECTION,
+          operation: 'create_remote',
+          provider: data.provider,
+          config_source: data.config_source,
+        })
       }}
       onStartOAuth={async (data) => {
         const response = await rcloneAPI.startOAuthSession(data)
+        trackSystem(EventAction.START, {
+          section: CLOUD_STORAGE_ANALYTICS_SECTION,
+          operation: 'start_oauth',
+          provider: data.provider,
+          mode: data.mode || 'auto',
+          status: response.data.status,
+        })
         return response.data
       }}
       onGetOAuthSession={async (sessionId) => {
@@ -1155,6 +1282,13 @@ export default function CloudStorage() {
       }}
       onSaveOAuthCredentials={async (provider, data) => {
         await updateOAuthCredentialsMutation.mutateAsync({ provider, data })
+        trackSystem(EventAction.EDIT, {
+          section: CLOUD_STORAGE_ANALYTICS_SECTION,
+          operation: 'save_oauth_credentials',
+          provider,
+          has_client_id: Boolean(data.client_id),
+          has_client_secret: Boolean(data.client_secret),
+        })
       }}
       onEditRemote={(remote) => {
         updateRemoteMutation.reset()
@@ -1166,6 +1300,12 @@ export default function CloudStorage() {
       }}
       onUpdateRemote={async (data) => {
         await updateRemoteMutation.mutateAsync(data)
+        trackSystem(EventAction.EDIT, {
+          section: CLOUD_STORAGE_ANALYTICS_SECTION,
+          operation: 'update_remote',
+          provider: data.provider,
+          config_source: data.config_source,
+        })
       }}
       onRequestDeleteRemote={(remote) => {
         deleteRemoteMutation.reset()
