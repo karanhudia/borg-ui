@@ -100,11 +100,17 @@ jobs:
           cd visual-state
           git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
-          if git fetch --depth=1 origin visual-regression-state; then
+          if git ls-remote --exit-code --heads origin visual-regression-state >/dev/null 2>&1; then
+            git fetch --depth=1 origin visual-regression-state
             git checkout -B visual-regression-state FETCH_HEAD
           else
-            git checkout --orphan visual-regression-state
-            git rm -rf . >/dev/null 2>&1 || true
+            remote_status=$?
+            if [ "$remote_status" -eq 2 ]; then
+              git checkout --orphan visual-regression-state
+              git rm -rf . >/dev/null 2>&1 || true
+            else
+              exit "$remote_status"
+            fi
           fi
 
           mkdir -p visual/baseline visual/reports

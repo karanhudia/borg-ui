@@ -51,7 +51,8 @@ jobs:
           cd visual-state
           git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
-          if git fetch --depth=1 origin visual-regression-state; then
+          if git ls-remote --exit-code --heads origin visual-regression-state >/dev/null 2>&1; then
+            git fetch --depth=1 origin visual-regression-state
             git checkout -B visual-regression-state FETCH_HEAD
             cd ..
             if [ -d visual-state/visual ]; then
@@ -60,7 +61,12 @@ jobs:
               cp -R visual-state/visual docs/.vitepress/dist/visual
             fi
           else
-            echo "No visual-regression-state branch found; skipping visual report restore."
+            remote_status=$?
+            if [ "$remote_status" -eq 2 ]; then
+              echo "No visual-regression-state branch found; skipping visual report restore."
+            else
+              exit "$remote_status"
+            fi
           fi
 
       - name: Configure Pages
