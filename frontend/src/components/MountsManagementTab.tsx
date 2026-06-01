@@ -4,6 +4,7 @@ import { Box, Typography, IconButton, Tooltip, Skeleton, alpha, useTheme } from 
 import { HardDrive, XCircle, Trash2, FolderOpen, Copy, Info } from 'lucide-react'
 import { mountsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
+import EmptyStateCard from './EmptyStateCard'
 import { getApiErrorDetail } from '../utils/apiErrors'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { formatDate } from '../utils/dateUtils'
@@ -476,28 +477,12 @@ export default function MountsManagementTab() {
 
       {/* Empty state */}
       {mounts.length === 0 ? (
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            textAlign: 'center',
-            py: 8,
-            color: 'text.secondary',
-          }}
-        >
-          <FolderOpen size={48} style={{ marginBottom: 16, opacity: 0.5 }} />
-          <Typography variant="body1" color="text.secondary" fontWeight={500}>
-            {t('mountsManagement.empty')}
-          </Typography>
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{ mt: 0.75, opacity: 0.7, maxWidth: 360 }}
-          >
-            {t('mounts.emptyDescription')}
-          </Typography>
-        </Box>
+        <EmptyStateCard
+          centered={false}
+          icon={<FolderOpen size={48} />}
+          title={t('mountsManagement.empty')}
+          description={t('mounts.emptyDescription')}
+        />
       ) : (
         <Box
           sx={{
