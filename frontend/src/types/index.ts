@@ -238,6 +238,33 @@ export interface BackupPlanRepositoryLink {
   repository?: Repository | null
 }
 
+export type BackupPlanScriptHookType = 'pre-backup' | 'post-backup'
+export type BackupPlanScriptRunCondition = 'success' | 'failure' | 'warning' | 'always'
+
+export interface BackupPlanScriptHook {
+  id?: number | null
+  script_id: number
+  script_name?: string
+  script_description?: string | null
+  hook_type: BackupPlanScriptHookType
+  execution_order: number
+  enabled: boolean
+  custom_timeout?: number | null
+  custom_run_on?: BackupPlanScriptRunCondition | null
+  continue_on_error?: boolean | null
+  skip_on_failure?: boolean | null
+  default_timeout?: number | null
+  default_run_on?: BackupPlanScriptRunCondition | string | null
+  parameters?: Array<{
+    name: string
+    type: 'text' | 'password'
+    default: string
+    description: string
+    required: boolean
+  }> | null
+  parameter_values?: Record<string, string> | null
+}
+
 export interface BackupPlan {
   id: number
   name: string
@@ -267,6 +294,7 @@ export interface BackupPlan {
   post_backup_script_id?: number | null
   pre_backup_script_parameters?: Record<string, string> | null
   post_backup_script_parameters?: Record<string, string> | null
+  script_hooks?: BackupPlanScriptHook[]
   run_repository_scripts?: boolean
   run_prune_after?: boolean
   run_compact_after?: boolean
@@ -345,6 +373,7 @@ export interface BackupPlanData {
   post_backup_script_id?: number | null
   pre_backup_script_parameters?: Record<string, string> | null
   post_backup_script_parameters?: Record<string, string> | null
+  script_hooks?: BackupPlanScriptHook[]
   run_repository_scripts: boolean
   run_prune_after: boolean
   run_compact_after: boolean

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import MockAdapter from 'axios-mock-adapter'
 import api, { backupPlansAPI } from '../../services/api'
 import { buildBackupPlanPayload } from '../../utils/backupPlanPayload'
+import { planToState } from '../backup-plans/state'
 import {
   applyRepositorySelectionLimit,
   isRepositorySelectionOverLimit,
@@ -548,6 +549,152 @@ describe('BackupPlans payload', () => {
     expect(payload.pre_backup_script_parameters).toEqual({ TARGET: 'database' })
     expect(payload.post_backup_script_parameters).toEqual({ STATUS_FILE: '/tmp/status' })
     expect(payload.run_repository_scripts).toBe(false)
+  })
+
+  it('includes ordered plan script hooks in the payload and mirrors legacy fields', () => {
+    const payload = buildBackupPlanPayload({
+      name: 'Scripted Plan',
+      description: '',
+      enabled: true,
+      sourceType: 'local',
+      sourceSshConnectionId: '',
+      sourceDirectories: ['/data'],
+      excludePatterns: [],
+      repositoryIds: [10],
+      compression: 'lz4',
+      archiveNameTemplate: '{plan_name}-{repo_name}-{now}',
+      customFlags: '',
+      uploadRatelimitMb: '',
+      repositoryRunMode: 'series',
+      maxParallelRepositories: 1,
+      failureBehavior: 'continue',
+      scheduleEnabled: false,
+      cronExpression: '0 21 * * *',
+      timezone: 'UTC',
+      preBackupScriptId: null,
+      postBackupScriptId: null,
+      preBackupScriptParameters: {},
+      postBackupScriptParameters: {},
+      scriptHooks: [
+        {
+          script_id: 2,
+          hook_type: 'pre-backup',
+          execution_order: 2,
+          enabled: true,
+          continue_on_error: true,
+          skip_on_failure: false,
+          parameter_values: { TARGET: 'database' },
+        },
+        {
+          script_id: 3,
+          hook_type: 'post-backup',
+          execution_order: 1,
+          enabled: true,
+          custom_run_on: 'failure',
+          parameter_values: {},
+        },
+      ],
+      runRepositoryScripts: false,
+      runPruneAfter: false,
+      runCompactAfter: false,
+      runCheckAfter: false,
+      checkMaxDuration: 3600,
+      checkExtraFlags: '',
+      pruneKeepHourly: 0,
+      pruneKeepDaily: 7,
+      pruneKeepWeekly: 4,
+      pruneKeepMonthly: 6,
+      pruneKeepQuarterly: 0,
+      pruneKeepYearly: 1,
+    })
+
+    expect(payload.script_hooks).toEqual([
+      expect.objectContaining({
+        script_id: 2,
+        hook_type: 'pre-backup',
+        execution_order: 2,
+        continue_on_error: true,
+        parameter_values: { TARGET: 'database' },
+      }),
+      expect.objectContaining({
+        script_id: 3,
+        hook_type: 'post-backup',
+        execution_order: 1,
+        custom_run_on: 'failure',
+      }),
+    ])
+    expect(payload.pre_backup_script_id).toBe(2)
+    expect(payload.pre_backup_script_parameters).toEqual({ TARGET: 'database' })
+    expect(payload.post_backup_script_id).toBe(3)
+  })
+
+  it('hydrates script hooks from the API and falls back to legacy plan script fields', () => {
+    const stateWithHooks = planToState({
+      id: 1,
+      name: 'Scripted Plan',
+      enabled: true,
+      source_type: 'local',
+      source_directories: ['/data'],
+      source_locations: [],
+      exclude_patterns: [],
+      archive_name_template: '{plan_name}-{repo_name}-{now}',
+      compression: 'lz4',
+      repository_run_mode: 'series',
+      max_parallel_repositories: 1,
+      failure_behavior: 'continue',
+      schedule_enabled: false,
+      timezone: 'UTC',
+      repository_count: 1,
+      repositories: [],
+      script_hooks: [
+        {
+          script_id: 9,
+          hook_type: 'post-backup',
+          execution_order: 1,
+          enabled: true,
+          custom_run_on: 'warning',
+          parameter_values: { STATUS_FILE: '/tmp/status' },
+        },
+      ],
+    })
+
+    expect(stateWithHooks.scriptHooks).toEqual([
+      expect.objectContaining({
+        script_id: 9,
+        hook_type: 'post-backup',
+        custom_run_on: 'warning',
+        parameter_values: { STATUS_FILE: '/tmp/status' },
+      }),
+    ])
+
+    const legacyState = planToState({
+      id: 2,
+      name: 'Legacy Plan',
+      enabled: true,
+      source_type: 'local',
+      source_directories: ['/data'],
+      source_locations: [],
+      exclude_patterns: [],
+      archive_name_template: '{plan_name}-{repo_name}-{now}',
+      compression: 'lz4',
+      repository_run_mode: 'series',
+      max_parallel_repositories: 1,
+      failure_behavior: 'continue',
+      schedule_enabled: false,
+      timezone: 'UTC',
+      repository_count: 1,
+      repositories: [],
+      pre_backup_script_id: 4,
+      pre_backup_script_parameters: { TARGET: 'database' },
+    })
+
+    expect(legacyState.scriptHooks).toEqual([
+      expect.objectContaining({
+        script_id: 4,
+        hook_type: 'pre-backup',
+        parameter_values: { TARGET: 'database' },
+      }),
+    ])
   })
 
   it('keeps database source script assignments separate from plan scripts', () => {
