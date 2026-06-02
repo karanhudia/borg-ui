@@ -10,6 +10,7 @@ SCRIPT_PATH = (
 
 
 def load_shard_module():
+    """Load the shard selector script as an importable test module."""
     spec = importlib.util.spec_from_file_location("select_pytest_shard", SCRIPT_PATH)
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
@@ -18,6 +19,7 @@ def load_shard_module():
 
 
 def test_count_tests_by_file_groups_pytest_nodes_and_ignores_noise():
+    """Count only real pytest node IDs and ignore collection noise."""
     module = load_shard_module()
 
     counts = module.count_tests_by_file(
@@ -39,6 +41,7 @@ def test_count_tests_by_file_groups_pytest_nodes_and_ignores_noise():
 
 
 def test_select_shard_balances_files_by_collected_test_count():
+    """Assign files to shards by collected test count without duplication."""
     module = load_shard_module()
     counts = {
         "tests/unit/test_large.py": 9,
@@ -65,6 +68,7 @@ def test_select_shard_balances_files_by_collected_test_count():
     ],
 )
 def test_select_shard_rejects_invalid_shard_arguments(shard_index, shard_total):
+    """Reject shard indexes and totals outside the supported range."""
     module = load_shard_module()
 
     with pytest.raises(ValueError):
@@ -76,6 +80,7 @@ def test_select_shard_rejects_invalid_shard_arguments(shard_index, shard_total):
 
 
 def test_select_shard_rejects_empty_test_counts():
+    """Reject empty collection input so CI never runs an accidental empty shard."""
     module = load_shard_module()
 
     with pytest.raises(ValueError, match="No pytest test nodes"):
