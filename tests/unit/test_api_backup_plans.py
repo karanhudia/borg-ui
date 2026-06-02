@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
 from app.config import settings
 from app.database.models import (
@@ -31,6 +32,12 @@ from app.database.models import (
 )
 from app.core.security import get_password_hash
 from app.services.backup_plan_execution_service import backup_plan_execution_service
+
+
+def _json_snapshot(value):
+    if isinstance(value, dict):
+        return value
+    return json.loads(value)
 
 
 def _create_repo(test_db, name: str, path: str, **kwargs) -> Repository:
@@ -2069,6 +2076,180 @@ class TestBackupPlanRoutes:
         test_db.refresh(running_job)
         assert completed_job.status == "completed"
         assert running_job.status == "cancelled"
+
+    def test_retry_failed_backup_plan_run_creates_failed_only_run_with_lineage(
+        self, test_client: TestClient, admin_headers, test_db, admin_user
+    ):
+        repo_a = _create_repo(test_db, "Primary", "/repos/retry-primary")
+        repo_b = _create_repo(test_db, "Secondary", "/repos/retry-secondary")
+        plan, run = _create_execution_plan(test_db, [repo_a, repo_b])
+        run.status = "failed"
+        run.completed_at = datetime.utcnow()
+        failed_job = BackupJob(
+            repository=repo_a.path,
+            repository_id=repo_a.id,
+            backup_plan_id=plan.id,
+            backup_plan_run_id=run.id,
+            status="failed",
+            completed_at=datetime.utcnow(),
+            created_at=datetime.utcnow(),
+        )
+        completed_job = BackupJob(
+            repository=repo_b.path,
+            repository_id=repo_b.id,
+            backup_plan_id=plan.id,
+            backup_plan_run_id=run.id,
+            status="completed",
+            completed_at=datetime.utcnow(),
+            created_at=datetime.utcnow(),
+        )
+        test_db.add_all([failed_job, completed_job])
+        test_db.flush()
+        failed_child = (
+            test_db.query(BackupPlanRunRepository)
+            .filter_by(backup_plan_run_id=run.id, repository_id=repo_a.id)
+            .one()
+        )
+        failed_child.status = "failed"
+        failed_child.completed_at = datetime.utcnow()
+        failed_child.error_message = "repo failed"
+        failed_child.backup_job_id = failed_job.id
+        completed_child = (
+            test_db.query(BackupPlanRunRepository)
+            .filter_by(backup_plan_run_id=run.id, repository_id=repo_b.id)
+            .one()
+        )
+        completed_child.status = "completed"
+        completed_child.completed_at = datetime.utcnow()
+        completed_child.backup_job_id = completed_job.id
+        test_db.commit()
+
+        def close_background_task(coro):
+            coro.close()
+            return None
+
+        with patch(
+            "app.services.backup_plan_execution_service.asyncio.create_task",
+            side_effect=close_background_task,
+        ) as create_task:
+            response = test_client.post(
+                f"/api/backup-plans/runs/{run.id}/retry",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 202
+        body = response.json()
+        assert body["id"] != run.id
+        assert body["backup_plan_id"] == plan.id
+        assert body["trigger"] == "retry"
+        assert body["status"] == "pending"
+        assert body["retry_attempt"] == 2
+        assert body["retry_original_run_id"] == run.id
+        assert body["retry_source_run_id"] == run.id
+        assert body["retry_requested_by_user_id"] == admin_user.id
+        assert body["retry_requested_at"] is not None
+        assert [child["repository_id"] for child in body["repositories"]] == [repo_a.id]
+
+        test_db.refresh(run)
+        assert run.status == "failed"
+        retry_run = test_db.query(BackupPlanRun).filter_by(id=body["id"]).one()
+        assert retry_run.trigger == "retry"
+        assert retry_run.status == "pending"
+        assert retry_run.retry_attempt == 2
+        assert retry_run.retry_original_run_id == run.id
+        assert retry_run.retry_source_run_id == run.id
+        retry_children = (
+            test_db.query(BackupPlanRunRepository)
+            .filter_by(backup_plan_run_id=retry_run.id)
+            .all()
+        )
+        assert [child.repository_id for child in retry_children] == [repo_a.id]
+
+        lineage = (
+            test_db.execute(text("SELECT * FROM backup_plan_run_retry_lineage"))
+            .mappings()
+            .one()
+        )
+        assert lineage["original_run_id"] == run.id
+        assert lineage["retry_source_run_id"] == run.id
+        assert lineage["attempt_number"] == 2
+        assert lineage["requested_by_user_id"] == admin_user.id
+        assert lineage["requested_at"] is not None
+        assert lineage["created_run_id"] == retry_run.id
+        snapshot = _json_snapshot(lineage["request_snapshot"])
+        assert snapshot["kind"] == "backup_plan_run_retry"
+        assert snapshot["mode"] == "failed_only"
+        assert snapshot["source_run_status"] == "failed"
+        assert snapshot["selected_repository_ids"] == [repo_a.id]
+        assert snapshot["skipped_repository_ids"] == []
+        assert snapshot["uses_current_plan_configuration"] is True
+        create_task.assert_called_once()
+
+    def test_retry_backup_plan_run_rejects_active_source_run(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Active Source", "/repos/retry-active-source")
+        _plan, run = _create_execution_plan(test_db, [repo])
+        run.status = "running"
+        test_db.commit()
+
+        response = test_client.post(
+            f"/api/backup-plans/runs/{run.id}/retry", headers=admin_headers
+        )
+
+        assert response.status_code == 400
+        assert test_db.query(BackupPlanRun).count() == 1
+
+    def test_retry_backup_plan_run_rejects_when_plan_has_active_run(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Active Plan", "/repos/retry-active-plan")
+        plan, run = _create_execution_plan(test_db, [repo])
+        run.status = "failed"
+        run.completed_at = datetime.utcnow()
+        child = (
+            test_db.query(BackupPlanRunRepository)
+            .filter_by(backup_plan_run_id=run.id, repository_id=repo.id)
+            .one()
+        )
+        child.status = "failed"
+        active_run = BackupPlanRun(
+            backup_plan_id=plan.id,
+            trigger="manual",
+            status="running",
+            created_at=datetime.utcnow(),
+        )
+        test_db.add(active_run)
+        test_db.commit()
+
+        response = test_client.post(
+            f"/api/backup-plans/runs/{run.id}/retry", headers=admin_headers
+        )
+
+        assert response.status_code == 409
+        assert test_db.query(BackupPlanRun).count() == 2
+
+    def test_retry_backup_plan_run_requires_operator_access(
+        self, test_client: TestClient, auth_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Plan Permission", "/repos/retry-permission")
+        _plan, run = _create_execution_plan(test_db, [repo])
+        run.status = "failed"
+        run.completed_at = datetime.utcnow()
+        child = (
+            test_db.query(BackupPlanRunRepository)
+            .filter_by(backup_plan_run_id=run.id, repository_id=repo.id)
+            .one()
+        )
+        child.status = "failed"
+        test_db.commit()
+
+        response = test_client.post(
+            f"/api/backup-plans/runs/{run.id}/retry", headers=auth_headers
+        )
+
+        assert response.status_code == 403
+        assert test_db.query(BackupPlanRun).count() == 1
 
     @pytest.mark.asyncio
     async def test_execute_plan_run_uses_plan_source_settings(self, test_db):
