@@ -41,6 +41,7 @@ from app.utils.borg_env import (
 )
 from app.utils.ssh_utils import (
     resolve_repo_ssh_key_file,  # noqa: F401
+    resolve_ssh_key_file_by_id,
 )  # Backward-compatible patch target for tests
 
 logger = structlog.get_logger()
@@ -644,7 +645,12 @@ class BackupService:
         return f"{bytes_value:.2f} PB"
 
     async def _calculate_source_size(
-        self, source_paths: list[str], exclude_patterns: list[str] = None
+        self,
+        source_paths: list[str],
+        exclude_patterns: list[str] = None,
+        key_file: str = None,
+        key_files_by_ssh_target: dict[tuple[str, str, str], str] = None,
+        login_relative_ssh_targets: set[tuple[str, str, str]] = None,
     ) -> int:
         """Calculate total size of source directories in bytes.
 
@@ -654,7 +660,94 @@ class BackupService:
         from app.utils.fs import calculate_path_size_bytes
 
         timeout = self._get_operation_timeouts()["source_size_timeout"]
-        return await calculate_path_size_bytes(source_paths, exclude_patterns, timeout)
+        return await calculate_path_size_bytes(
+            source_paths,
+            exclude_patterns,
+            timeout,
+            key_file=key_file,
+            key_files_by_ssh_target=key_files_by_ssh_target,
+            login_relative_ssh_targets=login_relative_ssh_targets,
+        )
+
+    def _resolve_source_size_ssh_key_files(
+        self, db: Session, source_paths: list[str]
+    ) -> dict[tuple[str, str, str], str]:
+        """Resolve SSH key files for remote source size calculations."""
+        from app.database.models import SSHConnection
+
+        key_files_by_target = {}
+        key_files_by_key_id = {}
+
+        for source_path in source_paths:
+            if not source_path.startswith("ssh://"):
+                continue
+
+            parsed = self._parse_ssh_url(source_path)
+            if not parsed:
+                continue
+
+            username = parsed["username"]
+            host = parsed["host"]
+            port = str(parsed["port"])
+            connection = (
+                db.query(SSHConnection)
+                .filter(
+                    SSHConnection.host == host,
+                    SSHConnection.username == username,
+                    SSHConnection.port == int(port),
+                )
+                .first()
+            )
+
+            ssh_key_id = getattr(connection, "ssh_key_id", None)
+            if not ssh_key_id:
+                continue
+
+            key_file = key_files_by_key_id.get(ssh_key_id)
+            if key_file is None:
+                key_file = resolve_ssh_key_file_by_id(ssh_key_id, db=db)
+                if key_file:
+                    key_files_by_key_id[ssh_key_id] = key_file
+
+            if key_file:
+                key_files_by_target[(username, host, port)] = key_file
+
+        return key_files_by_target
+
+    def _resolve_source_size_login_relative_targets(
+        self, db: Session, source_paths: list[str]
+    ) -> set[tuple[str, str, str]]:
+        """Resolve SSH targets where source paths may be login-relative."""
+        from app.database.models import SSHConnection
+
+        targets = set()
+        for source_path in source_paths:
+            if not source_path.startswith("ssh://"):
+                continue
+
+            parsed = self._parse_ssh_url(source_path)
+            if not parsed:
+                continue
+
+            username = parsed["username"]
+            host = parsed["host"]
+            port = str(parsed["port"])
+            remote_path = parsed["path"]
+            connection = (
+                db.query(SSHConnection)
+                .filter(
+                    SSHConnection.host == host,
+                    SSHConnection.username == username,
+                    SSHConnection.port == int(port),
+                )
+                .first()
+            )
+            default_path = getattr(connection, "default_path", None)
+            normalized_default_path = (default_path or "").strip()
+            if remote_path.startswith("/./") or normalized_default_path in {"", "/"}:
+                targets.add((username, host, port))
+
+        return targets
 
     async def _calculate_and_update_size_background(
         self, job_id: int, source_paths: list[str], exclude_patterns: list[str] = None
@@ -668,6 +761,7 @@ class BackupService:
             source_paths: List of source directory paths
             exclude_patterns: List of patterns to exclude (same format as Borg excludes)
         """
+        temp_source_key_files = set()
         try:
             if exclude_patterns is None:
                 exclude_patterns = []
@@ -679,8 +773,29 @@ class BackupService:
                 path_count=len(source_paths),
                 exclude_count=len(exclude_patterns),
             )
+
+            key_files_by_ssh_target = None
+            login_relative_ssh_targets = None
+            if any(path.startswith("ssh://") for path in source_paths):
+                db = SessionLocal()
+                try:
+                    key_files_by_ssh_target = self._resolve_source_size_ssh_key_files(
+                        db, source_paths
+                    )
+                    login_relative_ssh_targets = (
+                        self._resolve_source_size_login_relative_targets(
+                            db, source_paths
+                        )
+                    )
+                    temp_source_key_files.update(key_files_by_ssh_target.values())
+                finally:
+                    db.close()
+
             total_expected_size = await self._calculate_source_size(
-                source_paths, exclude_patterns
+                source_paths,
+                exclude_patterns,
+                key_files_by_ssh_target=key_files_by_ssh_target,
+                login_relative_ssh_targets=login_relative_ssh_targets,
             )
 
             if total_expected_size > 0:
@@ -720,6 +835,9 @@ class BackupService:
                 error_type=type(e).__name__,
                 source_paths=source_paths,
             )
+        finally:
+            for key_file in temp_source_key_files:
+                cleanup_temp_key_file(key_file)
 
     def _parse_ssh_url(self, ssh_url: str) -> dict:
         """
