@@ -28,6 +28,11 @@ from app.services.backup_service import backup_service
 from app.services.backup_progress_contract import serialize_backup_progress_details
 from app.services.backup_route_planner import apply_repository_route_to_backup_job
 from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
+from app.services.job_admission import (
+    OPERATION_BACKUP,
+    ensure_manual_backup_capacity,
+    ensure_repository_admission,
+)
 from app.services.repository_executor import (
     cancel_agent_backup_job,
     get_agent_job_for_backup,
@@ -221,9 +226,14 @@ async def _start_backup_impl(
                 if is_agent_executor(repo_record):
                     validate_agent_backup_repository(db, repo_record)
 
+        ensure_manual_backup_capacity(db)
+        if repo_record is not None:
+            ensure_repository_admission(db, repo_record, OPERATION_BACKUP)
+
         # Create backup job record
         backup_job = BackupJob(
             repository=backup_request.repository or "default",
+            repository_id=repo_record.id if repo_record else None,
             status="pending",
             source_ssh_connection_id=repo_record.source_ssh_connection_id
             if repo_record

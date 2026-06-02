@@ -15,7 +15,7 @@ from app.api.maintenance_jobs import (
     serialize_job_status,
     serialize_job_summary,
 )
-from app.database.models import CheckJob, Repository
+from app.database.models import BackupJob, CheckJob, Repository
 
 
 def _create_repo(test_db, name="Repo", path="/repos/main"):
@@ -91,6 +91,74 @@ class TestMaintenanceJobsHelpers:
         assert job.max_duration == 90
         assert len(scheduled) == 1
         scheduled[0].close()
+
+    def test_start_background_maintenance_job_rejects_pending_same_type(self, test_db):
+        repo = _create_repo(test_db)
+        test_db.add(CheckJob(repository_id=repo.id, status="pending"))
+        test_db.commit()
+
+        async def fake_dispatch(job):
+            return job.id
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(
+                "app.api.maintenance_jobs.schedule_background_job",
+                lambda coro: coro.close(),
+            )
+            with pytest.raises(HTTPException) as exc:
+                start_background_maintenance_job(
+                    test_db,
+                    repo,
+                    CheckJob,
+                    error_key="backend.errors.repo.checkAlreadyRunning",
+                    dispatcher=fake_dispatch,
+                )
+
+        assert exc.value.status_code == 409
+        assert exc.value.detail["key"] == "backend.errors.repo.checkAlreadyRunning"
+        assert (
+            test_db.query(CheckJob).filter(CheckJob.repository_id == repo.id).count()
+            == 1
+        )
+
+    def test_start_background_maintenance_job_rejects_running_backup_conflict(
+        self, test_db
+    ):
+        repo = _create_repo(test_db)
+        test_db.add(
+            BackupJob(
+                repository=repo.path,
+                repository_id=repo.id,
+                status="running",
+            )
+        )
+        test_db.commit()
+
+        async def fake_dispatch(job):
+            return job.id
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(
+                "app.api.maintenance_jobs.schedule_background_job",
+                lambda coro: coro.close(),
+            )
+            with pytest.raises(HTTPException) as exc:
+                start_background_maintenance_job(
+                    test_db,
+                    repo,
+                    CheckJob,
+                    error_key="backend.errors.repo.checkAlreadyRunning",
+                    dispatcher=fake_dispatch,
+                )
+
+        assert exc.value.status_code == 409
+        assert (
+            exc.value.detail["key"] == "backend.errors.jobs.repositoryOperationActive"
+        )
+        assert (
+            test_db.query(CheckJob).filter(CheckJob.repository_id == repo.id).count()
+            == 0
+        )
 
     def test_get_job_with_repository_checks_access(self, test_db, admin_user):
         repo = _create_repo(test_db)

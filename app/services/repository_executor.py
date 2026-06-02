@@ -10,6 +10,12 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database.models import AgentJob, AgentMachine, BackupJob, Repository
+from app.services.job_admission import (
+    OPERATION_BACKUP,
+    ensure_repository_admission,
+    ignore_active_job,
+    operation_for_agent_job_kind,
+)
 
 EXECUTOR_SERVER = "server"
 EXECUTOR_AGENT = "agent"
@@ -295,6 +301,23 @@ def queue_agent_repository_operation_job(
     maintenance_job_id: Optional[int] = None,
 ) -> AgentJob:
     agent = validate_agent_repository_operation(db, repository, job_kind=job_kind)
+    operation_payload = operation
+    admission_operation = operation_for_agent_job_kind(job_kind)
+    maintenance_table_by_kind = {
+        "check": "check_jobs",
+        "restore_check": "restore_check_jobs",
+        "compact": "compact_jobs",
+        "prune": "prune_jobs",
+    }
+    ensure_repository_admission(
+        db,
+        repository,
+        admission_operation,
+        ignore=ignore_active_job(
+            maintenance_table_by_kind.get(maintenance_job_kind or ""),
+            maintenance_job_id,
+        ),
+    )
     now = datetime.utcnow()
     agent_job = AgentJob(
         agent_machine_id=agent.id,
@@ -303,7 +326,7 @@ def queue_agent_repository_operation_job(
         payload=build_agent_repository_operation_payload(
             repository,
             job_kind,
-            operation=operation,
+            operation=operation_payload,
             maintenance_job_kind=maintenance_job_kind,
             maintenance_job_id=maintenance_job_id,
         ),
@@ -369,6 +392,12 @@ def queue_agent_backup_job(
         repository=repository,
     )
     agent = validate_agent_backup_repository(db, repository, source_paths=source_paths)
+    ensure_repository_admission(
+        db,
+        repository,
+        OPERATION_BACKUP,
+        ignore=ignore_active_job(BackupJob.__tablename__, backup_job.id),
+    )
 
     archive_name = archive_name or (
         f"manual-backup-{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"

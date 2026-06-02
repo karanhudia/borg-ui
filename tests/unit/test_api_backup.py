@@ -15,6 +15,7 @@ from app.database.models import (
     PruneJob,
     CompactJob,
     SSHConnection,
+    SystemSettings,
 )
 from datetime import datetime
 import json
@@ -221,6 +222,52 @@ class TestBackupStart:
             assert response.status_code == 200
             assert response.json()["status"] == "pending"
 
+    def test_start_backup_rejects_when_manual_backup_limit_reached(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Limited Repo",
+            path="/limited/repo",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add_all(
+            [
+                repo,
+                SystemSettings(max_concurrent_backups=1),
+            ]
+        )
+        test_db.flush()
+        test_db.add(
+            BackupJob(
+                repository=repo.path,
+                repository_id=repo.id,
+                status="pending",
+            )
+        )
+        test_db.commit()
+
+        with (
+            patch(
+                "app.api.backup.backup_service.execute_backup", new_callable=AsyncMock
+            ) as execute_backup,
+            patch("app.api.backup.asyncio.create_task") as create_task,
+        ):
+            response = test_client.post(
+                "/api/backup/start",
+                json={"repository": repo.path},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 409
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.backup.concurrentLimitReached"
+        )
+        execute_backup.assert_not_called()
+        create_task.assert_not_called()
+        assert test_db.query(BackupJob).filter_by(repository=repo.path).count() == 1
+
     def test_start_backup_multiple_sources(
         self, test_client: TestClient, admin_headers, test_db
     ):
@@ -327,6 +374,63 @@ class TestBackupStart:
         assert agent_job.payload["secrets"] == {
             "BORG_PASSPHRASE": {"value": "repo-secret"}
         }
+
+    def test_start_backup_for_agent_repository_rejects_conflict_before_agent_job(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Laptop",
+            agent_id="agt_conflict",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+        )
+        test_db.add(agent)
+        test_db.flush()
+        repo = Repository(
+            name="Agent Conflict Repo",
+            path="/agent/conflict-repo",
+            encryption="none",
+            compression="lz4",
+            source_directories=json.dumps(["/home/user/docs"]),
+            repository_type="local",
+            execution_target="agent",
+            executor_type="agent",
+            agent_machine_id=agent.id,
+        )
+        test_db.add_all(
+            [
+                repo,
+                SystemSettings(max_concurrent_backups=5),
+            ]
+        )
+        test_db.flush()
+        test_db.add(
+            BackupJob(
+                repository=repo.path,
+                repository_id=repo.id,
+                status="running",
+            )
+        )
+        test_db.commit()
+
+        with patch(
+            "app.api.backup.dispatch_agent_job_best_effort", new_callable=AsyncMock
+        ) as dispatch_agent_job:
+            response = test_client.post(
+                "/api/backup/start",
+                json={"repository": repo.path},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 409
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.jobs.repositoryOperationActive"
+        )
+        dispatch_agent_job.assert_not_called()
+        assert test_db.query(AgentJob).count() == 0
+        assert test_db.query(BackupJob).filter_by(repository=repo.path).count() == 1
 
     def test_start_backup_uses_remote_direct_for_same_ssh_source_and_repo(
         self, test_client: TestClient, admin_headers, test_db
