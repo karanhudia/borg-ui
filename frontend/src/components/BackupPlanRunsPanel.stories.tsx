@@ -55,6 +55,64 @@ const retryableRun: BackupPlanRun = {
   ],
 }
 
+const retryInProgressRun: BackupPlanRun = {
+  ...retryableRun,
+}
+
+const activeRunForSamePlan: BackupPlanRun = {
+  id: 341,
+  backup_plan_id: plan.id,
+  trigger: 'manual',
+  status: 'running',
+  started_at: '2026-05-22T08:10:00Z',
+  created_at: '2026-05-22T08:10:00Z',
+  repositories: [
+    {
+      id: 411,
+      repository_id: 31,
+      status: 'running',
+      repository: {
+        id: 31,
+        name: 'Accounting repository',
+        path: '/backups/accounting',
+        borg_version: 2,
+      },
+      backup_job: {
+        id: 902,
+        repository_id: 31,
+        repository: '/backups/accounting',
+        type: 'backup',
+        status: 'running',
+        started_at: '2026-05-22T08:10:00Z',
+        has_logs: true,
+        execution_mode: 'local',
+      },
+    },
+  ],
+}
+
+const noFailedRepositoriesRun: BackupPlanRun = {
+  ...retryableRun,
+  id: 342,
+  repositories: [
+    {
+      ...retryableRun.repositories[0],
+      id: 412,
+      status: 'completed',
+      backup_job: retryableRun.repositories[0].backup_job
+        ? {
+            ...retryableRun.repositories[0].backup_job,
+            id: 903,
+            status: 'completed',
+          }
+        : undefined,
+    },
+  ],
+}
+
+const allowRetry = (_run: BackupPlanRun): boolean => true
+const denyRetry = (_run: BackupPlanRun): boolean => false
+
 const meta = {
   title: 'Components/BackupPlanRunsPanel',
   component: BackupPlanRunsPanel,
@@ -67,7 +125,7 @@ const meta = {
     onCancel: () => {},
     onViewLogs: () => {},
     onRetry: () => {},
-    canRetryRun: () => true,
+    canRetryRun: allowRetry,
   },
   render: (args) => (
     <Box sx={{ p: 3 }}>
@@ -81,3 +139,28 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const RetryableBackupPlanRun: Story = {}
+
+export const RetryInProgress: Story = {
+  args: {
+    runs: [retryInProgressRun],
+    retryingRunId: retryInProgressRun.id,
+  },
+}
+
+export const DisabledDueToActiveRun: Story = {
+  args: {
+    runs: [retryableRun, activeRunForSamePlan],
+  },
+}
+
+export const DisabledNoFailedRepositories: Story = {
+  args: {
+    runs: [noFailedRepositoriesRun],
+  },
+}
+
+export const DisabledNoPermission: Story = {
+  args: {
+    canRetryRun: denyRetry,
+  },
+}

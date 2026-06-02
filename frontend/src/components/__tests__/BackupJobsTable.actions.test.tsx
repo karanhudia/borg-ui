@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { within } from '@testing-library/react'
 import { renderWithProviders, screen, userEvent, waitFor } from '../../test/test-utils'
 import BackupJobsTable from '../BackupJobsTable'
 import { QueryClient } from '@tanstack/react-query'
@@ -269,11 +270,6 @@ describe('BackupJobsTable action internals', () => {
 
   it('confirms and calls retry for failed manual backup jobs', async () => {
     const user = userEvent.setup()
-    const confirmSpy = vi.fn(() => true)
-    Object.defineProperty(window, 'confirm', {
-      value: confirmSpy,
-      configurable: true,
-    })
     const onRetryJob = vi.fn()
 
     renderWithProviders(
@@ -298,7 +294,10 @@ describe('BackupJobsTable action internals', () => {
 
     await user.click(screen.getByRole('button', { name: /retry backup job/i }))
 
-    expect(confirmSpy).toHaveBeenCalledWith('Retry backup job #12?')
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByText('Retry backup job #12?')).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: /retry backup job/i }))
+
     expect(onRetryJob).toHaveBeenCalledWith(expect.objectContaining({ id: 12 }))
   })
 

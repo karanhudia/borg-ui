@@ -57,11 +57,6 @@ describe('BackupPlanRunsPanel', () => {
 
   it('confirms and retries failed backup plan runs from recent history', async () => {
     const user = userEvent.setup()
-    const confirmSpy = vi.fn(() => true)
-    Object.defineProperty(window, 'confirm', {
-      value: confirmSpy,
-      configurable: true,
-    })
     const onRetry = vi.fn()
     const run = {
       id: 17,
@@ -105,8 +100,51 @@ describe('BackupPlanRunsPanel', () => {
     const recentSection = screen.getByRole('region', { name: /recent backup plan runs/i })
     await user.click(within(recentSection).getByRole('button', { name: /retry backup plan run/i }))
 
-    expect(confirmSpy).toHaveBeenCalledWith('Retry backup plan run #17?')
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByText('Retry backup plan run #17?')).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: /retry backup plan run/i }))
+
     expect(onRetry).toHaveBeenCalledWith(17)
+  })
+
+  it('does not show retry for cancelled backup plan runs', () => {
+    const run = {
+      id: 16,
+      backup_plan_id: 3,
+      trigger: 'manual',
+      status: 'cancelled',
+      started_at: '2026-05-11T10:00:00Z',
+      completed_at: '2026-05-11T10:01:00Z',
+      created_at: '2026-05-11T10:00:00Z',
+      repositories: [
+        {
+          id: 96,
+          repository_id: 7,
+          status: 'cancelled',
+          repository: {
+            id: 7,
+            name: 'Primary Repo',
+            path: '/repos/primary',
+          },
+        },
+      ],
+    } satisfies BackupPlanRun
+
+    render(
+      <BackupPlanRunsPanel
+        runs={[run]}
+        plans={[plan]}
+        onCancel={vi.fn()}
+        onViewLogs={vi.fn()}
+        onRetry={vi.fn()}
+        canRetryRun={() => true}
+      />
+    )
+
+    const recentSection = screen.getByRole('region', { name: /recent backup plan runs/i })
+    expect(
+      within(recentSection).queryByRole('button', { name: /retry backup plan run/i })
+    ).not.toBeInTheDocument()
   })
 
   it('disables retry when a failed backup plan run has no failed repositories', () => {

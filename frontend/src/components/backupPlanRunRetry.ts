@@ -11,7 +11,7 @@ export function backupPlanRunHasFailedRepositories(run: BackupPlanRun): boolean 
 }
 
 export function shouldShowBackupPlanRunRetryAction(run: BackupPlanRun): boolean {
-  return run.status === 'failed' || run.status === 'cancelled'
+  return run.status === 'failed'
 }
 
 export function getBackupPlanRunRetryDisabledReason(

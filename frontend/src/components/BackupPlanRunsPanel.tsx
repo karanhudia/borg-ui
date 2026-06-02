@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Alert,
@@ -26,6 +26,7 @@ import {
 import ActiveBackupPlanRunCard from './ActiveBackupPlanRunCard'
 import DataTable, { type ActionButton, type Column } from './DataTable'
 import RepositoryCell from './RepositoryCell'
+import RetryJobDialog from './RetryJobDialog'
 import StatusBadge from './StatusBadge'
 import type {
   BackupJob,
@@ -597,6 +598,7 @@ export default function BackupPlanRunsPanel({
   canRetryRun?: (run: BackupPlanRun) => boolean
 }) {
   const { t } = useTranslation()
+  const [retryRun, setRetryRun] = useState<BackupPlanRun | null>(null)
   const activeRuns = useMemo(() => runs.filter((run) => isActiveRun(run.status)), [runs])
   const recentRuns = useMemo(
     () => runs.filter((run) => !isActiveRun(run.status)).slice(0, 4),
@@ -624,12 +626,17 @@ export default function BackupPlanRunsPanel({
   }
   const handleRetryRun = (run: BackupPlanRun) => {
     if (getRetryDisabledReason(run)) return
-    const confirmed =
-      typeof window.confirm === 'function'
-        ? window.confirm(t('backupPlans.runsPanel.retryConfirm', { id: run.id }))
-        : true
-    if (!confirmed) return
-    onRetry?.(run.id)
+    setRetryRun(run)
+  }
+  const handleConfirmRetryRun = () => {
+    if (!retryRun) return
+
+    const runId = retryRun.id
+    setRetryRun(null)
+    onRetry?.(runId)
+  }
+  const handleCloseRetryDialog = () => {
+    setRetryRun(null)
   }
   const getPlanName = (run: BackupPlanRun) => {
     const plan = findPlan(run, plans)
@@ -901,6 +908,13 @@ export default function BackupPlanRunsPanel({
           ? t('backupPlans.runsPanel.empty')
           : t('backupPlans.runsPanel.emptyRecent')
       )}
+      <RetryJobDialog
+        open={Boolean(retryRun)}
+        title={retryRun ? t('backupPlans.runsPanel.retryConfirm', { id: retryRun.id }) : ''}
+        confirmLabel={t('backupPlans.runsPanel.retryRun')}
+        onClose={handleCloseRetryDialog}
+        onConfirm={handleConfirmRetryRun}
+      />
     </Stack>
   )
 }

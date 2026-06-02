@@ -25,6 +25,7 @@ import ErrorDetailsDialog from './ErrorDetailsDialog'
 import LogViewerDialog from './LogViewerDialog'
 import CancelJobDialog from './CancelJobDialog'
 import DeleteJobDialog from './DeleteJobDialog'
+import RetryJobDialog from './RetryJobDialog'
 import LockErrorDialog from './LockErrorDialog'
 import { activityAPI, repositoriesAPI } from '../services/api'
 import { buildDownloadUrl } from '@/utils/downloadUrl'
@@ -262,6 +263,7 @@ export const BackupJobsTable = <T extends Job = Job>({
   const [logJob, setLogJob] = useState<T | null>(null)
   const [cancelJob, setCancelJob] = useState<T | null>(null)
   const [deleteJob, setDeleteJob] = useState<T | null>(null)
+  const [retryJob, setRetryJob] = useState<T | null>(null)
   const [lockError, setLockError] = useState<{
     repositoryId: number
     repositoryName: string
@@ -422,12 +424,19 @@ export const BackupJobsTable = <T extends Job = Job>({
   const handleRetryClick = (job: T) => {
     const disabledReason = getBackupJobRetryDisabledReason(job, canRetryJob(job), t)
     if (disabledReason) return
-    const confirmed =
-      typeof window.confirm === 'function'
-        ? window.confirm(t('backupJobsTable.confirmations.retryJob', { id: job.id }))
-        : true
-    if (!confirmed) return
-    onRetryJob?.(job)
+    setRetryJob(job)
+  }
+
+  const handleConfirmRetry = async () => {
+    if (!retryJob) return
+
+    const jobToRetry = retryJob
+    setRetryJob(null)
+    await onRetryJob?.(jobToRetry)
+  }
+
+  const handleCloseRetryDialog = () => {
+    setRetryJob(null)
   }
 
   // Internal break lock handler (can be overridden by onBreakLock prop)
@@ -830,6 +839,14 @@ export const BackupJobsTable = <T extends Job = Job>({
         onConfirm={handleConfirmDelete}
         jobId={deleteJob?.id}
         jobType={deleteJob?.type}
+      />
+
+      <RetryJobDialog
+        open={Boolean(retryJob)}
+        title={retryJob ? t('backupJobsTable.confirmations.retryJob', { id: retryJob.id }) : ''}
+        confirmLabel={t('backupJobsTable.actions.retry')}
+        onClose={handleCloseRetryDialog}
+        onConfirm={handleConfirmRetry}
       />
 
       {/* Archive Contents Dialog */}
