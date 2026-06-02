@@ -1,17 +1,17 @@
 {
-  "generatedAt": "2026-06-02T17:43:03.485Z",
+  "generatedAt": "2026-06-02T19:44:28.941Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #607 visual report",
-    "commitSha": "62dcf90e996d",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26837246451"
+    "commitSha": "54bf7fecc7a1",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26843638635"
   },
   "totals": {
     "baseline": 254,
-    "actual": 260,
+    "actual": 268,
     "compared": 254,
     "changed": 1,
-    "added": 6,
+    "added": 14,
     "removed": 0,
     "unchanged": 253
   },
@@ -51,6 +51,38 @@
     {
       "fileName": "components-backupjobstable--retryable-failed-backup-job.png",
       "actualPath": "images/actual/components-backupjobstable--retryable-failed-backup-job.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--disabled-due-to-active-run--mobile.png",
+      "actualPath": "images/actual/components-backupplanrunspanel--disabled-due-to-active-run--mobile.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--disabled-due-to-active-run.png",
+      "actualPath": "images/actual/components-backupplanrunspanel--disabled-due-to-active-run.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--disabled-no-failed-repositories--mobile.png",
+      "actualPath": "images/actual/components-backupplanrunspanel--disabled-no-failed-repositories--mobile.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--disabled-no-failed-repositories.png",
+      "actualPath": "images/actual/components-backupplanrunspanel--disabled-no-failed-repositories.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--disabled-no-permission--mobile.png",
+      "actualPath": "images/actual/components-backupplanrunspanel--disabled-no-permission--mobile.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--disabled-no-permission.png",
+      "actualPath": "images/actual/components-backupplanrunspanel--disabled-no-permission.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--retry-in-progress--mobile.png",
+      "actualPath": "images/actual/components-backupplanrunspanel--retry-in-progress--mobile.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--retry-in-progress.png",
+      "actualPath": "images/actual/components-backupplanrunspanel--retry-in-progress.png"
     },
     {
       "fileName": "components-backupplanrunspanel--retryable-backup-plan-run--mobile.png",
