@@ -1,7 +1,137 @@
 {
   "version": 1,
-  "generated_at": "2026-05-16T00:00:00Z",
+  "generated_at": "2026-06-02T06:42:02Z",
   "announcements": [
+    {
+      "id": "update-2.2.0-available",
+      "type": "update_available",
+      "priority": 130,
+      "title": "Borg UI 2.2.0 is available",
+      "title_localized": {
+        "es": "Borg UI 2.2.0 ya esta disponible",
+        "de": "Borg UI 2.2.0 ist verfugbar",
+        "it": "Borg UI 2.2.0 e disponibile"
+      },
+      "message": "Update to Borg UI 2.2.0 for guided cloud storage setup, rclone remotes, mixed-source Backup Plans with database sources, script hooks, and clearer source review.",
+      "message_localized": {
+        "es": "Actualiza a Borg UI 2.2.0 para obtener configuracion guiada de almacenamiento en la nube, remotos rclone, Backup Plans de multiples origenes con bases de datos, hooks de scripts y revision de origenes mas clara.",
+        "de": "Aktualisieren Sie auf Borg UI 2.2.0 fur gefuhrte Cloud-Speicher-Einrichtung, rclone-Remotes, Backup Plans mit gemischten Quellen und Datenbanken, Skript-Hooks und klarere Quellenprufung.",
+        "it": "Aggiorna a Borg UI 2.2.0 per configurazione guidata dello storage cloud, remoti rclone, Backup Plans con origini miste e database, hook di script e revisione delle origini piu chiara."
+      },
+      "highlights": [
+        "Set up Google Drive and other rclone cloud remotes with guided provider credentials and browser OAuth",
+        "Mirror repositories to managed rclone remotes or use Borg 2 direct rclone destinations",
+        "Build Backup Plans from local, SSH, managed-agent, and database sources in one definition",
+        "Scan for MySQL/MariaDB and SQLite databases and carry detected paths into the source workflow",
+        "Assign database source scripts and plan-level scripts for safer pre/post backup automation",
+        "Review selected sources with clearer paths, source scripts, and repository routing before saving"
+      ],
+      "highlights_localized": {
+        "es": [
+          "Configura Google Drive y otros remotos rclone con credenciales guiadas del proveedor y OAuth en navegador",
+          "Replica repositorios en remotos rclone gestionados o usa destinos rclone directos de Borg 2",
+          "Crea Backup Plans desde origenes locales, SSH, agentes gestionados y bases de datos en una sola definicion",
+          "Escanea bases MySQL/MariaDB y SQLite y conserva las rutas detectadas en el flujo de origenes",
+          "Asigna scripts de origen de base de datos y scripts de plan para automatizacion pre/post backup mas segura",
+          "Revisa origenes seleccionados con rutas, scripts y enrutamiento de repositorios mas claros antes de guardar"
+        ],
+        "de": [
+          "Richten Sie Google Drive und andere rclone-Cloud-Remotes mit gefuhrten Provider-Zugangsdaten und Browser-OAuth ein",
+          "Spiegeln Sie Repositories auf verwaltete rclone-Remotes oder nutzen Sie direkte Borg-2-rclone-Ziele",
+          "Erstellen Sie Backup Plans aus lokalen, SSH-, Managed-Agent- und Datenbankquellen in einer Definition",
+          "Scannen Sie MySQL/MariaDB- und SQLite-Datenbanken und ubernehmen Sie erkannte Pfade in den Quellen-Workflow",
+          "Weisen Sie Datenbank-Quellskripte und Plan-Skripte fur sicherere Pre/Post-Backup-Automatisierung zu",
+          "Prufen Sie ausgewahlte Quellen mit klareren Pfaden, Skripten und Repository-Routing vor dem Speichern"
+        ],
+        "it": [
+          "Configura Google Drive e altri remoti cloud rclone con credenziali guidate del provider e OAuth nel browser",
+          "Replica repository su remoti rclone gestiti o usa destinazioni rclone dirette di Borg 2",
+          "Crea Backup Plans da origini locali, SSH, agent gestiti e database in una sola definizione",
+          "Scansiona database MySQL/MariaDB e SQLite e porta i percorsi rilevati nel flusso delle origini",
+          "Assegna script di origine database e script di piano per automazioni pre/post backup piu sicure",
+          "Rivedi le origini selezionate con percorsi, script e routing dei repository piu chiari prima di salvare"
+        ]
+      },
+      "cta_label": "Upgrade details",
+      "cta_label_localized": {
+        "es": "Detalles de la actualizacion",
+        "de": "Upgrade-Details",
+        "it": "Dettagli dell'aggiornamento"
+      },
+      "cta_url": "https://github.com/karanhudia/borg-ui/releases/tag/v2.2.0",
+      "dismissible": true,
+      "snooze_days": 7,
+      "starts_at": "2026-06-02T00:00:00Z",
+      "ends_at": "2027-06-02T00:00:00Z",
+      "min_app_version": "2.0.0",
+      "max_app_version": "2.2.0-alpha.999",
+      "target_plans": ["community", "pro", "enterprise"]
+    },
+    {
+      "id": "release-2.2.0-whats-new",
+      "type": "release_highlight",
+      "priority": 95,
+      "title": "What's new in 2.2.0",
+      "title_localized": {
+        "es": "Novedades de la version 2.2.0",
+        "de": "Neu in Version 2.2.0",
+        "it": "Novita della versione 2.2.0"
+      },
+      "message": "Borg UI 2.2.0 adds guided cloud storage setup, richer rclone provider support, mixed-source Backup Plans with database sources, source and plan script hooks, and smoother review flows.",
+      "message_localized": {
+        "es": "Borg UI 2.2.0 agrega configuracion guiada de almacenamiento en la nube, mejor soporte de proveedores rclone, Backup Plans de multiples origenes con bases de datos, hooks de scripts de origen y plan, y flujos de revision mas claros.",
+        "de": "Borg UI 2.2.0 erganzt gefuhrte Cloud-Speicher-Einrichtung, besseren rclone-Provider-Support, Backup Plans mit gemischten Quellen und Datenbanken, Quellen- und Plan-Skript-Hooks sowie klarere Prufablaufe.",
+        "it": "Borg UI 2.2.0 aggiunge configurazione guidata dello storage cloud, supporto rclone piu ricco, Backup Plans con origini miste e database, hook di script di origine e piano, e flussi di revisione piu chiari."
+      },
+      "highlights": [
+        "Set up Google Drive and other rclone cloud remotes with guided provider credentials and browser OAuth",
+        "Mirror repositories to managed rclone remotes or use Borg 2 direct rclone destinations",
+        "Build Backup Plans from local, SSH, managed-agent, and database sources in one definition",
+        "Scan for MySQL/MariaDB and SQLite databases and carry detected paths into the source workflow",
+        "Assign database source scripts and plan-level scripts for safer pre/post backup automation",
+        "Review selected sources with clearer paths, source scripts, and repository routing before saving"
+      ],
+      "highlights_localized": {
+        "es": [
+          "Configura Google Drive y otros remotos rclone con credenciales guiadas del proveedor y OAuth en navegador",
+          "Replica repositorios en remotos rclone gestionados o usa destinos rclone directos de Borg 2",
+          "Crea Backup Plans desde origenes locales, SSH, agentes gestionados y bases de datos en una sola definicion",
+          "Escanea bases MySQL/MariaDB y SQLite y conserva las rutas detectadas en el flujo de origenes",
+          "Asigna scripts de origen de base de datos y scripts de plan para automatizacion pre/post backup mas segura",
+          "Revisa origenes seleccionados con rutas, scripts y enrutamiento de repositorios mas claros antes de guardar"
+        ],
+        "de": [
+          "Richten Sie Google Drive und andere rclone-Cloud-Remotes mit gefuhrten Provider-Zugangsdaten und Browser-OAuth ein",
+          "Spiegeln Sie Repositories auf verwaltete rclone-Remotes oder nutzen Sie direkte Borg-2-rclone-Ziele",
+          "Erstellen Sie Backup Plans aus lokalen, SSH-, Managed-Agent- und Datenbankquellen in einer Definition",
+          "Scannen Sie MySQL/MariaDB- und SQLite-Datenbanken und ubernehmen Sie erkannte Pfade in den Quellen-Workflow",
+          "Weisen Sie Datenbank-Quellskripte und Plan-Skripte fur sicherere Pre/Post-Backup-Automatisierung zu",
+          "Prufen Sie ausgewahlte Quellen mit klareren Pfaden, Skripten und Repository-Routing vor dem Speichern"
+        ],
+        "it": [
+          "Configura Google Drive e altri remoti cloud rclone con credenziali guidate del provider e OAuth nel browser",
+          "Replica repository su remoti rclone gestiti o usa destinazioni rclone dirette di Borg 2",
+          "Crea Backup Plans da origini locali, SSH, agent gestiti e database in una sola definizione",
+          "Scansiona database MySQL/MariaDB e SQLite e porta i percorsi rilevati nel flusso delle origini",
+          "Assegna script di origine database e script di piano per automazioni pre/post backup piu sicure",
+          "Rivedi le origini selezionate con percorsi, script e routing dei repository piu chiari prima di salvare"
+        ]
+      },
+      "cta_label": "View release notes",
+      "cta_label_localized": {
+        "es": "Ver notas de la version",
+        "de": "Release Notes ansehen",
+        "it": "Vedi note di rilascio"
+      },
+      "cta_url": "https://github.com/karanhudia/borg-ui/releases/tag/v2.2.0",
+      "dismissible": true,
+      "snooze_days": 7,
+      "starts_at": "2026-06-02T00:00:00Z",
+      "ends_at": "2027-06-02T00:00:00Z",
+      "min_app_version": "2.2.0",
+      "max_app_version": "2.2.0",
+      "target_plans": ["community", "pro", "enterprise"]
+    },
     {
       "id": "update-2.1.0-available",
       "type": "update_available",
