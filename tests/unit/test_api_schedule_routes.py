@@ -90,7 +90,7 @@ class TestScheduleRouteContracts:
             "External Drive Manual",
             cron_expression="",
             repository="/repos/external",
-            next_run=None,
+            next_run=datetime.now(timezone.utc) + timedelta(hours=1),
         )
 
         response = test_client.get("/api/schedule/", headers=admin_headers)
@@ -102,6 +102,34 @@ class TestScheduleRouteContracts:
         assert job["cron_expression"] is None
         assert job["timezone"] is None
         assert job["next_run"] is None
+        test_db.refresh(schedule)
+        assert schedule.next_run is not None
+
+    def test_get_schedule_returns_manual_only_fields(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        schedule = _create_schedule(
+            test_db,
+            "External Drive Manual Detail",
+            cron_expression="",
+            repository="/repos/external-detail",
+            next_run=datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+
+        response = test_client.get(
+            f"/api/schedule/{schedule.id}", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        job = body["job"]
+        assert job["schedule_enabled"] is False
+        assert job["cron_expression"] is None
+        assert job["timezone"] is None
+        assert job["next_run"] is None
+        test_db.refresh(schedule)
+        assert schedule.cron_expression == ""
+        assert schedule.next_run is not None
 
     def test_upcoming_jobs_returns_enabled_jobs_sorted_and_filtered(
         self,

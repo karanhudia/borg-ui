@@ -160,6 +160,12 @@ def _serialize_schedule_timezone(job: ScheduledJob) -> Optional[str]:
     return job.timezone or DEFAULT_SCHEDULE_TIMEZONE
 
 
+def _serialize_schedule_next_run(job: ScheduledJob) -> Optional[str]:
+    if not _schedule_enabled_from_cron(job.cron_expression):
+        return None
+    return serialize_datetime(job.next_run)
+
+
 def _raise_invalid_schedule_timezone(exc: InvalidScheduleTimezone) -> NoReturn:
     raise HTTPException(
         status_code=400,
@@ -440,7 +446,7 @@ async def get_scheduled_jobs(
                     "repository_ids": repository_ids,
                     "enabled": job.enabled,
                     "last_run": serialize_datetime(job.last_run),
-                    "next_run": serialize_datetime(job.next_run),
+                    "next_run": _serialize_schedule_next_run(job),
                     "created_at": serialize_datetime(job.created_at),
                     "updated_at": serialize_datetime(job.updated_at),
                     "description": job.description,
@@ -799,7 +805,7 @@ async def create_scheduled_job(
                 "timezone": _serialize_schedule_timezone(scheduled_job),
                 "repository": scheduled_job.repository,
                 "enabled": scheduled_job.enabled,
-                "next_run": serialize_datetime(scheduled_job.next_run),
+                "next_run": _serialize_schedule_next_run(scheduled_job),
             },
         }
     except HTTPException:
@@ -1069,7 +1075,7 @@ async def get_scheduled_job(
                 "repository": job.repository,
                 "enabled": job.enabled,
                 "last_run": serialize_datetime(job.last_run),
-                "next_run": serialize_datetime(job.next_run),
+                "next_run": _serialize_schedule_next_run(job),
                 "next_runs": next_runs,
                 "created_at": serialize_datetime(job.created_at),
                 "updated_at": serialize_datetime(job.updated_at),

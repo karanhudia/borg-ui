@@ -104,6 +104,19 @@ describe('WizardStepScheduleReview', () => {
     expect(screen.getByText('0 2 * * *')).toBeInTheDocument()
   })
 
+  it('displays manual-only review state without timezone row', () => {
+    render(
+      <WizardStepScheduleReview
+        {...defaultProps}
+        data={{ ...defaultData, scheduleEnabled: false }}
+      />
+    )
+
+    expect(screen.getByText('Manual only')).toBeInTheDocument()
+    expect(screen.queryByText('0 2 * * *')).not.toBeInTheDocument()
+    expect(screen.queryByText('Timezone')).not.toBeInTheDocument()
+  })
+
   it('displays archive name template', () => {
     render(<WizardStepScheduleReview {...defaultProps} />)
 
