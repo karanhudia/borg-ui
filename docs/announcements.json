@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-06-02T06:49:37Z",
+  "generated_at": "2026-06-02T06:53:25Z",
   "announcements": [
     {
       "id": "update-2.2.0-available",
@@ -22,7 +22,7 @@
         "Cloud storage through rclone for repository mirrors and Borg 2 direct rclone destinations",
         "Managed agents for backing up remote machines without opening inbound SSH",
         "Mixed-source Backup Plans that combine local, SSH, managed-agent, and database sources",
-        "Database source discovery for MySQL/MariaDB and SQLite",
+        "Database source discovery for PostgreSQL, MySQL/MariaDB, MongoDB, Redis, and SQLite",
         "Source review that makes paths, destinations, and repository routing easier to verify before saving"
       ],
       "highlights_localized": {
@@ -30,21 +30,21 @@
           "Almacenamiento en la nube con rclone para replicas de repositorios y destinos rclone directos de Borg 2",
           "Agentes gestionados para hacer copias de maquinas remotas sin abrir SSH entrante",
           "Backup Plans de multiples origenes que combinan origenes locales, SSH, agentes gestionados y bases de datos",
-          "Descubrimiento de origenes de base de datos para MySQL/MariaDB y SQLite",
+          "Descubrimiento de origenes de base de datos para PostgreSQL, MySQL/MariaDB, MongoDB, Redis y SQLite",
           "Revision de origenes que facilita verificar rutas, destinos y enrutamiento de repositorios antes de guardar"
         ],
         "de": [
           "Cloud-Speicher mit rclone fur Repository-Spiegel und direkte Borg-2-rclone-Ziele",
           "Managed Agents zum Sichern entfernter Maschinen ohne eingehendes SSH",
           "Backup Plans mit gemischten Quellen fur lokale, SSH-, Managed-Agent- und Datenbankquellen",
-          "Erkennung von Datenbankquellen fur MySQL/MariaDB und SQLite",
+          "Erkennung von Datenbankquellen fur PostgreSQL, MySQL/MariaDB, MongoDB, Redis und SQLite",
           "Quellenprufung, die Pfade, Ziele und Repository-Routing vor dem Speichern leichter verifizierbar macht"
         ],
         "it": [
           "Storage cloud con rclone per mirror dei repository e destinazioni rclone dirette Borg 2",
           "Agent gestiti per eseguire backup di macchine remote senza aprire SSH in ingresso",
           "Backup Plans con origini miste che combinano origini locali, SSH, agent gestiti e database",
-          "Rilevamento delle origini database per MySQL/MariaDB e SQLite",
+          "Rilevamento delle origini database per PostgreSQL, MySQL/MariaDB, MongoDB, Redis e SQLite",
           "Revisione delle origini che rende piu semplice verificare percorsi, destinazioni e routing dei repository prima di salvare"
         ]
       },
@@ -83,7 +83,7 @@
         "Cloud storage through rclone for repository mirrors and Borg 2 direct rclone destinations",
         "Managed agents for backing up remote machines without opening inbound SSH",
         "Mixed-source Backup Plans that combine local, SSH, managed-agent, and database sources",
-        "Database source discovery for MySQL/MariaDB and SQLite",
+        "Database source discovery for PostgreSQL, MySQL/MariaDB, MongoDB, Redis, and SQLite",
         "Source review that makes paths, destinations, and repository routing easier to verify before saving"
       ],
       "highlights_localized": {
@@ -91,21 +91,21 @@
           "Almacenamiento en la nube con rclone para replicas de repositorios y destinos rclone directos de Borg 2",
           "Agentes gestionados para hacer copias de maquinas remotas sin abrir SSH entrante",
           "Backup Plans de multiples origenes que combinan origenes locales, SSH, agentes gestionados y bases de datos",
-          "Descubrimiento de origenes de base de datos para MySQL/MariaDB y SQLite",
+          "Descubrimiento de origenes de base de datos para PostgreSQL, MySQL/MariaDB, MongoDB, Redis y SQLite",
           "Revision de origenes que facilita verificar rutas, destinos y enrutamiento de repositorios antes de guardar"
         ],
         "de": [
           "Cloud-Speicher mit rclone fur Repository-Spiegel und direkte Borg-2-rclone-Ziele",
           "Managed Agents zum Sichern entfernter Maschinen ohne eingehendes SSH",
           "Backup Plans mit gemischten Quellen fur lokale, SSH-, Managed-Agent- und Datenbankquellen",
-          "Erkennung von Datenbankquellen fur MySQL/MariaDB und SQLite",
+          "Erkennung von Datenbankquellen fur PostgreSQL, MySQL/MariaDB, MongoDB, Redis und SQLite",
           "Quellenprufung, die Pfade, Ziele und Repository-Routing vor dem Speichern leichter verifizierbar macht"
         ],
         "it": [
           "Storage cloud con rclone per mirror dei repository e destinazioni rclone dirette Borg 2",
           "Agent gestiti per eseguire backup di macchine remote senza aprire SSH in ingresso",
           "Backup Plans con origini miste che combinano origini locali, SSH, agent gestiti e database",
-          "Rilevamento delle origini database per MySQL/MariaDB e SQLite",
+          "Rilevamento delle origini database per PostgreSQL, MySQL/MariaDB, MongoDB, Redis e SQLite",
           "Revisione delle origini che rende piu semplice verificare percorsi, destinazioni e routing dei repository prima di salvare"
         ]
       },
