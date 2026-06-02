@@ -28,6 +28,12 @@ logger = structlog.get_logger()
 
 ACTIVE_JOB_STATUSES = {"pending", "running"}
 ACTIVE_PLAN_RUN_STATUSES = {"pending", "running"}
+COMPLETED_BACKUP_STATUSES = {"completed", "completed_with_warnings"}
+RUNNING_BACKUP_MAINTENANCE_FAILURES = {
+    "running_prune": "prune_failed",
+    "running_compact": "compact_failed",
+    "running_check": "check_failed",
+}
 SUCCESS_PLAN_REPOSITORY_STATUSES = {"completed", "completed_with_warnings"}
 WARNING_PLAN_REPOSITORY_STATUSES = {"completed_with_warnings", "skipped"}
 CONTAINER_RESTARTED_DURING_BACKUP = json.dumps(
@@ -134,28 +140,28 @@ def _mark_stale_backup_maintenance_failed(db: Session) -> int:
     """
     Normalize backup rows left in running maintenance states after a restart.
 
-    This handles stale backup rows even when the corresponding prune/compact
+    This handles stale backup rows even when the corresponding maintenance
     child job row is already gone or no longer marked as running.
     """
     stale_backup_jobs = (
         db.query(BackupJob)
         .filter(
-            BackupJob.maintenance_status.in_(["running_prune", "running_compact"]),
-            BackupJob.status != "completed",
+            BackupJob.maintenance_status.in_(list(RUNNING_BACKUP_MAINTENANCE_FAILURES)),
         )
         .all()
     )
 
     for backup_job in stale_backup_jobs:
         previous_state = backup_job.maintenance_status
-        backup_job.status = "failed"
         backup_job.completed_at = backup_job.completed_at or datetime.utcnow()
-        backup_job.error_message = (
-            backup_job.error_message or CONTAINER_RESTARTED_DURING_OPERATION
-        )
-        backup_job.maintenance_status = (
-            "prune_failed" if previous_state == "running_prune" else "compact_failed"
-        )
+        if backup_job.status not in COMPLETED_BACKUP_STATUSES:
+            backup_job.status = "failed"
+            backup_job.error_message = (
+                backup_job.error_message or CONTAINER_RESTARTED_DURING_OPERATION
+            )
+        backup_job.maintenance_status = RUNNING_BACKUP_MAINTENANCE_FAILURES[
+            previous_state
+        ]
         logger.info(
             "Normalized stale backup maintenance state after restart",
             backup_job_id=backup_job.id,

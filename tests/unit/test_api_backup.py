@@ -12,6 +12,7 @@ from app.database.models import (
     AgentMachine,
     Repository,
     BackupJob,
+    CheckJob,
     PruneJob,
     CompactJob,
     SSHConnection,
@@ -1134,6 +1135,79 @@ class TestBackupCancel:
         assert job.maintenance_status == "compact_failed"
         assert compact_job.status == "cancelled"
         mock_cancel.assert_awaited_once_with(compact_job.id)
+
+    def test_cancel_backup_running_check_success(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Test Repo",
+            path="/test/repo",
+            encryption="none",
+            repository_type="local",
+            borg_version=1,
+        )
+        job = BackupJob(
+            repository=repo.path,
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            maintenance_status="running_check",
+        )
+        test_db.add_all([repo, job])
+        test_db.commit()
+        test_db.refresh(repo)
+        test_db.refresh(job)
+
+        check_job = CheckJob(
+            repository_id=repo.id,
+            repository_path=repo.path,
+            status="running",
+        )
+        test_db.add(check_job)
+        test_db.commit()
+        test_db.refresh(check_job)
+
+        response = test_client.post(
+            f"/api/backup/cancel/{job.id}", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(job)
+        test_db.refresh(check_job)
+        assert job.status == "completed"
+        assert job.maintenance_status == "check_failed"
+        assert check_job.status == "cancelled"
+        assert check_job.completed_at is not None
+
+    def test_cancel_backup_stale_running_check_without_child_reconciles_parent(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Test Repo",
+            path="/test/repo",
+            encryption="none",
+            repository_type="local",
+            borg_version=1,
+        )
+        job = BackupJob(
+            repository=repo.path,
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            maintenance_status="running_check",
+        )
+        test_db.add_all([repo, job])
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.post(
+            f"/api/backup/cancel/{job.id}", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(job)
+        assert job.status == "completed"
+        assert job.maintenance_status == "check_failed"
 
     def test_cancel_backup_unauthorized(self, test_client: TestClient):
         """Test cancelling backup without auth returns 403"""

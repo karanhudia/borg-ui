@@ -264,6 +264,35 @@ class TestProcessUtils:
         )
         mock_db.commit.assert_called_once()
 
+    def test_cleanup_orphaned_jobs_normalizes_completed_backup_running_check_without_child_job(
+        self, db_session
+    ):
+        repo = Repository(
+            name="Check Repo",
+            path="/repos/check",
+            encryption="none",
+            repository_type="local",
+        )
+        db_session.add(repo)
+        db_session.flush()
+
+        backup_job = BackupJob(
+            repository=repo.path,
+            repository_id=repo.id,
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            maintenance_status="running_check",
+        )
+        db_session.add(backup_job)
+        db_session.commit()
+
+        cleanup_orphaned_jobs(db_session)
+
+        db_session.refresh(backup_job)
+        assert backup_job.status == "completed"
+        assert backup_job.maintenance_status == "check_failed"
+
     def test_cleanup_orphaned_jobs_finishes_interrupted_backup_plan_run(
         self, db_session
     ):
