@@ -616,7 +616,45 @@ class BackupJob(Base):
     remote_process_pid = Column(Integer, nullable=True)  # PID on remote host
     remote_hostname = Column(String, nullable=True)  # Remote hostname for reference
 
+    # Retry lineage metadata. Original attempts default to attempt 1; retry
+    # attempts point at the original and immediate source rows.
+    retry_original_job_id = Column(
+        Integer, ForeignKey("backup_jobs.id", ondelete="SET NULL"), nullable=True
+    )
+    retry_source_job_id = Column(
+        Integer, ForeignKey("backup_jobs.id", ondelete="SET NULL"), nullable=True
+    )
+    retry_attempt = Column(Integer, default=1, nullable=False)
+    retry_requested_by_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    retry_requested_at = Column(DateTime, nullable=True)
+
     created_at = Column(DateTime, default=utc_now)
+
+
+class BackupJobRetryLineage(Base):
+    __tablename__ = "backup_job_retry_lineage"
+    __table_args__ = (
+        UniqueConstraint("created_job_id", name="uq_backup_job_retry_created_job"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    original_job_id = Column(
+        Integer, ForeignKey("backup_jobs.id", ondelete="SET NULL"), nullable=True
+    )
+    retry_source_job_id = Column(
+        Integer, ForeignKey("backup_jobs.id", ondelete="SET NULL"), nullable=True
+    )
+    attempt_number = Column(Integer, nullable=False)
+    requested_by_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    requested_at = Column(DateTime, default=utc_now, nullable=False)
+    created_job_id = Column(
+        Integer, ForeignKey("backup_jobs.id", ondelete="SET NULL"), nullable=True
+    )
+    request_snapshot = Column(JSON, nullable=False)
 
 
 class RestoreJob(Base):
@@ -936,6 +974,18 @@ class BackupPlanRun(Base):
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime, default=utc_now, nullable=False)
 
+    retry_original_run_id = Column(
+        Integer, ForeignKey("backup_plan_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    retry_source_run_id = Column(
+        Integer, ForeignKey("backup_plan_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    retry_attempt = Column(Integer, default=1, nullable=False)
+    retry_requested_by_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    retry_requested_at = Column(DateTime, nullable=True)
+
     repositories = relationship(
         "BackupPlanRunRepository",
         back_populates="backup_plan_run",
@@ -945,6 +995,30 @@ class BackupPlanRun(Base):
         "ScriptExecution",
         back_populates="backup_plan_run",
     )
+
+
+class BackupPlanRunRetryLineage(Base):
+    __tablename__ = "backup_plan_run_retry_lineage"
+    __table_args__ = (
+        UniqueConstraint("created_run_id", name="uq_backup_plan_run_retry_created"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    original_run_id = Column(
+        Integer, ForeignKey("backup_plan_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    retry_source_run_id = Column(
+        Integer, ForeignKey("backup_plan_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    attempt_number = Column(Integer, nullable=False)
+    requested_by_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    requested_at = Column(DateTime, default=utc_now, nullable=False)
+    created_run_id = Column(
+        Integer, ForeignKey("backup_plan_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    request_snapshot = Column(JSON, nullable=False)
 
 
 class BackupPlanRunRepository(Base):
