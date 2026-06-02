@@ -611,7 +611,7 @@ class BorgInterface:
         strip_components: int = None,
     ) -> Dict:
         """Extract files from an archive"""
-        cmd = [self.borg_cmd, "extract"]
+        cmd = [self.borg_cmd, "extract", "--umask", "0022"]
 
         if remote_path:
             cmd.extend(["--remote-path", remote_path])

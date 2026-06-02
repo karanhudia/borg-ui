@@ -839,6 +839,34 @@ class BackupService:
             for key_file in temp_source_key_files:
                 cleanup_temp_key_file(key_file)
 
+    def _validate_local_source_paths_exist(
+        self, source_paths: list[str], skip_paths: set[str] | None = None
+    ) -> None:
+        skip_paths = skip_paths or set()
+        missing_paths = [
+            source_path
+            for source_path in source_paths
+            if source_path not in skip_paths
+            and not source_path.startswith("ssh://")
+            and not Path(source_path).exists()
+        ]
+        if not missing_paths:
+            return
+
+        logger.error(
+            "Backup source path does not exist",
+            missing_paths=missing_paths,
+            missing_count=len(missing_paths),
+        )
+        raise ValueError(
+            json.dumps(
+                {
+                    "key": "backend.errors.filesystem.pathNotFound",
+                    "params": {"path": missing_paths[0]},
+                }
+            )
+        )
+
     def _parse_ssh_url(self, ssh_url: str) -> dict:
         """
         Parse SSH URL to extract connection details
@@ -2016,6 +2044,14 @@ class BackupService:
                         canary_path=str(canary_path),
                     )
 
+            snapshot_source_paths = {
+                path
+                for location in normalized_locations or []
+                if location.get("snapshot")
+                for path in location.get("paths") or []
+            }
+            source_paths_for_existence_check = list(source_paths)
+
             if normalized_locations is not None:
                 (
                     source_paths,
@@ -2160,6 +2196,10 @@ class BackupService:
                             job_id=job_id,
                             continue_on_failure=True,
                         )
+
+            self._validate_local_source_paths_exist(
+                source_paths_for_existence_check, skip_paths=snapshot_source_paths
+            )
 
             # Calculate total expected size of source directories in background
             # This runs asynchronously without blocking backup start
