@@ -21,6 +21,7 @@ vi.mock('cron-parser', () => ({
 
 describe('WizardStepScheduleConfig', () => {
   const defaultData = {
+    scheduleEnabled: true,
     cronExpression: '0 2 * * *',
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
     archiveNameTemplate: '{job_name}-{now}',
@@ -235,6 +236,35 @@ describe('WizardStepScheduleConfig', () => {
 
     const cronInput = screen.getByLabelText(/Schedule \(Cron Expression\)/i)
     expect(cronInput).toBeRequired()
+  })
+
+  it('hides cron and timezone controls for manual-only jobs', () => {
+    render(
+      <WizardStepScheduleConfig
+        {...defaultProps}
+        data={{ ...defaultData, scheduleEnabled: false }}
+      />
+    )
+
+    expect(screen.getByLabelText(/Run manually only/i)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/Schedule \(Cron Expression\)/i)).not.toBeInTheDocument()
+    expect(screen.getByLabelText(/Archive Name Template/i)).toBeInTheDocument()
+    expect(screen.getByText(/No cron expression or timezone is required/i)).toBeInTheDocument()
+  })
+
+  it('emits schedule mode changes', () => {
+    const onChange = vi.fn()
+    render(
+      <WizardStepScheduleConfig
+        {...defaultProps}
+        data={{ ...defaultData, scheduleEnabled: false }}
+        onChange={onChange}
+      />
+    )
+
+    fireEvent.click(screen.getByLabelText(/Run manually only/i))
+
+    expect(onChange).toHaveBeenCalledWith({ scheduleEnabled: true })
   })
 
   it('displays next run times inline with info tooltip', () => {

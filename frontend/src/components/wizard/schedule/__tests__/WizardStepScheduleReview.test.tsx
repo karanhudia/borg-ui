@@ -19,6 +19,7 @@ describe('WizardStepScheduleReview', () => {
     name: 'Daily Backup Job',
     description: 'Backup all servers daily',
     repositoryIds: [1, 2],
+    scheduleEnabled: true,
     cronExpression: '0 2 * * *',
     archiveNameTemplate: '{job_name}-{now}',
     preBackupScriptId: 1,

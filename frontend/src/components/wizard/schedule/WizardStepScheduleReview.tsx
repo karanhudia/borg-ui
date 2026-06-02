@@ -10,6 +10,7 @@ interface WizardStepScheduleReviewProps {
     name: string
     description: string
     repositoryIds: number[]
+    scheduleEnabled: boolean
     cronExpression: string
     timezone?: string
     archiveNameTemplate: string
@@ -264,11 +265,24 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
             </AttrRow>
           )}
           <AttrRow label={t('wizard.scheduleWizard.review.schedule')}>
-            <CodePill>{data.cronExpression}</CodePill>
+            {data.scheduleEnabled ? (
+              <CodePill>{data.cronExpression}</CodePill>
+            ) : (
+              <Chip
+                label={t('wizard.scheduleWizard.review.manualOnly')}
+                color="default"
+                size="small"
+                sx={{ height: 17, fontSize: '0.62rem', fontWeight: 600 }}
+              />
+            )}
           </AttrRow>
-          <AttrRow label={t('wizard.scheduleWizard.review.timezone', { defaultValue: 'Timezone' })}>
-            <CodePill>{data.timezone || 'UTC'}</CodePill>
-          </AttrRow>
+          {data.scheduleEnabled && (
+            <AttrRow
+              label={t('wizard.scheduleWizard.review.timezone', { defaultValue: 'Timezone' })}
+            >
+              <CodePill>{data.timezone || 'UTC'}</CodePill>
+            </AttrRow>
+          )}
           <AttrRow label={t('wizard.scheduleWizard.review.archiveNameTemplate')}>
             <CodePill>{data.archiveNameTemplate}</CodePill>
           </AttrRow>

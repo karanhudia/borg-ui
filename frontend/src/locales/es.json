@@ -590,6 +590,7 @@
     "card": {
       "stats": {
         "schedule": "Schedule",
+        "manualOnly": "Solo manual",
         "repository": "Repository",
         "lastRun": "Last Run",
         "nextRun": "Next Run"
@@ -3650,6 +3651,8 @@
         "compactInfo": "La compactación recupera espacio en disco tras la poda. Puede llevar tiempo en repositorios grandes."
       },
       "config": {
+        "manualOnlyLabel": "Ejecutar solo manualmente",
+        "manualOnlyHelper": "No se requiere expresión cron ni zona horaria. Usa Ejecutar ahora cuando el repositorio esté disponible.",
         "scheduleLabel": "Programación (Expresión Cron)",
         "scheduleHelper": "Haz clic en el icono del reloj para usar el constructor visual.",
         "timezoneLabel": "Zona horaria",
@@ -3662,6 +3665,7 @@
         "name": "Nombre",
         "repositories": "Repositorios ({{count}})",
         "schedule": "Programación",
+        "manualOnly": "Solo manual",
         "timezone": "Zona horaria",
         "archiveNameTemplate": "Plantilla de nombre de archivo",
         "scriptsConfiguration": "Configuración de scripts",

@@ -604,6 +604,7 @@
     "card": {
       "stats": {
         "schedule": "Schedule",
+        "manualOnly": "Manual only",
         "repository": "Repository",
         "lastRun": "Last Run",
         "nextRun": "Next Run"
@@ -3650,6 +3651,8 @@
         "compactInfo": "Compact reclaims disk space after prune. May take time on large repositories."
       },
       "config": {
+        "manualOnlyLabel": "Run manually only",
+        "manualOnlyHelper": "No cron expression or timezone is required. Use Run Now when the repository is available.",
         "scheduleLabel": "Schedule (Cron Expression)",
         "scheduleHelper": "Click the clock icon to use the visual builder.",
         "timezoneLabel": "Timezone",
@@ -3662,6 +3665,7 @@
         "name": "Name",
         "repositories": "Repositories ({{count}})",
         "schedule": "Schedule",
+        "manualOnly": "Manual only",
         "timezone": "Timezone",
         "archiveNameTemplate": "Archive Name Template",
         "scriptsConfiguration": "Scripts Configuration",

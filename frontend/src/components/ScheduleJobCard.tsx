@@ -28,7 +28,8 @@ interface Repository {
 interface ScheduledJob {
   id: number
   name: string
-  cron_expression: string
+  schedule_enabled?: boolean
+  cron_expression: string | null
   timezone?: string | null
   repository: string | null
   repository_id: number | null
@@ -96,8 +97,10 @@ export default function ScheduleJobCard({
   const { t } = useTranslation()
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
+  const isScheduled = job.schedule_enabled ?? Boolean(job.cron_expression)
   const scheduleTimezone = job.timezone || 'UTC'
-  const scheduleDisplay = formatCronHuman(job.cron_expression)
+  const manualOnlyLabel = t('schedule.card.stats.manualOnly', { defaultValue: 'Manual only' })
+  const scheduleDisplay = isScheduled ? formatCronHuman(job.cron_expression || '') : manualOnlyLabel
   const nextRunDisplay = job.next_run
     ? formatScheduledInstantDisplay(job.next_run, scheduleTimezone)
     : null
@@ -107,7 +110,7 @@ export default function ScheduleJobCard({
       icon: <CalendarClock size={11} />,
       label: t('schedule.card.stats.schedule'),
       value: scheduleDisplay,
-      tooltip: `${job.cron_expression} (${scheduleTimezone})`,
+      tooltip: isScheduled ? `${job.cron_expression} (${scheduleTimezone})` : '',
       color: 'info',
     },
     {
@@ -126,17 +129,20 @@ export default function ScheduleJobCard({
     {
       icon: <CalendarCheck size={11} />,
       label: t('schedule.card.stats.nextRun'),
-      value: nextRunDisplay?.value ?? t('common.never'),
-      tooltip: nextRunDisplay ? <ScheduledInstantTooltip display={nextRunDisplay} /> : '',
+      value: isScheduled ? (nextRunDisplay?.value ?? t('common.never')) : manualOnlyLabel,
+      tooltip:
+        isScheduled && nextRunDisplay ? <ScheduledInstantTooltip display={nextRunDisplay} /> : '',
       color: 'success',
     },
   ]
 
   const meta: MetaItem[] = []
-  meta.push({
-    label: t('common.timezone', { defaultValue: 'Timezone' }),
-    value: scheduleTimezone,
-  })
+  if (isScheduled) {
+    meta.push({
+      label: t('common.timezone', { defaultValue: 'Timezone' }),
+      value: scheduleTimezone,
+    })
+  }
   if (job.description) meta.push({ label: t('schedule.card.meta.note'), value: job.description })
   if (job.run_prune_after)
     meta.push({

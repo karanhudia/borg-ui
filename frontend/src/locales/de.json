@@ -590,6 +590,7 @@
     "card": {
       "stats": {
         "schedule": "Schedule",
+        "manualOnly": "Nur manuell",
         "repository": "Repository",
         "lastRun": "Last Run",
         "nextRun": "Next Run"
@@ -3650,6 +3651,8 @@
         "compactInfo": "Komprimierung gibt nach der Bereinigung Speicherplatz frei. Kann bei großen Repositories Zeit in Anspruch nehmen."
       },
       "config": {
+        "manualOnlyLabel": "Nur manuell ausführen",
+        "manualOnlyHelper": "Kein Cron-Ausdruck und keine Zeitzone erforderlich. Verwende Jetzt ausführen, wenn das Repository verfügbar ist.",
         "scheduleLabel": "Zeitplan (Cron-Ausdruck)",
         "scheduleHelper": "Klicke auf das Uhr-Symbol, um den visuellen Builder zu verwenden.",
         "timezoneLabel": "Zeitzone",
@@ -3662,6 +3665,7 @@
         "name": "Name",
         "repositories": "Repositories ({{count}})",
         "schedule": "Zeitplan",
+        "manualOnly": "Nur manuell",
         "timezone": "Zeitzone",
         "archiveNameTemplate": "Archivnamen-Vorlage",
         "scriptsConfiguration": "Skriptkonfiguration",

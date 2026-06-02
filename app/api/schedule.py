@@ -58,7 +58,7 @@ from pydantic import BaseModel
 
 class ScheduledJobCreate(BaseModel):
     name: str
-    cron_expression: str
+    cron_expression: Optional[str] = None
     timezone: Optional[str] = None
     repository: Optional[str] = None  # Legacy single-repo (by path)
     repository_id: Optional[int] = None  # Single-repo (by ID)
@@ -139,6 +139,25 @@ def _calculate_next_schedule_run(
     schedule_timezone: Optional[str] = None,
 ) -> datetime:
     return calculate_next_cron_run(cron_expression, base_time, schedule_timezone)
+
+
+def _normalize_schedule_cron(cron_expression: Optional[str]) -> str:
+    return (cron_expression or "").strip()
+
+
+def _schedule_enabled_from_cron(cron_expression: Optional[str]) -> bool:
+    return bool(_normalize_schedule_cron(cron_expression))
+
+
+def _serialize_schedule_cron(cron_expression: Optional[str]) -> Optional[str]:
+    cron = _normalize_schedule_cron(cron_expression)
+    return cron or None
+
+
+def _serialize_schedule_timezone(job: ScheduledJob) -> Optional[str]:
+    if not _schedule_enabled_from_cron(job.cron_expression):
+        return None
+    return job.timezone or DEFAULT_SCHEDULE_TIMEZONE
 
 
 def _raise_invalid_schedule_timezone(exc: InvalidScheduleTimezone) -> NoReturn:
@@ -408,12 +427,14 @@ async def get_scheduled_jobs(
             else:
                 repository_ids = None
 
+            schedule_enabled = _schedule_enabled_from_cron(job.cron_expression)
             result_jobs.append(
                 {
                     "id": job.id,
                     "name": job.name,
-                    "cron_expression": job.cron_expression,
-                    "timezone": job.timezone or DEFAULT_SCHEDULE_TIMEZONE,
+                    "schedule_enabled": schedule_enabled,
+                    "cron_expression": _serialize_schedule_cron(job.cron_expression),
+                    "timezone": _serialize_schedule_timezone(job),
                     "repository": job.repository,
                     "repository_id": job.repository_id,
                     "repository_ids": repository_ids,
@@ -571,23 +592,27 @@ async def create_scheduled_job(
             )
             # Continue anyway - the atomic transaction + rollback will protect us
 
-        # Validate timezone and cron expression
-        try:
-            schedule_timezone = normalize_schedule_timezone(job_data.timezone)
-            next_run = _calculate_next_schedule_run(
-                job_data.cron_expression,
-                schedule_timezone=schedule_timezone,
-            )
-        except InvalidScheduleTimezone as e:
-            _raise_invalid_schedule_timezone(e)
-        except Exception as e:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "key": "backend.errors.schedule.invalidCronExpression",
-                    "params": {"error": str(e)},
-                },
-            )
+        cron_expression = _normalize_schedule_cron(job_data.cron_expression)
+        if cron_expression:
+            try:
+                schedule_timezone = normalize_schedule_timezone(job_data.timezone)
+                next_run = _calculate_next_schedule_run(
+                    cron_expression,
+                    schedule_timezone=schedule_timezone,
+                )
+            except InvalidScheduleTimezone as e:
+                _raise_invalid_schedule_timezone(e)
+            except Exception as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "key": "backend.errors.schedule.invalidCronExpression",
+                        "params": {"error": str(e)},
+                    },
+                )
+        else:
+            schedule_timezone = DEFAULT_SCHEDULE_TIMEZONE
+            next_run = None
 
         # Check if job name already exists
         existing_job = (
@@ -623,7 +648,7 @@ async def create_scheduled_job(
         # Create scheduled job
         scheduled_job = ScheduledJob(
             name=job_data.name,
-            cron_expression=job_data.cron_expression,
+            cron_expression=cron_expression,
             timezone=schedule_timezone,
             repository=job_data.repository,  # Legacy
             repository_id=job_data.repository_id,  # Single-repo by ID
@@ -765,8 +790,13 @@ async def create_scheduled_job(
             "job": {
                 "id": scheduled_job.id,
                 "name": scheduled_job.name,
-                "cron_expression": scheduled_job.cron_expression,
-                "timezone": scheduled_job.timezone or DEFAULT_SCHEDULE_TIMEZONE,
+                "schedule_enabled": _schedule_enabled_from_cron(
+                    scheduled_job.cron_expression
+                ),
+                "cron_expression": _serialize_schedule_cron(
+                    scheduled_job.cron_expression
+                ),
+                "timezone": _serialize_schedule_timezone(scheduled_job),
                 "repository": scheduled_job.repository,
                 "enabled": scheduled_job.enabled,
                 "next_run": serialize_datetime(scheduled_job.next_run),
@@ -911,6 +941,8 @@ async def get_upcoming_jobs(
         for job in jobs:
             try:
                 _require_schedule_access(db, current_user, job, "viewer")
+                if not _schedule_enabled_from_cron(job.cron_expression):
+                    continue
                 next_run = _calculate_next_schedule_run(
                     job.cron_expression,
                     now,
@@ -1011,16 +1043,19 @@ async def get_scheduled_job(
         _require_schedule_access(db, current_user, job, "viewer")
 
         # Calculate next run times
-        try:
-            next_runs = [
-                serialize_datetime(next_dt)
-                for next_dt in calculate_next_cron_runs(
-                    job.cron_expression,
-                    count=5,
-                    schedule_timezone=job.timezone or DEFAULT_SCHEDULE_TIMEZONE,
-                )
-            ]
-        except:
+        if _schedule_enabled_from_cron(job.cron_expression):
+            try:
+                next_runs = [
+                    serialize_datetime(next_dt)
+                    for next_dt in calculate_next_cron_runs(
+                        job.cron_expression,
+                        count=5,
+                        schedule_timezone=job.timezone or DEFAULT_SCHEDULE_TIMEZONE,
+                    )
+                ]
+            except:
+                next_runs = []
+        else:
             next_runs = []
 
         return {
@@ -1028,8 +1063,9 @@ async def get_scheduled_job(
             "job": {
                 "id": job.id,
                 "name": job.name,
-                "cron_expression": job.cron_expression,
-                "timezone": job.timezone or DEFAULT_SCHEDULE_TIMEZONE,
+                "schedule_enabled": _schedule_enabled_from_cron(job.cron_expression),
+                "cron_expression": _serialize_schedule_cron(job.cron_expression),
+                "timezone": _serialize_schedule_timezone(job),
                 "repository": job.repository,
                 "enabled": job.enabled,
                 "last_run": serialize_datetime(job.last_run),
@@ -1107,35 +1143,39 @@ async def update_scheduled_job(
             job.name = job_data.name
 
         schedule_definition_changed = (
-            job_data.cron_expression is not None
+            "cron_expression" in job_data.model_fields_set
             or "timezone" in job_data.model_fields_set
         )
         if schedule_definition_changed:
-            next_cron_expression = (
+            next_cron_expression = _normalize_schedule_cron(
                 job_data.cron_expression
-                if job_data.cron_expression is not None
+                if "cron_expression" in job_data.model_fields_set
                 else job.cron_expression
             )
-            try:
-                next_schedule_timezone = normalize_schedule_timezone(
-                    job_data.timezone
-                    if "timezone" in job_data.model_fields_set
-                    else job.timezone
-                )
-                next_run = _calculate_next_schedule_run(
-                    next_cron_expression,
-                    schedule_timezone=next_schedule_timezone,
-                )
-            except InvalidScheduleTimezone as e:
-                _raise_invalid_schedule_timezone(e)
-            except Exception as e:
-                raise HTTPException(
-                    status_code=400,
-                    detail={
-                        "key": "backend.errors.schedule.invalidCronExpression",
-                        "params": {"error": str(e)},
-                    },
-                )
+            if next_cron_expression:
+                try:
+                    next_schedule_timezone = normalize_schedule_timezone(
+                        job_data.timezone
+                        if "timezone" in job_data.model_fields_set
+                        else job.timezone
+                    )
+                    next_run = _calculate_next_schedule_run(
+                        next_cron_expression,
+                        schedule_timezone=next_schedule_timezone,
+                    )
+                except InvalidScheduleTimezone as e:
+                    _raise_invalid_schedule_timezone(e)
+                except Exception as e:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "key": "backend.errors.schedule.invalidCronExpression",
+                            "params": {"error": str(e)},
+                        },
+                    )
+            else:
+                next_schedule_timezone = DEFAULT_SCHEDULE_TIMEZONE
+                next_run = None
 
             job.cron_expression = next_cron_expression
             job.timezone = next_schedule_timezone
@@ -1149,21 +1189,24 @@ async def update_scheduled_job(
         if job_data.enabled is not None:
             job.enabled = job_data.enabled
             if job.enabled and not was_enabled and not schedule_definition_changed:
-                try:
-                    job.next_run = _calculate_next_schedule_run(
-                        job.cron_expression,
-                        schedule_timezone=job.timezone or DEFAULT_SCHEDULE_TIMEZONE,
-                    )
-                except InvalidScheduleTimezone as e:
-                    _raise_invalid_schedule_timezone(e)
-                except Exception as e:
-                    raise HTTPException(
-                        status_code=400,
-                        detail={
-                            "key": "backend.errors.schedule.invalidCronExpression",
-                            "params": {"error": str(e)},
-                        },
-                    )
+                if _schedule_enabled_from_cron(job.cron_expression):
+                    try:
+                        job.next_run = _calculate_next_schedule_run(
+                            job.cron_expression,
+                            schedule_timezone=job.timezone or DEFAULT_SCHEDULE_TIMEZONE,
+                        )
+                    except InvalidScheduleTimezone as e:
+                        _raise_invalid_schedule_timezone(e)
+                    except Exception as e:
+                        raise HTTPException(
+                            status_code=400,
+                            detail={
+                                "key": "backend.errors.schedule.invalidCronExpression",
+                                "params": {"error": str(e)},
+                            },
+                        )
+                else:
+                    job.next_run = None
 
         if job_data.description is not None:
             job.description = job_data.description
@@ -1340,21 +1383,24 @@ async def toggle_scheduled_job(
 
         job.enabled = not job.enabled
         if job.enabled:
-            try:
-                job.next_run = _calculate_next_schedule_run(
-                    job.cron_expression,
-                    schedule_timezone=job.timezone or DEFAULT_SCHEDULE_TIMEZONE,
-                )
-            except InvalidScheduleTimezone as e:
-                _raise_invalid_schedule_timezone(e)
-            except Exception as e:
-                raise HTTPException(
-                    status_code=400,
-                    detail={
-                        "key": "backend.errors.schedule.invalidCronExpression",
-                        "params": {"error": str(e)},
-                    },
-                )
+            if _schedule_enabled_from_cron(job.cron_expression):
+                try:
+                    job.next_run = _calculate_next_schedule_run(
+                        job.cron_expression,
+                        schedule_timezone=job.timezone or DEFAULT_SCHEDULE_TIMEZONE,
+                    )
+                except InvalidScheduleTimezone as e:
+                    _raise_invalid_schedule_timezone(e)
+                except Exception as e:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "key": "backend.errors.schedule.invalidCronExpression",
+                            "params": {"error": str(e)},
+                        },
+                    )
+            else:
+                job.next_run = None
         job.updated_at = datetime.now(timezone.utc)
         db.commit()
 
@@ -1411,21 +1457,25 @@ async def duplicate_scheduled_job(
             new_name = f"{base_name} ({counter})"
 
         # Calculate next run time from cron expression
-        try:
-            next_run = _calculate_next_schedule_run(
-                original_job.cron_expression,
-                schedule_timezone=original_job.timezone or DEFAULT_SCHEDULE_TIMEZONE,
-            )
-        except InvalidScheduleTimezone as e:
-            _raise_invalid_schedule_timezone(e)
-        except Exception as e:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "key": "backend.errors.schedule.invalidCronExpression",
-                    "params": {"error": str(e)},
-                },
-            )
+        if _schedule_enabled_from_cron(original_job.cron_expression):
+            try:
+                next_run = _calculate_next_schedule_run(
+                    original_job.cron_expression,
+                    schedule_timezone=original_job.timezone
+                    or DEFAULT_SCHEDULE_TIMEZONE,
+                )
+            except InvalidScheduleTimezone as e:
+                _raise_invalid_schedule_timezone(e)
+            except Exception as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "key": "backend.errors.schedule.invalidCronExpression",
+                        "params": {"error": str(e)},
+                    },
+                )
+        else:
+            next_run = None
 
         # Create the duplicate job
         duplicated_job = ScheduledJob(
@@ -1518,8 +1568,13 @@ async def duplicate_scheduled_job(
                 "id": duplicated_job.id,
                 "name": duplicated_job.name,
                 "enabled": duplicated_job.enabled,
-                "cron_expression": duplicated_job.cron_expression,
-                "timezone": duplicated_job.timezone or DEFAULT_SCHEDULE_TIMEZONE,
+                "schedule_enabled": _schedule_enabled_from_cron(
+                    duplicated_job.cron_expression
+                ),
+                "cron_expression": _serialize_schedule_cron(
+                    duplicated_job.cron_expression
+                ),
+                "timezone": _serialize_schedule_timezone(duplicated_job),
             },
         }
     except HTTPException:
@@ -2611,6 +2666,11 @@ def _dispatch_due_scheduled_job(
     from app.database.models import Repository
 
     now = to_utc_naive(now)
+    if not _schedule_enabled_from_cron(job.cron_expression):
+        job.next_run = None
+        db.commit()
+        logger.warning("Skipped manual-only job in scheduled dispatcher", job_id=job.id)
+        return None
 
     repo_links = (
         db.query(ScheduledJobRepository).filter_by(scheduled_job_id=job.id).all()

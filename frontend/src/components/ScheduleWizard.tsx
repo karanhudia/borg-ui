@@ -18,7 +18,8 @@ import { Repository } from '../types'
 export interface ScheduledJob {
   id: number
   name: string
-  cron_expression: string
+  schedule_enabled?: boolean
+  cron_expression: string | null
   timezone?: string | null
   repository: string | null
   repository_id: number | null
@@ -62,8 +63,8 @@ export interface ScheduleData {
   description: string | null
   repository_ids: number[]
   enabled: boolean
-  cron_expression: string
-  timezone: string
+  cron_expression: string | null
+  timezone: string | null
   archive_name_template: string
   pre_backup_script_id: number | null
   post_backup_script_id: number | null
@@ -88,6 +89,7 @@ interface WizardState {
   repositoryIds: number[]
 
   // Step 2: Schedule
+  scheduleEnabled: boolean
   cronExpression: string
   timezone: string
   archiveNameTemplate: string
@@ -114,6 +116,7 @@ const createInitialState = (): WizardState => ({
   name: '',
   description: '',
   repositoryIds: [],
+  scheduleEnabled: true,
   cronExpression: '0 2 * * *',
   timezone: getBrowserTimeZone(),
   archiveNameTemplate: '{job_name}-{now}',
@@ -180,12 +183,15 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
       }
     }
 
+    const scheduleEnabled = scheduledJob.schedule_enabled ?? Boolean(scheduledJob.cron_expression)
+
     setWizardState({
       name: scheduledJob.name,
       description: scheduledJob.description || '',
       repositoryIds: Array.from(new Set(repository_ids)),
-      cronExpression: scheduledJob.cron_expression,
-      timezone: scheduledJob.timezone || 'UTC',
+      scheduleEnabled,
+      cronExpression: scheduledJob.cron_expression || '0 2 * * *',
+      timezone: scheduledJob.timezone || getBrowserTimeZone(),
       archiveNameTemplate: scheduledJob.archive_name_template || '{job_name}-{now}',
       preBackupScriptId: scheduledJob.pre_backup_script_id || null,
       postBackupScriptId: scheduledJob.post_backup_script_id || null,
@@ -240,8 +246,10 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
         return true
 
       case 'schedule':
-        if (!wizardState.cronExpression.trim()) return false
-        if (!wizardState.timezone.trim()) return false
+        if (wizardState.scheduleEnabled) {
+          if (!wizardState.cronExpression.trim()) return false
+          if (!wizardState.timezone.trim()) return false
+        }
         if (!wizardState.archiveNameTemplate.trim()) return false
         return true
 
@@ -269,8 +277,8 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
       description: wizardState.description || null,
       repository_ids: Array.from(new Set(wizardState.repositoryIds)),
       enabled: mode === 'edit' && scheduledJob ? scheduledJob.enabled : true,
-      cron_expression: wizardState.cronExpression,
-      timezone: wizardState.timezone,
+      cron_expression: wizardState.scheduleEnabled ? wizardState.cronExpression : null,
+      timezone: wizardState.scheduleEnabled ? wizardState.timezone : null,
       archive_name_template: wizardState.archiveNameTemplate,
       pre_backup_script_id: wizardState.preBackupScriptId,
       post_backup_script_id: wizardState.postBackupScriptId,
@@ -292,6 +300,7 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
       source: 'wizard',
       mode,
       repository_count: wizardState.repositoryIds.length,
+      schedule_enabled: wizardState.scheduleEnabled,
     })
 
     onSubmit(data)
@@ -320,6 +329,7 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
         return (
           <WizardStepScheduleConfig
             data={{
+              scheduleEnabled: wizardState.scheduleEnabled,
               cronExpression: wizardState.cronExpression,
               timezone: wizardState.timezone,
               archiveNameTemplate: wizardState.archiveNameTemplate,

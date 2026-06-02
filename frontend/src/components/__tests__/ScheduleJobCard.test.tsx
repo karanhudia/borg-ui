@@ -124,4 +124,42 @@ describe('ScheduleJobCard', () => {
     })
     expect(nextRunStat?.tooltip?.props?.display?.scheduledTimeZone).toBe(baseJob.timezone)
   })
+
+  it('shows manual-only jobs without cron or timezone metadata', () => {
+    renderWithProviders(
+      <ScheduleJobCard
+        job={{
+          ...baseJob,
+          cron_expression: null,
+          timezone: null,
+          next_run: null,
+          name: 'External Drive Manual',
+        }}
+        repositories={[{ id: 1, name: 'External Drive Repo', path: '/backups/external' }]}
+        canManage
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onDuplicate={vi.fn()}
+        onRunNow={vi.fn()}
+        onToggle={vi.fn()}
+      />
+    )
+
+    const props = entityCardMock.mock.lastCall?.[0] as
+      | {
+          stats: Array<{ label: string; value: string; tooltip?: string; color?: string }>
+          meta?: Array<{ label: string; value: string }>
+          primaryAction?: { disabled?: boolean }
+        }
+      | undefined
+    const scheduleStat = props?.stats.find((stat) => stat.label === 'Schedule')
+    const nextRunStat = props?.stats.find((stat) => stat.color === 'success')
+
+    expect(scheduleStat).toMatchObject({ value: 'Manual only', tooltip: '' })
+    expect(nextRunStat).toMatchObject({ value: 'Manual only', tooltip: '' })
+    expect(props?.meta ?? []).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ label: 'Timezone' })])
+    )
+    expect(props?.primaryAction?.disabled).not.toBe(true)
+  })
 })

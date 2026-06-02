@@ -590,6 +590,7 @@
     "card": {
       "stats": {
         "schedule": "Schedule",
+        "manualOnly": "Solo manuale",
         "repository": "Repository",
         "lastRun": "Last Run",
         "nextRun": "Next Run"
@@ -3650,6 +3651,8 @@
         "compactInfo": "La compattazione recupera spazio su disco dopo la pulizia. Potrebbe richiedere tempo su repository di grandi dimensioni."
       },
       "config": {
+        "manualOnlyLabel": "Esegui solo manualmente",
+        "manualOnlyHelper": "Non sono necessari espressione cron o fuso orario. Usa Esegui ora quando il repository è disponibile.",
         "scheduleLabel": "Pianificazione (Espressione Cron)",
         "scheduleHelper": "Clicca l'icona dell'orologio per usare il costruttore visivo.",
         "timezoneLabel": "Fuso orario",
@@ -3662,6 +3665,7 @@
         "name": "Nome",
         "repositories": "Repository ({{count}})",
         "schedule": "Pianificazione",
+        "manualOnly": "Solo manuale",
         "timezone": "Fuso orario",
         "archiveNameTemplate": "Template Nome Archivio",
         "scriptsConfiguration": "Configurazione Script",

@@ -16,7 +16,7 @@ import { AlertCircle, Trash2 } from 'lucide-react'
 interface ScheduledJob {
   id: number
   name: string
-  cron_expression: string
+  cron_expression: string | null
   repository: string | null
   repository_id: number | null
   repository_ids: number[] | null

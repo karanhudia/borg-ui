@@ -6,7 +6,8 @@ import ScheduleJobCard from './ScheduleJobCard'
 interface ScheduledJob {
   id: number
   name: string
-  cron_expression: string
+  schedule_enabled?: boolean
+  cron_expression: string | null
   timezone?: string | null
   repository: string | null
   repository_id: number | null

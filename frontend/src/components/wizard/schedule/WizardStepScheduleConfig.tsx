@@ -1,10 +1,11 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { Stack } from '@mui/material'
+import { Alert, FormControlLabel, Stack, Switch } from '@mui/material'
 import SchedulePicker from '../../shared/SchedulePicker'
 import ArchiveNameTemplateInput from '../../ArchiveNameTemplateInput'
 
 interface WizardStepScheduleConfigData {
+  scheduleEnabled: boolean
   cronExpression: string
   timezone?: string
   archiveNameTemplate: string
@@ -25,15 +26,37 @@ const WizardStepScheduleConfig: React.FC<WizardStepScheduleConfigProps> = ({
 
   return (
     <Stack spacing={2}>
-      <SchedulePicker
-        cronExpression={data.cronExpression}
-        timezone={data.timezone || 'UTC'}
-        onChange={(updates) => onChange(updates)}
-        required
-        size="medium"
-        cronLabel={t('wizard.scheduleWizard.config.scheduleLabel')}
-        cronHelperText={t('wizard.scheduleWizard.config.scheduleHelper')}
+      <FormControlLabel
+        sx={{
+          m: 0,
+          alignItems: 'center',
+          gap: 1,
+          '& .MuiFormControlLabel-label': { lineHeight: 1.35 },
+        }}
+        control={
+          <Switch
+            checked={!data.scheduleEnabled}
+            onChange={(event) => onChange({ scheduleEnabled: !event.target.checked })}
+          />
+        }
+        label={t('wizard.scheduleWizard.config.manualOnlyLabel')}
       />
+
+      {data.scheduleEnabled ? (
+        <SchedulePicker
+          cronExpression={data.cronExpression}
+          timezone={data.timezone || 'UTC'}
+          onChange={(updates) => onChange(updates)}
+          required
+          size="medium"
+          cronLabel={t('wizard.scheduleWizard.config.scheduleLabel')}
+          cronHelperText={t('wizard.scheduleWizard.config.scheduleHelper')}
+        />
+      ) : (
+        <Alert severity="info" sx={{ alignItems: 'center' }}>
+          {t('wizard.scheduleWizard.config.manualOnlyHelper')}
+        </Alert>
+      )}
 
       <ArchiveNameTemplateInput
         value={data.archiveNameTemplate}

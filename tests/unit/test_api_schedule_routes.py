@@ -82,6 +82,27 @@ class TestScheduleRouteContracts:
         job = next(item for item in body["jobs"] if item["id"] == schedule.id)
         assert job["repository_ids"] == [repo_b.id, repo_a.id]
 
+    def test_list_schedules_marks_manual_only_jobs(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        schedule = _create_schedule(
+            test_db,
+            "External Drive Manual",
+            cron_expression="",
+            repository="/repos/external",
+            next_run=None,
+        )
+
+        response = test_client.get("/api/schedule/", headers=admin_headers)
+
+        assert response.status_code == 200
+        body = response.json()
+        job = next(item for item in body["jobs"] if item["id"] == schedule.id)
+        assert job["schedule_enabled"] is False
+        assert job["cron_expression"] is None
+        assert job["timezone"] is None
+        assert job["next_run"] is None
+
     def test_upcoming_jobs_returns_enabled_jobs_sorted_and_filtered(
         self,
         test_client: TestClient,
@@ -123,6 +144,46 @@ class TestScheduleRouteContracts:
             job["id"] == soon.id and job["type"] == "schedule"
             for job in body["upcoming_jobs"]
         )
+
+    def test_create_manual_only_schedule_without_cron(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "External Drive", "/repos/external-drive")
+
+        response = test_client.post(
+            "/api/schedule/",
+            json={
+                "name": "External Drive Manual",
+                "repository_ids": [repo.id],
+                "enabled": True,
+                "run_prune_after": True,
+                "run_compact_after": True,
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["job"]["schedule_enabled"] is False
+        assert body["job"]["cron_expression"] is None
+        assert body["job"]["timezone"] is None
+        assert body["job"]["next_run"] is None
+
+        schedule = (
+            test_db.query(ScheduledJob).filter_by(name="External Drive Manual").one()
+        )
+        assert schedule.cron_expression == ""
+        assert schedule.next_run is None
+        assert schedule.enabled is True
+        assert schedule.run_prune_after is True
+        assert schedule.run_compact_after is True
+
+        links = (
+            test_db.query(ScheduledJobRepository)
+            .filter_by(scheduled_job_id=schedule.id)
+            .all()
+        )
+        assert [link.repository_id for link in links] == [repo.id]
 
     def test_upcoming_jobs_includes_scheduled_backup_plans(
         self, test_client: TestClient, admin_headers, test_db
@@ -252,6 +313,27 @@ class TestScheduleRouteContracts:
         )
         assert schedule.id not in {job.id for job in due_jobs}
 
+    def test_update_schedule_can_clear_cron_for_manual_only(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        schedule = _create_schedule(
+            test_db,
+            "Convert To Manual",
+            repository="/repos/manual",
+            next_run=datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+
+        response = test_client.put(
+            f"/api/schedule/{schedule.id}",
+            json={"cron_expression": "", "timezone": None},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(schedule)
+        assert schedule.cron_expression == ""
+        assert schedule.next_run is None
+
     def test_delete_schedule_nulls_backup_job_links(
         self, test_client: TestClient, admin_headers, test_db
     ):
@@ -326,6 +408,51 @@ class TestScheduleRouteContracts:
             .all()
         )
         assert [link.repository_id for link in links] == [repo_b.id, repo_a.id]
+
+    def test_duplicate_manual_only_schedule_keeps_no_next_run(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        original = _create_schedule(
+            test_db,
+            "Manual Original",
+            cron_expression="",
+            repository="/repos/manual",
+            next_run=None,
+        )
+
+        response = test_client.post(
+            f"/api/schedule/{original.id}/duplicate", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        duplicated_id = response.json()["job"]["id"]
+        duplicated = test_db.query(ScheduledJob).filter_by(id=duplicated_id).one()
+        assert duplicated.enabled is False
+        assert duplicated.cron_expression == ""
+        assert duplicated.next_run is None
+        assert response.json()["job"]["schedule_enabled"] is False
+
+    def test_toggle_manual_only_schedule_does_not_compute_next_run(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        schedule = _create_schedule(
+            test_db,
+            "Manual Toggle",
+            cron_expression="",
+            repository="/repos/manual",
+            next_run=None,
+        )
+        schedule.enabled = False
+        test_db.commit()
+
+        response = test_client.post(
+            f"/api/schedule/{schedule.id}/toggle", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(schedule)
+        assert schedule.enabled is True
+        assert schedule.next_run is None
 
     def test_run_now_requires_configured_repositories(
         self, test_client: TestClient, admin_headers, test_db
