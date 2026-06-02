@@ -1236,6 +1236,10 @@
       "deleted": "Repository deleted successfully",
       "deleteFailed": "Failed to delete repository",
       "checkStarted": "Check operation started",
+      "checkCompleted": "Check completed",
+      "checkCompletedWithWarnings": "Check completed with warnings",
+      "checkRunFailed": "Check failed",
+      "checkFailedWithMessage": "Check failed: {{message}}",
       "checkFailed": "Failed to start check",
       "compactStarted": "Compact operation started",
       "compactFailed": "Failed to start compact",
@@ -4121,7 +4125,18 @@
   "repositoryInfoDialog": {
     "failedToDownloadKeyfile": "Failed to download keyfile",
     "noArchivesDescription": "This repository has been initialized but contains no archives. Storage statistics will appear here after you create your first backup.",
-    "failedToLoad": "Failed to load repository information. Make sure the repository is accessible and properly initialized."
+    "failedToLoad": "Failed to load repository information. Make sure the repository is accessible and properly initialized.",
+    "recovery": {
+      "title": "Recovery commands",
+      "description": "Use these command templates when you need to diagnose, repair, or recreate this repository outside Borg UI.",
+      "checkCommand": "Check repository",
+      "repairCommand": "Repair check",
+      "initCommand": "Initialize repository",
+      "copyCommand": "Copy {{label}} command",
+      "copiedCommand": "Copied {{label}} command",
+      "commandCopied": "Command copied",
+      "copyFailed": "Failed to copy command"
+    }
   },
   "analyticsBanner": {
     "viewDashboardLink": "View our public analytics dashboard",

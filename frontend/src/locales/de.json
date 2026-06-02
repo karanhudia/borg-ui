@@ -1236,6 +1236,10 @@
       "deleted": "Repository erfolgreich gelöscht",
       "deleteFailed": "Repository konnte nicht gelöscht werden",
       "checkStarted": "Überprüfung gestartet",
+      "checkCompleted": "Überprüfung abgeschlossen",
+      "checkCompletedWithWarnings": "Überprüfung mit Warnungen abgeschlossen",
+      "checkRunFailed": "Überprüfung fehlgeschlagen",
+      "checkFailedWithMessage": "Überprüfung fehlgeschlagen: {{message}}",
       "checkFailed": "Überprüfung konnte nicht gestartet werden",
       "compactStarted": "Komprimierung gestartet",
       "compactFailed": "Komprimierung konnte nicht gestartet werden",
@@ -4121,7 +4125,18 @@
   "repositoryInfoDialog": {
     "failedToDownloadKeyfile": "Schlüsseldatei konnte nicht heruntergeladen werden",
     "noArchivesDescription": "Dieses Repository wurde initialisiert, enthält aber keine Archive. Speicherstatistiken erscheinen hier nach der ersten Sicherung.",
-    "failedToLoad": "Repository-Informationen konnten nicht geladen werden. Stelle sicher, dass das Repository zugänglich und ordnungsgemäß initialisiert ist."
+    "failedToLoad": "Repository-Informationen konnten nicht geladen werden. Stelle sicher, dass das Repository zugänglich und ordnungsgemäß initialisiert ist.",
+    "recovery": {
+      "title": "Wiederherstellungsbefehle",
+      "description": "Nutze diese Befehlsvorlagen, um dieses Repository außerhalb von Borg UI zu diagnostizieren, zu reparieren oder neu zu erstellen.",
+      "checkCommand": "Repository prüfen",
+      "repairCommand": "Reparaturprüfung",
+      "initCommand": "Repository initialisieren",
+      "copyCommand": "Befehl {{label}} kopieren",
+      "copiedCommand": "Befehl {{label}} kopiert",
+      "commandCopied": "Befehl kopiert",
+      "copyFailed": "Befehl konnte nicht kopiert werden"
+    }
   },
   "analyticsBanner": {
     "viewDashboardLink": "Unser öffentliches Analyse-Dashboard anzeigen",

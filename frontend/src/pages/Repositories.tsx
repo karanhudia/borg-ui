@@ -48,6 +48,14 @@ const TERMINAL_WIPE_STATUSES = new Set([
 ])
 type RcloneRepositoryAction = 'sync' | 'hydrate'
 
+interface MaintenanceJobSummary {
+  id: number
+  status?: string | null
+  started_at?: string | null
+  completed_at?: string | null
+  error_message?: string | null
+}
+
 function parseBackupPlanFilterId(value: string | null): number | null {
   if (!value) return null
   const id = Number(value)
@@ -513,9 +521,22 @@ export default function Repositories() {
             : tracked.operation === 'Compact'
               ? await repositoriesAPI.getRepositoryCompactJobs(repositoryId, 1)
               : await repositoriesAPI.getRepositoryPruneJobs(repositoryId, 1)
-        const latestJob = response.data?.jobs?.[0]
+        const latestJob = response.data?.jobs?.[0] as MaintenanceJobSummary | undefined
 
         if (latestJob?.status) {
+          if (tracked.operation === 'Check') {
+            if (latestJob.status === 'completed') {
+              toast.success(t('repositories.toasts.checkCompleted'))
+            } else if (latestJob.status === 'completed_with_warnings') {
+              toast(t('repositories.toasts.checkCompletedWithWarnings'), { icon: '!' })
+            } else {
+              const message = latestJob.error_message
+                ? translateBackendKey(latestJob.error_message)
+                : t('repositories.toasts.checkRunFailed')
+              toast.error(t('repositories.toasts.checkFailedWithMessage', { message }))
+            }
+          }
+
           const action =
             latestJob.status === 'completed' || latestJob.status === 'completed_with_warnings'
               ? EventAction.COMPLETE

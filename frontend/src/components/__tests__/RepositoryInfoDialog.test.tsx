@@ -276,6 +276,48 @@ describe('RepositoryInfoDialog', () => {
 
       expect(screen.getByText(/Failed to load repository information/i)).toBeInTheDocument()
     })
+
+    it('shows copyable recovery commands when repository info cannot load', () => {
+      render(
+        <RepositoryInfoDialog
+          open={true}
+          repository={{ ...mockRepository, encryption: 'repokey', borg_version: 1 }}
+          repositoryInfo={null}
+          isLoading={false}
+          onClose={vi.fn()}
+        />
+      )
+
+      expect(screen.getByText('Recovery commands')).toBeInTheDocument()
+      expect(screen.getByText('borg check /repo/test')).toBeInTheDocument()
+      expect(screen.getByText('borg check --repair /repo/test')).toBeInTheDocument()
+      expect(screen.getByText('borg init --encryption repokey /repo/test')).toBeInTheDocument()
+    })
+
+    it('copies a recovery command to the clipboard', async () => {
+      const user = userEvent.setup()
+      const writeText = vi.fn().mockResolvedValue(undefined)
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: { writeText },
+      })
+
+      render(
+        <RepositoryInfoDialog
+          open={true}
+          repository={{ ...mockRepository, encryption: 'repokey', borg_version: 1 }}
+          repositoryInfo={null}
+          isLoading={false}
+          onClose={vi.fn()}
+        />
+      )
+
+      await user.click(
+        screen.getByRole('button', { name: 'Copy Check repository command' })
+      )
+
+      expect(writeText).toHaveBeenCalledWith('borg check /repo/test')
+    })
   })
 
   describe('Close Button', () => {

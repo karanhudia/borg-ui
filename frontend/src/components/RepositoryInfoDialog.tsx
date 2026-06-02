@@ -10,10 +10,13 @@ import {
   Alert,
   IconButton,
   Tooltip,
+  Paper,
 } from '@mui/material'
 import ResponsiveDialog from './shared/ResponsiveDialog'
 import { useEffect, useState } from 'react'
 import CalendarMonth from '@mui/icons-material/CalendarMonth'
+import CheckIcon from '@mui/icons-material/Check'
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import FileDownload from '@mui/icons-material/FileDownload'
 import Info from '@mui/icons-material/Info'
 import Lock from '@mui/icons-material/Lock'
@@ -29,6 +32,7 @@ import PlanGate from './shared/PlanGate'
 import UpgradePrompt from './UpgradePrompt'
 import { Repository } from '../types'
 import { isV2Repo } from '../utils/repoCapabilities'
+import { generateBorgInitCommand } from '../utils/borgUtils'
 
 interface RepositoryInfo {
   encryption?: {
@@ -51,6 +55,130 @@ interface RepositoryInfoDialogProps {
   repositoryInfo: RepositoryInfo | null
   isLoading: boolean
   onClose: () => void
+}
+
+interface RecoveryCommand {
+  key: 'check' | 'repair' | 'init'
+  label: string
+  command: string
+}
+
+function buildCheckCommand(repository: Repository, repair = false): string {
+  const borgVersion = repository.borg_version === 2 ? 2 : 1
+  const binary = borgVersion === 2 ? 'borg2' : 'borg'
+  const remotePath = typeof repository.remote_path === 'string' ? repository.remote_path.trim() : ''
+  const remotePathFlag = remotePath ? ` --remote-path ${remotePath}` : ''
+
+  if (borgVersion === 2) {
+    return `${binary} -r ${repository.path} check${repair ? ' --repair' : ''}${remotePathFlag}`
+  }
+
+  return `${binary} check${repair ? ' --repair' : ''}${remotePathFlag} ${repository.path}`
+}
+
+function buildRecoveryCommands(
+  repository: Repository,
+  t: ReturnType<typeof useTranslation>['t']
+): RecoveryCommand[] {
+  const borgVersion = repository.borg_version === 2 ? 2 : 1
+  const remotePath = typeof repository.remote_path === 'string' ? repository.remote_path.trim() : ''
+  const remotePathFlag = remotePath ? `--remote-path ${remotePath} ` : ''
+  const encryption =
+    typeof repository.encryption === 'string' && repository.encryption.trim()
+      ? repository.encryption.trim()
+      : borgVersion === 2
+        ? 'repokey-aes-ocb'
+        : 'repokey'
+
+  return [
+    {
+      key: 'check',
+      label: t('repositoryInfoDialog.recovery.checkCommand'),
+      command: buildCheckCommand(repository),
+    },
+    {
+      key: 'repair',
+      label: t('repositoryInfoDialog.recovery.repairCommand'),
+      command: buildCheckCommand(repository, true),
+    },
+    {
+      key: 'init',
+      label: t('repositoryInfoDialog.recovery.initCommand'),
+      command: generateBorgInitCommand({
+        repositoryPath: repository.path,
+        borgVersion,
+        encryption,
+        remotePathFlag,
+      }),
+    },
+  ]
+}
+
+function RecoveryCommandBox({ command }: { command: RecoveryCommand }) {
+  const { t } = useTranslation()
+  const [copied, setCopied] = useState(false)
+
+  const copyLabel = copied
+    ? t('repositoryInfoDialog.recovery.copiedCommand', { label: command.label })
+    : t('repositoryInfoDialog.recovery.copyCommand', { label: command.label })
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(command.command)
+      setCopied(true)
+      toast.success(t('repositoryInfoDialog.recovery.commandCopied'))
+      window.setTimeout(() => setCopied(false), 2000)
+    } catch {
+      toast.error(t('repositoryInfoDialog.recovery.copyFailed'))
+    }
+  }
+
+  return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+      <Typography variant="caption" color="text.secondary" fontWeight={700}>
+        {command.label}
+      </Typography>
+      <Box
+        sx={{
+          position: 'relative',
+          bgcolor: 'grey.900',
+          color: 'grey.100',
+          borderRadius: 1,
+          px: 1.25,
+          py: 1,
+          pr: 5,
+          fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace',
+          fontSize: '0.78rem',
+          lineHeight: 1.45,
+          overflowX: 'auto',
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-all',
+        }}
+      >
+        {command.command}
+        <Tooltip title={copyLabel}>
+          <IconButton
+            size="small"
+            aria-label={copyLabel}
+            onClick={handleCopy}
+            sx={{
+              position: 'absolute',
+              top: 4,
+              right: 4,
+              color: 'grey.400',
+              bgcolor: 'rgba(255,255,255,0.08)',
+              '&:hover': {
+                bgcolor: 'rgba(255,255,255,0.16)',
+                color: 'grey.200',
+              },
+            }}
+          >
+            {copied ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
+          </IconButton>
+        </Tooltip>
+      </Box>
+    </Box>
+  )
 }
 
 export default function RepositoryInfoDialog({
@@ -264,7 +392,31 @@ export default function RepositoryInfoDialog({
                 )}
               </Box>
             ) : (
-              <Alert severity="error">{t('repositoryInfoDialog.failedToLoad')}</Alert>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <Alert severity="error">{t('repositoryInfoDialog.failedToLoad')}</Alert>
+                {displayRepository && (
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      p: 2,
+                      borderRadius: 1,
+                      bgcolor: 'action.hover',
+                    }}
+                  >
+                    <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+                      {t('repositoryInfoDialog.recovery.title')}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                      {t('repositoryInfoDialog.recovery.description')}
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+                      {buildRecoveryCommands(displayRepository, t).map((command) => (
+                        <RecoveryCommandBox key={command.key} command={command} />
+                      ))}
+                    </Box>
+                  </Paper>
+                )}
+              </Box>
             )}
           </PlanGate>
         )}
