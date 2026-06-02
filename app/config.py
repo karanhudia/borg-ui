@@ -170,10 +170,6 @@ class Settings(BaseSettings):
     rclone_hydrate_timeout: int = 14400
     rclone_default_transfers: int = 4
     rclone_default_checkers: int = 8
-    google_drive_oauth_client_id: Optional[str] = None
-    google_drive_oauth_client_secret: Optional[str] = None
-    onedrive_oauth_client_id: Optional[str] = None
-    onedrive_oauth_client_secret: Optional[str] = None
 
     # Health check settings
     health_check_interval: int = 30

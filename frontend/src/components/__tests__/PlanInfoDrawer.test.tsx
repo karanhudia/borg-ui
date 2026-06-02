@@ -81,10 +81,47 @@ const { usePlanContentMock } = vi.hoisted(() => ({
         availability: 'included',
       },
       {
+        id: 'backup_plan_mixed_sources',
+        plan: 'pro',
+        label: 'Multi-source backup',
+        description:
+          'Back up local, SSH, managed-agent, and database sources from one backup definition.',
+        availability: 'included',
+      },
+      {
+        id: 'rclone',
+        plan: 'pro',
+        label: 'Cloud storage with rclone',
+        description:
+          'Mirror repositories to managed rclone remotes and use direct Borg 2 rclone targets.',
+        availability: 'included',
+      },
+      {
+        id: 'managed_agents',
+        plan: 'pro',
+        label: 'Managed agents',
+        description: 'Enroll machines as agents and back them up without opening inbound SSH.',
+        availability: 'included',
+      },
+      {
+        id: 'multi_source_policies',
+        plan: 'pro',
+        label: 'Multi-source backup',
+        description: 'Back up remote and local sources from one backup definition.',
+        availability: 'coming_soon',
+      },
+      {
         id: 'backup_reports',
         plan: 'pro',
         label: 'Backup reports',
         description: 'Generate daily, weekly, monthly, or custom backup reports.',
+        availability: 'coming_soon',
+      },
+      {
+        id: 'rclone_support',
+        plan: 'pro',
+        label: 'Rclone support',
+        description: 'Use Rclone-backed destinations as backup targets.',
         availability: 'coming_soon',
       },
       {
@@ -156,6 +193,9 @@ vi.mock('../../hooks/useAuth', () => ({
 const featureMap = {
   borg_v2: 'pro',
   backup_plan_multi_repository: 'pro',
+  backup_plan_mixed_sources: 'pro',
+  rclone: 'pro',
+  managed_agents: 'pro',
   multi_user: 'community',
   extra_users: 'pro',
 } as const
@@ -281,7 +321,15 @@ describe('PlanInfoDrawer', () => {
     expect(screen.getByText('Up to 10 users')).toBeInTheDocument()
     expect(screen.getByText('Deployment on 3 servers')).toBeInTheDocument()
     expect(screen.getByText('Multi-repository backup')).toBeInTheDocument()
+    expect(screen.getByText('Multi-source backup')).toBeInTheDocument()
+    expect(screen.getByText('Cloud storage with rclone')).toBeInTheDocument()
+    expect(screen.getByText('Managed agents')).toBeInTheDocument()
     expect(screen.queryByText('backup_plan_multi_repository')).not.toBeInTheDocument()
+    expect(screen.queryByText('backup_plan_mixed_sources')).not.toBeInTheDocument()
+    expect(screen.queryByText('rclone')).not.toBeInTheDocument()
+    expect(screen.queryByText('managed_agents')).not.toBeInTheDocument()
+    expect(screen.queryByText('Rclone support')).not.toBeInTheDocument()
+    expect(screen.getAllByText('Multi-source backup')).toHaveLength(1)
 
     await user.click(screen.getByText('Enterprise'))
 

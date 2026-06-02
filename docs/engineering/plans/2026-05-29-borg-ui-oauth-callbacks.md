@@ -4,7 +4,10 @@
 
 **Goal:** Add Borg UI-owned OAuth callbacks for Google Drive and Microsoft OneDrive while preserving existing rclone loopback/manual authorization.
 
-**Architecture:** Keep Cloud Storage's managed rclone remote model. Add provider-owned OAuth session handling in `app/api/rclone.py`, provider credential settings in `app/config.py`, and UI metadata/copy in the Cloud Storage dialog. Use tests first for every backend and frontend behavior change.
+**Architecture:** Keep Cloud Storage's managed rclone remote model. Add provider-owned OAuth session handling in `app/api/rclone.py`, UI-saved provider credentials, and UI metadata/copy in the Cloud Storage dialog. Use tests first for every backend and frontend behavior change.
+
+> Superseded note: provider client credentials are now saved in Borg UI, not read
+> from `GOOGLE_DRIVE_OAUTH_*` or `ONEDRIVE_OAUTH_*` environment variables.
 
 **Tech Stack:** FastAPI, Pydantic settings, httpx, SQLAlchemy models already in place, React, MUI, React Query, Vitest, Storybook screenshots.
 
@@ -21,14 +24,13 @@
 - [ ] Add failing backend tests proving Google Drive and OneDrive provider
       metadata includes `oauth_mode`, `oauth_configured`, and callback URLs only
       when `PUBLIC_BASE_URL` and provider credentials are valid.
-- [ ] Implement settings for `GOOGLE_DRIVE_OAUTH_CLIENT_ID`,
-      `GOOGLE_DRIVE_OAUTH_CLIENT_SECRET`, `ONEDRIVE_OAUTH_CLIENT_ID`, and
-      `ONEDRIVE_OAUTH_CLIENT_SECRET`.
+- [ ] Implement UI-saved OAuth client credential storage for Google Drive and
+      OneDrive.
 - [ ] Implement public base URL validation and callback URL builders in
       `app/api/rclone.py`.
 - [ ] Update `GET /api/rclone/providers` to return non-secret OAuth metadata.
-- [ ] Update configuration and reverse-proxy docs with the env vars and provider
-      redirect URLs.
+- [ ] Update configuration and reverse-proxy docs with provider redirect URLs and
+      UI-saved credential setup.
 - [ ] Run `pytest tests/unit/test_api_rclone.py -q` and verify the new tests pass.
 
 ## Task 2: Backend Provider-Owned OAuth Sessions and Callback

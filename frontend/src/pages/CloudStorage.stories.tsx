@@ -18,7 +18,7 @@ const providers: RcloneProvider[] = [
     oauth_configured: true,
     oauth_callback_url: 'https://backups.example.com/api/rclone/oauth/callback/drive',
     oauth_setup_key: null,
-    oauth_credentials_source: 'environment',
+    oauth_credentials_source: 'database',
     oauth_client_id_set: true,
     oauth_client_secret_set: true,
   },

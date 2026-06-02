@@ -141,7 +141,7 @@ export interface RcloneProvider {
   oauth_configured?: boolean
   oauth_callback_url?: string | null
   oauth_setup_key?: string | null
-  oauth_credentials_source?: 'database' | 'environment' | 'unset' | 'unsupported'
+  oauth_credentials_source?: 'database' | 'unset' | 'unsupported'
   oauth_client_id_set?: boolean
   oauth_client_secret_set?: boolean
 }
@@ -155,7 +155,7 @@ export interface RcloneOAuthCredentialStatus {
   provider: string
   label: string
   configured: boolean
-  credential_source: 'database' | 'environment' | 'unset' | 'unsupported'
+  credential_source: 'database' | 'unset' | 'unsupported'
   client_id: string | null
   client_id_set: boolean
   client_secret_set: boolean
