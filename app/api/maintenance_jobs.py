@@ -8,6 +8,11 @@ from sqlalchemy.orm import Session
 
 from app.core.security import check_repo_access
 from app.database.models import Repository, User
+from app.services.job_admission import (
+    ACTIVE_MAINTENANCE_STATUSES,
+    ensure_repository_admission,
+    operation_for_maintenance_model,
+)
 from app.utils.datetime_utils import serialize_datetime
 
 
@@ -52,7 +57,7 @@ def ensure_no_running_job(
         db.query(job_model)
         .filter(
             job_model.repository_id == repository_id,
-            job_model.status == "running",
+            job_model.status.in_(ACTIVE_MAINTENANCE_STATUSES),
         )
         .first()
     )
@@ -135,11 +140,12 @@ def start_background_maintenance_job(
     status: str = "pending",
     extra_fields: Optional[dict[str, Any]] = None,
 ):
-    ensure_no_running_job(
+    operation = operation_for_maintenance_model(job_model)
+    ensure_repository_admission(
         db,
-        job_model,
-        repository.id,
-        error_key=error_key,
+        repository,
+        operation,
+        duplicate_error_key=error_key,
     )
     job = create_started_maintenance_job(
         db,

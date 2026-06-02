@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from datetime import datetime, timedelta, timezone
 
 from app.database.models import (
+    BackupJob,
     CheckJob,
     Repository,
     RestoreCheckJob,
@@ -453,6 +454,59 @@ async def test_shared_scheduler_dispatch_limits_scheduled_backups(db_session):
         await dispatch_due_scheduled_backups(db_session, datetime.now(timezone.utc))
 
     assert mock_dispatch.call_count == 2
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_shared_scheduler_counts_active_scheduled_backup_jobs_from_db(
+    db_session,
+):
+    schedule_api._active_scheduled_backup_runs.clear()
+    repo = Repository(
+        name="Repo",
+        path="/tmp/repo",
+        encryption="none",
+        compression="lz4",
+        repository_type="local",
+    )
+    db_session.add(repo)
+    db_session.add(SystemSettings(max_concurrent_scheduled_backups=1))
+    db_session.flush()
+
+    active_schedule = ScheduledJob(
+        name="Already Running",
+        cron_expression="0 2 * * *",
+        enabled=True,
+        repository_id=repo.id,
+        next_run=datetime.now(timezone.utc) + timedelta(days=1),
+    )
+    due_schedule = ScheduledJob(
+        name="Due Schedule",
+        cron_expression="0 3 * * *",
+        enabled=True,
+        repository_id=repo.id,
+        next_run=datetime.now(timezone.utc) - timedelta(minutes=1),
+    )
+    db_session.add_all([active_schedule, due_schedule])
+    db_session.flush()
+    db_session.add(
+        BackupJob(
+            repository=repo.path,
+            repository_id=repo.id,
+            status="pending",
+            scheduled_job_id=active_schedule.id,
+        )
+    )
+    db_session.commit()
+
+    with patch.object(
+        schedule_api,
+        "_dispatch_due_scheduled_job",
+        side_effect=["run-1"],
+    ) as mock_dispatch:
+        await dispatch_due_scheduled_backups(db_session, datetime.now(timezone.utc))
+
+    mock_dispatch.assert_not_called()
 
 
 @pytest.mark.unit

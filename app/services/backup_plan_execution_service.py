@@ -41,6 +41,7 @@ from app.services.backup_route_planner import (
     plan_repository_route,
 )
 from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
+from app.services.job_admission import OPERATION_BACKUP, ensure_repository_admission
 from app.services.repository_executor import (
     cancel_agent_backup_job,
     is_agent_executor,
@@ -1287,6 +1288,8 @@ class BackupPlanExecutionService:
             route = plan_repository_route(repo, context.source_locations)
             if not route.supported:
                 raise ValueError(route.reason_key or "Unsupported backup route")
+
+            ensure_repository_admission(db, repo, OPERATION_BACKUP)
 
             backup_job = BackupJob(
                 repository=repo.path,
