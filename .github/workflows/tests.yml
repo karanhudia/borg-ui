@@ -48,11 +48,13 @@ jobs:
           ruff format --check app tests
 
   backend-unit-coverage:
-    name: Backend / Unit Tests
+    name: Backend / Unit Tests (${{ matrix.shard }}/${{ matrix.total_shards }})
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+        total_shards: [4]
 
     services:
       redis:
@@ -95,19 +97,78 @@ jobs:
           mkdir -p /tmp/borg-ui-tests
           mkdir -p data
           mkdir -p logs
+          mkdir -p coverage-data
 
-      - name: Run backend unit coverage
+      - name: Select backend unit test shard
         run: |
+          python -m pytest tests/unit --collect-only -q -o addopts='' > .pytest-unit-nodes.txt
+          python scripts/ci/select_pytest_shard.py \
+            --shard-index "${{ matrix.shard }}" \
+            --shard-total "${{ matrix.total_shards }}" \
+            < .pytest-unit-nodes.txt \
+            > .pytest-unit-shard.txt
+          test -s .pytest-unit-shard.txt
+          echo "Shard ${{ matrix.shard }}/${{ matrix.total_shards }} selected $(wc -l < .pytest-unit-shard.txt) test files:"
+          sed 's/^/  /' .pytest-unit-shard.txt
+
+      - name: Run backend unit coverage shard
+        run: |
+          mapfile -t PYTEST_FILES < .pytest-unit-shard.txt
           pytest \
-            tests/unit \
+            "${PYTEST_FILES[@]}" \
             -v \
             --cov=app \
-            --cov-report=term-missing \
-            --cov-report=xml \
-            --cov-report=html
+            --cov-report=term-missing
         env:
           REDIS_HOST: localhost
           REDIS_PORT: 6379
+          COVERAGE_FILE: coverage-data/unit-${{ matrix.shard }}.coverage
+
+      - name: Upload backend coverage data
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-unit-coverage-${{ matrix.shard }}
+          path: coverage-data/unit-${{ matrix.shard }}.coverage
+          if-no-files-found: error
+          retention-days: 7
+
+  backend-unit-coverage-combine:
+    name: Backend / Unit Coverage Report
+    runs-on: ubuntu-latest
+    needs: [backend-unit-coverage]
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install coverage dependency
+        run: |
+          python -m pip install --upgrade pip
+          pip install "coverage[toml]==7.13.5"
+
+      - name: Download backend coverage data
+        uses: actions/download-artifact@v8
+        with:
+          pattern: backend-unit-coverage-*
+          path: coverage-artifacts/backend
+          merge-multiple: true
+
+      - name: Combine backend coverage
+        run: |
+          ls -la coverage-artifacts/backend
+          coverage combine coverage-artifacts/backend/*.coverage
+          coverage report --show-missing
+          coverage xml
+          coverage html
 
       - name: Upload backend coverage artifact
         uses: actions/upload-artifact@v7
@@ -264,7 +325,7 @@ jobs:
   coverage-backend:
     name: Coverage / Backend
     runs-on: ubuntu-latest
-    needs: [backend-unit-coverage, backend-api-integration, frontend-vitest]
+    needs: [backend-unit-coverage-combine, backend-api-integration, frontend-vitest]
 
     steps:
       - name: Checkout code
@@ -290,7 +351,7 @@ jobs:
   coverage-frontend:
     name: Coverage / Frontend
     runs-on: ubuntu-latest
-    needs: [backend-unit-coverage, backend-api-integration, frontend-vitest]
+    needs: [backend-unit-coverage-combine, backend-api-integration, frontend-vitest]
 
     steps:
       - name: Checkout code
@@ -699,14 +760,15 @@ jobs:
   test-results:
     name: CI / Summary
     runs-on: ubuntu-latest
-    needs: [backend-lint, backend-unit-coverage, backend-api-integration, typecheck-lint-format, frontend-vitest, coverage-backend, coverage-frontend, frontend-build, smoke-borg-core, smoke-borg-extended, smoke-borg-ssh-localhost]
+    needs: [backend-lint, backend-unit-coverage, backend-unit-coverage-combine, backend-api-integration, typecheck-lint-format, frontend-vitest, coverage-backend, coverage-frontend, frontend-build, smoke-borg-core, smoke-borg-extended, smoke-borg-ssh-localhost]
     if: always()
 
     steps:
       - name: Check test results
         run: |
           echo "Backend / Lint & Format: ${{ needs.backend-lint.result }}"
-          echo "Backend / Unit Tests: ${{ needs.backend-unit-coverage.result }}"
+          echo "Backend / Unit Test Shards: ${{ needs.backend-unit-coverage.result }}"
+          echo "Backend / Unit Coverage Report: ${{ needs.backend-unit-coverage-combine.result }}"
           echo "Backend / Integration Tests: ${{ needs.backend-api-integration.result }}"
           echo "Frontend / Code Quality: ${{ needs.typecheck-lint-format.result }}"
           echo "Frontend / Unit Tests: ${{ needs.frontend-vitest.result }}"
@@ -723,7 +785,12 @@ jobs:
           fi
 
           if [ "${{ needs.backend-unit-coverage.result }}" != "success" ]; then
-            echo "Backend / Unit Tests failed"
+            echo "Backend / Unit Test Shards failed"
+            exit 1
+          fi
+
+          if [ "${{ needs.backend-unit-coverage-combine.result }}" != "success" ]; then
+            echo "Backend / Unit Coverage Report failed"
             exit 1
           fi
 
