@@ -434,6 +434,273 @@ async def test_calculate_source_size_ssh(backup_service_fixture):
         assert "du -sb" in args[len(args) - 1]  # Command is last arg
 
 
+@pytest.mark.asyncio
+async def test_calculate_source_size_ssh_uses_key_file_by_target(
+    backup_service_fixture,
+):
+    """Test SSH directory size calculation uses the matching source key."""
+    paths = ["ssh://user@host:2222/remote/path"]
+
+    mock_process = AsyncMock()
+    mock_process.returncode = 0
+    mock_process.communicate.return_value = (b"2048", b"")
+
+    with patch(
+        "app.services.backup_service.asyncio.create_subprocess_exec",
+        return_value=mock_process,
+    ) as mock_exec:
+        size = await backup_service_fixture._calculate_source_size(
+            paths,
+            key_files_by_ssh_target={("user", "host", "2222"): "/tmp/source.key"},
+        )
+
+    assert size == 2048
+    args = mock_exec.call_args[0]
+    assert args[0] == "ssh"
+    assert "-i" in args
+    assert "/tmp/source.key" in args
+    assert "user@host" in args
+
+
+@pytest.mark.asyncio
+async def test_calculate_source_size_ssh_retries_login_relative_du(
+    backup_service_fixture,
+):
+    """Test SSH source size retries the login-relative path for eligible targets."""
+    paths = ["ssh://user@host:22/remote/path"]
+
+    first_process = AsyncMock()
+    first_process.returncode = 0
+    first_process.communicate.return_value = (b"", b"")
+    second_process = AsyncMock()
+    second_process.returncode = 0
+    second_process.communicate.return_value = (b"2048", b"")
+
+    with patch(
+        "app.services.backup_service.asyncio.create_subprocess_exec",
+        side_effect=[first_process, second_process],
+    ) as mock_exec:
+        size = await backup_service_fixture._calculate_source_size(
+            paths,
+            key_files_by_ssh_target={("user", "host", "22"): "/tmp/source.key"},
+            login_relative_ssh_targets={("user", "host", "22")},
+        )
+
+    assert size == 2048
+    first_cmd = mock_exec.call_args_list[0].args
+    second_cmd = mock_exec.call_args_list[1].args
+    assert first_cmd[-1] == "du -sb /remote/path 2>/dev/null | cut -f1"
+    assert second_cmd[-1] == "du -sb remote/path 2>/dev/null | cut -f1"
+
+
+@pytest.mark.asyncio
+async def test_calculate_source_size_ssh_does_not_retry_du_without_login_relative_target(
+    backup_service_fixture,
+):
+    paths = ["ssh://user@host:22/remote/path"]
+
+    process = AsyncMock()
+    process.returncode = 0
+    process.communicate.return_value = (b"", b"")
+
+    with patch(
+        "app.services.backup_service.asyncio.create_subprocess_exec",
+        return_value=process,
+    ) as mock_exec:
+        size = await backup_service_fixture._calculate_source_size(
+            paths,
+            key_files_by_ssh_target={("user", "host", "22"): "/tmp/source.key"},
+            login_relative_ssh_targets=set(),
+        )
+
+    assert size == 0
+    assert mock_exec.call_count == 1
+    assert mock_exec.call_args.args[-1] == "du -sb /remote/path 2>/dev/null | cut -f1"
+
+
+def test_resolve_source_size_ssh_key_files_matches_each_remote_source(
+    backup_service_fixture, mock_db_session
+):
+    source_a = SSHConnection(
+        id=11,
+        host="server-a.example",
+        username="backup-a",
+        port=22,
+        ssh_key_id=101,
+    )
+    source_b = SSHConnection(
+        id=12,
+        host="server-b.example",
+        username="backup-b",
+        port=2222,
+        ssh_key_id=202,
+    )
+    ssh_query = MagicMock()
+    ssh_query.filter.return_value.first.side_effect = [source_a, source_b]
+
+    def query_side_effect(model):
+        if model == SSHConnection:
+            return ssh_query
+        return MagicMock()
+
+    mock_db_session.query.side_effect = query_side_effect
+
+    with patch(
+        "app.services.backup_service.resolve_ssh_key_file_by_id",
+        side_effect=["/tmp/source-a.key", "/tmp/source-b.key"],
+    ) as resolve_key:
+        key_files = backup_service_fixture._resolve_source_size_ssh_key_files(
+            mock_db_session,
+            [
+                "ssh://backup-a@server-a.example:22/home/backup-a/data",
+                "/srv/app",
+                "ssh://backup-b@server-b.example:2222/var/lib/service",
+            ],
+        )
+
+    assert key_files == {
+        ("backup-a", "server-a.example", "22"): "/tmp/source-a.key",
+        ("backup-b", "server-b.example", "2222"): "/tmp/source-b.key",
+    }
+    assert [call.args[0] for call in resolve_key.call_args_list] == [101, 202]
+
+
+def test_resolve_source_size_ssh_key_files_reuses_same_key_file(
+    backup_service_fixture, mock_db_session
+):
+    source_a = SSHConnection(
+        id=11,
+        host="server-a.example",
+        username="backup-a",
+        port=22,
+        ssh_key_id=101,
+    )
+    source_b = SSHConnection(
+        id=12,
+        host="server-b.example",
+        username="backup-b",
+        port=2222,
+        ssh_key_id=101,
+    )
+    ssh_query = MagicMock()
+    ssh_query.filter.return_value.first.side_effect = [source_a, source_b]
+
+    def query_side_effect(model):
+        if model == SSHConnection:
+            return ssh_query
+        return MagicMock()
+
+    mock_db_session.query.side_effect = query_side_effect
+
+    with patch(
+        "app.services.backup_service.resolve_ssh_key_file_by_id",
+        return_value="/tmp/shared-source.key",
+    ) as resolve_key:
+        key_files = backup_service_fixture._resolve_source_size_ssh_key_files(
+            mock_db_session,
+            [
+                "ssh://backup-a@server-a.example:22/home/backup-a/data",
+                "ssh://backup-b@server-b.example:2222/var/lib/service",
+            ],
+        )
+
+    assert key_files == {
+        ("backup-a", "server-a.example", "22"): "/tmp/shared-source.key",
+        ("backup-b", "server-b.example", "2222"): "/tmp/shared-source.key",
+    }
+    resolve_key.assert_called_once_with(101, db=mock_db_session)
+
+
+def test_resolve_source_size_login_relative_targets_respects_default_path(
+    backup_service_fixture, mock_db_session
+):
+    root_connection = SSHConnection(
+        id=11,
+        host="server-a.example",
+        username="backup-a",
+        port=22,
+        default_path="/",
+    )
+    explicit_connection = SSHConnection(
+        id=12,
+        host="server-b.example",
+        username="backup-b",
+        port=2222,
+        default_path="/srv",
+    )
+    ssh_query = MagicMock()
+    ssh_query.filter.return_value.first.side_effect = [
+        root_connection,
+        explicit_connection,
+        explicit_connection,
+    ]
+
+    def query_side_effect(model):
+        if model == SSHConnection:
+            return ssh_query
+        return MagicMock()
+
+    mock_db_session.query.side_effect = query_side_effect
+
+    targets = backup_service_fixture._resolve_source_size_login_relative_targets(
+        mock_db_session,
+        [
+            "ssh://backup-a@server-a.example:22/backups",
+            "ssh://backup-b@server-b.example:2222/srv/data",
+            "ssh://backup-b@server-b.example:2222/./relative-data",
+        ],
+    )
+
+    assert targets == {
+        ("backup-a", "server-a.example", "22"),
+        ("backup-b", "server-b.example", "2222"),
+    }
+
+
+@pytest.mark.asyncio
+async def test_calculate_and_update_size_background_passes_source_keys_and_cleans(
+    backup_service_fixture, mock_db_session
+):
+    paths = ["ssh://backup-a@server-a.example:22/home/backup-a/data"]
+    key_files = {("backup-a", "server-a.example", "22"): "/tmp/source-a.key"}
+
+    with (
+        patch("app.services.backup_service.SessionLocal", return_value=mock_db_session),
+        patch.object(
+            backup_service_fixture,
+            "_resolve_source_size_ssh_key_files",
+            return_value=key_files,
+        ) as resolve_keys,
+        patch.object(
+            backup_service_fixture,
+            "_resolve_source_size_login_relative_targets",
+            return_value={("backup-a", "server-a.example", "22")},
+        ) as resolve_login_relative_targets,
+        patch.object(
+            backup_service_fixture,
+            "_calculate_source_size",
+            new=AsyncMock(return_value=0),
+        ) as calculate_size,
+        patch("app.services.backup_service.cleanup_temp_key_file") as cleanup_key,
+    ):
+        await backup_service_fixture._calculate_and_update_size_background(
+            job_id=42,
+            source_paths=paths,
+            exclude_patterns=None,
+        )
+
+    resolve_keys.assert_called_once_with(mock_db_session, paths)
+    resolve_login_relative_targets.assert_called_once_with(mock_db_session, paths)
+    calculate_size.assert_awaited_once_with(
+        paths,
+        [],
+        key_files_by_ssh_target=key_files,
+        login_relative_ssh_targets={("backup-a", "server-a.example", "22")},
+    )
+    cleanup_key.assert_called_once_with("/tmp/source-a.key")
+    mock_db_session.close.assert_called_once()
+
+
 def _make_skip_query_side_effect(job, repo):
     """Shared DB query mock used by skip-on-failure tests."""
 
