@@ -143,7 +143,7 @@ const Backup: React.FC = () => {
     if (repoId !== null) return permissions.canDo(repoId, 'backup')
     const repoPath = job.repository || ''
     const repo = repositoriesData?.data?.repositories?.find(
-      (candidate: Repository) => candidate.path === repoPath || candidate.name === repoPath
+      (candidate: Repository) => candidate.path === repoPath
     )
     return repo ? permissions.canDo(repo.id, 'backup') : false
   }
