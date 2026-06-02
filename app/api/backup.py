@@ -16,6 +16,7 @@ from app.database.models import (
     BackupJobRetryLineage,
     BackupPlan,
     Repository,
+    CheckJob,
     PruneJob,
     CompactJob,
 )
@@ -41,6 +42,7 @@ from app.services.repository_executor import (
     queue_agent_backup_job,
     validate_agent_backup_repository,
 )
+from app.utils.backup_maintenance import RUNNING_BACKUP_MAINTENANCE_FAILURES
 from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
@@ -91,6 +93,8 @@ def _get_running_maintenance_job(
         job_model = PruneJob
     elif maintenance_status == "running_compact":
         job_model = CompactJob
+    elif maintenance_status == "running_check":
+        job_model = CheckJob
     else:
         return None
 
@@ -260,16 +264,23 @@ def _backup_retry_request_snapshot(
 
 
 async def _cancel_running_maintenance_job(db: Session, backup_job: BackupJob):
+    failure_status = RUNNING_BACKUP_MAINTENANCE_FAILURES.get(
+        backup_job.maintenance_status or ""
+    )
+    if not failure_status:
+        return None
+
     maintenance_job = _get_running_maintenance_job(
         db, backup_job, backup_job.maintenance_status
     )
+    backup_job.maintenance_status = failure_status
+
     if not maintenance_job:
-        return None
+        return SimpleNamespace(job=None, process_killed=False)
 
     repo = _get_job_repository(db, backup_job.repository)
 
-    if backup_job.maintenance_status == "running_prune":
-        backup_job.maintenance_status = "prune_failed"
+    if failure_status == "prune_failed":
         if repo and getattr(repo, "borg_version", 1) == 2:
             from app.services.v2.prune_service import prune_v2_service
 
@@ -278,8 +289,7 @@ async def _cancel_running_maintenance_job(db: Session, backup_job: BackupJob):
             from app.services.prune_service import prune_service
 
             process_killed = await prune_service.cancel_prune(maintenance_job.id)
-    elif backup_job.maintenance_status == "running_compact":
-        backup_job.maintenance_status = "compact_failed"
+    elif failure_status == "compact_failed":
         if repo and getattr(repo, "borg_version", 1) == 2:
             from app.services.v2.compact_service import compact_v2_service
 
@@ -288,6 +298,8 @@ async def _cancel_running_maintenance_job(db: Session, backup_job: BackupJob):
             from app.services.compact_service import compact_service
 
             process_killed = await compact_service.cancel_compact(maintenance_job.id)
+    elif failure_status == "check_failed":
+        process_killed = False
     else:
         return None
 
@@ -709,7 +721,7 @@ async def cancel_backup(
                 job.error_message = (
                     '{"key": "backend.errors.backup.cancelledByUserProcessNotFound"}'
                 )
-        elif job.maintenance_status in {"running_prune", "running_compact"}:
+        elif job.maintenance_status in RUNNING_BACKUP_MAINTENANCE_FAILURES:
             maintenance_result = await _cancel_running_maintenance_job(db, job)
             if maintenance_result is None:
                 raise HTTPException(

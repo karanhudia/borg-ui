@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional
 import structlog
 from datetime import datetime
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 from app.config import settings
 from app.core.borg_router import BorgRouter
@@ -22,6 +23,10 @@ from app.database.models import (
     RestoreCheckJob,
     RestoreJob,
     Repository,
+)
+from app.utils.backup_maintenance import (
+    COMPLETED_BACKUP_STATUSES,
+    RUNNING_BACKUP_MAINTENANCE_FAILURES,
 )
 
 logger = structlog.get_logger()
@@ -130,32 +135,54 @@ def _mark_backup_job_failed_after_restart(
     job.completed_at = now
 
 
-def _mark_stale_backup_maintenance_failed(db: Session) -> int:
+def _has_running_check_child(db: Session, backup_job: BackupJob) -> bool:
+    query = db.query(CheckJob.id).filter(CheckJob.status == "running")
+    if backup_job.repository_id is not None:
+        query = query.filter(CheckJob.repository_id == backup_job.repository_id)
+    else:
+        query = query.filter(CheckJob.repository_path == backup_job.repository)
+    return query.first() is not None
+
+
+def _mark_backup_maintenance_failed(
+    backup_job: BackupJob,
+    previous_state: str,
+    now: datetime,
+) -> None:
+    backup_job.completed_at = backup_job.completed_at or now
+    if backup_job.status not in COMPLETED_BACKUP_STATUSES:
+        backup_job.status = "failed"
+        backup_job.error_message = (
+            backup_job.error_message or CONTAINER_RESTARTED_DURING_OPERATION
+        )
+    backup_job.maintenance_status = RUNNING_BACKUP_MAINTENANCE_FAILURES[previous_state]
+
+
+def _mark_stale_backup_maintenance_failed(db: Session, now: datetime) -> int:
     """
     Normalize backup rows left in running maintenance states after a restart.
 
-    This handles stale backup rows even when the corresponding prune/compact
+    This handles stale backup rows even when the corresponding maintenance
     child job row is already gone or no longer marked as running.
     """
     stale_backup_jobs = (
         db.query(BackupJob)
         .filter(
-            BackupJob.maintenance_status.in_(["running_prune", "running_compact"]),
-            BackupJob.status != "completed",
+            BackupJob.maintenance_status.in_(list(RUNNING_BACKUP_MAINTENANCE_FAILURES)),
         )
         .all()
     )
 
+    normalized_count = 0
     for backup_job in stale_backup_jobs:
         previous_state = backup_job.maintenance_status
-        backup_job.status = "failed"
-        backup_job.completed_at = backup_job.completed_at or datetime.utcnow()
-        backup_job.error_message = (
-            backup_job.error_message or CONTAINER_RESTARTED_DURING_OPERATION
-        )
-        backup_job.maintenance_status = (
-            "prune_failed" if previous_state == "running_prune" else "compact_failed"
-        )
+        if previous_state == "running_check" and _has_running_check_child(
+            db, backup_job
+        ):
+            continue
+
+        _mark_backup_maintenance_failed(backup_job, previous_state, now)
+        normalized_count += 1
         logger.info(
             "Normalized stale backup maintenance state after restart",
             backup_job_id=backup_job.id,
@@ -164,7 +191,7 @@ def _mark_stale_backup_maintenance_failed(db: Session) -> int:
             new_maintenance_status=backup_job.maintenance_status,
         )
 
-    return len(stale_backup_jobs)
+    return normalized_count
 
 
 def is_process_alive(pid: int, stored_start_time: int) -> bool:
@@ -288,7 +315,8 @@ def cleanup_orphaned_jobs(db: Session):
     """
     logger.info("Checking for orphaned jobs...")
 
-    stale_backup_jobs = _mark_stale_backup_maintenance_failed(db)
+    now = datetime.utcnow()
+    stale_backup_jobs = _mark_stale_backup_maintenance_failed(db, now)
 
     # Find backup jobs that were owned by in-memory tasks before restart.
     active_backup_jobs = (
@@ -349,8 +377,6 @@ def cleanup_orphaned_jobs(db: Session):
         return
 
     # Process backup jobs
-    now = datetime.utcnow()
-
     for job in active_backup_jobs:
         # Backup jobs don't have process_pid tracking, so active rows cannot resume.
         previous_status = job.status
@@ -429,6 +455,34 @@ def cleanup_orphaned_jobs(db: Session):
                             "key": "backend.errors.service.warningRemoteProcessMayBeRunning"
                         }
                     )
+
+            backup_match_filter = BackupJob.repository_id == job.repository_id
+            if job.repository_path:
+                backup_match_filter = or_(
+                    backup_match_filter,
+                    and_(
+                        BackupJob.repository_id.is_(None),
+                        BackupJob.repository == job.repository_path,
+                    ),
+                )
+
+            affected_backup_jobs = (
+                db.query(BackupJob)
+                .filter(
+                    BackupJob.maintenance_status == "running_check",
+                    backup_match_filter,
+                )
+                .all()
+            )
+
+            for backup_job in affected_backup_jobs:
+                _mark_backup_maintenance_failed(backup_job, "running_check", now)
+                logger.info(
+                    "Marked backup maintenance state as failed after orphaned check",
+                    backup_job_id=backup_job.id,
+                    check_job_id=job.id,
+                    repository=backup_job.repository,
+                )
         else:
             # Process is still alive! This is unexpected
             logger.warning(
