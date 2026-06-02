@@ -848,7 +848,7 @@ class BackupService:
             for source_path in source_paths
             if source_path not in skip_paths
             and not source_path.startswith("ssh://")
-            and not Path(source_path).exists()
+            and not os.path.lexists(source_path)
         ]
         if not missing_paths:
             return

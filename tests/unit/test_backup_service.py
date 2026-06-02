@@ -440,12 +440,14 @@ class TestBackupService:
         repo_path.mkdir()
         (repo_path / "data").mkdir()
         (repo_path / "config").write_text("[repository]\nversion = 1\n")
+        source_path = tmp_path / "source"
+        source_path.mkdir()
         repo = Repository(
             name="Repo",
             path=str(repo_path),
             encryption="none",
             repository_type="local",
-            source_directories='["/data"]',
+            source_directories=f'["{source_path}"]',
             compression="lz4",
         )
         settings_row = SystemSettings(log_save_policy="all_jobs")
@@ -484,7 +486,7 @@ class TestBackupService:
             patch.object(
                 backup_service,
                 "_prepare_source_paths",
-                AsyncMock(return_value=(["/data"], [])),
+                AsyncMock(return_value=([str(source_path)], [])),
             ),
             patch.object(
                 backup_service, "_calculate_and_update_size_background", AsyncMock()
@@ -598,6 +600,14 @@ class TestBackupService:
         calculate_size.assert_not_called()
         notifications.send_backup_start.assert_not_awaited()
         notifications.send_backup_failure.assert_awaited_once()
+
+    def test_validate_local_source_paths_allows_dangling_symlink_source(
+        self, backup_service, tmp_path
+    ):
+        source_link = tmp_path / "dangling-source"
+        source_link.symlink_to(tmp_path / "missing-target")
+
+        backup_service._validate_local_source_paths_exist([str(source_link)])
 
     @pytest.mark.parametrize(
         ("returncode", "expected_status"),
@@ -995,12 +1005,14 @@ class TestBackupService:
         repo_path.mkdir()
         (repo_path / "data").mkdir()
         (repo_path / "config").write_text("[repository]\nversion = 1\n")
+        source_path = tmp_path / "source"
+        source_path.mkdir()
         repo = Repository(
             name="Repo",
             path=str(repo_path),
             encryption="none",
             repository_type="local",
-            source_directories='["/data"]',
+            source_directories=f'["{source_path}"]',
             compression="lz4",
         )
         settings_row = SystemSettings(log_save_policy="all_jobs")
@@ -1043,7 +1055,7 @@ class TestBackupService:
             patch.object(
                 backup_service,
                 "_prepare_source_paths",
-                AsyncMock(return_value=(["/data"], [])),
+                AsyncMock(return_value=([str(source_path)], [])),
             ),
             patch.object(
                 backup_service, "_calculate_and_update_size_background", AsyncMock()
@@ -1086,12 +1098,14 @@ class TestBackupService:
         repo_path.mkdir()
         (repo_path / "data").mkdir()
         (repo_path / "config").write_text("[repository]\nversion = 1\n")
+        source_path = tmp_path / "source"
+        source_path.mkdir()
         repo = Repository(
             name="Repo",
             path=str(repo_path),
             encryption="none",
             repository_type="local",
-            source_directories='["/data"]',
+            source_directories=f'["{source_path}"]',
             compression="lz4",
         )
         settings_row = SystemSettings(log_save_policy="all_jobs")
@@ -1135,7 +1149,7 @@ class TestBackupService:
             patch.object(
                 backup_service,
                 "_prepare_source_paths",
-                AsyncMock(return_value=(["/data"], [])),
+                AsyncMock(return_value=([str(source_path)], [])),
             ),
             patch.object(
                 backup_service, "_calculate_and_update_size_background", AsyncMock()
@@ -1177,12 +1191,14 @@ class TestBackupService:
         repo_path.mkdir()
         (repo_path / "data").mkdir()
         (repo_path / "config").write_text("[repository]\nversion = 1\n")
+        source_path = tmp_path / "source"
+        source_path.mkdir()
         repo = Repository(
             name="Repo",
             path=str(repo_path),
             encryption="none",
             repository_type="local",
-            source_directories='["/data"]',
+            source_directories=f'["{source_path}"]',
             compression="lz4",
         )
         settings_row = SystemSettings(log_save_policy="all_jobs")
@@ -1220,7 +1236,7 @@ class TestBackupService:
             patch.object(
                 backup_service,
                 "_prepare_source_paths",
-                AsyncMock(return_value=(["/data"], [])),
+                AsyncMock(return_value=([str(source_path)], [])),
             ),
             patch.object(
                 backup_service, "_calculate_and_update_size_background", AsyncMock()
@@ -1261,12 +1277,14 @@ class TestBackupService:
         repo_path.mkdir()
         (repo_path / "data").mkdir()
         (repo_path / "config").write_text("[repository]\nversion = 1\n")
+        source_path = tmp_path / "source"
+        source_path.mkdir()
         repo = Repository(
             name="Repo",
             path=str(repo_path),
             encryption="none",
             repository_type="local",
-            source_directories='["/data"]',
+            source_directories=f'["{source_path}"]',
             compression="lz4",
         )
         settings_row = SystemSettings(log_save_policy="all_jobs")
@@ -1305,7 +1323,7 @@ class TestBackupService:
             patch.object(
                 backup_service,
                 "_prepare_source_paths",
-                AsyncMock(return_value=(["/data"], [])),
+                AsyncMock(return_value=([str(source_path)], [])),
             ),
             patch.object(
                 backup_service, "_calculate_and_update_size_background", AsyncMock()
@@ -1346,12 +1364,14 @@ class TestBackupService:
         repo_path.mkdir()
         (repo_path / "data").mkdir()
         (repo_path / "config").write_text("[repository]\nversion = 1\n")
+        source_path = tmp_path / "source"
+        source_path.mkdir()
         repo = Repository(
             name="Repo",
             path=str(repo_path),
             encryption="none",
             repository_type="local",
-            source_directories='["/data"]',
+            source_directories=f'["{source_path}"]',
             compression="lz4",
         )
         settings_row = SystemSettings(log_save_policy="all_jobs")
@@ -1390,7 +1410,7 @@ class TestBackupService:
             patch.object(
                 backup_service,
                 "_prepare_source_paths",
-                AsyncMock(return_value=(["/data"], [])),
+                AsyncMock(return_value=([str(source_path)], [])),
             ),
             patch.object(
                 backup_service, "_calculate_and_update_size_background", AsyncMock()
