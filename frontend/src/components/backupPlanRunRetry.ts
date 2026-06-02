@@ -1,6 +1,7 @@
 import type { BackupPlanRun } from '../types'
 
 type RetryTranslate = (key: string, options?: Record<string, unknown>) => string
+type RepositoryPermissionCheck = (repositoryId: number) => boolean
 
 export function backupPlanRunHasFailedRepositories(run: BackupPlanRun): boolean {
   return run.repositories.some(
@@ -8,6 +9,23 @@ export function backupPlanRunHasFailedRepositories(run: BackupPlanRun): boolean 
       Boolean(runRepository.repository_id) &&
       (runRepository.status === 'failed' || runRepository.backup_job?.status === 'failed')
   )
+}
+
+export function canRetryBackupPlanRunForPermissions(
+  run: BackupPlanRun,
+  canBackupRepository: RepositoryPermissionCheck
+): boolean {
+  if (!backupPlanRunHasFailedRepositories(run)) return false
+  return run.repositories
+    .filter(
+      (runRepository) =>
+        runRepository.status === 'failed' || runRepository.backup_job?.status === 'failed'
+    )
+    .every(
+      (runRepository) =>
+        typeof runRepository.repository_id === 'number' &&
+        canBackupRepository(runRepository.repository_id)
+    )
 }
 
 export function shouldShowBackupPlanRunRetryAction(run: BackupPlanRun): boolean {

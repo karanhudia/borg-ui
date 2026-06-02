@@ -8,7 +8,7 @@ interface RetryJobDialogProps {
   title: string
   confirmLabel: string
   onClose: () => void
-  onConfirm: () => void | Promise<void>
+  onConfirm: () => void
 }
 
 export default function RetryJobDialog({

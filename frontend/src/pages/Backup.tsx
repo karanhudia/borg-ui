@@ -29,7 +29,7 @@ import LogViewerDialog from '../components/LogViewerDialog'
 import CommandPreview from '../components/CommandPreview'
 import RunningBackupsSection from '../components/RunningBackupsSection'
 import BackupPlanRunsPanel, { type BackupPlanRunLogJob } from '../components/BackupPlanRunsPanel'
-import { backupPlanRunHasFailedRepositories } from '../components/backupPlanRunRetry'
+import { canRetryBackupPlanRunForPermissions } from '../components/backupPlanRunRetry'
 import PageTabs from '../components/PageTabs'
 import BackupPlanSelect from '../components/shared/BackupPlanSelect'
 import { useAnalytics } from '../hooks/useAnalytics'
@@ -147,19 +147,10 @@ const Backup: React.FC = () => {
     )
     return repo ? permissions.canDo(repo.id, 'backup') : false
   }
-  const canRetryBackupPlanRun = (run: BackupPlanRun) => {
-    if (!backupPlanRunHasFailedRepositories(run)) return false
-    return run.repositories
-      .filter(
-        (runRepository) =>
-          runRepository.status === 'failed' || runRepository.backup_job?.status === 'failed'
-      )
-      .every(
-        (runRepository) =>
-          typeof runRepository.repository_id === 'number' &&
-          permissions.canDo(runRepository.repository_id, 'backup')
-      )
-  }
+  const canRetryBackupPlanRun = (run: BackupPlanRun) =>
+    canRetryBackupPlanRunForPermissions(run, (repositoryId) =>
+      permissions.canDo(repositoryId, 'backup')
+    )
 
   const runBackupPlanMutation = useMutation({
     mutationFn: (planId: number) => backupPlansAPI.run(planId),

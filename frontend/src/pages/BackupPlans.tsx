@@ -13,7 +13,7 @@ import WizardDialog from '../components/shared/WizardDialog'
 import LogViewerDialog from '../components/LogViewerDialog'
 import FileExplorerDialog from '../components/FileExplorerDialog'
 import { type BackupPlanRunLogJob } from '../components/BackupPlanRunsPanel'
-import { backupPlanRunHasFailedRepositories } from '../components/backupPlanRunRetry'
+import { canRetryBackupPlanRunForPermissions } from '../components/backupPlanRunRetry'
 import {
   backupPlansAPI,
   managedAgentsAPI,
@@ -159,19 +159,10 @@ export default function BackupPlans() {
     refetchInterval: 2000,
   })
   const backupPlanRuns: BackupPlanRun[] = useMemo(() => runsData?.data?.runs || [], [runsData])
-  const canRetryBackupPlanRun = (run: BackupPlanRun) => {
-    if (!backupPlanRunHasFailedRepositories(run)) return false
-    return run.repositories
-      .filter(
-        (runRepository) =>
-          runRepository.status === 'failed' || runRepository.backup_job?.status === 'failed'
-      )
-      .every(
-        (runRepository) =>
-          typeof runRepository.repository_id === 'number' &&
-          permissions.canDo(runRepository.repository_id, 'backup')
-      )
-  }
+  const canRetryBackupPlanRun = (run: BackupPlanRun) =>
+    canRetryBackupPlanRunForPermissions(run, (repositoryId) =>
+      permissions.canDo(repositoryId, 'backup')
+    )
   const hasActiveRunForPlan = (run: BackupPlanRun) =>
     backupPlanRuns.some(
       (candidate) =>
