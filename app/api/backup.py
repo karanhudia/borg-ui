@@ -41,16 +41,11 @@ from app.services.repository_executor import (
     queue_agent_backup_job,
     validate_agent_backup_repository,
 )
+from app.utils.backup_maintenance import RUNNING_BACKUP_MAINTENANCE_FAILURES
 from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
 router = APIRouter()
-
-RUNNING_BACKUP_MAINTENANCE_FAILURES = {
-    "running_prune": "prune_failed",
-    "running_compact": "compact_failed",
-    "running_check": "check_failed",
-}
 
 
 def _get_job_repository(

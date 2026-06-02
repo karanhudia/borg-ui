@@ -14,13 +14,14 @@ Backup rows stuck in `running_check` can be canceled or reconciled from the same
 
 - `POST /api/backup/cancel/{job_id}` succeeds for a backup row with `maintenance_status="running_check"` and a running `CheckJob`.
 - The same endpoint reconciles a stale `running_check` parent backup row when no running `CheckJob` exists.
-- Startup orphan cleanup maps `running_check` to `check_failed`.
+- Startup orphan cleanup maps stale `running_check` to `check_failed` only when no live running `CheckJob` child remains.
 - Completed or warning backup rows keep their backup result when only the post-backup maintenance check is stale.
 - Focused backend tests cover cancel and orphan cleanup behavior.
 
 ## Validation
 
 - Run focused cancel and cleanup tests that fail before the code change and pass after it.
+- Run cleanup tests that prove live `CheckJob` children are preserved and dead or missing children reconcile the parent.
 - Run `ruff check app tests`.
 - Run `ruff format --check app tests`.
 

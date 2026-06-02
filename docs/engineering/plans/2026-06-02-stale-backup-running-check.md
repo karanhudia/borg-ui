@@ -13,9 +13,10 @@
 ## File Structure
 
 - Modify `tests/unit/test_api_backup.py`: add cancel endpoint tests for running and orphaned `running_check`.
-- Modify `tests/unit/test_utils.py`: add startup cleanup coverage for completed backups with stale `running_check`.
+- Modify `tests/unit/test_utils.py`: add startup cleanup coverage for completed backups with stale, live, and dead-child `running_check`.
 - Modify `app/api/backup.py`: add `CheckJob` support to maintenance cancellation.
-- Modify `app/utils/process_utils.py`: add `running_check` to stale maintenance normalization while preserving completed backup status.
+- Modify `app/utils/backup_maintenance.py`: share backup maintenance status constants.
+- Modify `app/utils/process_utils.py`: add `running_check` to stale maintenance normalization while preserving completed backup status and live child processes.
 
 ### Task 1: RED Tests for Backup Cancel
 
