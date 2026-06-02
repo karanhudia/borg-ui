@@ -474,6 +474,8 @@
       "startFailed": "Failed to start backup",
       "cancelled": "Backup cancelled successfully!",
       "cancelFailed": "Failed to cancel backup",
+      "retryStarted": "Backup retry started",
+      "retryFailed": "Failed to retry backup",
       "selectRepository": "Please select a repository first"
     }
   },
@@ -770,6 +772,8 @@
       "startFailed": "Failed to start backup plan",
       "cancelled": "Backup plan run cancelled",
       "cancelFailed": "Failed to cancel backup plan run",
+      "retryStarted": "Backup plan retry started",
+      "retryFailed": "Failed to retry backup plan run",
       "repositoryCreated": "Repository created",
       "repositoryCreateFailed": "Failed to create repository",
       "multiRepositoryRequiresPro": "Multiple repositories in one backup plan require Pro",
@@ -1154,6 +1158,17 @@
       },
       "repositoryProgress": "{{completed}}/{{total}} repositories finished",
       "cancelRun": "Cancel Run",
+      "retryRun": "Retry backup plan run",
+      "retryConfirm": "Retry backup plan run #{{id}}?",
+      "retryTooltips": {
+        "ready": "Retry backup plan run",
+        "retrying": "Retrying backup plan run...",
+        "onlyFailed": "Only failed backup plan runs can be retried.",
+        "missingPlan": "This run is no longer linked to a backup plan.",
+        "activeRun": "Wait for the running backup plan run to finish before retrying.",
+        "noFailedRepositories": "This run has no failed repositories to retry.",
+        "requiresPermission": "Operator access is required for every failed repository in this run."
+      },
       "noRepositories": "No repository runs recorded yet."
     }
   },
@@ -2230,7 +2245,22 @@
       "errorDetails": "Error Details",
       "cancel": "Cancel",
       "cancelJob": "Cancel Job",
-      "breakLock": "Break Lock"
+      "breakLock": "Break Lock",
+      "retry": "Retry backup job"
+    },
+    "confirmations": {
+      "retryJob": "Retry backup job #{{id}}?"
+    },
+    "retryTooltips": {
+      "ready": "Retry backup job",
+      "retrying": "Retrying backup job...",
+      "onlyTerminal": "Only failed or cancelled backup jobs can be retried.",
+      "destructiveType": "{{type}} jobs are not safe to retry from this table.",
+      "unsupportedType": "{{type}} jobs cannot be retried from this table.",
+      "backupPlanJob": "Retry this job from its backup plan run.",
+      "scheduledJob": "Scheduled backup jobs should be rerun from the schedule or plan.",
+      "missingRepository": "This job cannot be retried because its source repository is missing.",
+      "requiresPermission": "Operator access is required to retry this backup job."
     },
     "never": "Never",
     "empty": "No backup jobs found",
@@ -4400,11 +4430,15 @@
         "failedGetBackupJobs": "Failed to get backup jobs",
         "failedGetBackupStatus": "Failed to get backup status",
         "failedCancelBackup": "Failed to cancel backup",
-        "cannotDownloadLogsForRunningBackup": "Cannot download logs for running backup"
+        "cannotDownloadLogsForRunningBackup": "Cannot download logs for running backup",
+        "retryOnlyTerminalFailedCancelled": "Only failed or cancelled backup jobs can be retried.",
+        "retryUnsupportedJobType": "This backup job type cannot be retried.",
+        "retryRequestNotReconstructable": "This backup job can no longer be reconstructed for retry."
       },
       "backupPlans": {
         "nameRequired": "Backup plan name is required.",
-        "clearLegacyRepositoryNotSelected": "Cannot clear legacy source settings for a repository that is not selected in this backup plan."
+        "clearLegacyRepositoryNotSelected": "Cannot clear legacy source settings for a repository that is not selected in this backup plan.",
+        "retryUnsupported": "This backup plan run cannot be retried."
       },
       "restore": {
         "cancelledByUser": "Restore cancelled by user",

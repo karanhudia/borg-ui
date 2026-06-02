@@ -13,7 +13,16 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
-import { Activity, Clock, Eye, FileText, ListChecks, RefreshCw, Square } from 'lucide-react'
+import {
+  Activity,
+  Clock,
+  Eye,
+  FileText,
+  ListChecks,
+  RefreshCw,
+  RotateCcw,
+  Square,
+} from 'lucide-react'
 import ActiveBackupPlanRunCard from './ActiveBackupPlanRunCard'
 import DataTable, { type ActionButton, type Column } from './DataTable'
 import RepositoryCell from './RepositoryCell'
@@ -31,6 +40,10 @@ import {
   formatDateTimeFull,
   formatTimeRange,
 } from '../utils/dateUtils'
+import {
+  getBackupPlanRunRetryDisabledReason,
+  shouldShowBackupPlanRunRetryAction,
+} from './backupPlanRunRetry'
 
 function isActiveRun(status?: string): boolean {
   return status === 'pending' || status === 'running'
@@ -567,15 +580,21 @@ export default function BackupPlanRunsPanel({
   plans,
   loading,
   cancellingRunId,
+  retryingRunId = null,
   onCancel,
   onViewLogs,
+  onRetry,
+  canRetryRun = () => false,
 }: {
   runs: BackupPlanRun[]
   plans: BackupPlan[]
   loading?: boolean
   cancellingRunId?: number | null
+  retryingRunId?: number | null
   onCancel: (runId: number) => void
   onViewLogs: (job: BackupPlanRunLogJob) => void
+  onRetry?: (runId: number) => void
+  canRetryRun?: (run: BackupPlanRun) => boolean
 }) {
   const { t } = useTranslation()
   const activeRuns = useMemo(() => runs.filter((run) => isActiveRun(run.status)), [runs])
@@ -583,6 +602,35 @@ export default function BackupPlanRunsPanel({
     () => runs.filter((run) => !isActiveRun(run.status)).slice(0, 4),
     [runs]
   )
+  const activePlanIds = useMemo(
+    () =>
+      new Set(
+        activeRuns
+          .map((run) => run.backup_plan_id)
+          .filter((planId): planId is number => typeof planId === 'number')
+      ),
+    [activeRuns]
+  )
+  const hasActiveRunForPlan = (run: BackupPlanRun) =>
+    Boolean(run.backup_plan_id && activePlanIds.has(run.backup_plan_id))
+  const getRetryDisabledReason = (run: BackupPlanRun) =>
+    getBackupPlanRunRetryDisabledReason(run, t, {
+      canRetry: canRetryRun(run),
+      hasActiveRunForPlan: hasActiveRunForPlan(run),
+    })
+  const getRetryTooltip = (run: BackupPlanRun) => {
+    if (retryingRunId === run.id) return t('backupPlans.runsPanel.retryTooltips.retrying')
+    return getRetryDisabledReason(run) || t('backupPlans.runsPanel.retryTooltips.ready')
+  }
+  const handleRetryRun = (run: BackupPlanRun) => {
+    if (getRetryDisabledReason(run)) return
+    const confirmed =
+      typeof window.confirm === 'function'
+        ? window.confirm(t('backupPlans.runsPanel.retryConfirm', { id: run.id }))
+        : true
+    if (!confirmed) return
+    onRetry?.(run.id)
+  }
   const getPlanName = (run: BackupPlanRun) => {
     const plan = findPlan(run, plans)
     return (
@@ -714,6 +762,20 @@ export default function BackupPlanRunsPanel({
       },
       show: (run) => Boolean(findFirstLogJob(run)),
     },
+    ...(onRetry
+      ? [
+          {
+            icon: <RotateCcw size={16} />,
+            label: t('backupPlans.runsPanel.retryRun'),
+            tooltip: getRetryTooltip,
+            color: 'info' as const,
+            onClick: handleRetryRun,
+            disabled: (run: BackupPlanRun) =>
+              retryingRunId === run.id || Boolean(getRetryDisabledReason(run)),
+            show: shouldShowBackupPlanRunRetryAction,
+          },
+        ]
+      : []),
     {
       icon: <Square size={16} />,
       label: t('backupPlans.runsPanel.cancelRun'),

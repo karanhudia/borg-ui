@@ -15,17 +15,21 @@ const { trackBackup, toastSuccess, toastError, navigateMock } = vi.hoisted(() =>
 const {
   getManualJobsMock,
   backupJobsTableMock,
+  backupRetryJobMock,
   backupPlansListMock,
   backupPlansListRunsMock,
   backupPlansRunMock,
   backupPlansCancelRunMock,
+  backupPlansRetryRunMock,
 } = vi.hoisted(() => ({
   getManualJobsMock: vi.fn(),
   backupJobsTableMock: vi.fn(),
+  backupRetryJobMock: vi.fn(),
   backupPlansListMock: vi.fn(),
   backupPlansListRunsMock: vi.fn(),
   backupPlansRunMock: vi.fn(),
   backupPlansCancelRunMock: vi.fn(),
+  backupPlansRetryRunMock: vi.fn(),
 }))
 
 let locationState: Record<string, unknown> | null = null
@@ -131,6 +135,7 @@ vi.mock('../../services/api', () => ({
       })
     ),
     cancelJob: vi.fn(() => Promise.resolve({ data: {} })),
+    retryJob: backupRetryJobMock.mockImplementation(() => Promise.resolve({ data: {} })),
   },
   backupPlansAPI: {
     list: backupPlansListMock.mockImplementation(() =>
@@ -159,6 +164,7 @@ vi.mock('../../services/api', () => ({
       })
     ),
     cancelRun: backupPlansCancelRunMock.mockImplementation(() => Promise.resolve({ data: {} })),
+    retryRun: backupPlansRetryRunMock.mockImplementation(() => Promise.resolve({ data: {} })),
   },
   repositoriesAPI: {
     getRepositories: vi.fn(() =>
@@ -566,6 +572,47 @@ describe('Backup page', () => {
         jobs: manualJobsPayload,
       })
     )
+  })
+
+  it('wires manual backup job retry through the backup retry API', async () => {
+    const user = userEvent.setup()
+    manualJobsPayload = [
+      {
+        id: 42,
+        repository: '/repos/primary',
+        repository_id: 1,
+        status: 'failed',
+        type: 'backup',
+      },
+    ]
+
+    renderWithProviders(<Backup />)
+
+    await openLegacyBackupTab(user)
+    await user.click(await screen.findByRole('button', { name: /choose primary repo/i }))
+
+    await waitFor(() => {
+      expect(backupJobsTableMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actions: expect.objectContaining({ retry: true }),
+          onRetryJob: expect.any(Function),
+          canRetryJob: expect.any(Function),
+        })
+      )
+    })
+
+    const lastCall = backupJobsTableMock.mock.calls[backupJobsTableMock.mock.calls.length - 1]
+    const lastProps = lastCall?.[0] as {
+      onRetryJob: (job: { id: number }) => void
+      canRetryJob: (job: { repository_id: number }) => boolean
+    }
+    expect(lastProps.canRetryJob({ repository_id: 1 })).toBe(true)
+    lastProps.onRetryJob({ id: 42 })
+
+    await waitFor(() => {
+      expect(backupRetryJobMock).toHaveBeenCalledWith('42')
+    })
+    expect(toastSuccess).toHaveBeenCalledWith('Backup retry started')
   })
 
   it('labels the history section as recent manual jobs', async () => {

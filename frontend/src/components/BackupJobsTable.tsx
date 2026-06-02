@@ -12,6 +12,7 @@ import {
   Calendar,
   User,
   FolderOpen,
+  RotateCcw,
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { useQueryClient, useQuery } from '@tanstack/react-query'
@@ -60,6 +61,7 @@ interface BackupJobsTableProps<T extends Job = Job> {
     breakLock?: boolean
     runNow?: boolean
     delete?: boolean
+    retry?: boolean
   }
 
   // Callbacks
@@ -70,10 +72,13 @@ interface BackupJobsTableProps<T extends Job = Job> {
   onBreakLock?: (job: T) => void | Promise<void>
   onRunNow?: (job: T) => void
   onDeleteJob?: (job: T) => void | Promise<void>
+  onRetryJob?: (job: T) => void | Promise<void>
 
   // User permissions
   canBreakLocks?: boolean
   canDeleteJobs?: boolean
+  canRetryJob?: (job: T) => boolean
+  retryingJobId?: string | number | null
 
   // Table styling
   headerBgColor?: string
@@ -157,6 +162,66 @@ const getTransportLabel = (
   return t('backupJobsTable.transport.server')
 }
 
+const RETRYABLE_BACKUP_JOB_STATUSES = new Set(['failed', 'cancelled'])
+const DESTRUCTIVE_JOB_TYPES = new Set([
+  'delete_archive',
+  'archive_delete',
+  'repository_wipe',
+  'wipe',
+  'prune',
+])
+
+const isManualBackupRetrySource = (job: Job): boolean => {
+  const jobType = job.type || 'backup'
+  if (jobType !== 'backup') return false
+  if (job.backup_plan_id || job.backup_plan_run_id) return false
+  if (job.scheduled_job_id || job.schedule_id) return false
+  if (job.triggered_by === 'backup_plan' || job.triggered_by === 'schedule') return false
+  return true
+}
+
+const hasBackupRetryRepositoryContext = (job: Job): boolean =>
+  Boolean(job.repository_id || job.repository || job.repository_path)
+
+const shouldShowRetryAction = (job: Job): boolean => {
+  if (!RETRYABLE_BACKUP_JOB_STATUSES.has(job.status)) return false
+  return isManualBackupRetrySource(job) || Boolean(job.type)
+}
+
+const getBackupJobRetryDisabledReason = (
+  job: Job,
+  canRetry: boolean,
+  t: (key: string, options?: Record<string, unknown>) => string
+): string | null => {
+  if (!RETRYABLE_BACKUP_JOB_STATUSES.has(job.status)) {
+    return t('backupJobsTable.retryTooltips.onlyTerminal')
+  }
+
+  if (!isManualBackupRetrySource(job)) {
+    const typeLabel = getTypeLabel(job.type || 'backup', t)
+    if (DESTRUCTIVE_JOB_TYPES.has(job.type || '')) {
+      return t('backupJobsTable.retryTooltips.destructiveType', { type: typeLabel })
+    }
+    if (job.backup_plan_id || job.backup_plan_run_id || job.triggered_by === 'backup_plan') {
+      return t('backupJobsTable.retryTooltips.backupPlanJob')
+    }
+    if (job.scheduled_job_id || job.schedule_id || job.triggered_by === 'schedule') {
+      return t('backupJobsTable.retryTooltips.scheduledJob')
+    }
+    return t('backupJobsTable.retryTooltips.unsupportedType', { type: typeLabel })
+  }
+
+  if (!hasBackupRetryRepositoryContext(job)) {
+    return t('backupJobsTable.retryTooltips.missingRepository')
+  }
+
+  if (!canRetry) {
+    return t('backupJobsTable.retryTooltips.requiresPermission')
+  }
+
+  return null
+}
+
 export const BackupJobsTable = <T extends Job = Job>({
   jobs,
   showTypeColumn = false,
@@ -172,8 +237,11 @@ export const BackupJobsTable = <T extends Job = Job>({
   onBreakLock,
   onRunNow,
   onDeleteJob,
+  onRetryJob,
   canBreakLocks = false,
   canDeleteJobs = false,
+  canRetryJob = () => false,
+  retryingJobId = null,
   headerBgColor = 'background.default',
   enableHover = true,
   getRowKey,
@@ -349,6 +417,17 @@ export const BackupJobsTable = <T extends Job = Job>({
 
   const handleCloseDeleteDialog = () => {
     setDeleteJob(null)
+  }
+
+  const handleRetryClick = (job: T) => {
+    const disabledReason = getBackupJobRetryDisabledReason(job, canRetryJob(job), t)
+    if (disabledReason) return
+    const confirmed =
+      typeof window.confirm === 'function'
+        ? window.confirm(t('backupJobsTable.confirmations.retryJob', { id: job.id }))
+        : true
+    if (!confirmed) return
+    onRetryJob?.(job)
   }
 
   // Internal break lock handler (can be overridden by onBreakLock prop)
@@ -616,6 +695,28 @@ export const BackupJobsTable = <T extends Job = Job>({
     })
   }
 
+  if (actions.retry === true && onRetryJob) {
+    actionButtons.push({
+      icon: <RotateCcw size={18} />,
+      label: t('backupJobsTable.actions.retry'),
+      onClick: handleRetryClick,
+      color: 'info',
+      tooltip: (job) => {
+        if (retryingJobId !== null && String(retryingJobId) === String(job.id)) {
+          return t('backupJobsTable.retryTooltips.retrying')
+        }
+        return (
+          getBackupJobRetryDisabledReason(job, canRetryJob(job), t) ||
+          t('backupJobsTable.retryTooltips.ready')
+        )
+      },
+      disabled: (job) =>
+        (retryingJobId !== null && String(retryingJobId) === String(job.id)) ||
+        Boolean(getBackupJobRetryDisabledReason(job, canRetryJob(job), t)),
+      show: shouldShowRetryAction,
+    })
+  }
+
   if (actions.cancel !== false) {
     actionButtons.push({
       icon: <Trash2 size={18} />,
@@ -689,6 +790,9 @@ export const BackupJobsTable = <T extends Job = Job>({
         data={jobs}
         columns={columns}
         actions={actionButtons}
+        actionColumnWidth={
+          actionButtons.length > 0 ? `${Math.max(130, actionButtons.length * 34)}px` : undefined
+        }
         getRowKey={getRowKey || ((job: T) => String((job as Job).id))}
         loading={loading}
         headerBgColor={headerBgColor}

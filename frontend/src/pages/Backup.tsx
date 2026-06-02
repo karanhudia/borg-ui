@@ -22,12 +22,14 @@ import { toast } from 'react-hot-toast'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { BackupJob, Repository } from '../types'
 import type { BackupPlan, BackupPlanRun } from '../types'
+import type { Job } from '../types/jobs'
 import BackupJobsTable from '../components/BackupJobsTable'
 import RepoSelect from '../components/RepoSelect'
 import LogViewerDialog from '../components/LogViewerDialog'
 import CommandPreview from '../components/CommandPreview'
 import RunningBackupsSection from '../components/RunningBackupsSection'
 import BackupPlanRunsPanel, { type BackupPlanRunLogJob } from '../components/BackupPlanRunsPanel'
+import { backupPlanRunHasFailedRepositories } from '../components/backupPlanRunRetry'
 import PageTabs from '../components/PageTabs'
 import BackupPlanSelect from '../components/shared/BackupPlanSelect'
 import { useAnalytics } from '../hooks/useAnalytics'
@@ -136,6 +138,28 @@ const Backup: React.FC = () => {
   }, [selectedRepository, repositoriesData])
 
   const canStartBackup = selectedRepoData ? permissions.canDo(selectedRepoData.id, 'backup') : false
+  const canRetryManualBackupJob = (job: Job) => {
+    const repoId = typeof job.repository_id === 'number' ? job.repository_id : null
+    if (repoId !== null) return permissions.canDo(repoId, 'backup')
+    const repoPath = job.repository || ''
+    const repo = repositoriesData?.data?.repositories?.find(
+      (candidate: Repository) => candidate.path === repoPath || candidate.name === repoPath
+    )
+    return repo ? permissions.canDo(repo.id, 'backup') : false
+  }
+  const canRetryBackupPlanRun = (run: BackupPlanRun) => {
+    if (!backupPlanRunHasFailedRepositories(run)) return false
+    return run.repositories
+      .filter(
+        (runRepository) =>
+          runRepository.status === 'failed' || runRepository.backup_job?.status === 'failed'
+      )
+      .every(
+        (runRepository) =>
+          typeof runRepository.repository_id === 'number' &&
+          permissions.canDo(runRepository.repository_id, 'backup')
+      )
+  }
 
   const runBackupPlanMutation = useMutation({
     mutationFn: (planId: number) => backupPlansAPI.run(planId),
@@ -168,6 +192,25 @@ const Backup: React.FC = () => {
     onError: (error: any) => {
       toast.error(
         translateBackendKey(error.response?.data?.detail) || t('backupPlans.toasts.cancelFailed')
+      )
+    },
+  })
+
+  const retryBackupPlanRunMutation = useMutation({
+    mutationFn: (runId: number) => backupPlansAPI.retryRun(runId),
+    onSuccess: (_response, runId) => {
+      toast.success(t('backupPlans.toasts.retryStarted'))
+      queryClient.invalidateQueries({ queryKey: ['backup-plan-runs'] })
+      queryClient.invalidateQueries({ queryKey: ['backup-plans'] })
+      trackBackup(EventAction.START, 'backup_plan', undefined, {
+        trigger: 'retry',
+        backup_plan_run_id: runId,
+      })
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (error: any) => {
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) || t('backupPlans.toasts.retryFailed')
       )
     },
   })
@@ -205,6 +248,26 @@ const Backup: React.FC = () => {
     onError: (error: any) => {
       toast.error(
         translateBackendKey(error.response?.data?.detail) || t('backup.toasts.cancelFailed')
+      )
+    },
+  })
+
+  const retryBackupMutation = useMutation({
+    mutationFn: (jobId: string) => backupAPI.retryJob(jobId),
+    onSuccess: (_response, jobId) => {
+      toast.success(t('backup.toasts.retryStarted'))
+      queryClient.invalidateQueries({ queryKey: ['backup-status-manual'] })
+      queryClient.invalidateQueries({ queryKey: ['backup-status'] })
+      queryClient.invalidateQueries({ queryKey: ['recent-backup-jobs'] })
+      trackBackup(EventAction.START, 'manual', selectedRepoData || undefined, {
+        trigger: 'retry',
+        retry_source_job_id: jobId,
+      })
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (error: any) => {
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) || t('backup.toasts.retryFailed')
       )
     },
   })
@@ -449,7 +512,14 @@ const Backup: React.FC = () => {
                 ? Number(cancelBackupPlanRunMutation.variables)
                 : null
             }
+            retryingRunId={
+              retryBackupPlanRunMutation.isPending
+                ? Number(retryBackupPlanRunMutation.variables)
+                : null
+            }
             onCancel={(runId) => cancelBackupPlanRunMutation.mutate(runId)}
+            onRetry={(runId) => retryBackupPlanRunMutation.mutate(runId)}
+            canRetryRun={canRetryBackupPlanRun}
             onViewLogs={handleViewLogs}
           />
         </Stack>
@@ -576,9 +646,13 @@ const Backup: React.FC = () => {
                   downloadLogs: true,
                   errorInfo: true,
                   delete: true,
+                  retry: true,
                 }}
                 canBreakLocks={canManageRepositoryOperations}
                 canDeleteJobs={canManageRepositoryOperations}
+                canRetryJob={canRetryManualBackupJob}
+                retryingJobId={retryBackupMutation.isPending ? retryBackupMutation.variables : null}
+                onRetryJob={(job) => retryBackupMutation.mutate(String(job.id))}
                 getRowKey={(job) => String(job.id)}
                 headerBgColor="background.default"
                 enableHover={true}

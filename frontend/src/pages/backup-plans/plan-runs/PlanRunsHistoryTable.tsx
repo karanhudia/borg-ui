@@ -12,10 +12,14 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
-import { Ban, Eye } from 'lucide-react'
+import { Ban, Eye, RotateCcw } from 'lucide-react'
 import type { TFunction } from 'i18next'
 
-import { type BackupPlanRunLogJob } from '../../../components/BackupPlanRunsPanel'
+import type { BackupPlanRunLogJob } from '../../../components/BackupPlanRunsPanel'
+import {
+  getBackupPlanRunRetryDisabledReason,
+  shouldShowBackupPlanRunRetryAction,
+} from '../../../components/backupPlanRunRetry'
 import { formatDateTimeFull, formatRelativeTime, formatTimeRange } from '../../../utils/dateUtils'
 import type { BackupPlanRun } from '../../../types'
 import { formatRunStatus, isActiveRun } from '../runStatus'
@@ -28,6 +32,10 @@ interface PlanRunsHistoryTableProps {
   cancelling: number | null
   onViewLogs: (job: BackupPlanRunLogJob) => void
   onCancel: (runId: number) => void
+  onRetry?: (runId: number) => void
+  retryingRunId?: number | null
+  canRetryRun?: (run: BackupPlanRun) => boolean
+  hasActiveRunForPlan?: (run: BackupPlanRun) => boolean
   t: TFunction
 }
 
@@ -36,6 +44,10 @@ export function PlanRunsHistoryTable({
   cancelling,
   onViewLogs,
   onCancel,
+  onRetry,
+  retryingRunId = null,
+  canRetryRun = () => false,
+  hasActiveRunForPlan = () => false,
   t,
 }: PlanRunsHistoryTableProps) {
   const formatStatusLabel = (status?: string) =>
@@ -70,7 +82,7 @@ export function PlanRunsHistoryTable({
             <TableCell sx={{ fontSize: '0.7rem' }}>
               {t('backupPlans.runsTable.columns.duration', { defaultValue: 'Duration' })}
             </TableCell>
-            <TableCell align="right" sx={{ width: 80, fontSize: '0.7rem' }}>
+            <TableCell align="right" sx={{ width: 112, fontSize: '0.7rem' }}>
               {t('backupPlans.runsTable.columns.actions', { defaultValue: 'Actions' })}
             </TableCell>
           </TableRow>
@@ -80,6 +92,14 @@ export function PlanRunsHistoryTable({
             const startedAt = run.started_at || run.created_at
             const logJob = findFirstLogJobForRun(run)
             const active = isActiveRun(run.status)
+            const retryDisabledReason = getBackupPlanRunRetryDisabledReason(run, t, {
+              canRetry: canRetryRun(run),
+              hasActiveRunForPlan: hasActiveRunForPlan(run),
+            })
+            const retryTooltip =
+              retryingRunId === run.id
+                ? t('backupPlans.runsPanel.retryTooltips.retrying')
+                : retryDisabledReason || t('backupPlans.runsPanel.retryTooltips.ready')
 
             return (
               <TableRow key={run.id} hover>
@@ -159,6 +179,38 @@ export function PlanRunsHistoryTable({
                         >
                           <Eye size={15} />
                         </IconButton>
+                      </Tooltip>
+                    )}
+                    {onRetry && shouldShowBackupPlanRunRetryAction(run) && (
+                      <Tooltip title={retryTooltip} arrow>
+                        <span>
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              if (retryDisabledReason) return
+                              const confirmed =
+                                typeof window.confirm === 'function'
+                                  ? window.confirm(
+                                      t('backupPlans.runsPanel.retryConfirm', { id: run.id })
+                                    )
+                                  : true
+                              if (confirmed) onRetry(run.id)
+                            }}
+                            disabled={retryingRunId === run.id || Boolean(retryDisabledReason)}
+                            aria-label={retryTooltip}
+                            sx={{
+                              width: 28,
+                              height: 28,
+                              color: 'info.main',
+                              '&:hover': {
+                                bgcolor: (theme) => alpha(theme.palette.info.main, 0.12),
+                              },
+                              '&.Mui-disabled': { opacity: 0.35 },
+                            }}
+                          >
+                            <RotateCcw size={15} />
+                          </IconButton>
+                        </span>
                       </Tooltip>
                     )}
                     {active && (

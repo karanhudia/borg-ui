@@ -13,6 +13,7 @@ import WizardDialog from '../components/shared/WizardDialog'
 import LogViewerDialog from '../components/LogViewerDialog'
 import FileExplorerDialog from '../components/FileExplorerDialog'
 import { type BackupPlanRunLogJob } from '../components/BackupPlanRunsPanel'
+import { backupPlanRunHasFailedRepositories } from '../components/backupPlanRunRetry'
 import {
   backupPlansAPI,
   managedAgentsAPI,
@@ -24,6 +25,7 @@ import {
 } from '../services/api'
 import { BorgApiClient } from '../services/borgApi'
 import { usePlan } from '../hooks/usePlan'
+import { usePermissions } from '../hooks/usePermissions'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { buildBackupPlanPayload } from '../utils/backupPlanPayload'
@@ -93,6 +95,7 @@ export default function BackupPlans() {
   const { t } = useTranslation()
   const { track, EventCategory, EventAction } = useAnalytics()
   const { can } = usePlan()
+  const permissions = usePermissions()
   const canUseMultiRepository = can('backup_plan_multi_repository')
   const canUseMixedSourceTypes = can('backup_plan_mixed_sources')
   const canUseManagedAgents = can('managed_agents')
@@ -156,6 +159,26 @@ export default function BackupPlans() {
     refetchInterval: 2000,
   })
   const backupPlanRuns: BackupPlanRun[] = useMemo(() => runsData?.data?.runs || [], [runsData])
+  const canRetryBackupPlanRun = (run: BackupPlanRun) => {
+    if (!backupPlanRunHasFailedRepositories(run)) return false
+    return run.repositories
+      .filter(
+        (runRepository) =>
+          runRepository.status === 'failed' || runRepository.backup_job?.status === 'failed'
+      )
+      .every(
+        (runRepository) =>
+          typeof runRepository.repository_id === 'number' &&
+          permissions.canDo(runRepository.repository_id, 'backup')
+      )
+  }
+  const hasActiveRunForPlan = (run: BackupPlanRun) =>
+    backupPlanRuns.some(
+      (candidate) =>
+        candidate.id !== run.id &&
+        candidate.backup_plan_id === run.backup_plan_id &&
+        isActiveRun(candidate.status)
+    )
   const latestRunByPlan = useMemo(() => {
     const latest = new Map<number, BackupPlanRun>()
     backupPlanRuns.forEach((run) => {
@@ -399,6 +422,25 @@ export default function BackupPlans() {
     },
     onSettled: () => {
       setCancellingRunId(null)
+    },
+  })
+
+  const retryRunMutation = useMutation({
+    mutationFn: (id: number) => backupPlansAPI.retryRun(id),
+    onSuccess: (_response, runId) => {
+      toast.success(t('backupPlans.toasts.retryStarted'))
+      if (historyPlanId !== null) setHistoryPlanId(null)
+      queryClient.invalidateQueries({ queryKey: ['backup-plan-runs'] })
+      queryClient.invalidateQueries({ queryKey: ['backup-plans'] })
+      track(EventCategory.BACKUP, EventAction.START, {
+        entity: 'backup_plan_run',
+        section: BACKUP_PLANS_ANALYTICS_SECTION,
+        operation: 'retry_run',
+        backup_plan_run_id: runId,
+      })
+    },
+    onError: (error: unknown) => {
+      toast.error(errorMessage(error, t('backupPlans.toasts.retryFailed')))
     },
   })
 
@@ -731,10 +773,12 @@ export default function BackupPlans() {
   // directly so the callbacks are actually stable.
   const runMutate = runMutation.mutate
   const cancelRunMutate = cancelRunMutation.mutate
+  const retryRunMutate = retryRunMutation.mutate
   const toggleMutate = toggleMutation.mutate
   const deleteMutate = deleteMutation.mutate
   const handleRunPlan = useCallback((planId: number) => runMutate(planId), [runMutate])
   const handleCancelRun = useCallback((runId: number) => cancelRunMutate(runId), [cancelRunMutate])
+  const handleRetryRun = useCallback((runId: number) => retryRunMutate(runId), [retryRunMutate])
   const handleTogglePlan = useCallback((planId: number) => toggleMutate(planId), [toggleMutate])
   const handleDeletePlan = useCallback((planId: number) => deleteMutate(planId), [deleteMutate])
   const handleViewRepositories = useCallback(
@@ -931,6 +975,10 @@ export default function BackupPlans() {
         onClose={() => setHistoryPlanId(null)}
         onViewLogs={(job) => setLogJob(job)}
         onCancel={(runId) => cancelRunMutation.mutate(runId)}
+        onRetry={handleRetryRun}
+        retryingRunId={retryRunMutation.isPending ? Number(retryRunMutation.variables) : null}
+        canRetryRun={canRetryBackupPlanRun}
+        hasActiveRunForPlan={hasActiveRunForPlan}
         t={t}
       />
     </Box>
