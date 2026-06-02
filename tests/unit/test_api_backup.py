@@ -933,6 +933,10 @@ class TestBackupRetry:
         )
 
         assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.backup.retryOnlyTerminalFailedCancelled"
+        )
         test_db.refresh(source_job)
         assert source_job.status == "running"
         assert test_db.query(BackupJob).count() == 1
