@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, joinedload
 from typing import Dict, List, Optional
 from pydantic import BaseModel
 from datetime import datetime
+from collections import Counter
 from pathlib import Path
 import os
 import hashlib
@@ -23,6 +24,7 @@ from app.database.models import (
     Repository,
     ScheduledJob,
     BackupPlan,
+    BackupPlanScript,
     User,
 )
 from app.core.security import get_current_user, encrypt_secret
@@ -178,10 +180,39 @@ def compute_script_usage_counts(
             q = q.filter(column.in_(script_ids))
         return dict(q.group_by(column).all())
 
+    def _backup_plan_ref_counts() -> Dict[int, int]:
+        allowed_ids = set(script_ids) if script_ids is not None else None
+        refs: set[tuple[int, str, int]] = set()
+
+        def add_ref(plan_id: int, hook_type: str, script_id: Optional[int]) -> None:
+            if script_id is None:
+                return
+            if allowed_ids is not None and script_id not in allowed_ids:
+                return
+            refs.add((plan_id, hook_type, script_id))
+
+        for plan_id, hook_type, script_id in db.query(
+            BackupPlanScript.backup_plan_id,
+            BackupPlanScript.hook_type,
+            BackupPlanScript.script_id,
+        ).filter(BackupPlanScript.script_id.isnot(None)):
+            add_ref(plan_id, hook_type, script_id)
+
+        for plan_id, script_id in db.query(
+            BackupPlan.id, BackupPlan.pre_backup_script_id
+        ).filter(BackupPlan.pre_backup_script_id.isnot(None)):
+            add_ref(plan_id, "pre-backup", script_id)
+
+        for plan_id, script_id in db.query(
+            BackupPlan.id, BackupPlan.post_backup_script_id
+        ).filter(BackupPlan.post_backup_script_id.isnot(None)):
+            add_ref(plan_id, "post-backup", script_id)
+
+        return dict(Counter(script_id for _, _, script_id in refs))
+
     sources = (
         _ref_counts(RepositoryScript.script_id),
-        _ref_counts(BackupPlan.pre_backup_script_id),
-        _ref_counts(BackupPlan.post_backup_script_id),
+        _backup_plan_ref_counts(),
         _ref_counts(ScheduledJob.pre_backup_script_id),
         _ref_counts(ScheduledJob.post_backup_script_id),
     )
@@ -714,6 +745,19 @@ async def delete_script(
             "Cleared script reference from backup plans",
             script_id=script_id,
             count=len(backup_plans_using_script),
+        )
+
+    backup_plan_script_count = (
+        db.query(BackupPlanScript)
+        .filter(BackupPlanScript.script_id == script_id)
+        .delete(synchronize_session=False)
+    )
+    if backup_plan_script_count:
+        db.flush()
+        logger.info(
+            "Cleared script hook assignments from backup plans",
+            script_id=script_id,
+            count=backup_plan_script_count,
         )
 
     # Delete script file

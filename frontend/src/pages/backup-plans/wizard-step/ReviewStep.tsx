@@ -57,8 +57,15 @@ export function ReviewStep({
           id: wizardState.sourceSshConnectionId,
         })
       : t('backupPlans.wizard.review.notSet')
-  const prePlanScript = scripts.find((script) => script.id === wizardState.preBackupScriptId)
-  const postPlanScript = scripts.find((script) => script.id === wizardState.postBackupScriptId)
+  const planScriptHooks = wizardState.scriptHooks || []
+  const prePlanScripts = planScriptHooks
+    .filter((hook) => hook.hook_type === 'pre-backup' && hook.enabled !== false)
+    .sort((left, right) => left.execution_order - right.execution_order)
+  const postPlanScripts = planScriptHooks
+    .filter((hook) => hook.hook_type === 'post-backup' && hook.enabled !== false)
+    .sort((left, right) => left.execution_order - right.execution_order)
+  const scriptName = (scriptId: number) =>
+    scripts.find((script) => script.id === scriptId)?.name || `Script #${scriptId}`
   const selectedRepositories = wizardState.repositoryIds
     .map((repositoryId) => repositories.find((repository) => repository.id === repositoryId))
     .filter((repository): repository is Repository => Boolean(repository))
@@ -406,20 +413,24 @@ export function ReviewStep({
             <Typography
               variant="body2"
               fontSize="0.75rem"
-              fontWeight={prePlanScript ? 600 : 400}
-              color={prePlanScript ? 'text.primary' : 'text.disabled'}
+              fontWeight={prePlanScripts.length > 0 ? 600 : 400}
+              color={prePlanScripts.length > 0 ? 'text.primary' : 'text.disabled'}
             >
-              {prePlanScript?.name || t('backupPlans.wizard.review.noScript')}
+              {prePlanScripts.length > 0
+                ? prePlanScripts.map((hook) => scriptName(hook.script_id)).join(', ')
+                : t('backupPlans.wizard.review.noScript')}
             </Typography>
           </ReviewAttrRow>
           <ReviewAttrRow label={t('backupPlans.wizard.review.planPostScript')}>
             <Typography
               variant="body2"
               fontSize="0.75rem"
-              fontWeight={postPlanScript ? 600 : 400}
-              color={postPlanScript ? 'text.primary' : 'text.disabled'}
+              fontWeight={postPlanScripts.length > 0 ? 600 : 400}
+              color={postPlanScripts.length > 0 ? 'text.primary' : 'text.disabled'}
             >
-              {postPlanScript?.name || t('backupPlans.wizard.review.noScript')}
+              {postPlanScripts.length > 0
+                ? postPlanScripts.map((hook) => scriptName(hook.script_id)).join(', ')
+                : t('backupPlans.wizard.review.noScript')}
             </Typography>
           </ReviewAttrRow>
           <ReviewAttrRow label={t('backupPlans.wizard.review.repositoryScripts')}>

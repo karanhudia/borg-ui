@@ -26,6 +26,8 @@ export interface ScriptOption {
   name: string
   description?: string | null
   parameters?: ScriptParameter[] | null
+  timeout?: number
+  run_on?: string
 }
 
 export interface BasicRepositoryState {
