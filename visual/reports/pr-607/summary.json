@@ -1,17 +1,17 @@
 {
-  "generatedAt": "2026-06-02T21:06:47.320Z",
+  "generatedAt": "2026-06-02T22:35:37.889Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #607 visual report",
-    "commitSha": "d7205a26aea9",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26847883545"
+    "commitSha": "76af2fd7f18a",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26851918284"
   },
   "totals": {
     "baseline": 254,
-    "actual": 268,
+    "actual": 272,
     "compared": 254,
     "changed": 1,
-    "added": 14,
+    "added": 18,
     "removed": 0,
     "unchanged": 253
   },
@@ -91,6 +91,22 @@
     {
       "fileName": "components-backupplanrunspanel--retryable-backup-plan-run.png",
       "actualPath": "images/actual/components-backupplanrunspanel--retryable-backup-plan-run.png"
+    },
+    {
+      "fileName": "components-retryjobdialog--backup-job-retry--mobile.png",
+      "actualPath": "images/actual/components-retryjobdialog--backup-job-retry--mobile.png"
+    },
+    {
+      "fileName": "components-retryjobdialog--backup-job-retry.png",
+      "actualPath": "images/actual/components-retryjobdialog--backup-job-retry.png"
+    },
+    {
+      "fileName": "components-retryjobdialog--backup-plan-run-retry--mobile.png",
+      "actualPath": "images/actual/components-retryjobdialog--backup-plan-run-retry--mobile.png"
+    },
+    {
+      "fileName": "components-retryjobdialog--backup-plan-run-retry.png",
+      "actualPath": "images/actual/components-retryjobdialog--backup-plan-run-retry.png"
     }
   ],
   "removed": [],
