@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional
 import structlog
 from datetime import datetime
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from app.config import settings
 from app.core.borg_router import BorgRouter
@@ -455,11 +456,18 @@ def cleanup_orphaned_jobs(db: Session):
                         }
                     )
 
+            backup_match_filter = BackupJob.repository_id == job.repository_id
+            if job.repository_path:
+                backup_match_filter = or_(
+                    backup_match_filter,
+                    BackupJob.repository == job.repository_path,
+                )
+
             affected_backup_jobs = (
                 db.query(BackupJob)
                 .filter(
                     BackupJob.maintenance_status == "running_check",
-                    BackupJob.repository_id == job.repository_id,
+                    backup_match_filter,
                 )
                 .all()
             )

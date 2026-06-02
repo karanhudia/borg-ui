@@ -178,9 +178,10 @@ Expected: test fails because `maintenance_status` remains `running_check`.
 
 **Files:**
 - Modify: `app/api/backup.py`
+- Add: `app/utils/backup_maintenance.py`
 - Modify: `app/utils/process_utils.py`
 
-- [ ] **Step 1: Add `CheckJob` and a running-maintenance map in `app/api/backup.py`**
+- [ ] **Step 1: Add `CheckJob` and import the shared running-maintenance map in `app/api/backup.py`**
 
 ```python
 from app.database.models import (
@@ -193,12 +194,7 @@ from app.database.models import (
     PruneJob,
     CompactJob,
 )
-
-RUNNING_BACKUP_MAINTENANCE_FAILURES = {
-    "running_prune": "prune_failed",
-    "running_compact": "compact_failed",
-    "running_check": "check_failed",
-}
+from app.utils.backup_maintenance import RUNNING_BACKUP_MAINTENANCE_FAILURES
 ```
 
 - [ ] **Step 2: Extend `_get_running_maintenance_job`**
@@ -272,12 +268,10 @@ async def _cancel_running_maintenance_job(db: Session, backup_job: BackupJob):
 - [ ] **Step 5: Update stale cleanup mapping in `app/utils/process_utils.py`**
 
 ```python
-RUNNING_BACKUP_MAINTENANCE_FAILURES = {
-    "running_prune": "prune_failed",
-    "running_compact": "compact_failed",
-    "running_check": "check_failed",
-}
-COMPLETED_BACKUP_STATUSES = {"completed", "completed_with_warnings"}
+from app.utils.backup_maintenance import (
+    COMPLETED_BACKUP_STATUSES,
+    RUNNING_BACKUP_MAINTENANCE_FAILURES,
+)
 ```
 
 ```python

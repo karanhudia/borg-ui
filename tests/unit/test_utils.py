@@ -378,6 +378,48 @@ class TestProcessUtils:
         mock_is_process_alive.assert_called_once_with(4321, 8765)
         mock_break_repository_lock.assert_called_once_with(repo)
 
+    @patch("app.utils.process_utils.break_repository_lock", return_value=True)
+    @patch("app.utils.process_utils.is_process_alive", return_value=False)
+    def test_cleanup_orphaned_jobs_matches_running_check_parent_by_repository_path(
+        self, mock_is_process_alive, mock_break_repository_lock, db_session
+    ):
+        repo = Repository(
+            name="Legacy Check Repo",
+            path="/repos/legacy-check",
+            encryption="none",
+            repository_type="local",
+        )
+        db_session.add(repo)
+        db_session.flush()
+
+        backup_job = BackupJob(
+            repository=repo.path,
+            repository_id=None,
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            maintenance_status="running_check",
+        )
+        check_job = CheckJob(
+            repository_id=repo.id,
+            repository_path=repo.path,
+            status="running",
+            process_pid=2468,
+            process_start_time=1357,
+        )
+        db_session.add_all([backup_job, check_job])
+        db_session.commit()
+
+        cleanup_orphaned_jobs(db_session)
+
+        db_session.refresh(backup_job)
+        db_session.refresh(check_job)
+        assert backup_job.status == "completed"
+        assert backup_job.maintenance_status == "check_failed"
+        assert check_job.status == "failed"
+        mock_is_process_alive.assert_called_once_with(2468, 1357)
+        mock_break_repository_lock.assert_called_once_with(repo)
+
     def test_cleanup_orphaned_jobs_finishes_interrupted_backup_plan_run(
         self, db_session
     ):
