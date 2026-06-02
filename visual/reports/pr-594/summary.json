@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-06-02T00:39:48.050Z",
+  "generatedAt": "2026-06-02T04:09:31.777Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #594 visual report",
-    "commitSha": "553c3a6ecbf4",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26790910439"
+    "commitSha": "5a09f9dc4c23",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26797624848"
   },
   "totals": {
-    "baseline": 252,
-    "actual": 252,
-    "compared": 252,
+    "baseline": 254,
+    "actual": 254,
+    "compared": 254,
     "changed": 0,
     "added": 0,
     "removed": 0,
-    "unchanged": 252
+    "unchanged": 254
   },
   "changed": [],
   "added": [],
@@ -66,6 +66,12 @@
     },
     {
       "fileName": "backup-plans-scriptsstep--database-source-scripts.png"
+    },
+    {
+      "fileName": "backup-plans-scriptsstep--plan-script-chains--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-scriptsstep--plan-script-chains.png"
     },
     {
       "fileName": "backup-plans-sourceselectiondialog--community-mixed-sources-locked--mobile.png"
