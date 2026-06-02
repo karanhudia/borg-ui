@@ -10,9 +10,12 @@
 
 ---
 
+## Implementation Tasks
+
 ### Task 1: Reproduce Silent Manual Check Completion
 
 **Files:**
+
 - Modify: `frontend/src/pages/__tests__/Repositories.test.tsx`
 - Read: `frontend/src/pages/Repositories.tsx`
 
@@ -22,6 +25,7 @@
 ### Task 2: Announce Terminal Check Results
 
 **Files:**
+
 - Modify: `frontend/src/pages/Repositories.tsx`
 - Test: `frontend/src/pages/__tests__/Repositories.test.tsx`
 
@@ -35,6 +39,7 @@
 ### Task 3: Add Info Recovery Commands
 
 **Files:**
+
 - Modify: `frontend/src/components/RepositoryInfoDialog.tsx`
 - Modify: `frontend/src/components/__tests__/RepositoryInfoDialog.test.tsx`
 - Modify: `frontend/src/components/RepositoryInfoDialog.stories.tsx`
@@ -52,6 +57,7 @@
 ### Task 4: Required Validation and Handoff
 
 **Files:**
+
 - Read/Update: Linear workpad comment
 - Commit/push through repo skills
 

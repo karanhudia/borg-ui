@@ -27,6 +27,37 @@ const mockRepository = {
   mode: 'full',
 }
 
+const buildCheckJob = (
+  overrides: Partial<{
+    id: number
+    repository_id: number
+    status: string
+    started_at: string
+    completed_at: string
+    error_message: string | null
+    progress: number
+    progress_message: string
+    scheduled_check: boolean
+  }> = {}
+) => ({
+  id: 23,
+  repository_id: 1,
+  status: 'failed',
+  started_at: '2026-01-01T00:00:00Z',
+  completed_at: '2026-01-01T00:00:05Z',
+  error_message: 'Repository is not initialized',
+  progress: 100,
+  progress_message: 'Check failed',
+  scheduled_check: false,
+  ...overrides,
+})
+
+const mockLatestCheckJob = (job: ReturnType<typeof buildCheckJob>) => {
+  vi.mocked(repositoriesAPI.getRepositoryCheckJobs).mockResolvedValue({
+    data: { jobs: [job] },
+  } as Awaited<ReturnType<typeof repositoriesAPI.getRepositoryCheckJobs>>)
+}
+
 vi.mock('react-hot-toast', () => {
   const toastMock = Object.assign(vi.fn(), {
     success: vi.fn(),
@@ -176,27 +207,11 @@ describe('Repositories', () => {
     vi.mocked(backupPlansAPI.list).mockResolvedValue({
       data: { backup_plans: [] },
     } as Awaited<ReturnType<typeof backupPlansAPI.list>>)
-    vi.mocked(repositoriesAPI.getRepositoryCheckJobs).mockResolvedValue({
-      data: {
-        jobs: [
-          {
-            id: 23,
-            repository_id: 1,
-            status: 'failed',
-            started_at: '2026-01-01T00:00:00Z',
-            completed_at: '2026-01-01T00:00:05Z',
-            error_message: 'Repository is not initialized',
-            progress: 100,
-            progress_message: 'Check failed',
-            scheduled_check: false,
-          },
-        ],
-      },
-    } as Awaited<ReturnType<typeof repositoriesAPI.getRepositoryCheckJobs>>)
+    mockLatestCheckJob(buildCheckJob())
     mockCheckRepository.mockResolvedValue({ data: { job_id: 23 } })
   })
 
-  it('announces stored error details when a manual check job fails after the spinner stops', async () => {
+  async function runManualCheckToCompletion() {
     renderWithProviders(<Repositories />)
 
     fireEvent.click(await screen.findByRole('button', { name: 'start check' }))
@@ -210,11 +225,55 @@ describe('Repositories', () => {
     })
 
     fireEvent.click(screen.getByRole('button', { name: 'complete check' }))
+  }
+
+  it('announces stored error details when a manual check job fails after the spinner stops', async () => {
+    await runManualCheckToCompletion()
 
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith(
         expect.stringContaining('Repository is not initialized')
       )
+    })
+  })
+
+  it('announces success when a manual check job completes cleanly', async () => {
+    mockLatestCheckJob(buildCheckJob({ status: 'completed', error_message: null }))
+
+    await runManualCheckToCompletion()
+
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith('Check completed')
+    })
+  })
+
+  it('announces warnings when a manual check job completes with warnings', async () => {
+    mockLatestCheckJob(buildCheckJob({ status: 'completed_with_warnings', error_message: null }))
+
+    await runManualCheckToCompletion()
+
+    await waitFor(() => {
+      expect(toast).toHaveBeenCalledWith('Check completed with warnings', { icon: '!' })
+    })
+  })
+
+  it('announces a fallback error when a failed manual check has no stored message', async () => {
+    mockLatestCheckJob(buildCheckJob({ error_message: null }))
+
+    await runManualCheckToCompletion()
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('Check failed: Check failed')
+    })
+  })
+
+  it('still announces completion when the check job summary lookup fails', async () => {
+    vi.mocked(repositoriesAPI.getRepositoryCheckJobs).mockRejectedValue(new Error('lookup failed'))
+
+    await runManualCheckToCompletion()
+
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith('Check completed')
     })
   })
 })

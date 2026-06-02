@@ -4130,7 +4130,7 @@
       "title": "Comandos de recuperación",
       "description": "Usa estas plantillas de comandos cuando necesites diagnosticar, reparar o recrear este repositorio fuera de Borg UI.",
       "checkCommand": "Comprobar repositorio",
-      "repairCommand": "Comprobación de reparación",
+      "repairCommand": "Reparar repositorio",
       "initCommand": "Inicializar repositorio",
       "copyCommand": "Copiar comando {{label}}",
       "copiedCommand": "Comando {{label}} copiado",
