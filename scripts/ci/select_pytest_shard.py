@@ -9,6 +9,7 @@ from collections.abc import Iterable
 
 
 def count_tests_by_file(lines: Iterable[str]) -> dict[str, int]:
+    """Count collected pytest node IDs by their owning test file."""
     counts: dict[str, int] = {}
 
     for raw_line in lines:
@@ -31,6 +32,7 @@ def select_shard(
     shard_index: int,
     shard_total: int,
 ) -> list[str]:
+    """Return the test files assigned to one balanced one-based shard."""
     if shard_total < 1:
         raise ValueError("shard_total must be at least 1")
     if shard_index < 1 or shard_index > shard_total:
@@ -55,6 +57,7 @@ def select_shard(
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
+    """Parse CLI arguments for shard selection."""
     parser = argparse.ArgumentParser(
         description="Select pytest test files for one balanced CI shard.",
     )
@@ -74,6 +77,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run the shard selector CLI."""
     args = parse_args(argv if argv is not None else sys.argv[1:])
     test_counts = count_tests_by_file(sys.stdin)
 
