@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Optional
 import structlog
 from datetime import datetime
-from sqlalchemy import or_
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 from app.config import settings
 from app.core.borg_router import BorgRouter
@@ -460,7 +460,10 @@ def cleanup_orphaned_jobs(db: Session):
             if job.repository_path:
                 backup_match_filter = or_(
                     backup_match_filter,
-                    BackupJob.repository == job.repository_path,
+                    and_(
+                        BackupJob.repository_id.is_(None),
+                        BackupJob.repository == job.repository_path,
+                    ),
                 )
 
             affected_backup_jobs = (

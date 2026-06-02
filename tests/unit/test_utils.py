@@ -420,6 +420,65 @@ class TestProcessUtils:
         mock_is_process_alive.assert_called_once_with(2468, 1357)
         mock_break_repository_lock.assert_called_once_with(repo)
 
+    @patch("app.utils.process_utils.break_repository_lock", return_value=True)
+    @patch("app.utils.process_utils.is_process_alive", return_value=False)
+    def test_cleanup_orphaned_jobs_does_not_match_running_check_parent_by_path_when_repository_id_differs(
+        self, mock_is_process_alive, mock_break_repository_lock, db_session
+    ):
+        mock_is_process_alive.side_effect = lambda pid, _start_time: pid == 9753
+        repo = Repository(
+            name="Path Check Repo",
+            path="/repos/path-check",
+            encryption="none",
+            repository_type="local",
+        )
+        other_repo = Repository(
+            name="Other Path Check Repo",
+            path="/repos/other-path-check",
+            encryption="none",
+            repository_type="local",
+        )
+        db_session.add_all([repo, other_repo])
+        db_session.flush()
+
+        backup_job = BackupJob(
+            repository=repo.path,
+            repository_id=other_repo.id,
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            maintenance_status="running_check",
+        )
+        check_job = CheckJob(
+            repository_id=repo.id,
+            repository_path=repo.path,
+            status="running",
+            process_pid=3579,
+            process_start_time=2468,
+        )
+        live_check_job = CheckJob(
+            repository_id=other_repo.id,
+            repository_path=repo.path,
+            status="running",
+            process_pid=9753,
+            process_start_time=8642,
+        )
+        db_session.add_all([backup_job, check_job, live_check_job])
+        db_session.commit()
+
+        cleanup_orphaned_jobs(db_session)
+
+        db_session.refresh(backup_job)
+        db_session.refresh(check_job)
+        db_session.refresh(live_check_job)
+        assert backup_job.status == "completed"
+        assert backup_job.maintenance_status == "running_check"
+        assert check_job.status == "failed"
+        assert live_check_job.status == "running"
+        mock_is_process_alive.assert_any_call(3579, 2468)
+        mock_is_process_alive.assert_any_call(9753, 8642)
+        mock_break_repository_lock.assert_called_once_with(repo)
+
     def test_cleanup_orphaned_jobs_finishes_interrupted_backup_plan_run(
         self, db_session
     ):
