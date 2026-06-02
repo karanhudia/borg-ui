@@ -300,7 +300,39 @@ Backup Plan schedules run backups automatically.
 
 Plans can also run prune, compact, and check after successful repository backups.
 
-The Schedules area still shows scheduled repository work. New backup schedules should usually live on Backup Plans.
+The Schedule area still shows scheduled repository work. Existing
+repository-based schedules continue to run there. New backup schedules should
+usually live on Backup Plans.
+
+### Move a Schedule Workflow to a Backup Plan
+
+For a workflow that wakes a backup server, backs up several repositories, prunes
+and compacts them, then powers the server off after the last repository
+finishes, use one scheduled Backup Plan:
+
+1. Create or edit a Backup Plan.
+2. Select the repositories that should run in the plan. Use series mode when the
+   repositories should run one after another. Use parallel mode only when it is
+   safe for the selected repositories and scripts.
+3. In the Scripts step, add the wake script as a plan pre-backup script.
+4. Add the power-off script as a plan post-backup script. Set its run condition
+   to Always, On success, On failure, or On warning depending on when the server
+   should shut down.
+5. In Maintenance, enable prune and compact and set the retention policy.
+6. In Schedule, enable the cron schedule and timezone.
+7. Save the plan.
+
+Plan pre-backup scripts run once before repository backups begin. Repository
+backups then run in the selected order or parallel mode, with prune and compact
+running after each successful repository backup when enabled. Plan post-backup
+scripts run once after the whole plan run finishes, so they are the right place
+for cleanup or power-off actions that should wait for the last repository.
+
+When you create a Backup Plan from an existing repository, Borg UI can copy that
+repository's preferred schedule, schedule-level scripts, prune/compact settings,
+and retention policy into the new plan. Review the plan afterward if the old
+schedule targeted multiple repositories, then add the remaining repositories and
+confirm the run mode.
 
 Use notifications for scheduled backup failures so failures do not go unnoticed.
 
