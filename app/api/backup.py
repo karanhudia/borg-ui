@@ -5,7 +5,7 @@ import structlog
 import asyncio
 import json
 from types import SimpleNamespace
-from typing import Optional
+from typing import Any, Optional
 from datetime import datetime
 
 from app.database.database import get_db
@@ -13,6 +13,7 @@ from app.database.models import (
     AgentJobLog,
     User,
     BackupJob,
+    BackupJobRetryLineage,
     BackupPlan,
     Repository,
     CheckJob,
@@ -47,6 +48,8 @@ from app.utils.datetime_utils import serialize_datetime
 logger = structlog.get_logger()
 router = APIRouter()
 
+RETRYABLE_BACKUP_STATUSES = {"failed", "cancelled"}
+
 
 def _get_job_repository(
     db: Session, repository_path: Optional[str]
@@ -54,6 +57,14 @@ def _get_job_repository(
     if not repository_path:
         return None
     return db.query(Repository).filter(Repository.path == repository_path).first()
+
+
+def _get_backup_job_repository(db: Session, job: BackupJob) -> Optional[Repository]:
+    if job.repository_id:
+        repo = db.query(Repository).filter(Repository.id == job.repository_id).first()
+        if repo:
+            return repo
+    return _get_job_repository(db, job.repository)
 
 
 def _resolve_backup_log_file(job: BackupJob):
@@ -162,6 +173,94 @@ def _get_backup_plan_name(db: Session, backup_plan_id: Optional[int]) -> Optiona
         return None
     plan = db.query(BackupPlan).filter(BackupPlan.id == backup_plan_id).first()
     return plan.name if plan else None
+
+
+def _retry_metadata(job: BackupJob) -> dict[str, Any]:
+    return {
+        "retry_attempt": job.retry_attempt or 1,
+        "retry_original_job_id": job.retry_original_job_id,
+        "retry_source_job_id": job.retry_source_job_id,
+        "retry_requested_by_user_id": job.retry_requested_by_user_id,
+        "retry_requested_at": serialize_datetime(job.retry_requested_at),
+    }
+
+
+def _backup_retry_response(job: BackupJob) -> dict[str, Any]:
+    return {
+        "job_id": job.id,
+        "status": job.status,
+        "message": "Backup job retry started",
+        **_retry_metadata(job),
+    }
+
+
+def _ensure_backup_retry_supported(source_job: BackupJob) -> None:
+    if source_job.status not in RETRYABLE_BACKUP_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.backup.retryOnlyTerminalFailedCancelled"},
+        )
+    if (
+        source_job.scheduled_job_id is not None
+        or source_job.backup_plan_id is not None
+        or source_job.backup_plan_run_id is not None
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.backup.retryUnsupportedJobType"},
+        )
+    if source_job.maintenance_status:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.backup.retryUnsupportedJobType"},
+        )
+
+
+def _backup_retry_request_snapshot(
+    *,
+    source_job: BackupJob,
+    retry_job: BackupJob,
+    repo: Repository,
+    agent_payload: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    source_directories = _decode_json_list(repo.source_directories)
+    source_locations = _decode_json_list(repo.source_locations)
+    exclude_patterns = _decode_json_list(repo.exclude_patterns)
+    snapshot: dict[str, Any] = {
+        "kind": "backup_job_retry",
+        "source_job": {
+            "id": source_job.id,
+            "status": source_job.status,
+            "execution_mode": source_job.execution_mode or "local",
+            "archive_name": source_job.archive_name,
+            "route_strategy": source_job.route_strategy,
+        },
+        "created_job": {
+            "id": retry_job.id,
+            "status": retry_job.status,
+            "execution_mode": retry_job.execution_mode or "local",
+            "route_strategy": retry_job.route_strategy,
+        },
+        "repository": {
+            "id": repo.id,
+            "path": repo.path,
+            "executor_type": getattr(repo, "executor_type", None),
+            "execution_target": getattr(repo, "execution_target", None),
+            "borg_version": getattr(repo, "borg_version", 1),
+        },
+        "backup": {
+            "execution_mode": retry_job.execution_mode or "local",
+            "source_directories": source_directories,
+            "source_locations": source_locations,
+            "exclude_patterns": exclude_patterns,
+            "compression": repo.compression or "lz4",
+            "custom_flags": repo.custom_flags or "",
+            "source_ssh_connection_id": retry_job.source_ssh_connection_id,
+        },
+    }
+    if agent_payload is not None:
+        snapshot["agent_payload"] = agent_payload
+    return snapshot
 
 
 async def _cancel_running_maintenance_job(db: Session, backup_job: BackupJob):
@@ -333,6 +432,124 @@ async def run_backup(
     return await _start_backup_impl(backup_request, current_user, db)
 
 
+@router.post("/jobs/{job_id}/retry", status_code=status.HTTP_202_ACCEPTED)
+async def retry_backup_job(
+    job_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Retry a terminal manual backup job by creating a new job row."""
+    source_job = db.query(BackupJob).filter(BackupJob.id == job_id).first()
+    if not source_job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"key": "backend.errors.backup.backupJobNotFound"},
+        )
+    _ensure_backup_retry_supported(source_job)
+
+    repo = _get_backup_job_repository(db, source_job)
+    if not repo:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.backup.retryRequestNotReconstructable"},
+        )
+    check_repo_access(db, current_user, repo, "operator")
+
+    ensure_manual_backup_capacity(db)
+    attempt_number = (source_job.retry_attempt or 1) + 1
+    original_job_id = source_job.retry_original_job_id or source_job.id
+    requested_at = datetime.utcnow()
+
+    retry_job = BackupJob(
+        repository=repo.path,
+        repository_id=repo.id,
+        status="pending",
+        source_ssh_connection_id=repo.source_ssh_connection_id,
+        retry_original_job_id=original_job_id,
+        retry_source_job_id=source_job.id,
+        retry_attempt=attempt_number,
+        retry_requested_by_user_id=current_user.id,
+        retry_requested_at=requested_at,
+        created_at=requested_at,
+    )
+
+    if is_agent_executor(repo):
+        validate_agent_backup_repository(db, repo)
+        db.add(retry_job)
+        db.flush()
+        agent_job = queue_agent_backup_job(db, retry_job, repo)
+        db.add(
+            BackupJobRetryLineage(
+                original_job_id=original_job_id,
+                retry_source_job_id=source_job.id,
+                attempt_number=attempt_number,
+                requested_by_user_id=current_user.id,
+                requested_at=requested_at,
+                created_job_id=retry_job.id,
+                request_snapshot=_backup_retry_request_snapshot(
+                    source_job=source_job,
+                    retry_job=retry_job,
+                    repo=repo,
+                    agent_payload=agent_job.payload,
+                ),
+            )
+        )
+        db.commit()
+        db.refresh(retry_job)
+        await dispatch_agent_job_best_effort(
+            db,
+            agent_job,
+            source="backup_retry",
+            backup_job_id=retry_job.id,
+            repository_id=repo.id,
+            retry_source_job_id=source_job.id,
+        )
+        logger.info(
+            "Agent backup retry queued",
+            source_job_id=source_job.id,
+            retry_job_id=retry_job.id,
+            agent_job_id=agent_job.id,
+            user=current_user.username,
+        )
+        return _backup_retry_response(retry_job)
+
+    ensure_repository_admission(db, repo, OPERATION_BACKUP)
+    apply_repository_route_to_backup_job(retry_job, repo)
+    db.add(retry_job)
+    db.flush()
+    db.add(
+        BackupJobRetryLineage(
+            original_job_id=original_job_id,
+            retry_source_job_id=source_job.id,
+            attempt_number=attempt_number,
+            requested_by_user_id=current_user.id,
+            requested_at=requested_at,
+            created_job_id=retry_job.id,
+            request_snapshot=_backup_retry_request_snapshot(
+                source_job=source_job,
+                retry_job=retry_job,
+                repo=repo,
+            ),
+        )
+    )
+    db.commit()
+    db.refresh(retry_job)
+    asyncio.create_task(
+        backup_service.execute_backup(
+            retry_job.id,
+            repo.path,
+            None,
+        )
+    )
+    logger.info(
+        "Backup retry created",
+        source_job_id=source_job.id,
+        retry_job_id=retry_job.id,
+        user=current_user.username,
+    )
+    return _backup_retry_response(retry_job)
+
+
 @router.get("/jobs")
 async def get_all_backup_jobs(
     current_user: User = Depends(get_current_user),
@@ -405,6 +622,7 @@ async def get_all_backup_jobs(
                     "archive_name": getattr(job, "archive_name", None),
                     "execution_mode": job.execution_mode or "local",
                     "route_strategy": job.route_strategy,
+                    **_retry_metadata(job),
                     "progress_details": serialize_backup_progress_details(
                         job,
                         _get_job_repository(db, job.repository),
@@ -460,6 +678,7 @@ async def get_backup_status(
                 if job.scheduled_job_id
                 else "manual"
             ),
+            **_retry_metadata(job),
             "progress_details": serialize_backup_progress_details(job, repo),
             "route_strategy": job.route_strategy,
         }

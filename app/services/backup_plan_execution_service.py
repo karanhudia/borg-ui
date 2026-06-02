@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 import structlog
+from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.maintenance_jobs import create_started_maintenance_job
@@ -24,6 +25,7 @@ from app.database.models import (
     BackupPlanRepository,
     BackupPlanScript,
     BackupPlanRun,
+    BackupPlanRunRetryLineage,
     BackupPlanRunRepository,
     CheckJob,
     CompactJob,
@@ -620,6 +622,122 @@ class BackupPlanExecutionService:
         asyncio.create_task(self.execute_run(run.id))
         return run.id
 
+    def retry_failed_run(
+        self,
+        db: Session,
+        source_run: BackupPlanRun,
+        *,
+        requested_by_user_id: Optional[int],
+    ) -> int:
+        if source_run.status != "failed":
+            raise ValueError("Only failed backup plan runs can be retried")
+        if not source_run.backup_plan_id:
+            raise ValueError("Backup plan run no longer references a plan")
+
+        plan = (
+            db.query(BackupPlan)
+            .options(
+                joinedload(BackupPlan.repositories).joinedload(
+                    BackupPlanRepository.repository
+                )
+            )
+            .filter(BackupPlan.id == source_run.backup_plan_id)
+            .first()
+        )
+        if not plan:
+            raise ValueError("Backup plan no longer exists")
+        if self.has_active_run(db, plan.id):
+            raise HTTPException(
+                status_code=409,
+                detail={"key": "backend.errors.backupPlans.runAlreadyActive"},
+            )
+
+        enabled_repository_ids = [
+            link.repository_id
+            for link in sorted(plan.repositories, key=lambda item: item.execution_order)
+            if link.enabled and link.repository
+        ]
+        enabled_repository_id_set = set(enabled_repository_ids)
+        failed_repository_ids: list[int] = []
+        skipped_repository_ids: list[int] = []
+
+        source_children = sorted(
+            source_run.repositories,
+            key=lambda item: (
+                item.repository_id is None,
+                item.repository_id or 0,
+                item.id,
+            ),
+        )
+        for child in source_children:
+            backup_status = child.backup_job.status if child.backup_job else None
+            failed = child.status == "failed" or backup_status == "failed"
+            if not failed or child.repository_id is None:
+                continue
+            if child.repository_id in enabled_repository_id_set:
+                if child.repository_id not in failed_repository_ids:
+                    failed_repository_ids.append(child.repository_id)
+            else:
+                skipped_repository_ids.append(child.repository_id)
+
+        if not failed_repository_ids:
+            raise ValueError("Backup plan run has no retryable failed repositories")
+
+        selected_repository_ids = [
+            repo_id
+            for repo_id in enabled_repository_ids
+            if repo_id in failed_repository_ids
+        ]
+        attempt_number = (source_run.retry_attempt or 1) + 1
+        original_run_id = source_run.retry_original_run_id or source_run.id
+        requested_at = datetime.utcnow()
+        retry_run = BackupPlanRun(
+            backup_plan_id=plan.id,
+            trigger="retry",
+            status="pending",
+            retry_original_run_id=original_run_id,
+            retry_source_run_id=source_run.id,
+            retry_attempt=attempt_number,
+            retry_requested_by_user_id=requested_by_user_id,
+            retry_requested_at=requested_at,
+            created_at=requested_at,
+        )
+        db.add(retry_run)
+        db.flush()
+
+        for repository_id in selected_repository_ids:
+            db.add(
+                BackupPlanRunRepository(
+                    backup_plan_run_id=retry_run.id,
+                    repository_id=repository_id,
+                    status="pending",
+                )
+            )
+
+        db.add(
+            BackupPlanRunRetryLineage(
+                original_run_id=original_run_id,
+                retry_source_run_id=source_run.id,
+                attempt_number=attempt_number,
+                requested_by_user_id=requested_by_user_id,
+                requested_at=requested_at,
+                created_run_id=retry_run.id,
+                request_snapshot={
+                    "kind": "backup_plan_run_retry",
+                    "mode": "failed_only",
+                    "source_run_id": source_run.id,
+                    "source_run_status": source_run.status,
+                    "backup_plan_id": plan.id,
+                    "selected_repository_ids": selected_repository_ids,
+                    "skipped_repository_ids": skipped_repository_ids,
+                    "uses_current_plan_configuration": True,
+                },
+            )
+        )
+        db.commit()
+        asyncio.create_task(self.execute_run(retry_run.id))
+        return retry_run.id
+
     async def execute_run(self, run_id: int) -> None:
         try:
             context, repositories = self._prepare_run(run_id)
@@ -705,6 +823,15 @@ class BackupPlanExecutionService:
             run = db.query(BackupPlanRun).filter(BackupPlanRun.id == run_id).first()
             if not run:
                 raise ValueError(f"Backup plan run {run_id} not found")
+            retry_repository_ids = (
+                {
+                    child.repository_id
+                    for child in run.repositories
+                    if child.repository_id is not None
+                }
+                if run.trigger == "retry"
+                else None
+            )
 
             plan = (
                 db.query(BackupPlan)
@@ -733,6 +860,12 @@ class BackupPlanExecutionService:
                 )
                 if link.enabled and link.repository
             ]
+            if retry_repository_ids is not None:
+                enabled_links = [
+                    link
+                    for link in enabled_links
+                    if link.repository_id in retry_repository_ids
+                ]
             if not enabled_links:
                 raise ValueError("Backup plan has no enabled repositories")
 
