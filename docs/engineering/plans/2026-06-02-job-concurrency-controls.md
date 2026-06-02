@@ -46,7 +46,7 @@ The command exits `1` with no output. The only backend "original_job_id" search 
 Most long-running work persists a row with `status`, timestamps, logs, and progress fields:
 
 - `BackupJob`, `RestoreJob`, `CheckJob`, `RestoreCheckJob`, `CompactJob`, `PruneJob`, `DeleteArchiveJob`, `RepositoryWipeJob`, `PackageInstallJob`, `AgentJob`, `BackupPlanRun`, and `BackupPlanRunRepository`.
-- The common statuses are `pending`, `running`, `completed`, `failed`, and `cancelled` or `canceled`, with extra warning/partial states for backup-plan and wipe flows.
+- The common statuses are `pending`, `running`, `completed`, `failed`, and `cancelled`, with extra warning/partial states for backup-plan and wipe flows. `AgentJob.status` is a narrow exception with a separate terminal cancel spelling that maps related backup rows back to `cancelled`.
 - There are no retry count, retry lineage, idempotency key, queued-by, or original payload snapshot fields on these job tables.
 
 ### Async execution
