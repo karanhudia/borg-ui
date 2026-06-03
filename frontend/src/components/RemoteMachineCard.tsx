@@ -12,6 +12,7 @@ import {
   CheckCircle,
   XCircle,
   AlertTriangle,
+  Activity,
   Edit,
   Trash2,
   RefreshCw,
@@ -57,6 +58,7 @@ interface RemoteMachineCardProps {
   onRefreshStorage: (machine: RemoteMachine) => void
   onTestConnection: (machine: RemoteMachine) => void
   onDeployKey: (machine: RemoteMachine) => void
+  onRunDiagnostics?: (machine: RemoteMachine) => void
   canManageConnections?: boolean
 }
 
@@ -93,6 +95,7 @@ export default function RemoteMachineCard({
   onRefreshStorage,
   onTestConnection,
   onDeployKey,
+  onRunDiagnostics,
   canManageConnections = true,
 }: RemoteMachineCardProps) {
   const { t } = useTranslation()
@@ -492,6 +495,18 @@ export default function RemoteMachineCard({
                 <RefreshCw size={16} />
               </IconButton>
             </Tooltip>
+            {onRunDiagnostics && (
+              <Tooltip title={t('remoteMachine.actions.runDiagnostics')} arrow>
+                <IconButton
+                  size="small"
+                  aria-label={t('remoteMachine.actions.runDiagnostics')}
+                  onClick={() => onRunDiagnostics(machine)}
+                  sx={coloredIconBtnSx('warning')}
+                >
+                  <Activity size={16} />
+                </IconButton>
+              </Tooltip>
+            )}
             {canManageConnections && (
               <Tooltip title={t('remoteMachineCard.actions.deploy')} arrow>
                 <IconButton

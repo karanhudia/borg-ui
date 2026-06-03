@@ -10,6 +10,7 @@ import asyncio
 
 from pydantic import ValidationError
 
+from app.core.security import encrypt_secret
 from app.api import ssh_keys as ssh_keys_api
 from app.api.ssh_keys import (
     SSHConnectionCreate,
@@ -215,6 +216,219 @@ class TestSSHKeysEndpoints:
             if connection["id"] == stored_connection.id
         )
         assert listed_connection["error_message"] == error_message
+
+    def _create_diagnostics_connection(self, test_db):
+        fake_private_key = "-----BEGIN OPENSSH PRIVATE KEY-----\ntest\n-----END OPENSSH PRIVATE KEY-----\n"
+        ssh_key = SSHKey(
+            name="System SSH Key",
+            public_key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAItest test@test",
+            private_key=encrypt_secret(fake_private_key),
+            is_system_key=True,
+            is_active=True,
+        )
+        test_db.add(ssh_key)
+        test_db.commit()
+        test_db.refresh(ssh_key)
+
+        connection = SSHConnection(
+            ssh_key_id=ssh_key.id,
+            host="backup.example.com",
+            username="borg",
+            port=2222,
+            status="connected",
+            default_path="/srv",
+            mount_point="backup-box",
+        )
+        test_db.add(connection)
+        test_db.commit()
+        test_db.refresh(connection)
+        return ssh_key, connection
+
+    def test_connection_diagnostics_returns_latency_tcp_and_throughput(
+        self, test_client: TestClient, admin_headers, test_db, monkeypatch
+    ):
+        self._create_diagnostics_connection(test_db)
+        commands: list[list[str]] = []
+        monotonic_values = iter([10.0, 10.025, 20.0, 20.004, 30.0, 30.25])
+
+        async def fake_run_ssh_process(cmd, timeout_seconds):
+            commands.append(cmd)
+            if "-W" in cmd:
+                return 0, b"", b""
+            if cmd[-1].startswith("dd if=/dev/zero"):
+                return 0, b"x" * 131072, b""
+            return 0, b"/srv\n", b""
+
+        monkeypatch.setattr(
+            ssh_keys_api, "_run_ssh_process", fake_run_ssh_process, raising=False
+        )
+        monkeypatch.setattr(
+            ssh_keys_api, "_monotonic", lambda: next(monotonic_values), raising=False
+        )
+
+        response = test_client.post(
+            "/api/ssh-keys/connections/1/diagnostics",
+            json={
+                "target": {
+                    "host": "postgres.internal",
+                    "port": 5432,
+                    "timeout_seconds": 3,
+                },
+                "timeout_seconds": 4,
+                "speed_probe_bytes": 131072,
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["connection"]["host"] == "backup.example.com"
+        assert data["session"] == {
+            "status": "success",
+            "elapsed_ms": 25,
+            "output": "/srv",
+        }
+        assert data["latency"] == {"status": "success", "elapsed_ms": 25}
+        assert data["tcp"] == {
+            "target": {
+                "host": "postgres.internal",
+                "port": 5432,
+                "timeout_seconds": 3.0,
+            },
+            "status": "success",
+            "elapsed_ms": 4,
+        }
+        assert data["throughput"] == {
+            "status": "success",
+            "direction": "download",
+            "probe_size_bytes": 131072,
+            "bytes_transferred": 131072,
+            "elapsed_ms": 250,
+            "mbps": 0.5,
+        }
+        assert any("-W" in cmd for cmd in commands)
+        assert any(cmd[-1].startswith("dd if=/dev/zero") for cmd in commands)
+
+    def test_connection_diagnostics_keeps_failed_tcp_as_partial_result(
+        self, test_client: TestClient, admin_headers, test_db, monkeypatch
+    ):
+        self._create_diagnostics_connection(test_db)
+        monotonic_values = iter([10.0, 10.01, 20.0, 20.006, 30.0, 30.1])
+
+        async def fake_run_ssh_process(cmd, timeout_seconds):
+            if "-W" in cmd:
+                return (
+                    255,
+                    b"",
+                    b"channel 0: open failed: connect failed: Connection refused",
+                )
+            if cmd[-1].startswith("dd if=/dev/zero"):
+                return 0, b"x" * 65536, b""
+            return 0, b"/srv\n", b""
+
+        monkeypatch.setattr(
+            ssh_keys_api, "_run_ssh_process", fake_run_ssh_process, raising=False
+        )
+        monkeypatch.setattr(
+            ssh_keys_api, "_monotonic", lambda: next(monotonic_values), raising=False
+        )
+
+        response = test_client.post(
+            "/api/ssh-keys/connections/1/diagnostics",
+            json={
+                "target": {
+                    "host": "postgres.internal",
+                    "port": 5432,
+                    "timeout_seconds": 3,
+                }
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["session"]["status"] == "success"
+        assert data["tcp"]["status"] == "failed"
+        assert data["tcp"]["elapsed_ms"] == 6
+        assert data["tcp"]["error"] == "connection_refused"
+        assert "Connection refused" in data["tcp"]["message"]
+        assert data["throughput"]["status"] == "success"
+
+    def test_connection_diagnostics_reports_session_timeout(
+        self, test_client: TestClient, admin_headers, test_db, monkeypatch
+    ):
+        self._create_diagnostics_connection(test_db)
+        monotonic_values = iter([10.0, 15.0])
+
+        async def fake_run_ssh_process(cmd, timeout_seconds):
+            raise asyncio.TimeoutError
+
+        monkeypatch.setattr(
+            ssh_keys_api, "_run_ssh_process", fake_run_ssh_process, raising=False
+        )
+        monkeypatch.setattr(
+            ssh_keys_api, "_monotonic", lambda: next(monotonic_values), raising=False
+        )
+
+        response = test_client.post(
+            "/api/ssh-keys/connections/1/diagnostics",
+            json={},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["session"] == {
+            "status": "timeout",
+            "elapsed_ms": 5000,
+            "error": "timeout",
+            "message": "SSH diagnostic command timed out",
+        }
+        assert data["latency"]["status"] == "timeout"
+        assert data["tcp"] is None
+        assert data["throughput"] is None
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {"target": {"host": "", "port": 5432, "timeout_seconds": 3}},
+            {"target": {"host": "bad host", "port": 5432, "timeout_seconds": 3}},
+            {"target": {"host": "postgres.internal", "port": 0, "timeout_seconds": 3}},
+            {
+                "target": {
+                    "host": "postgres.internal",
+                    "port": 5432,
+                    "timeout_seconds": 0,
+                }
+            },
+            {"timeout_seconds": 0},
+            {"speed_probe_bytes": 1024},
+            {"speed_probe_bytes": 10485760},
+        ],
+    )
+    def test_connection_diagnostics_rejects_invalid_inputs(
+        self, test_client: TestClient, admin_headers, test_db, payload
+    ):
+        self._create_diagnostics_connection(test_db)
+
+        response = test_client.post(
+            "/api/ssh-keys/connections/1/diagnostics",
+            json=payload,
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 422
+
+    def test_connection_diagnostics_missing_connection(
+        self, test_client: TestClient, admin_headers
+    ):
+        response = test_client.post(
+            "/api/ssh-keys/connections/999999/diagnostics",
+            json={},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 404
 
 
 @pytest.mark.unit

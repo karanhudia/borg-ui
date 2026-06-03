@@ -1807,6 +1807,22 @@
       "passwordPlaceholder": "Introduce la contraseña SSH",
       "passwordHelper": "La contraseña se usa para desplegar la clave pública en authorized_keys"
     },
+    "diagnostics": {
+      "title": "Diagnóstico de máquina remota",
+      "description": "Verifica la sesión SSH, el alcance TCP remoto opcional y la velocidad limitada del transporte SSH.",
+      "noConnection": "No hay conexión seleccionada",
+      "targetHost": "Host de destino",
+      "targetHostHelper": "Destino TCP remoto opcional",
+      "targetPort": "Puerto",
+      "targetTimeout": "Tiempo límite del destino",
+      "sshTimeout": "Tiempo límite SSH",
+      "speedProbeSize": "Tamaño de la prueba de velocidad",
+      "speedProbeHelper": "Bytes que se leerán por SSH, de 65536 a 5242880.",
+      "seconds": "Segundos",
+      "latency": "Latencia",
+      "runCheck": "Ejecutar comprobación",
+      "running": "Ejecutando diagnóstico"
+    },
     "remoteConnections": {
       "title": "Conexiones remotas",
       "configured_one": "{{count}} máquina configurada",
@@ -1833,7 +1849,9 @@
       "storageRefreshFailed": "Error al actualizar el almacenamiento",
       "keyDeleted": "¡Clave SSH del sistema eliminada correctamente!",
       "keyDeleteFailed": "Error al eliminar la clave SSH",
-      "publicKeyCopied": "¡Clave pública copiada al portapapeles!"
+      "publicKeyCopied": "¡Clave pública copiada al portapapeles!",
+      "diagnosticsComplete": "Diagnóstico completado",
+      "diagnosticsFailed": "Error al ejecutar el diagnóstico"
     }
   },
   "scripts": {
@@ -4157,7 +4175,8 @@
     "defaultPath": "Ruta predeterminada",
     "actions": {
       "testConnection": "Probar conexión",
-      "refreshStorage": "Actualizar almacenamiento"
+      "refreshStorage": "Actualizar almacenamiento",
+      "runDiagnostics": "Ejecutar diagnóstico"
     }
   },
   "repositoryInfoDialog": {

@@ -876,6 +876,61 @@ export const backupPlansAPI = {
   listRunsForPlan: (id: number) => api.get(`/backup-plans/${id}/runs`),
 }
 
+export interface SSHConnectionDiagnosticsTargetRequest {
+  host: string
+  port: number
+  timeout_seconds?: number
+}
+
+export interface SSHConnectionDiagnosticsRequest {
+  target?: SSHConnectionDiagnosticsTargetRequest
+  timeout_seconds?: number
+  speed_probe_bytes?: number
+}
+
+export interface SSHConnectionDiagnosticsMetadata {
+  id: number
+  host: string
+  username: string
+  port: number
+  status: string
+  last_test?: string | null
+  last_success?: string | null
+  error_message?: string | null
+}
+
+export interface SSHConnectionDiagnosticsProbeResult {
+  status: 'success' | 'failed' | 'timeout' | string
+  elapsed_ms?: number | null
+  error?: string | null
+  message?: string | null
+  output?: string | null
+}
+
+export interface SSHConnectionDiagnosticsTcpResult extends SSHConnectionDiagnosticsProbeResult {
+  target: {
+    host: string
+    port: number
+    timeout_seconds?: number
+  }
+}
+
+export interface SSHConnectionDiagnosticsThroughputResult
+  extends SSHConnectionDiagnosticsProbeResult {
+  direction: 'download' | string
+  probe_size_bytes: number
+  bytes_transferred?: number | null
+  mbps?: number | null
+}
+
+export interface SSHConnectionDiagnosticsResponse {
+  connection: SSHConnectionDiagnosticsMetadata
+  session: SSHConnectionDiagnosticsProbeResult
+  latency: SSHConnectionDiagnosticsProbeResult
+  tcp?: SSHConnectionDiagnosticsTcpResult | null
+  throughput?: SSHConnectionDiagnosticsThroughputResult | null
+}
+
 // SSH Keys API
 export const sshKeysAPI = {
   // Single-key system
@@ -903,6 +958,11 @@ export const sshKeysAPI = {
     api.delete(`/ssh-keys/connections/${connectionId}`),
   refreshConnectionStorage: (connectionId: number) =>
     api.post(`/ssh-keys/connections/${connectionId}/refresh-storage`),
+  runConnectionDiagnostics: (connectionId: number, data: SSHConnectionDiagnosticsRequest) =>
+    api.post<SSHConnectionDiagnosticsResponse>(
+      `/ssh-keys/connections/${connectionId}/diagnostics`,
+      data
+    ),
   redeployKeyToConnection: (connectionId: number, password: string) =>
     api.post(`/ssh-keys/connections/${connectionId}/redeploy`, { password }),
   importSSHKey: (data: ApiData) => api.post('/ssh-keys/import', data),
