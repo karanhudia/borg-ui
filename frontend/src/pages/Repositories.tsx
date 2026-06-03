@@ -5,7 +5,12 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { Box } from '@mui/material'
-import { backupPlansAPI, repositoriesAPI, RepositoryData } from '../services/api'
+import {
+  backupPlansAPI,
+  repositoriesAPI,
+  RepositoryData,
+  settingsAPI,
+} from '../services/api'
 import { BorgApiClient } from '../services/borgApi'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { useAuth } from '../hooks/useAuth'
@@ -121,6 +126,15 @@ export default function Repositories() {
     queryKey: ['repositories'],
     queryFn: repositoriesAPI.getRepositories,
   })
+
+  const { data: systemSettingsData } = useQuery({
+    queryKey: ['systemSettings'],
+    queryFn: async () => {
+      const response = await settingsAPI.getSystemSettings()
+      return response.data
+    },
+  })
+  const lockBreakingEnabled = systemSettingsData?.settings?.lock_breaking_enabled ?? false
 
   const { data: backupPlansData, isLoading: loadingBackupPlanFilter } = useQuery({
     queryKey: ['backup-plans'],
@@ -920,7 +934,10 @@ export default function Repositories() {
           repositoryId={lockError.repositoryId}
           repositoryName={lockError.repositoryName}
           borgVersion={lockError.borgVersion}
-          canBreakLock={canManageRepositoriesGlobally}
+          canBreakLock={
+            lockBreakingEnabled && permissions.canDo(lockError.repositoryId, 'maintenance')
+          }
+          lockBreakingEnabled={lockBreakingEnabled}
           onLockBroken={() => {
             queryClient.invalidateQueries({ queryKey: ['repository-info', lockError.repositoryId] })
           }}

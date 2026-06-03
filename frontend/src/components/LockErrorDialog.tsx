@@ -24,6 +24,7 @@ interface LockErrorDialogProps {
   borgVersion?: 1 | 2
   onLockBroken?: () => void
   canBreakLock?: boolean
+  lockBreakingEnabled?: boolean
 }
 
 export default function LockErrorDialog({
@@ -34,9 +35,11 @@ export default function LockErrorDialog({
   borgVersion: _borgVersion,
   onLockBroken,
   canBreakLock = false,
+  lockBreakingEnabled = true,
 }: LockErrorDialogProps) {
   const { t } = useTranslation()
   const [breaking, setBreaking] = useState(false)
+  const canUseBreakLock = lockBreakingEnabled && canBreakLock
 
   const handleBreakLock = async () => {
     if (!window.confirm(t('dialogs.lockError.breakLockWarning'))) {
@@ -110,11 +113,20 @@ export default function LockErrorDialog({
           <li>{t('dialogs.lockError.beforeBreakingCheck3')}</li>
         </Typography>
 
-        {!canBreakLock && (
+        {!lockBreakingEnabled && (
           <Alert severity="info" sx={{ mt: 2 }}>
             <Typography variant="body2">
-              <strong>{t('dialogs.lockError.adminRequired')}</strong>{' '}
-              {t('dialogs.lockError.adminRequiredDetail')}
+              <strong>{t('dialogs.lockError.lockBreakingDisabled')}</strong>{' '}
+              {t('dialogs.lockError.lockBreakingDisabledDetail')}
+            </Typography>
+          </Alert>
+        )}
+
+        {lockBreakingEnabled && !canBreakLock && (
+          <Alert severity="info" sx={{ mt: 2 }}>
+            <Typography variant="body2">
+              <strong>{t('dialogs.lockError.maintenanceRequired')}</strong>{' '}
+              {t('dialogs.lockError.maintenanceRequiredDetail')}
             </Typography>
           </Alert>
         )}
@@ -128,9 +140,9 @@ export default function LockErrorDialog({
           variant="contained"
           color="warning"
           onClick={handleBreakLock}
-          disabled={breaking || !canBreakLock}
+          disabled={breaking || !canUseBreakLock}
           startIcon={breaking ? <CircularProgress size={16} /> : <Unlock size={16} />}
-          title={!canBreakLock ? 'Admin privileges required to break locks' : ''}
+          title={!canUseBreakLock ? t('dialogs.lockError.breakLockUnavailable') : ''}
         >
           {breaking ? t('status.running') : t('dialogs.lockError.breakLock')}
         </Button>

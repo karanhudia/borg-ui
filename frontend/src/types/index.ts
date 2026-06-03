@@ -135,6 +135,7 @@ export interface BackupJob {
   id: string | number
   repository: string
   repository_id?: number | null
+  repository_path?: string | null
   type?: string
   status: 'running' | 'completed' | 'completed_with_warnings' | 'failed' | 'cancelled' | string
   started_at?: string

@@ -11,6 +11,7 @@ import {
   backupAPI,
   scriptsAPI,
   backupPlansAPI,
+  settingsAPI,
 } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { useAnalytics } from '../hooks/useAnalytics'
@@ -70,7 +71,9 @@ interface ScheduledJob {
 
 interface BackupJob {
   id: string
+  repository_id?: number | null
   repository: string
+  repository_path?: string | null
   status: 'running' | 'completed' | 'failed' | 'cancelled' | 'completed_with_warnings'
   started_at: string
   completed_at?: string
@@ -211,8 +214,30 @@ const Schedule: React.FC = () => {
     () => repositoriesData?.data?.repositories ?? [],
     [repositoriesData?.data?.repositories]
   )
+  const { data: systemSettingsData } = useQuery({
+    queryKey: ['systemSettings'],
+    queryFn: async () => {
+      const response = await settingsAPI.getSystemSettings()
+      return response.data
+    },
+  })
+  const lockBreakingEnabled = systemSettingsData?.settings?.lock_breaking_enabled ?? false
   const manageableRepositories = repositories.filter((repo: Repository) =>
     canDo(repo.id, 'maintenance')
+  )
+  const repositoryIdByPath = React.useMemo(() => {
+    return new Map(repositories.map((repo: Repository) => [repo.path, repo.id]))
+  }, [repositories])
+  const canBreakLockForBackupJob = React.useCallback(
+    (job: BackupJob) => {
+      if (!lockBreakingEnabled) return false
+      const repoId =
+        job.repository_id ??
+        (job.repository_path ? repositoryIdByPath.get(job.repository_path) : undefined) ??
+        repositoryIdByPath.get(job.repository)
+      return typeof repoId === 'number' ? canDo(repoId, 'maintenance') : false
+    },
+    [canDo, lockBreakingEnabled, repositoryIdByPath]
   )
 
   // Backup job history — fetch all jobs (not just scheduled) so orphaned/manual
@@ -700,7 +725,7 @@ const Schedule: React.FC = () => {
             backupPlans={backupPlans}
             repositories={repositories}
             isLoading={loadingBackupJobs}
-            canBreakLocks={canManageRepositoriesGlobally}
+            canBreakLocks={canBreakLockForBackupJob}
             canDeleteJobs={canManageRepositoriesGlobally}
             filterSchedule={filterSchedule}
             filterRepository={filterRepository}

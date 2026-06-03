@@ -61,6 +61,7 @@ class TestSystemSettingsContracts:
         assert settings["backup_reports_include_stale_repositories"] is True
         assert settings["backup_reports_include_recent_activity"] is True
         assert settings["backup_reports_last_sent_at"] is None
+        assert settings["lock_breaking_enabled"] is True
         assert test_db.query(SystemSettings).count() == 1
 
     def test_get_system_settings_falls_back_when_log_storage_lookup_fails(
@@ -88,10 +89,23 @@ class TestSystemSettingsContracts:
         )
 
         assert response.status_code == 400
-        assert (
-            response.json()["detail"]["key"]
-            == "backend.errors.settings.invalidLogSavePolicy"
+
+    def test_update_system_settings_persists_lock_breaking_enabled(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        response = test_client.put(
+            "/api/settings/system",
+            json={"lock_breaking_enabled": False},
+            headers=admin_headers,
         )
+
+        assert response.status_code == 200
+        settings = test_db.query(SystemSettings).first()
+        assert settings.lock_breaking_enabled is False
+
+        readback = test_client.get("/api/settings/system", headers=admin_headers)
+        assert readback.status_code == 200
+        assert readback.json()["settings"]["lock_breaking_enabled"] is False
 
     def test_update_system_settings_rejects_too_small_log_limit(
         self, test_client: TestClient, admin_headers

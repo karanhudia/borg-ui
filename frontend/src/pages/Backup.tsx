@@ -16,7 +16,7 @@ import {
   Typography,
 } from '@mui/material'
 import { Clock, Info, Play } from 'lucide-react'
-import { backupAPI, backupPlansAPI, repositoriesAPI } from '../services/api'
+import { backupAPI, backupPlansAPI, repositoriesAPI, settingsAPI } from '../services/api'
 import { BorgApiClient } from '../services/borgApi'
 import { toast } from 'react-hot-toast'
 import { translateBackendKey } from '../utils/translateBackendKey'
@@ -82,6 +82,15 @@ const Backup: React.FC = () => {
     queryFn: repositoriesAPI.getRepositories,
   })
 
+  const { data: systemSettingsData } = useQuery({
+    queryKey: ['systemSettings'],
+    queryFn: async () => {
+      const response = await settingsAPI.getSystemSettings()
+      return response.data
+    },
+  })
+  const lockBreakingEnabled = systemSettingsData?.settings?.lock_breaking_enabled ?? false
+
   const { data: backupPlansData, isLoading: loadingBackupPlans } = useQuery({
     queryKey: ['backup-plans'],
     queryFn: () => backupPlansAPI.list(),
@@ -136,6 +145,20 @@ const Backup: React.FC = () => {
   }, [selectedRepository, repositoriesData])
 
   const canStartBackup = selectedRepoData ? permissions.canDo(selectedRepoData.id, 'backup') : false
+  const canBreakLockForBackupJob = React.useCallback(
+    (job: BackupJob) => {
+      if (!lockBreakingEnabled) return false
+      const repoId =
+        job.repository_id ??
+        selectedRepoData?.id ??
+        repositoriesData?.data?.repositories?.find(
+          (repo: Repository) =>
+            repo.path === job.repository || repo.path === job.repository_path
+        )?.id
+      return typeof repoId === 'number' ? permissions.canDo(repoId, 'maintenance') : false
+    },
+    [lockBreakingEnabled, permissions, repositoriesData?.data?.repositories, selectedRepoData?.id]
+  )
 
   const runBackupPlanMutation = useMutation({
     mutationFn: (planId: number) => backupPlansAPI.run(planId),
@@ -577,7 +600,7 @@ const Backup: React.FC = () => {
                   errorInfo: true,
                   delete: true,
                 }}
-                canBreakLocks={canManageRepositoryOperations}
+                canBreakLocks={canBreakLockForBackupJob}
                 canDeleteJobs={canManageRepositoryOperations}
                 getRowKey={(job) => String(job.id)}
                 headerBgColor="background.default"

@@ -225,6 +225,7 @@ export interface SystemSettings {
   dashboard_observe_freshness_critical_days?: number
   bypass_lock_on_info?: boolean
   bypass_lock_on_list?: boolean
+  lock_breaking_enabled?: boolean
   metrics_enabled?: boolean
   metrics_require_auth?: boolean
   metrics_token?: string

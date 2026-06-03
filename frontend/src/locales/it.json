@@ -2054,6 +2054,11 @@
       "beforeBreakingCheck3": "Questo romperà sia i blocchi del repository che della cache",
       "adminRequired": "Privilegi di amministratore richiesti:",
       "adminRequiredDetail": "Solo gli amministratori possono rompere i blocchi del repository. Contatta il tuo amministratore per assistenza.",
+      "maintenanceRequired": "Accesso di manutenzione al repository richiesto:",
+      "maintenanceRequiredDetail": "Serve accesso editor a questo repository per romperne il blocco. Contatta il tuo amministratore per assistenza.",
+      "lockBreakingDisabled": "Rottura blocchi disabilitata:",
+      "lockBreakingDisabledDetail": "Un amministratore ha disabilitato la rottura manuale dei blocchi per questa installazione.",
+      "breakLockUnavailable": "La rottura dei blocchi non è disponibile per questo repository",
       "failedToBreakLock": "Impossibile rompere il blocco del repository"
     },
     "errorDetails": {
@@ -2764,6 +2769,9 @@
     "bypassLocksListTitle": "Ignora Blocchi per Comandi List",
     "enableBypassLocksList": "Abilita bypass-lock per tutti i comandi borg list",
     "bypassLocksListDescription": "Aggiunge --bypass-lock a tutti i comandi borg list. Questo previene la contesa di blocco quando più operazioni di lettura (es., info + list) vengono eseguite simultaneamente. Abilita se vedi errori \"Failed to acquire lock\". Nota: Potrebbe mostrare dati obsoleti se un backup è attivamente in esecuzione.",
+    "lockBreakingTitle": "Rottura manuale dei blocchi",
+    "enableLockBreaking": "Consenti rottura manuale dei blocchi repository",
+    "lockBreakingDescription": "Consente agli utenti con accesso editor di rompere blocchi repository obsoleti da Borg UI. Disabilitalo quando altri servizi possono mantenere blocchi transitori normali.",
     "showLegacyRestoreTabTitle": "Mostra Scheda Ripristino Legacy",
     "showLegacyRestoreTabLabel": "Mostra la scheda Ripristino dedicata nella navigazione",
     "showLegacyRestoreTabDescription": "Abilita questa opzione per accedere alla scheda Ripristino legacy. La funzionalità di ripristino è ora integrata nella pagina Archivi, ma questa opzione ti permette di usare la vecchia interfaccia se preferisci.",

@@ -9,7 +9,7 @@
 
 export interface Job {
   id: string | number
-  repository_id?: number
+  repository_id?: number | null
   repository?: string | null
   repository_path?: string | null
   type?: string

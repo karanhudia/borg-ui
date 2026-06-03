@@ -39,7 +39,9 @@ import { BackupPlan, Repository } from '../types'
 
 interface BackupJob {
   id: string
+  repository_id?: number | null
   repository: string
+  repository_path?: string | null
   status: 'running' | 'completed' | 'failed' | 'cancelled' | 'completed_with_warnings'
   started_at: string
   completed_at?: string
@@ -68,7 +70,7 @@ interface BackupHistorySectionProps {
   backupPlans: BackupPlan[]
   repositories: Repository[]
   isLoading: boolean
-  canBreakLocks?: boolean
+  canBreakLocks?: boolean | ((job: BackupJob) => boolean)
   canDeleteJobs?: boolean
   filterSchedule: number | 'all'
   filterRepository: string | 'all'
@@ -292,7 +294,7 @@ const BackupHistorySection: React.FC<BackupHistorySectionProps> = ({
         </Select>
       </Box>
 
-      <BackupJobsTable
+      <BackupJobsTable<BackupJob>
         jobs={filteredBackupJobs}
         repositories={repositories || []}
         loading={isLoading}
