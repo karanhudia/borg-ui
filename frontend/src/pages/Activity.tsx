@@ -75,9 +75,7 @@ const Activity: React.FC = () => {
   const lockBreakingEnabled = systemSettingsData?.settings?.lock_breaking_enabled ?? false
   const repositoryIdByPath = React.useMemo(() => {
     const repositories = repositoriesData?.data?.repositories ?? []
-    return new Map(
-      repositories.map((repo: { id: number; path: string }) => [repo.path, repo.id])
-    )
+    return new Map(repositories.map((repo: { id: number; path: string }) => [repo.path, repo.id]))
   }, [repositoriesData?.data?.repositories])
   const canBreakLockForActivity = React.useCallback(
     (job: ActivityItem) => {

@@ -318,13 +318,7 @@ describe('LockErrorDialog', () => {
     })
 
     it('shows a global disabled alert when lock breaking is disabled', () => {
-      render(
-        <LockErrorDialog
-          {...defaultProps}
-          canBreakLock={true}
-          lockBreakingEnabled={false}
-        />
-      )
+      render(<LockErrorDialog {...defaultProps} canBreakLock={true} lockBreakingEnabled={false} />)
 
       expect(screen.getByText(/Lock breaking disabled/)).toBeInTheDocument()
       expect(

@@ -152,8 +152,7 @@ const Backup: React.FC = () => {
         job.repository_id ??
         selectedRepoData?.id ??
         repositoriesData?.data?.repositories?.find(
-          (repo: Repository) =>
-            repo.path === job.repository || repo.path === job.repository_path
+          (repo: Repository) => repo.path === job.repository || repo.path === job.repository_path
         )?.id
       return typeof repoId === 'number' ? permissions.canDo(repoId, 'maintenance') : false
     },

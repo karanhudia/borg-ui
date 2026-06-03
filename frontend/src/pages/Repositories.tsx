@@ -5,12 +5,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { Box } from '@mui/material'
-import {
-  backupPlansAPI,
-  repositoriesAPI,
-  RepositoryData,
-  settingsAPI,
-} from '../services/api'
+import { backupPlansAPI, repositoriesAPI, RepositoryData, settingsAPI } from '../services/api'
 import { BorgApiClient } from '../services/borgApi'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { useAuth } from '../hooks/useAuth'
