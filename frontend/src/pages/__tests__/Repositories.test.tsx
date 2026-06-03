@@ -119,7 +119,7 @@ vi.mock('../../services/borgApi', () => ({
   BorgApiClient: vi.fn(function BorgApiClientMock() {
     return {
       checkRepository: mockCheckRepository,
-      getInfo: vi.fn(),
+      getInfo: vi.fn().mockResolvedValue({ data: { info: null } }),
     }
   }),
 }))
@@ -156,7 +156,31 @@ vi.mock('../../components/RepositoryWipeDialog', () => ({
 }))
 
 vi.mock('../../components/RepositoryInfoDialog', () => ({
-  default: () => null,
+  default: ({
+    open,
+    repository,
+    onRunRecoveryCheck,
+    canRunRecoveryCheck,
+  }: {
+    open: boolean
+    repository: typeof mockRepository | null
+    onRunRecoveryCheck?: (repository: typeof mockRepository) => void
+    canRunRecoveryCheck?: boolean
+  }) =>
+    open && repository ? (
+      <div>
+        <span>{repository.name} info dialog</span>
+        {onRunRecoveryCheck ? (
+          <button
+            type="button"
+            disabled={!canRunRecoveryCheck}
+            onClick={() => onRunRecoveryCheck(repository)}
+          >
+            Run guided check
+          </button>
+        ) : null}
+      </div>
+    ) : null,
 }))
 
 vi.mock('../repositories-page/CreateBackupPlanDialog', () => ({
@@ -175,10 +199,12 @@ vi.mock('../repositories-page/RepositoryGroups', () => ({
   RepositoryGroups: ({
     repositories,
     onCheck,
+    onViewInfo,
     onJobCompleted,
   }: {
     repositories: Array<typeof mockRepository>
     onCheck: (repository: typeof mockRepository) => void
+    onViewInfo: (repository: typeof mockRepository) => void
     onJobCompleted: (repositoryId: number) => void
   }) => {
     if (repositories.length === 0) {
@@ -189,6 +215,9 @@ vi.mock('../repositories-page/RepositoryGroups', () => ({
       <>
         <button type="button" onClick={() => onCheck(repositories[0])}>
           start check
+        </button>
+        <button type="button" onClick={() => onViewInfo(repositories[0])}>
+          view info
         </button>
         <button type="button" onClick={() => onJobCompleted(1)}>
           complete check
@@ -275,5 +304,16 @@ describe('Repositories', () => {
     await waitFor(() => {
       expect(toast.success).toHaveBeenCalledWith('Check completed')
     })
+  })
+
+  it('opens the existing check confirmation from the repository info recovery action', async () => {
+    renderWithProviders(<Repositories />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'view info' }))
+    expect(await screen.findByText('Broken Repo info dialog')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run guided check' }))
+
+    expect(screen.getByRole('button', { name: 'confirm check' })).toBeInTheDocument()
   })
 })

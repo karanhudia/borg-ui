@@ -25,6 +25,8 @@ const meta = {
     repositoryInfo: null,
     isLoading: false,
     onClose: () => {},
+    onRunRecoveryCheck: () => {},
+    canRunRecoveryCheck: true,
   },
   render: (args) => (
     <Box sx={{ width: 760, minHeight: 520 }}>
@@ -38,3 +40,9 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const FailedInfoRecovery: Story = {}
+
+export const FailedInfoRecoveryUnavailable: Story = {
+  args: {
+    canRunRecoveryCheck: false,
+  },
+}

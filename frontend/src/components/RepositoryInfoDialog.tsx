@@ -11,6 +11,7 @@ import {
   IconButton,
   Tooltip,
   Paper,
+  CircularProgress,
 } from '@mui/material'
 import ResponsiveDialog from './shared/ResponsiveDialog'
 import { useEffect, useRef, useState } from 'react'
@@ -55,6 +56,9 @@ interface RepositoryInfoDialogProps {
   repositoryInfo: RepositoryInfo | null
   isLoading: boolean
   onClose: () => void
+  onRunRecoveryCheck?: (repository: Repository) => void
+  canRunRecoveryCheck?: boolean
+  isRecoveryCheckStarting?: boolean
 }
 
 interface RecoveryCommand {
@@ -207,12 +211,79 @@ function RecoveryCommandBox({ command }: { command: RecoveryCommand }) {
   )
 }
 
+function RecoveryGuidedCheckAction({
+  repository,
+  canRunRecoveryCheck,
+  isRecoveryCheckStarting,
+  onRunRecoveryCheck,
+}: {
+  repository: Repository
+  canRunRecoveryCheck: boolean
+  isRecoveryCheckStarting: boolean
+  onRunRecoveryCheck: (repository: Repository) => void
+}) {
+  const { t } = useTranslation()
+  const actionDisabled = !canRunRecoveryCheck || isRecoveryCheckStarting
+
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: { xs: 'column', sm: 'row' },
+        alignItems: { xs: 'stretch', sm: 'center' },
+        justifyContent: 'space-between',
+        gap: 1.5,
+        border: '1px solid',
+        borderColor: 'divider',
+        borderRadius: 1,
+        bgcolor: 'background.paper',
+        p: 1.5,
+      }}
+    >
+      <Box sx={{ minWidth: 0 }}>
+        <Typography variant="body2" fontWeight={700}>
+          {t('repositoryInfoDialog.recovery.guidedCheckTitle')}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {t('repositoryInfoDialog.recovery.guidedCheckDescription')}
+        </Typography>
+        {!canRunRecoveryCheck && (
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+            {t('repositoryInfoDialog.recovery.guidedCheckUnavailable')}
+          </Typography>
+        )}
+      </Box>
+      <Button
+        variant="contained"
+        size="small"
+        disabled={actionDisabled}
+        onClick={() => onRunRecoveryCheck(repository)}
+        startIcon={
+          isRecoveryCheckStarting ? <CircularProgress size={14} color="inherit" /> : <CheckIcon />
+        }
+        sx={{
+          alignSelf: { xs: 'stretch', sm: 'center' },
+          minWidth: 152,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {isRecoveryCheckStarting
+          ? t('repositoryInfoDialog.recovery.guidedCheckStarting')
+          : t('repositoryInfoDialog.recovery.guidedCheckButton')}
+      </Button>
+    </Box>
+  )
+}
+
 export default function RepositoryInfoDialog({
   open,
   repository,
   repositoryInfo,
   isLoading,
   onClose,
+  onRunRecoveryCheck,
+  canRunRecoveryCheck = true,
+  isRecoveryCheckStarting = false,
 }: RepositoryInfoDialogProps) {
   const { t } = useTranslation()
   const [displayRepository, setDisplayRepository] = useState<Repository | null>(repository)
@@ -441,6 +512,16 @@ export default function RepositoryInfoDialog({
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
                       {t('repositoryInfoDialog.recovery.description')}
                     </Typography>
+                    {onRunRecoveryCheck && (
+                      <Box sx={{ mb: 1.5 }}>
+                        <RecoveryGuidedCheckAction
+                          repository={displayRepository}
+                          canRunRecoveryCheck={canRunRecoveryCheck}
+                          isRecoveryCheckStarting={isRecoveryCheckStarting}
+                          onRunRecoveryCheck={onRunRecoveryCheck}
+                        />
+                      </Box>
+                    )}
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
                       {buildRecoveryCommands(displayRepository, t).map((command) => (
                         <RecoveryCommandBox key={command.key} command={command} />
