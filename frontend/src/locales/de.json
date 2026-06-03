@@ -474,6 +474,8 @@
       "startFailed": "Sicherung konnte nicht gestartet werden",
       "cancelled": "Sicherung erfolgreich abgebrochen!",
       "cancelFailed": "Sicherung konnte nicht abgebrochen werden",
+      "retryStarted": "Sicherungswiederholung gestartet",
+      "retryFailed": "Sicherung konnte nicht erneut gestartet werden",
       "selectRepository": "Bitte zuerst ein Repository auswählen"
     }
   },
@@ -770,6 +772,8 @@
       "startFailed": "Backup-Plan konnte nicht gestartet werden",
       "cancelled": "Backup-Plan-Lauf abgebrochen",
       "cancelFailed": "Backup-Plan-Lauf konnte nicht abgebrochen werden",
+      "retryStarted": "Backup-Plan-Wiederholung gestartet",
+      "retryFailed": "Backup-Plan-Lauf konnte nicht erneut gestartet werden",
       "repositoryCreated": "Repository erstellt",
       "repositoryCreateFailed": "Repository konnte nicht erstellt werden",
       "multiRepositoryRequiresPro": "Mehrere Repositories in einem Backup-Plan erfordern Pro",
@@ -1154,6 +1158,17 @@
       },
       "repositoryProgress": "{{completed}}/{{total}} Repositories abgeschlossen",
       "cancelRun": "Lauf abbrechen",
+      "retryRun": "Backup-Plan-Lauf erneut versuchen",
+      "retryConfirm": "Backup-Plan-Lauf #{{id}} erneut versuchen?",
+      "retryTooltips": {
+        "ready": "Backup-Plan-Lauf erneut versuchen",
+        "retrying": "Backup-Plan-Lauf wird erneut gestartet...",
+        "onlyFailed": "Nur fehlgeschlagene Backup-Plan-Läufe können erneut versucht werden.",
+        "missingPlan": "Dieser Lauf ist nicht mehr mit einem Backup-Plan verknüpft.",
+        "activeRun": "Warte, bis der laufende Backup-Plan-Lauf abgeschlossen ist, bevor du es erneut versuchst.",
+        "noFailedRepositories": "Dieser Lauf enthält keine fehlgeschlagenen Repositories zum erneuten Versuch.",
+        "requiresPermission": "Operator-Zugriff ist für jedes fehlgeschlagene Repository in diesem Lauf erforderlich."
+      },
       "noRepositories": "Noch keine Repository-Läufe aufgezeichnet."
     }
   },
@@ -2235,7 +2250,22 @@
       "errorDetails": "Fehlerdetails",
       "cancel": "Abbrechen",
       "cancelJob": "Aufgabe abbrechen",
-      "breakLock": "Sperre aufheben"
+      "breakLock": "Sperre aufheben",
+      "retry": "Sicherungsauftrag erneut versuchen"
+    },
+    "confirmations": {
+      "retryJob": "Sicherungsauftrag #{{id}} erneut versuchen?"
+    },
+    "retryTooltips": {
+      "ready": "Sicherungsauftrag erneut versuchen",
+      "retrying": "Sicherungsauftrag wird erneut gestartet...",
+      "onlyTerminal": "Nur fehlgeschlagene oder abgebrochene Sicherungsaufträge können erneut versucht werden.",
+      "destructiveType": "{{type}}-Aufträge können nicht sicher aus dieser Tabelle erneut versucht werden.",
+      "unsupportedType": "{{type}}-Aufträge können aus dieser Tabelle nicht erneut versucht werden.",
+      "backupPlanJob": "Versuche diesen Auftrag über seinen Backup-Plan-Lauf erneut.",
+      "scheduledJob": "Geplante Sicherungsaufträge sollten über den Zeitplan oder Plan erneut ausgeführt werden.",
+      "missingRepository": "Dieser Auftrag kann nicht erneut versucht werden, weil sein Quell-Repository fehlt.",
+      "requiresPermission": "Operator-Zugriff ist erforderlich, um diesen Sicherungsauftrag erneut zu versuchen."
     },
     "never": "Nie",
     "empty": "Keine Sicherungsaufgaben gefunden",
@@ -4408,11 +4438,15 @@
         "failedGetBackupJobs": "Fehler beim Abrufen der Sicherungsaufträge",
         "failedGetBackupStatus": "Fehler beim Abrufen des Sicherungsstatus",
         "failedCancelBackup": "Fehler beim Abbrechen der Sicherung",
-        "cannotDownloadLogsForRunningBackup": "Protokolle einer laufenden Sicherung können nicht heruntergeladen werden"
+        "cannotDownloadLogsForRunningBackup": "Protokolle einer laufenden Sicherung können nicht heruntergeladen werden",
+        "retryOnlyTerminalFailedCancelled": "Nur fehlgeschlagene oder abgebrochene Sicherungsaufträge können erneut versucht werden.",
+        "retryUnsupportedJobType": "Dieser Sicherungsauftragstyp kann nicht erneut versucht werden.",
+        "retryRequestNotReconstructable": "Dieser Sicherungsauftrag kann für einen erneuten Versuch nicht mehr rekonstruiert werden."
       },
       "backupPlans": {
         "nameRequired": "Der Name des Backup-Plans ist erforderlich.",
-        "clearLegacyRepositoryNotSelected": "Legacy-Quelleinstellungen können nicht für ein Repository gelöscht werden, das in diesem Backup-Plan nicht ausgewählt ist."
+        "clearLegacyRepositoryNotSelected": "Legacy-Quelleinstellungen können nicht für ein Repository gelöscht werden, das in diesem Backup-Plan nicht ausgewählt ist.",
+        "retryUnsupported": "Dieser Backup-Plan-Lauf kann nicht erneut versucht werden."
       },
       "restore": {
         "cancelledByUser": "Wiederherstellung vom Benutzer abgebrochen",

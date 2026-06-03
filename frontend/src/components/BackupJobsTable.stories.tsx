@@ -46,6 +46,40 @@ const jobs: Job[] = [
   },
 ]
 
+const retryableFailedBackupJobs: Job[] = [
+  {
+    id: 201,
+    repository: '/backups/accounting',
+    repository_path: '/backups/accounting',
+    repository_id: 31,
+    type: 'backup',
+    status: 'failed',
+    started_at: '2026-05-22T09:00:00Z',
+    completed_at: '2026-05-22T09:04:00Z',
+    triggered_by: 'manual',
+    execution_mode: 'local',
+    has_logs: true,
+    error_message: 'Connection closed while writing archive metadata',
+  },
+]
+
+const nonRetryableDestructiveJobs: Job[] = [
+  {
+    id: 202,
+    repository: '/backups/accounting',
+    repository_path: '/backups/accounting',
+    repository_id: 31,
+    type: 'prune',
+    status: 'failed',
+    started_at: '2026-05-22T09:20:00Z',
+    completed_at: '2026-05-22T09:22:00Z',
+    triggered_by: 'manual',
+    execution_mode: 'local',
+    has_logs: true,
+    error_message: 'Retention pass stopped after partial repository scan',
+  },
+]
+
 const meta = {
   title: 'Components/BackupJobsTable',
   component: BackupJobsTable,
@@ -65,6 +99,44 @@ export const TransportModes: Story = {
     actions: { breakLock: true },
     canBreakLocks: (job) => job.repository_id === 3,
     lockBreakingEnabled: true,
+  },
+  render: (args) => (
+    <Box sx={{ p: 3 }}>
+      <BackupJobsTable {...args} />
+    </Box>
+  ),
+}
+
+export const RetryableFailedBackupJob: Story = {
+  args: {
+    jobs: retryableFailedBackupJobs,
+    showTypeColumn: true,
+    showTriggerColumn: true,
+    actions: {
+      retry: true,
+      viewLogs: true,
+    },
+    canRetryJob: () => true,
+    onRetryJob: () => {},
+  },
+  render: (args) => (
+    <Box sx={{ p: 3 }}>
+      <BackupJobsTable {...args} />
+    </Box>
+  ),
+}
+
+export const NonRetryableDestructiveJob: Story = {
+  args: {
+    jobs: nonRetryableDestructiveJobs,
+    showTypeColumn: true,
+    showTriggerColumn: true,
+    actions: {
+      retry: true,
+      viewLogs: true,
+    },
+    canRetryJob: () => true,
+    onRetryJob: () => {},
   },
   render: (args) => (
     <Box sx={{ p: 3 }}>

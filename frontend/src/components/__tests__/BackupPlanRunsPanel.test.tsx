@@ -55,6 +55,211 @@ describe('BackupPlanRunsPanel', () => {
     })
   })
 
+  it('confirms and retries failed backup plan runs from recent history', async () => {
+    const user = userEvent.setup()
+    const onRetry = vi.fn()
+    const run = {
+      id: 17,
+      backup_plan_id: 3,
+      trigger: 'manual',
+      status: 'failed',
+      started_at: '2026-05-11T10:00:00Z',
+      completed_at: '2026-05-11T10:01:00Z',
+      created_at: '2026-05-11T10:00:00Z',
+      repositories: [
+        {
+          id: 97,
+          repository_id: 7,
+          status: 'failed',
+          repository: {
+            id: 7,
+            name: 'Primary Repo',
+            path: '/repos/primary',
+          },
+          backup_job: {
+            id: 57,
+            repository: '/repos/primary',
+            repository_id: 7,
+            status: 'failed',
+          },
+        },
+      ],
+    } satisfies BackupPlanRun
+
+    render(
+      <BackupPlanRunsPanel
+        runs={[run]}
+        plans={[plan]}
+        onCancel={vi.fn()}
+        onViewLogs={vi.fn()}
+        onRetry={onRetry}
+        canRetryRun={() => true}
+      />
+    )
+
+    const recentSection = screen.getByRole('region', { name: /recent backup plan runs/i })
+    await user.click(within(recentSection).getByRole('button', { name: /retry backup plan run/i }))
+
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByText('Retry backup plan run #17?')).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: /retry backup plan run/i }))
+
+    expect(onRetry).toHaveBeenCalledWith(17)
+  })
+
+  it('does not show retry for cancelled backup plan runs', () => {
+    const run = {
+      id: 16,
+      backup_plan_id: 3,
+      trigger: 'manual',
+      status: 'cancelled',
+      started_at: '2026-05-11T10:00:00Z',
+      completed_at: '2026-05-11T10:01:00Z',
+      created_at: '2026-05-11T10:00:00Z',
+      repositories: [
+        {
+          id: 96,
+          repository_id: 7,
+          status: 'cancelled',
+          repository: {
+            id: 7,
+            name: 'Primary Repo',
+            path: '/repos/primary',
+          },
+        },
+      ],
+    } satisfies BackupPlanRun
+
+    render(
+      <BackupPlanRunsPanel
+        runs={[run]}
+        plans={[plan]}
+        onCancel={vi.fn()}
+        onViewLogs={vi.fn()}
+        onRetry={vi.fn()}
+        canRetryRun={() => true}
+      />
+    )
+
+    const recentSection = screen.getByRole('region', { name: /recent backup plan runs/i })
+    expect(
+      within(recentSection).queryByRole('button', { name: /retry backup plan run/i })
+    ).not.toBeInTheDocument()
+  })
+
+  it('disables retry when a failed backup plan run has no failed repositories', () => {
+    const run = {
+      id: 18,
+      backup_plan_id: 3,
+      trigger: 'manual',
+      status: 'failed',
+      started_at: '2026-05-11T10:00:00Z',
+      completed_at: '2026-05-11T10:01:00Z',
+      created_at: '2026-05-11T10:00:00Z',
+      repositories: [
+        {
+          id: 98,
+          repository_id: 7,
+          status: 'completed',
+          repository: {
+            id: 7,
+            name: 'Primary Repo',
+            path: '/repos/primary',
+          },
+          backup_job: {
+            id: 58,
+            repository: '/repos/primary',
+            repository_id: 7,
+            status: 'completed',
+          },
+        },
+      ],
+    } satisfies BackupPlanRun
+
+    render(
+      <BackupPlanRunsPanel
+        runs={[run]}
+        plans={[plan]}
+        onCancel={vi.fn()}
+        onViewLogs={vi.fn()}
+        onRetry={vi.fn()}
+        canRetryRun={() => true}
+      />
+    )
+
+    expect(
+      screen.getByRole('button', {
+        name: /this run has no failed repositories to retry/i,
+      })
+    ).toBeDisabled()
+  })
+
+  it('disables retry while the same backup plan already has an active run', () => {
+    const failedRun = {
+      id: 19,
+      backup_plan_id: 3,
+      trigger: 'manual',
+      status: 'failed',
+      started_at: '2026-05-11T09:00:00Z',
+      completed_at: '2026-05-11T09:01:00Z',
+      repositories: [
+        {
+          id: 99,
+          repository_id: 7,
+          status: 'failed',
+          repository: {
+            id: 7,
+            name: 'Primary Repo',
+            path: '/repos/primary',
+          },
+          backup_job: {
+            id: 59,
+            repository: '/repos/primary',
+            repository_id: 7,
+            status: 'failed',
+          },
+        },
+      ],
+    } satisfies BackupPlanRun
+    const activeRun = {
+      id: 20,
+      backup_plan_id: 3,
+      trigger: 'manual',
+      status: 'running',
+      started_at: '2026-05-11T10:00:00Z',
+      repositories: [
+        {
+          id: 100,
+          repository_id: 7,
+          status: 'running',
+          repository: {
+            id: 7,
+            name: 'Primary Repo',
+            path: '/repos/primary',
+          },
+        },
+      ],
+    } satisfies BackupPlanRun
+
+    render(
+      <BackupPlanRunsPanel
+        runs={[failedRun, activeRun]}
+        plans={[plan]}
+        onCancel={vi.fn()}
+        onViewLogs={vi.fn()}
+        onRetry={vi.fn()}
+        canRetryRun={() => true}
+      />
+    )
+
+    const recentSection = screen.getByRole('region', { name: /recent backup plan runs/i })
+    expect(
+      within(recentSection).getByRole('button', {
+        name: /wait for the running backup plan run to finish before retrying/i,
+      })
+    ).toBeDisabled()
+  })
+
   it('keeps active plan runs separate from recent plan run history', async () => {
     const user = userEvent.setup()
     const onCancel = vi.fn()

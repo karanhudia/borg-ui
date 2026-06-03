@@ -132,15 +132,19 @@ async def test_prepare_source_paths_reuses_first_sshfs_temp_root_for_multiple_co
 
 
 @pytest.mark.asyncio
-async def test_execute_backup_command(backup_service_fixture, mock_db_session):
+async def test_execute_backup_command(
+    backup_service_fixture, mock_db_session, tmp_path
+):
     """Test 'borg create' command construction"""
     # Setup Data
     job_id = 999
+    source_path = tmp_path / "data"
+    source_path.mkdir()
     repo = Repository(
         id=1,
         path="/backups/repo",
         compression="zstd,3",
-        source_directories='["/home/user/data"]',
+        source_directories=f'["{source_path}"]',
         exclude_patterns='["*.tmp"]',
         passphrase="secret",
         mode="full",
@@ -219,7 +223,7 @@ async def test_execute_backup_command(backup_service_fixture, mock_db_session):
                     assert "zstd,3" in create_call_args
                     assert "--exclude" in create_call_args
                     assert "*.tmp" in create_call_args
-                    assert "/home/user/data" in create_call_args  # Source path
+                    assert str(source_path) in create_call_args  # Source path
 
                     # Verify content of the archive argument
                     archive_arg = [a for a in create_call_args if "::" in a][0]
@@ -227,14 +231,16 @@ async def test_execute_backup_command(backup_service_fixture, mock_db_session):
 
 
 @pytest.mark.asyncio
-async def test_execute_backup_hooks(backup_service_fixture, mock_db_session):
+async def test_execute_backup_hooks(backup_service_fixture, mock_db_session, tmp_path):
     """Test pre/post backup hook execution"""
     # Setup Data
     job_id = 999
+    source_path = tmp_path / "data"
+    source_path.mkdir()
     repo = Repository(
         id=1,
         path="/backups/repo",
-        source_directories='["/data"]',
+        source_directories=f'["{source_path}"]',
         pre_backup_script="echo pre",
         post_backup_script="echo post",
     )
@@ -313,14 +319,16 @@ async def test_execute_backup_hooks(backup_service_fixture, mock_db_session):
 
 @pytest.mark.asyncio
 async def test_execute_backup_runs_post_hook_on_cancel_as_failure(
-    backup_service_fixture, mock_db_session
+    backup_service_fixture, mock_db_session, tmp_path
 ):
     """Cancelled backups should still execute post-backup hooks with failure semantics."""
     job_id = 1001
+    source_path = tmp_path / "data"
+    source_path.mkdir()
     repo = Repository(
         id=1,
         path="/backups/repo",
-        source_directories='["/data"]',
+        source_directories=f'["{source_path}"]',
         post_backup_script="echo post",
     )
     job = BackupJob(id=job_id, status="cancelled")
@@ -785,13 +793,15 @@ async def test_sync_rclone_after_borg_preserves_existing_borg_warning(
 
 @pytest.mark.asyncio
 async def test_execute_backup_uses_rclone_sync_failure_for_hooks_and_notifications(
-    backup_service_fixture, mock_db_session
+    backup_service_fixture, mock_db_session, tmp_path
 ):
     job_id = 46
+    source_path = tmp_path / "data"
+    source_path.mkdir()
     repo = Repository(
         id=1,
         path="/backups/repo",
-        source_directories='["/data"]',
+        source_directories=f'["{source_path}"]',
         compression="lz4",
     )
     job = BackupJob(id=job_id, status="pending")
@@ -832,7 +842,7 @@ async def test_execute_backup_uses_rclone_sync_failure_for_hooks_and_notificatio
         patch.object(
             backup_service_fixture,
             "_prepare_source_paths",
-            new=AsyncMock(return_value=(["/data"], [])),
+            new=AsyncMock(return_value=([str(source_path)], [])),
         ),
         patch.object(
             backup_service_fixture,
@@ -1169,9 +1179,11 @@ async def test_execute_backup_delegates_remote_ssh_job(
 
 @pytest.mark.asyncio
 async def test_execute_backup_resolves_grouped_source_locations(
-    backup_service_fixture, mock_db_session
+    backup_service_fixture, mock_db_session, tmp_path
 ):
     job_id = 501
+    local_source = tmp_path / "srv-app"
+    local_source.mkdir()
     repo = Repository(
         id=1,
         path="/backups/repo",
@@ -1201,7 +1213,7 @@ async def test_execute_backup_resolves_grouped_source_locations(
         {
             "source_type": "local",
             "source_ssh_connection_id": None,
-            "paths": ["/srv/app"],
+            "paths": [str(local_source)],
         },
         {
             "source_type": "remote",
@@ -1259,7 +1271,7 @@ async def test_execute_backup_resolves_grouped_source_locations(
             "_prepare_source_paths",
             new=AsyncMock(
                 return_value=(
-                    ["/srv/app", "data", "var/lib/service"],
+                    [str(local_source), "data", "var/lib/service"],
                     [
                         ("/tmp/sshfs-a", "data"),
                         ("/tmp/sshfs-b", "var/lib/service"),
@@ -1282,13 +1294,13 @@ async def test_execute_backup_resolves_grouped_source_locations(
             job_id,
             repo.path,
             db=mock_db_session,
-            source_directories=["/srv/app", "data", "/var/lib/service"],
+            source_directories=[str(local_source), "data", "/var/lib/service"],
             source_locations=source_locations,
         )
 
     prepare_source_paths.assert_awaited_once_with(
         [
-            "/srv/app",
+            str(local_source),
             "ssh://backup-a@server-a.example:22/home/backup-a/data",
             "ssh://backup-b@server-b.example:2222/var/lib/service",
         ],

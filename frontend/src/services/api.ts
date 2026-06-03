@@ -558,6 +558,7 @@ export const backupAPI = {
     }),
   getScheduledJobs: () => api.get('/backup/jobs?scheduled_only=true'),
   cancelJob: (jobId: string) => api.post(`/backup/cancel/${jobId}`),
+  retryJob: (jobId: string | number) => api.post(`/backup/jobs/${jobId}/retry`),
   // Download logs as file (only for failed/cancelled backups)
   downloadLogs: (jobId: string) =>
     window.open(buildDownloadUrl(`/backup/logs/${jobId}/download`), '_blank'),
@@ -871,6 +872,7 @@ export const backupPlansAPI = {
   listRuns: () => api.get('/backup-plans/runs'),
   getRun: (id: number) => api.get(`/backup-plans/runs/${id}`),
   cancelRun: (id: number) => api.post(`/backup-plans/runs/${id}/cancel`),
+  retryRun: (id: number) => api.post(`/backup-plans/runs/${id}/retry`),
   listRunsForPlan: (id: number) => api.get(`/backup-plans/${id}/runs`),
 }
 

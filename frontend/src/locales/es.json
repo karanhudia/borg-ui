@@ -474,6 +474,8 @@
       "startFailed": "Error al iniciar la copia de seguridad",
       "cancelled": "¡Copia de seguridad cancelada correctamente!",
       "cancelFailed": "Error al cancelar la copia de seguridad",
+      "retryStarted": "Reintento de copia iniciado",
+      "retryFailed": "No se pudo reintentar la copia",
       "selectRepository": "Por favor selecciona un repositorio primero"
     }
   },
@@ -770,6 +772,8 @@
       "startFailed": "No se pudo iniciar el plan de copia",
       "cancelled": "Ejecución del plan cancelada",
       "cancelFailed": "No se pudo cancelar la ejecución del plan",
+      "retryStarted": "Reintento del plan de copia iniciado",
+      "retryFailed": "No se pudo reintentar la ejecución del plan",
       "repositoryCreated": "Repositorio creado",
       "repositoryCreateFailed": "No se pudo crear el repositorio",
       "multiRepositoryRequiresPro": "Varios repositorios en un plan de copia requieren Pro",
@@ -1154,6 +1158,17 @@
       },
       "repositoryProgress": "{{completed}}/{{total}} repositorios finalizados",
       "cancelRun": "Cancelar ejecución",
+      "retryRun": "Reintentar ejecución del plan",
+      "retryConfirm": "¿Reintentar la ejecución del plan #{{id}}?",
+      "retryTooltips": {
+        "ready": "Reintentar ejecución del plan",
+        "retrying": "Reintentando la ejecución del plan...",
+        "onlyFailed": "Solo se pueden reintentar ejecuciones fallidas del plan.",
+        "missingPlan": "Esta ejecución ya no está vinculada a un plan de copia.",
+        "activeRun": "Espera a que termine la ejecución activa del plan antes de reintentar.",
+        "noFailedRepositories": "Esta ejecución no tiene repositorios fallidos para reintentar.",
+        "requiresPermission": "Se requiere acceso de operador para cada repositorio fallido de esta ejecución."
+      },
       "noRepositories": "Aún no se han registrado ejecuciones de repositorio."
     }
   },
@@ -2235,7 +2250,22 @@
       "errorDetails": "Detalles del error",
       "cancel": "Cancelar",
       "cancelJob": "Cancelar trabajo",
-      "breakLock": "Forzar desbloqueo"
+      "breakLock": "Forzar desbloqueo",
+      "retry": "Reintentar trabajo de copia"
+    },
+    "confirmations": {
+      "retryJob": "¿Reintentar el trabajo de copia #{{id}}?"
+    },
+    "retryTooltips": {
+      "ready": "Reintentar trabajo de copia",
+      "retrying": "Reintentando trabajo de copia...",
+      "onlyTerminal": "Solo se pueden reintentar trabajos de copia fallidos o cancelados.",
+      "destructiveType": "Los trabajos {{type}} no son seguros para reintentar desde esta tabla.",
+      "unsupportedType": "Los trabajos {{type}} no se pueden reintentar desde esta tabla.",
+      "backupPlanJob": "Reintenta este trabajo desde su ejecución del plan de copia.",
+      "scheduledJob": "Los trabajos programados deben volver a ejecutarse desde la programación o el plan.",
+      "missingRepository": "Este trabajo no se puede reintentar porque falta su repositorio de origen.",
+      "requiresPermission": "Se requiere acceso de operador para reintentar este trabajo de copia."
     },
     "never": "Nunca",
     "empty": "No se encontraron trabajos de copia de seguridad",
@@ -4408,11 +4438,15 @@
         "failedGetBackupJobs": "Error al obtener los trabajos de copia de seguridad",
         "failedGetBackupStatus": "Error al obtener el estado de la copia de seguridad",
         "failedCancelBackup": "Error al cancelar la copia de seguridad",
-        "cannotDownloadLogsForRunningBackup": "No se pueden descargar los registros de una copia de seguridad en ejecución"
+        "cannotDownloadLogsForRunningBackup": "No se pueden descargar los registros de una copia de seguridad en ejecución",
+        "retryOnlyTerminalFailedCancelled": "Solo se pueden reintentar trabajos de copia fallidos o cancelados.",
+        "retryUnsupportedJobType": "Este tipo de trabajo de copia no se puede reintentar.",
+        "retryRequestNotReconstructable": "Este trabajo de copia ya no se puede reconstruir para reintentarlo."
       },
       "backupPlans": {
         "nameRequired": "El nombre del plan de copia de seguridad es obligatorio.",
-        "clearLegacyRepositoryNotSelected": "No se pueden borrar los ajustes de origen heredados de un repositorio que no está seleccionado en este plan de copia."
+        "clearLegacyRepositoryNotSelected": "No se pueden borrar los ajustes de origen heredados de un repositorio que no está seleccionado en este plan de copia.",
+        "retryUnsupported": "Esta ejecución del plan de copia no se puede reintentar."
       },
       "restore": {
         "cancelledByUser": "Restauración cancelada por el usuario",
