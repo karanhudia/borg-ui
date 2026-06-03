@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-06-03T01:33:48.484Z",
+  "generatedAt": "2026-06-03T02:13:56.004Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #613 visual report",
-    "commitSha": "72b6c68ecbf9",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26858212414"
+    "commitSha": "afe789626af7",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26859486518"
   },
   "totals": {
     "baseline": 254,
@@ -57,9 +57,9 @@
       "baselinePath": "images/baseline/components-betafeaturestab--current-beta-switches--mobile.png",
       "actualPath": "images/actual/components-betafeaturestab--current-beta-switches--mobile.png",
       "diffPath": "images/diff/components-betafeaturestab--current-beta-switches--mobile.png",
-      "diffPixels": 13774,
+      "diffPixels": 13515,
       "totalPixels": 329160,
-      "diffRatio": 0.041845910803256774,
+      "diffRatio": 0.04105905942398833,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -75,9 +75,9 @@
       "baselinePath": "images/baseline/components-betafeaturestab--current-beta-switches.png",
       "actualPath": "images/actual/components-betafeaturestab--current-beta-switches.png",
       "diffPath": "images/diff/components-betafeaturestab--current-beta-switches.png",
-      "diffPixels": 137871,
+      "diffPixels": 137859,
       "totalPixels": 1024000,
-      "diffRatio": 0.1346396484375,
+      "diffRatio": 0.1346279296875,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
