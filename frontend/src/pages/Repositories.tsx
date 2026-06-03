@@ -920,6 +920,11 @@ export default function Repositories() {
         repositoryInfo={repositoryInfo?.data?.info || null}
         isLoading={loadingInfo}
         onClose={() => setViewingInfoRepository(null)}
+        onRunRecoveryCheck={(repository) => handleCheckRepository(repository as Repository)}
+        canRunRecoveryCheck={
+          viewingInfoRepository ? permissions.canDo(viewingInfoRepository.id, 'maintenance') : false
+        }
+        isRecoveryCheckStarting={checkRepositoryMutation.isPending}
       />
 
       {/* Prune Repository Dialog */}

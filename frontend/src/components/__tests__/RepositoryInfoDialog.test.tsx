@@ -382,6 +382,58 @@ describe('RepositoryInfoDialog', () => {
       expect(writeText).toHaveBeenCalledWith('borg check /repo/test')
     })
 
+    it('runs the guided recovery check action when available', async () => {
+      const user = userEvent.setup()
+      const onRunRecoveryCheck = vi.fn()
+
+      render(
+        <RepositoryInfoDialog
+          open={true}
+          repository={{ ...mockRepository, encryption: 'repokey', borg_version: 1 }}
+          repositoryInfo={null}
+          isLoading={false}
+          onClose={vi.fn()}
+          onRunRecoveryCheck={onRunRecoveryCheck}
+          canRunRecoveryCheck={true}
+        />
+      )
+
+      await user.click(screen.getByRole('button', { name: 'Run guided check' }))
+
+      expect(onRunRecoveryCheck).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 1,
+          name: 'Test Repository',
+          path: '/repo/test',
+        })
+      )
+      expect(screen.getByText('borg check /repo/test')).toBeInTheDocument()
+      expect(screen.getByText('borg check --repair /repo/test')).toBeInTheDocument()
+      expect(screen.getByText('borg init --encryption repokey /repo/test')).toBeInTheDocument()
+    })
+
+    it('keeps command fallbacks visible when guided recovery check is unavailable', () => {
+      render(
+        <RepositoryInfoDialog
+          open={true}
+          repository={{ ...mockRepository, encryption: 'repokey', borg_version: 1 }}
+          repositoryInfo={null}
+          isLoading={false}
+          onClose={vi.fn()}
+          onRunRecoveryCheck={vi.fn()}
+          canRunRecoveryCheck={false}
+        />
+      )
+
+      expect(screen.getByRole('button', { name: 'Run guided check' })).toBeDisabled()
+      expect(
+        screen.getByText('Maintenance access is required to run checks in Borg UI.')
+      ).toBeInTheDocument()
+      expect(screen.getByText('borg check /repo/test')).toBeInTheDocument()
+      expect(screen.getByText('borg check --repair /repo/test')).toBeInTheDocument()
+      expect(screen.getByText('borg init --encryption repokey /repo/test')).toBeInTheDocument()
+    })
+
     it('clears the copied feedback timeout when unmounted', async () => {
       const writeText = vi.fn().mockResolvedValue(undefined)
       const setTimeoutSpy = vi.spyOn(window, 'setTimeout')

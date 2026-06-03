@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.core.security import create_access_token, get_password_hash
 from app.database.models import (
+    CheckJob,
     PruneJob,
     Repository,
     SystemSettings,
@@ -62,6 +63,53 @@ class TestRepositoryApiDispatch:
         assert routed_repo.id == repo.id
         assert routed_repo.borg_version == repo.borg_version
         fake_router.check.assert_awaited_once_with(99)
+
+    def test_check_route_accepts_guided_recovery_diagnosis_payload(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Broken Repo",
+            path="/tmp/broken-repo",
+            encryption="repokey",
+            repository_type="local",
+            borg_version=1,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        dispatched = {}
+
+        def fake_start(db, repository, job_model, **kwargs):
+            dispatched["repository"] = repository
+            dispatched["job_model"] = job_model
+            dispatched["extra_fields"] = kwargs["extra_fields"]
+            dispatched["error_key"] = kwargs["error_key"]
+            return SimpleNamespace(id=17, repository_id=repository.id, status="pending")
+
+        with patch(
+            "app.api.repositories.start_background_maintenance_job",
+            side_effect=fake_start,
+        ):
+            response = test_client.post(
+                f"/api/repositories/{repo.id}/check",
+                json={"max_duration": 0, "check_extra_flags": ""},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "job_id": 17,
+            "status": "pending",
+            "message": "backend.success.repo.checkJobStarted",
+        }
+        assert dispatched["repository"].id == repo.id
+        assert dispatched["job_model"] is CheckJob
+        assert dispatched["error_key"] == "backend.errors.repo.checkAlreadyRunning"
+        assert dispatched["extra_fields"] == {
+            "max_duration": 0,
+            "extra_flags": None,
+        }
 
     @pytest.mark.asyncio
     async def test_compact_route_dispatches_through_borg_router(
