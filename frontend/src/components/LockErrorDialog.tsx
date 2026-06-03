@@ -24,7 +24,7 @@ interface LockErrorDialogProps {
   borgVersion?: 1 | 2
   onLockBroken?: () => void
   canBreakLock?: boolean
-  lockBreakingEnabled?: boolean
+  lockBreakingEnabled: boolean
 }
 
 export default function LockErrorDialog({
@@ -35,7 +35,7 @@ export default function LockErrorDialog({
   borgVersion: _borgVersion,
   onLockBroken,
   canBreakLock = false,
-  lockBreakingEnabled = true,
+  lockBreakingEnabled,
 }: LockErrorDialogProps) {
   const { t } = useTranslation()
   const [breaking, setBreaking] = useState(false)

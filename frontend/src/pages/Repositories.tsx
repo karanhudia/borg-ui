@@ -929,9 +929,7 @@ export default function Repositories() {
           repositoryId={lockError.repositoryId}
           repositoryName={lockError.repositoryName}
           borgVersion={lockError.borgVersion}
-          canBreakLock={
-            lockBreakingEnabled && permissions.canDo(lockError.repositoryId, 'maintenance')
-          }
+          canBreakLock={permissions.canDo(lockError.repositoryId, 'maintenance')}
           lockBreakingEnabled={lockBreakingEnabled}
           onLockBroken={() => {
             queryClient.invalidateQueries({ queryKey: ['repository-info', lockError.repositoryId] })

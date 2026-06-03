@@ -150,6 +150,7 @@ export interface BackupJob {
   error_message?: string
   triggered_by?: string
   schedule_id?: number | null
+  scheduled_job_id?: number | null
   has_logs?: boolean
   maintenance_status?: string
   backup_plan_id?: number | null

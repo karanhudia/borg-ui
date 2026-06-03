@@ -64,6 +64,7 @@ export const TransportModes: Story = {
     showTriggerColumn: true,
     actions: { breakLock: true },
     canBreakLocks: (job) => job.repository_id === 3,
+    lockBreakingEnabled: true,
   },
   render: (args) => (
     <Box sx={{ p: 3 }}>

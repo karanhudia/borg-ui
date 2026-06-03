@@ -16,7 +16,7 @@ import {
   Typography,
 } from '@mui/material'
 import { Clock, Info, Play } from 'lucide-react'
-import { backupAPI, backupPlansAPI, repositoriesAPI, settingsAPI } from '../services/api'
+import { backupAPI, backupPlansAPI, repositoriesAPI } from '../services/api'
 import { BorgApiClient } from '../services/borgApi'
 import { toast } from 'react-hot-toast'
 import { translateBackendKey } from '../utils/translateBackendKey'
@@ -33,6 +33,7 @@ import BackupPlanSelect from '../components/shared/BackupPlanSelect'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { useAuth } from '../hooks/useAuth'
 import { usePermissions } from '../hooks/usePermissions'
+import { useLockBreakPermissions } from '../hooks/useLockBreakPermissions'
 import { getRepoCapabilities } from '../utils/repoCapabilities'
 import { useTrackedJobOutcomes } from '../hooks/useTrackedJobOutcomes'
 import { getJobDurationSeconds } from '../utils/analyticsProperties'
@@ -81,15 +82,6 @@ const Backup: React.FC = () => {
     queryKey: ['repositories'],
     queryFn: repositoriesAPI.getRepositories,
   })
-
-  const { data: systemSettingsData } = useQuery({
-    queryKey: ['systemSettings'],
-    queryFn: async () => {
-      const response = await settingsAPI.getSystemSettings()
-      return response.data
-    },
-  })
-  const lockBreakingEnabled = systemSettingsData?.settings?.lock_breaking_enabled ?? false
 
   const { data: backupPlansData, isLoading: loadingBackupPlans } = useQuery({
     queryKey: ['backup-plans'],
@@ -143,21 +135,16 @@ const Backup: React.FC = () => {
       (repo: Repository) => repo.path === selectedRepository
     )
   }, [selectedRepository, repositoriesData])
+  const repositories = useMemo<Repository[]>(
+    () => repositoriesData?.data?.repositories ?? [],
+    [repositoriesData?.data?.repositories]
+  )
 
   const canStartBackup = selectedRepoData ? permissions.canDo(selectedRepoData.id, 'backup') : false
-  const canBreakLockForBackupJob = React.useCallback(
-    (job: BackupJob) => {
-      if (!lockBreakingEnabled) return false
-      const repoId =
-        job.repository_id ??
-        selectedRepoData?.id ??
-        repositoriesData?.data?.repositories?.find(
-          (repo: Repository) => repo.path === job.repository || repo.path === job.repository_path
-        )?.id
-      return typeof repoId === 'number' ? permissions.canDo(repoId, 'maintenance') : false
-    },
-    [lockBreakingEnabled, permissions, repositoriesData?.data?.repositories, selectedRepoData?.id]
-  )
+  const { canBreakLock: canBreakLockForBackupJob, lockBreakingEnabled } = useLockBreakPermissions({
+    repositories,
+    fallbackRepositoryId: selectedRepoData?.id ?? null,
+  })
 
   const runBackupPlanMutation = useMutation({
     mutationFn: (planId: number) => backupPlansAPI.run(planId),
@@ -600,6 +587,7 @@ const Backup: React.FC = () => {
                   delete: true,
                 }}
                 canBreakLocks={canBreakLockForBackupJob}
+                lockBreakingEnabled={lockBreakingEnabled}
                 canDeleteJobs={canManageRepositoryOperations}
                 getRowKey={(job) => String(job.id)}
                 headerBgColor="background.default"

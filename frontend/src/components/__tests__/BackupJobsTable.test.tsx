@@ -537,6 +537,36 @@ describe('BackupJobsTable', () => {
     expect(breakLockButtons.length).toBe(0)
   })
 
+  it('does not show Break Lock button when lock breaking is globally disabled', () => {
+    const jobsWithLockError = [
+      {
+        id: 4,
+        repository: '/backup/repo4',
+        repository_path: '/backup/repo4',
+        type: 'backup',
+        status: 'failed',
+        started_at: '2024-01-20T12:00:00Z',
+        completed_at: '2024-01-20T12:05:00Z',
+        triggered_by: 'manual',
+        error_message:
+          'LOCK_ERROR::/backup/repo4\n[Exit Code 73] Failed to create/acquire the lock (timeout)',
+      },
+    ]
+
+    renderWithProviders(
+      <BackupJobsTable
+        jobs={jobsWithLockError}
+        canBreakLocks={true}
+        lockBreakingEnabled={false}
+        actions={{ breakLock: true }}
+        onBreakLock={mockCallbacks.onBreakLock}
+      />
+    )
+
+    const breakLockButtons = screen.queryAllByRole('button', { name: 'Break Lock' })
+    expect(breakLockButtons.length).toBe(0)
+  })
+
   it('does not show Break Lock button when canBreakLocks is undefined', () => {
     const jobsWithLockError = [
       {

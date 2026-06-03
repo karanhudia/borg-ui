@@ -75,6 +75,7 @@ interface BackupJobsTableProps<T extends Job = Job> {
 
   // User permissions
   canBreakLocks?: CanBreakLocks<T>
+  lockBreakingEnabled?: boolean
   canDeleteJobs?: boolean
 
   // Table styling
@@ -175,6 +176,7 @@ export const BackupJobsTable = <T extends Job = Job>({
   onRunNow,
   onDeleteJob,
   canBreakLocks = false,
+  lockBreakingEnabled = true,
   canDeleteJobs = false,
   headerBgColor = 'background.default',
   enableHover = true,
@@ -201,6 +203,7 @@ export const BackupJobsTable = <T extends Job = Job>({
     repositoryName: string
     borgVersion?: 1 | 2
     canBreakLock: boolean
+    lockBreakingEnabled: boolean
   } | null>(null)
   const [archiveView, setArchiveView] = useState<{
     archive: Archive
@@ -378,6 +381,7 @@ export const BackupJobsTable = <T extends Job = Job>({
         repositoryName: repo.name,
         borgVersion: repo.borg_version as 1 | 2 | undefined,
         canBreakLock: resolveCanBreakLocks(job),
+        lockBreakingEnabled,
       })
     }
   }
@@ -643,6 +647,7 @@ export const BackupJobsTable = <T extends Job = Job>({
       color: 'warning',
       tooltip: t('backupJobsTable.actions.breakLock'),
       show: (job) =>
+        lockBreakingEnabled &&
         resolveCanBreakLocks(job) &&
         job.status === 'failed' &&
         !!job.error_message?.includes('LOCK_ERROR::'),
@@ -759,6 +764,7 @@ export const BackupJobsTable = <T extends Job = Job>({
           repositoryName={lockError.repositoryName}
           borgVersion={lockError.borgVersion}
           canBreakLock={lockError.canBreakLock}
+          lockBreakingEnabled={lockError.lockBreakingEnabled}
           onLockBroken={() => {
             setLockError(null)
             queryClient.invalidateQueries({ queryKey: ['activity'] })

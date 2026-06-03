@@ -71,6 +71,7 @@ interface BackupHistorySectionProps {
   repositories: Repository[]
   isLoading: boolean
   canBreakLocks?: boolean | ((job: BackupJob) => boolean)
+  lockBreakingEnabled?: boolean
   canDeleteJobs?: boolean
   filterSchedule: number | 'all'
   filterRepository: string | 'all'
@@ -89,6 +90,7 @@ const BackupHistorySection: React.FC<BackupHistorySectionProps> = ({
   repositories,
   isLoading,
   canBreakLocks = false,
+  lockBreakingEnabled = true,
   canDeleteJobs = false,
   filterSchedule,
   filterRepository,
@@ -306,6 +308,7 @@ const BackupHistorySection: React.FC<BackupHistorySectionProps> = ({
           delete: true,
         }}
         canBreakLocks={canBreakLocks}
+        lockBreakingEnabled={lockBreakingEnabled}
         canDeleteJobs={canDeleteJobs}
         getRowKey={(job) => String(job.id)}
         headerBgColor="background.default"

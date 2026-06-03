@@ -10,9 +10,10 @@
 
 ---
 
-### Task 1: Backend Contract And Enforcement
+## Task 1: Backend Contract And Enforcement
 
 **Files:**
+
 - Modify: `tests/unit/test_api_repositories_dispatch.py`
 - Modify: `tests/unit/test_api_settings_routes.py`
 - Modify: `app/database/models.py`
@@ -32,9 +33,10 @@
 - [ ] In `break_repository_lock`, keep `_load_repository_with_access(..., "operator")`, then reject with `403` and `backend.errors.repo.lockBreakingDisabled` before preparing Borg env when the setting is false.
 - [ ] Run the targeted pytest tests and confirm they pass.
 
-### Task 2: Frontend Permission State
+## Task 2: Frontend Permission State
 
 **Files:**
+
 - Modify: `frontend/src/services/api.ts`
 - Modify: `frontend/src/components/LockErrorDialog.tsx`
 - Modify: `frontend/src/components/__tests__/LockErrorDialog.test.tsx`
@@ -59,9 +61,10 @@
 - [ ] Add/update Storybook states for lock-error permission behavior and the settings switch.
 - [ ] Run targeted Vitest tests and confirm they pass.
 
-### Task 3: Settings UI
+## Task 3: Settings UI
 
 **Files:**
+
 - Modify: `frontend/src/components/BetaFeaturesTab.tsx`
 - Modify: `frontend/src/components/__tests__/BetaFeaturesTab.test.tsx`
 - Modify: `frontend/src/components/BetaFeaturesTab.stories.tsx`
@@ -73,9 +76,10 @@
 - [ ] Update Storybook initial settings so the switch renders in snapshots.
 - [ ] Run targeted Vitest tests and confirm they pass.
 
-### Task 4: Verification And Handoff
+## Task 4: Verification And Handoff
 
 **Files:**
+
 - Modify only if validation exposes defects.
 
 - [ ] Run targeted backend tests:

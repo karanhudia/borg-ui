@@ -288,7 +288,9 @@ class TestRepositoryApiDispatch:
         test_db.refresh(repo)
 
         fake_router = Mock(break_lock=AsyncMock(return_value={"success": True}))
-        with patch("app.api.repositories.BorgRouter", return_value=fake_router):
+        with patch(
+            "app.api.repositories.BorgRouter", return_value=fake_router
+        ) as mock_router:
             response = test_client.post(
                 f"/api/repositories/{repo.id}/break-lock",
                 headers=admin_headers,
@@ -298,6 +300,7 @@ class TestRepositoryApiDispatch:
         assert response.json()["detail"] == {
             "key": "backend.errors.repo.lockBreakingDisabled"
         }
+        mock_router.assert_not_called()
         fake_router.break_lock.assert_not_awaited()
 
     def test_break_lock_route_requires_operator_access(

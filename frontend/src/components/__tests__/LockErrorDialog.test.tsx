@@ -30,6 +30,7 @@ describe('LockErrorDialog', () => {
     repositoryName: 'test-repo',
     onLockBroken: mockOnLockBroken,
     canBreakLock: true, // Default to admin for existing tests
+    lockBreakingEnabled: true,
   }
 
   beforeEach(() => {
@@ -270,6 +271,7 @@ describe('LockErrorDialog', () => {
           repositoryId={1}
           repositoryName="test-repo"
           canBreakLock={true}
+          lockBreakingEnabled={true}
           // No onLockBroken callback
         />
       )
@@ -308,7 +310,7 @@ describe('LockErrorDialog', () => {
       render(<LockErrorDialog {...defaultProps} canBreakLock={false} />)
       expect(screen.getByText(/Repository maintenance access required/)).toBeInTheDocument()
       expect(
-        screen.getByText(/You need editor access to this repository to break its lock/)
+        screen.getByText(/You need maintenance access to this repository to break its lock/)
       ).toBeInTheDocument()
     })
 

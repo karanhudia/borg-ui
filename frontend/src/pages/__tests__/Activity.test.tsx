@@ -45,6 +45,13 @@ vi.mock('../../hooks/useAuth', () => ({
   }),
 }))
 
+vi.mock('../../hooks/useLockBreakPermissions', () => ({
+  useLockBreakPermissions: () => ({
+    canBreakLock: () => true,
+    lockBreakingEnabled: true,
+  }),
+}))
+
 vi.mock('@tanstack/react-query', async () => {
   const actual =
     await vi.importActual<typeof import('@tanstack/react-query')>('@tanstack/react-query')
@@ -101,7 +108,8 @@ describe('Activity page', () => {
       expect.objectContaining({
         showTypeColumn: true,
         showTriggerColumn: true,
-        canBreakLocks: true,
+        canBreakLocks: expect.any(Function),
+        lockBreakingEnabled: true,
         canDeleteJobs: true,
         actions: expect.objectContaining({ delete: true, breakLock: true }),
       })

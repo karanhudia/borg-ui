@@ -89,6 +89,10 @@ class TestSystemSettingsContracts:
         )
 
         assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.settings.invalidLogSavePolicy"
+        )
 
     def test_update_system_settings_persists_lock_breaking_enabled(
         self, test_client: TestClient, admin_headers, test_db

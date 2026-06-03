@@ -3,10 +3,10 @@ import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { Box, IconButton, MenuItem, Select, Typography } from '@mui/material'
 import { History, Info, RefreshCw } from 'lucide-react'
-import { activityAPI, repositoriesAPI, settingsAPI } from '../services/api'
+import { activityAPI, repositoriesAPI } from '../services/api'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { useAuth } from '../hooks/useAuth'
-import { usePermissions } from '../hooks/usePermissions'
+import { useLockBreakPermissions } from '../hooks/useLockBreakPermissions'
 import BackupJobsTable from '../components/BackupJobsTable'
 import LogViewerDialog from '../components/LogViewerDialog'
 import RunningCloudStorageJobsSection from '../components/RunningCloudStorageJobsSection'
@@ -38,7 +38,6 @@ const Activity: React.FC = () => {
   const { track, EventCategory, EventAction } = useAnalytics()
   const { hasGlobalPermission } = useAuth()
   const canManageActivityJobs = hasGlobalPermission('repositories.manage_all')
-  const permissions = usePermissions()
   const [typeFilter, setTypeFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [logJob, setLogJob] = useState<ActivityItem | null>(null)
@@ -65,29 +64,13 @@ const Activity: React.FC = () => {
     queryKey: ['repositories'],
     queryFn: repositoriesAPI.getRepositories,
   })
-  const { data: systemSettingsData } = useQuery({
-    queryKey: ['systemSettings'],
-    queryFn: async () => {
-      const response = await settingsAPI.getSystemSettings()
-      return response.data
-    },
-  })
-  const lockBreakingEnabled = systemSettingsData?.settings?.lock_breaking_enabled ?? false
-  const repositoryIdByPath = React.useMemo(() => {
-    const repositories = repositoriesData?.data?.repositories ?? []
-    return new Map(repositories.map((repo: { id: number; path: string }) => [repo.path, repo.id]))
-  }, [repositoriesData?.data?.repositories])
-  const canBreakLockForActivity = React.useCallback(
-    (job: ActivityItem) => {
-      if (!lockBreakingEnabled) return false
-      const repoId =
-        job.repository_id ??
-        (job.repository_path ? repositoryIdByPath.get(job.repository_path) : undefined) ??
-        (job.repository ? repositoryIdByPath.get(job.repository) : undefined)
-      return typeof repoId === 'number' ? permissions.canDo(repoId, 'maintenance') : false
-    },
-    [lockBreakingEnabled, permissions, repositoryIdByPath]
+  const repositories = React.useMemo(
+    () => repositoriesData?.data?.repositories ?? [],
+    [repositoriesData?.data?.repositories]
   )
+  const { canBreakLock: canBreakLockForActivity, lockBreakingEnabled } = useLockBreakPermissions({
+    repositories,
+  })
 
   const handleTypeFilterChange = (value: string) => {
     setTypeFilter(value)
@@ -209,6 +192,7 @@ const Activity: React.FC = () => {
             delete: true,
           }}
           canBreakLocks={canBreakLockForActivity}
+          lockBreakingEnabled={lockBreakingEnabled}
           canDeleteJobs={canManageActivityJobs}
           getRowKey={(activity) => `${activity.type}-${activity.id}`}
           headerBgColor="background.default"
@@ -229,6 +213,7 @@ const Activity: React.FC = () => {
             delete: true,
           }}
           canBreakLocks={canBreakLockForActivity}
+          lockBreakingEnabled={lockBreakingEnabled}
           canDeleteJobs={canManageActivityJobs}
           getRowKey={(activity) => `${activity.type}-${activity.id}`}
           headerBgColor="background.default"
