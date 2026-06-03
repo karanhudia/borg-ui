@@ -26,3 +26,16 @@ def test_runtime_base_precreates_documented_borg_cache_dir() -> None:
     assert f"/home/borg/.ssh {EXPECTED_CACHE_DIR} /etc/cron.d" in dockerfile
     assert "/home/borg/.cache /etc/cron.d" in dockerfile
     assert f"chmod 700 /home/borg/.ssh {EXPECTED_CACHE_DIR}" in dockerfile
+
+
+def test_entrypoint_persists_borg_ssh_home() -> None:
+    entrypoint = (ROOT / "entrypoint.sh").read_text(encoding="utf-8")
+
+    assert "SSH_HOME_DIR=/home/borg/.ssh" in entrypoint
+    assert "PERSISTENT_SSH_DIR=/data/ssh_keys" in entrypoint
+    assert 'mkdir -p "$PERSISTENT_SSH_DIR"' in entrypoint
+    assert 'cp -a "$SSH_HOME_DIR"/. "$PERSISTENT_SSH_DIR"/' in entrypoint
+    assert 'rm -rf "$SSH_HOME_DIR"' in entrypoint
+    assert 'ln -sfn "$PERSISTENT_SSH_DIR" "$SSH_HOME_DIR"' in entrypoint
+    assert 'chown -R borg:borg "$PERSISTENT_SSH_DIR"' in entrypoint
+    assert 'chmod 700 "$PERSISTENT_SSH_DIR"' in entrypoint
