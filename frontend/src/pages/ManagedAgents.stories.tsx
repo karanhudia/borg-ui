@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import { Box, Chip, Divider, Paper, Stack, Typography } from '@mui/material'
 import { Laptop, Play, Server } from 'lucide-react'
 import type {
+  AgentDiagnosticsResponse,
   AgentEnrollmentTokenSummary,
   AgentJobResponse,
   AgentMachineResponse,
@@ -11,6 +12,7 @@ import AddAgentDialog from './managed-agents/AddAgentDialog'
 import AgentInstallCommand from './managed-agents/AgentInstallCommand'
 import { buildAgentInstallCommand } from './managed-agents/agentInstallCommandText'
 import {
+  AgentDiagnosticsDialog,
   AgentDeleteConfirmationDialog,
   AgentJobLogsDialog,
   AgentList,
@@ -162,6 +164,46 @@ const jobLogs = [
     received_at: '2026-05-16T11:52:01.000Z',
   },
 ]
+
+const diagnosticsSuccess: AgentDiagnosticsResponse = {
+  agent: {
+    id: agents[0].id,
+    name: agents[0].name,
+    agent_id: agents[0].agent_id,
+    hostname: agents[0].hostname,
+    status: agents[0].status,
+    last_seen_at: agents[0].last_seen_at,
+    agent_version: agents[0].agent_version,
+    borg_versions: agents[0].borg_versions,
+    capabilities: ['session.commands', 'diagnostics.run', 'backup.create'],
+    last_error: null,
+  },
+  session: { status: 'success', elapsed_ms: 12 },
+  tcp: null,
+}
+
+const diagnosticsPartialFailure: AgentDiagnosticsResponse = {
+  agent: diagnosticsSuccess.agent,
+  session: { status: 'success', elapsed_ms: 10 },
+  tcp: {
+    target: { host: 'postgres.internal', port: 5432, timeout_seconds: 3 },
+    status: 'failed',
+    elapsed_ms: 4,
+    error: 'connection_refused',
+    message: 'Connection refused',
+  },
+}
+
+const diagnosticsTimeout: AgentDiagnosticsResponse = {
+  agent: { ...diagnosticsSuccess.agent, status: 'offline' },
+  session: {
+    status: 'timeout',
+    elapsed_ms: null,
+    error: 'agent_timeout',
+    message: 'Agent did not return diagnostics before the timeout',
+  },
+  tcp: null,
+}
 
 const agentsById = new Map(agents.map((agent) => [agent.id, agent]))
 const exampleCommand = buildAgentInstallCommand(
@@ -454,6 +496,48 @@ export const AgentReinstallDialogOpen: Story = {
         serverUrl="https://borg-ui.example.com"
         onCancel={() => {}}
         onCopy={() => {}}
+      />
+    </Box>
+  ),
+}
+
+export const AgentDiagnosticsSuccess: Story = {
+  render: () => (
+    <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>
+      <AgentDiagnosticsDialog
+        open
+        agent={agents[0]}
+        initialResult={diagnosticsSuccess}
+        onClose={() => {}}
+        onRunDiagnostics={async () => diagnosticsSuccess}
+      />
+    </Box>
+  ),
+}
+
+export const AgentDiagnosticsPartialFailure: Story = {
+  render: () => (
+    <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>
+      <AgentDiagnosticsDialog
+        open
+        agent={agents[0]}
+        initialResult={diagnosticsPartialFailure}
+        onClose={() => {}}
+        onRunDiagnostics={async () => diagnosticsPartialFailure}
+      />
+    </Box>
+  ),
+}
+
+export const AgentDiagnosticsTimeout: Story = {
+  render: () => (
+    <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>
+      <AgentDiagnosticsDialog
+        open
+        agent={agents[1]}
+        initialResult={diagnosticsTimeout}
+        onClose={() => {}}
+        onRunDiagnostics={async () => diagnosticsTimeout}
       />
     </Box>
   ),

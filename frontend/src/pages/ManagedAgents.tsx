@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'react-hot-toast'
@@ -8,6 +8,7 @@ import {
   Box,
   Button,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -24,11 +25,13 @@ import {
   TableCell,
   TableHead,
   TableRow,
+  TextField,
   Tooltip,
   Typography,
   useTheme,
 } from '@mui/material'
 import {
+  Activity,
   AlertTriangle,
   Ban,
   CheckCircle,
@@ -43,6 +46,8 @@ import {
 } from 'lucide-react'
 import {
   AgentEnrollmentTokenSummary,
+  AgentDiagnosticsRequest,
+  AgentDiagnosticsResponse,
   AgentJobLogEntryResponse,
   AgentJobResponse,
   AgentMachineResponse,
@@ -57,6 +62,7 @@ import PageTabs from '../components/PageTabs'
 import PageHeader from '../components/PageHeader'
 import PlanGate from '../components/shared/PlanGate'
 import LogViewerDialog, { type LogViewerFetchLogs } from '../components/shared/LogViewerDialog'
+import ResponsiveDialog from '../components/shared/ResponsiveDialog'
 import AddAgentDialog from './managed-agents/AddAgentDialog'
 import { resolveAgentServerUrl } from './managed-agents/agentServerUrl'
 import {
@@ -131,6 +137,45 @@ function formatBorgBinary(binary: Record<string, unknown>): string {
   const label = version || path || 'borg'
 
   return installSource ? `${label} (${installSource})` : label
+}
+
+function formatElapsedMs(value?: number | null): string {
+  if (typeof value !== 'number') return 'Not reported'
+  return `${Math.round(value)} ms`
+}
+
+function buildDiagnosticsPayload(
+  hostValue: string,
+  portValue: string,
+  timeoutValue: string
+): AgentDiagnosticsRequest {
+  const host = hostValue.trim()
+  if (!host) return {}
+
+  return {
+    target: {
+      host,
+      port: Number(portValue),
+      timeout_seconds: Number(timeoutValue),
+    },
+  }
+}
+
+function sessionStatusLabel(status: string): string {
+  switch (status) {
+    case 'success':
+      return 'Session healthy'
+    case 'offline':
+      return 'Agent offline'
+    case 'timeout':
+      return 'Timed out'
+    default:
+      return 'Session failed'
+  }
+}
+
+function tcpStatusLabel(status: string): string {
+  return status === 'success' ? 'TCP reachable' : 'TCP failed'
 }
 
 export default function ManagedAgents() {
@@ -388,6 +433,16 @@ export default function ManagedAgents() {
               status: agent.status,
             })
             setLogsAgent(agent)
+          }}
+          onRunDiagnostics={async (agent, payload) => {
+            trackSystem(EventAction.START, {
+              section: MANAGED_AGENTS_ANALYTICS_SECTION,
+              operation: 'run_agent_diagnostics',
+              status: agent.status,
+              has_target: Boolean(payload.target),
+            })
+            const response = await managedAgentsAPI.runDiagnostics(agent.id, payload)
+            return response.data
           }}
           isRevoking={revokeAgentMutation.isPending}
           isDeleting={deleteAgentMutation.isPending}
@@ -675,6 +730,288 @@ const getAgentStatusIcon = (status: string) => {
   }
 }
 
+export function AgentDiagnosticsDialog({
+  agent,
+  open,
+  initialResult = null,
+  onClose,
+  onRunDiagnostics,
+}: {
+  agent: AgentMachineResponse | null
+  open: boolean
+  initialResult?: AgentDiagnosticsResponse | null
+  onClose: () => void
+  onRunDiagnostics?: (
+    agent: AgentMachineResponse,
+    payload: AgentDiagnosticsRequest
+  ) => Promise<AgentDiagnosticsResponse>
+}) {
+  const [targetHost, setTargetHost] = useState('')
+  const [targetPort, setTargetPort] = useState('')
+  const [targetTimeout, setTargetTimeout] = useState('3')
+  const [result, setResult] = useState<AgentDiagnosticsResponse | null>(initialResult)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [running, setRunning] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    setResult(initialResult)
+    setErrorMessage(null)
+    setRunning(false)
+  }, [initialResult, open])
+
+  const runDiagnostics = async () => {
+    if (!agent || !onRunDiagnostics) return
+    setRunning(true)
+    setErrorMessage(null)
+    try {
+      const nextResult = await onRunDiagnostics(
+        agent,
+        buildDiagnosticsPayload(targetHost, targetPort, targetTimeout)
+      )
+      setResult(nextResult)
+    } catch (error) {
+      setErrorMessage(extractBackendMessage(error, 'Failed to run diagnostics'))
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  const diagnosticAgent = result?.agent
+  const borgVersions = diagnosticAgent?.borg_versions ?? agent?.borg_versions ?? []
+  const capabilities = diagnosticAgent?.capabilities ?? agent?.capabilities ?? []
+  const lastError = diagnosticAgent?.last_error ?? agent?.last_error ?? null
+
+  const footer = (
+    <DialogActions sx={{ px: 3, py: 2 }}>
+      <Button onClick={onClose}>Close</Button>
+      <Button
+        variant="contained"
+        onClick={() => void runDiagnostics()}
+        disabled={!agent || running || !onRunDiagnostics}
+        startIcon={running ? <CircularProgress color="inherit" size={16} /> : <Activity size={16} />}
+      >
+        {running ? 'Running diagnostics' : 'Run check'}
+      </Button>
+    </DialogActions>
+  )
+
+  return (
+    <ResponsiveDialog open={open} onClose={onClose} fullWidth maxWidth="md" footer={footer}>
+      <DialogTitle>Agent diagnostics</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2.25} sx={{ pt: 0.5, pb: 1 }}>
+          <Box>
+            <Typography fontWeight={700}>{getAgentLabel(agent || undefined)}</Typography>
+            <Typography color="text.secondary" variant="body2" sx={{ mt: 0.25 }}>
+              Verify the outbound agent session and optionally test a TCP target from the agent
+              host.
+            </Typography>
+          </Box>
+
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 1fr) 120px 140px' },
+              gap: 1.25,
+            }}
+          >
+            <TextField
+              label="Target host"
+              value={targetHost}
+              onChange={(event) => setTargetHost(event.target.value)}
+              placeholder="postgres.internal"
+              size="small"
+              helperText="Optional TCP target"
+            />
+            <TextField
+              label="Port"
+              value={targetPort}
+              onChange={(event) => setTargetPort(event.target.value)}
+              placeholder="5432"
+              size="small"
+              type="number"
+              inputProps={{ min: 1, max: 65535 }}
+            />
+            <TextField
+              label="Timeout"
+              value={targetTimeout}
+              onChange={(event) => setTargetTimeout(event.target.value)}
+              size="small"
+              type="number"
+              inputProps={{ min: 0.5, max: 10, step: 0.5 }}
+              helperText="Seconds"
+            />
+          </Box>
+
+          {errorMessage && (
+            <Alert severity="error" role="alert" sx={{ borderRadius: 1.5 }}>
+              {errorMessage}
+            </Alert>
+          )}
+
+          <Box
+            sx={{
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: 1.5,
+              overflow: 'hidden',
+            }}
+          >
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+              }}
+            >
+              {[
+                ['Status', diagnosticAgent?.status ?? agent?.status ?? 'unknown'],
+                ['Last seen', formatDate(diagnosticAgent?.last_seen_at ?? agent?.last_seen_at)],
+                ['Agent version', diagnosticAgent?.agent_version ?? agent?.agent_version ?? '—'],
+                [
+                  'Borg',
+                  borgVersions.length ? borgVersions.map(formatBorgBinary).join(', ') : 'None',
+                ],
+              ].map(([label, value], index) => (
+                <Box
+                  key={label}
+                  sx={{
+                    px: 1.5,
+                    py: 1.25,
+                    borderRight: { xs: 0, sm: index % 2 === 0 ? '1px solid' : 0 },
+                    borderBottom: index < 2 ? '1px solid' : 0,
+                    borderColor: 'divider',
+                    minWidth: 0,
+                  }}
+                >
+                  <Typography variant="caption" color="text.secondary" fontWeight={700}>
+                    {label}
+                  </Typography>
+                  <Typography noWrap title={String(value)} fontWeight={600}>
+                    {value}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+          </Box>
+
+          <Stack spacing={1}>
+            <Typography variant="caption" color="text.secondary" fontWeight={700}>
+              Capabilities
+            </Typography>
+            <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
+              {capabilities.length ? (
+                capabilities.map((capability) => (
+                  <Chip key={capability} label={capability} size="small" variant="outlined" />
+                ))
+              ) : (
+                <Chip label="None reported" size="small" variant="outlined" />
+              )}
+            </Stack>
+          </Stack>
+
+          {lastError && (
+            <Alert
+              severity="warning"
+              icon={<AlertTriangle size={16} />}
+              sx={{ borderRadius: 1.5 }}
+            >
+              {lastError}
+            </Alert>
+          )}
+
+          {result ? (
+            <Stack spacing={1.25} aria-live="polite">
+              <DiagnosticResultRow
+                title={sessionStatusLabel(result.session.status)}
+                elapsed={result.session.elapsed_ms}
+                error={result.session.error}
+                message={result.session.message}
+                severity={result.session.status === 'success' ? 'success' : 'warning'}
+              />
+              {result.tcp ? (
+                <DiagnosticResultRow
+                  title={tcpStatusLabel(result.tcp.status)}
+                  elapsed={result.tcp.elapsed_ms}
+                  target={`${result.tcp.target.host}:${result.tcp.target.port}`}
+                  error={result.tcp.error}
+                  message={result.tcp.message}
+                  severity={result.tcp.status === 'success' ? 'success' : 'error'}
+                />
+              ) : null}
+            </Stack>
+          ) : (
+            <Alert severity="info" sx={{ borderRadius: 1.5 }}>
+              Run a check to verify the active agent session. Add a host and port to test TCP
+              reachability from the agent host.
+            </Alert>
+          )}
+        </Stack>
+      </DialogContent>
+    </ResponsiveDialog>
+  )
+}
+
+function DiagnosticResultRow({
+  title,
+  elapsed,
+  error,
+  message,
+  target,
+  severity,
+}: {
+  title: string
+  elapsed?: number | null
+  error?: string | null
+  message?: string | null
+  target?: string
+  severity: 'success' | 'warning' | 'error'
+}) {
+  return (
+    <Box
+      sx={{
+        border: '1px solid',
+        borderColor: 'divider',
+        borderRadius: 1.5,
+        px: 1.5,
+        py: 1.25,
+      }}
+    >
+      <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+        <Stack direction="row" spacing={0.75} alignItems="center" minWidth={0}>
+          {severity === 'success' ? (
+            <CheckCircle size={16} />
+          ) : severity === 'error' ? (
+            <XCircle size={16} />
+          ) : (
+            <AlertTriangle size={16} />
+          )}
+          <Typography fontWeight={700}>{title}</Typography>
+        </Stack>
+        <Chip label={formatElapsedMs(elapsed)} size="small" variant="outlined" />
+      </Stack>
+      {target && (
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+          {target}
+        </Typography>
+      )}
+      {error && (
+        <Typography
+          variant="body2"
+          sx={{ mt: 0.75, fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace' }}
+        >
+          {error}
+        </Typography>
+      )}
+      {message && (
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          {message}
+        </Typography>
+      )}
+    </Box>
+  )
+}
+
 export function AgentDeleteConfirmationDialog({
   agent,
   open,
@@ -770,6 +1107,7 @@ export function AgentList({
   onRevoke,
   onDelete,
   onViewLogs,
+  onRunDiagnostics,
   isRevoking,
   isDeleting,
 }: {
@@ -779,6 +1117,10 @@ export function AgentList({
   onRevoke: (agent: AgentMachineResponse) => void
   onDelete: (agent: AgentMachineResponse) => void
   onViewLogs: (agent: AgentMachineResponse) => void
+  onRunDiagnostics?: (
+    agent: AgentMachineResponse,
+    payload: AgentDiagnosticsRequest
+  ) => Promise<AgentDiagnosticsResponse>
   isRevoking: boolean
   isDeleting: boolean
 }) {
@@ -787,6 +1129,30 @@ export function AgentList({
   const isDark = theme.palette.mode === 'dark'
   const [deleteTarget, setDeleteTarget] = useState<AgentMachineResponse | null>(null)
   const [reinstallTarget, setReinstallTarget] = useState<AgentMachineResponse | null>(null)
+  const [diagnosticsTarget, setDiagnosticsTarget] = useState<AgentMachineResponse | null>(null)
+  const handleRunDiagnostics =
+    onRunDiagnostics ??
+    (async (agent: AgentMachineResponse): Promise<AgentDiagnosticsResponse> => ({
+      agent: {
+        id: agent.id,
+        name: agent.name,
+        agent_id: agent.agent_id,
+        hostname: agent.hostname,
+        status: agent.status,
+        last_seen_at: agent.last_seen_at,
+        agent_version: agent.agent_version,
+        borg_versions: agent.borg_versions,
+        capabilities: agent.capabilities,
+        last_error: agent.last_error,
+      },
+      session: {
+        status: 'failed',
+        elapsed_ms: null,
+        error: 'diagnostics_unavailable',
+        message: 'Diagnostics are unavailable in this story or test surface.',
+      },
+      tcp: null,
+    }))
 
   if (!agents.length) {
     return <Alert severity="info">No agents enrolled.</Alert>
@@ -1021,6 +1387,32 @@ export function AgentList({
                     borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.07),
                   }}
                 >
+                  <Tooltip title="Run diagnostics" arrow>
+                    <IconButton
+                      size="small"
+                      aria-label="Run diagnostics"
+                      onClick={() => {
+                        trackSystem(EventAction.START, {
+                          section: MANAGED_AGENTS_ANALYTICS_SECTION,
+                          operation: 'open_diagnostics_dialog',
+                          status: agent.status,
+                        })
+                        setDiagnosticsTarget(agent)
+                      }}
+                      sx={{
+                        width: { xs: 40, sm: 34 },
+                        height: { xs: 40, sm: 34 },
+                        borderRadius: 1.5,
+                        color: alpha(theme.palette.success.main, 0.75),
+                        '&:hover': {
+                          color: theme.palette.success.main,
+                          bgcolor: alpha(theme.palette.success.main, isDark ? 0.15 : 0.1),
+                        },
+                      }}
+                    >
+                      <Activity size={16} />
+                    </IconButton>
+                  </Tooltip>
                   <Tooltip title="View agent logs" arrow>
                     <IconButton
                       size="small"
@@ -1135,6 +1527,12 @@ export function AgentList({
         serverUrl={serverUrl}
         onCopy={onCopy}
         onCancel={() => setReinstallTarget(null)}
+      />
+      <AgentDiagnosticsDialog
+        open={!!diagnosticsTarget}
+        agent={diagnosticsTarget}
+        onClose={() => setDiagnosticsTarget(null)}
+        onRunDiagnostics={handleRunDiagnostics}
       />
     </>
   )

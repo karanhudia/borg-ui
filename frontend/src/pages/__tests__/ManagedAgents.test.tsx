@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, waitFor, within } from '@testing-library/react'
 import { QueryClient } from '@tanstack/react-query'
 import ManagedAgents, {
+  AgentDiagnosticsDialog,
   AgentList,
   AgentSetupGuide,
   AgentSetupHelpContent,
@@ -12,7 +13,12 @@ import AgentInstallCommand from '../managed-agents/AgentInstallCommand'
 import { buildAgentInstallCommand } from '../managed-agents/agentInstallCommandText'
 import { isLocalAgentServerUrl, resolveAgentServerUrl } from '../managed-agents/agentServerUrl'
 import { renderWithProviders, userEvent } from '../../test/test-utils'
-import { AgentJobResponse, AgentMachineResponse, managedAgentsAPI } from '../../services/api'
+import {
+  AgentDiagnosticsResponse,
+  AgentJobResponse,
+  AgentMachineResponse,
+  managedAgentsAPI,
+} from '../../services/api'
 import type { AxiosResponse } from 'axios'
 import { buildAgentReinstallCommand } from '../managed-agents/agentInstallCommandText'
 
@@ -33,6 +39,7 @@ vi.mock('../../services/api', () => ({
     deleteAgent: vi.fn(),
     createBackupJob: vi.fn(),
     cancelJob: vi.fn(),
+    runDiagnostics: vi.fn(),
   },
 }))
 
@@ -68,6 +75,49 @@ vi.mock('react-hot-toast', async () => {
   }
 })
 
+function buildAgent(overrides: Partial<AgentMachineResponse> = {}): AgentMachineResponse {
+  return {
+    id: 7,
+    agent_id: 'agent-client-7',
+    name: 'client',
+    hostname: 'client-01',
+    status: 'online',
+    os: 'linux',
+    arch: 'arm64',
+    agent_version: '0.4.0',
+    last_seen_at: '2026-05-18T10:00:00.000Z',
+    borg_versions: [{ major: 1, version: '1.2.8', path: '/usr/bin/borg' }],
+    capabilities: ['session.commands', 'diagnostics.run'],
+    last_error: null,
+    created_at: '2026-05-18T09:00:00.000Z',
+    updated_at: '2026-05-18T10:00:00.000Z',
+    ...overrides,
+  } as AgentMachineResponse
+}
+
+function buildDiagnosticsResult(
+  agent: AgentMachineResponse,
+  overrides: Partial<AgentDiagnosticsResponse> = {}
+): AgentDiagnosticsResponse {
+  return {
+    agent: {
+      id: agent.id,
+      name: agent.name,
+      agent_id: agent.agent_id,
+      hostname: agent.hostname ?? null,
+      status: agent.status,
+      last_seen_at: agent.last_seen_at ?? null,
+      agent_version: agent.agent_version ?? null,
+      borg_versions: agent.borg_versions ?? [],
+      capabilities: agent.capabilities ?? [],
+      last_error: agent.last_error ?? null,
+    },
+    session: { status: 'success', elapsed_ms: 12 },
+    tcp: null,
+    ...overrides,
+  }
+}
+
 describe('ManagedAgents', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -78,6 +128,9 @@ describe('ManagedAgents', () => {
     vi.mocked(managedAgentsAPI.listJobs).mockResolvedValue({ data: [] } as AxiosResponse)
     vi.mocked(managedAgentsAPI.listJobLogs).mockResolvedValue({ data: [] } as AxiosResponse)
     vi.mocked(managedAgentsAPI.listAgentLogs).mockResolvedValue({ data: [] } as AxiosResponse)
+    vi.mocked(managedAgentsAPI.runDiagnostics).mockResolvedValue({
+      data: buildDiagnosticsResult(buildAgent()),
+    } as AxiosResponse<AgentDiagnosticsResponse>)
   })
 
   it('shows concrete remote setup instructions before any agents are enrolled', async () => {
@@ -462,6 +515,7 @@ describe('ManagedAgents', () => {
         onRevoke={onRevoke}
         onDelete={onDelete}
         onViewLogs={vi.fn()}
+        onRunDiagnostics={vi.fn()}
         isRevoking={false}
         isDeleting={false}
       />
@@ -475,6 +529,138 @@ describe('ManagedAgents', () => {
 
     await user.click(screen.getByRole('button', { name: /revoke agent/i }))
     expect(onRevoke).toHaveBeenCalledWith(agent)
+  })
+
+  it('opens managed-agent diagnostics from an agent card and runs a session check', async () => {
+    const user = userEvent.setup()
+    const agent = buildAgent({
+      id: 7,
+      hostname: 'client-01',
+      agent_id: 'agent-client-7',
+      status: 'online',
+      last_seen_at: '2026-05-18T10:00:00.000Z',
+      agent_version: '0.4.0',
+      borg_versions: [{ major: 1, version: '1.2.8', path: '/usr/bin/borg' }],
+      capabilities: ['session.commands', 'diagnostics.run'],
+    })
+    vi.mocked(managedAgentsAPI.listAgents).mockResolvedValue({ data: [agent] } as AxiosResponse)
+    vi.mocked(managedAgentsAPI.runDiagnostics).mockResolvedValue({
+      data: buildDiagnosticsResult(agent, { session: { status: 'success', elapsed_ms: 12 } }),
+    } as AxiosResponse<AgentDiagnosticsResponse>)
+
+    renderWithProviders(<ManagedAgents />, { initialRoute: '/managed-agents' })
+
+    await screen.findByText('client-01', undefined, { timeout: 10000 })
+    await user.click(screen.getByRole('button', { name: /run diagnostics/i }))
+
+    const dialog = await screen.findByRole('dialog', { name: /agent diagnostics/i })
+    expect(within(dialog).getByText(/client-01/i)).toBeInTheDocument()
+
+    await user.click(within(dialog).getByRole('button', { name: /run check/i }))
+
+    await waitFor(() => {
+      expect(managedAgentsAPI.runDiagnostics).toHaveBeenCalledWith(7, {})
+    })
+    expect(await within(dialog).findByText(/Session healthy/i)).toBeInTheDocument()
+    expect(within(dialog).getByText('12 ms')).toBeInTheDocument()
+    expect(within(dialog).getByText(/diagnostics.run/i)).toBeInTheDocument()
+  }, 60000)
+
+  it('keeps existing agent card actions enabled while diagnostics are loading', async () => {
+    const user = userEvent.setup()
+    let resolveDiagnostics:
+      | ((value: AxiosResponse<AgentDiagnosticsResponse>) => void)
+      | undefined
+    const agent = buildAgent({ id: 7, hostname: 'client-01', status: 'online' })
+    vi.mocked(managedAgentsAPI.listAgents).mockResolvedValue({ data: [agent] } as AxiosResponse)
+    vi.mocked(managedAgentsAPI.runDiagnostics).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveDiagnostics = resolve
+      })
+    )
+
+    renderWithProviders(<ManagedAgents />, { initialRoute: '/managed-agents' })
+
+    await screen.findByText('client-01', undefined, { timeout: 10000 })
+    await user.click(screen.getByRole('button', { name: /run diagnostics/i }))
+    const dialog = await screen.findByRole('dialog', { name: /agent diagnostics/i })
+    await user.click(within(dialog).getByRole('button', { name: /run check/i }))
+
+    expect(within(dialog).getByRole('button', { name: /running diagnostics/i })).toBeDisabled()
+    expect(
+      screen.getByRole('button', { name: /view agent logs/i, hidden: true })
+    ).not.toBeDisabled()
+    expect(
+      screen.getByRole('button', { name: /reinstall agent/i, hidden: true })
+    ).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: /delete agent/i, hidden: true })).not.toBeDisabled()
+
+    resolveDiagnostics?.({
+      data: buildDiagnosticsResult(agent, { session: { status: 'success', elapsed_ms: 15 } }),
+    } as AxiosResponse<AgentDiagnosticsResponse>)
+    expect(await within(dialog).findByText('15 ms')).toBeInTheDocument()
+  }, 60000)
+
+  it('renders diagnostics partial TCP failure details', () => {
+    const agent = buildAgent({ hostname: 'client-01', status: 'online' })
+
+    renderWithProviders(
+      <AgentDiagnosticsDialog
+        open
+        agent={agent}
+        initialResult={buildDiagnosticsResult(agent, {
+          session: { status: 'success', elapsed_ms: 10 },
+          tcp: {
+            target: { host: 'postgres.internal', port: 5432, timeout_seconds: 3 },
+            status: 'failed',
+            elapsed_ms: 4,
+            error: 'connection_refused',
+            message: 'Connection refused',
+          },
+        })}
+        onClose={vi.fn()}
+        onRunDiagnostics={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText(/Session healthy/i)).toBeInTheDocument()
+    expect(screen.getByText(/TCP failed/i)).toBeInTheDocument()
+    expect(screen.getByText(/postgres.internal:5432/i)).toBeInTheDocument()
+    expect(screen.getByText(/connection_refused/i)).toBeInTheDocument()
+    expect(screen.getByText(/Connection refused/i)).toBeInTheDocument()
+  })
+
+  it.each([
+    [
+      'offline',
+      { status: 'offline', elapsed_ms: null, error: 'agent_offline', message: 'Agent offline' },
+      /Agent offline/i,
+    ],
+    [
+      'timeout',
+      {
+        status: 'timeout',
+        elapsed_ms: null,
+        error: 'agent_timeout',
+        message: 'Agent did not return diagnostics before the timeout',
+      },
+      /Timed out/i,
+    ],
+  ])('renders diagnostics %s state', (_state, session, expectedLabel) => {
+    const agent = buildAgent({ hostname: 'client-01', status: 'offline' })
+
+    renderWithProviders(
+      <AgentDiagnosticsDialog
+        open
+        agent={agent}
+        initialResult={buildDiagnosticsResult(agent, { session })}
+        onClose={vi.fn()}
+        onRunDiagnostics={vi.fn()}
+      />
+    )
+
+    expect(screen.getAllByText(expectedLabel).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(session.message).length).toBeGreaterThan(0)
   })
 
   it('builds a tokenless reinstall command for existing agents', () => {
