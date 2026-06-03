@@ -1,17 +1,17 @@
 {
-  "generatedAt": "2026-06-03T02:13:56.004Z",
+  "generatedAt": "2026-06-03T02:41:26.026Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #613 visual report",
-    "commitSha": "afe789626af7",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26859486518"
+    "commitSha": "d6badca39fe1",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26860330173"
   },
   "totals": {
     "baseline": 254,
-    "actual": 254,
+    "actual": 260,
     "compared": 254,
     "changed": 4,
-    "added": 0,
+    "added": 6,
     "removed": 0,
     "unchanged": 250
   },
@@ -89,7 +89,32 @@
       }
     }
   ],
-  "added": [],
+  "added": [
+    {
+      "fileName": "components-lockerrordialog--break-lock-available--mobile.png",
+      "actualPath": "images/actual/components-lockerrordialog--break-lock-available--mobile.png"
+    },
+    {
+      "fileName": "components-lockerrordialog--break-lock-available.png",
+      "actualPath": "images/actual/components-lockerrordialog--break-lock-available.png"
+    },
+    {
+      "fileName": "components-lockerrordialog--lock-breaking-disabled--mobile.png",
+      "actualPath": "images/actual/components-lockerrordialog--lock-breaking-disabled--mobile.png"
+    },
+    {
+      "fileName": "components-lockerrordialog--lock-breaking-disabled.png",
+      "actualPath": "images/actual/components-lockerrordialog--lock-breaking-disabled.png"
+    },
+    {
+      "fileName": "components-lockerrordialog--maintenance-required--mobile.png",
+      "actualPath": "images/actual/components-lockerrordialog--maintenance-required--mobile.png"
+    },
+    {
+      "fileName": "components-lockerrordialog--maintenance-required.png",
+      "actualPath": "images/actual/components-lockerrordialog--maintenance-required.png"
+    }
+  ],
   "removed": [],
   "unchanged": [
     {
