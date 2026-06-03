@@ -118,7 +118,7 @@
       "archives": "Archivi",
       "restore": "Ripristino",
       "integrity": "Integrità",
-      "schedule": "Pianificazione"
+      "schedule": "Lavori"
     },
     "badges": {
       "new": "Nuovo"
@@ -537,16 +537,17 @@
     }
   },
   "schedule": {
-    "title": "Pianificazione",
-    "subtitle": "Gestisci backup automatizzati e controlli del repository",
+    "title": "Lavori",
+    "subtitle": "Pianifica ed esegui lavori di backup, controllo e ripristino",
     "createBackup": "Crea Pianificazione Backup",
     "createBackupPlan": "Crea piano di backup",
     "createSchedule": "Crea pianificazione",
-    "createLegacySchedule": "Crea pianificazione legacy",
+    "createLegacySchedule": "Crea lavoro legacy",
+    "createLegacyJob": "Crea lavoro legacy",
     "addCheck": "Aggiungi Pianificazione Controllo",
     "addRestoreCheck": "Aggiungi controllo di ripristino",
     "tabs": {
-      "byPlan": "Pianificazioni",
+      "byPlan": "Lavori eseguibili",
       "backupJobs": "Attività",
       "repositoryChecks": "Controlli Repository",
       "restoreChecks": "Controlli di ripristino"
@@ -577,8 +578,10 @@
       "runCheckTip": "Il controllo di integrità viene eseguito dopo ogni backup (oltre a qualsiasi controllo pianificato qui sotto)"
     },
     "noRepositories": "Devi creare almeno un repository prima di pianificare i backup.",
-    "legacyBackupSchedulesTitle": "Pianificazioni backup legacy",
-    "legacyBackupSchedulesDescription": "Le pianificazioni esistenti basate su repository continuano a essere eseguite qui. I nuovi backup pianificati dovrebbero essere creati come piani di backup.",
+    "legacyBackupSchedulesTitle": "Lavori repository legacy",
+    "legacyBackupSchedulesDescription": "I lavori repository legacy continuano a essere eseguiti qui per repository con percorsi sorgente propri. Usa i piani di backup per nuovi flussi gestiti dai piani.",
+    "legacyRepositoryJobsTitle": "Lavori repository legacy",
+    "legacyRepositoryJobsDescription": "I lavori repository legacy continuano a essere eseguiti qui per repository con percorsi sorgente propri. Usa i piani di backup per nuovi flussi gestiti dai piani.",
     "confirmRunNow": "Eseguire \"{{name}}\" ora?",
     "maintenance": {
       "pruning": "Pulizia archivi in corso...",
@@ -3731,9 +3734,9 @@
     }
   },
   "scheduledJobsTableSection": {
-    "title": "Tutti i Job Pianificati",
-    "noJobsFound": "Nessun job pianificato trovato",
-    "noJobsDesc": "Crea il tuo primo job di backup pianificato"
+    "title": "Lavori repository legacy",
+    "noJobsFound": "Nessun lavoro repository legacy trovato",
+    "noJobsDesc": "Crea un lavoro legacy per un repository che possiede ancora percorsi sorgente."
   },
   "advancedRepositoryOptions": {
     "title": "Opzioni Avanzate",

@@ -52,7 +52,7 @@ const defaultProps = {
 describe('ScheduledJobsTable', () => {
   it('renders the section title', () => {
     render(<ScheduledJobsTable {...defaultProps} />)
-    expect(screen.getByText('All Scheduled Jobs')).toBeInTheDocument()
+    expect(screen.getByText('Legacy Repository Jobs')).toBeInTheDocument()
   })
 
   it('renders a card for each job', () => {
@@ -78,7 +78,7 @@ describe('ScheduledJobsTable', () => {
 
   it('shows empty state when jobs array is empty', () => {
     render(<ScheduledJobsTable {...defaultProps} jobs={[]} />)
-    expect(screen.getByText('No scheduled jobs found')).toBeInTheDocument()
+    expect(screen.getByText('No legacy repository jobs found')).toBeInTheDocument()
   })
 
   it('renders the jobs list without an outer card wrapper', () => {

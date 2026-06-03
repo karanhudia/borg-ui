@@ -300,9 +300,15 @@ Backup Plan schedules run backups automatically.
 
 Plans can also run prune, compact, and check after successful repository backups.
 
-The Schedules area still shows scheduled repository work. New backup schedules should usually live on Backup Plans.
+The Jobs area still shows executable repository work, including Legacy Repository Jobs for repositories that still own source paths. New backup schedules should usually live on Backup Plans.
 
 Use notifications for scheduled backup failures so failures do not go unnoticed.
+
+## Legacy Repository Jobs
+
+Legacy Repository Jobs keep older repository-owned schedule workflows available. Use them when a repository still owns its source paths and the job needs to run a batch such as wake server, back up multiple repositories, prune, compact, and run a final shutdown script after the last repository finishes.
+
+Use Backup Plans for new plan-owned workflows. Backup Plans own the source configuration, selected repositories, scripts, schedule, and maintenance settings together.
 
 ## Maintenance
 
@@ -315,7 +321,7 @@ Repository maintenance actions include:
 
 Use check and restore verification regularly. A backup that cannot be restored is not useful.
 
-Scheduled repository checks and restore checks are managed from Schedule.
+Scheduled repository checks and restore checks are managed from Jobs.
 
 See [Disaster Recovery](disaster-recovery) for restore-check modes and recovery drills.
 

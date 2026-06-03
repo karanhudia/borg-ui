@@ -37,6 +37,7 @@ import { type BackupPlan, type BackupPlanRun, Repository } from '../types'
 import { useTrackedJobOutcomes } from '../hooks/useTrackedJobOutcomes'
 import { getJobDurationSeconds } from '../utils/analyticsProperties'
 import { buildScheduleDeepLink, parseScheduleDeepLink } from '../utils/scheduleDeepLink'
+import { getExecutableLegacyRepositories } from '../utils/executableRepositories'
 
 interface ScheduledJob {
   id: number
@@ -213,6 +214,10 @@ const Schedule: React.FC = () => {
   )
   const manageableRepositories = repositories.filter((repo: Repository) =>
     canDo(repo.id, 'maintenance')
+  )
+  const executableLegacyRepositories = React.useMemo(
+    () => getExecutableLegacyRepositories(manageableRepositories),
+    [manageableRepositories]
   )
 
   // Backup job history — fetch all jobs (not just scheduled) so orphaned/manual
@@ -509,7 +514,9 @@ const Schedule: React.FC = () => {
     [canDo, canManageRepositoriesGlobally, repositories]
   )
 
-  const canCreateSchedule = canManageRepositoriesGlobally || manageableRepositories.length > 0
+  const canManageAnyRepository = canManageRepositoriesGlobally || manageableRepositories.length > 0
+  const canCreateBackupPlan = canManageAnyRepository
+  const canCreateLegacyJob = executableLegacyRepositories.length > 0
 
   const jobs = jobsData?.data?.jobs || []
   const allBackupJobs = backupJobsData?.data?.jobs || []
@@ -543,42 +550,44 @@ const Schedule: React.FC = () => {
         </Box>
 
         {/* Action Button — hidden for viewers */}
-        {canCreateSchedule && currentTab === TAB_BY_PLAN && (
+        {(canCreateBackupPlan || canCreateLegacyJob) && currentTab === TAB_BY_PLAN && (
           <Stack
             direction={{ xs: 'column', sm: 'row' }}
             spacing={1}
             sx={{ width: { xs: '100%', sm: 'auto' } }}
           >
-            <Button
-              variant="outlined"
-              startIcon={<Plus size={18} />}
-              onClick={openCreateWizard}
-              disabled={!canCreateSchedule}
-              fullWidth
-              sx={{ width: { xs: '100%', sm: 'auto' } }}
-            >
-              {t('schedule.createLegacySchedule', {
-                defaultValue: 'Create legacy schedule',
-              })}
-            </Button>
-            <Button
-              variant="contained"
-              startIcon={<Plus size={18} />}
-              onClick={() => navigate('/backup-plans')}
-              disabled={!canCreateSchedule}
-              fullWidth
-              sx={{ width: { xs: '100%', sm: 'auto' } }}
-            >
-              {t('schedule.createBackupPlan')}
-            </Button>
+            {canCreateLegacyJob && (
+              <Button
+                variant="outlined"
+                startIcon={<Plus size={18} />}
+                onClick={openCreateWizard}
+                fullWidth
+                sx={{ width: { xs: '100%', sm: 'auto' } }}
+              >
+                {t('schedule.createLegacyJob', {
+                  defaultValue: 'Create legacy job',
+                })}
+              </Button>
+            )}
+            {canCreateBackupPlan && (
+              <Button
+                variant="contained"
+                startIcon={<Plus size={18} />}
+                onClick={() => navigate('/backup-plans')}
+                fullWidth
+                sx={{ width: { xs: '100%', sm: 'auto' } }}
+              >
+                {t('schedule.createBackupPlan')}
+              </Button>
+            )}
           </Stack>
         )}
-        {canCreateSchedule && currentTab === TAB_REPO_CHECKS && (
+        {canManageAnyRepository && currentTab === TAB_REPO_CHECKS && (
           <Button
             variant="contained"
             startIcon={<Plus size={18} />}
             onClick={() => scheduledChecksSectionRef.current?.openAddDialog()}
-            disabled={!canCreateSchedule}
+            disabled={!canManageAnyRepository}
             fullWidth
             sx={{
               width: { xs: '100%', sm: 'auto' },
@@ -588,12 +597,12 @@ const Schedule: React.FC = () => {
             {t('schedule.addCheck')}
           </Button>
         )}
-        {canCreateSchedule && currentTab === TAB_RESTORE_CHECKS && (
+        {canManageAnyRepository && currentTab === TAB_RESTORE_CHECKS && (
           <Button
             variant="contained"
             startIcon={<Plus size={18} />}
             onClick={() => scheduledRestoreChecksSectionRef.current?.openAddDialog()}
-            disabled={!canCreateSchedule}
+            disabled={!canManageAnyRepository}
             fullWidth
             sx={{
               width: { xs: '100%', sm: 'auto' },
@@ -640,23 +649,21 @@ const Schedule: React.FC = () => {
           canManageRepo={(repoId) => canDo(repoId, 'maintenance')}
           canManagePlan={() => canManageRepositoriesGlobally}
           legacySection={
-            (isLoading || jobs.length > 0) && (
-              <ScheduledJobsTable
-                jobs={jobs}
-                repositories={repositories}
-                isLoading={isLoading}
-                title={t('schedule.legacyBackupSchedulesTitle')}
-                description={t('schedule.legacyBackupSchedulesDescription')}
-                canManageJob={canManageJob}
-                onEdit={openEditWizard}
-                onDelete={setDeleteConfirmJob}
-                onDuplicate={handleDuplicateJob}
-                onRunNow={handleRunJobNow}
-                onToggle={handleToggleJob}
-                isRunNowPending={runJobNowMutation.isPending}
-                isDuplicatePending={duplicateJobMutation.isPending}
-              />
-            )
+            <ScheduledJobsTable
+              jobs={jobs}
+              repositories={repositories}
+              isLoading={isLoading}
+              title={t('schedule.legacyRepositoryJobsTitle')}
+              description={t('schedule.legacyRepositoryJobsDescription')}
+              canManageJob={canManageJob}
+              onEdit={openEditWizard}
+              onDelete={setDeleteConfirmJob}
+              onDuplicate={handleDuplicateJob}
+              onRunNow={handleRunJobNow}
+              onToggle={handleToggleJob}
+              isRunNowPending={runJobNowMutation.isPending}
+              isDuplicatePending={duplicateJobMutation.isPending}
+            />
           }
         />
       )}
@@ -741,7 +748,7 @@ const Schedule: React.FC = () => {
         onClose={() => setShowScheduleWizard(false)}
         mode={wizardMode}
         scheduledJob={editingJobForWizard}
-        repositories={manageableRepositories || []}
+        repositories={executableLegacyRepositories}
         scripts={scriptsData?.data || []}
         onSubmit={handleWizardSubmit}
       />

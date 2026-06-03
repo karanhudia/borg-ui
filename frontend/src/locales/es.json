@@ -118,7 +118,7 @@
       "archives": "Archivos",
       "restore": "Restaurar",
       "integrity": "Integridad",
-      "schedule": "Programación"
+      "schedule": "Trabajos"
     },
     "badges": {
       "new": "Nuevo"
@@ -537,16 +537,17 @@
     }
   },
   "schedule": {
-    "title": "Programación",
-    "subtitle": "Gestiona copias de seguridad automatizadas y comprobaciones de repositorio",
+    "title": "Trabajos",
+    "subtitle": "Programa y ejecuta trabajos de copia, comprobación y restauración",
     "createBackup": "Crear programación de copia de seguridad",
     "createBackupPlan": "Crear plan de copia",
     "createSchedule": "Crear programación",
-    "createLegacySchedule": "Crear programación heredada",
+    "createLegacySchedule": "Crear trabajo heredado",
+    "createLegacyJob": "Crear trabajo heredado",
     "addCheck": "Agregar comprobación programada",
     "addRestoreCheck": "Agregar comprobación de restauración",
     "tabs": {
-      "byPlan": "Programaciones",
+      "byPlan": "Trabajos ejecutables",
       "backupJobs": "Actividad",
       "repositoryChecks": "Comprobaciones de repositorio",
       "restoreChecks": "Comprobaciones de restauración"
@@ -577,8 +578,10 @@
       "runCheckTip": "La comprobación de integridad se ejecuta después de cada copia (además de cualquier comprobación programada abajo)"
     },
     "noRepositories": "Necesitas crear al menos un repositorio antes de programar copias de seguridad.",
-    "legacyBackupSchedulesTitle": "Programaciones de copia heredadas",
-    "legacyBackupSchedulesDescription": "Las programaciones existentes basadas en repositorio siguen ejecutándose aquí. Las nuevas copias programadas deberían crearse como planes de copia.",
+    "legacyBackupSchedulesTitle": "Trabajos de repositorio heredados",
+    "legacyBackupSchedulesDescription": "Los trabajos de repositorio heredados siguen ejecutándose aquí para repositorios con sus propias rutas de origen. Usa planes de copia para nuevos flujos de copia gestionados por planes.",
+    "legacyRepositoryJobsTitle": "Trabajos de repositorio heredados",
+    "legacyRepositoryJobsDescription": "Los trabajos de repositorio heredados siguen ejecutándose aquí para repositorios con sus propias rutas de origen. Usa planes de copia para nuevos flujos de copia gestionados por planes.",
     "confirmRunNow": "¿Ejecutar \"{{name}}\" ahora?",
     "maintenance": {
       "pruning": "Podando archivos...",
@@ -3731,9 +3734,9 @@
     }
   },
   "scheduledJobsTableSection": {
-    "title": "Todos los trabajos programados",
-    "noJobsFound": "No se encontraron trabajos programados",
-    "noJobsDesc": "Crea tu primer trabajo de copia de seguridad programado"
+    "title": "Trabajos de repositorio heredados",
+    "noJobsFound": "No se encontraron trabajos de repositorio heredados",
+    "noJobsDesc": "Crea un trabajo heredado para un repositorio que todavía tenga rutas de origen propias."
   },
   "advancedRepositoryOptions": {
     "title": "Opciones avanzadas",

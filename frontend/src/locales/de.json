@@ -118,7 +118,7 @@
       "archives": "Archive",
       "restore": "Wiederherstellen",
       "integrity": "Integrität",
-      "schedule": "Zeitplan"
+      "schedule": "Jobs"
     },
     "badges": {
       "new": "Neu"
@@ -537,16 +537,17 @@
     }
   },
   "schedule": {
-    "title": "Zeitplan",
-    "subtitle": "Verwalte automatische Sicherungen und Repository-Überprüfungen",
+    "title": "Jobs",
+    "subtitle": "Plane und starte ausführbare Backup-, Prüf- und Restore-Jobs",
     "createBackup": "Sicherungszeitplan erstellen",
     "createBackupPlan": "Backup-Plan erstellen",
     "createSchedule": "Zeitplan erstellen",
-    "createLegacySchedule": "Legacy-Zeitplan erstellen",
+    "createLegacySchedule": "Legacy-Job erstellen",
+    "createLegacyJob": "Legacy-Job erstellen",
     "addCheck": "Überprüfungszeitplan hinzufügen",
     "addRestoreCheck": "Restore-Prüfung hinzufügen",
     "tabs": {
-      "byPlan": "Zeitpläne",
+      "byPlan": "Ausführbare Jobs",
       "backupJobs": "Aktivität",
       "repositoryChecks": "Repository-Überprüfungen",
       "restoreChecks": "Restore-Prüfungen"
@@ -577,8 +578,10 @@
       "runCheckTip": "Integritätsprüfung läuft nach jedem Backup (zusätzlich zu geplanten Prüfungen unten)"
     },
     "noRepositories": "Du musst mindestens ein Repository erstellen, bevor du Sicherungen planst.",
-    "legacyBackupSchedulesTitle": "Legacy-Sicherungszeitpläne",
-    "legacyBackupSchedulesDescription": "Bestehende Repository-basierte Zeitpläne laufen hier weiter. Neue geplante Sicherungen sollten als Backup-Pläne erstellt werden.",
+    "legacyBackupSchedulesTitle": "Legacy-Repository-Jobs",
+    "legacyBackupSchedulesDescription": "Legacy-Repository-Jobs laufen hier für Repositories mit eigenen Quellpfaden weiter. Nutze Backup-Pläne für neue planbasierte Backup-Abläufe.",
+    "legacyRepositoryJobsTitle": "Legacy-Repository-Jobs",
+    "legacyRepositoryJobsDescription": "Legacy-Repository-Jobs laufen hier für Repositories mit eigenen Quellpfaden weiter. Nutze Backup-Pläne für neue planbasierte Backup-Abläufe.",
     "confirmRunNow": "\"{{name}}\" jetzt ausführen?",
     "maintenance": {
       "pruning": "Archive werden bereinigt...",
@@ -3731,9 +3734,9 @@
     }
   },
   "scheduledJobsTableSection": {
-    "title": "Alle geplanten Aufgaben",
-    "noJobsFound": "Keine geplanten Aufgaben gefunden",
-    "noJobsDesc": "Erstelle deine erste geplante Sicherungsaufgabe"
+    "title": "Legacy-Repository-Jobs",
+    "noJobsFound": "Keine Legacy-Repository-Jobs gefunden",
+    "noJobsDesc": "Erstelle einen Legacy-Job für ein Repository, das noch eigene Quellpfade besitzt."
   },
   "advancedRepositoryOptions": {
     "title": "Erweiterte Optionen",

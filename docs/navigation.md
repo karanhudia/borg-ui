@@ -17,7 +17,7 @@ For a new setup, follow the sidebar in this order:
 1. Open Dashboard to check overall health.
 2. Add storage targets from Repositories, Cloud Storage, or Remote Machines.
 3. Create a plan from Backup Plans.
-4. Configure automatic runs from the plan schedule or the Schedule page.
+4. Configure automatic runs from the plan schedule or the Jobs page.
 5. Watch work in Activity and browse results in Archives.
 6. Adjust preferences, notifications, and system options from Settings.
 
@@ -33,7 +33,7 @@ For a new setup, follow the sidebar in this order:
 | Storage | Repositories | Create, import, inspect, maintain, and restore from Borg repositories. A repository is the storage target. |
 | Backups | Backup Plans | Define what to back up, where it should go, when it should run, and what maintenance should run afterward. |
 | Backups | Backup | Run older repository-based backups or legacy backup jobs. New workflows should usually start from Backup Plans. |
-| Backups | Schedule | Review scheduled repository work, scheduled restore checks, and plan schedules from one operational view. |
+| Backups | Jobs | Review executable backup jobs, legacy repository jobs, scheduled checks, restore checks, and plan activity. |
 | Backups | Archives | Browse archives, select files or folders, restore data, and run archive-level actions. |
 
 ## Settings

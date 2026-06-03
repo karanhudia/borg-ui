@@ -118,7 +118,7 @@
       "archives": "Archives",
       "restore": "Restore",
       "integrity": "Integrity",
-      "schedule": "Schedule"
+      "schedule": "Jobs"
     },
     "badges": {
       "new": "New"
@@ -537,16 +537,17 @@
     }
   },
   "schedule": {
-    "title": "Schedule",
-    "subtitle": "Manage automated backups and repository checks",
+    "title": "Jobs",
+    "subtitle": "Schedule and run executable backup work, checks, and restore checks",
     "createBackup": "Create Backup Schedule",
     "createBackupPlan": "Create Backup Plan",
     "createSchedule": "Create Schedule",
-    "createLegacySchedule": "Create legacy schedule",
+    "createLegacySchedule": "Create legacy job",
+    "createLegacyJob": "Create legacy job",
     "addCheck": "Add Check Schedule",
     "addRestoreCheck": "Add Restore Check",
     "tabs": {
-      "byPlan": "Schedules",
+      "byPlan": "Executable Jobs",
       "backupJobs": "Activity",
       "repositoryChecks": "Repository Checks",
       "restoreChecks": "Restore Checks"
@@ -577,8 +578,10 @@
       "runCheckTip": "Integrity check runs after each backup (in addition to any scheduled check below)"
     },
     "noRepositories": "You need to create at least one repository before scheduling backups.",
-    "legacyBackupSchedulesTitle": "Legacy Backup Schedules",
-    "legacyBackupSchedulesDescription": "Existing repository-based schedules continue to run here. New scheduled backups should be created as Backup Plans.",
+    "legacyBackupSchedulesTitle": "Legacy Repository Jobs",
+    "legacyBackupSchedulesDescription": "Legacy repository jobs continue to run here for repositories with their own source paths. Use Backup Plans for new plan-owned backup workflows.",
+    "legacyRepositoryJobsTitle": "Legacy Repository Jobs",
+    "legacyRepositoryJobsDescription": "Legacy repository jobs continue to run here for repositories with their own source paths. Use Backup Plans for new plan-owned backup workflows.",
     "confirmRunNow": "Run \"{{name}}\" now?",
     "maintenance": {
       "pruning": "Pruning archives...",
@@ -3731,9 +3734,9 @@
     }
   },
   "scheduledJobsTableSection": {
-    "title": "All Scheduled Jobs",
-    "noJobsFound": "No scheduled jobs found",
-    "noJobsDesc": "Create your first scheduled backup job"
+    "title": "Legacy Repository Jobs",
+    "noJobsFound": "No legacy repository jobs found",
+    "noJobsDesc": "Create a legacy job for a repository that still owns source paths."
   },
   "advancedRepositoryOptions": {
     "title": "Advanced Options",
