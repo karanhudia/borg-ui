@@ -49,6 +49,14 @@ const TERMINAL_WIPE_STATUSES = new Set([
 ])
 type RcloneRepositoryAction = 'sync' | 'hydrate'
 
+interface MaintenanceJobSummary {
+  id: number
+  status?: string | null
+  started_at?: string | null
+  completed_at?: string | null
+  error_message?: string | null
+}
+
 function parseBackupPlanFilterId(value: string | null): number | null {
   if (!value) return null
   const id = Number(value)
@@ -509,6 +517,7 @@ export default function Repositories() {
     const tracked = maintenanceTrackingRef.current.get(repositoryId)
     if (tracked) {
       const repository = repositories.find((repo: Repository) => repo.id === repositoryId)
+      let toastShown = false
       try {
         const response =
           tracked.operation === 'Check'
@@ -516,9 +525,25 @@ export default function Repositories() {
             : tracked.operation === 'Compact'
               ? await repositoriesAPI.getRepositoryCompactJobs(repositoryId, 1)
               : await repositoriesAPI.getRepositoryPruneJobs(repositoryId, 1)
-        const latestJob = response.data?.jobs?.[0]
+        const latestJob = response.data?.jobs?.[0] as MaintenanceJobSummary | undefined
 
         if (latestJob?.status) {
+          if (tracked.operation === 'Check') {
+            if (latestJob.status === 'completed') {
+              toast.success(t('repositories.toasts.checkCompleted'))
+              toastShown = true
+            } else if (latestJob.status === 'completed_with_warnings') {
+              toast(t('repositories.toasts.checkCompletedWithWarnings'), { icon: '!' })
+              toastShown = true
+            } else {
+              const message = latestJob.error_message
+                ? translateBackendKey(latestJob.error_message) || latestJob.error_message
+                : t('repositories.toasts.checkRunFailed')
+              toast.error(t('repositories.toasts.checkFailedWithMessage', { message }))
+              toastShown = true
+            }
+          }
+
           const action =
             latestJob.status === 'completed' || latestJob.status === 'completed_with_warnings'
               ? EventAction.COMPLETE
@@ -529,8 +554,14 @@ export default function Repositories() {
             duration_seconds: getJobDurationSeconds(latestJob.started_at, latestJob.completed_at),
             error_present: !!latestJob.error_message,
           })
+        } else if (tracked.operation === 'Check') {
+          toast.success(t('repositories.toasts.checkCompleted'))
+          toastShown = true
         }
       } catch {
+        if (tracked.operation === 'Check' && !toastShown) {
+          toast.success(t('repositories.toasts.checkCompleted'))
+        }
         // Best-effort analytics should not affect maintenance UX.
       }
       maintenanceTrackingRef.current.delete(repositoryId)
