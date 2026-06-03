@@ -1,21 +1,57 @@
 {
-  "generatedAt": "2026-06-03T02:41:26.026Z",
+  "generatedAt": "2026-06-03T04:06:49.621Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #613 visual report",
-    "commitSha": "d6badca39fe1",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26860330173"
+    "commitSha": "bbc39eb46735",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26862949307"
   },
   "totals": {
-    "baseline": 254,
-    "actual": 260,
-    "compared": 254,
-    "changed": 4,
+    "baseline": 272,
+    "actual": 278,
+    "compared": 272,
+    "changed": 6,
     "added": 6,
     "removed": 0,
-    "unchanged": 250
+    "unchanged": 266
   },
   "changed": [
+    {
+      "fileName": "components-backupjobstable--non-retryable-destructive-job.png",
+      "baselinePath": "images/baseline/components-backupjobstable--non-retryable-destructive-job.png",
+      "actualPath": "images/actual/components-backupjobstable--non-retryable-destructive-job.png",
+      "diffPath": "images/diff/components-backupjobstable--non-retryable-destructive-job.png",
+      "diffPixels": 9081,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0088681640625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-backupjobstable--retryable-failed-backup-job.png",
+      "baselinePath": "images/baseline/components-backupjobstable--retryable-failed-backup-job.png",
+      "actualPath": "images/actual/components-backupjobstable--retryable-failed-backup-job.png",
+      "diffPath": "images/diff/components-backupjobstable--retryable-failed-backup-job.png",
+      "diffPixels": 9196,
+      "totalPixels": 1024000,
+      "diffRatio": 0.00898046875,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
     {
       "fileName": "components-backupjobstable--transport-modes--mobile.png",
       "baselinePath": "images/baseline/components-backupjobstable--transport-modes--mobile.png",
@@ -39,9 +75,9 @@
       "baselinePath": "images/baseline/components-backupjobstable--transport-modes.png",
       "actualPath": "images/actual/components-backupjobstable--transport-modes.png",
       "diffPath": "images/diff/components-backupjobstable--transport-modes.png",
-      "diffPixels": 1606,
+      "diffPixels": 20416,
       "totalPixels": 1024000,
-      "diffRatio": 0.001568359375,
+      "diffRatio": 0.0199375,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -334,6 +370,42 @@
       "fileName": "backup-plans-sourcestep--single-local-group.png"
     },
     {
+      "fileName": "components-backupjobstable--non-retryable-destructive-job--mobile.png"
+    },
+    {
+      "fileName": "components-backupjobstable--retryable-failed-backup-job--mobile.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--disabled-due-to-active-run--mobile.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--disabled-due-to-active-run.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--disabled-no-failed-repositories--mobile.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--disabled-no-failed-repositories.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--disabled-no-permission--mobile.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--disabled-no-permission.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--retry-in-progress--mobile.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--retry-in-progress.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--retryable-backup-plan-run--mobile.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--retryable-backup-plan-run.png"
+    },
+    {
       "fileName": "components-backupplanselect--configured-plan--mobile.png"
     },
     {
@@ -578,6 +650,18 @@
     },
     {
       "fileName": "components-repositorywipedialog--protected-archive-blocked.png"
+    },
+    {
+      "fileName": "components-retryjobdialog--backup-job-retry--mobile.png"
+    },
+    {
+      "fileName": "components-retryjobdialog--backup-job-retry.png"
+    },
+    {
+      "fileName": "components-retryjobdialog--backup-plan-run-retry--mobile.png"
+    },
+    {
+      "fileName": "components-retryjobdialog--backup-plan-run-retry.png"
     },
     {
       "fileName": "components-runningcloudstoragejobssection--active-jobs--mobile.png"
