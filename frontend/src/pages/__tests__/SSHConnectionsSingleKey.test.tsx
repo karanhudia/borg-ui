@@ -109,9 +109,7 @@ vi.mock('../../components/RemoteMachineCard', () => ({
       <button onClick={() => onDelete(machine)}>delete {machine.host}</button>
       <button onClick={() => onTestConnection(machine)}>test {machine.host}</button>
       <button onClick={() => onDeployKey(machine)}>deploy {machine.host}</button>
-      <button onClick={() => onRunDiagnostics?.(machine)}>
-        run diagnostics {machine.host}
-      </button>
+      <button onClick={() => onRunDiagnostics?.(machine)}>run diagnostics {machine.host}</button>
     </div>
   ),
 }))
@@ -308,55 +306,45 @@ describe('SSHConnectionsSingleKey', () => {
     })
   })
 
-  it(
-    'opens remote machine diagnostics from a connection card and runs a session check',
-    async () => {
-      const user = userEvent.setup()
-      const { sshKeysAPI } = await import('../../services/api')
+  it('opens remote machine diagnostics from a connection card and runs a session check', async () => {
+    const user = userEvent.setup()
+    const { sshKeysAPI } = await import('../../services/api')
 
-      renderWithProviders(<SSHConnectionsSingleKey />)
+    renderWithProviders(<SSHConnectionsSingleKey />)
 
-      await screen.findByText('backup-host')
-      await user.click(screen.getByRole('button', { name: /run diagnostics backup-host/i }))
-      const dialog = await screen.findByRole('dialog', { name: /remote machine diagnostics/i })
+    await screen.findByText('backup-host')
+    await user.click(screen.getByRole('button', { name: /run diagnostics backup-host/i }))
+    const dialog = await screen.findByRole('dialog', { name: /remote machine diagnostics/i })
 
-      await user.click(within(dialog).getByRole('button', { name: /run check/i }))
+    await user.click(within(dialog).getByRole('button', { name: /run check/i }))
 
-      await waitFor(() => {
-        expect(sshKeysAPI.runConnectionDiagnostics).toHaveBeenCalledWith(3, {
-          timeout_seconds: 5,
-          speed_probe_bytes: 262144,
-        })
+    await waitFor(() => {
+      expect(sshKeysAPI.runConnectionDiagnostics).toHaveBeenCalledWith(3, {
+        timeout_seconds: 5,
+        speed_probe_bytes: 262144,
       })
-      expect(await within(dialog).findByText(/SSH session healthy/i)).toBeInTheDocument()
-      expect(within(dialog).getAllByText(/12 ms/i)).toHaveLength(2)
-      expect(within(dialog).getByText(/8.06 MB\/s/i)).toBeInTheDocument()
-    },
-    30000
-  )
+    })
+    expect(await within(dialog).findByText(/SSH session healthy/i)).toBeInTheDocument()
+    expect(within(dialog).getAllByText(/12 ms/i)).toHaveLength(2)
+    expect(within(dialog).getByText(/8.06 MB\/s/i)).toBeInTheDocument()
+  }, 30000)
 
-  it(
-    'validates remote diagnostics target inputs before running',
-    async () => {
-      const user = userEvent.setup()
-      const { sshKeysAPI } = await import('../../services/api')
+  it('validates remote diagnostics target inputs before running', async () => {
+    const user = userEvent.setup()
+    const { sshKeysAPI } = await import('../../services/api')
 
-      renderWithProviders(<SSHConnectionsSingleKey />)
+    renderWithProviders(<SSHConnectionsSingleKey />)
 
-      await screen.findByText('backup-host')
-      await user.click(screen.getByRole('button', { name: /run diagnostics backup-host/i }))
-      const dialog = await screen.findByRole('dialog', { name: /remote machine diagnostics/i })
+    await screen.findByText('backup-host')
+    await user.click(screen.getByRole('button', { name: /run diagnostics backup-host/i }))
+    const dialog = await screen.findByRole('dialog', { name: /remote machine diagnostics/i })
 
-      await user.type(within(dialog).getByLabelText(/target host/i), 'postgres.internal')
+    await user.type(within(dialog).getByLabelText(/target host/i), 'postgres.internal')
 
-      expect(
-        within(dialog).getByText(/Enter a TCP port between 1 and 65535/i)
-      ).toBeInTheDocument()
-      expect(within(dialog).getByRole('button', { name: /run check/i })).toBeDisabled()
-      expect(sshKeysAPI.runConnectionDiagnostics).not.toHaveBeenCalled()
-    },
-    30000
-  )
+    expect(within(dialog).getByText(/Enter a TCP port between 1 and 65535/i)).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: /run check/i })).toBeDisabled()
+    expect(sshKeysAPI.runConnectionDiagnostics).not.toHaveBeenCalled()
+  }, 30000)
 
   it('renders remote diagnostics partial TCP failure details', () => {
     renderWithProviders(

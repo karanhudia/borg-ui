@@ -915,8 +915,7 @@ export interface SSHConnectionDiagnosticsTcpResult extends SSHConnectionDiagnost
   }
 }
 
-export interface SSHConnectionDiagnosticsThroughputResult
-  extends SSHConnectionDiagnosticsProbeResult {
+export interface SSHConnectionDiagnosticsThroughputResult extends SSHConnectionDiagnosticsProbeResult {
   direction: 'download' | string
   probe_size_bytes: number
   bytes_transferred?: number | null

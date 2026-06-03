@@ -43,9 +43,7 @@ function parseBoundedNumber(value: string, min: number, max: number): number | n
 
 function parseProbeBytes(value: string): number | null {
   const parsed = Number.parseInt(value.trim(), 10)
-  return Number.isInteger(parsed) && parsed >= 65536 && parsed <= 5 * 1024 * 1024
-    ? parsed
-    : null
+  return Number.isInteger(parsed) && parsed >= 65536 && parsed <= 5 * 1024 * 1024 ? parsed : null
 }
 
 function getTargetError(host: string, port: string, timeout: string): string | null {
@@ -68,9 +66,7 @@ function formatBytes(value?: number | null): string {
   return `${(value / 1024 / 1024).toFixed(2)} MB`
 }
 
-function probeStatusColor(
-  status?: string
-): 'default' | 'success' | 'error' | 'warning' | 'info' {
+function probeStatusColor(status?: string): 'default' | 'success' | 'error' | 'warning' | 'info' {
   if (status === 'success') return 'success'
   if (status === 'timeout') return 'warning'
   if (status === 'failed') return 'error'
@@ -317,8 +313,7 @@ export function ConnectionDiagnosticsDialog({
               type="number"
               inputProps={{ min: 0.5, max: 15, step: 0.5 }}
               error={
-                Boolean(targetHost.trim()) &&
-                parseBoundedNumber(targetTimeout, 0.5, 15) === null
+                Boolean(targetHost.trim()) && parseBoundedNumber(targetTimeout, 0.5, 15) === null
               }
               helperText={t('sshConnections.diagnostics.seconds')}
             />
