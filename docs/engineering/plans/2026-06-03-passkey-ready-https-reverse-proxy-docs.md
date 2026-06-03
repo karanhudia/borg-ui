@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: User-Facing Documentation
+## Task 1: User-Facing Documentation
 
 **Files:**
 - Modify: `docs/authentication.md`
@@ -32,7 +32,7 @@
 
   In `docs/reverse-proxy.md`, make Caddy and Traefik examples explicitly present automatic Let's Encrypt as the low-friction option, and make NGINX guidance explain that HTTP challenge, Cloudflare DNS challenge, and other DNS providers belong to the user's proxy/certificate tooling.
 
-### Task 2: Validation And Handoff
+## Task 2: Validation And Handoff
 
 **Files:**
 - Verify: `docs/authentication.md`
