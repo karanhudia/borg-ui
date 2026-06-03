@@ -144,6 +144,33 @@ function formatElapsedMs(value?: number | null): string {
   return `${Math.round(value)} ms`
 }
 
+function parseDiagnosticsPort(value: string): number | null {
+  const trimmed = value.trim()
+  if (!/^\d+$/.test(trimmed)) return null
+  const port = Number.parseInt(trimmed, 10)
+  return Number.isInteger(port) && port >= 1 && port <= 65535 ? port : null
+}
+
+function parseDiagnosticsTimeout(value: string): number | null {
+  const timeout = Number.parseFloat(value.trim())
+  return Number.isFinite(timeout) && timeout >= 0.5 && timeout <= 10 ? timeout : null
+}
+
+function getDiagnosticsTargetError(
+  hostValue: string,
+  portValue: string,
+  timeoutValue: string
+): string | null {
+  if (!hostValue.trim()) return null
+  if (parseDiagnosticsPort(portValue) === null) {
+    return 'Enter a TCP port between 1 and 65535.'
+  }
+  if (parseDiagnosticsTimeout(timeoutValue) === null) {
+    return 'Enter a timeout between 0.5 and 10 seconds.'
+  }
+  return null
+}
+
 function buildDiagnosticsPayload(
   hostValue: string,
   portValue: string,
@@ -151,12 +178,15 @@ function buildDiagnosticsPayload(
 ): AgentDiagnosticsRequest {
   const host = hostValue.trim()
   if (!host) return {}
+  const port = parseDiagnosticsPort(portValue)
+  const timeout = parseDiagnosticsTimeout(timeoutValue)
+  if (port === null || timeout === null) return {}
 
   return {
     target: {
       host,
-      port: Number(portValue),
-      timeout_seconds: Number(timeoutValue),
+      port,
+      timeout_seconds: timeout,
     },
   }
 }
@@ -752,6 +782,10 @@ export function AgentDiagnosticsDialog({
   const [result, setResult] = useState<AgentDiagnosticsResponse | null>(initialResult)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
+  const targetError = getDiagnosticsTargetError(targetHost, targetPort, targetTimeout)
+  const hasTarget = Boolean(targetHost.trim())
+  const portInvalid = hasTarget && parseDiagnosticsPort(targetPort) === null
+  const timeoutInvalid = hasTarget && parseDiagnosticsTimeout(targetTimeout) === null
 
   useEffect(() => {
     if (!open) return
@@ -762,6 +796,11 @@ export function AgentDiagnosticsDialog({
 
   const runDiagnostics = async () => {
     if (!agent || !onRunDiagnostics) return
+    const validationError = getDiagnosticsTargetError(targetHost, targetPort, targetTimeout)
+    if (validationError) {
+      setErrorMessage(validationError)
+      return
+    }
     setRunning(true)
     setErrorMessage(null)
     try {
@@ -788,7 +827,7 @@ export function AgentDiagnosticsDialog({
       <Button
         variant="contained"
         onClick={() => void runDiagnostics()}
-        disabled={!agent || running || !onRunDiagnostics}
+        disabled={!agent || running || !onRunDiagnostics || !!targetError}
         startIcon={
           running ? <CircularProgress color="inherit" size={16} /> : <Activity size={16} />
         }
@@ -834,6 +873,9 @@ export function AgentDiagnosticsDialog({
               size="small"
               type="number"
               inputProps={{ min: 1, max: 65535 }}
+              required={hasTarget}
+              error={portInvalid}
+              helperText={portInvalid ? '1-65535' : undefined}
             />
             <TextField
               label="Timeout"
@@ -842,9 +884,17 @@ export function AgentDiagnosticsDialog({
               size="small"
               type="number"
               inputProps={{ min: 0.5, max: 10, step: 0.5 }}
-              helperText="Seconds"
+              required={hasTarget}
+              error={timeoutInvalid}
+              helperText={timeoutInvalid ? '0.5-10 seconds' : 'Seconds'}
             />
           </Box>
+
+          {targetError && (
+            <Alert severity="warning" role="alert" sx={{ borderRadius: 1.5 }}>
+              {targetError}
+            </Alert>
+          )}
 
           {errorMessage && (
             <Alert severity="error" role="alert" sx={{ borderRadius: 1.5 }}>

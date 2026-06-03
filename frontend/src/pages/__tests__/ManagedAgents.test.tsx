@@ -599,6 +599,24 @@ describe('ManagedAgents', () => {
     expect(await within(dialog).findByText('15 ms')).toBeInTheDocument()
   }, 60000)
 
+  it('validates diagnostics TCP target inputs before running', async () => {
+    const user = userEvent.setup()
+    const agent = buildAgent({ id: 7, hostname: 'client-01', status: 'online' })
+    vi.mocked(managedAgentsAPI.listAgents).mockResolvedValue({ data: [agent] } as AxiosResponse)
+
+    renderWithProviders(<ManagedAgents />, { initialRoute: '/managed-agents' })
+
+    await screen.findByText('client-01', undefined, { timeout: 10000 })
+    await user.click(screen.getByRole('button', { name: /run diagnostics/i }))
+    const dialog = await screen.findByRole('dialog', { name: /agent diagnostics/i })
+
+    await user.type(within(dialog).getByLabelText(/target host/i), 'postgres.internal')
+
+    expect(within(dialog).getByText(/Enter a TCP port between 1 and 65535/i)).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: /run check/i })).toBeDisabled()
+    expect(managedAgentsAPI.runDiagnostics).not.toHaveBeenCalled()
+  }, 60000)
+
   it('renders diagnostics partial TCP failure details', () => {
     const agent = buildAgent({ hostname: 'client-01', status: 'online' })
 

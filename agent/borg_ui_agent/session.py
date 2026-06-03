@@ -54,10 +54,7 @@ def _normalize_tcp_error(exc: Exception) -> tuple[str, str]:
 
 def _open_tcp_connection(host: str, port: int, timeout_seconds: float) -> None:
     connection = socket_module.create_connection((host, port), timeout=timeout_seconds)
-    try:
-        return None
-    finally:
-        connection.close()
+    connection.close()
 
 
 class SessionCommandClient:
