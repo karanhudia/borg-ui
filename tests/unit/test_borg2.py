@@ -56,3 +56,35 @@ async def test_list_archive_contents_omits_depth_when_not_requested():
         max_lines=1_000_000,
         env=None,
     )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_extract_archive_uses_restore_umask():
+    with patch.object(
+        borg2,
+        "_run",
+        new=AsyncMock(return_value={"success": True, "stdout": ""}),
+    ) as mock_run:
+        await borg2.extract_archive(
+            repository="/repo",
+            archive="archive-1",
+            paths=["home/user/file.txt"],
+            destination="/restore",
+        )
+
+    mock_run.assert_awaited_once_with(
+        [
+            "borg2",
+            "-r",
+            "/repo",
+            "extract",
+            "--umask",
+            "0022",
+            "archive-1",
+            "home/user/file.txt",
+        ],
+        timeout=3600,
+        cwd="/restore",
+        env=None,
+    )

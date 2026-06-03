@@ -151,7 +151,7 @@ class BorgRouter:
                 strip_components=strip_components,
             )
 
-        cmd = ["borg", "extract", "--progress", "--log-json"]
+        cmd = ["borg", "extract", "--progress", "--log-json", "--umask", "0022"]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
         if bypass_lock:

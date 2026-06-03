@@ -1,7 +1,7 @@
 import asyncio
 import json
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, call, patch
 
 import pytest
 from sqlalchemy.orm import sessionmaker
@@ -306,6 +306,59 @@ class TestRestoreServiceExecution:
         assert refreshed.progress == 100
         assert refreshed.progress_percent == 100.0
         assert "STDOUT:" in refreshed.logs
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_local_restore_root_created_destination_inherits_existing_parent_owner(
+        self, testing_session_local, restore_job, tmp_path
+    ):
+        parent = tmp_path / "parent"
+        parent.mkdir()
+        destination = parent / "new" / "child"
+        parent_stat = parent.stat()
+        service = RestoreService()
+        process = FakeRestoreProcess(
+            returncode=0,
+            stderr_chunks=[
+                b'{"type":"progress_percent","current":1,"total":1,"finished":true}\n'
+            ],
+            stdout_lines=[b"restored\n"],
+        )
+
+        notification_mock = SimpleNamespace(
+            send_restore_success=AsyncMock(return_value=None),
+            send_restore_failure=AsyncMock(return_value=None),
+        )
+
+        with (
+            patch("app.services.restore_service.SessionLocal", testing_session_local),
+            patch("app.services.restore_service.os.geteuid", return_value=0),
+            patch("app.services.restore_service.os.chown") as chown_mock,
+            patch(
+                "app.services.restore_service.asyncio.create_subprocess_exec",
+                return_value=process,
+            ),
+            patch(
+                "app.services.restore_service.notification_service",
+                notification_mock,
+            ),
+        ):
+            await service._execute_local_to_local(
+                restore_job.id,
+                restore_job.repository,
+                restore_job.archive,
+                str(destination),
+                None,
+            )
+
+        assert destination.exists()
+        chown_mock.assert_has_calls(
+            [
+                call(str(parent / "new"), parent_stat.st_uid, parent_stat.st_gid),
+                call(str(destination), parent_stat.st_uid, parent_stat.st_gid),
+            ],
+            any_order=False,
+        )
 
     @pytest.mark.unit
     @pytest.mark.asyncio
