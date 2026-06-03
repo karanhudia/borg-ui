@@ -6,7 +6,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest'
 import MockAdapter from 'axios-mock-adapter'
-import api, { repositoriesAPI } from './api'
+import api, { backupAPI, backupPlansAPI, repositoriesAPI } from './api'
 
 describe('API Request Interceptor', () => {
   let localStorageMock: { [key: string]: string }
@@ -408,6 +408,46 @@ describe('Repositories API - Repository wipe', () => {
 
     expect(status.data).toEqual({ id: 11, status: 'running' })
     expect(cancelled.data).toEqual({ id: 11, status: 'cancelled' })
+    mock.restore()
+  })
+})
+
+describe('Retry API helpers', () => {
+  it('retries backup jobs through the backend retry endpoint', async () => {
+    const mock = new MockAdapter(api)
+    mock.onPost('/backup/jobs/42/retry').reply(202, {
+      job_id: 108,
+      status: 'pending',
+      retry_source_job_id: 42,
+    })
+
+    const response = await backupAPI.retryJob(42)
+
+    expect(response.data).toEqual({
+      job_id: 108,
+      status: 'pending',
+      retry_source_job_id: 42,
+    })
+    mock.restore()
+  })
+
+  it('retries backup plan runs through the backend retry endpoint', async () => {
+    const mock = new MockAdapter(api)
+    mock.onPost('/backup-plans/runs/77/retry').reply(202, {
+      id: 93,
+      status: 'pending',
+      trigger: 'retry',
+      retry_source_run_id: 77,
+    })
+
+    const response = await backupPlansAPI.retryRun(77)
+
+    expect(response.data).toEqual({
+      id: 93,
+      status: 'pending',
+      trigger: 'retry',
+      retry_source_run_id: 77,
+    })
     mock.restore()
   })
 })

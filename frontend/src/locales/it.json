@@ -474,6 +474,8 @@
       "startFailed": "Impossibile avviare il backup",
       "cancelled": "Backup annullato con successo!",
       "cancelFailed": "Impossibile annullare il backup",
+      "retryStarted": "Ritentativo di backup avviato",
+      "retryFailed": "Impossibile ritentare il backup",
       "selectRepository": "Seleziona prima un repository"
     }
   },
@@ -770,6 +772,8 @@
       "startFailed": "Impossibile avviare il piano di backup",
       "cancelled": "Esecuzione del piano annullata",
       "cancelFailed": "Impossibile annullare l'esecuzione del piano",
+      "retryStarted": "Ritentativo del piano di backup avviato",
+      "retryFailed": "Impossibile ritentare l'esecuzione del piano",
       "repositoryCreated": "Repository creato",
       "repositoryCreateFailed": "Impossibile creare il repository",
       "multiRepositoryRequiresPro": "Più repository in un piano di backup richiedono Pro",
@@ -1154,6 +1158,17 @@
       },
       "repositoryProgress": "{{completed}}/{{total}} repository completati",
       "cancelRun": "Annulla esecuzione",
+      "retryRun": "Ritenta esecuzione piano di backup",
+      "retryConfirm": "Ritentare l'esecuzione del piano di backup #{{id}}?",
+      "retryTooltips": {
+        "ready": "Ritenta esecuzione piano di backup",
+        "retrying": "Ritentativo dell'esecuzione del piano in corso...",
+        "onlyFailed": "Solo le esecuzioni del piano fallite possono essere ritentate.",
+        "missingPlan": "Questa esecuzione non è più collegata a un piano di backup.",
+        "activeRun": "Attendi che l'esecuzione del piano in corso termini prima di ritentare.",
+        "noFailedRepositories": "Questa esecuzione non ha repository falliti da ritentare.",
+        "requiresPermission": "È richiesto l'accesso operatore per ogni repository fallito in questa esecuzione."
+      },
       "noRepositories": "Nessuna esecuzione repository registrata."
     }
   },
@@ -2230,7 +2245,22 @@
       "errorDetails": "Dettagli Errore",
       "cancel": "Annulla",
       "cancelJob": "Annulla Job",
-      "breakLock": "Rompi Blocco"
+      "breakLock": "Rompi Blocco",
+      "retry": "Ritenta job di backup"
+    },
+    "confirmations": {
+      "retryJob": "Ritentare il job di backup #{{id}}?"
+    },
+    "retryTooltips": {
+      "ready": "Ritenta job di backup",
+      "retrying": "Ritentativo del job di backup in corso...",
+      "onlyTerminal": "Solo i job di backup falliti o annullati possono essere ritentati.",
+      "destructiveType": "Questo job di tipo {{type}} non è sicuro da ritentare da questa tabella.",
+      "unsupportedType": "Questo job di tipo {{type}} non può essere ritentato da questa tabella.",
+      "backupPlanJob": "Ritenta questo job dalla sua esecuzione del piano di backup.",
+      "scheduledJob": "I job di backup pianificati devono essere riavviati dalla pianificazione o dal piano.",
+      "missingRepository": "Questo job non può essere ritentato perché il repository sorgente manca.",
+      "requiresPermission": "È richiesto l'accesso operatore per ritentare questo job di backup."
     },
     "never": "Mai",
     "empty": "Nessun job di backup trovato",
@@ -4400,11 +4430,15 @@
         "failedGetBackupJobs": "Impossibile ottenere i job di backup",
         "failedGetBackupStatus": "Impossibile ottenere lo stato del backup",
         "failedCancelBackup": "Impossibile annullare il backup",
-        "cannotDownloadLogsForRunningBackup": "Impossibile scaricare i log per un backup in esecuzione"
+        "cannotDownloadLogsForRunningBackup": "Impossibile scaricare i log per un backup in esecuzione",
+        "retryOnlyTerminalFailedCancelled": "Solo i job di backup falliti o annullati possono essere ritentati.",
+        "retryUnsupportedJobType": "Questo tipo di job di backup non può essere ritentato.",
+        "retryRequestNotReconstructable": "Questo job di backup non può più essere ricostruito per il ritentativo."
       },
       "backupPlans": {
         "nameRequired": "Il nome del piano di backup è obbligatorio.",
-        "clearLegacyRepositoryNotSelected": "Impossibile cancellare le impostazioni sorgente legacy per un repository non selezionato in questo piano di backup."
+        "clearLegacyRepositoryNotSelected": "Impossibile cancellare le impostazioni sorgente legacy per un repository non selezionato in questo piano di backup.",
+        "retryUnsupported": "Questa esecuzione del piano di backup non può essere ritentata."
       },
       "restore": {
         "cancelledByUser": "Ripristino annullato dall'utente",

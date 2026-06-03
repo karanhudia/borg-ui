@@ -23,6 +23,10 @@ interface BackupPlanHistoryDialogProps {
   onClose: () => void
   onViewLogs: (job: BackupPlanRunLogJob) => void
   onCancel: (runId: number) => void
+  onRetry?: (runId: number) => void
+  retryingRunId?: number | null
+  canRetryRun?: (run: BackupPlanRun) => boolean
+  hasActiveRunForPlan?: (run: BackupPlanRun) => boolean
   t: TFunction
 }
 
@@ -33,6 +37,10 @@ export function BackupPlanHistoryDialog({
   onClose,
   onViewLogs,
   onCancel,
+  onRetry,
+  retryingRunId,
+  canRetryRun,
+  hasActiveRunForPlan,
   t,
 }: BackupPlanHistoryDialogProps) {
   const theme = useTheme()
@@ -65,6 +73,10 @@ export function BackupPlanHistoryDialog({
           cancelling={cancellingRunId}
           onViewLogs={onViewLogs}
           onCancel={onCancel}
+          onRetry={onRetry}
+          retryingRunId={retryingRunId}
+          canRetryRun={canRetryRun}
+          hasActiveRunForPlan={hasActiveRunForPlan}
           t={t}
         />
       </DialogContent>
