@@ -29,6 +29,7 @@ def test_runtime_base_precreates_documented_borg_cache_dir() -> None:
 
 
 def test_entrypoint_persists_borg_ssh_home() -> None:
+    """Require hook SSH client state to live on Borg UI's persistent data volume."""
     entrypoint = (ROOT / "entrypoint.sh").read_text(encoding="utf-8")
 
     assert "SSH_HOME_DIR=/home/borg/.ssh" in entrypoint
