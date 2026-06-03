@@ -452,10 +452,6 @@ describe('RepositoryInfoDialog', () => {
     })
   })
 
-  describe('beforeEach cleanup', () => {
-    it('placeholder to attach beforeEach', () => {})
-  })
-
   describe('Borg 2 repository stats', () => {
     const v2Repo = { id: 2, name: 'V2 Repo', path: '/repo/test', borg_version: 2 }
     const v2Info = {
