@@ -1013,6 +1013,54 @@ export interface AgentFilesystemBrowseResponse {
   items_truncated?: boolean
 }
 
+export interface AgentDiagnosticsTargetRequest {
+  host: string
+  port: number
+  timeout_seconds?: number
+}
+
+export interface AgentDiagnosticsRequest {
+  target?: AgentDiagnosticsTargetRequest
+}
+
+export interface AgentDiagnosticsMetadata {
+  id: number
+  name: string
+  agent_id: string
+  hostname?: string | null
+  status: string
+  last_seen_at?: string | null
+  agent_version?: string | null
+  borg_versions?: Array<Record<string, unknown>> | null
+  capabilities?: string[] | null
+  last_error?: string | null
+}
+
+export interface AgentDiagnosticsSessionResult {
+  status: 'success' | 'offline' | 'timeout' | 'failed' | string
+  elapsed_ms?: number | null
+  error?: string | null
+  message?: string | null
+}
+
+export interface AgentDiagnosticsTcpResult {
+  target: {
+    host: string
+    port: number
+    timeout_seconds?: number
+  }
+  status: 'success' | 'failed' | string
+  elapsed_ms?: number | null
+  error?: string | null
+  message?: string | null
+}
+
+export interface AgentDiagnosticsResponse {
+  agent: AgentDiagnosticsMetadata
+  session: AgentDiagnosticsSessionResult
+  tcp?: AgentDiagnosticsTcpResult | null
+}
+
 export interface AgentEnrollmentTokenCreate {
   name: string
   default_path?: string | null
@@ -1046,6 +1094,8 @@ export const managedAgentsAPI = {
       `/managed-machines/agents/${agentId}/filesystem/browse`,
       { params: { path, include_hidden: includeHidden } }
     ),
+  runDiagnostics: (agentId: number, data: AgentDiagnosticsRequest) =>
+    api.post<AgentDiagnosticsResponse>(`/managed-machines/agents/${agentId}/diagnostics`, data),
 }
 
 // Schedule API

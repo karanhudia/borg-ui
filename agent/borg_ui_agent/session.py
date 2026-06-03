@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import socket as socket_module
 import time
 from collections.abc import Callable
 from typing import Any, Optional
@@ -35,6 +36,25 @@ def _session_url(server_url: str) -> str:
     return urlunparse(
         parsed._replace(scheme=scheme, path=path, params="", query="", fragment="")
     )
+
+
+def _elapsed_ms(started_at: float) -> int:
+    return int(round((time.monotonic() - started_at) * 1000))
+
+
+def _normalize_tcp_error(exc: Exception) -> tuple[str, str]:
+    if isinstance(exc, TimeoutError):
+        return "timeout", "Connection timed out"
+    if isinstance(exc, ConnectionRefusedError):
+        return "connection_refused", "Connection refused"
+    if isinstance(exc, OSError):
+        return "network_error", str(exc) or exc.__class__.__name__
+    return "tcp_check_failed", str(exc) or exc.__class__.__name__
+
+
+def _open_tcp_connection(host: str, port: int, timeout_seconds: float) -> None:
+    connection = socket_module.create_connection((host, port), timeout=timeout_seconds)
+    connection.close()
 
 
 class SessionCommandClient:
@@ -243,6 +263,10 @@ class AgentSessionRuntime:
             self._handle_filesystem_browse(client, payload)
             return
 
+        if command == "diagnostics.run":
+            self._handle_diagnostics(client, payload)
+            return
+
         if command == "cancel":
             if job_id is None:
                 client.send_result({"success": True})
@@ -307,4 +331,49 @@ class AgentSessionRuntime:
                 "items": items[:max_items],
                 "items_truncated": True,
             }
+        client.send_result(result)
+
+    def _handle_diagnostics(
+        self, client: SessionCommandClient, payload: dict[str, Any]
+    ) -> None:
+        started_at = time.monotonic()
+        result: dict[str, Any] = {"success": True}
+        target = (
+            payload.get("target") if isinstance(payload.get("target"), dict) else None
+        )
+
+        if target is not None:
+            host = str(target.get("host") or "")
+            port = int(target.get("port") or 0)
+            timeout_seconds = float(target.get("timeout_seconds") or 3.0)
+            tcp_started_at = time.monotonic()
+            tcp_result: dict[str, Any] = {
+                "target": {
+                    "host": host,
+                    "port": port,
+                    "timeout_seconds": timeout_seconds,
+                }
+            }
+            try:
+                _open_tcp_connection(host, port, timeout_seconds)
+            except Exception as exc:
+                error_code, message = _normalize_tcp_error(exc)
+                tcp_result.update(
+                    {
+                        "status": "failed",
+                        "elapsed_ms": _elapsed_ms(tcp_started_at),
+                        "error": error_code,
+                        "message": message,
+                    }
+                )
+            else:
+                tcp_result.update(
+                    {
+                        "status": "success",
+                        "elapsed_ms": _elapsed_ms(tcp_started_at),
+                    }
+                )
+            result["tcp"] = tcp_result
+
+        result["session"] = {"status": "success", "elapsed_ms": _elapsed_ms(started_at)}
         client.send_result(result)
