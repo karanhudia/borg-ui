@@ -381,6 +381,40 @@ describe('RepositoryInfoDialog', () => {
 
       expect(writeText).toHaveBeenCalledWith('borg check /repo/test')
     })
+
+    it('clears the copied feedback timeout when unmounted', async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined)
+      const setTimeoutSpy = vi.spyOn(window, 'setTimeout')
+      const clearTimeoutSpy = vi.spyOn(window, 'clearTimeout')
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: { writeText },
+      })
+
+      const { unmount } = render(
+        <RepositoryInfoDialog
+          open={true}
+          repository={{ ...mockRepository, encryption: 'repokey', borg_version: 1 }}
+          repositoryInfo={null}
+          isLoading={false}
+          onClose={vi.fn()}
+        />
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: 'Copy Check repository command' }))
+      await waitFor(() => expect(writeText).toHaveBeenCalledWith('borg check /repo/test'))
+      const copyTimeoutResult = setTimeoutSpy.mock.results.find(
+        (_, index) => setTimeoutSpy.mock.calls[index]?.[1] === 2000
+      )
+
+      expect(copyTimeoutResult?.value).toBeDefined()
+
+      unmount()
+
+      expect(clearTimeoutSpy).toHaveBeenCalledWith(copyTimeoutResult?.value)
+      setTimeoutSpy.mockRestore()
+      clearTimeoutSpy.mockRestore()
+    })
   })
 
   describe('Close Button', () => {

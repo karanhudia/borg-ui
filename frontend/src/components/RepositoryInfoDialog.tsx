@@ -13,7 +13,7 @@ import {
   Paper,
 } from '@mui/material'
 import ResponsiveDialog from './shared/ResponsiveDialog'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import CalendarMonth from '@mui/icons-material/CalendarMonth'
 import CheckIcon from '@mui/icons-material/Check'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
@@ -128,6 +128,15 @@ function buildRecoveryCommands(
 function RecoveryCommandBox({ command }: { command: RecoveryCommand }) {
   const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
+  const resetCopiedTimeoutRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (resetCopiedTimeoutRef.current !== null) {
+        window.clearTimeout(resetCopiedTimeoutRef.current)
+      }
+    }
+  }, [])
 
   const copyLabel = copied
     ? t('repositoryInfoDialog.recovery.copiedCommand', { label: command.label })
@@ -138,7 +147,13 @@ function RecoveryCommandBox({ command }: { command: RecoveryCommand }) {
       await navigator.clipboard.writeText(command.command)
       setCopied(true)
       toast.success(t('repositoryInfoDialog.recovery.commandCopied'))
-      window.setTimeout(() => setCopied(false), 2000)
+      if (resetCopiedTimeoutRef.current !== null) {
+        window.clearTimeout(resetCopiedTimeoutRef.current)
+      }
+      resetCopiedTimeoutRef.current = window.setTimeout(() => {
+        setCopied(false)
+        resetCopiedTimeoutRef.current = null
+      }, 2000)
     } catch {
       toast.error(t('repositoryInfoDialog.recovery.copyFailed'))
     }
