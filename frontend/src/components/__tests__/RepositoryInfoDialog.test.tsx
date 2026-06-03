@@ -426,7 +426,9 @@ describe('RepositoryInfoDialog', () => {
       )
 
       expect(screen.getByRole('button', { name: 'Run guided check' })).toBeDisabled()
-      expect(screen.getByText('Maintenance access is required to run checks in Borg UI.')).toBeInTheDocument()
+      expect(
+        screen.getByText('Maintenance access is required to run checks in Borg UI.')
+      ).toBeInTheDocument()
       expect(screen.getByText('borg check /repo/test')).toBeInTheDocument()
       expect(screen.getByText('borg check --repair /repo/test')).toBeInTheDocument()
       expect(screen.getByText('borg init --encryption repokey /repo/test')).toBeInTheDocument()
