@@ -568,9 +568,7 @@ describe('ManagedAgents', () => {
 
   it('keeps existing agent card actions enabled while diagnostics are loading', async () => {
     const user = userEvent.setup()
-    let resolveDiagnostics:
-      | ((value: AxiosResponse<AgentDiagnosticsResponse>) => void)
-      | undefined
+    let resolveDiagnostics: ((value: AxiosResponse<AgentDiagnosticsResponse>) => void) | undefined
     const agent = buildAgent({ id: 7, hostname: 'client-01', status: 'online' })
     vi.mocked(managedAgentsAPI.listAgents).mockResolvedValue({ data: [agent] } as AxiosResponse)
     vi.mocked(managedAgentsAPI.runDiagnostics).mockReturnValueOnce(

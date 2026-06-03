@@ -789,7 +789,9 @@ export function AgentDiagnosticsDialog({
         variant="contained"
         onClick={() => void runDiagnostics()}
         disabled={!agent || running || !onRunDiagnostics}
-        startIcon={running ? <CircularProgress color="inherit" size={16} /> : <Activity size={16} />}
+        startIcon={
+          running ? <CircularProgress color="inherit" size={16} /> : <Activity size={16} />
+        }
       >
         {running ? 'Running diagnostics' : 'Run check'}
       </Button>
@@ -911,11 +913,7 @@ export function AgentDiagnosticsDialog({
           </Stack>
 
           {lastError && (
-            <Alert
-              severity="warning"
-              icon={<AlertTriangle size={16} />}
-              sx={{ borderRadius: 1.5 }}
-            >
+            <Alert severity="warning" icon={<AlertTriangle size={16} />} sx={{ borderRadius: 1.5 }}>
               {lastError}
             </Alert>
           )}
