@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-06-02T22:49:43.384Z",
+  "generatedAt": "2026-06-03T04:28:54.846Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #609 visual report",
-    "commitSha": "28989a8a1372",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26852507808"
+    "commitSha": "6e9f1dc68b81",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26863616159"
   },
   "totals": {
-    "baseline": 254,
-    "actual": 256,
-    "compared": 254,
+    "baseline": 278,
+    "actual": 280,
+    "compared": 278,
     "changed": 0,
     "added": 2,
     "removed": 0,
-    "unchanged": 254
+    "unchanged": 278
   },
   "changed": [],
   "added": [
@@ -245,10 +245,52 @@
       "fileName": "backup-plans-sourcestep--single-local-group.png"
     },
     {
+      "fileName": "components-backupjobstable--non-retryable-destructive-job--mobile.png"
+    },
+    {
+      "fileName": "components-backupjobstable--non-retryable-destructive-job.png"
+    },
+    {
+      "fileName": "components-backupjobstable--retryable-failed-backup-job--mobile.png"
+    },
+    {
+      "fileName": "components-backupjobstable--retryable-failed-backup-job.png"
+    },
+    {
       "fileName": "components-backupjobstable--transport-modes--mobile.png"
     },
     {
       "fileName": "components-backupjobstable--transport-modes.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--disabled-due-to-active-run--mobile.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--disabled-due-to-active-run.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--disabled-no-failed-repositories--mobile.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--disabled-no-failed-repositories.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--disabled-no-permission--mobile.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--disabled-no-permission.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--retry-in-progress--mobile.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--retry-in-progress.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--retryable-backup-plan-run--mobile.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--retryable-backup-plan-run.png"
     },
     {
       "fileName": "components-backupplanselect--configured-plan--mobile.png"
@@ -357,6 +399,24 @@
     },
     {
       "fileName": "components-fileexplorerdialog--rclone-remote-browser.png"
+    },
+    {
+      "fileName": "components-lockerrordialog--break-lock-available--mobile.png"
+    },
+    {
+      "fileName": "components-lockerrordialog--break-lock-available.png"
+    },
+    {
+      "fileName": "components-lockerrordialog--lock-breaking-disabled--mobile.png"
+    },
+    {
+      "fileName": "components-lockerrordialog--lock-breaking-disabled.png"
+    },
+    {
+      "fileName": "components-lockerrordialog--maintenance-required--mobile.png"
+    },
+    {
+      "fileName": "components-lockerrordialog--maintenance-required.png"
     },
     {
       "fileName": "components-monitoringreportstab--configured--mobile.png"
@@ -501,6 +561,18 @@
     },
     {
       "fileName": "components-repositorywipedialog--protected-archive-blocked.png"
+    },
+    {
+      "fileName": "components-retryjobdialog--backup-job-retry--mobile.png"
+    },
+    {
+      "fileName": "components-retryjobdialog--backup-job-retry.png"
+    },
+    {
+      "fileName": "components-retryjobdialog--backup-plan-run-retry--mobile.png"
+    },
+    {
+      "fileName": "components-retryjobdialog--backup-plan-run-retry.png"
     },
     {
       "fileName": "components-runningcloudstoragejobssection--active-jobs--mobile.png"
