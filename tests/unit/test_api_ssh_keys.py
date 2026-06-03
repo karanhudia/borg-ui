@@ -244,12 +244,25 @@ class TestSSHKeysEndpoints:
         test_db.refresh(connection)
         return ssh_key, connection
 
+    def _patch_monotonic(self, monkeypatch, values: list[float]):
+        sequence = iter(values)
+        last_value = 0.0
+
+        def fake_monotonic():
+            nonlocal last_value
+            try:
+                last_value = next(sequence)
+            except StopIteration:
+                last_value += 0.001
+            return last_value
+
+        monkeypatch.setattr(ssh_keys_api, "_monotonic", fake_monotonic, raising=False)
+
     def test_connection_diagnostics_returns_latency_tcp_and_throughput(
         self, test_client: TestClient, admin_headers, test_db, monkeypatch
     ):
-        self._create_diagnostics_connection(test_db)
+        _, connection = self._create_diagnostics_connection(test_db)
         commands: list[list[str]] = []
-        monotonic_values = iter([10.0, 10.025, 20.0, 20.004, 30.0, 30.25])
 
         async def fake_run_ssh_process(cmd, timeout_seconds):
             commands.append(cmd)
@@ -262,12 +275,13 @@ class TestSSHKeysEndpoints:
         monkeypatch.setattr(
             ssh_keys_api, "_run_ssh_process", fake_run_ssh_process, raising=False
         )
-        monkeypatch.setattr(
-            ssh_keys_api, "_monotonic", lambda: next(monotonic_values), raising=False
+        self._patch_monotonic(
+            monkeypatch,
+            [10.0, 10.0, 10.0, 10.025, 10.026, 10.026, 10.03, 10.031, 10.031, 10.281],
         )
 
         response = test_client.post(
-            "/api/ssh-keys/connections/1/diagnostics",
+            f"/api/ssh-keys/connections/{connection.id}/diagnostics",
             json={
                 "target": {
                     "host": "postgres.internal",
@@ -312,8 +326,7 @@ class TestSSHKeysEndpoints:
     def test_connection_diagnostics_keeps_failed_tcp_as_partial_result(
         self, test_client: TestClient, admin_headers, test_db, monkeypatch
     ):
-        self._create_diagnostics_connection(test_db)
-        monotonic_values = iter([10.0, 10.01, 20.0, 20.006, 30.0, 30.1])
+        _, connection = self._create_diagnostics_connection(test_db)
 
         async def fake_run_ssh_process(cmd, timeout_seconds):
             if "-W" in cmd:
@@ -329,12 +342,13 @@ class TestSSHKeysEndpoints:
         monkeypatch.setattr(
             ssh_keys_api, "_run_ssh_process", fake_run_ssh_process, raising=False
         )
-        monkeypatch.setattr(
-            ssh_keys_api, "_monotonic", lambda: next(monotonic_values), raising=False
+        self._patch_monotonic(
+            monkeypatch,
+            [10.0, 10.0, 10.0, 10.01, 10.011, 10.011, 10.017, 10.018, 10.018, 10.118],
         )
 
         response = test_client.post(
-            "/api/ssh-keys/connections/1/diagnostics",
+            f"/api/ssh-keys/connections/{connection.id}/diagnostics",
             json={
                 "target": {
                     "host": "postgres.internal",
@@ -357,8 +371,7 @@ class TestSSHKeysEndpoints:
     def test_connection_diagnostics_reports_session_timeout(
         self, test_client: TestClient, admin_headers, test_db, monkeypatch
     ):
-        self._create_diagnostics_connection(test_db)
-        monotonic_values = iter([10.0, 15.0])
+        _, connection = self._create_diagnostics_connection(test_db)
 
         async def fake_run_ssh_process(cmd, timeout_seconds):
             raise asyncio.TimeoutError
@@ -366,12 +379,10 @@ class TestSSHKeysEndpoints:
         monkeypatch.setattr(
             ssh_keys_api, "_run_ssh_process", fake_run_ssh_process, raising=False
         )
-        monkeypatch.setattr(
-            ssh_keys_api, "_monotonic", lambda: next(monotonic_values), raising=False
-        )
+        self._patch_monotonic(monkeypatch, [10.0, 10.0, 10.0, 15.0])
 
         response = test_client.post(
-            "/api/ssh-keys/connections/1/diagnostics",
+            f"/api/ssh-keys/connections/{connection.id}/diagnostics",
             json={},
             headers=admin_headers,
         )
@@ -387,6 +398,42 @@ class TestSSHKeysEndpoints:
         assert data["latency"]["status"] == "timeout"
         assert data["tcp"] is None
         assert data["throughput"] is None
+
+    def test_connection_diagnostics_stops_when_timeout_budget_is_exhausted(
+        self, test_client: TestClient, admin_headers, test_db, monkeypatch
+    ):
+        _, connection = self._create_diagnostics_connection(test_db)
+        commands: list[list[str]] = []
+
+        async def fake_run_ssh_process(cmd, timeout_seconds):
+            commands.append(cmd)
+            return 0, b"/srv\n", b""
+
+        monkeypatch.setattr(
+            ssh_keys_api, "_run_ssh_process", fake_run_ssh_process, raising=False
+        )
+        self._patch_monotonic(monkeypatch, [10.0, 10.0, 10.0, 14.0, 14.0])
+
+        response = test_client.post(
+            f"/api/ssh-keys/connections/{connection.id}/diagnostics",
+            json={"timeout_seconds": 4, "speed_probe_bytes": 131072},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["session"]["status"] == "success"
+        assert data["session"]["elapsed_ms"] == 4000
+        assert data["throughput"] == {
+            "status": "timeout",
+            "direction": "download",
+            "probe_size_bytes": 131072,
+            "elapsed_ms": 4000,
+            "error": "timeout",
+            "message": "SSH diagnostics timeout budget exhausted before speed probe started",
+        }
+        assert len(commands) == 1
+        assert not any(cmd[-1].startswith("dd if=/dev/zero") for cmd in commands)
 
     @pytest.mark.parametrize(
         "payload",
@@ -409,10 +456,10 @@ class TestSSHKeysEndpoints:
     def test_connection_diagnostics_rejects_invalid_inputs(
         self, test_client: TestClient, admin_headers, test_db, payload
     ):
-        self._create_diagnostics_connection(test_db)
+        _, connection = self._create_diagnostics_connection(test_db)
 
         response = test_client.post(
-            "/api/ssh-keys/connections/1/diagnostics",
+            f"/api/ssh-keys/connections/{connection.id}/diagnostics",
             json=payload,
             headers=admin_headers,
         )

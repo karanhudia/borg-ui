@@ -77,14 +77,14 @@ const diagnosticsTimeout: SSHConnectionDiagnosticsResponse = {
   session: {
     status: 'timeout',
     elapsed_ms: null,
-    error: 'ssh_timeout',
-    message: 'SSH diagnostics timed out after 5 seconds',
+    error: 'timeout',
+    message: 'SSH diagnostic command timed out',
   },
   latency: {
     status: 'timeout',
     elapsed_ms: null,
-    error: 'ssh_timeout',
-    message: 'SSH diagnostics timed out after 5 seconds',
+    error: 'timeout',
+    message: 'SSH diagnostic command timed out',
   },
   tcp: null,
   throughput: null,

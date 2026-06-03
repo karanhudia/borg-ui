@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
+import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import {
   Alert,
@@ -46,21 +47,31 @@ function parseProbeBytes(value: string): number | null {
   return Number.isInteger(parsed) && parsed >= 65536 && parsed <= 5 * 1024 * 1024 ? parsed : null
 }
 
-function getTargetError(host: string, port: string, timeout: string): string | null {
+function getTargetError(host: string, port: string, timeout: string, t: TFunction): string | null {
   if (!host.trim()) return null
-  if (parsePort(port) === null) return 'Enter a TCP port between 1 and 65535.'
+  if (parsePort(port) === null) {
+    return t('sshConnections.diagnostics.errors.targetPortRange', {
+      defaultValue: 'Enter a TCP port between 1 and 65535.',
+    })
+  }
   if (parseBoundedNumber(timeout, 0.5, 15) === null) {
-    return 'Enter a target timeout between 0.5 and 15 seconds.'
+    return t('sshConnections.diagnostics.errors.targetTimeoutRange', {
+      defaultValue: 'Enter a target timeout between 0.5 and 15 seconds.',
+    })
   }
   return null
 }
 
-function formatElapsed(value?: number | null): string {
-  return typeof value === 'number' ? `${Math.round(value)} ms` : 'Not reported'
+function formatElapsed(value: number | null | undefined, t: TFunction): string {
+  return typeof value === 'number'
+    ? `${Math.round(value)} ms`
+    : t('sshConnections.diagnostics.notReported', { defaultValue: 'Not reported' })
 }
 
-function formatBytes(value?: number | null): string {
-  if (typeof value !== 'number') return 'Not reported'
+function formatBytes(value: number | null | undefined, t: TFunction): string {
+  if (typeof value !== 'number') {
+    return t('sshConnections.diagnostics.notReported', { defaultValue: 'Not reported' })
+  }
   if (value < 1024) return `${value} B`
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(0)} KB`
   return `${(value / 1024 / 1024).toFixed(2)} MB`
@@ -73,22 +84,22 @@ function probeStatusColor(status?: string): 'default' | 'success' | 'error' | 'w
   return 'default'
 }
 
-function sessionLabel(status: string): string {
-  if (status === 'success') return 'SSH session healthy'
-  if (status === 'timeout') return 'SSH timed out'
-  return 'SSH failed'
+function sessionLabel(status: string, t: TFunction): string {
+  if (status === 'success') return t('sshConnections.diagnostics.sessionHealthy')
+  if (status === 'timeout') return t('sshConnections.diagnostics.sessionTimedOut')
+  return t('sshConnections.diagnostics.sessionFailed')
 }
 
-function tcpLabel(status: string): string {
-  if (status === 'success') return 'TCP reachable'
-  if (status === 'timeout') return 'TCP timed out'
-  return 'TCP failed'
+function tcpLabel(status: string, t: TFunction): string {
+  if (status === 'success') return t('sshConnections.diagnostics.tcpReachable')
+  if (status === 'timeout') return t('sshConnections.diagnostics.tcpTimedOut')
+  return t('sshConnections.diagnostics.tcpFailed')
 }
 
-function throughputLabel(status: string): string {
-  if (status === 'success') return 'Speed probe complete'
-  if (status === 'timeout') return 'Speed probe timed out'
-  return 'Speed probe failed'
+function throughputLabel(status: string, t: TFunction): string {
+  if (status === 'success') return t('sshConnections.diagnostics.speedComplete')
+  if (status === 'timeout') return t('sshConnections.diagnostics.speedTimedOut')
+  return t('sshConnections.diagnostics.speedFailed')
 }
 
 function buildPayload(
@@ -173,16 +184,23 @@ function tcpDetail(result: SSHConnectionDiagnosticsTcpResult): string {
   return error ? `${target} - ${error}` : target
 }
 
-function throughputValue(result: SSHConnectionDiagnosticsThroughputResult): string {
+function throughputValue(result: SSHConnectionDiagnosticsThroughputResult, t: TFunction): string {
   if (result.status === 'success' && typeof result.mbps === 'number') {
     return `${result.mbps.toFixed(2)} MB/s`
   }
-  return errorDetail(result) || 'No throughput result'
+  return (
+    errorDetail(result) ||
+    t('sshConnections.diagnostics.noThroughputResult', { defaultValue: 'No throughput result' })
+  )
 }
 
-function throughputDetail(result: SSHConnectionDiagnosticsThroughputResult): string {
+function throughputDetail(result: SSHConnectionDiagnosticsThroughputResult, t: TFunction): string {
   if (result.status !== 'success') return errorDetail(result) || ''
-  return `${formatBytes(result.bytes_transferred)} in ${formatElapsed(result.elapsed_ms)}`
+  return t('sshConnections.diagnostics.transferredIn', {
+    bytes: formatBytes(result.bytes_transferred, t),
+    elapsed: formatElapsed(result.elapsed_ms, t),
+    defaultValue: '{{bytes}} in {{elapsed}}',
+  })
 }
 
 export function ConnectionDiagnosticsDialog({
@@ -218,14 +236,18 @@ export function ConnectionDiagnosticsDialog({
     setErrorMessage(null)
   }, [initialResult, open])
 
-  const targetError = getTargetError(targetHost, targetPort, targetTimeout)
+  const targetError = getTargetError(targetHost, targetPort, targetTimeout, t)
   const timeoutError =
     parseBoundedNumber(timeoutSeconds, 1, 30) === null
-      ? 'Enter an SSH timeout between 1 and 30 seconds.'
+      ? t('sshConnections.diagnostics.errors.sshTimeoutRange', {
+          defaultValue: 'Enter an SSH timeout between 1 and 30 seconds.',
+        })
       : null
   const speedError =
     parseProbeBytes(speedProbeBytes) === null
-      ? 'Enter a speed probe size between 65536 and 5242880 bytes.'
+      ? t('sshConnections.diagnostics.errors.speedProbeRange', {
+          defaultValue: 'Enter a speed probe size between 65536 and 5242880 bytes.',
+        })
       : null
   const formError = targetError || timeoutError || speedError
 
@@ -240,7 +262,9 @@ export function ConnectionDiagnosticsDialog({
       )
       setResult(nextResult)
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to run diagnostics')
+      setErrorMessage(
+        error instanceof Error ? error.message : t('sshConnections.toasts.diagnosticsFailed')
+      )
     } finally {
       setRunning(false)
     }
@@ -364,24 +388,24 @@ export function ConnectionDiagnosticsDialog({
             <Stack spacing={1.25}>
               <DiagnosticRow
                 icon={<CheckCircle size={18} />}
-                title={sessionLabel(result.session.status)}
+                title={sessionLabel(result.session.status, t)}
                 status={result.session.status}
-                value={formatElapsed(result.session.elapsed_ms)}
+                value={formatElapsed(result.session.elapsed_ms, t)}
                 detail={errorDetail(result.session) || result.session.output}
               />
               <DiagnosticRow
                 icon={<Activity size={18} />}
                 title={t('sshConnections.diagnostics.latency')}
                 status={result.latency.status}
-                value={formatElapsed(result.latency.elapsed_ms)}
+                value={formatElapsed(result.latency.elapsed_ms, t)}
                 detail={errorDetail(result.latency)}
               />
               {result.tcp && (
                 <DiagnosticRow
                   icon={<Network size={18} />}
-                  title={tcpLabel(result.tcp.status)}
+                  title={tcpLabel(result.tcp.status, t)}
                   status={result.tcp.status}
-                  value={formatElapsed(result.tcp.elapsed_ms)}
+                  value={formatElapsed(result.tcp.elapsed_ms, t)}
                   detail={tcpDetail(result.tcp)}
                 />
               )}
@@ -394,10 +418,10 @@ export function ConnectionDiagnosticsDialog({
                       <XCircle size={18} />
                     )
                   }
-                  title={throughputLabel(result.throughput.status)}
+                  title={throughputLabel(result.throughput.status, t)}
                   status={result.throughput.status}
-                  value={throughputValue(result.throughput)}
-                  detail={throughputDetail(result.throughput)}
+                  value={throughputValue(result.throughput, t)}
+                  detail={throughputDetail(result.throughput, t)}
                 />
               )}
             </Stack>

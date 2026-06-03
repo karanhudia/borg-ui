@@ -1821,7 +1821,25 @@
       "seconds": "Secondi",
       "latency": "Latenza",
       "runCheck": "Esegui controllo",
-      "running": "Diagnostica in corso"
+      "running": "Diagnostica in corso",
+      "transferredIn": "{{bytes}} in {{elapsed}}",
+      "notReported": "Non riportato",
+      "noThroughputResult": "Nessun risultato di throughput",
+      "sessionHealthy": "Sessione SSH integra",
+      "sessionTimedOut": "Timeout SSH",
+      "sessionFailed": "SSH non riuscito",
+      "tcpReachable": "TCP raggiungibile",
+      "tcpTimedOut": "Timeout TCP",
+      "tcpFailed": "TCP non riuscito",
+      "speedComplete": "Test velocità completato",
+      "speedTimedOut": "Timeout test velocità",
+      "speedFailed": "Test velocità non riuscito",
+      "errors": {
+        "targetPortRange": "Inserisci una porta TCP tra 1 e 65535.",
+        "targetTimeoutRange": "Inserisci un timeout della destinazione tra 0,5 e 15 secondi.",
+        "sshTimeoutRange": "Inserisci un timeout SSH tra 1 e 30 secondi.",
+        "speedProbeRange": "Inserisci una dimensione del test velocità tra 65536 e 5242880 byte."
+      }
     },
     "remoteConnections": {
       "title": "Connessioni remote",

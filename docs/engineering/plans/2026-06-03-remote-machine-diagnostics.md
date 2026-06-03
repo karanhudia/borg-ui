@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Backend Failing Tests
+## Task 1: Backend Failing Tests
 
 **Files:**
 - Modify: `tests/unit/test_api_ssh_keys.py`
@@ -45,7 +45,7 @@
   Expected before implementation: tests fail because the endpoint and helper
   do not exist.
 
-### Task 2: Backend Implementation
+## Task 2: Backend Implementation
 
 **Files:**
 - Modify: `app/api/ssh_keys.py`
@@ -105,7 +105,7 @@
   pytest tests/unit/test_api_ssh_keys.py -q -k diagnostic
   ```
 
-### Task 3: Frontend Failing Tests
+## Task 3: Frontend Failing Tests
 
 **Files:**
 - Modify: `frontend/src/pages/__tests__/SSHConnectionsSingleKey.test.tsx`
@@ -135,7 +135,7 @@
   cd frontend && npm run test -- src/components/__tests__/RemoteMachineCard.test.tsx --run -t diagnostic
   ```
 
-### Task 4: Frontend Implementation
+## Task 4: Frontend Implementation
 
 **Files:**
 - Modify: `frontend/src/services/api.ts`
@@ -189,7 +189,7 @@
   cd frontend && npm run test -- src/components/__tests__/RemoteMachineCard.test.tsx --run -t diagnostic
   ```
 
-### Task 5: Storybook And Docs
+## Task 5: Storybook And Docs
 
 **Files:**
 - Create: `frontend/src/pages/ssh-connections-single-key/dialogs/ConnectionDiagnosticsDialog.stories.tsx`
@@ -204,7 +204,7 @@
   Add a Remote Machine Diagnostics section to `docs/ssh-keys.md` explaining
   session, remote TCP, and bounded speed probes.
 
-### Task 6: Required Validation And Publish
+## Task 6: Required Validation And Publish
 
 **Files:**
 - Inspect: `.github/PULL_REQUEST_TEMPLATE.md`

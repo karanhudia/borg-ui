@@ -1153,12 +1153,21 @@ async def get_ssh_connections(
         )
 
 
-def _elapsed_ms(started_at: float) -> int:
-    return int(round((_monotonic() - started_at) * 1000))
-
-
 def _monotonic() -> float:
     return time.monotonic()
+
+
+def _elapsed_ms_between(started_at: float, ended_at: float) -> int:
+    return int(round(max(ended_at - started_at, 0.0) * 1000))
+
+
+def _elapsed_ms(started_at: float) -> int:
+    return _elapsed_ms_between(started_at, _monotonic())
+
+
+def _remaining_timeout(deadline: float) -> tuple[float, float]:
+    now = _monotonic()
+    return max(deadline - now, 0.0), now
 
 
 def _ssh_connect_timeout(timeout_seconds: float) -> str:
@@ -1265,6 +1274,23 @@ def _failed_probe_result(
     }
 
 
+def _tcp_probe_base_result(target: SSHDiagnosticTarget) -> dict[str, Any]:
+    return {
+        "target": {
+            "host": target.host,
+            "port": target.port,
+            "timeout_seconds": float(target.timeout_seconds),
+        }
+    }
+
+
+def _throughput_probe_base_result(probe_size_bytes: int) -> dict[str, Any]:
+    return {
+        "direction": "download",
+        "probe_size_bytes": probe_size_bytes,
+    }
+
+
 async def _run_ssh_latency_probe(
     connection: SSHConnection,
     key_file_path: str,
@@ -1308,24 +1334,18 @@ async def _run_ssh_tcp_probe(
     connection: SSHConnection,
     key_file_path: str,
     target: SSHDiagnosticTarget,
+    timeout_seconds: float,
 ) -> dict[str, Any]:
-    cmd = _ssh_command_base(connection, key_file_path, target.timeout_seconds) + [
+    effective_timeout = min(float(target.timeout_seconds), timeout_seconds)
+    cmd = _ssh_command_base(connection, key_file_path, effective_timeout) + [
         "-W",
         f"{target.host}:{target.port}",
         _ssh_destination(connection),
     ]
     started_at = _monotonic()
-    target_result: dict[str, Any] = {
-        "target": {
-            "host": target.host,
-            "port": target.port,
-            "timeout_seconds": float(target.timeout_seconds),
-        }
-    }
+    target_result = _tcp_probe_base_result(target)
     try:
-        return_code, stdout, stderr = await _run_ssh_process(
-            cmd, target.timeout_seconds
-        )
+        return_code, stdout, stderr = await _run_ssh_process(cmd, effective_timeout)
     except asyncio.TimeoutError:
         target_result.update(
             _failed_probe_result(
@@ -1369,10 +1389,7 @@ async def _run_ssh_throughput_probe(
         f"dd if=/dev/zero bs={SSH_DIAGNOSTICS_BLOCK_SIZE_BYTES} count={block_count}",
     ]
     started_at = _monotonic()
-    base_result: dict[str, Any] = {
-        "direction": "download",
-        "probe_size_bytes": probe_size_bytes,
-    }
+    base_result = _throughput_probe_base_result(probe_size_bytes)
     try:
         return_code, stdout, stderr = await _run_ssh_process(cmd, timeout_seconds)
     except asyncio.TimeoutError:
@@ -1415,41 +1432,90 @@ async def _run_ssh_throughput_probe(
     return base_result
 
 
+def _diagnostics_result(
+    connection: SSHConnection, session_result: dict[str, Any]
+) -> dict[str, Any]:
+    latency_result = {
+        key: value
+        for key, value in session_result.items()
+        if key in {"status", "elapsed_ms", "error", "message"}
+    }
+    return {
+        "connection": _diagnostic_connection_metadata(connection),
+        "session": session_result,
+        "latency": latency_result,
+        "tcp": None,
+        "throughput": None,
+    }
+
+
+def _diagnostics_timeout_result(elapsed_ms: int, message: str) -> dict[str, Any]:
+    return _failed_probe_result(
+        status="timeout",
+        elapsed_ms=elapsed_ms,
+        error="timeout",
+        message=message,
+    )
+
+
 async def run_ssh_connection_diagnostics(
     connection: SSHConnection,
     ssh_key: SSHKey,
     payload: SSHConnectionDiagnosticsRequest,
 ) -> dict[str, Any]:
+    started_at = _monotonic()
+    deadline = started_at + float(payload.timeout_seconds)
     key_file_path = write_ssh_key_to_tempfile(ssh_key)
     try:
+        remaining, now = _remaining_timeout(deadline)
+        if remaining <= 0:
+            session_result = _diagnostics_timeout_result(
+                _elapsed_ms_between(started_at, now),
+                "SSH diagnostics timeout budget exhausted before session probe started",
+            )
+            return _diagnostics_result(connection, session_result)
+
         session_result = await _run_ssh_latency_probe(
-            connection, key_file_path, payload.timeout_seconds
+            connection, key_file_path, remaining
         )
-        latency_result = {
-            key: value
-            for key, value in session_result.items()
-            if key in {"status", "elapsed_ms", "error", "message"}
-        }
-        result: dict[str, Any] = {
-            "connection": _diagnostic_connection_metadata(connection),
-            "session": session_result,
-            "latency": latency_result,
-            "tcp": None,
-            "throughput": None,
-        }
+        result = _diagnostics_result(connection, session_result)
 
         if session_result["status"] != "success":
             return result
 
         if payload.target is not None:
+            remaining, now = _remaining_timeout(deadline)
+            if remaining <= 0:
+                result["tcp"] = _tcp_probe_base_result(payload.target)
+                result["tcp"].update(
+                    _diagnostics_timeout_result(
+                        _elapsed_ms_between(started_at, now),
+                        "SSH diagnostics timeout budget exhausted before TCP probe started",
+                    )
+                )
+                return result
+
             result["tcp"] = await _run_ssh_tcp_probe(
-                connection, key_file_path, payload.target
+                connection, key_file_path, payload.target, remaining
             )
+
+        remaining, now = _remaining_timeout(deadline)
+        if remaining <= 0:
+            result["throughput"] = _throughput_probe_base_result(
+                payload.speed_probe_bytes
+            )
+            result["throughput"].update(
+                _diagnostics_timeout_result(
+                    _elapsed_ms_between(started_at, now),
+                    "SSH diagnostics timeout budget exhausted before speed probe started",
+                )
+            )
+            return result
 
         result["throughput"] = await _run_ssh_throughput_probe(
             connection,
             key_file_path,
-            timeout_seconds=payload.timeout_seconds,
+            timeout_seconds=remaining,
             probe_size_bytes=payload.speed_probe_bytes,
         )
         return result
