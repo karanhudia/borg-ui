@@ -8,7 +8,29 @@ description: "Run Borg UI behind Nginx, Caddy, Traefik, or another reverse proxy
 
 Run Borg UI behind a reverse proxy for TLS, public hostnames, and optional external authentication.
 
-When using built-in OIDC, the frontend and API must be served from the same public origin.
+For production, terminate HTTPS at the reverse proxy, load balancer, ingress
+controller, or orchestrator. Borg UI runs as the upstream application; it does
+not issue certificates, store TLS private keys, or renew certificates inside the
+app process.
+
+Passkey registration and login require a stable HTTPS browser origin for
+non-localhost deployments. Serve the frontend and API from the same public
+origin, for example `https://backups.example.com`, so passkeys, cookies, OIDC,
+and Cloud Storage OAuth callbacks all see the same site. Split-origin frontend
+and API deployments need custom CORS and cookie handling and are not the normal
+deployment path.
+
+For a passkey-ready deployment:
+
+- set `PUBLIC_BASE_URL` to the normal browser URL, including `BASE_PATH` for
+  sub-path deployments
+- keep `PUBLIC_BASE_URL` on HTTPS except for localhost development
+- forward `Host`, `X-Forwarded-Host`, `X-Forwarded-Proto`, and
+  `X-Forwarded-For`
+- list only the proxy IPs that may be trusted in `TRUSTED_PROXIES` when Borg UI
+  should use forwarded headers
+- keep direct container access unavailable to users so they cannot bypass the
+  public HTTPS origin or spoof trusted headers
 
 ## Root Domain
 
@@ -16,6 +38,14 @@ Example public URL:
 
 ```text
 https://backups.example.com
+```
+
+Backend environment:
+
+```yaml
+environment:
+  - PUBLIC_BASE_URL=https://backups.example.com
+  - TRUSTED_PROXIES=127.0.0.1
 ```
 
 Nginx:
@@ -40,6 +70,12 @@ server {
 }
 ```
 
+NGINX terminates TLS for Borg UI, but certificate provisioning stays outside
+Borg UI. Use your NGINX or certificate tooling to obtain and renew certificates,
+such as Certbot or acme.sh with an HTTP challenge, a Cloudflare DNS challenge,
+or another DNS provider challenge. Mount or reference those certificates in
+NGINX; do not mount TLS private keys into Borg UI for in-process HTTPS.
+
 Caddy:
 
 ```text
@@ -47,6 +83,10 @@ backups.example.com {
     reverse_proxy 127.0.0.1:8081
 }
 ```
+
+Caddy is the lowest-friction option for many single-host deployments because it
+automatically obtains and renews Let's Encrypt certificates for public hostnames
+that can complete ACME validation.
 
 ## Sub-Path Deployment
 
@@ -61,6 +101,7 @@ Set:
 ```yaml
 environment:
   - BASE_PATH=/borg-ui
+  - PUBLIC_BASE_URL=https://example.com/borg-ui
 ```
 
 Your proxy must strip the `/borg-ui` prefix before forwarding to Borg UI.
@@ -138,6 +179,26 @@ authorization remains available for unsupported providers and advanced setups.
 
 ## Traefik Example
 
+Traefik can also automate Let's Encrypt issuance and renewal. Define an ACME
+certificate resolver in Traefik's static configuration, then point the Borg UI
+router at that resolver:
+
+```yaml
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: ops@example.com
+      storage: /letsencrypt/acme.json
+      httpChallenge:
+        entryPoint: web
+```
+
 ```yaml
 services:
   app:
@@ -149,7 +210,13 @@ services:
       - traefik.http.routers.borg-ui.entrypoints=websecure
       - traefik.http.routers.borg-ui.tls.certresolver=letsencrypt
       - traefik.http.services.borg-ui.loadbalancer.server.port=8081
+    environment:
+      - PUBLIC_BASE_URL=https://backups.example.com
 ```
+
+If HTTP challenge is not available, configure Traefik's ACME DNS challenge with
+Cloudflare or another DNS provider. That certificate automation remains a
+Traefik/proxy responsibility, not a Borg UI app responsibility.
 
 ## Trusted-Header Auth
 
