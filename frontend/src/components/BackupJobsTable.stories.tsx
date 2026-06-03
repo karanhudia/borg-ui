@@ -31,15 +31,18 @@ const jobs: Job[] = [
   },
   {
     id: 103,
+    repository_id: 3,
     repository: '/agent/repo',
     repository_path: '/agent/repo',
     type: 'backup',
-    status: 'completed',
+    status: 'failed',
     started_at: '2026-05-22T07:30:00Z',
     completed_at: '2026-05-22T07:35:00Z',
     triggered_by: 'schedule',
     scheduled_job_id: 8,
     execution_mode: 'agent',
+    error_message:
+      'LOCK_ERROR::/agent/repo\n[Exit Code 73] Failed to create/acquire the lock (timeout)',
   },
 ]
 
@@ -93,6 +96,9 @@ export const TransportModes: Story = {
   args: {
     jobs,
     showTriggerColumn: true,
+    actions: { breakLock: true },
+    canBreakLocks: (job) => job.repository_id === 3,
+    lockBreakingEnabled: true,
   },
   render: (args) => (
     <Box sx={{ p: 3 }}>

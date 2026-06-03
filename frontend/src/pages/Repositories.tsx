@@ -9,6 +9,7 @@ import { backupPlansAPI, repositoriesAPI, RepositoryData } from '../services/api
 import { BorgApiClient } from '../services/borgApi'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { useAuth } from '../hooks/useAuth'
+import { useLockBreakPermissions } from '../hooks/useLockBreakPermissions'
 import { usePlan } from '../hooks/usePlan'
 import { usePermissions } from '../hooks/usePermissions'
 import { useAppState } from '../context/AppContext'
@@ -121,6 +122,8 @@ export default function Repositories() {
     queryKey: ['repositories'],
     queryFn: repositoriesAPI.getRepositories,
   })
+
+  const { canBreakLock, lockBreakingEnabled } = useLockBreakPermissions()
 
   const { data: backupPlansData, isLoading: loadingBackupPlanFilter } = useQuery({
     queryKey: ['backup-plans'],
@@ -920,7 +923,8 @@ export default function Repositories() {
           repositoryId={lockError.repositoryId}
           repositoryName={lockError.repositoryName}
           borgVersion={lockError.borgVersion}
-          canBreakLock={canManageRepositoriesGlobally}
+          canBreakLock={canBreakLock({ repository_id: lockError.repositoryId })}
+          lockBreakingEnabled={lockBreakingEnabled}
           onLockBroken={() => {
             queryClient.invalidateQueries({ queryKey: ['repository-info', lockError.repositoryId] })
           }}

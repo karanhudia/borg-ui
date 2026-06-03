@@ -1365,6 +1365,9 @@ class SystemSettings(Base):
     bypass_lock_on_list = Column(
         Boolean, default=False, nullable=False
     )  # Use --bypass-lock for all borg list commands (beta fix for concurrent operation lock issues)
+    lock_breaking_enabled = Column(
+        Boolean, default=True, nullable=False
+    )  # Allow user-initiated repository lock breaking
     show_restore_tab = Column(
         Boolean, default=False, nullable=False
     )  # Show legacy Restore tab in navigation (beta feature)

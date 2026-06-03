@@ -2069,6 +2069,11 @@
       "beforeBreakingCheck3": "This will break both repository and cache locks",
       "adminRequired": "Admin privileges required:",
       "adminRequiredDetail": "Only administrators can break repository locks. Please contact your admin for assistance.",
+      "maintenanceRequired": "Repository maintenance access required:",
+      "maintenanceRequiredDetail": "You need maintenance access to this repository to break its lock. Please contact your admin for assistance.",
+      "lockBreakingDisabled": "Lock breaking disabled:",
+      "lockBreakingDisabledDetail": "An administrator has disabled manual lock breaking for this deployment.",
+      "breakLockUnavailable": "Lock breaking is not available for this repository",
       "failedToBreakLock": "Failed to break repository lock"
     },
     "errorDetails": {
@@ -2794,6 +2799,9 @@
     "bypassLocksListTitle": "Bypass Locks for List Commands",
     "enableBypassLocksList": "Enable bypass-lock for all borg list commands",
     "bypassLocksListDescription": "Adds --bypass-lock to all borg list commands. This prevents lock contention when multiple read operations (like info + list) run simultaneously. Enable if you see \"Failed to acquire lock\" errors. Note: May show stale data if a backup is actively running.",
+    "lockBreakingTitle": "Manual Lock Breaking",
+    "enableLockBreaking": "Allow manual repository lock breaking",
+    "lockBreakingDescription": "Allows users with maintenance access to break stale repository locks from Borg UI. Disable this when other services may hold normal transient locks.",
     "showLegacyRestoreTabTitle": "Show Legacy Restore Tab",
     "showLegacyRestoreTabLabel": "Show the dedicated Restore tab in navigation",
     "showLegacyRestoreTabDescription": "Enable this to access the legacy Restore tab. Restore functionality is now integrated into the Archives page, but this option allows you to use the old interface if preferred.",
