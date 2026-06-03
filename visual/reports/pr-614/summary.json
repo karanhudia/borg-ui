@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-06-03T05:59:56.076Z",
+  "generatedAt": "2026-06-03T06:21:23.642Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #614 visual report",
-    "commitSha": "f504b3d921b1",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26866477290"
+    "commitSha": "99604f8b20e4",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26867320419"
   },
   "totals": {
     "baseline": 280,
@@ -26,12 +26,12 @@
       "actualPath": "images/actual/components-scheduledjobstable--empty-legacy-repository-jobs.png"
     },
     {
-      "fileName": "components-scheduledjobstable--legacy-repository-jobs--mobile.png",
-      "actualPath": "images/actual/components-scheduledjobstable--legacy-repository-jobs--mobile.png"
+      "fileName": "components-scheduledjobstable--multi-repository-legacy-job--mobile.png",
+      "actualPath": "images/actual/components-scheduledjobstable--multi-repository-legacy-job--mobile.png"
     },
     {
-      "fileName": "components-scheduledjobstable--legacy-repository-jobs.png",
-      "actualPath": "images/actual/components-scheduledjobstable--legacy-repository-jobs.png"
+      "fileName": "components-scheduledjobstable--multi-repository-legacy-job.png",
+      "actualPath": "images/actual/components-scheduledjobstable--multi-repository-legacy-job.png"
     }
   ],
   "removed": [],
