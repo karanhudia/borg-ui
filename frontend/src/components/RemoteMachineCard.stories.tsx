@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { Box } from '@mui/material'
 import type { ComponentProps } from 'react'
+import { fn } from 'storybook/test'
 import RemoteMachineCard from './RemoteMachineCard'
 
 type RemoteMachine = ComponentProps<typeof RemoteMachineCard>['machine']
@@ -32,7 +33,13 @@ const machine: RemoteMachine = {
   created_at: '2026-06-01T10:00:00.000Z',
 }
 
-const noop = () => {}
+const handlers = {
+  onEdit: fn(),
+  onDelete: fn(),
+  onRefreshStorage: fn(),
+  onTestConnection: fn(),
+  onDeployKey: fn(),
+}
 
 const meta = {
   title: 'Remote Machines/RemoteMachineCard',
@@ -51,11 +58,14 @@ type Story = StoryObj<typeof meta>
 export const WithRunDiagnostics: Story = {
   args: {
     machine,
-    onEdit: noop,
-    onDelete: noop,
-    onRefreshStorage: noop,
-    onTestConnection: noop,
-    onDeployKey: noop,
-    onRunDiagnostics: noop,
+    ...handlers,
+    onRunDiagnostics: fn(),
+  },
+}
+
+export const WithoutRunDiagnostics: Story = {
+  args: {
+    machine,
+    ...handlers,
   },
 }
