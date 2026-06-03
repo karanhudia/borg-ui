@@ -31,7 +31,7 @@ const { track, mockState } = vi.hoisted(() => ({
         timezone: 'UTC',
         repository: null,
         repository_id: null,
-        repository_ids: [1],
+        repository_ids: [1, 2],
         enabled: true,
         last_run: null,
         next_run: '2026-06-04T02:00:00Z',
@@ -172,5 +172,19 @@ describe('Schedule Jobs page', () => {
       expect(within(dialog).getByText('Legacy source repo')).toBeInTheDocument()
     })
     expect(within(dialog).queryByText('Plan-owned repo')).not.toBeInTheDocument()
+  })
+
+  it('keeps existing source-less repository targets available when editing a legacy job', async () => {
+    const user = userEvent.setup()
+
+    renderWithProviders(<Schedule />, { initialRoute: '/schedule' })
+
+    expect(await screen.findByText('Legacy server batch')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Edit' }))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Legacy job wizard' })
+    expect(within(dialog).getByText('Legacy source repo')).toBeInTheDocument()
+    expect(within(dialog).getByText('Plan-owned repo')).toBeInTheDocument()
   })
 })

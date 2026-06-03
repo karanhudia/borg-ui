@@ -200,6 +200,25 @@ const Schedule: React.FC = () => {
   const { canBreakLock: canBreakLockForBackupJob, lockBreakingEnabled } = useLockBreakPermissions({
     repositories,
   })
+  const scheduleWizardRepositories = React.useMemo(() => {
+    if (wizardMode !== 'edit' || !editingJobForWizard) return executableLegacyRepositories
+
+    const currentRepositoryIds = new Set<number>()
+    editingJobForWizard.repository_ids?.forEach((repoId) => currentRepositoryIds.add(repoId))
+    if (editingJobForWizard.repository_id) currentRepositoryIds.add(editingJobForWizard.repository_id)
+
+    const currentRepositories = repositories.filter(
+      (repo) =>
+        currentRepositoryIds.has(repo.id) ||
+        (Boolean(editingJobForWizard.repository) && repo.path === editingJobForWizard.repository)
+    )
+    if (currentRepositories.length === 0) return executableLegacyRepositories
+
+    const repositoriesById = new Map<number, Repository>()
+    executableLegacyRepositories.forEach((repo) => repositoriesById.set(repo.id, repo))
+    currentRepositories.forEach((repo) => repositoriesById.set(repo.id, repo))
+    return Array.from(repositoriesById.values())
+  }, [editingJobForWizard, executableLegacyRepositories, repositories, wizardMode])
 
   // Backup job history — fetch all jobs (not just scheduled) so orphaned/manual
   // history remains visible after a legacy schedule is deleted.
@@ -730,7 +749,7 @@ const Schedule: React.FC = () => {
         onClose={() => setShowScheduleWizard(false)}
         mode={wizardMode}
         scheduledJob={editingJobForWizard}
-        repositories={executableLegacyRepositories}
+        repositories={scheduleWizardRepositories}
         scripts={scriptsData?.data || []}
         onSubmit={handleWizardSubmit}
       />

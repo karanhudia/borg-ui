@@ -19,7 +19,7 @@
 - Modify `frontend/src/components/__tests__/AppSidebar.test.tsx` to expect Jobs navigation.
 - Modify `frontend/src/components/__tests__/ScheduledJobsTable.test.tsx` for changed default/empty copy.
 - Add `frontend/src/components/ScheduledJobsTable.stories.tsx` for the Legacy Repository Jobs state.
-- Modify locale files `frontend/src/locales/en.json`, `frontend/src/locales/es.json`, and `frontend/src/locales/it.json` with matching keys.
+- Modify locale files `frontend/src/locales/en.json`, `frontend/src/locales/es.json`, `frontend/src/locales/it.json`, and `frontend/src/locales/de.json` with matching keys.
 - Modify `docs/navigation.md` and `docs/usage-guide.md` for the visible Jobs flow.
 
 ## Task 1: Failing Tests For Navigation And Executable Repositories
@@ -134,6 +134,7 @@ Expected: FAIL because `executableRepositories.ts` does not exist and current co
 - Modify: `frontend/src/locales/en.json`
 - Modify: `frontend/src/locales/es.json`
 - Modify: `frontend/src/locales/it.json`
+- Modify: `frontend/src/locales/de.json`
 
 - [ ] **Step 1: Add executable repository helper**
 
@@ -224,7 +225,7 @@ Set the visible navigation/page/tab values:
 }
 ```
 
-Apply matching keys to Spanish and Italian locale files. Existing translated
+Apply matching keys to Spanish, Italian, and German locale files. Existing translated
 files may use English fallback text where no reliable translation is already
 present; parity is more important than inventing poor translations.
 

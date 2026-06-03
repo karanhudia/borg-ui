@@ -75,7 +75,7 @@ export default meta
 
 type Story = StoryObj<typeof meta>
 
-export const LegacyRepositoryJobs: Story = {}
+export const MultiRepositoryLegacyJob: Story = {}
 
 export const EmptyLegacyRepositoryJobs: Story = {
   args: {
