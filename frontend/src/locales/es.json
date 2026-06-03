@@ -1251,6 +1251,10 @@
       "deleted": "Repositorio eliminado correctamente",
       "deleteFailed": "Error al eliminar el repositorio",
       "checkStarted": "Verificación iniciada",
+      "checkCompleted": "Verificación completada",
+      "checkCompletedWithWarnings": "Verificación completada con advertencias",
+      "checkRunFailed": "Verificación fallida",
+      "checkFailedWithMessage": "Verificación fallida: {{message}}",
       "checkFailed": "Error al iniciar la verificación",
       "compactStarted": "Compactación iniciada",
       "compactFailed": "Error al iniciar la compactación",
@@ -4159,7 +4163,18 @@
   "repositoryInfoDialog": {
     "failedToDownloadKeyfile": "Error al descargar el archivo de clave",
     "noArchivesDescription": "Este repositorio ha sido inicializado pero no contiene archivos. Las estadísticas de almacenamiento aparecerán aquí después de crear tu primera copia de seguridad.",
-    "failedToLoad": "Error al cargar la información del repositorio. Asegúrate de que el repositorio sea accesible y esté correctamente inicializado."
+    "failedToLoad": "Error al cargar la información del repositorio. Asegúrate de que el repositorio sea accesible y esté correctamente inicializado.",
+    "recovery": {
+      "title": "Comandos de recuperación",
+      "description": "Usa estas plantillas de comandos cuando necesites diagnosticar, reparar o recrear este repositorio fuera de Borg UI.",
+      "checkCommand": "Comprobar repositorio",
+      "repairCommand": "Reparar repositorio",
+      "initCommand": "Inicializar repositorio",
+      "copyCommand": "Copiar comando {{label}}",
+      "copiedCommand": "Comando {{label}} copiado",
+      "commandCopied": "Comando copiado",
+      "copyFailed": "Error al copiar el comando"
+    }
   },
   "analyticsBanner": {
     "viewDashboardLink": "Ver nuestro panel de análisis público",

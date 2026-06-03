@@ -1251,6 +1251,10 @@
       "deleted": "Repository eliminato con successo",
       "deleteFailed": "Impossibile eliminare il repository",
       "checkStarted": "Operazione di controllo avviata",
+      "checkCompleted": "Controllo completato",
+      "checkCompletedWithWarnings": "Controllo completato con avvisi",
+      "checkRunFailed": "Controllo non riuscito",
+      "checkFailedWithMessage": "Controllo non riuscito: {{message}}",
       "checkFailed": "Impossibile avviare il controllo",
       "compactStarted": "Operazione di compattazione avviata",
       "compactFailed": "Impossibile avviare la compattazione",
@@ -4159,7 +4163,18 @@
   "repositoryInfoDialog": {
     "failedToDownloadKeyfile": "Impossibile scaricare il file chiave",
     "noArchivesDescription": "Questo repository è stato inizializzato ma non contiene archivi. Le statistiche di archiviazione appariranno qui dopo aver creato il primo backup.",
-    "failedToLoad": "Impossibile caricare le informazioni del repository. Assicurati che il repository sia accessibile e inizializzato correttamente."
+    "failedToLoad": "Impossibile caricare le informazioni del repository. Assicurati che il repository sia accessibile e inizializzato correttamente.",
+    "recovery": {
+      "title": "Comandi di recupero",
+      "description": "Usa questi modelli di comando quando devi diagnosticare, riparare o ricreare questo repository fuori da Borg UI.",
+      "checkCommand": "Controlla repository",
+      "repairCommand": "Controllo con riparazione",
+      "initCommand": "Inizializza repository",
+      "copyCommand": "Copia comando {{label}}",
+      "copiedCommand": "Comando {{label}} copiato",
+      "commandCopied": "Comando copiato",
+      "copyFailed": "Impossibile copiare il comando"
+    }
   },
   "analyticsBanner": {
     "viewDashboardLink": "Visualizza la nostra dashboard di analisi pubblica",

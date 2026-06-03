@@ -3,10 +3,22 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import RepositoryInfoDialog from '../RepositoryInfoDialog'
 
+const { mockCanUseFeature } = vi.hoisted(() => ({
+  mockCanUseFeature: vi.fn(() => true),
+}))
+
 vi.mock('../../services/api', () => ({
   repositoriesAPI: {
     downloadKeyfile: vi.fn(),
   },
+}))
+
+vi.mock('../../hooks/usePlan', () => ({
+  usePlan: () => ({
+    plan: 'community',
+    isLoading: false,
+    can: mockCanUseFeature,
+  }),
 }))
 
 import { repositoriesAPI } from '../../services/api'
@@ -37,6 +49,11 @@ const mockRepositoryInfo = {
 }
 
 describe('RepositoryInfoDialog', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockCanUseFeature.mockReturnValue(true)
+  })
+
   describe('Rendering', () => {
     it('renders dialog when open', () => {
       render(
@@ -276,6 +293,128 @@ describe('RepositoryInfoDialog', () => {
 
       expect(screen.getByText(/Failed to load repository information/i)).toBeInTheDocument()
     })
+
+    it('shows copyable recovery commands when repository info cannot load', () => {
+      render(
+        <RepositoryInfoDialog
+          open={true}
+          repository={{ ...mockRepository, encryption: 'repokey', borg_version: 1 }}
+          repositoryInfo={null}
+          isLoading={false}
+          onClose={vi.fn()}
+        />
+      )
+
+      expect(screen.getByText('Recovery commands')).toBeInTheDocument()
+      expect(screen.getByText('borg check /repo/test')).toBeInTheDocument()
+      expect(screen.getByText('borg check --repair /repo/test')).toBeInTheDocument()
+      expect(screen.getByText('borg init --encryption repokey /repo/test')).toBeInTheDocument()
+    })
+
+    it('shell-escapes recovery command paths and remote path values', () => {
+      render(
+        <RepositoryInfoDialog
+          open={true}
+          repository={{
+            ...mockRepository,
+            encryption: 'repokey',
+            borg_version: 1,
+            path: '/repo/test path;rm',
+            remote_path: '/usr/bin/borg 2',
+          }}
+          repositoryInfo={null}
+          isLoading={false}
+          onClose={vi.fn()}
+        />
+      )
+
+      expect(
+        screen.getByText("borg check --remote-path '/usr/bin/borg 2' '/repo/test path;rm'")
+      ).toBeInTheDocument()
+      expect(
+        screen.getByText("borg check --repair --remote-path '/usr/bin/borg 2' '/repo/test path;rm'")
+      ).toBeInTheDocument()
+      expect(
+        screen.getByText(
+          "borg init --encryption repokey --remote-path '/usr/bin/borg 2' '/repo/test path;rm'"
+        )
+      ).toBeInTheDocument()
+    })
+
+    it('shows recovery commands for Borg 2 repositories even when Borg 2 details are gated', () => {
+      mockCanUseFeature.mockReturnValue(false)
+
+      render(
+        <RepositoryInfoDialog
+          open={true}
+          repository={{ ...mockRepository, encryption: 'repokey-aes-ocb', borg_version: 2 }}
+          repositoryInfo={null}
+          isLoading={false}
+          onClose={vi.fn()}
+        />
+      )
+
+      expect(screen.getByText(/Failed to load repository information/i)).toBeInTheDocument()
+      expect(screen.getByText('Recovery commands')).toBeInTheDocument()
+      expect(screen.getByText('borg2 -r /repo/test check')).toBeInTheDocument()
+    })
+
+    it('copies a recovery command to the clipboard', async () => {
+      const user = userEvent.setup()
+      const writeText = vi.fn().mockResolvedValue(undefined)
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: { writeText },
+      })
+
+      render(
+        <RepositoryInfoDialog
+          open={true}
+          repository={{ ...mockRepository, encryption: 'repokey', borg_version: 1 }}
+          repositoryInfo={null}
+          isLoading={false}
+          onClose={vi.fn()}
+        />
+      )
+
+      await user.click(screen.getByRole('button', { name: 'Copy Check repository command' }))
+
+      expect(writeText).toHaveBeenCalledWith('borg check /repo/test')
+    })
+
+    it('clears the copied feedback timeout when unmounted', async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined)
+      const setTimeoutSpy = vi.spyOn(window, 'setTimeout')
+      const clearTimeoutSpy = vi.spyOn(window, 'clearTimeout')
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: { writeText },
+      })
+
+      const { unmount } = render(
+        <RepositoryInfoDialog
+          open={true}
+          repository={{ ...mockRepository, encryption: 'repokey', borg_version: 1 }}
+          repositoryInfo={null}
+          isLoading={false}
+          onClose={vi.fn()}
+        />
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: 'Copy Check repository command' }))
+      await waitFor(() => expect(writeText).toHaveBeenCalledWith('borg check /repo/test'))
+      const copyTimeoutResult = setTimeoutSpy.mock.results.find(
+        (_, index) => setTimeoutSpy.mock.calls[index]?.[1] === 2000
+      )
+
+      expect(copyTimeoutResult?.value).toBeDefined()
+
+      unmount()
+
+      expect(clearTimeoutSpy).toHaveBeenCalledWith(copyTimeoutResult?.value)
+      setTimeoutSpy.mockRestore()
+      clearTimeoutSpy.mockRestore()
+    })
   })
 
   describe('Close Button', () => {
@@ -311,11 +450,6 @@ describe('RepositoryInfoDialog', () => {
 
       expect(onClose).toHaveBeenCalled()
     })
-  })
-
-  describe('beforeEach cleanup', () => {
-    beforeEach(() => vi.clearAllMocks())
-    it('placeholder to attach beforeEach', () => {})
   })
 
   describe('Borg 2 repository stats', () => {
