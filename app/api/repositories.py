@@ -5727,6 +5727,12 @@ async def break_repository_lock(
     """Break a stale lock on a repository (user-initiated)"""
     try:
         repository = _load_repository_with_access(repo_id, current_user, db, "operator")
+        settings = db.query(SystemSettings).first()
+        if settings and not settings.lock_breaking_enabled:
+            raise HTTPException(
+                status_code=403,
+                detail={"key": "backend.errors.repo.lockBreakingDisabled"},
+            )
 
         logger.warning(
             "User requested lock break", repo_id=repo_id, user=current_user.username

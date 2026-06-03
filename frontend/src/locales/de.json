@@ -2072,6 +2072,11 @@
       "beforeBreakingCheck3": "Dies bricht sowohl Repository- als auch Cache-Sperren",
       "adminRequired": "Administratorrechte erforderlich:",
       "adminRequiredDetail": "Nur Administratoren können Repository-Sperren aufheben. Bitte wende dich an deinen Administrator.",
+      "maintenanceRequired": "Repository-Wartungszugriff erforderlich:",
+      "maintenanceRequiredDetail": "Du benötigst Wartungszugriff auf dieses Repository, um seine Sperre aufzuheben. Bitte wende dich an deinen Administrator.",
+      "lockBreakingDisabled": "Sperrenaufhebung deaktiviert:",
+      "lockBreakingDisabledDetail": "Ein Administrator hat die manuelle Sperrenaufhebung für diese Bereitstellung deaktiviert.",
+      "breakLockUnavailable": "Sperrenaufhebung ist für dieses Repository nicht verfügbar",
       "failedToBreakLock": "Repository-Sperre konnte nicht aufgehoben werden"
     },
     "errorDetails": {
@@ -2797,6 +2802,9 @@
     "bypassLocksListTitle": "Sperren umgehen für List-Befehle",
     "enableBypassLocksList": "Sperren umgehen für alle borg list-Befehle aktivieren",
     "bypassLocksListDescription": "Fügt --bypass-lock zu allen borg list-Befehlen hinzu. Verhindert Sperrkonflikte, wenn mehrere Lesevorgänge (wie info + list) gleichzeitig ausgeführt werden. Aktivieren, wenn Fehler 'Sperre konnte nicht erworben werden' auftreten. Hinweis: Kann veraltete Daten anzeigen, wenn eine Sicherung aktiv läuft.",
+    "lockBreakingTitle": "Manuelle Sperrenaufhebung",
+    "enableLockBreaking": "Manuelles Aufheben von Repository-Sperren erlauben",
+    "lockBreakingDescription": "Erlaubt Benutzern mit Wartungszugriff, veraltete Repository-Sperren über Borg UI aufzuheben. Deaktiviere dies, wenn andere Dienste normale kurzzeitige Sperren halten können.",
     "showLegacyRestoreTabTitle": "Veralteten Wiederherstellungs-Tab anzeigen",
     "showLegacyRestoreTabLabel": "Den dedizierten Wiederherstellungs-Tab in der Navigation anzeigen",
     "showLegacyRestoreTabDescription": "Aktivieren, um auf den veralteten Wiederherstellungs-Tab zuzugreifen. Die Wiederherstellungsfunktion ist jetzt in die Archive-Seite integriert, aber diese Option ermöglicht die Nutzung der alten Oberfläche.",

@@ -135,6 +135,7 @@ export interface BackupJob {
   id: string | number
   repository: string
   repository_id?: number | null
+  repository_path?: string | null
   type?: string
   status: 'running' | 'completed' | 'completed_with_warnings' | 'failed' | 'cancelled' | string
   started_at?: string
@@ -149,6 +150,7 @@ export interface BackupJob {
   error_message?: string
   triggered_by?: string
   schedule_id?: number | null
+  scheduled_job_id?: number | null
   has_logs?: boolean
   maintenance_status?: string
   backup_plan_id?: number | null

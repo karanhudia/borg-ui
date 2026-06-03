@@ -35,6 +35,7 @@ import BackupPlanSelect from '../components/shared/BackupPlanSelect'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { useAuth } from '../hooks/useAuth'
 import { usePermissions } from '../hooks/usePermissions'
+import { useLockBreakPermissions } from '../hooks/useLockBreakPermissions'
 import { getRepoCapabilities } from '../utils/repoCapabilities'
 import { useTrackedJobOutcomes } from '../hooks/useTrackedJobOutcomes'
 import { getJobDurationSeconds } from '../utils/analyticsProperties'
@@ -136,15 +137,22 @@ const Backup: React.FC = () => {
       (repo: Repository) => repo.path === selectedRepository
     )
   }, [selectedRepository, repositoriesData])
+  const repositories = useMemo<Repository[]>(
+    () => repositoriesData?.data?.repositories ?? [],
+    [repositoriesData?.data?.repositories]
+  )
 
   const canStartBackup = selectedRepoData ? permissions.canDo(selectedRepoData.id, 'backup') : false
+  const { canBreakLock: canBreakLockForBackupJob, lockBreakingEnabled } = useLockBreakPermissions({
+    repositories,
+    fallbackRepositoryId: selectedRepoData?.id ?? null,
+  })
+
   const canRetryManualBackupJob = (job: Job) => {
     const repoId = typeof job.repository_id === 'number' ? job.repository_id : null
     if (repoId !== null) return permissions.canDo(repoId, 'backup')
     const repoPath = job.repository || ''
-    const repo = repositoriesData?.data?.repositories?.find(
-      (candidate: Repository) => candidate.path === repoPath
-    )
+    const repo = repositories.find((candidate: Repository) => candidate.path === repoPath)
     return repo ? permissions.canDo(repo.id, 'backup') : false
   }
   const canRetryBackupPlanRun = (run: BackupPlanRun) =>
@@ -639,7 +647,8 @@ const Backup: React.FC = () => {
                   delete: true,
                   retry: true,
                 }}
-                canBreakLocks={canManageRepositoryOperations}
+                canBreakLocks={canBreakLockForBackupJob}
+                lockBreakingEnabled={lockBreakingEnabled}
                 canDeleteJobs={canManageRepositoryOperations}
                 canRetryJob={canRetryManualBackupJob}
                 retryingJobId={retryBackupMutation.isPending ? retryBackupMutation.variables : null}

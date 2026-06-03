@@ -39,6 +39,8 @@ interface EmptyState {
   description?: string
 }
 
+type CanBreakLocks<T extends Job> = boolean | ((job: T) => boolean)
+
 interface BackupJobsTableProps<T extends Job = Job> {
   // Data
   jobs: T[]
@@ -76,7 +78,8 @@ interface BackupJobsTableProps<T extends Job = Job> {
   onRetryJob?: (job: T) => void | Promise<void>
 
   // User permissions
-  canBreakLocks?: boolean
+  canBreakLocks?: CanBreakLocks<T>
+  lockBreakingEnabled?: boolean
   canDeleteJobs?: boolean
   canRetryJob?: (job: T) => boolean
   retryingJobId?: string | number | null
@@ -240,6 +243,7 @@ export const BackupJobsTable = <T extends Job = Job>({
   onDeleteJob,
   onRetryJob,
   canBreakLocks = false,
+  lockBreakingEnabled = true,
   canDeleteJobs = false,
   canRetryJob = () => false,
   retryingJobId = null,
@@ -268,6 +272,8 @@ export const BackupJobsTable = <T extends Job = Job>({
     repositoryId: number
     repositoryName: string
     borgVersion?: 1 | 2
+    canBreakLock: boolean
+    lockBreakingEnabled: boolean
   } | null>(null)
   const [archiveView, setArchiveView] = useState<{
     archive: Archive
@@ -421,6 +427,10 @@ export const BackupJobsTable = <T extends Job = Job>({
     setDeleteJob(null)
   }
 
+  const resolveCanBreakLocks = (job: T): boolean => {
+    return typeof canBreakLocks === 'function' ? canBreakLocks(job) : canBreakLocks
+  }
+
   const handleRetryClick = (job: T) => {
     const disabledReason = getBackupJobRetryDisabledReason(job, canRetryJob(job), t)
     if (disabledReason) return
@@ -458,6 +468,8 @@ export const BackupJobsTable = <T extends Job = Job>({
         repositoryId: repo.id,
         repositoryName: repo.name,
         borgVersion: repo.borg_version as 1 | 2 | undefined,
+        canBreakLock: resolveCanBreakLocks(job),
+        lockBreakingEnabled,
       })
     }
   }
@@ -737,14 +749,18 @@ export const BackupJobsTable = <T extends Job = Job>({
     })
   }
 
-  if (actions.breakLock !== false && canBreakLocks) {
+  if (actions.breakLock !== false) {
     actionButtons.push({
       icon: <Lock size={18} />,
       label: t('backupJobsTable.actions.breakLock'),
       onClick: handleBreakLockClick,
       color: 'warning',
       tooltip: t('backupJobsTable.actions.breakLock'),
-      show: (job) => job.status === 'failed' && !!job.error_message?.includes('LOCK_ERROR::'),
+      show: (job) =>
+        lockBreakingEnabled &&
+        resolveCanBreakLocks(job) &&
+        job.status === 'failed' &&
+        !!job.error_message?.includes('LOCK_ERROR::'),
     })
   }
 
@@ -868,7 +884,8 @@ export const BackupJobsTable = <T extends Job = Job>({
           repositoryId={lockError.repositoryId}
           repositoryName={lockError.repositoryName}
           borgVersion={lockError.borgVersion}
-          canBreakLock={canBreakLocks}
+          canBreakLock={lockError.canBreakLock}
+          lockBreakingEnabled={lockError.lockBreakingEnabled}
           onLockBroken={() => {
             setLockError(null)
             queryClient.invalidateQueries({ queryKey: ['activity'] })

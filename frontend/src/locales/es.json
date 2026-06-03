@@ -2072,6 +2072,11 @@
       "beforeBreakingCheck3": "Esto romperá tanto los bloqueos del repositorio como los de caché",
       "adminRequired": "Se requieren privilegios de administrador:",
       "adminRequiredDetail": "Solo los administradores pueden forzar el desbloqueo del repositorio. Por favor, contacta a tu administrador.",
+      "maintenanceRequired": "Se requiere acceso de mantenimiento al repositorio:",
+      "maintenanceRequiredDetail": "Necesitas acceso de mantenimiento a este repositorio para romper su bloqueo. Contacta a tu administrador para obtener ayuda.",
+      "lockBreakingDisabled": "Ruptura de bloqueo desactivada:",
+      "lockBreakingDisabledDetail": "Un administrador ha desactivado la ruptura manual de bloqueos para esta implementación.",
+      "breakLockUnavailable": "La ruptura de bloqueo no está disponible para este repositorio",
       "failedToBreakLock": "Error al forzar el desbloqueo del repositorio"
     },
     "errorDetails": {
@@ -2797,6 +2802,9 @@
     "bypassLocksListTitle": "Omitir bloqueos para comandos List",
     "enableBypassLocksList": "Habilitar omisión de bloqueo para todos los comandos borg list",
     "bypassLocksListDescription": "Agrega --bypass-lock a todos los comandos borg list. Esto evita la contención de bloqueos cuando múltiples operaciones de lectura (como info + list) se ejecutan simultáneamente. Habilitar si ves errores de \"Error al adquirir bloqueo\". Nota: Puede mostrar datos obsoletos si hay una copia de seguridad activa.",
+    "lockBreakingTitle": "Ruptura manual de bloqueos",
+    "enableLockBreaking": "Permitir ruptura manual de bloqueos de repositorio",
+    "lockBreakingDescription": "Permite que usuarios con acceso de mantenimiento rompan bloqueos obsoletos de repositorios desde Borg UI. Desactívalo cuando otros servicios puedan mantener bloqueos transitorios normales.",
     "showLegacyRestoreTabTitle": "Mostrar pestaña de restauración heredada",
     "showLegacyRestoreTabLabel": "Mostrar la pestaña Restaurar dedicada en la navegación",
     "showLegacyRestoreTabDescription": "Habilitar esto para acceder a la pestaña de restauración heredada. La funcionalidad de restauración ahora está integrada en la página de Archivos, pero esta opción te permite usar la interfaz antigua si lo prefieres.",
