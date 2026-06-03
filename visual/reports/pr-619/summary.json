@@ -1,17 +1,17 @@
 {
-  "generatedAt": "2026-06-03T19:55:35.408Z",
+  "generatedAt": "2026-06-03T20:26:39.889Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #619 visual report",
-    "commitSha": "8ddab7de1953",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26909143178"
+    "commitSha": "9a5e77695b7f",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26910744273"
   },
   "totals": {
     "baseline": 294,
-    "actual": 302,
+    "actual": 304,
     "compared": 294,
     "changed": 0,
-    "added": 8,
+    "added": 10,
     "removed": 0,
     "unchanged": 294
   },
@@ -48,6 +48,14 @@
     {
       "fileName": "remote-machines-remotemachinecard--with-run-diagnostics.png",
       "actualPath": "images/actual/remote-machines-remotemachinecard--with-run-diagnostics.png"
+    },
+    {
+      "fileName": "remote-machines-remotemachinecard--without-run-diagnostics--mobile.png",
+      "actualPath": "images/actual/remote-machines-remotemachinecard--without-run-diagnostics--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-remotemachinecard--without-run-diagnostics.png",
+      "actualPath": "images/actual/remote-machines-remotemachinecard--without-run-diagnostics.png"
     }
   ],
   "removed": [],
