@@ -205,7 +205,8 @@ const Schedule: React.FC = () => {
 
     const currentRepositoryIds = new Set<number>()
     editingJobForWizard.repository_ids?.forEach((repoId) => currentRepositoryIds.add(repoId))
-    if (editingJobForWizard.repository_id) currentRepositoryIds.add(editingJobForWizard.repository_id)
+    if (editingJobForWizard.repository_id)
+      currentRepositoryIds.add(editingJobForWizard.repository_id)
 
     const currentRepositories = repositories.filter(
       (repo) =>

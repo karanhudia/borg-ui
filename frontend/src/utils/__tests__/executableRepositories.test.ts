@@ -58,8 +58,8 @@ describe('executable legacy repository filtering', () => {
     const observe = repo({ id: 2, mode: 'observe', source_directories: ['/srv/app'] })
     const planOwned = repo({ id: 3, source_directories: [], source_locations: [] })
 
-    expect(getExecutableLegacyRepositories([observe, planOwned, executable]).map((r) => r.id)).toEqual(
-      [1]
-    )
+    expect(
+      getExecutableLegacyRepositories([observe, planOwned, executable]).map((r) => r.id)
+    ).toEqual([1])
   })
 })
