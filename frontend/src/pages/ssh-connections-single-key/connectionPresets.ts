@@ -1,12 +1,13 @@
-import type { LucideIcon } from 'lucide-react'
-import { Database, HardDrive, Server, Settings2, Warehouse } from 'lucide-react'
+import type { ComponentType } from 'react'
+import { Settings2 } from 'lucide-react'
+import { SiBorgbackup, SiHetzner, SiLinux, SiSynology } from 'react-icons/si'
 import type { DeployConnectionPayload } from './types'
 
 export type RemoteMachineSetupPresetId = 'custom' | 'linux' | 'borgbase' | 'hetzner' | 'nas'
 
 export interface RemoteMachineSetupPreset {
   id: RemoteMachineSetupPresetId
-  icon: LucideIcon
+  icon: ComponentType<{ size?: number | string }>
   defaults: Partial<DeployConnectionPayload>
 }
 
@@ -18,7 +19,7 @@ export const remoteMachineSetupPresets: RemoteMachineSetupPreset[] = [
   },
   {
     id: 'linux',
-    icon: Server,
+    icon: SiLinux,
     defaults: {
       username: 'root',
       port: 22,
@@ -30,7 +31,7 @@ export const remoteMachineSetupPresets: RemoteMachineSetupPreset[] = [
   },
   {
     id: 'borgbase',
-    icon: Database,
+    icon: SiBorgbackup,
     defaults: {
       username: '',
       port: 22,
@@ -42,7 +43,7 @@ export const remoteMachineSetupPresets: RemoteMachineSetupPreset[] = [
   },
   {
     id: 'hetzner',
-    icon: Warehouse,
+    icon: SiHetzner,
     defaults: {
       username: '',
       port: 23,
@@ -54,7 +55,7 @@ export const remoteMachineSetupPresets: RemoteMachineSetupPreset[] = [
   },
   {
     id: 'nas',
-    icon: HardDrive,
+    icon: SiSynology,
     defaults: {
       username: '',
       port: 22,

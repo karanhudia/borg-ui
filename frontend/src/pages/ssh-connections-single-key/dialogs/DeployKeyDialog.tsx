@@ -4,23 +4,31 @@ import type { TFunction } from 'i18next'
 import {
   Box,
   Button,
-  ButtonBase,
   Checkbox,
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControl,
   FormControlLabel,
+  FormHelperText,
+  InputLabel,
   InputAdornment,
+  MenuItem,
+  Select,
   Stack,
   TextField,
   Tooltip,
   Typography,
 } from '@mui/material'
-import { alpha } from '@mui/material/styles'
 import { Info } from 'lucide-react'
+import RichSelectRow from '../../../components/shared/RichSelectRow'
 import ResponsiveDialog from '../../../components/shared/ResponsiveDialog'
 import { createConnectionForm } from '../formDefaults'
-import { remoteMachineSetupPresets, type RemoteMachineSetupPresetId } from '../connectionPresets'
+import {
+  remoteMachineSetupPresets,
+  type RemoteMachineSetupPreset,
+  type RemoteMachineSetupPresetId,
+} from '../connectionPresets'
 import type { DeployConnectionPayload } from '../types'
 import { SshHostField } from './SshHostField'
 
@@ -110,18 +118,37 @@ export function DeployKeyDialog({
     const preset = remoteMachineSetupPresets.find((item) => item.id === presetId)
     if (!preset) return
 
-    setConnectionForm(
-      preset.id === 'custom'
-        ? createConnectionForm()
-        : {
-            ...connectionForm,
-            ...preset.defaults,
-            host: connectionForm.host,
-            password: connectionForm.password,
-          }
-    )
+    setConnectionForm((current) => {
+      const nextForm =
+        preset.id === 'custom'
+          ? createConnectionForm()
+          : {
+              ...current,
+              ...preset.defaults,
+            }
+
+      return {
+        ...nextForm,
+        host: current.host,
+        password: current.password,
+      }
+    })
     setHostError(undefined)
     setSelectedPreset(preset.id)
+  }
+
+  const getPresetLabel = (presetId: RemoteMachineSetupPresetId) => presetLabels[presetId]
+  const renderPresetRow = (preset: RemoteMachineSetupPreset) => {
+    const Icon = preset.icon
+    const label = getPresetLabel(preset.id)
+
+    return (
+      <RichSelectRow
+        icon={<Icon size={18} />}
+        primary={label.title}
+        secondary={`${label.description} ${label.defaults}`}
+      />
+    )
   }
 
   return (
@@ -153,118 +180,37 @@ export function DeployKeyDialog({
       <DialogTitle>{t('sshConnections.deployDialog.title')}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
-          <Box>
-            <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+          <FormControl fullWidth>
+            <InputLabel id="deploy-key-setup-preset-label">
               {t('sshConnections.deployDialog.setupPreset')}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-              {t('sshConnections.deployDialog.setupPresetHint')}
-            </Typography>
-            <Box
+            </InputLabel>
+            <Select
+              labelId="deploy-key-setup-preset-label"
+              label={t('sshConnections.deployDialog.setupPreset')}
+              value={selectedPreset}
+              onChange={(event) => applyPreset(event.target.value as RemoteMachineSetupPresetId)}
+              renderValue={(value) => {
+                const preset =
+                  remoteMachineSetupPresets.find((item) => item.id === value) ??
+                  remoteMachineSetupPresets[0]
+                return renderPresetRow(preset)
+              }}
               sx={{
-                display: 'grid',
-                gridTemplateColumns: {
-                  xs: '1fr',
-                  sm: 'repeat(2, minmax(0, 1fr))',
-                  md: 'repeat(3, minmax(0, 1fr))',
+                '& .MuiSelect-select': {
+                  alignItems: 'center',
+                  display: 'flex',
+                  minHeight: 40,
                 },
-                gap: 1,
               }}
             >
-              {remoteMachineSetupPresets.map((preset) => {
-                const Icon = preset.icon
-                const selected = selectedPreset === preset.id
-                const label = presetLabels[preset.id]
-
-                return (
-                  <ButtonBase
-                    key={preset.id}
-                    component="button"
-                    type="button"
-                    aria-pressed={selected}
-                    onClick={() => applyPreset(preset.id)}
-                    sx={(theme) => ({
-                      alignItems: 'flex-start',
-                      border: 1,
-                      borderColor: selected ? 'primary.main' : 'divider',
-                      borderRadius: 1,
-                      bgcolor: selected
-                        ? alpha(
-                            theme.palette.primary.main,
-                            theme.palette.mode === 'dark' ? 0.18 : 0.08
-                          )
-                        : 'background.paper',
-                      color: 'text.primary',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      gap: 1.25,
-                      justifyContent: 'flex-start',
-                      minHeight: 112,
-                      p: 1.5,
-                      textAlign: 'left',
-                      transition:
-                        'border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease',
-                      width: '100%',
-                      '&:hover': {
-                        borderColor: selected ? 'primary.main' : 'text.secondary',
-                        bgcolor: selected
-                          ? alpha(
-                              theme.palette.primary.main,
-                              theme.palette.mode === 'dark' ? 0.22 : 0.1
-                            )
-                          : 'action.hover',
-                      },
-                      '&:focus-visible': {
-                        outline: `2px solid ${theme.palette.primary.main}`,
-                        outlineOffset: 2,
-                      },
-                    })}
-                  >
-                    <Box
-                      aria-hidden="true"
-                      sx={(theme) => ({
-                        alignItems: 'center',
-                        bgcolor: selected
-                          ? alpha(
-                              theme.palette.primary.main,
-                              theme.palette.mode === 'dark' ? 0.24 : 0.12
-                            )
-                          : 'action.hover',
-                        borderRadius: 1,
-                        color: selected ? 'primary.main' : 'text.secondary',
-                        display: 'flex',
-                        flexShrink: 0,
-                        height: 32,
-                        justifyContent: 'center',
-                        width: 32,
-                      })}
-                    >
-                      <Icon size={18} />
-                    </Box>
-                    <Box sx={{ minWidth: 0 }}>
-                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                        {label.title}
-                      </Typography>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ display: 'block', lineHeight: 1.35, mt: 0.25 }}
-                      >
-                        {label.description}
-                      </Typography>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ display: 'block', fontFamily: 'monospace', mt: 0.75 }}
-                      >
-                        {label.defaults}
-                      </Typography>
-                    </Box>
-                  </ButtonBase>
-                )
-              })}
-            </Box>
-          </Box>
+              {remoteMachineSetupPresets.map((preset) => (
+                <MenuItem key={preset.id} value={preset.id} sx={{ py: 1 }}>
+                  {renderPresetRow(preset)}
+                </MenuItem>
+              ))}
+            </Select>
+            <FormHelperText>{t('sshConnections.deployDialog.setupPresetHint')}</FormHelperText>
+          </FormControl>
           <SshHostField
             label={t('sshConnections.deployDialog.host')}
             value={connectionForm.host}

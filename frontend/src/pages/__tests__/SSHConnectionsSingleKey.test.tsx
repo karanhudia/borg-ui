@@ -9,6 +9,13 @@ import { ConnectionDiagnosticsDialog } from '../ssh-connections-single-key/dialo
 import { DeployKeyDialog } from '../ssh-connections-single-key/dialogs/DeployKeyDialog'
 import type { DeployConnectionPayload } from '../ssh-connections-single-key/types'
 
+async function chooseDeployPreset(dialog: HTMLElement, name: RegExp) {
+  fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: /setup preset/i }))
+  const listbox = await screen.findByRole('listbox')
+  fireEvent.click(within(listbox).getByRole('option', { name }))
+  await rtlWaitFor(() => expect(screen.queryByRole('listbox')).not.toBeInTheDocument())
+}
+
 const { track, toastSuccess, toastError, mockState } = vi.hoisted(() => ({
   track: vi.fn(),
   toastSuccess: vi.fn(),
@@ -307,7 +314,7 @@ describe('SSHConnectionsSingleKey', () => {
       })
     )
     const dialog = await screen.findByRole('dialog', { name: /deploy ssh key to server/i })
-    fireEvent.click(within(dialog).getByRole('button', { name: /hetzner storage box/i }))
+    await chooseDeployPreset(dialog, /hetzner storage box/i)
     fireEvent.change(within(dialog).getByLabelText(/^host$/i), {
       target: { value: 'u123456.your-storagebox.de' },
     })
@@ -346,7 +353,7 @@ describe('SSHConnectionsSingleKey', () => {
       })
     )
     const dialog = await screen.findByRole('dialog', { name: /deploy ssh key to server/i })
-    fireEvent.click(within(dialog).getByRole('button', { name: /^nas\b/i }))
+    await chooseDeployPreset(dialog, /^nas\b/i)
     fireEvent.change(within(dialog).getByLabelText(/^host$/i), {
       target: { value: 'nas.local' },
     })
@@ -386,9 +393,17 @@ describe('SSHConnectionsSingleKey', () => {
       })
     )
     const dialog = await screen.findByRole('dialog', { name: /deploy ssh key to server/i })
-    fireEvent.click(within(dialog).getByRole('button', { name: /borgbase/i }))
-    fireEvent.click(within(dialog).getByRole('button', { name: /custom setup/i }))
+    fireEvent.change(within(dialog).getByLabelText(/^host$/i), {
+      target: { value: 'backup.example.com' },
+    })
+    fireEvent.change(within(dialog).getByLabelText(/^password$/i), {
+      target: { value: 'secret' },
+    })
+    await chooseDeployPreset(dialog, /borgbase/i)
+    await chooseDeployPreset(dialog, /custom setup/i)
 
+    expect(within(dialog).getByLabelText(/^host$/i)).toHaveValue('backup.example.com')
+    expect(within(dialog).getByLabelText(/^password$/i)).toHaveValue('secret')
     expect(within(dialog).getByLabelText(/^port$/i)).toHaveValue(22)
     expect(within(dialog).getByRole('checkbox', { name: /use sftp mode/i })).toBeChecked()
     expect(within(dialog).getByLabelText(/default path/i)).toHaveValue('')
@@ -437,9 +452,8 @@ describe('SSHConnectionsSingleKey', () => {
     renderWithProviders(<DeployDialogHarness />)
 
     const dialog = await screen.findByRole('dialog', { name: /deploy ssh key to server/i })
-    expect(within(dialog).getByRole('button', { name: /hetzner storage box/i })).toHaveAttribute(
-      'aria-pressed',
-      'true'
+    expect(within(dialog).getByRole('combobox', { name: /setup preset/i })).toHaveTextContent(
+      /hetzner storage box/i
     )
 
     fireEvent.click(within(dialog).getByRole('button', { name: /cancel/i }))
@@ -452,10 +466,9 @@ describe('SSHConnectionsSingleKey', () => {
     fireEvent.click(screen.getByRole('button', { name: /reopen deploy dialog/i }))
     const reopenedDialog = await screen.findByRole('dialog', { name: /deploy ssh key to server/i })
 
-    expect(within(reopenedDialog).getByRole('button', { name: /custom setup/i })).toHaveAttribute(
-      'aria-pressed',
-      'true'
-    )
+    expect(
+      within(reopenedDialog).getByRole('combobox', { name: /setup preset/i })
+    ).toHaveTextContent(/custom setup/i)
     expect(within(reopenedDialog).getByLabelText(/^port$/i)).toHaveValue(22)
   }, 30000)
 
