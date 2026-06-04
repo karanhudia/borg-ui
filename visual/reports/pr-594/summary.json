@@ -1,21 +1,76 @@
 {
-  "generatedAt": "2026-06-02T04:09:31.777Z",
+  "generatedAt": "2026-06-04T05:11:22.375Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #594 visual report",
-    "commitSha": "5a09f9dc4c23",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26797624848"
+    "commitSha": "c8105249e49a",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26932063811"
   },
   "totals": {
-    "baseline": 254,
-    "actual": 254,
-    "compared": 254,
-    "changed": 0,
+    "baseline": 304,
+    "actual": 304,
+    "compared": 304,
+    "changed": 3,
     "added": 0,
     "removed": 0,
-    "unchanged": 254
+    "unchanged": 301
   },
-  "changed": [],
+  "changed": [
+    {
+      "fileName": "components-planinfodrawer--community-upgrade-drawer--mobile.png",
+      "baselinePath": "images/baseline/components-planinfodrawer--community-upgrade-drawer--mobile.png",
+      "actualPath": "images/actual/components-planinfodrawer--community-upgrade-drawer--mobile.png",
+      "diffPath": "images/diff/components-planinfodrawer--community-upgrade-drawer--mobile.png",
+      "diffPixels": 4995,
+      "totalPixels": 329160,
+      "diffRatio": 0.01517499088589136,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-planinfodrawer--dark-community-upgrade-drawer--mobile.png",
+      "baselinePath": "images/baseline/components-planinfodrawer--dark-community-upgrade-drawer--mobile.png",
+      "actualPath": "images/actual/components-planinfodrawer--dark-community-upgrade-drawer--mobile.png",
+      "diffPath": "images/diff/components-planinfodrawer--dark-community-upgrade-drawer--mobile.png",
+      "diffPixels": 4990,
+      "totalPixels": 329160,
+      "diffRatio": 0.015159800704824401,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-planinfodrawer--dark-community-upgrade-drawer.png",
+      "baselinePath": "images/baseline/components-planinfodrawer--dark-community-upgrade-drawer.png",
+      "actualPath": "images/actual/components-planinfodrawer--dark-community-upgrade-drawer.png",
+      "diffPath": "images/diff/components-planinfodrawer--dark-community-upgrade-drawer.png",
+      "diffPixels": 4663,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0045537109375,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    }
+  ],
   "added": [],
   "removed": [],
   "unchanged": [
@@ -236,10 +291,52 @@
       "fileName": "backup-plans-sourcestep--single-local-group.png"
     },
     {
+      "fileName": "components-backupjobstable--non-retryable-destructive-job--mobile.png"
+    },
+    {
+      "fileName": "components-backupjobstable--non-retryable-destructive-job.png"
+    },
+    {
+      "fileName": "components-backupjobstable--retryable-failed-backup-job--mobile.png"
+    },
+    {
+      "fileName": "components-backupjobstable--retryable-failed-backup-job.png"
+    },
+    {
       "fileName": "components-backupjobstable--transport-modes--mobile.png"
     },
     {
       "fileName": "components-backupjobstable--transport-modes.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--disabled-due-to-active-run--mobile.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--disabled-due-to-active-run.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--disabled-no-failed-repositories--mobile.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--disabled-no-failed-repositories.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--disabled-no-permission--mobile.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--disabled-no-permission.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--retry-in-progress--mobile.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--retry-in-progress.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--retryable-backup-plan-run--mobile.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--retryable-backup-plan-run.png"
     },
     {
       "fileName": "components-backupplanselect--configured-plan--mobile.png"
@@ -350,6 +447,24 @@
       "fileName": "components-fileexplorerdialog--rclone-remote-browser.png"
     },
     {
+      "fileName": "components-lockerrordialog--break-lock-available--mobile.png"
+    },
+    {
+      "fileName": "components-lockerrordialog--break-lock-available.png"
+    },
+    {
+      "fileName": "components-lockerrordialog--lock-breaking-disabled--mobile.png"
+    },
+    {
+      "fileName": "components-lockerrordialog--lock-breaking-disabled.png"
+    },
+    {
+      "fileName": "components-lockerrordialog--maintenance-required--mobile.png"
+    },
+    {
+      "fileName": "components-lockerrordialog--maintenance-required.png"
+    },
+    {
       "fileName": "components-monitoringreportstab--configured--mobile.png"
     },
     {
@@ -386,16 +501,7 @@
       "fileName": "components-pathselectorfield--filesystem-browse.png"
     },
     {
-      "fileName": "components-planinfodrawer--community-upgrade-drawer--mobile.png"
-    },
-    {
       "fileName": "components-planinfodrawer--community-upgrade-drawer.png"
-    },
-    {
-      "fileName": "components-planinfodrawer--dark-community-upgrade-drawer--mobile.png"
-    },
-    {
-      "fileName": "components-planinfodrawer--dark-community-upgrade-drawer.png"
     },
     {
       "fileName": "components-prunerepositorydialog--retention-preview--mobile.png"
@@ -476,6 +582,18 @@
       "fileName": "components-repositorycard--rclone-synced.png"
     },
     {
+      "fileName": "components-repositoryinfodialog--failed-info-recovery--mobile.png"
+    },
+    {
+      "fileName": "components-repositoryinfodialog--failed-info-recovery-unavailable--mobile.png"
+    },
+    {
+      "fileName": "components-repositoryinfodialog--failed-info-recovery-unavailable.png"
+    },
+    {
+      "fileName": "components-repositoryinfodialog--failed-info-recovery.png"
+    },
+    {
       "fileName": "components-repositorywipedialog--compact-failure-recovery--mobile.png"
     },
     {
@@ -494,10 +612,40 @@
       "fileName": "components-repositorywipedialog--protected-archive-blocked.png"
     },
     {
+      "fileName": "components-retryjobdialog--backup-job-retry--mobile.png"
+    },
+    {
+      "fileName": "components-retryjobdialog--backup-job-retry.png"
+    },
+    {
+      "fileName": "components-retryjobdialog--backup-plan-run-retry--mobile.png"
+    },
+    {
+      "fileName": "components-retryjobdialog--backup-plan-run-retry.png"
+    },
+    {
       "fileName": "components-runningcloudstoragejobssection--active-jobs--mobile.png"
     },
     {
       "fileName": "components-runningcloudstoragejobssection--active-jobs.png"
+    },
+    {
+      "fileName": "components-schedulejobcard--disabled-manual-run--mobile.png"
+    },
+    {
+      "fileName": "components-schedulejobcard--disabled-manual-run-pending--mobile.png"
+    },
+    {
+      "fileName": "components-schedulejobcard--disabled-manual-run-pending.png"
+    },
+    {
+      "fileName": "components-schedulejobcard--disabled-manual-run.png"
+    },
+    {
+      "fileName": "components-schedulejobcard--enabled-schedule--mobile.png"
+    },
+    {
+      "fileName": "components-schedulejobcard--enabled-schedule.png"
     },
     {
       "fileName": "components-terminallogviewer--unicode-json-log--mobile.png"
@@ -740,6 +888,24 @@
       "fileName": "pages-managedagents--add-agent-waiting-for-connection.png"
     },
     {
+      "fileName": "pages-managedagents--agent-diagnostics-partial-failure--mobile.png"
+    },
+    {
+      "fileName": "pages-managedagents--agent-diagnostics-partial-failure.png"
+    },
+    {
+      "fileName": "pages-managedagents--agent-diagnostics-success--mobile.png"
+    },
+    {
+      "fileName": "pages-managedagents--agent-diagnostics-success.png"
+    },
+    {
+      "fileName": "pages-managedagents--agent-diagnostics-timeout--mobile.png"
+    },
+    {
+      "fileName": "pages-managedagents--agent-diagnostics-timeout.png"
+    },
+    {
       "fileName": "pages-managedagents--agent-job-logs--mobile.png"
     },
     {
@@ -774,6 +940,36 @@
     },
     {
       "fileName": "pages-managedagents--setup-help-details.png"
+    },
+    {
+      "fileName": "remote-machines-connectiondiagnosticsdialog--partial-tcp-failure--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-connectiondiagnosticsdialog--partial-tcp-failure.png"
+    },
+    {
+      "fileName": "remote-machines-connectiondiagnosticsdialog--success--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-connectiondiagnosticsdialog--success.png"
+    },
+    {
+      "fileName": "remote-machines-connectiondiagnosticsdialog--timeout--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-connectiondiagnosticsdialog--timeout.png"
+    },
+    {
+      "fileName": "remote-machines-remotemachinecard--with-run-diagnostics--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-remotemachinecard--with-run-diagnostics.png"
+    },
+    {
+      "fileName": "remote-machines-remotemachinecard--without-run-diagnostics--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-remotemachinecard--without-run-diagnostics.png"
     },
     {
       "fileName": "remote-machines-sshhostfield--invalid-host--mobile.png"
