@@ -96,11 +96,12 @@ you revoke access, delete it from the fleet list, or unregister it on the client
   outbound WebSocket session and shows troubleshooting metadata such as online
   state, last seen time, agent version, Borg versions, capabilities, and last
   error.
-- To check whether the agent host can reach another service, enter a target
-  host and port before running diagnostics. The agent attempts a TCP connection
-  from the client machine and reports success or failure, elapsed time, timeout,
-  and normalized error text. Borg UI validates the target input and the agent
-  uses socket APIs, not shell commands.
+- To check whether the agent host can reach another service, open
+  **Advanced: test another service** and enter the service host and port before
+  running diagnostics. The agent attempts a TCP connection from the client
+  machine and reports success or failure, elapsed time, timeout, and normalized
+  error text. Borg UI validates the target input and the agent uses socket APIs,
+  not shell commands.
 - **Revoke access** blocks the agent credential but keeps the machine visible for
   history and troubleshooting.
 - **Delete agent** removes the machine from active fleet lists. Existing job and

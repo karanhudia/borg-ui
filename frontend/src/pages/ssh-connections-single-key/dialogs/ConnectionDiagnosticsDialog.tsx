@@ -17,6 +17,7 @@ import {
 } from '@mui/material'
 import { Activity, CheckCircle, Gauge, Network, XCircle } from 'lucide-react'
 import ResponsiveDialog from '../../../components/shared/ResponsiveDialog'
+import DiagnosticsTcpTargetFields from '../../../components/shared/DiagnosticsTcpTargetFields'
 import type {
   SSHConnectionDiagnosticsProbeResult,
   SSHConnectionDiagnosticsRequest,
@@ -304,44 +305,46 @@ export function ConnectionDiagnosticsDialog({
             </Typography>
           </Box>
 
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 1fr) 120px 150px' },
-              gap: 1.25,
+          <DiagnosticsTcpTargetFields
+            targetHost={targetHost}
+            targetPort={targetPort}
+            targetTimeout={targetTimeout}
+            onTargetHostChange={setTargetHost}
+            onTargetPortChange={setTargetPort}
+            onTargetTimeoutChange={setTargetTimeout}
+            hasTarget={Boolean(targetHost.trim())}
+            portInvalid={Boolean(targetHost.trim()) && parsePort(targetPort) === null}
+            timeoutInvalid={
+              Boolean(targetHost.trim()) && parseBoundedNumber(targetTimeout, 0.5, 15) === null
+            }
+            timeoutInputProps={{ min: 0.5, max: 15, step: 0.5 }}
+            labels={{
+              summary: t('sshConnections.diagnostics.advancedTargetSummary', {
+                defaultValue: 'Advanced: test another service',
+              }),
+              description: t('sshConnections.diagnostics.advancedTargetDescription', {
+                defaultValue:
+                  'Checks whether this remote machine can reach a separate service. Leave blank for normal diagnostics.',
+              }),
+              host: t('sshConnections.diagnostics.serviceHost', {
+                defaultValue: 'Service host',
+              }),
+              hostHelper: t('sshConnections.diagnostics.serviceHostHelper', {
+                defaultValue: 'Optional service to test from this remote machine',
+              }),
+              port: t('sshConnections.diagnostics.servicePort', {
+                defaultValue: 'Service port',
+              }),
+              portError: t('sshConnections.diagnostics.servicePortRangeShort', {
+                defaultValue: '1-65535',
+              }),
+              timeout: t('sshConnections.diagnostics.targetTimeout'),
+              timeoutHelper: t('sshConnections.diagnostics.seconds'),
+              timeoutError: t('sshConnections.diagnostics.serviceTimeoutRangeShort', {
+                defaultValue: '0.5-15 seconds',
+              }),
             }}
-          >
-            <TextField
-              label={t('sshConnections.diagnostics.targetHost')}
-              value={targetHost}
-              onChange={(event) => setTargetHost(event.target.value)}
-              placeholder="postgres.internal"
-              size="small"
-              helperText={t('sshConnections.diagnostics.targetHostHelper')}
-            />
-            <TextField
-              label={t('sshConnections.diagnostics.targetPort')}
-              value={targetPort}
-              onChange={(event) => setTargetPort(event.target.value)}
-              placeholder="5432"
-              size="small"
-              type="number"
-              inputProps={{ min: 1, max: 65535 }}
-              error={Boolean(targetHost.trim()) && parsePort(targetPort) === null}
-            />
-            <TextField
-              label={t('sshConnections.diagnostics.targetTimeout')}
-              value={targetTimeout}
-              onChange={(event) => setTargetTimeout(event.target.value)}
-              size="small"
-              type="number"
-              inputProps={{ min: 0.5, max: 15, step: 0.5 }}
-              error={
-                Boolean(targetHost.trim()) && parseBoundedNumber(targetTimeout, 0.5, 15) === null
-              }
-              helperText={t('sshConnections.diagnostics.seconds')}
-            />
-          </Box>
+          />
 
           <Box
             sx={{
