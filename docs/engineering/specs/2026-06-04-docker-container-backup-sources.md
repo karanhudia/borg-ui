@@ -6,7 +6,7 @@ The backup-plan source chooser exposes Files, Database, and Container as source 
 
 ## Desired Outcome
 
-The source chooser lets operators select a Docker container source with the same calm, compact Borg UI treatment used by files and database sources. A Docker source stages a container filesystem export into a Borg-readable path, stores typed container metadata in `source_locations`, and uses source-level scripts to prepare and clean that staged export during backup-plan execution.
+The source chooser lets operators select a Docker container source with the same calm, compact Borg UI treatment used by files and database sources. Operators can scan the Borg UI server or an SSH source for Docker containers, inspect what `docker export` will include, and still enter a container manually when scanning is unavailable. A Docker source stages a container filesystem export into a Borg-readable path, stores typed container metadata in `source_locations`, and uses source-level scripts to prepare and clean that staged export during backup-plan execution.
 
 ## Scope
 
@@ -16,16 +16,17 @@ The source chooser lets operators select a Docker container source with the same
   - container name or ID;
   - export staging path;
   - optional image/name note for reviewer context.
+- Add Docker container scanning for Borg UI server and SSH sources, returning detected containers, export staging paths, and mount coverage details.
 - Generate source-level pre/post script assignments for Docker container exports, using the existing source script execution phase (`source-pre-backup` and `source-post-backup`).
 - Preserve normalized container metadata through frontend payload building and backend `source_locations` normalization.
 - Update source summaries, review labels, Storybook, tests, and locale strings for the new source state.
 
 ## Out Of Scope
 
-- Live Docker daemon scanning and automatic container list discovery.
 - Volume graph introspection.
 - Starting, stopping, pausing, or checkpointing containers.
 - Docker socket installation or permission management beyond clear UI copy and generated script behavior.
+- Managed-agent Docker container scanning. Managed-agent container sources remain manually entered in this server-side scan flow.
 
 ## Approach
 
@@ -66,13 +67,15 @@ The generated pre-backup script should create the export directory, write `docke
 
 - The Container tab should look like the Files and Database tabs: same segmented pivot, full outline treatment, MUI controls, lucide icon, no heavy side borders.
 - Copy must be operational and precise: "Docker container export", "Container name or ID", "Export staging path".
-- The form should explain that `docker export` captures the container filesystem and not named volumes. Operators can still add volume paths through Files if they need them.
+- The scan result should show that `docker export` captures the container filesystem and should list bind mounts or named volumes as not included. Operators can still add volume paths through Files if they need them.
 - Apply remains one commit action for queued source groups. The Container tab should queue the container source and return to the tab list, like Database queues sources before applying.
 
 ## Acceptance Criteria
 
 - Container is selectable in the source-kind pivot and is no longer marked disabled/soon.
 - Selecting Container, entering a name/ID, and applying creates a source location with a populated `container` metadata block.
+- The Container tab can scan Docker containers on the Borg UI server and SSH sources and queue a detected container into the same source-location/script path as manual entry.
+- Detected containers show the exact export staging path and visibly disclose that bind mounts and named volumes are not included by `docker export`.
 - Backend normalization preserves the `container` metadata and rejects invalid empty container/export path input.
 - Source-level Docker scripts execute in backup-plan runs with container-specific environment variables.
 - Source summaries and review surfaces identify Docker container sources distinctly from plain files.
@@ -83,9 +86,11 @@ The generated pre-backup script should create the export directory, write `docke
 
 - Red/green frontend tests:
   - `cd frontend && npm test -- src/pages/backup-plans/__tests__/SourceStep.test.tsx -t "configures a Docker container source" --run`
+  - `cd frontend && npm test -- src/pages/backup-plans/__tests__/SourceStep.test.tsx -t "scans Docker containers" --run`
   - `cd frontend && npm test -- src/pages/__tests__/BackupPlans.test.tsx -t "preserves Docker container source metadata" --run`
 - Red/green backend tests:
   - `pytest tests/unit/test_source_discovery.py::TestSourceDiscovery::test_database_discovery_returns_extensible_source_types -q`
+  - `pytest tests/unit/test_source_discovery.py -k "container_scan" -q`
   - `pytest tests/unit/test_api_backup_plans.py -k "container_source" -q`
 - Required gates:
   - `cd frontend && npm run check:locales`
@@ -95,7 +100,7 @@ The generated pre-backup script should create the export directory, write `docke
   - `ruff check app tests`
   - `ruff format --check app tests`
 - Runtime walkthrough:
-  - Launch Borg UI locally, open backup plan creation, choose Sources, select Container, fill a container name and export path, apply, and verify the source summary/review shows the Docker source.
+  - Launch Borg UI locally, open backup plan creation, choose Sources, select Container, scan mocked Docker containers, verify included filesystem/excluded mount disclosure, queue the detected container, apply, and verify the source summary/review shows the Docker source.
 
 ## Original Request
 

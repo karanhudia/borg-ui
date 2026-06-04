@@ -10,6 +10,7 @@ import { SourceStep } from '../wizard-step/SourceStep'
 const apiMocks = vi.hoisted(() => ({
   databases: vi.fn(),
   scanDatabases: vi.fn(),
+  scanContainers: vi.fn(),
   filesystemSnapshots: vi.fn(),
 }))
 
@@ -20,6 +21,7 @@ vi.mock('../../../services/api', () => ({
   sourceDiscoveryAPI: {
     databases: apiMocks.databases,
     scanDatabases: apiMocks.scanDatabases,
+    scanContainers: apiMocks.scanContainers,
     filesystemSnapshots: apiMocks.filesystemSnapshots,
   },
 }))
@@ -289,6 +291,18 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.containerSourceMachine': 'Docker host',
   'backupPlans.sourceChooser.containerBackupPath': 'Export staging path',
   'backupPlans.sourceChooser.containerModeExport': 'docker export',
+  'backupPlans.sourceChooser.scanContainers': 'Scan containers',
+  'backupPlans.sourceChooser.rescanContainers': 'Re-scan containers',
+  'backupPlans.sourceChooser.scanContainersHint': 'Find containers on the selected Docker host.',
+  'backupPlans.sourceChooser.detectedContainers': 'Detected containers',
+  'backupPlans.sourceChooser.containerFilesystemIncluded':
+    'Container filesystem exported to {{path}}',
+  'backupPlans.sourceChooser.containerMountsNotIncluded': 'Mounts not included',
+  'backupPlans.sourceChooser.containerMountNotIncluded': 'Not included in docker export',
+  'backupPlans.sourceChooser.addDetectedContainer': 'Add detected container',
+  'backupPlans.sourceChooser.noContainersFoundTitle': 'No containers found',
+  'backupPlans.sourceChooser.noContainersFoundBody':
+    'Check Docker access on this host, or enter a container manually.',
   'backupPlans.sourceChooser.addContainer': 'Add container',
   'backupPlans.sourceChooser.selectedContainers': 'Selected containers',
   'backupPlans.sourceChooser.containerScriptsAssigned': 'Export scripts assigned',
@@ -386,6 +400,7 @@ const t = (key: string, options?: { count?: number }) => {
     .replace('{{command}}', String((options as { command?: string } | undefined)?.command ?? ''))
     .replace('{{provider}}', String((options as { provider?: string } | undefined)?.provider ?? ''))
     .replace('{{target}}', String((options as { target?: string } | undefined)?.target ?? ''))
+    .replace('{{path}}', String((options as { path?: string } | undefined)?.path ?? ''))
 }
 
 function clickExistingTextButton(name: string | RegExp) {
@@ -703,6 +718,105 @@ describe('SourceStep', () => {
               pre_backup_script_id: 201,
               post_backup_script_id: 202,
               script_execution_order: 1,
+            }),
+          }),
+        ],
+      })
+    )
+  }, 45000)
+
+  it('scans Docker containers and explains mount coverage before queueing', async () => {
+    apiMocks.databases.mockResolvedValue({ data: discoveryResponseWithEnabledContainer })
+    apiMocks.scanContainers.mockResolvedValue({
+      data: {
+        scan_target: {
+          source_type: 'local',
+          source_ssh_connection_id: null,
+          label: 'This Borg UI server',
+        },
+        containers: [
+          {
+            id: '5ad07b8f01d2',
+            name: 'postgres',
+            image: 'postgres:17',
+            status: 'running',
+            state: 'running',
+            export_path: '/var/tmp/borg-ui/container-exports/postgres',
+            backup_mode: 'export',
+            notes: [
+              'docker export captures the container filesystem.',
+              'Bind mounts and Docker named volumes are not included by docker export.',
+            ],
+            mounts: [
+              {
+                type: 'volume',
+                name: 'postgres-data',
+                source: '/var/lib/docker/volumes/postgres-data/_data',
+                destination: '/var/lib/postgresql/data',
+                backed_up: false,
+                reason:
+                  'Not included in docker export; add this path separately from Files if needed.',
+              },
+            ],
+          },
+        ],
+        warnings: [],
+      },
+    })
+    const updateState = vi.fn()
+    const onCreateScript = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 401 })
+      .mockResolvedValueOnce({ id: 402 })
+
+    renderSourceStep({ updateState, onCreateScript })
+
+    fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
+    const containerTab = await screen.findByRole('tab', { name: /container/i })
+    fireEvent.click(containerTab)
+    fireEvent.click(await screen.findByRole('button', { name: /scan containers/i }))
+
+    await waitFor(() => {
+      expect(apiMocks.scanContainers).toHaveBeenCalledWith({
+        source_type: 'local',
+        source_ssh_connection_id: null,
+        include_stopped: true,
+      })
+    })
+    expect(await screen.findByText('Detected containers')).toBeInTheDocument()
+    expect(screen.getByText('postgres')).toBeInTheDocument()
+    expect(screen.getByText('postgres:17')).toBeInTheDocument()
+    expect(
+      screen.getByText('Container filesystem exported to /var/tmp/borg-ui/container-exports/postgres')
+    ).toBeInTheDocument()
+    expect(screen.getByText('Mounts not included')).toBeInTheDocument()
+    expect(screen.getByText('/var/lib/postgresql/data')).toBeInTheDocument()
+    expect(screen.getByText('Not included in docker export')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /add detected container/i }))
+    expect(screen.getByText('Selected containers')).toBeInTheDocument()
+    expect(screen.getByText('/var/tmp/borg-ui/container-exports/postgres')).toBeInTheDocument()
+
+    clickExistingTextButton(/use these containers/i)
+
+    await waitFor(() => {
+      expect(onCreateScript).toHaveBeenCalledTimes(2)
+      expect(updateState).toHaveBeenCalledTimes(1)
+    })
+    expect(updateState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceDirectories: ['/var/tmp/borg-ui/container-exports/postgres'],
+        sourceLocations: [
+          expect.objectContaining({
+            source_type: 'local',
+            paths: ['/var/tmp/borg-ui/container-exports/postgres'],
+            container: expect.objectContaining({
+              container_name: 'postgres',
+              display_name: 'postgres',
+              image: 'postgres:17',
+              export_path: '/var/tmp/borg-ui/container-exports/postgres',
+              pre_backup_script_id: 401,
+              post_backup_script_id: 402,
             }),
           }),
         ],

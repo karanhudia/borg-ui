@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:test-driven-development for implementation. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Enable Docker container backup sources in the backup-plan source chooser with typed metadata and source-level export scripts.
+**Goal:** Enable Docker container backup sources in the backup-plan source chooser with typed metadata, source-level export scripts, and Docker scan-assisted selection for Borg UI server and SSH sources.
 
-**Architecture:** Docker remains a metadata block on a normal `SourceLocation`; Borg still reads from local, remote, or agent paths. The frontend queues an export staging path plus generated scripts, and the backend normalizes/preserves the `container` block and executes container source scripts through the existing source hook phase.
+**Architecture:** Docker remains a metadata block on a normal `SourceLocation`; Borg still reads from local, remote, or agent paths. The source-discovery API can scan local/SSH Docker hosts for `docker inspect` data, while the frontend queues either scanned or manually entered containers into the same export staging path plus generated scripts. The backend normalizes/preserves the `container` block and executes container source scripts through the existing source hook phase.
 
 **Tech Stack:** React, TypeScript, MUI, lucide-react, i18next, Vitest, FastAPI/Pydantic, pytest.
 
@@ -21,9 +21,11 @@
 
 - [ ] Write a failing backend normalization/API test that posts a backup plan with `source_locations[0].container` and expects the response and stored JSON to preserve normalized container metadata.
 - [ ] Update the source-discovery test to expect Docker containers to be `enabled` and not disabled.
+- [ ] Write failing backend scan tests for local and SSH Docker container discovery that assert detected containers include export paths and mount coverage marked not included by `docker export`.
 - [ ] Add `normalize_container_config()` beside `normalize_database_config()` with required `container_name`, `backup_mode="export"`, `export_path`, `script_execution_target`, optional script IDs, script parameters, image/display fields, and script order.
 - [ ] Call `normalize_container_config()` from `normalize_source_locations()` and preserve the `container` block in normalized locations.
 - [ ] Update `_source_types()` so the container option is enabled with precise copy.
+- [ ] Add `ContainerScanRequest`, `ContainerScanResponse`, local `docker inspect` parsing, and SSH scan execution in `app/api/source_discovery.py`.
 - [ ] Run the targeted backend tests and verify they fail before implementation, then pass after implementation.
 
 ## Task 2: Source-Level Container Script Execution
@@ -66,9 +68,12 @@
 - Modify: `frontend/src/pages/backup-plans/__tests__/ReviewStep.test.tsx`
 
 - [ ] Replace the old disabled-container test with a failing test that opens Container, enters a container name, applies, and expects `updateState.sourceLocations[0].container`.
+- [ ] Add a failing SourceStep test that scans Docker containers, displays the exported filesystem path and excluded mounts, then queues the detected container.
 - [ ] Add `container` and `container-detail` view state as needed, or render the container form directly from the Container tab if one screen is sufficient.
 - [ ] Enable the Container pivot segment and add count chip support.
 - [ ] Add Docker source form controls: source target, SSH/agent picker reuse, container name or ID, optional image label, export staging path, generated script mode.
+- [ ] Add scan controls in the Container tab for Borg UI server and SSH sources; keep managed-agent container entry manual.
+- [ ] Render detected containers with image/status, exact export path, and bind/named mount rows marked not included by `docker export`.
 - [ ] Generate pre/post Docker scripts through existing `onCreateScript` and store resulting IDs/parameters in the container metadata.
 - [ ] Show queued Docker sources alongside selected files/databases with a Container icon and remove actions.
 - [ ] Update SourceStep summary to show Docker container source kind when all source locations are container sources, and mixed source label when combined.
@@ -86,7 +91,7 @@
 - Modify: `frontend/src/locales/es.json`
 - Modify: `frontend/src/locales/it.json`
 
-- [ ] Add or update Storybook state showing a configured Docker container source.
+- [ ] Add or update Storybook state showing configured and scan-detected Docker container source states.
 - [ ] Add English source chooser strings for container tab, fields, warnings, script names, and summary/review labels.
 - [ ] Add matching locale keys in de/es/it, using clear fallback translations.
 - [ ] Run `cd frontend && npm run check:locales`.
@@ -99,9 +104,11 @@
 
 - [ ] Run targeted backend tests:
   - `pytest tests/unit/test_source_discovery.py::TestSourceDiscovery::test_database_discovery_returns_extensible_source_types -q`
+  - `pytest tests/unit/test_source_discovery.py -k "container_scan" -q`
   - `pytest tests/unit/test_api_backup_plans.py -k "container_source" -q`
 - [ ] Run targeted frontend tests:
   - `cd frontend && npm test -- src/pages/backup-plans/__tests__/SourceStep.test.tsx -t "configures a Docker container source" --run`
+  - `cd frontend && npm test -- src/pages/backup-plans/__tests__/SourceStep.test.tsx -t "scans Docker containers" --run`
   - `cd frontend && npm test -- src/pages/__tests__/BackupPlans.test.tsx -t "preserves Docker container source metadata" --run`
 - [ ] Run required frontend gates:
   - `cd frontend && npm run check:locales`

@@ -54,8 +54,10 @@ import ResponsiveDialog from '../../../components/shared/ResponsiveDialog'
 import SshConnectionSelect from '../../../components/shared/SshConnectionSelect'
 import {
   type AgentMachineResponse,
+  type DatabaseScanWarning,
   type FilesystemSnapshotCapabilitiesResponse,
   sourceDiscoveryAPI,
+  type SourceDiscoveryContainer,
   type SourceDiscoveryDatabase,
   type SourceDiscoveryResponse,
   type SourceDiscoveryScriptDraft,
@@ -780,6 +782,10 @@ export function SourceSelectionDialog({
   const [queuedContainerScriptDrafts, setQueuedContainerScriptDrafts] = useState<
     Record<string, QueuedContainerScriptDraft>
   >({})
+  const [containerScanLoading, setContainerScanLoading] = useState(false)
+  const [containerScanResults, setContainerScanResults] = useState<SourceDiscoveryContainer[]>([])
+  const [containerScanWarnings, setContainerScanWarnings] = useState<DatabaseScanWarning[]>([])
+  const [containerScanTargetLabel, setContainerScanTargetLabel] = useState<string | null>(null)
   const [applying, setApplying] = useState(false)
   const [selectedSourceKey, setSelectedSourceKey] = useState<SourceKey>('local')
   const [sourcePath, setSourcePath] = useState('')
@@ -842,6 +848,10 @@ export function SourceSelectionDialog({
     )
     setContainerExportPathTouched(Boolean(containerLocation?.container?.export_path))
     setQueuedContainerScriptDrafts({})
+    setContainerScanLoading(false)
+    setContainerScanResults([])
+    setContainerScanWarnings([])
+    setContainerScanTargetLabel(null)
     setDatabaseCaptureMode(databaseLocation?.database?.capture_mode || 'dump')
     setDatabaseDumpPath(
       databaseLocation?.database?.dump_path ||
@@ -1134,10 +1144,14 @@ export function SourceSelectionDialog({
     setContainerExportPathTouched(true)
   }
 
-  const queueContainerSource = () => {
-    const nextContainerName = containerName.trim()
+  const queueContainerSource = (
+    detectedContainer?: Pick<SourceDiscoveryContainer, 'name' | 'image' | 'export_path'>
+  ) => {
+    const nextContainerName = (detectedContainer?.name ?? containerName).trim()
     const requestedExportPath =
-      containerExportPath.trim() || defaultContainerExportPath(nextContainerName)
+      detectedContainer?.export_path?.trim() ||
+      containerExportPath.trim() ||
+      defaultContainerExportPath(nextContainerName)
     const nextExportPath = uniqueContainerExportPath(requestedExportPath, draftSourceLocations)
     if (!nextContainerName || !nextExportPath) return
 
@@ -1145,7 +1159,7 @@ export function SourceSelectionDialog({
     const container: SourceContainerSelection = {
       container_name: nextContainerName,
       display_name: nextContainerName,
-      image: containerImage.trim() || null,
+      image: (detectedContainer?.image ?? containerImage.trim()) || null,
       backup_mode: 'export',
       export_path: nextExportPath,
       script_execution_target: 'source',
@@ -2763,6 +2777,54 @@ export function SourceSelectionDialog({
       },
     ]
 
+    const scanContainers = async () => {
+      if (sourceKind === 'agent') {
+        setContainerScanResults([])
+        setContainerScanWarnings([
+          {
+            code: 'UNSUPPORTED_SOURCE_TARGET',
+            message: t('backupPlans.sourceChooser.containerScanUnsupportedForAgents'),
+            path: null,
+          },
+        ])
+        setContainerScanTargetLabel(null)
+        return
+      }
+      setContainerScanLoading(true)
+      setContainerScanWarnings([])
+      try {
+        const scanSourceType = sourceKind === 'remote' ? 'remote' : 'local'
+        const response = await sourceDiscoveryAPI.scanContainers({
+          source_type: scanSourceType,
+          source_ssh_connection_id: scanSourceType === 'remote' ? selectedRemoteIdNum : null,
+          include_stopped: true,
+        })
+        setContainerScanResults(response.data.containers)
+        setContainerScanWarnings(response.data.warnings || [])
+        setContainerScanTargetLabel(response.data.scan_target.label)
+      } catch (error) {
+        setContainerScanResults([])
+        setContainerScanTargetLabel(null)
+        setContainerScanWarnings([
+          {
+            code: 'SCAN_FAILED',
+            message:
+              error instanceof Error
+                ? error.message
+                : t('backupPlans.sourceChooser.containerScanFailedBody'),
+            path: null,
+          },
+        ])
+      } finally {
+        setContainerScanLoading(false)
+      }
+    }
+
+    const scanDisabled = remoteDisabled || agentDisabled || containerScanLoading
+    const scanButtonLabel = containerScanResults.length
+      ? t('backupPlans.sourceChooser.rescanContainers')
+      : t('backupPlans.sourceChooser.scanContainers')
+
     return (
       <Stack spacing={2.5}>
         {agentRepoConstraint && (
@@ -2869,6 +2931,192 @@ export function SourceSelectionDialog({
           </Typography>
         </Alert>
 
+        <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 1 }}>
+          <Stack spacing={1.5}>
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={1}
+              alignItems={{ xs: 'stretch', sm: 'center' }}
+              justifyContent="space-between"
+            >
+              <Stack spacing={0.25} sx={{ minWidth: 0 }}>
+                <Typography variant="subtitle2">
+                  {t('backupPlans.sourceChooser.detectedContainers')}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {t('backupPlans.sourceChooser.scanContainersHint')}
+                </Typography>
+              </Stack>
+              <Button
+                variant="outlined"
+                startIcon={<Search size={16} />}
+                onClick={scanContainers}
+                disabled={scanDisabled}
+                sx={{ alignSelf: { xs: 'flex-start', sm: 'center' } }}
+              >
+                {containerScanLoading
+                  ? t('backupPlans.sourceChooser.scanning')
+                  : scanButtonLabel}
+              </Button>
+            </Stack>
+
+            {sourceKind === 'agent' && (
+              <Alert severity="info" icon={<Info size={18} />}>
+                {t('backupPlans.sourceChooser.containerScanUnsupportedForAgents')}
+              </Alert>
+            )}
+
+            {containerScanWarnings.map((warning) => (
+              <Alert key={`${warning.code}:${warning.message}`} severity="warning">
+                {warning.message}
+              </Alert>
+            ))}
+
+            {!containerScanLoading &&
+              containerScanTargetLabel &&
+              containerScanResults.length === 0 &&
+              containerScanWarnings.length === 0 && (
+                <Alert severity="info" icon={<Info size={18} />}>
+                  <Stack spacing={0.25}>
+                    <Typography variant="body2" fontWeight={600}>
+                      {t('backupPlans.sourceChooser.noContainersFoundTitle')}
+                    </Typography>
+                    <Typography variant="body2">
+                      {t('backupPlans.sourceChooser.noContainersFoundBody')}
+                    </Typography>
+                  </Stack>
+                </Alert>
+              )}
+
+            {containerScanResults.length > 0 && (
+              <Stack spacing={1}>
+                {containerScanResults.map((container) => (
+                  <Paper
+                    key={container.id}
+                    variant="outlined"
+                    sx={{ p: 1.25, borderRadius: 1, bgcolor: 'background.default' }}
+                  >
+                    <Stack spacing={1.25}>
+                      <Stack
+                        direction={{ xs: 'column', sm: 'row' }}
+                        spacing={1.25}
+                        alignItems={{ xs: 'stretch', sm: 'flex-start' }}
+                        justifyContent="space-between"
+                      >
+                        <Stack direction="row" spacing={1.25} sx={{ minWidth: 0 }}>
+                          <ContainerIcon size={16} />
+                          <Stack spacing={0.3} sx={{ minWidth: 0 }}>
+                            <Stack
+                              direction="row"
+                              spacing={0.75}
+                              alignItems="center"
+                              useFlexGap
+                              flexWrap="wrap"
+                            >
+                              <Typography variant="subtitle2">{container.name}</Typography>
+                              {container.status && (
+                                <Chip size="small" variant="outlined" label={container.status} />
+                              )}
+                              <Chip
+                                size="small"
+                                variant="outlined"
+                                label={t('backupPlans.sourceChooser.containerModeExport')}
+                              />
+                            </Stack>
+                            {container.image && (
+                              <Typography variant="body2" color="text.secondary">
+                                {container.image}
+                              </Typography>
+                            )}
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{
+                                fontFamily:
+                                  'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+                                overflowWrap: 'anywhere',
+                              }}
+                            >
+                              {t('backupPlans.sourceChooser.containerFilesystemIncluded', {
+                                path: container.export_path,
+                              })}
+                            </Typography>
+                          </Stack>
+                        </Stack>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          startIcon={<Plus size={14} />}
+                          onClick={() => queueContainerSource(container)}
+                          sx={{ alignSelf: { xs: 'flex-start', sm: 'center' } }}
+                        >
+                          {t('backupPlans.sourceChooser.addDetectedContainer')}
+                        </Button>
+                      </Stack>
+
+                      {container.mounts.length > 0 && (
+                        <Stack spacing={0.75}>
+                          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                            {t('backupPlans.sourceChooser.containerMountsNotIncluded')}
+                          </Typography>
+                          <Stack spacing={0.75}>
+                            {container.mounts.map((mount) => {
+                              const mountKey = `${container.id}:${mount.destination || ''}:${mount.source || ''}`
+                              return (
+                                <Stack
+                                  key={mountKey}
+                                  direction={{ xs: 'column', sm: 'row' }}
+                                  spacing={0.75}
+                                  alignItems={{ xs: 'stretch', sm: 'center' }}
+                                  justifyContent="space-between"
+                                  sx={{
+                                    border: 1,
+                                    borderColor: 'divider',
+                                    borderRadius: 1,
+                                    px: 1,
+                                    py: 0.75,
+                                  }}
+                                >
+                                  <Stack spacing={0.15} sx={{ minWidth: 0 }}>
+                                    <Typography
+                                      variant="caption"
+                                      sx={{
+                                        fontFamily:
+                                          'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+                                        overflowWrap: 'anywhere',
+                                      }}
+                                    >
+                                      {mount.destination || mount.source || mount.name || mount.type}
+                                    </Typography>
+                                    {mount.source && mount.source !== mount.destination && (
+                                      <Typography
+                                        variant="caption"
+                                        color="text.secondary"
+                                        sx={{ overflowWrap: 'anywhere' }}
+                                      >
+                                        {mount.source}
+                                      </Typography>
+                                    )}
+                                  </Stack>
+                                  <Chip
+                                    size="small"
+                                    variant="outlined"
+                                    label={t('backupPlans.sourceChooser.containerMountNotIncluded')}
+                                  />
+                                </Stack>
+                              )
+                            })}
+                          </Stack>
+                        </Stack>
+                      )}
+                    </Stack>
+                  </Paper>
+                ))}
+              </Stack>
+            )}
+          </Stack>
+        </Paper>
+
         <Stack spacing={1.5}>
           <TextField
             label={t('backupPlans.sourceChooser.containerName')}
@@ -2911,7 +3159,7 @@ export function SourceSelectionDialog({
           <Button
             variant="contained"
             startIcon={<Plus size={16} />}
-            onClick={queueContainerSource}
+            onClick={() => queueContainerSource()}
             disabled={
               !containerName.trim() ||
               !effectiveExportPath.trim() ||

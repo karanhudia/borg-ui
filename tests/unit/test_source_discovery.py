@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import sqlite3
@@ -53,6 +54,156 @@ class TestSourceDiscovery:
         ]
         assert postgresql["backup_strategy"] == "logical_dump"
         assert postgresql["documentation_url"].startswith("https://www.postgresql.org/")
+
+    def test_container_scan_detects_local_containers_with_mount_coverage(
+        self, test_client, admin_headers, monkeypatch
+    ):
+        def fake_local_container_scan(**kwargs):
+            del kwargs
+            return SimpleNamespace(
+                returncode=0,
+                stdout=json.dumps(
+                    {
+                        "Id": "5ad07b8f01d2",
+                        "Name": "/postgres",
+                        "Config": {"Image": "postgres:17"},
+                        "State": {"Status": "running"},
+                        "Mounts": [
+                            {
+                                "Type": "volume",
+                                "Name": "postgres-data",
+                                "Source": "/var/lib/docker/volumes/postgres-data/_data",
+                                "Destination": "/var/lib/postgresql/data",
+                            },
+                            {
+                                "Type": "bind",
+                                "Source": "/srv/postgres/conf",
+                                "Destination": "/etc/postgresql/conf.d",
+                            },
+                        ],
+                    }
+                )
+                + "\n",
+                stderr="",
+            )
+
+        monkeypatch.setattr(
+            source_discovery,
+            "_run_local_container_scan",
+            fake_local_container_scan,
+            raising=False,
+        )
+
+        response = test_client.post(
+            "/api/source-discovery/containers/scan",
+            json={"source_type": "local", "source_ssh_connection_id": None},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["scan_target"] == {
+            "source_type": "local",
+            "source_ssh_connection_id": None,
+            "label": "This Borg UI server",
+        }
+        assert body["warnings"] == []
+        assert len(body["containers"]) == 1
+
+        container = body["containers"][0]
+        assert container["id"] == "5ad07b8f01d2"
+        assert container["name"] == "postgres"
+        assert container["image"] == "postgres:17"
+        assert container["status"] == "running"
+        assert container["backup_mode"] == "export"
+        assert container["export_path"] == "/var/tmp/borg-ui/container-exports/postgres"
+        assert any("container filesystem" in note for note in container["notes"])
+        assert any("not included" in note for note in container["notes"])
+        assert container["mounts"] == [
+            {
+                "type": "volume",
+                "name": "postgres-data",
+                "source": "/var/lib/docker/volumes/postgres-data/_data",
+                "destination": "/var/lib/postgresql/data",
+                "backed_up": False,
+                "reason": "Not included in docker export; add this path separately from Files if needed.",
+            },
+            {
+                "type": "bind",
+                "name": None,
+                "source": "/srv/postgres/conf",
+                "destination": "/etc/postgresql/conf.d",
+                "backed_up": False,
+                "reason": "Not included in docker export; add this path separately from Files if needed.",
+            },
+        ]
+
+    def test_container_scan_detects_remote_containers(
+        self, test_client, admin_headers, test_db, monkeypatch
+    ):
+        ssh_key = SSHKey(
+            name="container-scan-key",
+            public_key="ssh-ed25519 AAAATEST container-scan-key",
+            private_key=encrypt_secret("fake private key"),
+            key_type="ed25519",
+        )
+        test_db.add(ssh_key)
+        test_db.commit()
+        test_db.refresh(ssh_key)
+        connection = SSHConnection(
+            ssh_key_id=ssh_key.id,
+            host="docker-host.test",
+            username="backup",
+            port=2222,
+            is_backup_source=True,
+        )
+        test_db.add(connection)
+        test_db.commit()
+        test_db.refresh(connection)
+
+        def fake_remote_container_scan(**kwargs):
+            assert kwargs["connection"].id == connection.id
+            return SimpleNamespace(
+                returncode=0,
+                stdout=json.dumps(
+                    {
+                        "Id": "93b3f8a1c2d4",
+                        "Name": "/nginx",
+                        "Config": {"Image": "nginx:1.27"},
+                        "State": {"Status": "running"},
+                        "Mounts": [],
+                    }
+                )
+                + "\n",
+                stderr="",
+            )
+
+        monkeypatch.setattr(
+            source_discovery,
+            "_run_remote_container_scan",
+            fake_remote_container_scan,
+            raising=False,
+        )
+
+        response = test_client.post(
+            "/api/source-discovery/containers/scan",
+            json={
+                "source_type": "remote",
+                "source_ssh_connection_id": connection.id,
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["scan_target"] == {
+            "source_type": "remote",
+            "source_ssh_connection_id": connection.id,
+            "label": "backup@docker-host.test",
+        }
+        assert body["warnings"] == []
+        assert body["containers"][0]["name"] == "nginx"
+        assert body["containers"][0]["image"] == "nginx:1.27"
 
     def test_sqlite_template_stages_backup_with_parameters(
         self, test_client, admin_headers

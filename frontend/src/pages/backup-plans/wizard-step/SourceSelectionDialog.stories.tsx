@@ -257,6 +257,41 @@ const nothingFoundScanResponse = {
   detections: [],
 }
 
+const detectedContainerScanResponse = {
+  scan_target: {
+    source_type: 'local',
+    source_ssh_connection_id: null,
+    label: 'This Borg UI server',
+  },
+  containers: [
+    {
+      id: '5ad07b8f01d2',
+      name: 'postgres',
+      image: 'postgres:17',
+      status: 'running',
+      state: 'running',
+      export_path: '/var/tmp/borg-ui/container-exports/postgres',
+      backup_mode: 'export',
+      notes: [
+        'docker export captures the container filesystem.',
+        'Bind mounts and Docker named volumes are not included by docker export.',
+      ],
+      mounts: [
+        {
+          type: 'volume',
+          name: 'postgres-data',
+          source: '/var/lib/docker/volumes/postgres-data/_data',
+          destination: '/var/lib/postgresql/data',
+          backed_up: false,
+          reason:
+            'Not included in docker export; add this path separately from Files if needed.',
+        },
+      ],
+    },
+  ],
+  warnings: [],
+}
+
 interface MockOptions {
   scanStatus?:
     | 'detected'
@@ -277,6 +312,7 @@ function useMockedDiscovery({ scanStatus = 'detected', legacyTemplates = true }:
       mock.onGet('/source-discovery/databases').reply(200, legacyDiscoveryResponse)
     }
     mock.onGet('/source-discovery/filesystem-snapshots').reply(200, filesystemSnapshotCapabilities)
+    mock.onPost('/source-discovery/containers/scan').reply(200, detectedContainerScanResponse)
 
     if (scanStatus === 'detected') {
       mock.onPost('/source-discovery/databases/scan').reply(200, detectedScanResponse)
@@ -594,6 +630,21 @@ const translations: Record<string, string> = {
     'Borg UI exports the container filesystem to a staging path before Borg reads it. Docker named volumes are not included.',
   'backupPlans.sourceChooser.containerSourceMachine': 'Docker host',
   'backupPlans.sourceChooser.containerModeExport': 'docker export',
+  'backupPlans.sourceChooser.scanContainers': 'Scan containers',
+  'backupPlans.sourceChooser.rescanContainers': 'Re-scan containers',
+  'backupPlans.sourceChooser.scanContainersHint': 'Find containers on the selected Docker host.',
+  'backupPlans.sourceChooser.detectedContainers': 'Detected containers',
+  'backupPlans.sourceChooser.containerFilesystemIncluded':
+    'Container filesystem exported to {{path}}',
+  'backupPlans.sourceChooser.containerMountsNotIncluded': 'Mounts not included',
+  'backupPlans.sourceChooser.containerMountNotIncluded': 'Not included in docker export',
+  'backupPlans.sourceChooser.addDetectedContainer': 'Add detected container',
+  'backupPlans.sourceChooser.noContainersFoundTitle': 'No containers found',
+  'backupPlans.sourceChooser.noContainersFoundBody':
+    'Check Docker access on this host, or enter a container manually.',
+  'backupPlans.sourceChooser.containerScanUnsupportedForAgents':
+    'Docker container scanning is available for the Borg UI server and SSH sources. Enter managed-agent containers manually.',
+  'backupPlans.sourceChooser.containerScanFailedBody': 'Check Docker access or try again.',
   'backupPlans.sourceChooser.addContainer': 'Add container',
   'backupPlans.sourceChooser.selectedContainers': 'Selected containers',
   'backupPlans.sourceChooser.containerScriptsAssigned': 'Export scripts assigned',
@@ -687,6 +738,7 @@ const t = (key: string, options?: Record<string, unknown>) => {
   return (translations[key] || key)
     .replace('{{command}}', String(options?.command ?? ''))
     .replace('{{provider}}', String(options?.provider ?? ''))
+    .replace('{{path}}', String(options?.path ?? ''))
 }
 
 interface DialogStoryArgs {
@@ -700,6 +752,7 @@ interface DialogStoryArgs {
   canUseManagedAgents?: boolean
   canUseMixedSourceTypes?: boolean
   scrollToText?: string
+  autoClickText?: string
 }
 
 function DialogStory({
@@ -713,6 +766,7 @@ function DialogStory({
   canUseManagedAgents = true,
   canUseMixedSourceTypes = true,
   scrollToText,
+  autoClickText,
 }: DialogStoryArgs) {
   useMockedDiscovery(mockOptions)
   const stableState = useMemo(() => wizardState, [wizardState])
@@ -745,6 +799,35 @@ function DialogStory({
       if (timeout) window.clearTimeout(timeout)
     }
   }, [scrollToText])
+
+  useEffect(() => {
+    if (!autoClickText) return undefined
+
+    let timeout: number | undefined
+    let attempts = 0
+
+    const clickMatch = () => {
+      const match = Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find(
+        (element) => element.textContent?.includes(autoClickText)
+      )
+
+      if (match) {
+        match.click()
+        return
+      }
+
+      attempts += 1
+      if (attempts < 60) {
+        timeout = window.setTimeout(clickMatch, 50)
+      }
+    }
+
+    timeout = window.setTimeout(clickMatch, 50)
+
+    return () => {
+      if (timeout) window.clearTimeout(timeout)
+    }
+  }, [autoClickText])
 
   return (
     <Box sx={{ width: 1, height: '100vh', position: 'relative' }}>
@@ -808,6 +891,26 @@ export const ContainerPickerEmpty: Story = {
       description: {
         story:
           'Docker container source picker with host selection, generated export staging path, and queued source scripts.',
+      },
+    },
+  },
+}
+
+export const ContainerPickerDetected: Story = {
+  render: () => (
+    <DialogStory
+      wizardState={emptyWizardState}
+      mockOptions={{ scanStatus: 'detected' }}
+      initialView="container"
+      autoClickText="Scan containers"
+      scrollToText="Mounts not included"
+    />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Docker container source picker after a scan returns a detected container, including the exact export path and the mounted data that docker export will not include.',
       },
     },
   },
