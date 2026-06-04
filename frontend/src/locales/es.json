@@ -883,6 +883,8 @@
       "containerMountDestination": "Montado en {{path}}",
       "containerImageMetadata": "La imagen {{image}} identifica este contenedor; Borg UI no respalda la imagen.",
       "addDetectedContainer": "Agregar contenedor detectado",
+      "addDetectedContainerShort": "Agregar",
+      "containerAdded": "Agregado",
       "noContainersFoundTitle": "No se encontraron contenedores",
       "noContainersFoundBody": "Revisa el acceso a Docker en este host o introduce un contenedor manualmente.",
       "containerScanUnsupportedForAgents": "El escaneo de contenedores Docker está disponible para el servidor Borg UI y fuentes SSH. Introduce manualmente los contenedores de agentes administrados.",

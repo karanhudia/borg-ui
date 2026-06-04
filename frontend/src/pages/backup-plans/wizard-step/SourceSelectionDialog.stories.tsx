@@ -649,6 +649,8 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.containerImageMetadata':
     'Image {{image}} identifies this container; Borg UI does not back up the image.',
   'backupPlans.sourceChooser.addDetectedContainer': 'Add detected container',
+  'backupPlans.sourceChooser.addDetectedContainerShort': 'Add',
+  'backupPlans.sourceChooser.containerAdded': 'Added',
   'backupPlans.sourceChooser.noContainersFoundTitle': 'No containers found',
   'backupPlans.sourceChooser.noContainersFoundBody':
     'Check Docker access on this host, or enter a container manually.',

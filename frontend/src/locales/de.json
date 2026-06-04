@@ -883,6 +883,8 @@
       "containerMountDestination": "Gemountet unter {{path}}",
       "containerImageMetadata": "Image {{image}} identifiziert diesen Container; Borg UI sichert das Image selbst nicht.",
       "addDetectedContainer": "Erkannten Container hinzufügen",
+      "addDetectedContainerShort": "Hinzufügen",
+      "containerAdded": "Hinzugefügt",
       "noContainersFoundTitle": "Keine Container gefunden",
       "noContainersFoundBody": "Prüfe den Docker-Zugriff auf diesem Host oder gib einen Container manuell ein.",
       "containerScanUnsupportedForAgents": "Docker-Container-Scans sind für den Borg-UI-Server und SSH-Quellen verfügbar. Container auf verwalteten Agents manuell eingeben.",

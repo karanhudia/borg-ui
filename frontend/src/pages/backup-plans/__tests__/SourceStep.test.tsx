@@ -311,6 +311,8 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.containerImageMetadata':
     'Image {{image}} identifies this container; Borg UI does not back up the image.',
   'backupPlans.sourceChooser.addDetectedContainer': 'Add detected container',
+  'backupPlans.sourceChooser.addDetectedContainerShort': 'Add',
+  'backupPlans.sourceChooser.containerAdded': 'Added',
   'backupPlans.sourceChooser.noContainersFoundTitle': 'No containers found',
   'backupPlans.sourceChooser.noContainersFoundBody':
     'Check Docker access on this host, or enter a container manually.',
@@ -679,11 +681,15 @@ describe('SourceStep', () => {
     fireEvent.click(containerTab)
 
     expect(screen.getByText('Add Docker container backup')).toBeInTheDocument()
-    expect(screen.getByText(/Borg UI exports the container filesystem/i)).toBeInTheDocument()
+    expect(
+      screen.getByLabelText(
+        'Borg UI exports the container filesystem to a staging path before Borg reads it. This does not back up the Docker image, bind mounts, or named volumes.'
+      )
+    ).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText(/container name or id/i), {
       target: { value: 'postgres' },
     })
-    fireEvent.change(screen.getByLabelText(/image/i), {
+    fireEvent.change(screen.getByLabelText('Image (optional)'), {
       target: { value: 'postgres:17' },
     })
     fireEvent.click(screen.getByTitle('Browse filesystem'))
@@ -796,20 +802,31 @@ describe('SourceStep', () => {
       })
     })
     expect(await screen.findByText('Detected containers')).toBeInTheDocument()
+    expect(screen.getByTestId('container-scan-results')).toHaveStyle({
+      maxHeight: '360px',
+      overflowY: 'auto',
+    })
     expect(screen.getByText('portainer')).toBeInTheDocument()
     expect(screen.queryByText('portainer/portainer-ce:latest')).not.toBeInTheDocument()
+    expect(screen.queryByText('running')).not.toBeInTheDocument()
+    expect(screen.queryByText('docker export')).not.toBeInTheDocument()
     expect(
-      screen.getByText(
-        'Image portainer/portainer-ce:latest identifies this container; Borg UI does not back up the image.'
+      screen.getByLabelText(
+        'Borg UI exports the container filesystem to a staging path before Borg reads it. This does not back up the Docker image, bind mounts, or named volumes.'
       )
     ).toBeInTheDocument()
-    expect(screen.getByText('What this source backs up')).toBeInTheDocument()
+    expect(
+      screen.queryByText(
+        'Image portainer/portainer-ce:latest identifies this container; Borg UI does not back up the image.'
+      )
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('What this source backs up')).not.toBeInTheDocument()
     expect(
       screen.getByText(
         'Included: container filesystem export at /var/tmp/borg-ui/container-exports/portainer'
       )
     ).toBeInTheDocument()
-    expect(screen.getByText('Not included: mounted data')).toBeInTheDocument()
+    expect(screen.queryByText('Not included: mounted data')).not.toBeInTheDocument()
     expect(
       screen.getByText('Add these mount paths as Files sources if they contain data you need.')
     ).toBeInTheDocument()
@@ -817,8 +834,8 @@ describe('SourceStep', () => {
     expect(screen.getByText('/var/lib/docker/volumes/portainer_data/_data')).toBeInTheDocument()
     expect(screen.getByText('Optional mounted data')).toBeInTheDocument()
     expect(
-      screen.getByText('Select mounts to add them as Files sources in this plan.')
-    ).toBeInTheDocument()
+      screen.queryByText('Select mounts to add them as Files sources in this plan.')
+    ).not.toBeInTheDocument()
 
     fireEvent.click(
       screen.getByRole('checkbox', {
@@ -827,8 +844,9 @@ describe('SourceStep', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: /add detected container/i }))
+    expect(screen.getByRole('button', { name: /added/i })).toBeDisabled()
     expect(screen.getByText('Selected containers')).toBeInTheDocument()
-    expect(screen.getByText('/var/tmp/borg-ui/container-exports/portainer')).toBeInTheDocument()
+    expect(screen.getAllByText('/var/tmp/borg-ui/container-exports/portainer').length).toBe(2)
 
     clickExistingTextButton(/use these containers/i)
 

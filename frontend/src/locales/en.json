@@ -883,6 +883,8 @@
       "containerMountDestination": "Mounted at {{path}}",
       "containerImageMetadata": "Image {{image}} identifies this container; Borg UI does not back up the image.",
       "addDetectedContainer": "Add detected container",
+      "addDetectedContainerShort": "Add",
+      "containerAdded": "Added",
       "noContainersFoundTitle": "No containers found",
       "noContainersFoundBody": "Check Docker access on this host, or enter a container manually.",
       "containerScanUnsupportedForAgents": "Docker container scanning is available for the Borg UI server and SSH sources. Enter managed-agent containers manually.",
