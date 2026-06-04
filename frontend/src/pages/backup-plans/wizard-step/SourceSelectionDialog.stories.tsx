@@ -283,8 +283,7 @@ const detectedContainerScanResponse = {
           source: '/var/lib/docker/volumes/postgres-data/_data',
           destination: '/var/lib/postgresql/data',
           backed_up: false,
-          reason:
-            'Not included in docker export; add this path separately from Files if needed.',
+          reason: 'Not included in docker export; add this path separately from Files if needed.',
         },
       ],
     },

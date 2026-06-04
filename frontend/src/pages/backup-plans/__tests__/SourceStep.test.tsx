@@ -787,7 +787,9 @@ describe('SourceStep', () => {
     expect(screen.getByText('postgres')).toBeInTheDocument()
     expect(screen.getByText('postgres:17')).toBeInTheDocument()
     expect(
-      screen.getByText('Container filesystem exported to /var/tmp/borg-ui/container-exports/postgres')
+      screen.getByText(
+        'Container filesystem exported to /var/tmp/borg-ui/container-exports/postgres'
+      )
     ).toBeInTheDocument()
     expect(screen.getByText('Mounts not included')).toBeInTheDocument()
     expect(screen.getByText('/var/lib/postgresql/data')).toBeInTheDocument()

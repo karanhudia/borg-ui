@@ -2954,9 +2954,7 @@ export function SourceSelectionDialog({
                 disabled={scanDisabled}
                 sx={{ alignSelf: { xs: 'flex-start', sm: 'center' } }}
               >
-                {containerScanLoading
-                  ? t('backupPlans.sourceChooser.scanning')
-                  : scanButtonLabel}
+                {containerScanLoading ? t('backupPlans.sourceChooser.scanning') : scanButtonLabel}
               </Button>
             </Stack>
 
@@ -3086,7 +3084,10 @@ export function SourceSelectionDialog({
                                         overflowWrap: 'anywhere',
                                       }}
                                     >
-                                      {mount.destination || mount.source || mount.name || mount.type}
+                                      {mount.destination ||
+                                        mount.source ||
+                                        mount.name ||
+                                        mount.type}
                                     </Typography>
                                     {mount.source && mount.source !== mount.destination && (
                                       <Typography
