@@ -431,8 +431,7 @@ function commonDirectoryPrefix(paths: string[]): string {
 
 function isDatabaseDumpPath(sourceDirectory: string): boolean {
   return (
-    sourceDirectory === DATABASE_DUMP_ROOT ||
-    sourceDirectory.startsWith(`${DATABASE_DUMP_ROOT}/`)
+    sourceDirectory === DATABASE_DUMP_ROOT || sourceDirectory.startsWith(`${DATABASE_DUMP_ROOT}/`)
   )
 }
 
