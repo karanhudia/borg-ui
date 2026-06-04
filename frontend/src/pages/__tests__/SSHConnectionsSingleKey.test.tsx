@@ -444,7 +444,9 @@ describe('SSHConnectionsSingleKey', () => {
 
     fireEvent.click(within(dialog).getByRole('button', { name: /cancel/i }))
     await rtlWaitFor(() =>
-      expect(screen.queryByRole('dialog', { name: /deploy ssh key to server/i })).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('dialog', { name: /deploy ssh key to server/i })
+      ).not.toBeInTheDocument()
     )
 
     fireEvent.click(screen.getByRole('button', { name: /reopen deploy dialog/i }))

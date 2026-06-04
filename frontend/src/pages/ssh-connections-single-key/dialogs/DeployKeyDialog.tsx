@@ -20,10 +20,7 @@ import { alpha } from '@mui/material/styles'
 import { Info } from 'lucide-react'
 import ResponsiveDialog from '../../../components/shared/ResponsiveDialog'
 import { createConnectionForm } from '../formDefaults'
-import {
-  remoteMachineSetupPresets,
-  type RemoteMachineSetupPresetId,
-} from '../connectionPresets'
+import { remoteMachineSetupPresets, type RemoteMachineSetupPresetId } from '../connectionPresets'
 import type { DeployConnectionPayload } from '../types'
 import { SshHostField } from './SshHostField'
 
