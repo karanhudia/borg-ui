@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import { Box, Chip, Stack, Tooltip, Typography } from '@mui/material'
 import { alpha } from '@mui/material/styles'
 import { Server, XCircle } from 'lucide-react'
@@ -82,6 +83,12 @@ export function RepositoryHealthPanel({
   // gap left by a tall critical/warning card. With 1–2 cards the gap sits
   // empty under the short healthy card; let cards stretch instead.
   const useDensePacking = repos.length > 2
+  const hasExpandedCards = repos.some((repo) => repo.health_status !== 'healthy')
+  const hasCompactCards = repos.some((repo) => repo.health_status === 'healthy')
+  const useTwoColumnDenseLayout = useDensePacking && hasExpandedCards && hasCompactCards
+  const repositoryGridColumns = useTwoColumnDenseLayout
+    ? 'minmax(0, 1fr) minmax(0, 1fr)'
+    : 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))'
 
   return (
     <Box sx={{ ...surface, p: 2.5 }}>
@@ -241,6 +248,13 @@ export function RepositoryHealthPanel({
       )}
 
       <Box
+        data-testid="dashboard-repository-health-grid"
+        data-layout={useTwoColumnDenseLayout ? 'two-column-dense' : 'auto-fit'}
+        style={
+          {
+            '--repository-health-grid-columns': repositoryGridColumns,
+          } as CSSProperties
+        }
         sx={{
           display: 'grid',
           // Auto-fit with a 300px floor lets cards reflow from 1 column (narrow viewports)
@@ -254,6 +268,7 @@ export function RepositoryHealthPanel({
           gridTemplateColumns: {
             xs: 'minmax(0, 1fr)',
             sm: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))',
+            md: 'var(--repository-health-grid-columns)',
           },
           // Dense packing: critical/warning cards take 2 row tracks, healthy cards
           // take 1, so healthy cards fill the gaps next to taller cards instead of
@@ -290,9 +305,10 @@ export function RepositoryHealthPanel({
             return (
               <Box
                 key={repo.id}
+                data-testid={`dashboard-repository-health-card-${repo.id}`}
                 onClick={onOpenRepositories}
+                style={{ gridRow: useDensePacking ? 'span 1' : undefined }}
                 sx={{
-                  gridRow: useDensePacking ? 'span 1' : undefined,
                   bgcolor: T.bgCard,
                   border: `1px solid ${alpha(cs.color, 0.38)}`,
                   borderRadius: '10px',
@@ -377,7 +393,9 @@ export function RepositoryHealthPanel({
           return (
             <Box
               key={repo.id}
+              data-testid={`dashboard-repository-health-card-${repo.id}`}
               onClick={onOpenRepositories}
+              style={{ gridRow: useDensePacking ? 'span 2' : undefined }}
               sx={{
                 // Span 2 row tracks so a critical/warning card occupies the
                 // vertical space of two healthy one-liners, letting dense flow
@@ -385,7 +403,6 @@ export function RepositoryHealthPanel({
                 // of stretching them to match this card's height. Skipped at
                 // <=2 cards (see useDensePacking) so the lone healthy card
                 // stretches to match height instead of leaving a gap.
-                gridRow: useDensePacking ? 'span 2' : undefined,
                 // Subtle status tint (~5% alpha) on critical/warning cards so they
                 // register as different at a glance, without the wall-of-color
                 // effect the original 15% tints created. Healthy cards stay on

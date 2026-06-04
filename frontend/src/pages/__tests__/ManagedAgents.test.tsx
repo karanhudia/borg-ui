@@ -610,7 +610,12 @@ describe('ManagedAgents', () => {
     await user.click(screen.getByRole('button', { name: /run diagnostics/i }))
     const dialog = await screen.findByRole('dialog', { name: /agent diagnostics/i })
 
-    await user.type(within(dialog).getByLabelText(/target host/i), 'postgres.internal')
+    expect(within(dialog).queryByLabelText(/service host/i)).not.toBeInTheDocument()
+
+    await user.click(
+      within(dialog).getByRole('button', { name: /advanced: test another service/i })
+    )
+    await user.type(within(dialog).getByLabelText(/service host/i), 'postgres.internal')
 
     expect(within(dialog).getByText(/Enter a TCP port between 1 and 65535/i)).toBeInTheDocument()
     expect(within(dialog).getByRole('button', { name: /run check/i })).toBeDisabled()

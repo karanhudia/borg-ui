@@ -304,6 +304,21 @@ describe('DashboardV3', () => {
     })
   })
 
+  describe('resources card', () => {
+    it('keeps peer resource gauges in one stable three-column row', async () => {
+      mockFetchSuccess(makeOverview())
+      renderDashboard()
+
+      await waitFor(() => expect(screen.getByText('Resources')).toBeInTheDocument())
+
+      expect(screen.getByTestId('dashboard-resource-gauge-grid')).toHaveStyle({
+        gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+      })
+      expect(screen.getByText('3.6/8.0G')).toBeInTheDocument()
+      expect(screen.getByText('68/100G')).toBeInTheDocument()
+    })
+  })
+
   describe('repository health grid', () => {
     it('renders a card for each repository', async () => {
       mockFetchSuccess(makeOverview())
@@ -312,6 +327,66 @@ describe('DashboardV3', () => {
       await waitFor(() => {
         expect(screen.getAllByText('my-server').length).toBeGreaterThan(0)
         expect(screen.getAllByText('backup-nas').length).toBeGreaterThan(0)
+      })
+    })
+
+    it('uses two-column dense packing for mixed warning and healthy repositories', async () => {
+      const [firstRepo] = makeOverview().repository_health
+      const healthyDimensions = {
+        backup: 'healthy' as const,
+        check: 'healthy' as const,
+        compact: 'healthy' as const,
+        restore: 'healthy' as const,
+      }
+      const repositoryHealth = [
+        {
+          ...firstRepo,
+          id: 1,
+          name: 'Immich Onsite',
+          health_status: 'warning' as const,
+          dimension_health: {
+            ...firstRepo.dimension_health,
+            check: 'warning' as const,
+            restore: 'warning' as const,
+          },
+        },
+        {
+          ...firstRepo,
+          id: 2,
+          name: 'Databases Backup',
+          health_status: 'healthy' as const,
+          archive_count: 1,
+          total_size: '20.97 MB',
+          dimension_health: healthyDimensions,
+        },
+        {
+          ...firstRepo,
+          id: 3,
+          name: 'Immich Backup',
+          type: 'ssh' as const,
+          health_status: 'healthy' as const,
+          archive_count: 4,
+          total_size: '821.73 GB',
+          dimension_health: healthyDimensions,
+        },
+      ]
+
+      mockFetchSuccess(makeOverview({ repository_health: repositoryHealth }))
+      renderDashboard()
+
+      await waitFor(() => expect(screen.getByText('Repository Health')).toBeInTheDocument())
+
+      const grid = screen.getByTestId('dashboard-repository-health-grid')
+      expect(grid).toHaveAttribute('data-layout', 'two-column-dense')
+      expect(grid).toHaveStyle('--repository-health-grid-columns: minmax(0, 1fr) minmax(0, 1fr)')
+      expect(screen.getByTestId('dashboard-repository-health-card-1')).toHaveStyle({
+        gridRow: 'span 2',
+      })
+      expect(screen.getByTestId('dashboard-repository-health-card-2')).toHaveStyle({
+        gridRow: 'span 1',
+      })
+      expect(screen.getByTestId('dashboard-repository-health-card-3')).toHaveStyle({
+        gridRow: 'span 1',
       })
     })
 
