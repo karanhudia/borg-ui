@@ -35,10 +35,14 @@ def upgrade(connection):
     already_cascades = any(row[4] == "id" and row[6] == "CASCADE" for row in fk_rows)
 
     if already_cascades:
-        print("✓ delete_archive_jobs FK already has ON DELETE CASCADE — skipping migration 073")
+        print(
+            "✓ delete_archive_jobs FK already has ON DELETE CASCADE — skipping migration 073"
+        )
         return
 
-    print("⚠️  Fixing delete_archive_jobs foreign key constraint (adding ON DELETE CASCADE)...")
+    print(
+        "⚠️  Fixing delete_archive_jobs foreign key constraint (adding ON DELETE CASCADE)..."
+    )
 
     try:
         # ── Build new table DDL from the live schema ─────────────────────────
@@ -64,22 +68,30 @@ def upgrade(connection):
             "    FOREIGN KEY (repository_id) REFERENCES repositories(id) ON DELETE CASCADE"
         )
 
-        new_ddl = "CREATE TABLE delete_archive_jobs_new (\n" + ",\n".join(col_defs) + "\n)"
+        new_ddl = (
+            "CREATE TABLE delete_archive_jobs_new (\n" + ",\n".join(col_defs) + "\n)"
+        )
 
         # ── Clean up orphaned rows before copying ────────────────────────────
         # FK enforcement is ON (set by SQLAlchemy event listener in database.py).
         # Rows whose repository_id no longer exists in repositories would cause
         # the INSERT into the new table to fail. Delete them first.
-        orphans = connection.execute(text(
-            "SELECT COUNT(*) FROM delete_archive_jobs"
-            " WHERE repository_id NOT IN (SELECT id FROM repositories)"
-        )).scalar()
-        if orphans:
-            connection.execute(text(
-                "DELETE FROM delete_archive_jobs"
+        orphans = connection.execute(
+            text(
+                "SELECT COUNT(*) FROM delete_archive_jobs"
                 " WHERE repository_id NOT IN (SELECT id FROM repositories)"
-            ))
-            print(f"  Removed {orphans} orphaned delete_archive_jobs row(s) with no matching repository")
+            )
+        ).scalar()
+        if orphans:
+            connection.execute(
+                text(
+                    "DELETE FROM delete_archive_jobs"
+                    " WHERE repository_id NOT IN (SELECT id FROM repositories)"
+                )
+            )
+            print(
+                f"  Removed {orphans} orphaned delete_archive_jobs row(s) with no matching repository"
+            )
 
         # ── Guard against stale temp table from a previous interrupted run ───
         connection.execute(text("DROP TABLE IF EXISTS delete_archive_jobs_new"))
@@ -87,17 +99,25 @@ def upgrade(connection):
 
         # ── Copy using explicit column names (avoids SELECT * count mismatch) ─
         col_names = ", ".join(row[1] for row in col_rows)
-        connection.execute(text(
-            f"INSERT INTO delete_archive_jobs_new ({col_names})"
-            f" SELECT {col_names} FROM delete_archive_jobs"
-        ))
+        connection.execute(
+            text(
+                f"INSERT INTO delete_archive_jobs_new ({col_names})"
+                f" SELECT {col_names} FROM delete_archive_jobs"
+            )
+        )
 
         # ── Swap tables ───────────────────────────────────────────────────────
         connection.execute(text("DROP TABLE delete_archive_jobs"))
-        connection.execute(text("ALTER TABLE delete_archive_jobs_new RENAME TO delete_archive_jobs"))
+        connection.execute(
+            text("ALTER TABLE delete_archive_jobs_new RENAME TO delete_archive_jobs")
+        )
 
-        print("✓ delete_archive_jobs foreign key constraint fixed (ON DELETE CASCADE added)")
-        print("✓ Repositories can now be deleted even when delete_archive_jobs rows exist")
+        print(
+            "✓ delete_archive_jobs foreign key constraint fixed (ON DELETE CASCADE added)"
+        )
+        print(
+            "✓ Repositories can now be deleted even when delete_archive_jobs rows exist"
+        )
 
     except Exception as e:
         print(f"✗ Error fixing delete_archive_jobs foreign key constraint: {e}")
@@ -107,4 +127,6 @@ def upgrade(connection):
 
 def downgrade(connection):
     """No downgrade action - removing CASCADE would re-introduce the IntegrityError bug"""
-    print("✓ Downgrade skipped — reverting ON DELETE CASCADE would restore the IntegrityError bug")
+    print(
+        "✓ Downgrade skipped — reverting ON DELETE CASCADE would restore the IntegrityError bug"
+    )

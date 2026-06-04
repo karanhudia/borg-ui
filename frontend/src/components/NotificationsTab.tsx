@@ -25,7 +25,16 @@ import {
   Radio,
   alpha,
 } from '@mui/material'
-import { Plus, Bell, Info, ExternalLink, Archive, RotateCcw, Settings } from 'lucide-react'
+import {
+  Plus,
+  Bell,
+  Info,
+  ExternalLink,
+  Archive,
+  RotateCcw,
+  Settings,
+  ShieldCheck,
+} from 'lucide-react'
 import { notificationsAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { translateBackendKey } from '../utils/translateBackendKey'
@@ -33,7 +42,7 @@ import { Repository } from '../types'
 import MultiRepositorySelector from './MultiRepositorySelector'
 import { useAnalytics } from '../hooks/useAnalytics'
 import NotificationCard from './NotificationCard'
-import ResponsiveDialog from './ResponsiveDialog'
+import ResponsiveDialog from './shared/ResponsiveDialog'
 
 interface NotificationSetting {
   id: number
@@ -44,12 +53,17 @@ interface NotificationSetting {
   include_job_name_in_title: boolean
   notify_on_backup_start: boolean
   notify_on_backup_success: boolean
+  notify_on_backup_warning: boolean
   notify_on_backup_failure: boolean
   notify_on_restore_success: boolean
   notify_on_restore_failure: boolean
   notify_on_check_success: boolean
   notify_on_check_failure: boolean
+  notify_on_restore_check_success: boolean
+  notify_on_restore_check_failure: boolean
   notify_on_schedule_failure: boolean
+  notify_on_stale_backup: boolean
+  notify_on_backup_report: boolean
   monitor_all_repositories: boolean
   repositories: Repository[]
   created_at: string
@@ -75,12 +89,17 @@ const NotificationsTab: React.FC = () => {
     include_job_name_in_title: false,
     notify_on_backup_start: false,
     notify_on_backup_success: false,
+    notify_on_backup_warning: false,
     notify_on_backup_failure: true,
     notify_on_restore_success: false,
     notify_on_restore_failure: true,
     notify_on_check_success: false,
     notify_on_check_failure: true,
+    notify_on_restore_check_success: false,
+    notify_on_restore_check_failure: true,
     notify_on_schedule_failure: true,
+    notify_on_stale_backup: true,
+    notify_on_backup_report: true,
     monitor_all_repositories: true,
     repository_ids: [] as number[],
   })
@@ -109,7 +128,6 @@ const NotificationsTab: React.FC = () => {
       toast.success(t('notifications.serviceAddedSuccessfully'))
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
       setShowDialog(false)
-      resetForm()
       trackNotifications(EventAction.CREATE, {
         enabled: formData.enabled,
         monitor_all_repositories: formData.monitor_all_repositories,
@@ -132,8 +150,6 @@ const NotificationsTab: React.FC = () => {
       toast.success(t('notifications.serviceUpdatedSuccessfully'))
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
       setShowDialog(false)
-      setEditingNotification(null)
-      resetForm()
       trackNotifications(EventAction.EDIT, {
         enabled: formData.enabled,
         monitor_all_repositories: formData.monitor_all_repositories,
@@ -197,12 +213,17 @@ const NotificationsTab: React.FC = () => {
       include_job_name_in_title: false,
       notify_on_backup_start: false,
       notify_on_backup_success: false,
+      notify_on_backup_warning: false,
       notify_on_backup_failure: true,
       notify_on_restore_success: false,
       notify_on_restore_failure: true,
       notify_on_check_success: false,
       notify_on_check_failure: true,
+      notify_on_restore_check_success: false,
+      notify_on_restore_check_failure: true,
       notify_on_schedule_failure: true,
+      notify_on_stale_backup: true,
+      notify_on_backup_report: true,
       monitor_all_repositories: true,
       repository_ids: [],
     })
@@ -218,12 +239,17 @@ const NotificationsTab: React.FC = () => {
       include_job_name_in_title: notification.include_job_name_in_title || false,
       notify_on_backup_start: notification.notify_on_backup_start,
       notify_on_backup_success: notification.notify_on_backup_success,
+      notify_on_backup_warning: notification.notify_on_backup_warning,
       notify_on_backup_failure: notification.notify_on_backup_failure,
       notify_on_restore_success: notification.notify_on_restore_success,
       notify_on_restore_failure: notification.notify_on_restore_failure,
       notify_on_check_success: notification.notify_on_check_success,
       notify_on_check_failure: notification.notify_on_check_failure,
+      notify_on_restore_check_success: notification.notify_on_restore_check_success,
+      notify_on_restore_check_failure: notification.notify_on_restore_check_failure,
       notify_on_schedule_failure: notification.notify_on_schedule_failure,
+      notify_on_stale_backup: notification.notify_on_stale_backup,
+      notify_on_backup_report: notification.notify_on_backup_report,
       monitor_all_repositories: notification.monitor_all_repositories,
       repository_ids: Array.isArray(notification.repositories)
         ? notification.repositories.map((r) => r.id)
@@ -244,12 +270,17 @@ const NotificationsTab: React.FC = () => {
       include_job_name_in_title: notification.include_job_name_in_title || false,
       notify_on_backup_start: notification.notify_on_backup_start,
       notify_on_backup_success: notification.notify_on_backup_success,
+      notify_on_backup_warning: notification.notify_on_backup_warning,
       notify_on_backup_failure: notification.notify_on_backup_failure,
       notify_on_restore_success: notification.notify_on_restore_success,
       notify_on_restore_failure: notification.notify_on_restore_failure,
       notify_on_check_success: notification.notify_on_check_success,
       notify_on_check_failure: notification.notify_on_check_failure,
+      notify_on_restore_check_success: notification.notify_on_restore_check_success,
+      notify_on_restore_check_failure: notification.notify_on_restore_check_failure,
       notify_on_schedule_failure: notification.notify_on_schedule_failure,
+      notify_on_stale_backup: notification.notify_on_stale_backup,
+      notify_on_backup_report: notification.notify_on_backup_report,
       monitor_all_repositories: notification.monitor_all_repositories,
       repository_ids: Array.isArray(notification.repositories)
         ? notification.repositories.map((r) => r.id)
@@ -469,6 +500,7 @@ const NotificationsTab: React.FC = () => {
             startIcon={<Plus size={18} />}
             onClick={() => {
               resetForm()
+              setEditingNotification(null)
               setShowDialog(true)
             }}
           >
@@ -696,6 +728,17 @@ const NotificationsTab: React.FC = () => {
                 <FormControlLabel
                   control={
                     <Switch
+                      checked={formData.notify_on_backup_warning}
+                      onChange={(e) =>
+                        setFormData({ ...formData, notify_on_backup_warning: e.target.checked })
+                      }
+                    />
+                  }
+                  label={t('notifications.form.warning')}
+                />
+                <FormControlLabel
+                  control={
+                    <Switch
                       checked={formData.notify_on_backup_failure}
                       onChange={(e) =>
                         setFormData({ ...formData, notify_on_backup_failure: e.target.checked })
@@ -733,6 +776,46 @@ const NotificationsTab: React.FC = () => {
                       checked={formData.notify_on_restore_failure}
                       onChange={(e) =>
                         setFormData({ ...formData, notify_on_restore_failure: e.target.checked })
+                      }
+                    />
+                  }
+                  label={t('notifications.form.failure')}
+                />
+              </Box>
+            </Box>
+
+            {/* Restore Check Events Category */}
+            <Box sx={{ mb: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                <ShieldCheck size={16} />
+                <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                  {t('notifications.category.restoreCheckEvents')}
+                </Typography>
+              </Box>
+              <Box sx={{ pl: 2 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.notify_on_restore_check_success}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          notify_on_restore_check_success: e.target.checked,
+                        })
+                      }
+                    />
+                  }
+                  label={t('notifications.form.success')}
+                />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.notify_on_restore_check_failure}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          notify_on_restore_check_failure: e.target.checked,
+                        })
                       }
                     />
                   }
@@ -800,6 +883,40 @@ const NotificationsTab: React.FC = () => {
                   sx={{ display: 'block', pl: 4.5, mt: -0.5, mb: 1, color: 'text.secondary' }}
                 >
                   {t('notifications.form.schedulerErrorsHelper')}
+                </Typography>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.notify_on_stale_backup}
+                      onChange={(e) =>
+                        setFormData({ ...formData, notify_on_stale_backup: e.target.checked })
+                      }
+                    />
+                  }
+                  label={t('notifications.form.staleBackupAlerts')}
+                />
+                <Typography
+                  variant="caption"
+                  sx={{ display: 'block', pl: 4.5, mt: -0.5, mb: 1, color: 'text.secondary' }}
+                >
+                  {t('notifications.form.staleBackupAlertsHelper')}
+                </Typography>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.notify_on_backup_report}
+                      onChange={(e) =>
+                        setFormData({ ...formData, notify_on_backup_report: e.target.checked })
+                      }
+                    />
+                  }
+                  label={t('notifications.form.backupReports')}
+                />
+                <Typography
+                  variant="caption"
+                  sx={{ display: 'block', pl: 4.5, mt: -0.5, mb: 1, color: 'text.secondary' }}
+                >
+                  {t('notifications.form.backupReportsHelper')}
                 </Typography>
               </Box>
             </Box>

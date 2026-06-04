@@ -2,10 +2,18 @@
 Tests for borgmatic export/import service.
 """
 
+from datetime import datetime
+import io
+import zipfile
+
 import pytest
 import yaml
-from app.services.borgmatic_service import BorgmaticExportService, BorgmaticImportService
-from app.database.models import Repository, ScheduledJob, SSHKey
+from app.services.borgmatic_service import (
+    BorgmaticExportService,
+    BorgmaticImportService,
+    build_borgmatic_export_artifact,
+)
+from app.database.models import Repository, ScheduledJob
 
 
 class TestBorgmaticExportService:
@@ -15,36 +23,44 @@ class TestBorgmaticExportService:
         """Test exporting a local repository."""
         export_service = BorgmaticExportService(db_session)
 
-        config = export_service.export_repository(sample_repository, include_schedule=False)
+        config = export_service.export_repository(
+            sample_repository, include_schedule=False
+        )
 
         # New flat format (v1.8.0+)
-        assert 'repositories' in config
-        assert config['repositories'] == [sample_repository.path]
-        assert config['compression'] == sample_repository.compression
+        assert "repositories" in config
+        assert config["repositories"] == [sample_repository.path]
+        assert config["compression"] == sample_repository.compression
 
     def test_export_with_source_directories(self, db_session, sample_repository):
         """Test exporting repository with source directories."""
         import json
-        sample_repository.source_directories = json.dumps(['/home/user', '/etc'])
+
+        sample_repository.source_directories = json.dumps(["/home/user", "/etc"])
         db_session.commit()
 
         export_service = BorgmaticExportService(db_session)
-        config = export_service.export_repository(sample_repository, include_schedule=False)
+        config = export_service.export_repository(
+            sample_repository, include_schedule=False
+        )
 
         # New flat format
-        assert config['source_directories'] == ['/home/user', '/etc']
+        assert config["source_directories"] == ["/home/user", "/etc"]
 
     def test_export_with_exclude_patterns(self, db_session, sample_repository):
         """Test exporting repository with exclude patterns."""
         import json
-        sample_repository.exclude_patterns = json.dumps(['*.pyc', '*.tmp'])
+
+        sample_repository.exclude_patterns = json.dumps(["*.pyc", "*.tmp"])
         db_session.commit()
 
         export_service = BorgmaticExportService(db_session)
-        config = export_service.export_repository(sample_repository, include_schedule=False)
+        config = export_service.export_repository(
+            sample_repository, include_schedule=False
+        )
 
         # New flat format
-        assert config['exclude_patterns'] == ['*.pyc', '*.tmp']
+        assert config["exclude_patterns"] == ["*.pyc", "*.tmp"]
 
     def test_export_with_hooks(self, db_session, sample_repository):
         """Test exporting repository with pre/post backup hooks."""
@@ -53,22 +69,28 @@ class TestBorgmaticExportService:
         db_session.commit()
 
         export_service = BorgmaticExportService(db_session)
-        config = export_service.export_repository(sample_repository, include_schedule=False)
+        config = export_service.export_repository(
+            sample_repository, include_schedule=False
+        )
 
         # Using deprecated but still supported borgmatic hook format for maximum compatibility
-        assert 'before_backup' in config
-        assert config['before_backup'] == ['echo "Starting backup"']
-        assert 'after_backup' in config
-        assert config['after_backup'] == ['echo "Backup completed"']
+        assert "before_backup" in config
+        assert config["before_backup"] == ['echo "Starting backup"']
+        assert "after_backup" in config
+        assert config["after_backup"] == ['echo "Backup completed"']
 
-    def test_export_with_schedule(self, db_session, sample_repository, sample_scheduled_job):
+    def test_export_with_schedule(
+        self, db_session, sample_repository, sample_scheduled_job
+    ):
         """Test exporting repository with backup schedule."""
         export_service = BorgmaticExportService(db_session)
-        config = export_service.export_repository(sample_repository, include_schedule=True)
+        config = export_service.export_repository(
+            sample_repository, include_schedule=True
+        )
 
         # New flat format - retention keys at top level
-        assert 'keep_daily' in config
-        assert config['keep_daily'] == sample_scheduled_job.prune_keep_daily
+        assert "keep_daily" in config
+        assert config["keep_daily"] == sample_scheduled_job.prune_keep_daily
 
     def test_export_to_yaml(self, db_session, sample_repository):
         """Test exporting to YAML string."""
@@ -78,23 +100,23 @@ class TestBorgmaticExportService:
         assert yaml_content
         data = yaml.safe_load(yaml_content)
         # New flat format (v1.8.0+)
-        assert 'repositories' in data
-        assert len(data['repositories']) > 0
-        assert 'compression' in data
+        assert "repositories" in data
+        assert len(data["repositories"]) > 0
+        assert "compression" in data
 
     def test_export_ssh_repository(self, db_session):
         """Test exporting SSH repository."""
         # Create SSH repository with full SSH URL as path
-        ssh_url = 'ssh://backupuser@backup.example.com:22/backup/repo.borg'
+        ssh_url = "ssh://backupuser@backup.example.com:22/backup/repo.borg"
         repo = Repository(
-            name='ssh-repo',
+            name="ssh-repo",
             path=ssh_url,
-            repository_type='ssh',
-            host='backup.example.com',
+            repository_type="ssh",
+            host="backup.example.com",
             port=22,
-            username='backupuser',
-            encryption='repokey',
-            compression='lz4'
+            username="backupuser",
+            encryption="repokey",
+            compression="lz4",
         )
         db_session.add(repo)
         db_session.commit()
@@ -103,7 +125,75 @@ class TestBorgmaticExportService:
         config = export_service.export_repository(repo, include_schedule=False)
 
         # New flat format - path is returned as-is (already full SSH URL)
-        assert config['repositories'] == [ssh_url]
+        assert config["repositories"] == [ssh_url]
+
+
+class TestBorgmaticExportArtifact:
+    """Tests for packaging exported borgmatic configs for download or CLI use."""
+
+    def test_single_repository_artifact_is_yaml_with_timestamped_filename(self):
+        artifact = build_borgmatic_export_artifact(
+            [
+                (
+                    "Test Repo",
+                    {
+                        "source_directories": ["/srv/app"],
+                        "repositories": ["/backups/test-repo"],
+                    },
+                )
+            ],
+            timestamp=datetime(2026, 5, 30, 7, 30, 0),
+        )
+
+        assert artifact.media_type == "application/x-yaml"
+        assert artifact.filename == "2026-05-30_07-30-00_testrepo.yaml"
+        assert yaml.safe_load(artifact.content) == {
+            "source_directories": ["/srv/app"],
+            "repositories": ["/backups/test-repo"],
+        }
+
+    def test_multiple_repository_artifact_is_zip_with_one_yaml_per_repository(self):
+        artifact = build_borgmatic_export_artifact(
+            [
+                ("Repo One", {"repositories": ["/backups/one"]}),
+                ("Repo Two", {"repositories": ["/backups/two"]}),
+            ],
+            timestamp=datetime(2026, 5, 30, 7, 30, 0),
+        )
+
+        assert artifact.media_type == "application/zip"
+        assert artifact.filename == "2026-05-30_07-30-00_borgmatic-configs.zip"
+
+        with zipfile.ZipFile(io.BytesIO(artifact.content)) as archive:
+            assert sorted(archive.namelist()) == ["repoone.yaml", "repotwo.yaml"]
+            assert yaml.safe_load(archive.read("repoone.yaml")) == {
+                "repositories": ["/backups/one"]
+            }
+            assert yaml.safe_load(archive.read("repotwo.yaml")) == {
+                "repositories": ["/backups/two"]
+            }
+
+    def test_multiple_repository_artifact_disambiguates_duplicate_safe_names(self):
+        artifact = build_borgmatic_export_artifact(
+            [
+                ("Repo One", {"repositories": ["/backups/one"]}),
+                ("RepoOne", {"repositories": ["/backups/two"]}),
+            ],
+            timestamp=datetime(2026, 5, 30, 7, 30, 0),
+        )
+
+        with zipfile.ZipFile(io.BytesIO(artifact.content)) as archive:
+            assert sorted(archive.namelist()) == ["repoone-2.yaml", "repoone.yaml"]
+            assert yaml.safe_load(archive.read("repoone.yaml")) == {
+                "repositories": ["/backups/one"]
+            }
+            assert yaml.safe_load(archive.read("repoone-2.yaml")) == {
+                "repositories": ["/backups/two"]
+            }
+
+    def test_empty_export_artifact_raises_value_error(self):
+        with pytest.raises(ValueError, match="No repositories found to export"):
+            build_borgmatic_export_artifact([])
 
 
 class TestBorgmaticImportService:
@@ -131,16 +221,18 @@ retention:
 """
 
         import_service = BorgmaticImportService(db_session)
-        result = import_service.import_from_yaml(yaml_content, merge_strategy='skip_duplicates', dry_run=False)
+        result = import_service.import_from_yaml(
+            yaml_content, merge_strategy="skip_duplicates", dry_run=False
+        )
 
-        assert result['success']
-        assert result['repositories_created'] == 1
+        assert result["success"]
+        assert result["repositories_created"] == 1
 
         # Verify repository was created
-        repo = db_session.query(Repository).filter(Repository.name == 'repo').first()
+        repo = db_session.query(Repository).filter(Repository.name == "repo").first()
         assert repo is not None
-        assert repo.path == '/backup/repo.borg'
-        assert repo.compression == 'lz4'
+        assert repo.path == "/backup/repo.borg"
+        assert repo.compression == "lz4"
 
     def test_import_with_hooks(self, db_session):
         """Test importing configuration with hooks."""
@@ -157,10 +249,12 @@ hooks:
 """
 
         import_service = BorgmaticImportService(db_session)
-        result = import_service.import_from_yaml(yaml_content, merge_strategy='skip_duplicates', dry_run=False)
+        result = import_service.import_from_yaml(
+            yaml_content, merge_strategy="skip_duplicates", dry_run=False
+        )
 
-        assert result['success']
-        repo = db_session.query(Repository).filter(Repository.name == 'repo2').first()
+        assert result["success"]
+        repo = db_session.query(Repository).filter(Repository.name == "repo2").first()
         assert repo.pre_backup_script == 'echo "Starting"'
         assert repo.post_backup_script == 'echo "Done"'
 
@@ -173,12 +267,14 @@ location:
 """
 
         import_service = BorgmaticImportService(db_session)
-        result = import_service.import_from_yaml(yaml_content, merge_strategy='skip_duplicates', dry_run=False)
+        result = import_service.import_from_yaml(
+            yaml_content, merge_strategy="skip_duplicates", dry_run=False
+        )
 
-        assert result['success']
-        assert result['repositories_created'] == 0
-        assert len(result['warnings']) > 0
-        assert 'duplicate' in result['warnings'][0].lower()
+        assert result["success"]
+        assert result["repositories_created"] == 0
+        assert len(result["warnings"]) > 0
+        assert "duplicate" in result["warnings"][0].lower()
 
     def test_import_dry_run(self, db_session):
         """Test dry run mode doesn't create anything."""
@@ -191,10 +287,12 @@ location:
         initial_count = db_session.query(Repository).count()
 
         import_service = BorgmaticImportService(db_session)
-        result = import_service.import_from_yaml(yaml_content, merge_strategy='skip_duplicates', dry_run=True)
+        result = import_service.import_from_yaml(
+            yaml_content, merge_strategy="skip_duplicates", dry_run=True
+        )
 
-        assert result['success']
-        assert result['repositories_created'] == 1
+        assert result["success"]
+        assert result["repositories_created"] == 1
 
         # Verify no repository was actually created
         final_count = db_session.query(Repository).count()
@@ -212,20 +310,27 @@ storage:
 """
 
         import_service = BorgmaticImportService(db_session)
-        result = import_service.import_from_yaml(yaml_content, merge_strategy='skip_duplicates', dry_run=False)
+        result = import_service.import_from_yaml(
+            yaml_content, merge_strategy="skip_duplicates", dry_run=False
+        )
 
-        assert result['success']
-        assert result['repositories_created'] == 1
+        assert result["success"]
+        assert result["repositories_created"] == 1
 
-        repo = db_session.query(Repository).filter(Repository.name == 'ssh-repo').first()
+        repo = (
+            db_session.query(Repository).filter(Repository.name == "ssh-repo").first()
+        )
         assert repo is not None
         # SSH repository imported without connection_id - needs manual configuration
         assert repo.connection_id is None
-        assert repo.path == 'user@backup.example.com:/backup/ssh-repo.borg'
+        assert repo.path == "user@backup.example.com:/backup/ssh-repo.borg"
 
         # Check warning message about manual SSH configuration
-        assert len(result['warnings']) > 0
-        assert any('SSH connection must be configured manually' in w for w in result['warnings'])
+        assert len(result["warnings"]) > 0
+        assert any(
+            "SSH connection must be configured manually" in w
+            for w in result["warnings"]
+        )
 
     def test_import_borg_ui_export(self, db_session):
         """Test importing Borg UI export format (round-trip) - new format."""
@@ -242,25 +347,29 @@ storage:
 """
 
         import_service = BorgmaticImportService(db_session)
-        result = import_service.import_from_yaml(yaml_content, merge_strategy='skip_duplicates', dry_run=False)
+        result = import_service.import_from_yaml(
+            yaml_content, merge_strategy="skip_duplicates", dry_run=False
+        )
 
-        assert result['success']
-        assert result['repositories_created'] == 1
+        assert result["success"]
+        assert result["repositories_created"] == 1
 
-        repo = db_session.query(Repository).filter(Repository.name == 'repo').first()
+        repo = db_session.query(Repository).filter(Repository.name == "repo").first()
         assert repo is not None
-        assert repo.compression == 'lz4'
-        assert repo.mode == 'full'
+        assert repo.compression == "lz4"
+        assert repo.mode == "full"
 
     def test_import_invalid_yaml(self, db_session):
         """Test importing invalid YAML."""
         yaml_content = "invalid: yaml: content:"
 
         import_service = BorgmaticImportService(db_session)
-        result = import_service.import_from_yaml(yaml_content, merge_strategy='skip_duplicates', dry_run=False)
+        result = import_service.import_from_yaml(
+            yaml_content, merge_strategy="skip_duplicates", dry_run=False
+        )
 
-        assert not result['success']
-        assert 'error' in result
+        assert not result["success"]
+        assert "error" in result
 
     def test_import_rename_strategy(self, db_session, sample_repository):
         """Test rename merge strategy."""
@@ -272,13 +381,19 @@ location:
 """
 
         import_service = BorgmaticImportService(db_session)
-        result = import_service.import_from_yaml(yaml_content, merge_strategy='rename', dry_run=False)
+        result = import_service.import_from_yaml(
+            yaml_content, merge_strategy="rename", dry_run=False
+        )
 
-        assert result['success']
-        assert result['repositories_created'] == 1
+        assert result["success"]
+        assert result["repositories_created"] == 1
 
         # Verify renamed repository exists
-        repos = db_session.query(Repository).filter(Repository.name.like('another-repo%')).all()
+        repos = (
+            db_session.query(Repository)
+            .filter(Repository.name.like("another-repo%"))
+            .all()
+        )
         assert len(repos) == 1  # Renamed repository
 
 
@@ -287,11 +402,11 @@ location:
 def sample_repository(db_session):
     """Create a sample repository for testing."""
     repo = Repository(
-        name='test-repo',
-        path='/backup/test-repo.borg',
-        encryption='repokey',
-        compression='lz4',
-        repository_type='local'
+        name="test-repo",
+        path="/backup/test-repo.borg",
+        encryption="repokey",
+        compression="lz4",
+        repository_type="local",
     )
     db_session.add(repo)
     db_session.commit()
@@ -302,8 +417,8 @@ def sample_repository(db_session):
 def sample_scheduled_job(db_session, sample_repository):
     """Create a sample scheduled job for testing."""
     job = ScheduledJob(
-        name='test-job',
-        cron_expression='0 2 * * *',
+        name="test-job",
+        cron_expression="0 2 * * *",
         repository=sample_repository.path,
         enabled=True,
         prune_keep_daily=7,
@@ -311,7 +426,7 @@ def sample_scheduled_job(db_session, sample_repository):
         prune_keep_monthly=6,
         prune_keep_yearly=1,
         run_prune_after=True,
-        run_compact_after=False
+        run_compact_after=False,
     )
     db_session.add(job)
     db_session.commit()

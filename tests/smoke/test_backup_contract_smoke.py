@@ -67,15 +67,21 @@ def main() -> int:
         deadline = time.time() + 90
         last_payload = None
         while time.time() < deadline:
-            status_payload = client.request_ok("GET", f"/api/backup/status/{job_id}").json()
+            status_payload = client.request_ok(
+                "GET", f"/api/backup/status/{job_id}"
+            ).json()
             last_payload = status_payload
 
             if status_payload.get("repository") != repo_path:
-                raise SmokeFailure(f"Unexpected backup status repository payload: {status_payload}")
+                raise SmokeFailure(
+                    f"Unexpected backup status repository payload: {status_payload}"
+                )
 
             progress = status_payload.get("progress_details", {})
             if not required_keys.issubset(progress.keys()):
-                raise SmokeFailure(f"Unexpected backup progress_details shape: {status_payload}")
+                raise SmokeFailure(
+                    f"Unexpected backup progress_details shape: {status_payload}"
+                )
 
             has_live_progress = any(
                 [
@@ -100,11 +106,17 @@ def main() -> int:
             timeout=180,
         )
         if final_payload.get("repository") != repo_path:
-            raise SmokeFailure(f"Unexpected final backup status repository payload: {final_payload}")
+            raise SmokeFailure(
+                f"Unexpected final backup status repository payload: {final_payload}"
+            )
         if not required_keys.issubset(final_payload.get("progress_details", {}).keys()):
-            raise SmokeFailure(f"Unexpected final backup contract payload: {final_payload}")
+            raise SmokeFailure(
+                f"Unexpected final backup contract payload: {final_payload}"
+            )
 
-        client.log(f"Backup contract smoke passed for repository {repo_id} with job {job_id}")
+        client.log(
+            f"Backup contract smoke passed for repository {repo_id} with job {job_id}"
+        )
         return 0
     finally:
         client.cleanup()

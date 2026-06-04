@@ -11,10 +11,27 @@ class TestSshPaths:
 
     def test_resolve_sshfs_source_path_does_not_apply_ssh_command_prefix(self):
         assert resolve_sshfs_source_path(".", "/share/komodo") == "/share/komodo"
-        assert resolve_sshfs_source_path("/share/komodo", "/share/komodo") == "/share/komodo"
+        assert (
+            resolve_sshfs_source_path("/share/komodo", "/share/komodo")
+            == "/share/komodo"
+        )
 
     def test_apply_ssh_command_prefix_prepends_prefix_once(self):
-        assert apply_ssh_command_prefix("/share/komodo", "/volume1") == "/volume1/share/komodo"
+        assert (
+            apply_ssh_command_prefix("/share/komodo", "/volume1")
+            == "/volume1/share/komodo"
+        )
 
     def test_apply_ssh_command_prefix_does_not_double_prefix(self):
-        assert apply_ssh_command_prefix("/volume1/share/komodo", "/volume1") == "/volume1/share/komodo"
+        assert (
+            apply_ssh_command_prefix("/volume1/share/komodo", "/volume1")
+            == "/volume1/share/komodo"
+        )
+
+    def test_apply_ssh_command_prefix_preserves_borg_slashdot_prefix(self):
+        assert apply_ssh_command_prefix("/xxx/yyy", "/.") == "/./xxx/yyy"
+        assert apply_ssh_command_prefix("/./xxx/yyy", "/.") == "/./xxx/yyy"
+
+    def test_apply_ssh_command_prefix_does_not_double_borg_slashdot_prefix(self):
+        assert apply_ssh_command_prefix("/xxx/yyy", "/./xxx") == "/./xxx/yyy"
+        assert apply_ssh_command_prefix("/xxx/yyy", "/./xxx/yyy") == "/./xxx/yyy"

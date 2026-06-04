@@ -2,7 +2,6 @@ import React, { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Box,
-  Stack,
   Typography,
   TablePagination,
   Accordion,
@@ -112,6 +111,7 @@ export default function ArchivesList({
   const { t } = useTranslation()
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
+  const desktopGridTemplate = 'minmax(0, 1fr) 76px minmax(180px, 220px) 132px'
 
   // State
   const [page, setPage] = useState(0)
@@ -183,6 +183,32 @@ export default function ArchivesList({
     localStorage.setItem('archives-list-filter', filterValue)
   }
 
+  const tableHeader = (
+    <Box
+      sx={{
+        display: { xs: 'none', md: 'grid' },
+        gridTemplateColumns: desktopGridTemplate,
+        alignItems: 'center',
+        gap: 1,
+        px: 2,
+        py: 1,
+        bgcolor: isDark ? alpha('#fff', 0.03) : alpha('#000', 0.02),
+        borderBottom: '1px solid',
+        borderBottomColor: isDark ? alpha('#fff', 0.08) : alpha('#000', 0.08),
+        fontSize: '0.65rem',
+        fontWeight: 600,
+        textTransform: 'uppercase',
+        letterSpacing: '0.06em',
+        color: 'text.disabled',
+      }}
+    >
+      <span>{t('archivesList.columnArchive', 'Archive')}</span>
+      <span>{t('archivesList.columnType', 'Type')}</span>
+      <span>{t('archivesList.columnDate', 'Date')}</span>
+      <Box sx={{ textAlign: 'right' }}>{t('archivesList.columnActions', 'Actions')}</Box>
+    </Box>
+  )
+
   // Loading State
   if (loading) {
     return (
@@ -220,11 +246,18 @@ export default function ArchivesList({
             <Skeleton variant="rounded" width={44} height={20} sx={{ borderRadius: 1.5 }} />
           </Box>
         </Box>
-        <Stack spacing={2}>
-          {[0, 1, 2, 3, 4].map((i) => (
+        <Box
+          sx={{
+            borderRadius: 3,
+            border: '1px solid',
+            borderColor: isDark ? alpha('#fff', 0.07) : alpha('#000', 0.07),
+            overflow: 'hidden',
+          }}
+        >
+          {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
             <ArchiveCardSkeleton key={i} index={i} />
           ))}
-        </Stack>
+        </Box>
       </Box>
     )
   }
@@ -540,7 +573,7 @@ export default function ArchivesList({
           </Typography>
         </Box>
       ) : groupingEnabled && groupedArchives ? (
-        <Stack spacing={2}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {groupedArchives.map((group) => (
             <Accordion
               key={group.key}
@@ -573,29 +606,35 @@ export default function ArchivesList({
                   <Chip label={group.archives.length} size="small" sx={{ ml: 'auto', mr: 2 }} />
                 </Box>
               </AccordionSummary>
-              <AccordionDetails sx={{ pt: 2, pb: 2 }}>
-                <Stack spacing={2}>
-                  {group.archives.map((archive) => (
-                    <ArchiveCard
-                      key={archive.id}
-                      archive={archive}
-                      onView={onViewArchive}
-                      onRestore={onRestoreArchive}
-                      onMount={onMountArchive}
-                      onDelete={onDeleteArchive}
-                      mountDisabled={mountDisabled}
-                      canDelete={canDelete}
-                    />
-                  ))}
-                </Stack>
+              <AccordionDetails sx={{ pt: 0, pb: 0, px: 0 }}>
+                {group.archives.map((archive) => (
+                  <ArchiveCard
+                    key={archive.id}
+                    archive={archive}
+                    onView={onViewArchive}
+                    onRestore={onRestoreArchive}
+                    onMount={onMountArchive}
+                    onDelete={onDeleteArchive}
+                    mountDisabled={mountDisabled}
+                    canDelete={canDelete}
+                  />
+                ))}
               </AccordionDetails>
             </Accordion>
           ))}
-        </Stack>
+        </Box>
       ) : (
         <>
-          {/* Flat paginated list */}
-          <Stack spacing={2} sx={{ mb: 2 }}>
+          <Box
+            sx={{
+              borderRadius: 3,
+              border: '1px solid',
+              borderColor: isDark ? alpha('#fff', 0.07) : alpha('#000', 0.07),
+              overflow: 'hidden',
+              mb: 2,
+            }}
+          >
+            {tableHeader}
             {sortedArchives
               .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
               .map((archive) => (
@@ -610,7 +649,7 @@ export default function ArchivesList({
                   canDelete={canDelete}
                 />
               ))}
-          </Stack>
+          </Box>
 
           {/* Pagination */}
           {sortedArchives.length > 0 && (

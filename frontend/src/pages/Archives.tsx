@@ -22,8 +22,10 @@ import { Archive, Repository } from '@/types'
 import LockErrorDialog from '../components/LockErrorDialog'
 import { useAnalytics } from '../hooks/useAnalytics'
 import RestoreWizard, { RestoreData } from '../components/RestoreWizard'
+import type { RestoreLayout, RestorePathMetadata } from '../utils/restorePaths'
 import { getRepoCapabilities, getBorgVersion } from '../utils/repoCapabilities'
 import { usePermissions } from '../hooks/usePermissions'
+import { useLockBreakPermissions } from '../hooks/useLockBreakPermissions'
 import { useTrackedJobOutcomes } from '../hooks/useTrackedJobOutcomes'
 import { getArchiveAgeBucket, getJobDurationSeconds } from '../utils/analyticsProperties'
 
@@ -94,8 +96,25 @@ const Archives: React.FC = () => {
         : null,
     [repositories, selectedRepositoryId]
   )
+  const { canBreakLock, lockBreakingEnabled } = useLockBreakPermissions({
+    repositories,
+    fallbackRepositoryId: selectedRepositoryId,
+  })
 
-  // Get archives for selected repository
+  // Get repository info for statistics
+  const {
+    data: repoInfo,
+    isLoading: loadingRepoInfo,
+    error: repoInfoError,
+    isPending: repoInfoPending,
+  } = useQuery({
+    queryKey: ['repository-info', selectedRepositoryId],
+    queryFn: () => new BorgApiClient(selectedRepository!).getInfo(),
+    enabled: !!selectedRepository,
+    retry: false,
+  })
+
+  // Get archives for selected repository after repo info settles
   const {
     data: archives,
     isLoading: loadingArchives,
@@ -103,7 +122,7 @@ const Archives: React.FC = () => {
   } = useQuery({
     queryKey: ['repository-archives', selectedRepositoryId],
     queryFn: () => new BorgApiClient(selectedRepository!).listArchives(),
-    enabled: !!selectedRepository,
+    enabled: !!selectedRepository && !repoInfoPending,
     retry: false,
   })
 
@@ -119,18 +138,6 @@ const Archives: React.FC = () => {
       })
     }
   }, [archivesError, selectedRepositoryId, selectedRepository])
-
-  // Get repository info for statistics
-  const {
-    data: repoInfo,
-    isLoading: loadingRepoInfo,
-    error: repoInfoError,
-  } = useQuery({
-    queryKey: ['repository-info', selectedRepositoryId],
-    queryFn: () => new BorgApiClient(selectedRepository!).getInfo(),
-    enabled: !!selectedRepository,
-    retry: false,
-  })
 
   // Get restore jobs
   const { data: restoreJobsData } = useQuery({
@@ -229,6 +236,8 @@ const Archives: React.FC = () => {
       repository_id,
       destination_type,
       destination_connection_id,
+      restore_layout,
+      path_metadata,
     }: {
       repository: string
       archive: string
@@ -237,6 +246,8 @@ const Archives: React.FC = () => {
       repository_id: number
       destination_type: string
       destination_connection_id: number | null
+      restore_layout: RestoreLayout
+      path_metadata: RestorePathMetadata[]
     }) =>
       restoreAPI.startRestore(
         repository,
@@ -245,7 +256,9 @@ const Archives: React.FC = () => {
         destination,
         repository_id,
         destination_type,
-        destination_connection_id
+        destination_connection_id,
+        restore_layout,
+        path_metadata
       ),
     onSuccess: (_response, variables) => {
       toast.success(t('archives.restoreStarted'), {
@@ -254,6 +267,7 @@ const Archives: React.FC = () => {
       trackArchive(EventAction.START, selectedRepository || undefined, {
         operation: 'restore',
         destination_type: variables.destination_type,
+        restore_layout: variables.restore_layout,
         restore_path_count: variables.paths.length,
         uses_custom_destination: variables.destination !== '/',
         archive_age_bucket: getArchiveAgeBucket(restoreArchive?.start),
@@ -357,6 +371,8 @@ const Archives: React.FC = () => {
       repository_id: selectedRepository.id,
       destination_type: data.destination_type,
       destination_connection_id: data.destination_connection_id,
+      restore_layout: data.restore_layout,
+      path_metadata: data.path_metadata,
     })
 
     setShowRestoreWizard(false)
@@ -498,7 +514,12 @@ const Archives: React.FC = () => {
               {loadingRepoInfo ? (
                 <RepositoryStatsGridSkeleton />
               ) : repositoryStats ? (
-                <RepositoryStatsGrid stats={repositoryStats} archivesCount={archivesList.length} />
+                <RepositoryStatsGrid
+                  stats={repositoryStats}
+                  archivesCount={archivesList.length}
+                  borgVersion={selectedRepository?.borg_version}
+                  archivesLoading={loadingArchives || repoInfoPending}
+                />
               ) : null}
             </Box>
             {/* Last Restore */}
@@ -523,14 +544,14 @@ const Archives: React.FC = () => {
         <ArchivesList
           archives={archivesList}
           repositoryName={selectedRepository?.name || ''}
-          loading={loadingArchives}
+          loading={loadingArchives || repoInfoPending}
           onViewArchive={handleViewArchive}
           onRestoreArchive={handleRestoreArchive}
           onMountArchive={openMountDialog}
           onDeleteArchive={(archiveName) => setShowDeleteConfirm(archiveName)}
           mountDisabled={mountArchiveMutation.isPending}
           canDelete={
-            getRepoCapabilities({ mode: selectedRepository?.mode }).canDelete &&
+            getRepoCapabilities({ mode: selectedRepository?.mode }).canDeleteArchive &&
             (selectedRepositoryId
               ? permissions.canDo(selectedRepositoryId, 'delete_archive')
               : false)
@@ -554,10 +575,7 @@ const Archives: React.FC = () => {
               getBorgVersion(selectedRepository) === 2
                 ? (viewArchive?.id ?? archiveName)
                 : archiveName
-            window.open(
-              new BorgApiClient(selectedRepository).getDownloadUrl(archiveRef, filePath),
-              '_blank'
-            )
+            new BorgApiClient(selectedRepository).downloadFile(archiveRef, filePath)
           }
         }}
       />
@@ -590,6 +608,8 @@ const Archives: React.FC = () => {
           repositoryId={lockError.repositoryId}
           repositoryName={lockError.repositoryName}
           borgVersion={lockError.borgVersion}
+          canBreakLock={canBreakLock({ repository_id: lockError.repositoryId })}
+          lockBreakingEnabled={lockBreakingEnabled}
           onLockBroken={() => {
             // Invalidate queries to retry
             queryClient.invalidateQueries({
@@ -605,8 +625,8 @@ const Archives: React.FC = () => {
         <RestoreWizard
           open={showRestoreWizard}
           onClose={() => setShowRestoreWizard(false)}
-          archiveName={restoreArchive.name}
-          repositoryId={selectedRepository.id}
+          archive={restoreArchive}
+          repository={selectedRepository}
           repositoryType={selectedRepository.repository_type || 'local'}
           onRestore={handleRestoreFromWizard}
         />

@@ -1,10 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { AxiosResponse } from 'axios'
 import { renderWithProviders } from '../../test/test-utils'
 import FileExplorerDialog from '../FileExplorerDialog'
 import api from '../../services/api'
-import { sshKeysAPI } from '../../services/api'
+import {
+  managedAgentsAPI,
+  rcloneAPI,
+  sshKeysAPI,
+  type AgentFilesystemBrowseResponse,
+} from '../../services/api'
 
 // Mock the API
 vi.mock('../../services/api', () => ({
@@ -14,6 +20,12 @@ vi.mock('../../services/api', () => ({
   },
   sshKeysAPI: {
     getSSHConnections: vi.fn(),
+  },
+  managedAgentsAPI: {
+    browseFilesystem: vi.fn(),
+  },
+  rcloneAPI: {
+    browseRemote: vi.fn(),
   },
 }))
 
@@ -79,9 +91,50 @@ describe('FileExplorerDialog', () => {
     config: {} as any,
   }
 
+  const mockRcloneBrowseResponse = {
+    data: {
+      path: 'borg-ui',
+      entries: [
+        {
+          name: 'archives',
+          path: 'borg-ui/archives',
+          is_dir: true,
+        },
+        {
+          name: 'manifest.json',
+          path: 'borg-ui/manifest.json',
+          is_dir: false,
+        },
+      ],
+    },
+    status: 200,
+    statusText: 'OK',
+    headers: {},
+    config: {} as AxiosResponse['config'],
+  } as AxiosResponse
+
+  const makeAgentBrowseResponse = (
+    data: AgentFilesystemBrowseResponse
+  ): AxiosResponse<AgentFilesystemBrowseResponse> =>
+    ({
+      data,
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      config: {} as AxiosResponse<AgentFilesystemBrowseResponse>['config'],
+    }) as AxiosResponse<AgentFilesystemBrowseResponse>
+
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(api.get).mockResolvedValue(mockDirectoryResponse)
+    vi.mocked(managedAgentsAPI.browseFilesystem).mockResolvedValue(
+      makeAgentBrowseResponse({
+        current_path: '/home/user',
+        parent_path: '/home',
+        items: [],
+      })
+    )
+    vi.mocked(rcloneAPI.browseRemote).mockResolvedValue(mockRcloneBrowseResponse)
     vi.mocked(sshKeysAPI.getSSHConnections).mockResolvedValue(mockSSHConnectionsResponse)
   })
 
@@ -116,6 +169,62 @@ describe('FileExplorerDialog', () => {
 
       await waitFor(() => {
         expect(screen.getByText('Select Backup Location')).toBeInTheDocument()
+      })
+    })
+
+    it('shows the agent name in the managed-agent connection chip', async () => {
+      renderWithProviders(
+        <FileExplorerDialog
+          open={true}
+          onClose={mockOnClose}
+          onSelect={mockOnSelect}
+          connectionType="agent"
+          agentId={42}
+          agentName="Build Runner"
+        />
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText('Build Runner')).toBeInTheDocument()
+      })
+      expect(screen.queryByText('Agent #42')).not.toBeInTheDocument()
+    })
+
+    it('falls back to the localized agent label when the agent name is blank', async () => {
+      renderWithProviders(
+        <FileExplorerDialog
+          open={true}
+          onClose={mockOnClose}
+          onSelect={mockOnSelect}
+          connectionType="agent"
+          agentId={42}
+          agentName="   "
+        />
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText('Agent #42')).toBeInTheDocument()
+      })
+    })
+
+    it('starts managed-agent browsing from the agent default path when root is selected', async () => {
+      renderWithProviders(
+        <FileExplorerDialog
+          open={true}
+          onClose={mockOnClose}
+          onSelect={mockOnSelect}
+          connectionType="agent"
+          agentId={42}
+          agentDefaultPath="/home/karanhudia"
+        />
+      )
+
+      await waitFor(() => {
+        expect(managedAgentsAPI.browseFilesystem).toHaveBeenCalledWith(
+          42,
+          '/home/karanhudia',
+          false
+        )
       })
     })
 
@@ -237,6 +346,36 @@ describe('FileExplorerDialog', () => {
       })
     })
 
+    it('shows localized agent browse timeout errors', async () => {
+      vi.mocked(managedAgentsAPI.browseFilesystem).mockRejectedValue({
+        response: {
+          status: 504,
+          data: {
+            detail: {
+              key: 'backend.errors.agents.filesystemBrowseTimeout',
+            },
+          },
+        },
+      })
+
+      renderWithProviders(
+        <FileExplorerDialog
+          open={true}
+          onClose={mockOnClose}
+          onSelect={mockOnSelect}
+          connectionType="agent"
+          agentId={42}
+          initialPath="/home/user"
+        />
+      )
+
+      await waitFor(() => {
+        expect(
+          screen.getByText('Agent filesystem browsing timed out. Try again in a few seconds.')
+        ).toBeInTheDocument()
+      })
+    })
+
     it('shows empty state when directory has no items', async () => {
       vi.mocked(api.get).mockResolvedValue(mockEmptyDirectoryResponse)
 
@@ -248,6 +387,30 @@ describe('FileExplorerDialog', () => {
         expect(screen.getByText('No items found')).toBeInTheDocument()
         expect(screen.getByText('Empty directory')).toBeInTheDocument()
       })
+    })
+
+    it('loads rclone remote folders through the shared browser UI', async () => {
+      renderWithProviders(
+        <FileExplorerDialog
+          open={true}
+          onClose={mockOnClose}
+          onSelect={mockOnSelect}
+          title="Browse rclone remote"
+          connectionType="rclone"
+          rcloneRemoteId={10}
+          initialPath="borg-ui"
+        />
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText('archives')).toBeInTheDocument()
+      })
+
+      expect(rcloneAPI.browseRemote).toHaveBeenCalledWith(10, 'borg-ui')
+      expect(api.get).not.toHaveBeenCalledWith('/filesystem/browse', expect.anything())
+      expect(screen.getByPlaceholderText('Search...')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Use current/i })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /New Folder/i })).not.toBeInTheDocument()
     })
   })
 
@@ -307,6 +470,71 @@ describe('FileExplorerDialog', () => {
           path: '/home',
         }),
       })
+    })
+
+    it('reuses cached agent directory results when returning through breadcrumbs', async () => {
+      const user = userEvent.setup()
+
+      vi.mocked(managedAgentsAPI.browseFilesystem)
+        .mockResolvedValueOnce(
+          makeAgentBrowseResponse({
+            current_path: '/home/user',
+            parent_path: '/home',
+            items: [
+              {
+                name: 'Documents',
+                path: '/home/user/Documents',
+                type: 'directory',
+                size: 0,
+                modified_at: 1_764_500_000,
+                hidden: false,
+              },
+            ],
+          })
+        )
+        .mockResolvedValueOnce(
+          makeAgentBrowseResponse({
+            current_path: '/home/user/Documents',
+            parent_path: '/home/user',
+            items: [],
+          })
+        )
+
+      renderWithProviders(
+        <FileExplorerDialog
+          open={true}
+          onClose={mockOnClose}
+          onSelect={mockOnSelect}
+          connectionType="agent"
+          agentId={42}
+          initialPath="/home/user"
+        />
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText('Documents')).toBeInTheDocument()
+      })
+
+      await user.click(screen.getByText('Documents'))
+
+      await waitFor(() => {
+        expect(screen.getByText('No items found')).toBeInTheDocument()
+      })
+
+      await user.click(screen.getByText('user'))
+
+      await waitFor(() => {
+        expect(screen.getByText('Documents')).toBeInTheDocument()
+      })
+
+      expect(managedAgentsAPI.browseFilesystem).toHaveBeenCalledTimes(2)
+      expect(managedAgentsAPI.browseFilesystem).toHaveBeenNthCalledWith(1, 42, '/home/user', false)
+      expect(managedAgentsAPI.browseFilesystem).toHaveBeenNthCalledWith(
+        2,
+        42,
+        '/home/user/Documents',
+        false
+      )
     })
   })
 
@@ -685,6 +913,17 @@ describe('FileExplorerDialog', () => {
           connection_type: 'local',
         })
       )
+      await waitFor(() => {
+        expect(api.get).toHaveBeenCalledWith(
+          '/filesystem/browse',
+          expect.objectContaining({
+            params: expect.objectContaining({
+              path: '/home/user/NewFolder',
+              connection_type: 'local',
+            }),
+          })
+        )
+      })
     })
 
     it('shows error when folder creation fails', async () => {

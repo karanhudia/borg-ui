@@ -1,0 +1,10 @@
+[
+  {
+    "id": "PYSEC-2026-89",
+    "package": "markdown",
+    "version": "3.10.2",
+    "reason": "No fixed version is published in OSV or PyPI as of 2026-05-21.",
+    "reviewed_at": "2026-05-21",
+    "source": "https://osv.dev/vulnerability/PYSEC-2026-89"
+  }
+]

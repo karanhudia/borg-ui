@@ -4,11 +4,15 @@ Integration tests for archives API with real borg operations
 These tests use actual borg repositories and archives to verify
 end-to-end functionality of the archives API.
 """
+
 import pytest
 import json
 from fastapi.testclient import TestClient
 
-from tests.integration.test_helpers import parse_archives_payload, wait_for_job_terminal_status
+from tests.integration.test_helpers import (
+    parse_archives_payload,
+    wait_for_job_terminal_status,
+)
 
 
 @pytest.mark.integration
@@ -17,17 +21,13 @@ class TestArchivesListIntegration:
     """Integration tests for listing archives"""
 
     def test_list_archives_from_real_repository(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo_with_archives
+        self, test_client: TestClient, admin_headers, db_borg_repo_with_archives
     ):
         """Test listing archives from a real borg repository"""
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
 
         response = test_client.get(
-            f"/api/archives/list?repository={repo.path}",
-            headers=admin_headers
+            f"/api/archives/list?repository={repo.path}", headers=admin_headers
         )
 
         assert response.status_code == 200
@@ -51,17 +51,13 @@ class TestArchivesListIntegration:
             assert "id" in archive
 
     def test_list_archives_empty_repository(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo
+        self, test_client: TestClient, admin_headers, db_borg_repo
     ):
         """Test listing archives from a repository with no archives"""
         repo, repo_path, test_data_path = db_borg_repo
 
         response = test_client.get(
-            f"/api/archives/list?repository={repo.path}",
-            headers=admin_headers
+            f"/api/archives/list?repository={repo.path}", headers=admin_headers
         )
 
         assert response.status_code == 200
@@ -101,17 +97,14 @@ class TestArchiveInfoIntegration:
     """Integration tests for getting archive info"""
 
     def test_get_archive_info_real_archive(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo_with_archives
+        self, test_client: TestClient, admin_headers, db_borg_repo_with_archives
     ):
         """Test getting info from a real archive"""
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
 
         response = test_client.get(
             f"/api/archives/{archive_names[0]}/info?repository={repo.path}",
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 200
@@ -129,17 +122,14 @@ class TestArchiveInfoIntegration:
         assert "nfiles" in stats or "num_files" in stats
 
     def test_get_archive_info_with_files(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo_with_archives
+        self, test_client: TestClient, admin_headers, db_borg_repo_with_archives
     ):
         """Test getting archive info with file listing"""
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
 
         response = test_client.get(
             f"/api/archives/{archive_names[0]}/info?repository={repo.path}&include_files=true",
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 200
@@ -165,17 +155,14 @@ class TestArchiveInfoIntegration:
         assert any("file2.txt" in path for path in file_paths)
 
     def test_get_archive_info_file_limit(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo_with_archives
+        self, test_client: TestClient, admin_headers, db_borg_repo_with_archives
     ):
         """Test that file_limit parameter works"""
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
 
         response = test_client.get(
             f"/api/archives/{archive_names[0]}/info?repository={repo.path}&include_files=true&file_limit=2",
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 200
@@ -187,17 +174,14 @@ class TestArchiveInfoIntegration:
         assert len(info["files"]) <= 2
 
     def test_get_archive_info_nonexistent_archive(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo
+        self, test_client: TestClient, admin_headers, db_borg_repo
     ):
         """Test getting info for non-existent archive returns 500"""
         repo, repo_path, test_data_path = db_borg_repo
 
         response = test_client.get(
             f"/api/archives/nonexistent-archive/info?repository={repo.path}",
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         # Borg returns error when archive doesn't exist
@@ -231,17 +215,14 @@ class TestArchiveContentsIntegration:
     """Integration tests for browsing archive contents"""
 
     def test_get_archive_contents_root(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo_with_archives
+        self, test_client: TestClient, admin_headers, db_borg_repo_with_archives
     ):
         """Test getting contents from archive root"""
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
 
         response = test_client.get(
             f"/api/archives/{archive_names[0]}/contents?repository={repo.path}",
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 200
@@ -254,10 +235,7 @@ class TestArchiveContentsIntegration:
         assert len(contents) > 0
 
     def test_get_archive_contents_with_path_filter(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo_with_archives
+        self, test_client: TestClient, admin_headers, db_borg_repo_with_archives
     ):
         """Test filtering archive contents by path"""
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
@@ -265,7 +243,7 @@ class TestArchiveContentsIntegration:
         # Get contents filtered by subdir path
         response = test_client.get(
             f"/api/archives/{archive_names[0]}/contents?repository={repo.path}&path=subdir",
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 200
@@ -314,7 +292,7 @@ class TestDeleteArchiveIntegration:
         # Delete the first archive
         response = test_client.delete(
             f"/api/archives/{archive_names[0]}?repository={repo.path}",
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 200
@@ -342,22 +320,20 @@ class TestDeleteArchiveIntegration:
             headers=admin_headers,
         )
         assert list_response.status_code == 200
-        archive_names_after = [archive["name"] for archive in parse_archives_payload(list_response.json())]
+        archive_names_after = [
+            archive["name"] for archive in parse_archives_payload(list_response.json())
+        ]
         assert archive_names[0] not in archive_names_after
         assert archive_names[1] in archive_names_after
 
     def test_delete_nonexistent_archive(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo
+        self, test_client: TestClient, admin_headers, db_borg_repo
     ):
         """Test deleting non-existent archive"""
         repo, repo_path, test_data_path = db_borg_repo
 
         response = test_client.delete(
-            f"/api/archives/nonexistent?repository={repo.path}",
-            headers=admin_headers
+            f"/api/archives/nonexistent?repository={repo.path}", headers=admin_headers
         )
 
         assert response.status_code == 200
@@ -369,17 +345,13 @@ class TestEncryptedArchivesIntegration:
     """Integration tests with encrypted repositories"""
 
     def test_list_archives_encrypted_repo(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_encrypted_borg_repo
+        self, test_client: TestClient, admin_headers, db_encrypted_borg_repo
     ):
         """Test listing archives from encrypted repository"""
         repo, repo_path, test_data_path, passphrase = db_encrypted_borg_repo
 
         response = test_client.get(
-            f"/api/archives/list?repository={repo.path}",
-            headers=admin_headers
+            f"/api/archives/list?repository={repo.path}", headers=admin_headers
         )
 
         assert response.status_code == 200
@@ -392,17 +364,14 @@ class TestEncryptedArchivesIntegration:
         assert archives[0]["name"] == "encrypted-archive"
 
     def test_get_encrypted_archive_info(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_encrypted_borg_repo
+        self, test_client: TestClient, admin_headers, db_encrypted_borg_repo
     ):
         """Test getting info from encrypted archive"""
         repo, repo_path, test_data_path, passphrase = db_encrypted_borg_repo
 
         response = test_client.get(
             f"/api/archives/encrypted-archive/info?repository={repo.path}",
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 200
@@ -417,17 +386,14 @@ class TestEncryptedArchivesIntegration:
         assert encryption.get("mode") in ["repokey", "keyfile", "repokey-blake2"]
 
     def test_delete_encrypted_archive(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_encrypted_borg_repo
+        self, test_client: TestClient, admin_headers, db_encrypted_borg_repo
     ):
         """Test deleting archive from encrypted repository through background job completion."""
         repo, repo_path, test_data_path, passphrase = db_encrypted_borg_repo
 
         response = test_client.delete(
             f"/api/archives/encrypted-archive?repository={repo.path}",
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 200
@@ -454,7 +420,9 @@ class TestEncryptedArchivesIntegration:
             headers=admin_headers,
         )
         assert list_response.status_code == 200
-        archive_names_after = [archive["name"] for archive in parse_archives_payload(list_response.json())]
+        archive_names_after = [
+            archive["name"] for archive in parse_archives_payload(list_response.json())
+        ]
         assert "encrypted-archive" not in archive_names_after
 
 
@@ -468,7 +436,7 @@ class TestDownloadFileIntegration:
         test_client: TestClient,
         admin_headers,
         db_borg_repo_with_archives,
-        test_db
+        test_db,
     ):
         """Test downloading a real file from an archive"""
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
@@ -477,7 +445,7 @@ class TestDownloadFileIntegration:
 
         response = test_client.get(
             f"/api/archives/download?repository={repo.path}&archive={archive_names[0]}&file_path={file_path}",
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 200, response.text
@@ -516,17 +484,14 @@ class TestArchiveStatistics:
     """Integration tests for archive statistics and metadata"""
 
     def test_archive_compression_statistics(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo_with_archives
+        self, test_client: TestClient, admin_headers, db_borg_repo_with_archives
     ):
         """Verify compression statistics are accurate"""
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
 
         response = test_client.get(
             f"/api/archives/{archive_names[0]}/info?repository={repo.path}",
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 200
@@ -541,10 +506,7 @@ class TestArchiveStatistics:
             # (though not always due to compression overhead on small files)
 
     def test_archive_deduplication(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo_with_archives
+        self, test_client: TestClient, admin_headers, db_borg_repo_with_archives
     ):
         """Verify deduplication is working across archives"""
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
@@ -552,11 +514,11 @@ class TestArchiveStatistics:
         # Get info for both archives
         info1_response = test_client.get(
             f"/api/archives/{archive_names[0]}/info?repository={repo.path}",
-            headers=admin_headers
+            headers=admin_headers,
         )
         info2_response = test_client.get(
             f"/api/archives/{archive_names[1]}/info?repository={repo.path}",
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert info1_response.status_code == 200

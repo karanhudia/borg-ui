@@ -1,14 +1,28 @@
 import json
-import pytest
 from datetime import datetime, timezone
-from unittest.mock import Mock, patch, mock_open, MagicMock
+from unittest.mock import patch, mock_open, MagicMock
 from app.utils.datetime_utils import serialize_datetime
-from app.utils.process_utils import is_process_alive, break_repository_lock, cleanup_orphaned_jobs
-from app.database.models import Repository, BackupJob
+from app.utils.process_utils import (
+    is_process_alive,
+    break_repository_lock,
+    cleanup_orphaned_jobs,
+    cleanup_orphaned_mounts,
+)
+from app.database.models import (
+    BackupJob,
+    BackupPlan,
+    BackupPlanRun,
+    BackupPlanRunRepository,
+    CheckJob,
+    CompactJob,
+    PruneJob,
+    Repository,
+)
 
 # ==========================================
 # Datetime Utils Tests
 # ==========================================
+
 
 class TestDatetimeUtils:
     def test_serialize_none(self):
@@ -25,6 +39,7 @@ class TestDatetimeUtils:
         """Test aware datetime is converted to UTC"""
         # Let's use a manual offset for clarity +01:00
         from datetime import timedelta
+
         tz_plus_1 = timezone(timedelta(hours=1))
 
         dt = datetime(2025, 1, 1, 13, 0, 0, tzinfo=tz_plus_1)
@@ -32,9 +47,11 @@ class TestDatetimeUtils:
         # 13:00 +01:00 is 12:00 UTC
         assert serialized == "2025-01-01T12:00:00+00:00"
 
+
 # ==========================================
 # Process Utils Tests
 # ==========================================
+
 
 class TestProcessUtils:
     def test_is_process_alive_no_pid(self):
@@ -81,10 +98,7 @@ class TestProcessUtils:
     def test_break_repository_lock_local_success(self, mock_run):
         """Test breaking lock for local repo"""
         repo = Repository(
-            id=1,
-            path="/tmp/repo",
-            repository_type="local",
-            passphrase="secret"
+            id=1, path="/tmp/repo", repository_type="local", passphrase="secret"
         )
 
         mock_run.return_value.returncode = 0
@@ -106,7 +120,7 @@ class TestProcessUtils:
             id=1,
             path="ssh://user@host/repo",
             connection_id=1,  # SSH repo has connection_id
-            remote_path="/usr/bin/borg"
+            remote_path="/usr/bin/borg",
         )
 
         mock_run.return_value.returncode = 0
@@ -132,33 +146,458 @@ class TestProcessUtils:
         mock_backup_job = MagicMock(spec=BackupJob)
         mock_backup_job.id = 1
         mock_backup_job.repository = "repo1"
+        mock_backup_job.maintenance_status = "running_prune"
+
+        mock_prune_job = MagicMock(spec=PruneJob)
+        mock_prune_job.id = 2
+        mock_prune_job.repository_id = 10
+        mock_prune_job.repository_path = "repo1"
+
+        mock_compact_job = MagicMock(spec=CompactJob)
+        mock_compact_job.id = 3
+        mock_compact_job.repository_id = 11
+        mock_compact_job.repository_path = "repo2"
+        mock_compact_job.process_pid = 123
+        mock_compact_job.process_start_time = 456
+
+        mock_compact_backup_job = MagicMock(spec=BackupJob)
+        mock_compact_backup_job.id = 4
+        mock_compact_backup_job.repository = "repo2"
+        mock_compact_backup_job.maintenance_status = "running_compact"
 
         # Setup query chain
-        # db.query(Model).filter(...).all()
-        # We need to handle multiple queries for different job types
-
-        # Mock the query method to return a mock query object
-        mock_query = MagicMock()
-        mock_db.query.return_value = mock_query
-        mock_query.filter.return_value = mock_query
-
-        # Configure .all() to return our jobs ONLY for BackupJob query
-        # This is simplified; in a real scenario we'd check the model passed to query()
-        # But for this test, returning [job] for the first call (backup) and [] for others works
-        mock_query.all.side_effect = [
-            [mock_backup_job], # BackupJob
-            [], # RestoreJob
-            [], # CheckJob
-            [], # CompactJob
+        query_results = [
+            [mock_backup_job],  # stale backup maintenance jobs
+            [mock_backup_job],  # running backup jobs
+            [],  # running restore jobs
+            [],  # running check jobs
+            [],  # running restore check jobs
+            [mock_prune_job],  # running prune jobs
+            [mock_compact_job],  # running compact jobs
+            [],  # active backup plan runs
+            [mock_backup_job],  # backup jobs stuck in running_prune
+            [],  # repository lookup for orphaned compact job
+            [mock_compact_backup_job],  # backup jobs stuck in running_compact
         ]
 
+        def build_query(result):
+            mock_query = MagicMock()
+            mock_query.filter.return_value = mock_query
+            mock_query.all.return_value = result
+            mock_query.first.return_value = None
+            return mock_query
+
+        mock_db.query.side_effect = [build_query(result) for result in query_results]
+
         # Execute
-        cleanup_orphaned_jobs(mock_db)
+        with patch("app.utils.process_utils.is_process_alive", return_value=False):
+            cleanup_orphaned_jobs(mock_db)
 
         # Verify backup job was marked failed
         assert mock_backup_job.status == "failed"
-        assert json.loads(mock_backup_job.error_message)["key"] == "backend.errors.service.containerRestartedDuringBackup"
+        assert (
+            json.loads(mock_backup_job.error_message)["key"]
+            == "backend.errors.service.containerRestartedDuringBackup"
+        )
         assert mock_backup_job.completed_at is not None
+        assert mock_backup_job.maintenance_status == "prune_failed"
+
+        assert mock_prune_job.status == "failed"
+        assert (
+            json.loads(mock_prune_job.error_message)["key"]
+            == "backend.errors.service.containerRestartedDuringOperation"
+        )
+        assert mock_prune_job.completed_at is not None
+
+        assert mock_compact_job.status == "failed"
+        assert (
+            json.loads(mock_compact_job.error_message.split("\n")[0])["key"]
+            == "backend.errors.service.containerRestartedDuringOperation"
+        )
+        assert mock_compact_job.completed_at is not None
+        assert mock_compact_backup_job.maintenance_status == "compact_failed"
 
         # Verify commit was called
         mock_db.commit.assert_called_once()
+
+    def test_cleanup_orphaned_jobs_normalizes_stale_backup_maintenance_without_child_job(
+        self,
+    ):
+        """Test stale backup maintenance state is repaired even without a running child job"""
+        mock_db = MagicMock()
+
+        stale_backup_job = MagicMock(spec=BackupJob)
+        stale_backup_job.id = 10
+        stale_backup_job.repository = "repo-stale"
+        stale_backup_job.status = "running"
+        stale_backup_job.maintenance_status = "running_prune"
+        stale_backup_job.completed_at = None
+        stale_backup_job.error_message = None
+
+        query_results = [
+            [stale_backup_job],  # stale backup maintenance jobs
+            [],  # running backup jobs
+            [],  # running restore jobs
+            [],  # running check jobs
+            [],  # running restore check jobs
+            [],  # running prune jobs
+            [],  # running compact jobs
+            [],  # active backup plan runs
+        ]
+
+        def build_query(result):
+            mock_query = MagicMock()
+            mock_query.filter.return_value = mock_query
+            mock_query.all.return_value = result
+            mock_query.first.return_value = None
+            return mock_query
+
+        mock_db.query.side_effect = [build_query(result) for result in query_results]
+
+        cleanup_orphaned_jobs(mock_db)
+
+        assert stale_backup_job.status == "failed"
+        assert stale_backup_job.maintenance_status == "prune_failed"
+        assert stale_backup_job.completed_at is not None
+        assert (
+            json.loads(stale_backup_job.error_message)["key"]
+            == "backend.errors.service.containerRestartedDuringOperation"
+        )
+        mock_db.commit.assert_called_once()
+
+    def test_cleanup_orphaned_jobs_normalizes_completed_backup_running_check_without_child_job(
+        self, db_session
+    ):
+        repo = Repository(
+            name="Check Repo",
+            path="/repos/check",
+            encryption="none",
+            repository_type="local",
+        )
+        db_session.add(repo)
+        db_session.flush()
+
+        backup_job = BackupJob(
+            repository=repo.path,
+            repository_id=repo.id,
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            maintenance_status="running_check",
+        )
+        db_session.add(backup_job)
+        db_session.commit()
+
+        cleanup_orphaned_jobs(db_session)
+
+        db_session.refresh(backup_job)
+        assert backup_job.status == "completed"
+        assert backup_job.maintenance_status == "check_failed"
+
+    @patch("app.utils.process_utils.is_process_alive", return_value=True)
+    def test_cleanup_orphaned_jobs_preserves_running_check_with_live_child_process(
+        self, mock_is_process_alive, db_session
+    ):
+        repo = Repository(
+            name="Live Check Repo",
+            path="/repos/live-check",
+            encryption="none",
+            repository_type="local",
+        )
+        db_session.add(repo)
+        db_session.flush()
+
+        backup_job = BackupJob(
+            repository=repo.path,
+            repository_id=repo.id,
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            maintenance_status="running_check",
+        )
+        check_job = CheckJob(
+            repository_id=repo.id,
+            repository_path=repo.path,
+            status="running",
+            process_pid=1234,
+            process_start_time=5678,
+        )
+        db_session.add_all([backup_job, check_job])
+        db_session.commit()
+
+        cleanup_orphaned_jobs(db_session)
+
+        db_session.refresh(backup_job)
+        db_session.refresh(check_job)
+        assert backup_job.status == "completed"
+        assert backup_job.maintenance_status == "running_check"
+        assert check_job.status == "running"
+        assert check_job.completed_at is None
+        mock_is_process_alive.assert_called_once_with(1234, 5678)
+
+    @patch("app.utils.process_utils.break_repository_lock", return_value=True)
+    @patch("app.utils.process_utils.is_process_alive", return_value=False)
+    def test_cleanup_orphaned_jobs_marks_running_check_parent_when_child_process_dead(
+        self, mock_is_process_alive, mock_break_repository_lock, db_session
+    ):
+        repo = Repository(
+            name="Dead Check Repo",
+            path="/repos/dead-check",
+            encryption="none",
+            repository_type="local",
+        )
+        db_session.add(repo)
+        db_session.flush()
+
+        backup_job = BackupJob(
+            repository=repo.path,
+            repository_id=repo.id,
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            maintenance_status="running_check",
+        )
+        check_job = CheckJob(
+            repository_id=repo.id,
+            repository_path=repo.path,
+            status="running",
+            process_pid=4321,
+            process_start_time=8765,
+        )
+        db_session.add_all([backup_job, check_job])
+        db_session.commit()
+
+        cleanup_orphaned_jobs(db_session)
+
+        db_session.refresh(backup_job)
+        db_session.refresh(check_job)
+        assert backup_job.status == "completed"
+        assert backup_job.maintenance_status == "check_failed"
+        assert check_job.status == "failed"
+        assert check_job.completed_at is not None
+        mock_is_process_alive.assert_called_once_with(4321, 8765)
+        mock_break_repository_lock.assert_called_once_with(repo)
+
+    @patch("app.utils.process_utils.break_repository_lock", return_value=True)
+    @patch("app.utils.process_utils.is_process_alive", return_value=False)
+    def test_cleanup_orphaned_jobs_matches_running_check_parent_by_repository_path(
+        self, mock_is_process_alive, mock_break_repository_lock, db_session
+    ):
+        repo = Repository(
+            name="Legacy Check Repo",
+            path="/repos/legacy-check",
+            encryption="none",
+            repository_type="local",
+        )
+        db_session.add(repo)
+        db_session.flush()
+
+        backup_job = BackupJob(
+            repository=repo.path,
+            repository_id=None,
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            maintenance_status="running_check",
+        )
+        check_job = CheckJob(
+            repository_id=repo.id,
+            repository_path=repo.path,
+            status="running",
+            process_pid=2468,
+            process_start_time=1357,
+        )
+        db_session.add_all([backup_job, check_job])
+        db_session.commit()
+
+        cleanup_orphaned_jobs(db_session)
+
+        db_session.refresh(backup_job)
+        db_session.refresh(check_job)
+        assert backup_job.status == "completed"
+        assert backup_job.maintenance_status == "check_failed"
+        assert check_job.status == "failed"
+        mock_is_process_alive.assert_called_once_with(2468, 1357)
+        mock_break_repository_lock.assert_called_once_with(repo)
+
+    @patch("app.utils.process_utils.break_repository_lock", return_value=True)
+    @patch("app.utils.process_utils.is_process_alive", return_value=False)
+    def test_cleanup_orphaned_jobs_does_not_match_running_check_parent_by_path_when_repository_id_differs(
+        self, mock_is_process_alive, mock_break_repository_lock, db_session
+    ):
+        mock_is_process_alive.side_effect = lambda pid, _start_time: pid == 9753
+        repo = Repository(
+            name="Path Check Repo",
+            path="/repos/path-check",
+            encryption="none",
+            repository_type="local",
+        )
+        other_repo = Repository(
+            name="Other Path Check Repo",
+            path="/repos/other-path-check",
+            encryption="none",
+            repository_type="local",
+        )
+        db_session.add_all([repo, other_repo])
+        db_session.flush()
+
+        backup_job = BackupJob(
+            repository=repo.path,
+            repository_id=other_repo.id,
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            maintenance_status="running_check",
+        )
+        check_job = CheckJob(
+            repository_id=repo.id,
+            repository_path=repo.path,
+            status="running",
+            process_pid=3579,
+            process_start_time=2468,
+        )
+        live_check_job = CheckJob(
+            repository_id=other_repo.id,
+            repository_path=repo.path,
+            status="running",
+            process_pid=9753,
+            process_start_time=8642,
+        )
+        db_session.add_all([backup_job, check_job, live_check_job])
+        db_session.commit()
+
+        cleanup_orphaned_jobs(db_session)
+
+        db_session.refresh(backup_job)
+        db_session.refresh(check_job)
+        db_session.refresh(live_check_job)
+        assert backup_job.status == "completed"
+        assert backup_job.maintenance_status == "running_check"
+        assert check_job.status == "failed"
+        assert live_check_job.status == "running"
+        mock_is_process_alive.assert_any_call(3579, 2468)
+        mock_is_process_alive.assert_any_call(9753, 8642)
+        mock_break_repository_lock.assert_called_once_with(repo)
+
+    def test_cleanup_orphaned_jobs_finishes_interrupted_backup_plan_run(
+        self, db_session
+    ):
+        """Interrupted plan backups should not remain active after startup cleanup"""
+        repo = Repository(
+            name="Plan Repo",
+            path="/repos/plan",
+            encryption="none",
+            repository_type="local",
+        )
+        db_session.add(repo)
+        db_session.flush()
+
+        plan = BackupPlan(
+            name="Plan",
+            source_directories=json.dumps(["/src"]),
+            repositories=[],
+        )
+        db_session.add(plan)
+        db_session.flush()
+
+        run = BackupPlanRun(
+            backup_plan_id=plan.id,
+            trigger="manual",
+            status="running",
+            started_at=datetime.utcnow(),
+        )
+        db_session.add(run)
+        db_session.flush()
+
+        backup_job = BackupJob(
+            repository=repo.path,
+            repository_id=repo.id,
+            backup_plan_id=plan.id,
+            backup_plan_run_id=run.id,
+            status="running",
+            started_at=datetime.utcnow(),
+            progress=42,
+        )
+        db_session.add(backup_job)
+        db_session.flush()
+
+        child = BackupPlanRunRepository(
+            backup_plan_run_id=run.id,
+            repository_id=repo.id,
+            backup_job_id=backup_job.id,
+            status="running",
+            started_at=datetime.utcnow(),
+        )
+        db_session.add(child)
+        db_session.commit()
+
+        cleanup_orphaned_jobs(db_session)
+
+        db_session.refresh(backup_job)
+        db_session.refresh(child)
+        db_session.refresh(run)
+
+        assert backup_job.status == "failed"
+        assert child.status == "failed"
+        assert child.completed_at is not None
+        assert run.status == "failed"
+        assert run.completed_at is not None
+
+    def test_cleanup_orphaned_jobs_marks_pending_backup_job_failed(self, db_session):
+        """Pending backup jobs are in-memory work and cannot resume after restart"""
+        repo = Repository(
+            name="Manual Repo",
+            path="/repos/manual",
+            encryption="none",
+            repository_type="local",
+        )
+        db_session.add(repo)
+        db_session.flush()
+
+        backup_job = BackupJob(
+            repository=repo.path,
+            repository_id=repo.id,
+            status="pending",
+            progress=12,
+        )
+        db_session.add(backup_job)
+        db_session.commit()
+
+        cleanup_orphaned_jobs(db_session)
+
+        db_session.refresh(backup_job)
+
+        assert backup_job.status == "failed"
+        assert backup_job.completed_at is not None
+        assert (
+            json.loads(backup_job.error_message)["key"]
+            == "backend.errors.service.containerRestartedDuringBackup"
+        )
+
+    @patch("app.utils.process_utils.settings")
+    @patch("app.utils.process_utils.subprocess.run")
+    def test_cleanup_orphaned_mounts_handles_managed_mount_dir_names(
+        self, mock_run, mock_settings, tmp_path
+    ):
+        managed_mount_base = tmp_path / "mounts"
+        managed_mount_base.mkdir()
+        orphaned_dir = managed_mount_base / "manual-backup-2026-01-15T16_24_12"
+        orphaned_dir.mkdir()
+
+        mock_settings.data_dir = str(tmp_path)
+        mock_run.side_effect = [
+            MagicMock(
+                returncode=0,
+                stdout=f"borgfs on {orphaned_dir} type fuse.borgfs (rw,nosuid,nodev,relatime,user_id=0,group_id=0)",
+            ),
+            MagicMock(returncode=0, stderr=""),
+        ]
+
+        cleanup_orphaned_mounts()
+
+        assert not orphaned_dir.exists()
+        assert mock_run.call_args_list[1][0][0] == [
+            "fusermount",
+            "-uz",
+            str(orphaned_dir),
+        ]

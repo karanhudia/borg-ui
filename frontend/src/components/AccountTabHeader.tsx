@@ -1,54 +1,17 @@
-import { Box, Chip, Stack, Typography } from '@mui/material'
-import { formatDateShort } from '../utils/dateUtils'
+import { Box, Typography } from '@mui/material'
+import { useTranslation } from 'react-i18next'
 
-interface AccountTabHeaderProps {
-  username: string
-  displayName: string
-  subtitle: string
-  roleLabel: string
-  roleColor: 'default' | 'secondary' | 'info'
-  createdAt: string
-  deploymentLabel?: string | null
-}
+export default function AccountTabHeader() {
+  const { t } = useTranslation()
 
-export default function AccountTabHeader({
-  username,
-  displayName,
-  subtitle,
-  roleLabel,
-  roleColor,
-  createdAt,
-  deploymentLabel,
-}: AccountTabHeaderProps) {
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        flexDirection: { xs: 'column', sm: 'row' },
-        justifyContent: 'space-between',
-        alignItems: { xs: 'flex-start', sm: 'center' },
-        gap: 1.5,
-      }}
-    >
-      <Box>
-        <Typography variant="h6" fontWeight={600}>
-          {displayName}
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          {subtitle}
-        </Typography>
-        {deploymentLabel && (
-          <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 0.5 }}>
-            {deploymentLabel}
-          </Typography>
-        )}
-      </Box>
-      <Stack direction="row" spacing={1} alignItems="center" flexShrink={0}>
-        <Chip label={roleLabel} color={roleColor} size="small" />
-        <Typography variant="body2" color="text.disabled" sx={{ whiteSpace: 'nowrap' }}>
-          @{username} · since {formatDateShort(createdAt)}
-        </Typography>
-      </Stack>
+    <Box>
+      <Typography variant="h5" fontWeight={700} gutterBottom>
+        {t('settings.account.title')}
+      </Typography>
+      <Typography variant="body2" color="text.secondary">
+        {t('settings.account.description')}
+      </Typography>
     </Box>
   )
 }

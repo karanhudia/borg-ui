@@ -1,6 +1,7 @@
 """
 Create user_repository_permissions table for repository-scoped RBAC.
 """
+
 from sqlalchemy import text
 import structlog
 

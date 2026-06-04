@@ -1,5 +1,6 @@
 from sqlalchemy import text
 
+
 def upgrade(connection):
     """Add custom_flags column to repositories table
 
@@ -11,17 +12,20 @@ def upgrade(connection):
     result = connection.execute(text("PRAGMA table_info(repositories)"))
     columns = [row[1] for row in result]
 
-    if 'custom_flags' not in columns:
+    if "custom_flags" not in columns:
         # Add custom_flags column
-        connection.execute(text("""
+        connection.execute(
+            text("""
             ALTER TABLE repositories ADD COLUMN custom_flags TEXT
-        """))
+        """)
+        )
 
         print("✓ Migration 021: Added custom_flags column to repositories")
     else:
         print("⊘ Migration 021: custom_flags column already exists, skipping")
 
     connection.commit()
+
 
 def downgrade(connection):
     """Remove custom_flags column from repositories table"""
@@ -30,10 +34,11 @@ def downgrade(connection):
     result = connection.execute(text("PRAGMA table_info(repositories)"))
     columns = [row[1] for row in result]
 
-    if 'custom_flags' in columns:
+    if "custom_flags" in columns:
         # SQLite doesn't support DROP COLUMN directly, need to recreate table
         # Get current table schema to preserve all fields except custom_flags
-        connection.execute(text("""
+        connection.execute(
+            text("""
             CREATE TABLE repositories_new (
                 id INTEGER PRIMARY KEY,
                 name VARCHAR UNIQUE NOT NULL,
@@ -66,9 +71,11 @@ def downgrade(connection):
                 mode VARCHAR DEFAULT 'full',
                 FOREIGN KEY (ssh_key_id) REFERENCES ssh_keys (id)
             )
-        """))
+        """)
+        )
 
-        connection.execute(text("""
+        connection.execute(
+            text("""
             INSERT INTO repositories_new
             SELECT id, name, path, encryption, compression, passphrase,
                    source_directories, exclude_patterns, last_backup, last_check,
@@ -78,12 +85,15 @@ def downgrade(connection):
                    pre_backup_script, post_backup_script, hook_timeout,
                    continue_on_hook_failure, mode
             FROM repositories
-        """))
+        """)
+        )
 
         connection.execute(text("DROP TABLE repositories"))
         connection.execute(text("ALTER TABLE repositories_new RENAME TO repositories"))
 
-        print("✓ Migration 021 rolled back: Removed custom_flags column from repositories")
+        print(
+            "✓ Migration 021 rolled back: Removed custom_flags column from repositories"
+        )
     else:
         print("⊘ Migration 021 rollback: custom_flags column doesn't exist, skipping")
 

@@ -12,7 +12,7 @@ Use BorgRouter instead so the routing stays in one place.
 
 import structlog
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 
 logger = structlog.get_logger()
 
@@ -72,6 +72,7 @@ class BorgRouter:
         compression: str,
         exclude_patterns: List[str],
         custom_flags: List[str],
+        upload_ratelimit_kib: Optional[int] = None,
     ) -> List[str]:
         """Build the version-aware archive creation command."""
         if self.is_v2:
@@ -83,6 +84,7 @@ class BorgRouter:
                 compression=compression,
                 exclude_patterns=exclude_patterns,
                 custom_flags=custom_flags,
+                upload_ratelimit_kib=upload_ratelimit_kib,
             )
 
         cmd = [
@@ -95,17 +97,23 @@ class BorgRouter:
             "--compression",
             compression,
         ]
+        if upload_ratelimit_kib:
+            cmd.extend(["--upload-ratelimit", str(upload_ratelimit_kib)])
         for pattern in exclude_patterns:
             cmd.extend(["--exclude", pattern])
         cmd.extend(custom_flags)
         cmd.append(f"{repository_path}::{archive_name}")
         return cmd
 
-    def build_archive_info_command(self, repository_path: str, archive_name: str) -> List[str]:
+    def build_archive_info_command(
+        self, repository_path: str, archive_name: str
+    ) -> List[str]:
         if self.is_v2:
             from app.services.v2.backup_service import backup_v2_service
 
-            return backup_v2_service.build_archive_info_command(repository_path, archive_name)
+            return backup_v2_service.build_archive_info_command(
+                repository_path, archive_name
+            )
         return ["borg", "info", "--json", f"{repository_path}::{archive_name}"]
 
     def build_repo_list_command(self, repository_path: str) -> List[str]:
@@ -129,6 +137,7 @@ class BorgRouter:
         paths: List[str],
         remote_path: str = None,
         bypass_lock: bool = False,
+        strip_components: Optional[int] = None,
     ) -> List[str]:
         if self.is_v2:
             from app.services.v2.restore_service import restore_v2_service
@@ -139,19 +148,24 @@ class BorgRouter:
                 paths=paths,
                 remote_path=remote_path,
                 bypass_lock=bypass_lock,
+                strip_components=strip_components,
             )
 
-        cmd = ["borg", "extract", "--progress", "--log-json"]
+        cmd = ["borg", "extract", "--progress", "--log-json", "--umask", "0022"]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
         if bypass_lock:
             cmd.append("--bypass-lock")
+        if strip_components:
+            cmd.extend(["--strip-components", str(strip_components)])
         cmd.append(f"{repository_path}::{archive_name}")
         if paths:
             cmd.extend(paths)
         return cmd
 
-    def build_break_lock_command(self, repository_path: str, remote_path: str = None) -> List[str]:
+    def build_break_lock_command(
+        self, repository_path: str, remote_path: str = None
+    ) -> List[str]:
         """Build the version-aware break-lock command."""
         if self.is_v2:
             from app.core.borg2 import borg2
@@ -165,6 +179,53 @@ class BorgRouter:
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
         cmd.append(repository_path)
+        return cmd
+
+    def build_wipe_delete_command(self, *, dry_run: bool) -> List[str]:
+        """Build a repository-contents wipe delete command.
+
+        This intentionally selects all archives and never uses Borg repository
+        deletion commands.
+        """
+        if self.is_v2:
+            from app.core.borg2 import borg2
+
+            cmd = [borg2.borg_cmd, "-r", self.repo.path, "delete", "--list"]
+            if dry_run:
+                cmd.append("--dry-run")
+            cmd.extend(["-a", "sh:*"])
+            if self.repo.remote_path:
+                cmd.extend(["--remote-path", self.repo.remote_path])
+            return cmd
+
+        from app.core.borg import borg
+
+        cmd = [borg.borg_cmd, "delete", "--list"]
+        if dry_run:
+            cmd.append("--dry-run")
+        else:
+            cmd.append("--stats")
+        if self.repo.remote_path:
+            cmd.extend(["--remote-path", self.repo.remote_path])
+        cmd.extend(["--glob-archives", "*", self.repo.path])
+        return cmd
+
+    def build_wipe_compact_command(self) -> List[str]:
+        """Build the matching compact command for a contents wipe."""
+        if self.is_v2:
+            from app.core.borg2 import borg2
+
+            cmd = [borg2.borg_cmd, "-r", self.repo.path, "compact"]
+            if self.repo.remote_path:
+                cmd.extend(["--remote-path", self.repo.remote_path])
+            return cmd
+
+        from app.core.borg import borg
+
+        cmd = [borg.borg_cmd, "compact", "--progress", "--verbose"]
+        if self.repo.remote_path:
+            cmd.extend(["--remote-path", self.repo.remote_path])
+        cmd.append(self.repo.path)
         return cmd
 
     def build_mount_command(
@@ -190,7 +251,9 @@ class BorgRouter:
         cmd = ["borg", "mount"]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
-        cmd.append(f"{repository_path}::{archive_name}" if archive_name else repository_path)
+        cmd.append(
+            f"{repository_path}::{archive_name}" if archive_name else repository_path
+        )
         if mount_point:
             cmd.append(mount_point)
         cmd.extend(["-o", "allow_other", "-f"])
@@ -229,7 +292,33 @@ class BorgRouter:
             kwargs["env"] = env
         return await borg.break_lock(self.repo.path, **kwargs)
 
-    async def preview_restore(self, archive: str, paths: List[str], destination: str, env: dict = None) -> dict:
+    async def run_wipe_delete(self, *, dry_run: bool, env: dict = None) -> dict:
+        """Run the version-aware repository contents wipe delete command."""
+        cmd = self.build_wipe_delete_command(dry_run=dry_run)
+        if self.is_v2:
+            from app.core.borg2 import borg2
+
+            return await borg2._run(cmd, env=env)
+
+        from app.core.borg import borg
+
+        return await borg._execute_command(cmd, env=env)
+
+    async def run_wipe_compact(self, *, env: dict = None) -> dict:
+        """Run the version-aware compact command used after wipe delete."""
+        cmd = self.build_wipe_compact_command()
+        if self.is_v2:
+            from app.core.borg2 import borg2
+
+            return await borg2._run(cmd, env=env)
+
+        from app.core.borg import borg
+
+        return await borg._execute_command(cmd, env=env)
+
+    async def preview_restore(
+        self, archive: str, paths: List[str], destination: str, env: dict = None
+    ) -> dict:
         if self.is_v2:
             from app.services.v2.restore_service import restore_v2_service
 
@@ -253,24 +342,32 @@ class BorgRouter:
         }
         if env is not None:
             kwargs["env"] = env
-        return await borg.extract_archive(self.repo.path, archive, paths, destination, **kwargs)
+        return await borg.extract_archive(
+            self.repo.path, archive, paths, destination, **kwargs
+        )
 
     async def list_archive_contents(
         self,
         archive: str,
         path: str = "",
         max_lines: int = 1_000_000,
+        browse_depth: Optional[int] = None,
         env: dict = None,
     ) -> dict:
         if self.is_v2:
             from app.services.v2.restore_service import restore_v2_service
 
-            return await restore_v2_service.list_archive_contents(
-                repo=self.repo,
-                archive=archive,
-                path=path,
-                max_lines=max_lines,
-            )
+            kwargs = {
+                "repo": self.repo,
+                "archive": archive,
+                "path": path,
+                "max_lines": max_lines,
+            }
+            if browse_depth is not None:
+                kwargs["browse_depth"] = browse_depth
+            if env is not None:
+                kwargs["env"] = env
+            return await restore_v2_service.list_archive_contents(**kwargs)
 
         from app.core.borg import borg
 
@@ -292,6 +389,7 @@ class BorgRouter:
         v1: delegates to the existing update_repository_stats helper.
         """
         from app.api.repositories import update_repository_stats
+
         return await update_repository_stats(self.repo, db)
 
     async def calculate_total_size_bytes(
@@ -337,9 +435,11 @@ class BorgRouter:
         """
         if self.is_v2:
             from app.services.v2.check_service import check_v2_service
+
             await check_v2_service.execute_check(job_id, self.repo.id)
         else:
             from app.services.check_service import check_service
+
             await check_service.execute_check(job_id, self.repo.id)
 
     async def compact(self, job_id: int) -> None:
@@ -399,11 +499,15 @@ class BorgRouter:
         if self.is_v2:
             from app.services.v2.delete_archive_service import delete_archive_v2_service
 
-            await delete_archive_v2_service.execute_delete(job_id, self.repo.id, archive_name)
+            await delete_archive_v2_service.execute_delete(
+                job_id, self.repo.id, archive_name
+            )
         else:
             from app.services.delete_archive_service import delete_archive_service
 
-            await delete_archive_service.execute_delete(job_id, self.repo.id, archive_name)
+            await delete_archive_service.execute_delete(
+                job_id, self.repo.id, archive_name
+            )
 
     async def list_archives(self, env: dict = None) -> list:
         """Return the list of archives for this repository.
@@ -412,9 +516,25 @@ class BorgRouter:
         v2: calls borg2 list and parses the JSON archives array.
         v1: calls borg list and returns the archives list.
         """
+        import json
+
+        def _parse_archives_payload(payload) -> list:
+            if isinstance(payload, list):
+                return payload
+            if isinstance(payload, dict):
+                archives = payload.get("archives")
+                return archives if isinstance(archives, list) else []
+            if isinstance(payload, str):
+                try:
+                    parsed = json.loads(payload)
+                except Exception:
+                    return []
+                return _parse_archives_payload(parsed)
+            return []
+
         if self.is_v2:
-            import json
             from app.core.borg2 import borg2
+
             result = await borg2.list_archives(
                 self.repo.path,
                 passphrase=self.repo.passphrase,
@@ -424,13 +544,10 @@ class BorgRouter:
             )
             if not result["success"]:
                 return []
-            try:
-                data = json.loads(result.get("stdout", "{}"))
-                return data.get("archives", [])
-            except Exception:
-                return []
+            return _parse_archives_payload(result.get("stdout", "{}"))
         else:
             from app.core.borg import borg
+
             result = await borg.list_archives(
                 self.repo.path,
                 remote_path=self.repo.remote_path,
@@ -440,9 +557,11 @@ class BorgRouter:
             )
             if not result["success"]:
                 return []
-            return result.get("stdout") or []
+            return _parse_archives_payload(result.get("stdout", ""))
 
-    async def verify_repository(self, ssh_key_id: int = None, timeout: int = 60) -> dict:
+    async def verify_repository(
+        self, ssh_key_id: int = None, timeout: int = 60
+    ) -> dict:
         """Verify repository accessibility through the version-aware service layer."""
         if self.is_v2:
             from app.services.v2.repository_service import repository_v2_service
@@ -467,7 +586,9 @@ class BorgRouter:
             bypass_lock=getattr(self.repo, "bypass_lock", False),
         )
 
-    async def initialize_repository(self, ssh_key_id: int = None, init_timeout: int = 300) -> dict:
+    async def initialize_repository(
+        self, ssh_key_id: int = None, init_timeout: int = 300
+    ) -> dict:
         """Initialize repository through the version-aware service layer."""
         if self.is_v2:
             from app.services.v2.repository_service import repository_v2_service

@@ -13,11 +13,31 @@ Integration tests (test_api_archives_integration.py) handle:
 - File downloads
 - Encryption
 """
-from unittest.mock import AsyncMock, patch
+
+import asyncio
+import base64
+import os
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-from app.database.models import Repository
+from app.core.security import get_password_hash
+from app.database.models import AgentMachine, Repository
+
+
+def _create_agent(test_db, *capabilities: str) -> AgentMachine:
+    agent = AgentMachine(
+        name="Archive Download Agent",
+        agent_id="agt_archive_download",
+        token_hash=get_password_hash("borgui_agent_secret"),
+        token_prefix="borgui_agent_secret"[:20],
+        status="online",
+        capabilities=list(capabilities),
+    )
+    test_db.add(agent)
+    test_db.commit()
+    test_db.refresh(agent)
+    return agent
 
 
 @pytest.mark.unit
@@ -39,7 +59,9 @@ class TestArchivesAuthentication:
 
     def test_get_archive_contents_no_auth_returns_403(self, test_client: TestClient):
         """Verify unauthenticated archive contents requests are rejected"""
-        response = test_client.get("/api/archives/myarchive/contents?repository=/tmp/repo")
+        response = test_client.get(
+            "/api/archives/myarchive/contents?repository=/tmp/repo"
+        )
         assert response.status_code == 401
 
     def test_delete_archive_no_auth_returns_403(self, test_client: TestClient):
@@ -53,18 +75,18 @@ class TestArchivesResourceValidation:
     """Test resource existence validation"""
 
     def test_list_archives_nonexistent_repository_returns_404(
-        self,
-        test_client: TestClient,
-        admin_headers
+        self, test_client: TestClient, admin_headers
     ):
         """Should return 404 when repository doesn't exist in database"""
         response = test_client.get(
-            "/api/archives/list?repository=/nonexistent/path",
-            headers=admin_headers
+            "/api/archives/list?repository=/nonexistent/path", headers=admin_headers
         )
 
         assert response.status_code == 404
-        assert response.json()["detail"]["key"] == "backend.errors.restore.repositoryNotFound"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.restore.repositoryNotFound"
+        )
 
     def test_delete_archive_legacy_route_dispatches_v2_repo_via_router(
         self,
@@ -82,7 +104,9 @@ class TestArchivesResourceValidation:
         test_db.add(repo)
         test_db.commit()
 
-        with patch("app.api.archives.BorgRouter.delete_archive", new_callable=AsyncMock) as mock_delete:
+        with patch(
+            "app.api.archives.BorgRouter.delete_archive", new_callable=AsyncMock
+        ) as mock_delete:
             response = test_client.delete(
                 "/api/archives/archive-1",
                 params={"repository": repo.path},
@@ -91,6 +115,51 @@ class TestArchivesResourceValidation:
 
         assert response.status_code == 200
         mock_delete.assert_awaited_once()
+
+    def test_delete_archive_route_constructs_router_with_stable_repo_identity(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+    ):
+        repo = Repository(
+            name="Repo",
+            path="/tmp/repo",
+            encryption="none",
+            repository_type="local",
+            borg_version=2,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        fake_router = Mock(delete_archive=AsyncMock())
+        created = {}
+
+        def fake_create_task(coro):
+            created["coro"] = coro
+            return object()
+
+        with (
+            patch(
+                "app.api.archives.BorgRouter", return_value=fake_router
+            ) as mock_router,
+            patch("app.api.archives.asyncio.create_task", side_effect=fake_create_task),
+        ):
+            response = test_client.delete(
+                "/api/archives/archive-1",
+                params={"repository": repo.path},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        routed_repo = mock_router.call_args.args[0]
+        assert not isinstance(routed_repo, Repository)
+        assert routed_repo.id == repo.id
+        assert routed_repo.borg_version == repo.borg_version
+
+        asyncio.run(created["coro"])
+        fake_router.delete_archive.assert_awaited_once()
 
 
 @pytest.mark.unit
@@ -112,13 +181,22 @@ class TestArchivesSshEnvironment:
         test_db.commit()
 
         fake_key_path = "/tmp/test-ssh.key"
-        with patch("app.api.archives.resolve_repo_ssh_key_file", return_value=fake_key_path), \
-             patch("app.api.archives.os.path.exists", side_effect=lambda path: path == fake_key_path), \
-             patch("app.api.archives.os.unlink") as mock_unlink, \
-             patch(
-                 "app.api.archives.borg.list_archives",
-                 new=AsyncMock(return_value={"success": True, "stdout": {"archives": []}}),
-             ) as mock_list_archives:
+        with (
+            patch(
+                "app.api.archives.resolve_repo_ssh_key_file", return_value=fake_key_path
+            ),
+            patch(
+                "app.api.archives.os.path.exists",
+                side_effect=lambda path: path == fake_key_path,
+            ),
+            patch("app.api.archives.os.unlink") as mock_unlink,
+            patch(
+                "app.api.archives.borg.list_archives",
+                new=AsyncMock(
+                    return_value={"success": True, "stdout": {"archives": []}}
+                ),
+            ) as mock_list_archives,
+        ):
             response = test_client.get(
                 f"/api/archives/list?repository={repo.path}",
                 headers=admin_headers,
@@ -145,15 +223,22 @@ class TestArchivesSshEnvironment:
         test_db.add(repo)
         test_db.commit()
 
-        with patch("app.api.archives.resolve_repo_ssh_key_file", return_value=None), \
-             patch(
-                 "app.api.archives.borg.info_archive",
-                 new=AsyncMock(return_value={"success": True, "stdout": '{"archives":[{"name":"arch1"}]}'}),
-             ) as mock_info_archive, \
-             patch(
-                 "app.api.archives.borg.list_archive_contents",
-                 new=AsyncMock(return_value={"success": True, "stdout": ""}),
-             ) as mock_list_contents:
+        with (
+            patch("app.api.archives.resolve_repo_ssh_key_file", return_value=None),
+            patch(
+                "app.api.archives.borg.info_archive",
+                new=AsyncMock(
+                    return_value={
+                        "success": True,
+                        "stdout": '{"archives":[{"name":"arch1"}]}',
+                    }
+                ),
+            ) as mock_info_archive,
+            patch(
+                "app.api.archives.borg.list_archive_contents",
+                new=AsyncMock(return_value={"success": True, "stdout": ""}),
+            ) as mock_list_contents,
+        ):
             response = test_client.get(
                 f"/api/archives/arch1/info?repository={repo.path}&include_files=true",
                 headers=admin_headers,
@@ -166,46 +251,49 @@ class TestArchivesSshEnvironment:
         assert "BORG_RSH" in contents_kwargs["env"]
 
     def test_get_archive_info_nonexistent_repository_returns_404(
-        self,
-        test_client: TestClient,
-        admin_headers
+        self, test_client: TestClient, admin_headers
     ):
         """Should return 404 when repository doesn't exist in database"""
         response = test_client.get(
             "/api/archives/myarchive/info?repository=/nonexistent/path",
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 404
-        assert response.json()["detail"]["key"] == "backend.errors.restore.repositoryNotFound"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.restore.repositoryNotFound"
+        )
 
     def test_get_archive_contents_nonexistent_repository_returns_404(
-        self,
-        test_client: TestClient,
-        admin_headers
+        self, test_client: TestClient, admin_headers
     ):
         """Should return 404 when repository doesn't exist in database"""
         response = test_client.get(
             "/api/archives/myarchive/contents?repository=/nonexistent/path",
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 404
-        assert response.json()["detail"]["key"] == "backend.errors.restore.repositoryNotFound"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.restore.repositoryNotFound"
+        )
 
     def test_delete_archive_nonexistent_repository_returns_404(
-        self,
-        test_client: TestClient,
-        admin_headers
+        self, test_client: TestClient, admin_headers
     ):
         """Should return 404 when repository doesn't exist in database"""
         response = test_client.delete(
             "/api/archives/myarchive?repository=/nonexistent/path",
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 404
-        assert response.json()["detail"]["key"] == "backend.errors.restore.repositoryNotFound"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.restore.repositoryNotFound"
+        )
 
 
 @pytest.mark.unit
@@ -230,23 +318,22 @@ class TestDownloadFileEndpoint:
         assert response.status_code == 401
 
     def test_download_file_authorized_with_bearer_header(
-        self,
-        test_client: TestClient,
-        admin_headers
+        self, test_client: TestClient, admin_headers
     ):
         """Download endpoint should accept standard bearer auth without query token."""
         response = test_client.get(
             "/api/archives/download?repository=/nonexistent&archive=test-archive&file_path=/test.txt",
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 404
-        assert response.json()["detail"]["key"] == "backend.errors.archives.repositoryNotFound"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.archives.repositoryNotFound"
+        )
 
     def test_download_file_proxy_auth_without_token(
-        self,
-        test_client: TestClient,
-        monkeypatch
+        self, test_client: TestClient, monkeypatch
     ):
         """Proxy-auth mode should not require a JWT query token for downloads."""
         from app import config
@@ -255,26 +342,29 @@ class TestDownloadFileEndpoint:
 
         response = test_client.get(
             "/api/archives/download?repository=/nonexistent&archive=test-archive&file_path=/test.txt",
-            headers={"X-Forwarded-User": "proxyuser"}
+            headers={"X-Forwarded-User": "proxyuser"},
         )
 
         assert response.status_code == 404
-        assert response.json()["detail"]["key"] == "backend.errors.archives.repositoryNotFound"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.archives.repositoryNotFound"
+        )
 
     def test_download_file_repository_not_found(
-        self,
-        test_client: TestClient,
-        test_db,
-        admin_headers
+        self, test_client: TestClient, test_db, admin_headers
     ):
         """Test download from non-existent repository"""
         response = test_client.get(
             "/api/archives/download?repository=/nonexistent&archive=test-archive&file_path=/test.txt",
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 404
-        assert response.json()["detail"]["key"] == "backend.errors.archives.repositoryNotFound"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.archives.repositoryNotFound"
+        )
 
     def test_download_file_uses_repo_ssh_environment(
         self,
@@ -293,16 +383,30 @@ class TestDownloadFileEndpoint:
         test_db.commit()
 
         fake_key_path = "/tmp/test-ssh.key"
-        extracted_path = "/tmp/archive-download/extracted.txt"
-        with patch("app.api.archives.resolve_repo_ssh_key_file", return_value=fake_key_path), \
-             patch("app.api.archives.os.path.exists", side_effect=lambda path: path in {fake_key_path, extracted_path}), \
-             patch("app.api.archives.os.unlink") as mock_unlink, \
-             patch("app.api.archives.tempfile.mkdtemp", return_value="/tmp/archive-download"), \
-             patch("app.api.archives.FileResponse", side_effect=lambda **kwargs: {"path": kwargs["path"]}) as mock_file_response, \
-             patch(
-                 "app.api.archives.borg.extract_archive",
-                 new=AsyncMock(return_value={"success": True, "stdout": ""}),
-             ) as mock_extract:
+        temp_dir = "/tmp/archive-download"
+        extracted_path = os.path.realpath(os.path.join(temp_dir, "extracted.txt"))
+        with (
+            patch(
+                "app.api.archives.resolve_repo_ssh_key_file", return_value=fake_key_path
+            ),
+            patch(
+                "app.api.archives.os.path.exists",
+                side_effect=lambda path: path in {fake_key_path, extracted_path},
+            ),
+            patch("app.api.archives.os.unlink") as mock_unlink,
+            patch(
+                "app.api.archives.tempfile.mkdtemp",
+                return_value=temp_dir,
+            ),
+            patch(
+                "app.api.archives.FileResponse",
+                side_effect=lambda **kwargs: {"path": kwargs["path"]},
+            ) as mock_file_response,
+            patch(
+                "app.api.archives.borg.extract_archive",
+                new=AsyncMock(return_value={"success": True, "stdout": ""}),
+            ) as mock_extract,
+        ):
             response = test_client.get(
                 f"/api/archives/download?repository={repo.path}&archive=test-archive&file_path=/extracted.txt",
                 headers=admin_headers,
@@ -329,15 +433,27 @@ class TestDownloadFileEndpoint:
         test_db.add(repo)
         test_db.commit()
 
-        extracted_path = "/tmp/archive-download/extracted.txt"
-        with patch("app.api.archives.resolve_repo_ssh_key_file", return_value=None), \
-             patch("app.api.archives.os.path.exists", side_effect=lambda path: path == extracted_path), \
-             patch("app.api.archives.tempfile.mkdtemp", return_value="/tmp/archive-download"), \
-             patch("app.api.archives.FileResponse", side_effect=lambda **kwargs: {"path": kwargs["path"]}) as mock_file_response, \
-             patch(
-                 "app.api.archives.borg.extract_archive",
-                 new=AsyncMock(return_value={"success": True, "stdout": ""}),
-             ) as mock_extract:
+        temp_dir = "/tmp/archive-download"
+        extracted_path = os.path.realpath(os.path.join(temp_dir, "extracted.txt"))
+        with (
+            patch("app.api.archives.resolve_repo_ssh_key_file", return_value=None),
+            patch(
+                "app.api.archives.os.path.exists",
+                side_effect=lambda path: path == extracted_path,
+            ),
+            patch(
+                "app.api.archives.tempfile.mkdtemp",
+                return_value=temp_dir,
+            ),
+            patch(
+                "app.api.archives.FileResponse",
+                side_effect=lambda **kwargs: {"path": kwargs["path"]},
+            ) as mock_file_response,
+            patch(
+                "app.api.archives.borg.extract_archive",
+                new=AsyncMock(return_value={"success": True, "stdout": ""}),
+            ) as mock_extract,
+        ):
             response = test_client.get(
                 f"/api/archives/download?repository={repo.id}&archive=test-archive&file_path=/extracted.txt",
                 headers=admin_headers,
@@ -356,3 +472,146 @@ class TestDownloadFileEndpoint:
         assert kwargs["passphrase"] == repo.passphrase
         assert kwargs["bypass_lock"] == repo.bypass_lock
         mock_file_response.assert_called_once()
+
+    def test_download_file_for_agent_repository_queues_extract_job(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+        tmp_path,
+    ):
+        agent = _create_agent(test_db, "repository.extract_archive_file")
+        repo = Repository(
+            name="Agent Download Repo",
+            path="/agent/repositories/app",
+            encryption="none",
+            repository_type="local",
+            executor_type="agent",
+            execution_target="agent",
+            agent_machine_id=agent.id,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        archive_path = tmp_path / "extract"
+        content = b"hello from the managed agent\n"
+        queued_jobs = []
+
+        def fake_queue(db, repository, *, job_kind, operation=None, **_kwargs):
+            queued_jobs.append(
+                {
+                    "repository": repository,
+                    "job_kind": job_kind,
+                    "operation": operation,
+                }
+            )
+            return Mock(id=42)
+
+        with (
+            patch(
+                "app.api.archives.tempfile.mkdtemp",
+                return_value=str(archive_path),
+            ),
+            patch(
+                "app.api.archives.queue_agent_repository_operation_job",
+                side_effect=fake_queue,
+                create=True,
+            ),
+            patch(
+                "app.api.archives.dispatch_agent_job_best_effort",
+                new=AsyncMock(return_value=True),
+                create=True,
+            ) as dispatch_agent,
+            patch(
+                "app.api.archives.wait_for_agent_repository_operation_job",
+                new=AsyncMock(
+                    return_value={
+                        "success": True,
+                        "content_base64": base64.b64encode(content).decode("ascii"),
+                        "stderr": "",
+                    }
+                ),
+                create=True,
+            ) as wait_for_agent,
+            patch(
+                "app.api.archives.borg.extract_archive",
+                new=AsyncMock(return_value={"success": True, "stderr": ""}),
+            ) as local_extract,
+        ):
+            response = test_client.get(
+                f"/api/archives/download?repository={repo.id}&archive=test-archive&file_path=/extracted.txt",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        assert response.content == content
+        assert queued_jobs == [
+            {
+                "repository": repo,
+                "job_kind": "repository.extract_archive_file",
+                "operation": {
+                    "archive": "test-archive",
+                    "file_path": "/extracted.txt",
+                },
+            }
+        ]
+        dispatch_agent.assert_awaited_once()
+        wait_for_agent.assert_awaited_once_with(test_db, 42)
+        local_extract.assert_not_awaited()
+
+    def test_download_file_for_agent_repository_preserves_extract_failure(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+        tmp_path,
+    ):
+        agent = _create_agent(test_db, "repository.extract_archive_file")
+        repo = Repository(
+            name="Agent Missing Repo",
+            path="/agent/repositories/missing",
+            encryption="none",
+            repository_type="local",
+            executor_type="agent",
+            execution_target="agent",
+            agent_machine_id=agent.id,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        stderr = "Repository /agent/repositories/missing does not exist.\n"
+        with (
+            patch(
+                "app.api.archives.tempfile.mkdtemp",
+                return_value=str(tmp_path / "extract"),
+            ),
+            patch(
+                "app.api.archives.queue_agent_repository_operation_job",
+                return_value=Mock(id=43),
+            ),
+            patch(
+                "app.api.archives.dispatch_agent_job_best_effort",
+                new=AsyncMock(return_value=True),
+            ),
+            patch(
+                "app.api.archives.wait_for_agent_repository_operation_job",
+                new=AsyncMock(return_value={"success": False, "stderr": stderr}),
+            ),
+            patch(
+                "app.api.archives.borg.extract_archive",
+                new=AsyncMock(return_value={"success": True, "stderr": ""}),
+            ) as local_extract,
+        ):
+            response = test_client.get(
+                f"/api/archives/download?repository={repo.id}&archive=test-archive&file_path=/extracted.txt",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 500
+        assert response.json()["detail"] == {
+            "key": "backend.errors.archives.failedExtractFile",
+            "params": {"error": stderr},
+        }
+        local_extract.assert_not_awaited()

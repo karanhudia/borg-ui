@@ -150,6 +150,27 @@ describe('announcements utils', () => {
     ).toBeNull()
   })
 
+  it('does not show release highlights for later patch versions', () => {
+    const releaseHighlight: Announcement = {
+      id: 'release-2.0.3-whats-new',
+      type: 'release_highlight',
+      title: "What's new in 2.0.3",
+      message: 'Changes in 2.0.3.',
+      starts_at: '2026-04-01T00:00:00Z',
+      ends_at: '2026-07-01T00:00:00Z',
+      min_app_version: '2.0.3',
+      max_app_version: '2.0.3',
+    }
+
+    expect(
+      selectAnnouncement([releaseHighlight], {
+        appVersion: '2.0.4',
+        plan: 'community',
+        now: new Date(),
+      })
+    ).toBeNull()
+  })
+
   it('stores acknowledgements using stable localStorage keys', () => {
     acknowledgeAnnouncement(baseAnnouncement.id)
     expect(localStorage.getItem(getAnnouncementAckKey(baseAnnouncement.id))).toBe('true')

@@ -1,6 +1,6 @@
 {
   "name": "borg-web-ui-frontend",
-  "version": "2.0.3-beta.1",
+  "version": "2.2.1",
   "type": "module",
   "description": "React frontend for Borg Web UI",
   "license": "AGPL-3.0",
@@ -16,25 +16,30 @@
     "@types/node": "^25.6.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
-    "axios": "^1.15.0",
+    "axios": "^1.16.0",
     "clsx": "^2.0.0",
     "cron-parser": "^5.5.0",
     "date-fns": "^4.1.0",
     "i18next": "^26.0.4",
-    "lucide-react": "^0.577.0",
+    "lucide-react": "^1.8.0",
+    "qrcode": "^1.5.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-hook-form": "^7.72.1",
     "react-hot-toast": "^2.6.0",
-    "react-i18next": "^16.6.5",
-    "react-router-dom": "^7.14.0",
+    "react-i18next": "^17.0.4",
+    "react-icons": "^5.6.0",
+    "react-router-dom": "^7.16.0",
     "recharts": "^3.8.1",
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
+    "@storybook/addon-docs": "^10.4.0",
+    "@storybook/react-vite": "^10.4.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
+    "@types/qrcode": "^1.5.6",
     "@typescript-eslint/eslint-plugin": "^8.58.1",
     "@typescript-eslint/parser": "^8.48.0",
     "@vitejs/plugin-react": "^5.1.4",
@@ -50,8 +55,11 @@
     "husky": "^9.1.7",
     "jsdom": "^29.0.2",
     "lint-staged": "^16.4.0",
-    "postcss": "^8.5.9",
+    "playwright": "^1.60.0",
+    "pngjs": "^5.0.0",
+    "postcss": "^8.5.14",
     "prettier": "^3.8.2",
+    "storybook": "^10.4.0",
     "tailwindcss": "^3.4.18",
     "typescript": "^6.0.2",
     "vite": "^7.3.2",
@@ -59,8 +67,13 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build -o storybook-static",
+    "snapshots": "npm run visual:screenshots",
+    "visual:screenshots": "npm run build-storybook && node scripts/generate-storybook-snapshots.mjs",
+    "visual:report": "node scripts/visual-regression-report.mjs",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
@@ -91,6 +104,6 @@
     ]
   },
   "overrides": {
-    "dompurify": "3.3.2"
+    "dompurify": "3.4.0"
   }
 }

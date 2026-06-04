@@ -1,66 +1,179 @@
+from types import SimpleNamespace
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
-from app.database.models import Repository
+from app.core.security import create_access_token, get_password_hash
+from app.database.models import (
+    CheckJob,
+    PruneJob,
+    Repository,
+    SystemSettings,
+    User,
+    UserRepositoryPermission,
+)
 
 
 @pytest.mark.unit
 class TestRepositoryApiDispatch:
-    def test_check_route_dispatches_through_borg_router(self, test_client: TestClient, admin_headers, test_db):
-        repo = Repository(name="Repo", path="/tmp/repo", encryption="none", repository_type="local", borg_version=2)
+    @pytest.mark.asyncio
+    async def test_check_route_dispatches_through_borg_router(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Repo",
+            path="/tmp/repo",
+            encryption="none",
+            repository_type="local",
+            borg_version=2,
+        )
         test_db.add(repo)
         test_db.commit()
         test_db.refresh(repo)
 
+        dispatched = {}
         fake_router = Mock(check=AsyncMock())
-        with patch("app.api.repositories.BorgRouter", return_value=fake_router) as mock_router, patch(
-            "app.api.repositories.asyncio.create_task", return_value=object()
-        ) as mock_create_task:
+
+        def fake_start(db, repository, job_model, **kwargs):
+            dispatched["dispatcher"] = kwargs["dispatcher"]
+            return SimpleNamespace(id=11, repository_id=repository.id, status="pending")
+
+        with (
+            patch(
+                "app.api.repositories.BorgRouter", return_value=fake_router
+            ) as mock_router,
+            patch(
+                "app.api.repositories.start_background_maintenance_job",
+                side_effect=fake_start,
+            ),
+        ):
             response = test_client.post(
                 f"/api/repositories/{repo.id}/check",
                 json={"max_duration": 120},
                 headers=admin_headers,
             )
-
-            scheduled = mock_create_task.call_args.args[0]
-            scheduled.close()
+            await dispatched["dispatcher"](SimpleNamespace(id=99))
 
         assert response.status_code == 200
         mock_router.assert_called_once()
-        fake_router.check.assert_called_once()
+        routed_repo = mock_router.call_args.args[0]
+        assert not isinstance(routed_repo, Repository)
+        assert routed_repo.id == repo.id
+        assert routed_repo.borg_version == repo.borg_version
+        fake_router.check.assert_awaited_once_with(99)
 
-    def test_compact_route_dispatches_through_borg_router(self, test_client: TestClient, admin_headers, test_db):
-        repo = Repository(name="Repo", path="/tmp/repo", encryption="none", repository_type="local", borg_version=2)
+    def test_check_route_accepts_guided_recovery_diagnosis_payload(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Broken Repo",
+            path="/tmp/broken-repo",
+            encryption="repokey",
+            repository_type="local",
+            borg_version=1,
+        )
         test_db.add(repo)
         test_db.commit()
         test_db.refresh(repo)
 
+        dispatched = {}
+
+        def fake_start(db, repository, job_model, **kwargs):
+            dispatched["repository"] = repository
+            dispatched["job_model"] = job_model
+            dispatched["extra_fields"] = kwargs["extra_fields"]
+            dispatched["error_key"] = kwargs["error_key"]
+            return SimpleNamespace(id=17, repository_id=repository.id, status="pending")
+
+        with patch(
+            "app.api.repositories.start_background_maintenance_job",
+            side_effect=fake_start,
+        ):
+            response = test_client.post(
+                f"/api/repositories/{repo.id}/check",
+                json={"max_duration": 0, "check_extra_flags": ""},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "job_id": 17,
+            "status": "pending",
+            "message": "backend.success.repo.checkJobStarted",
+        }
+        assert dispatched["repository"].id == repo.id
+        assert dispatched["job_model"] is CheckJob
+        assert dispatched["error_key"] == "backend.errors.repo.checkAlreadyRunning"
+        assert dispatched["extra_fields"] == {
+            "max_duration": 0,
+            "extra_flags": None,
+        }
+
+    @pytest.mark.asyncio
+    async def test_compact_route_dispatches_through_borg_router(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Repo",
+            path="/tmp/repo",
+            encryption="none",
+            repository_type="local",
+            borg_version=2,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        dispatched = {}
         fake_router = Mock(compact=AsyncMock())
-        with patch("app.api.repositories.BorgRouter", return_value=fake_router) as mock_router, patch(
-            "app.api.repositories.asyncio.create_task", return_value=object()
-        ) as mock_create_task:
+
+        def fake_start(db, repository, job_model, **kwargs):
+            dispatched["dispatcher"] = kwargs["dispatcher"]
+            return SimpleNamespace(id=12, repository_id=repository.id, status="pending")
+
+        with (
+            patch(
+                "app.api.repositories.BorgRouter", return_value=fake_router
+            ) as mock_router,
+            patch(
+                "app.api.repositories.start_background_maintenance_job",
+                side_effect=fake_start,
+            ),
+        ):
             response = test_client.post(
                 f"/api/repositories/{repo.id}/compact",
                 headers=admin_headers,
             )
-
-            scheduled = mock_create_task.call_args.args[0]
-            scheduled.close()
+            await dispatched["dispatcher"](SimpleNamespace(id=77))
 
         assert response.status_code == 200
         mock_router.assert_called_once()
-        fake_router.compact.assert_called_once()
+        routed_repo = mock_router.call_args.args[0]
+        assert not isinstance(routed_repo, Repository)
+        assert routed_repo.id == repo.id
+        assert routed_repo.borg_version == repo.borg_version
+        fake_router.compact.assert_awaited_once_with(77)
 
-    def test_prune_route_dispatches_through_borg_router(self, test_client: TestClient, admin_headers, test_db):
-        repo = Repository(name="Repo", path="/tmp/repo", encryption="none", repository_type="local", borg_version=2)
+    def test_prune_route_dispatches_through_borg_router(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Repo",
+            path="/tmp/repo",
+            encryption="none",
+            repository_type="local",
+            borg_version=2,
+        )
         test_db.add(repo)
         test_db.commit()
         test_db.refresh(repo)
 
         fake_router = Mock(prune=AsyncMock())
-        with patch("app.api.repositories.BorgRouter", return_value=fake_router) as mock_router:
+        with patch(
+            "app.api.repositories.BorgRouter", return_value=fake_router
+        ) as mock_router:
             response = test_client.post(
                 f"/api/repositories/{repo.id}/prune",
                 json={"keep_daily": 3, "dry_run": True},
@@ -71,14 +184,88 @@ class TestRepositoryApiDispatch:
         mock_router.assert_called_once()
         fake_router.prune.assert_awaited_once()
 
-    def test_break_lock_route_dispatches_through_borg_router(self, test_client: TestClient, admin_headers, test_db):
-        repo = Repository(name="Repo", path="/tmp/repo", encryption="none", repository_type="local", borg_version=2)
+    @pytest.mark.asyncio
+    async def test_prune_route_starts_background_job_for_actual_prune(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Repo Background Prune",
+            path="/tmp/repo-background-prune",
+            encryption="none",
+            repository_type="local",
+            borg_version=2,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        dispatched = {}
+        fake_router = Mock(prune=AsyncMock())
+
+        def fake_start(db, repository, job_model, **kwargs):
+            dispatched["dispatcher"] = kwargs["dispatcher"]
+            assert job_model is PruneJob
+            assert kwargs["extra_fields"] == {"scheduled_prune": False}
+            return SimpleNamespace(id=13, repository_id=repository.id, status="pending")
+
+        with (
+            patch(
+                "app.api.repositories.BorgRouter", return_value=fake_router
+            ) as mock_router,
+            patch(
+                "app.api.repositories.start_background_maintenance_job",
+                side_effect=fake_start,
+            ) as mock_start,
+        ):
+            response = test_client.post(
+                f"/api/repositories/{repo.id}/prune",
+                json={
+                    "keep_hourly": 1,
+                    "keep_daily": 3,
+                    "keep_weekly": 2,
+                    "keep_monthly": 1,
+                    "keep_quarterly": 0,
+                    "keep_yearly": 0,
+                    "dry_run": False,
+                },
+                headers=admin_headers,
+            )
+
+            fake_router.prune.assert_not_awaited()
+            await dispatched["dispatcher"](SimpleNamespace(id=99))
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "job_id": 13,
+            "status": "pending",
+            "message": "backend.success.repo.pruneJobStarted",
+        }
+        mock_start.assert_called_once()
+        mock_router.assert_called_once()
+        routed_repo = mock_router.call_args.args[0]
+        assert not isinstance(routed_repo, Repository)
+        assert routed_repo.id == repo.id
+        assert routed_repo.borg_version == repo.borg_version
+        fake_router.prune.assert_awaited_once_with(99, 1, 3, 2, 1, 0, 0, False)
+
+    def test_break_lock_route_dispatches_through_borg_router(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Repo",
+            path="/tmp/repo",
+            encryption="none",
+            repository_type="local",
+            borg_version=2,
+        )
         test_db.add(repo)
         test_db.commit()
         test_db.refresh(repo)
 
         fake_router = Mock(break_lock=AsyncMock(return_value={"success": True}))
-        with patch("app.api.repositories.BorgRouter", return_value=fake_router) as mock_router:
+        with patch(
+            "app.api.repositories.BorgRouter", return_value=fake_router
+        ) as mock_router:
             response = test_client.post(
                 f"/api/repositories/{repo.id}/break-lock",
                 headers=admin_headers,
@@ -88,3 +275,105 @@ class TestRepositoryApiDispatch:
         assert response.json()["message"] == "backend.success.repo.lockBroken"
         mock_router.assert_called_once()
         fake_router.break_lock.assert_awaited_once()
+
+    def test_break_lock_route_allows_repository_operator_access(
+        self, test_client: TestClient, test_db
+    ):
+        repo = Repository(
+            name="Repo",
+            path="/tmp/repo",
+            encryption="none",
+            repository_type="local",
+            borg_version=2,
+        )
+        user = User(
+            username="repo-operator",
+            password_hash=get_password_hash("pass"),
+            is_active=True,
+            role="operator",
+        )
+        test_db.add_all([repo, user])
+        test_db.commit()
+        test_db.refresh(repo)
+        test_db.refresh(user)
+        test_db.add(
+            UserRepositoryPermission(
+                user_id=user.id,
+                repository_id=repo.id,
+                role="operator",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        test_db.commit()
+        headers = {
+            "X-Borg-Authorization": f"Bearer {create_access_token(data={'sub': user.username})}"
+        }
+
+        fake_router = Mock(break_lock=AsyncMock(return_value={"success": True}))
+        with patch("app.api.repositories.BorgRouter", return_value=fake_router):
+            response = test_client.post(
+                f"/api/repositories/{repo.id}/break-lock",
+                headers=headers,
+            )
+
+        assert response.status_code == 200
+        fake_router.break_lock.assert_awaited_once()
+
+    def test_break_lock_route_rejects_when_system_setting_disabled(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Repo",
+            path="/tmp/repo",
+            encryption="none",
+            repository_type="local",
+            borg_version=2,
+        )
+        settings = SystemSettings()
+        settings.lock_breaking_enabled = False
+        test_db.add_all([repo, settings])
+        test_db.commit()
+        test_db.refresh(repo)
+
+        fake_router = Mock(break_lock=AsyncMock(return_value={"success": True}))
+        with patch(
+            "app.api.repositories.BorgRouter", return_value=fake_router
+        ) as mock_router:
+            response = test_client.post(
+                f"/api/repositories/{repo.id}/break-lock",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 403
+        assert response.json()["detail"] == {
+            "key": "backend.errors.repo.lockBreakingDisabled"
+        }
+        mock_router.assert_not_called()
+        fake_router.break_lock.assert_not_awaited()
+
+    def test_break_lock_route_requires_operator_access(
+        self, test_client: TestClient, auth_headers, test_db
+    ):
+        repo = Repository(
+            name="Repo",
+            path="/tmp/repo",
+            encryption="none",
+            repository_type="local",
+            borg_version=2,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        fake_router = Mock(break_lock=AsyncMock(return_value={"success": True}))
+        with patch(
+            "app.api.repositories.BorgRouter", return_value=fake_router
+        ) as mock_router:
+            response = test_client.post(
+                f"/api/repositories/{repo.id}/break-lock",
+                headers=auth_headers,
+            )
+
+        assert response.status_code == 403
+        mock_router.assert_not_called()
+        fake_router.break_lock.assert_not_awaited()

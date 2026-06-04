@@ -2,12 +2,24 @@ import axios from 'axios'
 import { toast } from 'react-hot-toast'
 import { BASE_PATH } from '@/utils/basePath'
 import { API_BASE_URL, buildDownloadUrl } from '@/utils/downloadUrl'
+import { attachAccessTokenHeader } from './authHeaders'
+import type { RestoreLayout, RestorePathMetadata } from '@/utils/restorePaths'
+import type {
+  BackupPlan,
+  BackupPlanData,
+  RepositoryWipeExecuteRequest,
+  RepositoryWipeJob,
+  RepositoryWipePreviewRequest,
+  RcloneStorage,
+  SourceLocation,
+} from '../types'
 
-// Track if proxy auth is enabled (set during auth config check)
-let proxyAuthMode = false
+export type AuthTransportMode = 'jwt' | 'proxy' | 'insecure-no-auth'
 
-export const setProxyAuthMode = (enabled: boolean) => {
-  proxyAuthMode = enabled
+let authTransportMode: AuthTransportMode = 'jwt'
+
+export const setAuthTransportMode = (mode: AuthTransportMode) => {
+  authTransportMode = mode
 }
 
 const api = axios.create({
@@ -18,13 +30,7 @@ const api = axios.create({
 })
 
 // Request interceptor to add auth token
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('access_token')
-  if (token) {
-    config.headers['X-Borg-Authorization'] = `Bearer ${token}`
-  }
-  return config
-})
+api.interceptors.request.use(attachAccessTokenHeader)
 
 // Response interceptor to handle auth errors
 api.interceptors.response.use(
@@ -41,8 +47,10 @@ api.interceptors.response.use(
     if (
       error.response?.status === 401 &&
       error.config?.url !== '/auth/login' &&
+      error.config?.url !== '/auth/login/totp' &&
+      error.config?.url !== '/auth/passkeys/authenticate/verify' &&
       error.config?.url !== '/auth/config' &&
-      !proxyAuthMode // Don't redirect in proxy auth mode
+      authTransportMode === 'jwt'
     ) {
       localStorage.removeItem('access_token')
       window.location.href = `${BASE_PATH}/login`
@@ -58,8 +66,15 @@ export interface RepositoryData {
   encryption?: string
   compression?: string
   source_directories?: string[]
+  source_locations?: SourceLocation[]
   exclude_patterns?: string[]
   repository_type?: string
+  storage_backend?: 'local' | 'ssh' | 'agent_local' | 'rclone' | 'rclone_direct'
+  execution_target?: 'local' | 'ssh' | 'agent'
+  executor_type?: 'server' | 'agent'
+  agent_machine_id?: number | null
+  agent_machine_name?: string | null
+  agent_machine_status?: string | null
   host?: string
   port?: number
   username?: string
@@ -77,14 +92,116 @@ export interface RepositoryData {
   skip_on_hook_failure?: boolean
   passphrase?: string
   mode?: 'full' | 'observe'
+  cloud_mirror_enabled?: boolean
+  rclone_remote_id?: number | null
+  rclone_remote_path?: string | null
+  rclone_remote_path_verified?: boolean
+  rclone_sync_policy?: 'after_success' | 'manual' | 'scheduled'
+  rclone_sync_cron_expression?: string | null
+  rclone_sync_timezone?: string | null
+  rclone_extra_flags?: string[] | null
+  rclone_storage?: RcloneStorage | null
   custom_flags?: string | null
+  check_extra_flags?: string | null
   bypass_lock?: boolean
   has_schedule?: boolean
   schedule_enabled?: boolean
   schedule_name?: string | null
+  schedule_timezone?: string | null
   next_run?: string | null
   // Allow other properties for flexibility
   [key: string]: unknown
+}
+
+export interface RcloneStatus {
+  available: boolean
+  version?: string | null
+  error?: string | null
+}
+
+export interface RcloneProviderField {
+  name: string
+  label: string
+  kind: 'text' | 'password' | 'json'
+  required?: boolean
+  secret?: boolean
+  helper?: string
+}
+
+export interface RcloneProvider {
+  type: string
+  label: string
+  description: string
+  auth_type: 'none' | 'oauth_token' | 'access_key' | 'basic' | 'manual'
+  type_editable: boolean
+  docs_url?: string
+  config_template: Record<string, unknown>
+  fields: RcloneProviderField[]
+  oauth_mode?: 'borg_ui' | 'rclone_loopback' | 'manual'
+  oauth_configured?: boolean
+  oauth_callback_url?: string | null
+  oauth_setup_key?: string | null
+  oauth_credentials_source?: 'database' | 'unset' | 'unsupported'
+  oauth_client_id_set?: boolean
+  oauth_client_secret_set?: boolean
+}
+
+export interface RcloneOAuthCredentialUpdate {
+  client_id?: string | null
+  client_secret?: string | null
+}
+
+export interface RcloneOAuthCredentialStatus {
+  provider: string
+  label: string
+  configured: boolean
+  credential_source: 'database' | 'unset' | 'unsupported'
+  client_id: string | null
+  client_id_set: boolean
+  client_secret_set: boolean
+  callback_url?: string | null
+  setup_key?: string | null
+}
+
+export interface RcloneOAuthTokenStatus {
+  status: 'missing' | 'valid' | 'expiring' | 'expired' | 'refreshable' | 'unknown'
+  expires_at?: string | null
+  refresh_available?: boolean
+}
+
+export interface RcloneOAuthSession {
+  session_id: string
+  provider: string
+  status: 'starting' | 'awaiting_callback' | 'authorized' | 'failed'
+  oauth_mode?: 'borg_ui' | 'rclone_loopback'
+  authorization_url?: string | null
+  local_authorization_url?: string | null
+  config?: Record<string, unknown> | null
+  token_status?: RcloneOAuthTokenStatus | null
+  error?: string | null
+}
+
+export interface RcloneRemote {
+  id: number
+  name: string
+  provider: string
+  usage_count?: number
+  config_source?: string
+  config_path?: string | null
+  redacted_config?: Record<string, unknown> | null
+  last_test_status?: string | null
+  last_error?: string | null
+  oauth_token?: RcloneOAuthTokenStatus | null
+}
+
+export type { RcloneStorage } from '../types'
+
+export interface CreateRcloneRemoteRequest {
+  name: string
+  provider: string
+  config_source?: string
+  config_path?: string | null
+  redacted_config?: Record<string, unknown> | null
 }
 
 export interface SystemSettings {
@@ -93,13 +210,46 @@ export interface SystemSettings {
   list_timeout?: number
   init_timeout?: number
   backup_timeout?: number
+  max_concurrent_scheduled_backups?: number
+  max_concurrent_scheduled_checks?: number
   stats_refresh_interval_minutes?: number
+  dashboard_backup_warning_days?: number
+  dashboard_backup_critical_days?: number
+  dashboard_check_warning_days?: number
+  dashboard_check_critical_days?: number
+  dashboard_compact_warning_days?: number
+  dashboard_compact_critical_days?: number
+  dashboard_restore_check_warning_days?: number
+  dashboard_restore_check_critical_days?: number
+  dashboard_observe_freshness_warning_days?: number
+  dashboard_observe_freshness_critical_days?: number
   bypass_lock_on_info?: boolean
   bypass_lock_on_list?: boolean
+  lock_breaking_enabled?: boolean
   metrics_enabled?: boolean
   metrics_require_auth?: boolean
   metrics_token?: string
   metrics_token_set?: boolean
+  borg2_fast_browse_beta_enabled?: boolean
+  mqtt_beta_enabled?: boolean
+  backup_monitoring_enabled?: boolean
+  backup_monitoring_stale_after_days?: number
+  backup_monitoring_interval_hours?: number
+  backup_monitoring_alert_cooldown_hours?: number
+  backup_monitoring_include_observe_repos?: boolean
+  backup_monitoring_last_checked_at?: string | null
+  backup_monitoring_last_alert_sent_at?: string | null
+  backup_reports_enabled?: boolean
+  backup_reports_frequency?: 'daily' | 'weekly' | 'monthly'
+  backup_reports_cron_expression?: string
+  backup_reports_timezone?: string
+  backup_reports_hour_utc?: number
+  backup_reports_weekday?: number
+  backup_reports_monthday?: number
+  backup_reports_include_summary?: boolean
+  backup_reports_include_stale_repositories?: boolean
+  backup_reports_include_recent_activity?: boolean
+  backup_reports_last_sent_at?: string | null
   [key: string]: unknown
 }
 
@@ -127,20 +277,206 @@ export interface AuthUserResponse {
   is_active: boolean
   role: string
   all_repositories_role?: string | null
+  auth_source?: string | null
+  oidc_subject?: string | null
+  oidc_link_supported?: boolean
+  oidc_unlink_supported?: boolean
   must_change_password?: boolean
+  totp_enabled?: boolean
+  passkey_count?: number
   last_login?: string | null
   created_at: string
   global_permissions: string[]
 }
 
+export interface AuthLoginResponse {
+  access_token?: string | null
+  token_type?: string | null
+  expires_in?: number | null
+  must_change_password?: boolean
+  totp_required?: boolean
+  login_challenge_token?: string | null
+}
+
+export interface PasswordSetupCompleteResponse {
+  must_change_password: boolean
+}
+
+export interface LogoutResponse {
+  message: string
+  logout_url?: string | null
+}
+
+export interface TotpStatusResponse {
+  enabled: boolean
+  recovery_codes_remaining: number
+}
+
+export interface TotpSetupResponse {
+  setup_token: string
+  secret: string
+  otpauth_uri: string
+  recovery_codes: string[]
+}
+
+export interface TotpEnableResponse {
+  enabled: boolean
+  recovery_codes: string[]
+}
+
+export interface PasskeyCredentialResponse {
+  id: number
+  name: string
+  created_at: string
+  last_used_at?: string | null
+}
+
+export interface PasskeyCeremonyResponse {
+  ceremony_token: string
+  options: Record<string, unknown>
+}
+
+export interface ProxyAuthWarning {
+  code: string
+  message: string
+}
+
+export interface AuthConfigResponse {
+  proxy_auth_enabled: boolean
+  insecure_no_auth_enabled: boolean
+  authentication_required: boolean
+  oidc_enabled?: boolean
+  oidc_provider_name?: string | null
+  oidc_disable_local_auth?: boolean
+  oidc_link_supported?: boolean
+  oidc_unlink_supported?: boolean
+  oidc_account_linking_supported?: boolean
+  proxy_auth_header?: string | null
+  proxy_auth_role_header?: string | null
+  proxy_auth_all_repositories_role_header?: string | null
+  proxy_auth_email_header?: string | null
+  proxy_auth_full_name_header?: string | null
+  proxy_auth_health?: {
+    enabled: boolean
+    warnings: ProxyAuthWarning[]
+  }
+}
+
+export interface OidcLinkStartResponse {
+  authorization_url: string
+}
+
 // Generic type for object data
 type ApiData = Record<string, unknown>
 
+export interface SourceDiscoveryTypeOption {
+  id: string
+  label: string
+  description: string
+  status: string
+  disabled: boolean
+}
+
+export interface SourceDiscoveryScriptDraft {
+  name: string
+  description: string
+  content: string
+  timeout: number
+}
+
+export interface SourceDiscoveryDatabase {
+  id: string
+  engine: string
+  display_name: string
+  backup_strategy: string
+  source_directories: string[]
+  client_commands: string[]
+  documentation_url: string
+  detected: boolean
+  detection_source: string | null
+  notes: string[]
+  script_drafts: {
+    pre_backup: SourceDiscoveryScriptDraft
+    post_backup: SourceDiscoveryScriptDraft
+  }
+}
+
+export interface SourceDiscoveryResponse {
+  source_types: SourceDiscoveryTypeOption[]
+  detections: SourceDiscoveryDatabase[]
+  templates: SourceDiscoveryDatabase[]
+}
+
+export interface DatabaseScanRequest {
+  source_type: 'local' | 'remote'
+  source_ssh_connection_id: number | null
+  paths: string[]
+  /** Recursive walk depth (0 = legacy non-recursive, max 10). Omit to use server default. */
+  max_depth?: number
+  /** Directory basenames to skip during the walk. Omit to use server default. */
+  ignore_patterns?: string[]
+  /** Per-scan wall-clock cap in seconds. Omit to use server default. */
+  timeout_seconds?: number
+}
+
+export interface DatabaseScanWarning {
+  code: string
+  message: string
+  path: string | null
+}
+
+export interface DatabaseScanResponse {
+  scan_target: {
+    source_type: 'local' | 'remote'
+    source_ssh_connection_id: number | null
+    label: string
+  }
+  scanned_paths: string[]
+  detections: SourceDiscoveryDatabase[]
+  templates: SourceDiscoveryDatabase[]
+  warnings: DatabaseScanWarning[]
+}
+
+export interface FilesystemSnapshotProviderCapability {
+  id: 'btrfs' | 'zfs'
+  label: string
+  command: string
+  available: boolean
+  requirements: string[]
+}
+
+export interface FilesystemSnapshotCapabilitiesResponse {
+  providers: FilesystemSnapshotProviderCapability[]
+  supported_source_types: Array<'local'>
+  unsupported_source_targets: string[]
+  default_staging_path: string
+}
+
 export const authAPI = {
-  getAuthConfig: () => api.get('/auth/config'),
+  getAuthConfig: () => api.get<AuthConfigResponse>('/auth/config'),
+  getOidcLoginUrl: (returnTo?: string) => {
+    const params = new URLSearchParams()
+    if (returnTo) {
+      params.set('return_to', returnTo)
+    }
+    const suffix = params.toString()
+    return `${API_BASE_URL}/auth/oidc/login${suffix ? `?${suffix}` : ''}`
+  },
+  getOidcLinkUrl: (returnTo?: string) => {
+    const params = new URLSearchParams()
+    if (returnTo) {
+      params.set('return_to', returnTo)
+    }
+    const suffix = params.toString()
+    return `${API_BASE_URL}/auth/oidc/link${suffix ? `?${suffix}` : ''}`
+  },
+  beginOidcLink: (returnTo?: string) =>
+    api.post<OidcLinkStartResponse>('/auth/oidc/link', { return_to: returnTo }),
+  exchangeOidcToken: () => api.post<AuthLoginResponse>('/auth/oidc/exchange'),
+  unlinkOidc: () => api.post('/auth/oidc/unlink'),
 
   login: (username: string, password: string) =>
-    api.post(
+    api.post<AuthLoginResponse>(
       '/auth/login',
       `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`,
       {
@@ -148,18 +484,51 @@ export const authAPI = {
       }
     ),
 
-  logout: () => api.post('/auth/logout'),
+  verifyTotpLogin: (loginChallengeToken: string, code: string) =>
+    api.post<AuthLoginResponse>('/auth/login/totp', {
+      login_challenge_token: loginChallengeToken,
+      code,
+    }),
+
+  logout: () => api.post<LogoutResponse>('/auth/logout'),
 
   refresh: () => api.post('/auth/refresh'),
 
   getProfile: () => api.get('/auth/me'),
   getAuthorizationModel: () => api.get<AuthorizationModel>('/auth/authorization-model'),
+  getTotpStatus: () => api.get<TotpStatusResponse>('/auth/totp'),
+  beginTotpSetup: (currentPassword: string) =>
+    api.post<TotpSetupResponse>('/auth/totp/setup', { current_password: currentPassword }),
+  enableTotp: (setupToken: string, code: string) =>
+    api.post<TotpEnableResponse>('/auth/totp/enable', { setup_token: setupToken, code }),
+  disableTotp: (currentPassword: string, code: string) =>
+    api.post('/auth/totp/disable', { current_password: currentPassword, code }),
+  listPasskeys: () => api.get<PasskeyCredentialResponse[]>('/auth/passkeys'),
+  beginPasskeyRegistration: (currentPassword: string) =>
+    api.post<PasskeyCeremonyResponse>('/auth/passkeys/register/options', {
+      current_password: currentPassword,
+    }),
+  finishPasskeyRegistration: (ceremonyToken: string, credential: unknown, name?: string) =>
+    api.post<PasskeyCredentialResponse>('/auth/passkeys/register/verify', {
+      ceremony_token: ceremonyToken,
+      credential,
+      name,
+    }),
+  deletePasskey: (passkeyId: number) => api.delete(`/auth/passkeys/${passkeyId}`),
+  beginPasskeyAuthentication: () =>
+    api.post<PasskeyCeremonyResponse>('/auth/passkeys/authenticate/options'),
+  finishPasskeyAuthentication: (ceremonyToken: string, credential: unknown) =>
+    api.post<AuthLoginResponse>('/auth/passkeys/authenticate/verify', {
+      ceremony_token: ceremonyToken,
+      credential,
+    }),
 
   changePassword: (currentPassword: string, newPassword: string) =>
     api.post('/auth/change-password', {
       current_password: currentPassword,
       new_password: newPassword,
     }),
+  skipPasswordSetup: () => api.post<PasswordSetupCompleteResponse>('/auth/password-setup/skip'),
 }
 
 export const dashboardAPI = {
@@ -180,9 +549,16 @@ export const backupAPI = {
   startBackup: (repository?: string) => api.post('/backup/start', { repository }),
   getStatus: (jobId: string) => api.get(`/backup/status/${jobId}`),
   getAllJobs: () => api.get('/backup/jobs'),
-  getManualJobs: () => api.get('/backup/jobs?manual_only=true'),
+  getManualJobs: (repository?: string) =>
+    api.get('/backup/jobs', {
+      params: {
+        manual_only: true,
+        ...(repository ? { repository } : {}),
+      },
+    }),
   getScheduledJobs: () => api.get('/backup/jobs?scheduled_only=true'),
   cancelJob: (jobId: string) => api.post(`/backup/cancel/${jobId}`),
+  retryJob: (jobId: string | number) => api.post(`/backup/jobs/${jobId}/retry`),
   // Download logs as file (only for failed/cancelled backups)
   downloadLogs: (jobId: string) =>
     window.open(buildDownloadUrl(`/backup/logs/${jobId}/download`), '_blank'),
@@ -198,25 +574,17 @@ export const archivesAPI = {
     api.delete(
       `/archives/${encodeURIComponent(archive)}?repository=${encodeURIComponent(repository)}`
     ),
-  downloadFile: (repository: string, archive: string, filePath: string) => {
-    window.open(
+  downloadFile: (repository: string, archive: string, filePath: string) =>
+    window.location.assign(
       buildDownloadUrl('/archives/download', {
         repository,
         archive,
         file_path: filePath,
-      }),
-      '_blank'
-    )
-  },
+      })
+    ),
 }
 
 export const restoreAPI = {
-  getRepositories: () => api.get('/restore/repositories'),
-  getArchives: (repositoryId: number) => api.get(`/restore/archives/${repositoryId}`),
-  getArchiveContents: (repositoryId: number, archiveName: string, path: string = '') =>
-    api.get(`/restore/contents/${repositoryId}/${encodeURIComponent(archiveName)}`, {
-      params: { path },
-    }),
   previewRestore: (repository: string, archive: string, paths: string[]) =>
     api.post('/restore/preview', { repository, archive, paths }),
   startRestore: (
@@ -226,7 +594,9 @@ export const restoreAPI = {
     destination: string,
     repository_id: number,
     destination_type: string = 'local',
-    destination_connection_id: number | null = null
+    destination_connection_id: number | null = null,
+    restore_layout: RestoreLayout = 'preserve_path',
+    path_metadata: RestorePathMetadata[] = []
   ) =>
     api.post('/restore/start', {
       repository,
@@ -236,6 +606,8 @@ export const restoreAPI = {
       repository_id,
       destination_type,
       destination_connection_id,
+      restore_layout,
+      path_metadata,
     }),
   getRestoreJobs: () => api.get('/restore/jobs'),
   getRestoreStatus: (jobId: number) => api.get(`/restore/status/${jobId}`),
@@ -245,6 +617,8 @@ export const settingsAPI = {
   getSystemSettings: () => api.get('/settings/system'),
   updateSystemSettings: (settings: SystemSettings) => api.put('/settings/system', settings),
   refreshAllStats: () => api.post('/settings/refresh-stats'),
+  runBackupMonitoring: () => api.post('/settings/backup-monitoring/run'),
+  sendBackupReport: () => api.post('/settings/backup-reports/send'),
 
   // User management
   getUsers: () => api.get('/settings/users'),
@@ -332,6 +706,18 @@ export interface PermissionScopeResponse {
   all_repositories_role: string | null
 }
 
+export interface AuthEventRecord {
+  id: number
+  event_type: string
+  auth_source: string
+  username: string | null
+  email: string | null
+  success: boolean
+  detail: string | null
+  actor_user_id: number | null
+  created_at: string
+}
+
 export const permissionsAPI = {
   getMyPermissions: () => api.get<PermissionResponse[]>('/settings/permissions/me'),
   getMyPermissionScope: () => api.get<PermissionScopeResponse>('/settings/permissions/me/scope'),
@@ -349,6 +735,13 @@ export const permissionsAPI = {
     }),
   remove: (userId: number, repoId: number) =>
     api.delete(`/settings/users/${userId}/permissions/${repoId}`),
+}
+
+export const authAPIAdmin = {
+  listEvents: (limit: number = 50) =>
+    api.get<AuthEventRecord[]>('/auth/events', {
+      params: { limit },
+    }),
 }
 
 // Repositories API
@@ -371,41 +764,170 @@ export const repositoriesAPI = {
   deleteRepository: (id: number) => api.delete(`/repositories/${id}`),
   checkRepository: (id: number, maxDuration: number = 3600) =>
     api.post(`/repositories/${id}/check`, { max_duration: maxDuration }),
+  restoreCheckRepository: (
+    id: number,
+    data?: {
+      paths?: string[]
+      full_archive?: boolean
+    }
+  ) => api.post(`/repositories/${id}/restore-check`, data || {}),
   compactRepository: (id: number) => api.post(`/repositories/${id}/compact`),
   pruneRepository: (id: number, data: ApiData) => api.post(`/repositories/${id}/prune`, data),
+  previewRepositoryWipe: (id: number, data: RepositoryWipePreviewRequest) =>
+    api.post<RepositoryWipeJob>(`/repositories/${id}/wipe-preview`, data),
+  executeRepositoryWipe: (id: number, data: RepositoryWipeExecuteRequest) =>
+    api.post<RepositoryWipeJob>(`/repositories/${id}/wipe`, data),
+  getRepositoryWipeJob: (id: number, jobId: number) =>
+    api.get<RepositoryWipeJob>(`/repositories/${id}/wipe-jobs/${jobId}`),
+  cancelRepositoryWipeJob: (id: number, jobId: number) =>
+    api.post<RepositoryWipeJob>(`/repositories/${id}/wipe-jobs/${jobId}/cancel`),
   breakLock: (id: number) => api.post(`/repositories/${id}/break-lock`),
   getRepositoryStats: (id: number) => api.get(`/repositories/${id}/stats`),
   listRepositoryArchives: (id: number) => api.get(`/repositories/${id}/archives`),
   getRepositoryInfo: (id: number) => api.get(`/repositories/${id}/info`),
+  syncRcloneRepository: (id: number) => api.post(`/repositories/${id}/rclone/sync`),
+  hydrateRcloneRepository: (id: number) => api.post(`/repositories/${id}/rclone/hydrate`),
+  getRcloneStatus: (id: number) => api.get(`/repositories/${id}/rclone/status`),
   // Check/Compact job management
   getCheckJobStatus: (jobId: number) => api.get(`/repositories/check-jobs/${jobId}`),
-  getRepositoryCheckJobs: (id: number, limit?: number) =>
-    api.get(`/repositories/${id}/check-jobs`, { params: { limit } }),
+  getRepositoryCheckJobs: (id: number, limit?: number, scheduledOnly: boolean = false) =>
+    api.get(`/repositories/${id}/check-jobs`, {
+      params: { limit, scheduled_only: scheduledOnly },
+    }),
+  getRestoreCheckJobStatus: (jobId: number) => api.get(`/repositories/restore-check-jobs/${jobId}`),
+  getRepositoryRestoreCheckJobs: (id: number, limit?: number) =>
+    api.get(`/repositories/${id}/restore-check-jobs`, { params: { limit } }),
   getCompactJobStatus: (jobId: number) => api.get(`/repositories/compact-jobs/${jobId}`),
   getRepositoryCompactJobs: (id: number, limit?: number) =>
     api.get(`/repositories/${id}/compact-jobs`, { params: { limit } }),
   getRepositoryPruneJobs: (id: number, limit?: number) =>
     api.get(`/repositories/${id}/prune-jobs`, { params: { limit } }),
   getRunningJobs: (id: number) => api.get(`/repositories/${id}/running-jobs`),
-  getArchiveInfo: (
-    repoId: number,
-    archiveName: string,
-    includeFiles: boolean = true,
-    fileLimit: number = 1000
-  ) =>
-    api.get(`/repositories/${repoId}/archives/${archiveName}/info`, {
-      params: { include_files: includeFiles, file_limit: fileLimit },
-    }),
-  getArchiveFiles: (repoId: number, archiveName: string, limit?: number) =>
-    api.get(`/repositories/${repoId}/archives/${archiveName}/files`, {
-      params: limit ? { limit } : undefined,
-    }),
   // Check schedule management
   getCheckSchedule: (id: number) => api.get(`/repositories/${id}/check-schedule`),
   updateCheckSchedule: (id: number, data: ApiData) =>
     api.put(`/repositories/${id}/check-schedule`, data),
+  getRestoreCheckSchedule: (id: number) => api.get(`/repositories/${id}/restore-check-schedule`),
+  updateRestoreCheckSchedule: (id: number, data: ApiData) =>
+    api.put(`/repositories/${id}/restore-check-schedule`, data),
   list: () => api.get('/repositories/'),
   startCheck: (id: number, data: ApiData) => api.post(`/repositories/${id}/check`, data),
+}
+
+export const rcloneAPI = {
+  getStatus: () => api.get<RcloneStatus>('/rclone/status'),
+  getProviders: () => api.get<{ providers: RcloneProvider[] }>('/rclone/providers'),
+  updateOAuthCredentials: (provider: string, data: RcloneOAuthCredentialUpdate) =>
+    api.put<RcloneOAuthCredentialStatus>(`/rclone/oauth/credentials/${provider}`, data),
+  startOAuthSession: (data: {
+    provider: string
+    config?: Record<string, unknown>
+    client_id?: string
+    client_secret?: string
+    mode?: 'auto' | 'borg_ui' | 'rclone_loopback'
+  }) => api.post<RcloneOAuthSession>('/rclone/oauth/sessions', data),
+  getOAuthSession: (sessionId: string) =>
+    api.get<RcloneOAuthSession>(`/rclone/oauth/sessions/${sessionId}`),
+  cancelOAuthSession: (sessionId: string) =>
+    api.delete<void>(`/rclone/oauth/sessions/${sessionId}`),
+  listRemotes: () => api.get<{ remotes: RcloneRemote[] }>('/rclone/remotes'),
+  createRemote: (data: CreateRcloneRemoteRequest) =>
+    api.post<RcloneRemote>('/rclone/remotes', data),
+  updateRemote: (id: number, data: CreateRcloneRemoteRequest) =>
+    api.put<RcloneRemote>(`/rclone/remotes/${id}`, data),
+  deleteRemote: (id: number) => api.delete<void>(`/rclone/remotes/${id}`),
+  testRemote: (id: number) => api.post(`/rclone/remotes/${id}/test`),
+  browseRemote: (id: number, path?: string) =>
+    api.get(`/rclone/remotes/${id}/browse`, { params: { path } }),
+}
+
+export const backupPlansAPI = {
+  list: (repositoryId?: number | null) =>
+    api.get('/backup-plans/', {
+      params: repositoryId ? { repository_id: repositoryId } : undefined,
+    }),
+  create: (data: BackupPlanData) => api.post('/backup-plans/', data),
+  createFromRepository: (
+    id: number,
+    data: {
+      name?: string
+      copy_schedule?: boolean
+      disable_repository_schedule?: boolean
+      move_source_settings?: boolean
+    } = {}
+  ) =>
+    api.post<{
+      backup_plan: BackupPlan
+      source_repository_id: number
+      copied_schedule_id?: number | null
+      repository_schedule_disabled: boolean
+      repository_schedule_disable_reason?: string | null
+      source_settings_moved: boolean
+    }>(`/backup-plans/from-repository/${id}`, data),
+  get: (id: number) => api.get(`/backup-plans/${id}`),
+  update: (id: number, data: BackupPlanData) => api.put(`/backup-plans/${id}`, data),
+  delete: (id: number) => api.delete(`/backup-plans/${id}`),
+  toggle: (id: number) => api.post(`/backup-plans/${id}/toggle`),
+  run: (id: number) => api.post(`/backup-plans/${id}/run`),
+  listRuns: () => api.get('/backup-plans/runs'),
+  getRun: (id: number) => api.get(`/backup-plans/runs/${id}`),
+  cancelRun: (id: number) => api.post(`/backup-plans/runs/${id}/cancel`),
+  retryRun: (id: number) => api.post(`/backup-plans/runs/${id}/retry`),
+  listRunsForPlan: (id: number) => api.get(`/backup-plans/${id}/runs`),
+}
+
+export interface SSHConnectionDiagnosticsTargetRequest {
+  host: string
+  port: number
+  timeout_seconds?: number
+}
+
+export interface SSHConnectionDiagnosticsRequest {
+  target?: SSHConnectionDiagnosticsTargetRequest
+  timeout_seconds?: number
+  speed_probe_bytes?: number
+}
+
+export interface SSHConnectionDiagnosticsMetadata {
+  id: number
+  host: string
+  username: string
+  port: number
+  status: string
+  last_test?: string | null
+  last_success?: string | null
+  error_message?: string | null
+}
+
+export interface SSHConnectionDiagnosticsProbeResult {
+  status: 'success' | 'failed' | 'timeout' | string
+  elapsed_ms?: number | null
+  error?: string | null
+  message?: string | null
+  output?: string | null
+}
+
+export interface SSHConnectionDiagnosticsTcpResult extends SSHConnectionDiagnosticsProbeResult {
+  target: {
+    host: string
+    port: number
+    timeout_seconds?: number
+  }
+}
+
+export interface SSHConnectionDiagnosticsThroughputResult extends SSHConnectionDiagnosticsProbeResult {
+  direction: 'download' | string
+  probe_size_bytes: number
+  bytes_transferred?: number | null
+  mbps?: number | null
+}
+
+export interface SSHConnectionDiagnosticsResponse {
+  connection: SSHConnectionDiagnosticsMetadata
+  session: SSHConnectionDiagnosticsProbeResult
+  latency: SSHConnectionDiagnosticsProbeResult
+  tcp?: SSHConnectionDiagnosticsTcpResult | null
+  throughput?: SSHConnectionDiagnosticsThroughputResult | null
 }
 
 // SSH Keys API
@@ -435,9 +957,204 @@ export const sshKeysAPI = {
     api.delete(`/ssh-keys/connections/${connectionId}`),
   refreshConnectionStorage: (connectionId: number) =>
     api.post(`/ssh-keys/connections/${connectionId}/refresh-storage`),
+  runConnectionDiagnostics: (connectionId: number, data: SSHConnectionDiagnosticsRequest) =>
+    api.post<SSHConnectionDiagnosticsResponse>(
+      `/ssh-keys/connections/${connectionId}/diagnostics`,
+      data
+    ),
   redeployKeyToConnection: (connectionId: number, password: string) =>
     api.post(`/ssh-keys/connections/${connectionId}/redeploy`, { password }),
   importSSHKey: (data: ApiData) => api.post('/ssh-keys/import', data),
+}
+
+export interface AgentMachineResponse {
+  id: number
+  name: string
+  agent_id: string
+  hostname?: string | null
+  os?: string | null
+  arch?: string | null
+  agent_version?: string | null
+  default_path?: string | null
+  borg_versions?: Array<Record<string, unknown>> | null
+  capabilities?: string[] | null
+  labels?: Record<string, unknown> | null
+  status: string
+  last_seen_at?: string | null
+  last_error?: string | null
+  deleted_at?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface AgentEnrollmentTokenSummary {
+  id: number
+  name: string
+  token_prefix: string
+  default_path?: string | null
+  expires_at: string | null
+  used_at?: string | null
+  used_by_agent_id?: number | null
+  revoked_at?: string | null
+  created_at: string
+}
+
+export interface AgentEnrollmentTokenCreated extends AgentEnrollmentTokenSummary {
+  token: string
+}
+
+export interface AgentJobResponse {
+  id: number
+  agent_machine_id: number
+  backup_job_id?: number | null
+  job_type: string
+  status: string
+  payload: Record<string, unknown>
+  result?: Record<string, unknown> | null
+  claimed_at?: string | null
+  started_at?: string | null
+  completed_at?: string | null
+  error_message?: string | null
+  progress_percent?: number | null
+  current_file?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface AgentJobLogEntryResponse {
+  id: number
+  agent_job_id: number
+  sequence: number
+  stream: string
+  message: string
+  created_at: string
+  received_at: string
+}
+
+export interface AgentSessionLogEntryResponse {
+  id: string
+  agent_machine_id: number
+  job_id?: number | null
+  command_id?: string | null
+  stream: string
+  level: string
+  message: string
+  created_at: string
+}
+
+export interface AgentBackupJobCreate {
+  repository_path: string
+  archive_name: string
+  source_paths: string[]
+  borg_version?: 1 | 2
+  borg_binary?: string | null
+  compression?: string
+  exclude_patterns?: string[]
+  custom_flags?: string[]
+  remote_path?: string | null
+  repository_id?: number | null
+  secrets?: Record<string, unknown>
+}
+
+export interface AgentFilesystemItem {
+  name: string
+  path: string
+  type: 'directory' | 'file'
+  size: number
+  modified_at: number
+  hidden: boolean
+}
+
+export interface AgentFilesystemBrowseResponse {
+  current_path: string
+  parent_path: string | null
+  items: AgentFilesystemItem[]
+  items_truncated?: boolean
+}
+
+export interface AgentDiagnosticsTargetRequest {
+  host: string
+  port: number
+  timeout_seconds?: number
+}
+
+export interface AgentDiagnosticsRequest {
+  target?: AgentDiagnosticsTargetRequest
+}
+
+export interface AgentDiagnosticsMetadata {
+  id: number
+  name: string
+  agent_id: string
+  hostname?: string | null
+  status: string
+  last_seen_at?: string | null
+  agent_version?: string | null
+  borg_versions?: Array<Record<string, unknown>> | null
+  capabilities?: string[] | null
+  last_error?: string | null
+}
+
+export interface AgentDiagnosticsSessionResult {
+  status: 'success' | 'offline' | 'timeout' | 'failed' | string
+  elapsed_ms?: number | null
+  error?: string | null
+  message?: string | null
+}
+
+export interface AgentDiagnosticsTcpResult {
+  target: {
+    host: string
+    port: number
+    timeout_seconds?: number
+  }
+  status: 'success' | 'failed' | string
+  elapsed_ms?: number | null
+  error?: string | null
+  message?: string | null
+}
+
+export interface AgentDiagnosticsResponse {
+  agent: AgentDiagnosticsMetadata
+  session: AgentDiagnosticsSessionResult
+  tcp?: AgentDiagnosticsTcpResult | null
+}
+
+export interface AgentEnrollmentTokenCreate {
+  name: string
+  default_path?: string | null
+  expires_in_minutes?: number
+  expires_in_hours?: number
+  expires_in_days?: number
+  expires_never?: boolean
+}
+
+export const managedAgentsAPI = {
+  listAgents: () => api.get<AgentMachineResponse[]>('/managed-machines/agents'),
+  revokeAgent: (agentId: number) => api.post(`/managed-machines/agents/${agentId}/revoke`),
+  deleteAgent: (agentId: number) => api.delete(`/managed-machines/agents/${agentId}`),
+  createEnrollmentToken: (data: AgentEnrollmentTokenCreate) =>
+    api.post<AgentEnrollmentTokenCreated>('/managed-machines/enrollment-tokens', data),
+  listEnrollmentTokens: () =>
+    api.get<AgentEnrollmentTokenSummary[]>('/managed-machines/enrollment-tokens'),
+  revokeEnrollmentToken: (tokenId: number) =>
+    api.post(`/managed-machines/enrollment-tokens/${tokenId}/revoke`),
+  listJobs: () => api.get<AgentJobResponse[]>('/managed-machines/agent-jobs'),
+  createBackupJob: (agentId: number, data: AgentBackupJobCreate) =>
+    api.post<AgentJobResponse>(`/managed-machines/agents/${agentId}/backup-jobs`, data),
+  cancelJob: (jobId: number) =>
+    api.post<AgentJobResponse>(`/managed-machines/agent-jobs/${jobId}/cancel`),
+  listJobLogs: (jobId: number) =>
+    api.get<AgentJobLogEntryResponse[]>(`/managed-machines/agent-jobs/${jobId}/logs`),
+  listAgentLogs: (agentId: number) =>
+    api.get<AgentSessionLogEntryResponse[]>(`/managed-machines/agents/${agentId}/logs`),
+  browseFilesystem: (agentId: number, path = '/', includeHidden = false) =>
+    api.get<AgentFilesystemBrowseResponse>(
+      `/managed-machines/agents/${agentId}/filesystem/browse`,
+      { params: { path, include_hidden: includeHidden } }
+    ),
+  runDiagnostics: (agentId: number, data: AgentDiagnosticsRequest) =>
+    api.post<AgentDiagnosticsResponse>(`/managed-machines/agents/${agentId}/diagnostics`, data),
 }
 
 // Schedule API
@@ -466,8 +1183,12 @@ export const notificationsAPI = {
 
 export const activityAPI = {
   list: (params?: ApiData) => api.get('/activity/recent', { params }),
-  getLogs: (jobType: string, jobId: number, offset: number = 0) =>
+  getLogs: (jobType: string, jobId: string | number, offset: number = 0) =>
     api.get(`/activity/${jobType}/${jobId}/logs`, { params: { offset } }),
+  cancelJob: (jobType: string, jobId: string | number) =>
+    api.post(`/activity/${jobType}/${jobId}/cancel`),
+  deleteJob: (jobType: string, jobId: string | number) =>
+    api.delete(`/activity/${jobType}/${jobId}`),
   downloadLogs: (jobType: string, jobId: number) =>
     window.open(buildDownloadUrl(`/activity/${jobType}/${jobId}/logs/download`), '_blank'),
 }
@@ -521,6 +1242,14 @@ export const scriptsAPI = {
 
   // Delete a script
   delete: (scriptId: number) => api.delete(`/scripts/${scriptId}`),
+}
+
+export const sourceDiscoveryAPI = {
+  databases: () => api.get<SourceDiscoveryResponse>('/source-discovery/databases'),
+  scanDatabases: (body: DatabaseScanRequest) =>
+    api.post<DatabaseScanResponse>('/source-discovery/databases/scan', body),
+  filesystemSnapshots: () =>
+    api.get<FilesystemSnapshotCapabilitiesResponse>('/source-discovery/filesystem-snapshots'),
 }
 
 export const mountsAPI = {

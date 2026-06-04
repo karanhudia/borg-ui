@@ -83,10 +83,14 @@ jobs:
           # - GHSA-wp53-j4wj-2cfg: python-multipart (fix requires Python 3.10+)
           # - GHSA-wj6h-64fc-37mp: ecdsa (no fix available)
           # - CVE-2026-4539: pygments (transitive via structlog, no fix released yet)
+          # Tracked no-fix findings under active review:
+          # - security/pip-audit-known-vulns.json
+          mapfile -t known_no_fix_ignore_args < <(python3 scripts/pip_audit_known_vulns.py ignore-args)
           pip-audit -r requirements.txt \
             --ignore-vuln GHSA-wp53-j4wj-2cfg \
             --ignore-vuln GHSA-wj6h-64fc-37mp \
-            --ignore-vuln CVE-2026-4539
+            --ignore-vuln CVE-2026-4539 \
+            "${known_no_fix_ignore_args[@]}"
 
       - name: Generate pip-audit report
         if: always()
@@ -148,11 +152,43 @@ jobs:
     name: Trivy Docker Image Scan
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend assets
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Prepare frontend build context
+        run: |
+          rm -rf docker/frontend-build-output
+          mkdir -p docker/frontend-build-output
+          if [ -d "frontend/build" ]; then
+            cp -R frontend/build/. docker/frontend-build-output/
+          elif [ -d "frontend/dist" ]; then
+            cp -R frontend/dist/. docker/frontend-build-output/
+          else
+            echo "Frontend build output was not produced"
+            find frontend -maxdepth 3 -type d | sort
+            exit 1
+          fi
+
+      - name: Build runtime base image
+        run: docker build -f Dockerfile.runtime-base -t borg-ui-runtime-base:security-scan .
 
       - name: Build Docker image
-        run: docker build -t borg-ui:${{ github.sha }} .
+        run: docker build --build-arg BASE_IMAGE=borg-ui-runtime-base:security-scan -t borg-ui:${{ github.sha }} .
 
       - name: Run Trivy vulnerability scanner (Docker image)
         uses: aquasecurity/trivy-action@master
@@ -195,7 +231,7 @@ jobs:
     if: always()
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
 
       - name: Create security summary
         run: |
@@ -231,7 +267,7 @@ jobs:
 
       - name: Comment on PR (if applicable)
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');

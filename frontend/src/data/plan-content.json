@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-04-08T00:00:00Z",
+  "generated_at": "2026-06-02T06:42:02Z",
   "features": [
     {
       "id": "unlimited_repos",
@@ -139,6 +139,40 @@
       "availability": "included"
     },
     {
+      "id": "totp_2fa",
+      "plan": "community",
+      "label": "Two-factor authentication (TOTP)",
+      "label_localized": {
+        "es": "Autenticación de dos factores (TOTP)",
+        "de": "Zwei-Faktor-Authentifizierung (TOTP)",
+        "it": "Autenticazione a due fattori (TOTP)"
+      },
+      "description": "Secure your account with time-based one-time passwords and recovery codes.",
+      "description_localized": {
+        "es": "Protege tu cuenta con contraseñas de un solo uso basadas en tiempo y códigos de recuperación.",
+        "de": "Sichern Sie Ihr Konto mit zeitbasierten Einmalpasswörtern und Wiederherstellungscodes.",
+        "it": "Proteggi il tuo account con password monouso basate sul tempo e codici di recupero."
+      },
+      "availability": "included"
+    },
+    {
+      "id": "passkeys",
+      "plan": "community",
+      "label": "Passkeys",
+      "label_localized": {
+        "es": "Passkeys",
+        "de": "Passkeys",
+        "it": "Passkey"
+      },
+      "description": "Sign in with biometrics or a hardware security key instead of a password.",
+      "description_localized": {
+        "es": "Inicia sesión con biometría o una clave de seguridad de hardware en lugar de una contraseña.",
+        "de": "Melden Sie sich mit Biometrie oder einem Hardware-Sicherheitsschlüssel statt mit einem Passwort an.",
+        "it": "Accedi con biometria o una chiave di sicurezza hardware invece di una password."
+      },
+      "availability": "included"
+    },
+    {
       "id": "borg_v2",
       "plan": "pro",
       "label": "Borg v2 beta testing",
@@ -190,7 +224,7 @@
       "availability": "included"
     },
     {
-      "id": "multi_repo_orchestration",
+      "id": "backup_plan_multi_repository",
       "plan": "pro",
       "label": "Multi-repository backup",
       "label_localized": {
@@ -204,10 +238,10 @@
         "de": "Sichern Sie mit einer einzigen Konfiguration auf mehrere Ziele.",
         "it": "Esegui backup verso più destinazioni da un'unica configurazione."
       },
-      "availability": "coming_soon"
+      "availability": "included"
     },
     {
-      "id": "multi_source_policies",
+      "id": "backup_plan_mixed_sources",
       "plan": "pro",
       "label": "Multi-source backup",
       "label_localized": {
@@ -215,13 +249,47 @@
         "de": "Multi-Source-Backup",
         "it": "Backup multi-sorgente"
       },
-      "description": "Back up remote and local sources from one backup definition.",
+      "description": "Back up local, SSH, managed-agent, and database sources from one backup definition.",
       "description_localized": {
-        "es": "Haz copias de seguridad de orígenes remotos y locales desde una sola definición.",
-        "de": "Sichern Sie entfernte und lokale Quellen mit einer einzigen Backup-Definition.",
-        "it": "Esegui backup di sorgenti locali e remote da un'unica definizione."
+        "es": "Haz copias de seguridad de origenes locales, SSH, agentes gestionados y bases de datos desde una sola definicion.",
+        "de": "Sichern Sie lokale, SSH-, Managed-Agent- und Datenbankquellen mit einer einzigen Backup-Definition.",
+        "it": "Esegui backup di origini locali, SSH, agent gestiti e database da un'unica definizione."
       },
-      "availability": "coming_soon"
+      "availability": "included"
+    },
+    {
+      "id": "rclone",
+      "plan": "pro",
+      "label": "Cloud storage with rclone",
+      "label_localized": {
+        "es": "Almacenamiento en la nube con rclone",
+        "de": "Cloud-Speicher mit rclone",
+        "it": "Archiviazione cloud con rclone"
+      },
+      "description": "Mirror repositories to managed rclone remotes and use direct Borg 2 rclone targets.",
+      "description_localized": {
+        "es": "Replica repositorios en remotos rclone gestionados y usa destinos rclone directos de Borg 2.",
+        "de": "Spiegeln Sie Repositories auf verwaltete rclone-Remotes und nutzen Sie direkte Borg-2-rclone-Ziele.",
+        "it": "Replica i repository su remoti rclone gestiti e usa destinazioni rclone dirette di Borg 2."
+      },
+      "availability": "included"
+    },
+    {
+      "id": "managed_agents",
+      "plan": "pro",
+      "label": "Managed agents",
+      "label_localized": {
+        "es": "Agentes gestionados",
+        "de": "Managed Agents",
+        "it": "Agent gestiti"
+      },
+      "description": "Enroll machines as agents and back them up without opening inbound SSH.",
+      "description_localized": {
+        "es": "Inscribe maquinas como agentes y haz copias de seguridad sin abrir SSH entrante.",
+        "de": "Registrieren Sie Maschinen als Agents und sichern Sie sie, ohne eingehendes SSH zu oeffnen.",
+        "it": "Registra le macchine come agent ed esegui backup senza aprire SSH in ingresso."
+      },
+      "availability": "included"
     },
     {
       "id": "backup_reports",
@@ -292,23 +360,6 @@
       "availability": "coming_soon"
     },
     {
-      "id": "rclone_support",
-      "plan": "pro",
-      "label": "Rclone support",
-      "label_localized": {
-        "es": "Soporte para Rclone",
-        "de": "Rclone-Unterstützung",
-        "it": "Supporto per Rclone"
-      },
-      "description": "Use Rclone-backed destinations as backup targets.",
-      "description_localized": {
-        "es": "Usa destinos respaldados por Rclone como objetivos de copia de seguridad.",
-        "de": "Verwenden Sie von Rclone unterstützte Ziele als Backup-Ziele.",
-        "it": "Usa destinazioni supportate da Rclone come destinazioni di backup."
-      },
-      "availability": "coming_soon"
-    },
-    {
       "id": "rbac",
       "plan": "enterprise",
       "label": "RBAC",
@@ -358,23 +409,6 @@
         "it": "Usa la stessa chiave di licenza Enterprise su fino a 15 server Borg UI."
       },
       "availability": "included"
-    },
-    {
-      "id": "enterprise_auth",
-      "plan": "enterprise",
-      "label": "SSO, 2FA, passkeys, and OIDC",
-      "label_localized": {
-        "es": "SSO, 2FA, passkeys y OIDC",
-        "de": "SSO, 2FA, Passkeys und OIDC",
-        "it": "SSO, 2FA, passkey e OIDC"
-      },
-      "description": "Enterprise authentication and identity integration for larger teams.",
-      "description_localized": {
-        "es": "Autenticación empresarial e integración de identidad para equipos más grandes.",
-        "de": "Enterprise-Authentifizierung und Identitätsintegration für größere Teams.",
-        "it": "Autenticazione enterprise e integrazione dell'identità per team più grandi."
-      },
-      "availability": "coming_soon"
     },
     {
       "id": "centralized_management",

@@ -8,18 +8,30 @@ from app.database.models import Repository, SSHConnection
 class TestScriptTestingEndpoint:
     @pytest.mark.asyncio
     async def test_non_admin_cannot_test_scripts(self, test_client, auth_headers):
-        response = test_client.post("/api/scripts/test", headers=auth_headers, json={"script": "echo hi"})
+        response = test_client.post(
+            "/api/scripts/test", headers=auth_headers, json={"script": "echo hi"}
+        )
 
         assert response.status_code == 403
-        assert response.json()["detail"]["key"] == "backend.errors.scripts.adminAccessRequired"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.scripts.adminAccessRequired"
+        )
 
     def test_empty_script_is_rejected(self, test_client, admin_headers):
-        response = test_client.post("/api/scripts/test", headers=admin_headers, json={"script": "   "})
+        response = test_client.post(
+            "/api/scripts/test", headers=admin_headers, json={"script": "   "}
+        )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.scripts.scriptCannotBeEmpty"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.scripts.scriptCannotBeEmpty"
+        )
 
-    def test_executes_script_with_base_sandbox_environment(self, test_client, admin_headers):
+    def test_executes_script_with_base_sandbox_environment(
+        self, test_client, admin_headers
+    ):
         result = {
             "success": True,
             "stdout": "ok",
@@ -28,7 +40,9 @@ class TestScriptTestingEndpoint:
             "execution_time": 0.12,
         }
 
-        with patch("app.api.scripts.execute_script", new=AsyncMock(return_value=result)) as mock_execute:
+        with patch(
+            "app.api.scripts.execute_script", new=AsyncMock(return_value=result)
+        ) as mock_execute:
             response = test_client.post(
                 "/api/scripts/test",
                 headers=admin_headers,
@@ -48,7 +62,9 @@ class TestScriptTestingEndpoint:
             "TMPDIR": "/tmp",
         }
 
-    def test_injects_repository_context_and_source_connection(self, test_client, admin_headers, test_db):
+    def test_injects_repository_context_and_source_connection(
+        self, test_client, admin_headers, test_db
+    ):
         connection = SSHConnection(
             host="backup.example.com",
             username="borg",
@@ -71,13 +87,18 @@ class TestScriptTestingEndpoint:
         test_db.commit()
         test_db.refresh(repo)
 
-        with patch("app.api.scripts.execute_script", new=AsyncMock(return_value={
-            "success": True,
-            "stdout": "",
-            "stderr": "",
-            "exit_code": 0,
-            "execution_time": 0.01,
-        })) as mock_execute:
+        with patch(
+            "app.api.scripts.execute_script",
+            new=AsyncMock(
+                return_value={
+                    "success": True,
+                    "stdout": "",
+                    "stderr": "",
+                    "exit_code": 0,
+                    "execution_time": 0.01,
+                }
+            ),
+        ) as mock_execute:
             response = test_client.post(
                 "/api/scripts/test",
                 headers=admin_headers,
@@ -95,13 +116,18 @@ class TestScriptTestingEndpoint:
         assert env["BORG_UI_REMOTE_USERNAME"] == connection.username
 
     def test_timeout_result_is_returned_as_http_error(self, test_client, admin_headers):
-        with patch("app.api.scripts.execute_script", new=AsyncMock(return_value={
-            "success": False,
-            "stdout": "",
-            "stderr": "script timed out after 30s",
-            "exit_code": -1,
-            "execution_time": 30.0,
-        })):
+        with patch(
+            "app.api.scripts.execute_script",
+            new=AsyncMock(
+                return_value={
+                    "success": False,
+                    "stdout": "",
+                    "stderr": "script timed out after 30s",
+                    "exit_code": -1,
+                    "execution_time": 30.0,
+                }
+            ),
+        ):
             response = test_client.post(
                 "/api/scripts/test",
                 headers=admin_headers,
@@ -109,4 +135,7 @@ class TestScriptTestingEndpoint:
             )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.scripts.scriptExecutionTimedOut"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.scripts.scriptExecutionTimedOut"
+        )

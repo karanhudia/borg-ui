@@ -48,6 +48,49 @@ else
     fi
 fi
 
+# Setup Borg cache directory to persist across container restarts.
+# Borg defaults to $HOME/.cache/borg, but we keep the path explicit so it
+# matches the documented Docker volume even when HOME changes.
+BORG_CACHE_DIR=${BORG_CACHE_DIR:-/home/borg/.cache/borg}
+export BORG_CACHE_DIR
+
+echo "[$(date)] Setting up Borg cache directory at ${BORG_CACHE_DIR}..."
+mkdir -p "$BORG_CACHE_DIR"
+if ! chown -R borg:borg "$BORG_CACHE_DIR" 2>/dev/null; then
+    echo "[$(date)] Warning: Could not change ownership of Borg cache directory; continuing with existing permissions"
+fi
+if ! chmod 700 "$BORG_CACHE_DIR" 2>/dev/null; then
+    echo "[$(date)] Warning: Could not chmod Borg cache directory; continuing with existing permissions"
+fi
+echo "[$(date)] Borg cache directory setup complete"
+
+# Setup SSH home directory to persist across container updates.
+# Plain ssh commands in pre/post-backup hooks use ~/.ssh/known_hosts by default.
+SSH_HOME_DIR=/home/borg/.ssh
+PERSISTENT_SSH_DIR=/data/ssh_keys
+echo "[$(date)] Setting up persistent SSH directory at ${PERSISTENT_SSH_DIR}..."
+mkdir -p "$PERSISTENT_SSH_DIR"
+
+if [ -d "$SSH_HOME_DIR" ] && [ ! -L "$SSH_HOME_DIR" ]; then
+    if [ "$(ls -A "$SSH_HOME_DIR" 2>/dev/null)" ]; then
+        echo "[$(date)] Migrating existing SSH files to persistent storage..."
+        cp -a "$SSH_HOME_DIR"/. "$PERSISTENT_SSH_DIR"/
+    fi
+    rm -rf "$SSH_HOME_DIR"
+fi
+
+ln -sfn "$PERSISTENT_SSH_DIR" "$SSH_HOME_DIR"
+
+if ! chown -R borg:borg "$PERSISTENT_SSH_DIR" 2>/dev/null; then
+    echo "[$(date)] Warning: Could not change ownership of persistent SSH directory; continuing with existing permissions"
+fi
+if ! chmod 700 "$PERSISTENT_SSH_DIR" 2>/dev/null; then
+    echo "[$(date)] Warning: Could not chmod persistent SSH directory; continuing with existing permissions"
+fi
+chmod 600 "$PERSISTENT_SSH_DIR"/id_* 2>/dev/null || true
+chmod 644 "$PERSISTENT_SSH_DIR"/*.pub "$PERSISTENT_SSH_DIR"/known_hosts 2>/dev/null || true
+echo "[$(date)] Persistent SSH directory setup complete"
+
 # Setup SSH key symlink for root user (when PUID=0)
 # When borg user runs as root (UID 0), SSH looks for keys in /root/.ssh
 # but we deploy them to /home/borg/.ssh. Create symlink to handle this.

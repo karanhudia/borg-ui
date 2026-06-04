@@ -4,6 +4,7 @@ import AccountProfileSection from '../AccountProfileSection'
 import AccountPasswordDialog from '../AccountPasswordDialog'
 import AccountAccessSection from '../AccountAccessSection'
 import AccountSecuritySection from '../AccountSecuritySection'
+import AccountSecuritySettingsSection from '../AccountSecuritySettingsSection'
 import AccountTabHeader from '../AccountTabHeader'
 import AccountTabNavigation from '../AccountTabNavigation'
 
@@ -20,38 +21,44 @@ vi.mock('../UserPermissionsPanel', () => ({
   ),
 }))
 
+const defaultBadgeProps = {
+  roleLabel: 'Administrator',
+  isAdmin: true,
+  isOperator: false,
+  createdAt: '2024-01-15T00:00:00Z',
+  totpEnabled: false,
+  passkeyCount: 0,
+}
+
 describe('AccountProfileSection', () => {
-  it('renders the password action first when setup is incomplete and submits personal profile changes', async () => {
+  it('renders the password and edit profile cards', async () => {
     const user = userEvent.setup()
-    const onProfileFormChange = vi.fn()
-    const onSaveProfile = vi.fn()
+    const onOpenEditProfile = vi.fn()
 
     renderWithProviders(
       <AccountProfileSection
         canManageSystem={false}
-        mustChangePassword={true}
         profileForm={{ username: 'admin', email: 'admin@example.com', full_name: 'Admin User' }}
         deploymentForm={{ deployment_type: 'individual', enterprise_name: '' }}
         isSavingProfile={false}
         isSavingDeployment={false}
-        onProfileFormChange={onProfileFormChange}
+        onProfileFormChange={vi.fn()}
         onDeploymentFormChange={vi.fn()}
-        onSaveProfile={onSaveProfile}
+        onSaveProfile={vi.fn()}
         onSaveDeployment={vi.fn()}
         onOpenChangePassword={vi.fn()}
+        onOpenEditProfile={onOpenEditProfile}
+        {...defaultBadgeProps}
       />
     )
 
     const headings = screen.getAllByText('Account password')
     expect(headings[0]).toBeInTheDocument()
-    expect(screen.getByText('Password update required')).toBeInTheDocument()
-    expect(screen.queryByText('Finish account setup')).not.toBeInTheDocument()
+    expect(screen.getAllByText('Click to change your login credentials').length).toBeGreaterThan(0)
+    expect(screen.getByText('Edit profile')).toBeInTheDocument()
 
-    fireEvent.change(screen.getByLabelText(/username/i), { target: { value: 'backup-admin' } })
-    expect(onProfileFormChange).toHaveBeenCalledWith({ username: 'backup-admin' })
-
-    await user.click(screen.getByRole('button', { name: /save profile/i }))
-    expect(onSaveProfile).toHaveBeenCalledTimes(1)
+    await user.click(screen.getByRole('button', { name: /edit profile/i }))
+    expect(onOpenEditProfile).toHaveBeenCalledTimes(1)
     expect(screen.queryByText('Deployment profile')).not.toBeInTheDocument()
   })
 
@@ -63,7 +70,6 @@ describe('AccountProfileSection', () => {
     const { unmount } = renderWithProviders(
       <AccountProfileSection
         canManageSystem={true}
-        mustChangePassword={false}
         profileForm={{ username: 'admin', email: 'admin@example.com', full_name: 'Admin User' }}
         deploymentForm={{ deployment_type: 'enterprise', enterprise_name: '' }}
         isSavingProfile={false}
@@ -73,6 +79,8 @@ describe('AccountProfileSection', () => {
         onSaveProfile={vi.fn()}
         onSaveDeployment={onSaveDeployment}
         onOpenChangePassword={vi.fn()}
+        onOpenEditProfile={vi.fn()}
+        {...defaultBadgeProps}
       />
     )
 
@@ -92,7 +100,6 @@ describe('AccountProfileSection', () => {
     renderWithProviders(
       <AccountProfileSection
         canManageSystem={true}
-        mustChangePassword={false}
         profileForm={{ username: 'admin', email: 'admin@example.com', full_name: 'Admin User' }}
         deploymentForm={{ deployment_type: 'enterprise', enterprise_name: 'NullCode AI' }}
         isSavingProfile={false}
@@ -102,6 +109,8 @@ describe('AccountProfileSection', () => {
         onSaveProfile={vi.fn()}
         onSaveDeployment={onSaveDeployment}
         onOpenChangePassword={vi.fn()}
+        onOpenEditProfile={vi.fn()}
+        {...defaultBadgeProps}
       />
     )
 
@@ -111,7 +120,7 @@ describe('AccountProfileSection', () => {
 })
 
 describe('AccountPasswordDialog', () => {
-  it('shows mismatch feedback and supports cancel for optional password changes', async () => {
+  it('shows mismatch feedback and supports cancel for password changes', async () => {
     const user = userEvent.setup()
     const onFormChange = vi.fn()
     const onSubmit = vi.fn()
@@ -120,7 +129,6 @@ describe('AccountPasswordDialog', () => {
     renderWithProviders(
       <AccountPasswordDialog
         open={true}
-        mustChangePassword={false}
         currentPassword="old-pass"
         newPassword="new-pass"
         confirmPassword="different-pass"
@@ -138,30 +146,6 @@ describe('AccountPasswordDialog', () => {
 
     fireEvent.submit(screen.getByRole('button', { name: /update password/i }).closest('form')!)
     expect(onSubmit).toHaveBeenCalledTimes(1)
-  })
-
-  it('hides cancel when password change is mandatory', () => {
-    renderWithProviders(
-      <AccountPasswordDialog
-        open={true}
-        mustChangePassword={true}
-        currentPassword=""
-        newPassword=""
-        confirmPassword=""
-        isSubmitting={false}
-        onClose={vi.fn()}
-        onFormChange={vi.fn()}
-        onSubmit={vi.fn()}
-      />
-    )
-
-    expect(screen.getByText('Complete account setup')).toBeInTheDocument()
-    expect(
-      screen.getByText(
-        /your password must be changed before you can navigate outside account settings/i
-      )
-    ).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /cancel/i })).not.toBeInTheDocument()
   })
 })
 
@@ -186,41 +170,26 @@ describe('AccountAccessSection', () => {
 })
 
 describe('AccountSecuritySection', () => {
-  it('changes copy for mandatory password updates and opens the password dialog on click', async () => {
+  it('opens the password dialog on click', async () => {
     const user = userEvent.setup()
     const onOpenChangePassword = vi.fn()
 
-    renderWithProviders(
-      <AccountSecuritySection
-        mustChangePassword={true}
-        onOpenChangePassword={onOpenChangePassword}
-      />
-    )
+    renderWithProviders(<AccountSecuritySection onOpenChangePassword={onOpenChangePassword} />)
 
-    expect(screen.getByText('Password update required')).toBeInTheDocument()
-    await user.click(screen.getByText('Password update required'))
+    expect(screen.getByText('Account password')).toBeInTheDocument()
+    await user.click(screen.getByText('Account password'))
     expect(onOpenChangePassword).toHaveBeenCalledTimes(1)
   })
 })
 
 describe('AccountTabHeader', () => {
-  it('renders identity chips and member metadata', () => {
-    renderWithProviders(
-      <AccountTabHeader
-        username="admin"
-        displayName="Admin User"
-        subtitle="Personal and deployment identity live here."
-        roleLabel="Administrator"
-        roleColor="secondary"
-        createdAt="2024-01-15T00:00:00Z"
-        deploymentLabel="Enterprise deployment"
-      />
-    )
+  it('renders account settings title and description', () => {
+    renderWithProviders(<AccountTabHeader />)
 
-    expect(screen.getByText('Admin User')).toBeInTheDocument()
-    expect(screen.getByText('Administrator')).toBeInTheDocument()
-    expect(screen.getByText('Enterprise deployment')).toBeInTheDocument()
-    expect(screen.getByText(/@admin · since/i)).toBeInTheDocument()
+    expect(screen.getByText('User Settings')).toBeInTheDocument()
+    expect(
+      screen.getByText('Manage your personal profile, credentials, and access preferences.')
+    ).toBeInTheDocument()
   })
 })
 
@@ -231,9 +200,41 @@ describe('AccountTabNavigation', () => {
 
     renderWithProviders(<AccountTabNavigation value="profile" onChange={onChange} />)
 
+    expect(screen.getByRole('tab', { name: /security/i })).toBeInTheDocument()
+
     await user.click(screen.getByRole('tab', { name: /access/i }))
 
     expect(onChange).toHaveBeenCalledWith('access')
+  })
+
+  it('hides the security tab when account security is not applicable', () => {
+    renderWithProviders(
+      <AccountTabNavigation value="profile" onChange={vi.fn()} showSecurityTab={false} />
+    )
+
     expect(screen.queryByRole('tab', { name: /security/i })).not.toBeInTheDocument()
+  })
+})
+
+describe('AccountSecuritySettingsSection', () => {
+  it('renders a dedicated security surface with TOTP and passkey summaries', () => {
+    renderWithProviders(
+      <AccountSecuritySettingsSection
+        totpEnabled={false}
+        recoveryCodesRemaining={0}
+        totpLoading={false}
+        onEnableTotp={vi.fn()}
+        onDisableTotp={vi.fn()}
+        passkeys={[]}
+        passkeysLoading={false}
+        onAddPasskey={vi.fn()}
+        onDeletePasskey={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText('Security')).toBeInTheDocument()
+    expect(screen.getAllByText('Two-factor authentication')).toHaveLength(2)
+    expect(screen.getAllByText('Passkeys')).toHaveLength(2)
+    expect(screen.getByText('Account security')).toBeInTheDocument()
   })
 })

@@ -11,7 +11,6 @@ Both phases emit progress_percent on stderr with --progress --log-json.
 
 import asyncio
 import json
-import os
 from datetime import datetime
 from pathlib import Path
 import structlog
@@ -20,8 +19,12 @@ from app.database.models import CompactJob, Repository
 from app.database.database import SessionLocal
 from app.core.borg2 import _get_borg2_binary
 from app.config import settings
+from app.services.maintenance_state import apply_compact_completion
+from app.utils.db_retries import commit_with_retry
 from app.utils.borg_env import build_repository_borg_env, cleanup_temp_key_file
-from app.utils.ssh_utils import resolve_repo_ssh_key_file  # Backward-compatible patch target for tests
+from app.utils.ssh_utils import (
+    resolve_repo_ssh_key_file,  # noqa: F401
+)  # Backward-compatible patch target for tests
 
 logger = structlog.get_logger()
 
@@ -45,6 +48,36 @@ class CompactV2Service:
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.running_processes: dict = {}
 
+    async def cancel_compact(self, job_id: int) -> bool:
+        """Cancel a running borg2 compact job by terminating its tracked process."""
+        if job_id not in self.running_processes:
+            logger.warning(
+                "No running borg2 compact process found for job", job_id=job_id
+            )
+            return False
+
+        process = self.running_processes[job_id]
+        try:
+            process.terminate()
+            logger.info(
+                "Sent SIGTERM to borg2 compact process",
+                job_id=job_id,
+                pid=process.pid,
+            )
+            try:
+                await asyncio.wait_for(process.wait(), timeout=5.0)
+            except asyncio.TimeoutError:
+                process.kill()
+                await process.wait()
+            return True
+        except Exception as e:
+            logger.error(
+                "Failed to cancel borg2 compact process",
+                job_id=job_id,
+                error=str(e),
+            )
+            return False
+
     async def execute_compact(self, job_id: int, repository_id: int, _db=None):
         """Execute borg2 compact with progress streaming into a CompactJob record."""
         db = SessionLocal()
@@ -56,36 +89,63 @@ class CompactV2Service:
                 logger.error("Borg2 compact job not found", job_id=job_id)
                 return
 
-            repo = db.query(Repository).filter(Repository.id == repository_id).first()
-            if not repo:
-                job.status = "failed"
-                job.error_message = f"Repository not found (ID: {repository_id})"
-                job.completed_at = datetime.utcnow()
-                db.commit()
+            repository = (
+                db.query(Repository).filter(Repository.id == repository_id).first()
+            )
+            if not repository:
+                completed_at = datetime.utcnow()
+
+                def persist_missing_repo_state():
+                    job.status = "failed"
+                    job.error_message = f"Repository not found (ID: {repository_id})"
+                    job.completed_at = completed_at
+
+                await commit_with_retry(
+                    db,
+                    prepare=persist_missing_repo_state,
+                    logger=logger,
+                    action="borg2_compact_missing_repo",
+                    job_id=job_id,
+                    repository_id=repository_id,
+                )
                 return
 
             # Job is pre-set to running by the endpoint; refresh to ensure we have latest state.
             # If the job was somehow already completed/cancelled (race), bail out.
             db.refresh(job)
             if job.status not in ("running", "pending"):
-                logger.warning("Compact job already in terminal state, skipping",
-                               job_id=job_id, status=job.status)
+                logger.warning(
+                    "Compact job already in terminal state, skipping",
+                    job_id=job_id,
+                    status=job.status,
+                )
                 return
 
             env, temp_key_file = build_repository_borg_env(
-                repo,
+                repository,
                 db,
                 keepalive=True,
                 show_progress=True,
             )
 
             borg_cmd = _get_borg2_binary()
-            cmd = [borg_cmd, "-r", repo.path, "compact", "--progress", "--log-json"]
-            if repo.remote_path:
-                cmd.extend(["--remote-path", repo.remote_path])
+            cmd = [
+                borg_cmd,
+                "-r",
+                repository.path,
+                "compact",
+                "--progress",
+                "--log-json",
+            ]
+            if repository.remote_path:
+                cmd.extend(["--remote-path", repository.remote_path])
 
-            logger.info("Starting borg2 compact", job_id=job_id, repository=repo.path,
-                        command=" ".join(cmd))
+            logger.info(
+                "Starting borg2 compact",
+                job_id=job_id,
+                repository=repository.path,
+                command=" ".join(cmd),
+            )
 
             process = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -94,9 +154,20 @@ class CompactV2Service:
                 env=env,
             )
 
-            job.process_pid = process.pid
-            job.process_start_time = _get_process_start_time(process.pid)
-            db.commit()
+            process_start_time = _get_process_start_time(process.pid)
+
+            def persist_pid_tracking():
+                job.process_pid = process.pid
+                job.process_start_time = process_start_time
+
+            await commit_with_retry(
+                db,
+                prepare=persist_pid_tracking,
+                logger=logger,
+                action="borg2_compact_store_pid",
+                job_id=job_id,
+                repository_id=repository_id,
+            )
 
             self.running_processes[job_id] = process
             cancelled = False
@@ -114,7 +185,9 @@ class CompactV2Service:
                     await asyncio.sleep(3)
                     db.refresh(job)
                     if job.status == "cancelled":
-                        logger.info("Borg2 compact cancelled, terminating", job_id=job_id)
+                        logger.info(
+                            "Borg2 compact cancelled, terminating", job_id=job_id
+                        )
                         cancelled = True
                         process.terminate()
                         try:
@@ -136,7 +209,11 @@ class CompactV2Service:
                             log_buffer.pop(0)
 
                         if line_str:
-                            logger.info("Borg2 compact output", job_id=job_id, line=line_str[:200])
+                            logger.info(
+                                "Borg2 compact output",
+                                job_id=job_id,
+                                line=line_str[:200],
+                            )
 
                         try:
                             if line_str and line_str[0] == "{":
@@ -153,7 +230,11 @@ class CompactV2Service:
 
                                     if message:
                                         progress_msg = f"{message} ({current}/{total})"
-                                        if now - last_progress_update.get(progress_msg, 0) >= PROGRESS_THROTTLE:
+                                        if (
+                                            now
+                                            - last_progress_update.get(progress_msg, 0)
+                                            >= PROGRESS_THROTTLE
+                                        ):
                                             job.progress_message = progress_msg
                                             last_progress_update[progress_msg] = now
 
@@ -172,7 +253,21 @@ class CompactV2Service:
                                             or now - last_commit_time >= COMMIT_INTERVAL
                                         )
                                         if should_commit:
-                                            db.commit()
+                                            progress = job.progress
+                                            progress_message = job.progress_message
+
+                                            def persist_progress():
+                                                job.progress = progress
+                                                job.progress_message = progress_message
+
+                                            await commit_with_retry(
+                                                db,
+                                                prepare=persist_progress,
+                                                logger=logger,
+                                                action="borg2_compact_progress",
+                                                job_id=job_id,
+                                                repository_id=repository_id,
+                                            )
                                             last_commit_time = now
                                             first_progress_committed = True
                         except (json.JSONDecodeError, KeyError, ValueError):
@@ -180,11 +275,26 @@ class CompactV2Service:
                 except asyncio.CancelledError:
                     raise
                 finally:
-                    db.commit()
+                    final_progress = job.progress
+                    final_progress_message = job.progress_message
+
+                    def persist_stream_state():
+                        job.progress = final_progress
+                        job.progress_message = final_progress_message
+
+                    await commit_with_retry(
+                        db,
+                        prepare=persist_stream_state,
+                        logger=logger,
+                        action="borg2_compact_stream_finalize",
+                        job_id=job_id,
+                        repository_id=repository_id,
+                    )
 
             try:
-                await asyncio.gather(check_cancellation(), stream_logs(),
-                                     return_exceptions=True)
+                await asyncio.gather(
+                    check_cancellation(), stream_logs(), return_exceptions=True
+                )
             except asyncio.CancelledError:
                 cancelled = True
                 process.terminate()
@@ -196,30 +306,32 @@ class CompactV2Service:
 
             if job.status == "cancelled":
                 job.completed_at = datetime.utcnow()
-            elif process.returncode == 0:
-                job.status = "completed"
-                job.progress = 100
-                job.progress_message = "Compact completed successfully"
-                job.completed_at = datetime.utcnow()
-                logger.info("Borg2 compact completed", job_id=job_id)
-            elif process.returncode == 1 or (100 <= process.returncode <= 127):
-                job.status = "completed_with_warnings"
-                job.progress = 100
-                job.progress_message = f"Compact completed with warnings (exit code {process.returncode})"
-                job.error_message = job.progress_message
-                job.completed_at = datetime.utcnow()
-                logger.warning("Borg2 compact warnings", job_id=job_id,
-                               exit_code=process.returncode)
             else:
-                job.status = "failed"
-                job.error_message = f"Compact failed with exit code {process.returncode}"
-                job.completed_at = datetime.utcnow()
-                logger.error("Borg2 compact failed", job_id=job_id,
-                             exit_code=process.returncode)
+                apply_compact_completion(
+                    job,
+                    repository,
+                    process.returncode,
+                )
+                if job.status == "completed":
+                    logger.info("Borg2 compact completed", job_id=job_id)
+                elif job.status == "completed_with_warnings":
+                    logger.warning(
+                        "Borg2 compact warnings",
+                        job_id=job_id,
+                        exit_code=process.returncode,
+                    )
+                else:
+                    logger.error(
+                        "Borg2 compact failed",
+                        job_id=job_id,
+                        exit_code=process.returncode,
+                    )
 
             if log_buffer:
-                log_file = (self.log_dir /
-                            f"compact_job_{job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+                log_file = (
+                    self.log_dir
+                    / f"compact_job_{job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+                )
                 try:
                     log_file.write_text("\n".join(log_buffer))
                     job.log_file_path = str(log_file)
@@ -228,17 +340,58 @@ class CompactV2Service:
                 except Exception as e:
                     job.has_logs = False
                     job.logs = f"Failed to save logs: {e}"
-                    logger.error("Failed to save borg2 compact logs", job_id=job_id, error=str(e))
+                    logger.error(
+                        "Failed to save borg2 compact logs", job_id=job_id, error=str(e)
+                    )
 
-            db.commit()
+            final_status = job.status
+            final_progress = job.progress
+            final_progress_message = job.progress_message
+            final_completed_at = job.completed_at
+            final_error_message = job.error_message
+            final_log_file_path = job.log_file_path
+            final_has_logs = job.has_logs
+            final_logs = job.logs
+            repository_last_compact = repository.last_compact
+
+            def persist_final_state():
+                job.status = final_status
+                job.progress = final_progress
+                job.progress_message = final_progress_message
+                job.completed_at = final_completed_at
+                job.error_message = final_error_message
+                job.log_file_path = final_log_file_path
+                job.has_logs = final_has_logs
+                job.logs = final_logs
+                repository.last_compact = repository_last_compact
+
+            await commit_with_retry(
+                db,
+                prepare=persist_final_state,
+                logger=logger,
+                action="borg2_compact_finalize",
+                job_id=job_id,
+                repository_id=repository_id,
+            )
 
         except Exception as e:
             logger.error("Borg2 compact execution failed", job_id=job_id, error=str(e))
             try:
-                job.status = "failed"
-                job.error_message = str(e)
-                job.completed_at = datetime.utcnow()
-                db.commit()
+                completed_at = datetime.utcnow()
+
+                def persist_failure_state():
+                    job.status = "failed"
+                    job.error_message = str(e)
+                    job.completed_at = completed_at
+
+                await commit_with_retry(
+                    db,
+                    prepare=persist_failure_state,
+                    logger=logger,
+                    action="borg2_compact_fail",
+                    job_id=job_id,
+                    repository_id=repository_id,
+                )
             except Exception:
                 db.rollback()
         finally:

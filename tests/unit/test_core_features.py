@@ -2,7 +2,13 @@ import pytest
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.features import FEATURES, Plan, get_current_plan, plan_includes, require_feature
+from app.core.features import (
+    FEATURES,
+    Plan,
+    get_current_plan,
+    plan_includes,
+    require_feature,
+)
 from app.database.models import LicensingState
 
 
@@ -24,20 +30,32 @@ class TestPlanIncludes:
 
 @pytest.mark.unit
 class TestCurrentPlan:
-    def test_get_current_plan_defaults_to_community_when_missing_settings(self, db_session: Session):
+    def test_get_current_plan_defaults_to_community_when_missing_settings(
+        self, db_session: Session
+    ):
         assert get_current_plan(db_session) == Plan.COMMUNITY
 
     def test_get_current_plan_uses_saved_value(self, db_session: Session):
         db_session.add(
-            LicensingState(instance_id="test-instance-core-features-enterprise", plan="enterprise", status="active")
+            LicensingState(
+                instance_id="test-instance-core-features-enterprise",
+                plan="enterprise",
+                status="active",
+            )
         )
         db_session.commit()
 
         assert get_current_plan(db_session) == Plan.ENTERPRISE
 
-    def test_get_current_plan_defaults_inactive_state_to_community(self, db_session: Session):
+    def test_get_current_plan_defaults_inactive_state_to_community(
+        self, db_session: Session
+    ):
         db_session.add(
-            LicensingState(instance_id="test-instance-core-features-inactive", plan="pro", status="none")
+            LicensingState(
+                instance_id="test-instance-core-features-inactive",
+                plan="pro",
+                status="none",
+            )
         )
         db_session.commit()
 
@@ -54,7 +72,11 @@ class TestRequireFeature:
 
     def test_require_feature_allows_included_plan(self, db_session: Session):
         db_session.add(
-            LicensingState(instance_id="test-instance-core-features-rbac", plan="enterprise", status="active")
+            LicensingState(
+                instance_id="test-instance-core-features-rbac",
+                plan="enterprise",
+                status="active",
+            )
         )
         db_session.commit()
 
@@ -64,7 +86,11 @@ class TestRequireFeature:
 
     def test_require_feature_blocks_missing_plan(self, db_session: Session):
         db_session.add(
-            LicensingState(instance_id="test-instance-core-features-community", plan="community", status="active")
+            LicensingState(
+                instance_id="test-instance-core-features-community",
+                plan="community",
+                status="active",
+            )
         )
         db_session.commit()
 

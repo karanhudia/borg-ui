@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { within } from '@testing-library/react'
+import i18n from '../../i18n'
 import { renderWithProviders, screen, userEvent, waitFor } from '../../test/test-utils'
 import SSHConnectionsSingleKey from '../SSHConnectionsSingleKey'
+import { ConnectionDiagnosticsDialog } from '../ssh-connections-single-key/dialogs/ConnectionDiagnosticsDialog'
 
 const { track, toastSuccess, toastError, mockState } = vi.hoisted(() => ({
   track: vi.fn(),
@@ -91,12 +94,14 @@ vi.mock('../../components/RemoteMachineCard', () => ({
     onDelete,
     onTestConnection,
     onDeployKey,
+    onRunDiagnostics,
   }: {
     machine: { host: string }
     onEdit: (machine: { host: string }) => void
     onDelete: (machine: { host: string }) => void
     onTestConnection: (machine: { host: string }) => void
     onDeployKey: (machine: { host: string }) => void
+    onRunDiagnostics?: (machine: { host: string }) => void
   }) => (
     <div>
       <span>{machine.host}</span>
@@ -104,6 +109,7 @@ vi.mock('../../components/RemoteMachineCard', () => ({
       <button onClick={() => onDelete(machine)}>delete {machine.host}</button>
       <button onClick={() => onTestConnection(machine)}>test {machine.host}</button>
       <button onClick={() => onDeployKey(machine)}>deploy {machine.host}</button>
+      <button onClick={() => onRunDiagnostics?.(machine)}>run diagnostics {machine.host}</button>
     </div>
   ),
 }))
@@ -122,11 +128,39 @@ vi.mock('../../services/api', () => ({
     refreshConnectionStorage: vi.fn(() => Promise.resolve({ data: {} })),
     deleteSSHKey: vi.fn(() => Promise.resolve({ data: {} })),
     redeployKeyToConnection: vi.fn(() => Promise.resolve({ data: { success: true } })),
+    runConnectionDiagnostics: vi.fn(() =>
+      Promise.resolve({
+        data: {
+          connection: {
+            id: 3,
+            host: 'backup-host',
+            username: 'borg',
+            port: 2222,
+            status: 'connected',
+            last_test: null,
+            last_success: null,
+            error_message: null,
+          },
+          session: { status: 'success', elapsed_ms: 12, output: '/srv' },
+          latency: { status: 'success', elapsed_ms: 12 },
+          tcp: null,
+          throughput: {
+            status: 'success',
+            direction: 'download',
+            probe_size_bytes: 262144,
+            bytes_transferred: 262144,
+            elapsed_ms: 31,
+            mbps: 8.06,
+          },
+        },
+      })
+    ),
   },
 }))
 
 describe('SSHConnectionsSingleKey', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await i18n.changeLanguage('en')
     vi.clearAllMocks()
     mockState.canManageSsh = true
     mockState.systemKeyResponse = {
@@ -178,6 +212,13 @@ describe('SSHConnectionsSingleKey', () => {
     renderWithProviders(<SSHConnectionsSingleKey />)
 
     expect(await screen.findByTestId('navigate')).toHaveTextContent('redirect:/dashboard')
+  })
+
+  it('does not show the remote machines summary stats band', async () => {
+    renderWithProviders(<SSHConnectionsSingleKey />)
+
+    expect(await screen.findByText('Remote Machines')).toBeInTheDocument()
+    expect(screen.queryByText('Total Connections')).not.toBeInTheDocument()
   })
 
   it('generates a system SSH key with the selected algorithm', async () => {
@@ -263,6 +304,121 @@ describe('SSHConnectionsSingleKey', () => {
         port: 44,
       })
     })
+  })
+
+  it('opens remote machine diagnostics from a connection card and runs a session check', async () => {
+    const user = userEvent.setup()
+    const { sshKeysAPI } = await import('../../services/api')
+
+    renderWithProviders(<SSHConnectionsSingleKey />)
+
+    await screen.findByText('backup-host')
+    await user.click(screen.getByRole('button', { name: /run diagnostics backup-host/i }))
+    const dialog = await screen.findByRole('dialog', { name: /remote machine diagnostics/i })
+
+    await user.click(within(dialog).getByRole('button', { name: /run check/i }))
+
+    await waitFor(() => {
+      expect(sshKeysAPI.runConnectionDiagnostics).toHaveBeenCalledWith(3, {
+        timeout_seconds: 5,
+        speed_probe_bytes: 262144,
+      })
+    })
+    expect(await within(dialog).findByText(/SSH session healthy/i)).toBeInTheDocument()
+    expect(within(dialog).getAllByText(/12 ms/i)).toHaveLength(2)
+    expect(within(dialog).getByText(/8.06 MB\/s/i)).toBeInTheDocument()
+  }, 30000)
+
+  it('validates remote diagnostics target inputs before running', async () => {
+    const user = userEvent.setup()
+    const { sshKeysAPI } = await import('../../services/api')
+
+    renderWithProviders(<SSHConnectionsSingleKey />)
+
+    await screen.findByText('backup-host')
+    await user.click(screen.getByRole('button', { name: /run diagnostics backup-host/i }))
+    const dialog = await screen.findByRole('dialog', { name: /remote machine diagnostics/i })
+
+    await user.type(within(dialog).getByLabelText(/target host/i), 'postgres.internal')
+
+    expect(within(dialog).getByText(/Enter a TCP port between 1 and 65535/i)).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: /run check/i })).toBeDisabled()
+    expect(sshKeysAPI.runConnectionDiagnostics).not.toHaveBeenCalled()
+  }, 30000)
+
+  it('renders remote diagnostics partial TCP failure details', () => {
+    renderWithProviders(
+      <ConnectionDiagnosticsDialog
+        open
+        connection={{
+          id: 3,
+          ssh_key_id: 7,
+          ssh_key_name: 'System SSH Key',
+          host: 'backup-host',
+          username: 'borg',
+          port: 2222,
+          use_sftp_mode: true,
+          use_sudo: false,
+          status: 'connected',
+          created_at: '2026-01-01T00:00:00Z',
+        }}
+        initialResult={{
+          connection: {
+            id: 3,
+            host: 'backup-host',
+            username: 'borg',
+            port: 2222,
+            status: 'connected',
+            last_test: null,
+            last_success: null,
+            error_message: null,
+          },
+          session: { status: 'success', elapsed_ms: 10, output: '/srv' },
+          latency: { status: 'success', elapsed_ms: 10 },
+          tcp: {
+            target: { host: 'postgres.internal', port: 5432, timeout_seconds: 3 },
+            status: 'failed',
+            elapsed_ms: 4,
+            error: 'connection_refused',
+            message: 'Connection refused',
+          },
+          throughput: {
+            status: 'success',
+            direction: 'download',
+            probe_size_bytes: 262144,
+            bytes_transferred: 262144,
+            elapsed_ms: 64,
+            mbps: 3.91,
+          },
+        }}
+        onClose={vi.fn()}
+        onRunDiagnostics={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText(/SSH session healthy/i)).toBeInTheDocument()
+    expect(screen.getByText(/TCP failed/i)).toBeInTheDocument()
+    expect(screen.getByText(/postgres.internal:5432/i)).toBeInTheDocument()
+    expect(screen.getByText(/connection_refused/i)).toBeInTheDocument()
+    expect(screen.getByText(/Connection refused/i)).toBeInTheDocument()
+    expect(screen.getByText(/3.91 MB\/s/i)).toBeInTheDocument()
+  })
+
+  it('localizes the remote connections empty state', async () => {
+    await i18n.changeLanguage('de')
+    mockState.systemKeyResponse = { data: { exists: false } }
+    mockState.connectionsResponse = { data: { connections: [] } }
+
+    renderWithProviders(<SSHConnectionsSingleKey />)
+
+    expect(await screen.findByText('Remote-Maschinen')).toBeInTheDocument()
+    expect(screen.getByText('Remote-Verbindungen')).toBeInTheDocument()
+    expect(screen.getByText('Noch keine Remote-Maschinen')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Erzeuge oder importiere zuerst einen SSH-Schlüssel und stelle ihn dann auf Remote-Servern bereit.'
+      )
+    ).toBeInTheDocument()
   })
 
   it('updates an existing connection and automatically retests it', async () => {

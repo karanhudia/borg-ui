@@ -1,4 +1,4 @@
-import { Box, Switch, Tooltip, Typography } from '@mui/material'
+import { Box, IconButton, Switch, Tooltip, Typography, alpha, useTheme } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import {
   CalendarClock,
@@ -7,15 +7,16 @@ import {
   CalendarCheck,
   Play,
   Copy,
-  Pencil,
+  SquarePen,
   Trash2,
 } from 'lucide-react'
 import EntityCard, { StatItem, MetaItem, ActionItem } from './EntityCard'
+import ScheduledInstantTooltip from './ScheduledInstantTooltip'
 import {
-  formatDateShort,
+  formatDateCompact,
   formatDateTimeFull,
   formatCronHuman,
-  convertCronToLocal,
+  formatScheduledInstantDisplay,
 } from '../utils/dateUtils'
 
 interface Repository {
@@ -28,6 +29,7 @@ interface ScheduledJob {
   id: number
   name: string
   cron_expression: string
+  timezone?: string | null
   repository: string | null
   repository_id: number | null
   repository_ids: number[] | null
@@ -92,13 +94,20 @@ export default function ScheduleJobCard({
   isDuplicatePending,
 }: ScheduleJobCardProps) {
   const { t } = useTranslation()
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
+  const scheduleTimezone = job.timezone || 'UTC'
+  const scheduleDisplay = formatCronHuman(job.cron_expression)
+  const nextRunDisplay = job.next_run
+    ? formatScheduledInstantDisplay(job.next_run, scheduleTimezone)
+    : null
 
   const stats: StatItem[] = [
     {
       icon: <CalendarClock size={11} />,
       label: t('schedule.card.stats.schedule'),
-      value: formatCronHuman(convertCronToLocal(job.cron_expression)),
-      tooltip: job.cron_expression,
+      value: scheduleDisplay,
+      tooltip: `${job.cron_expression} (${scheduleTimezone})`,
       color: 'info',
     },
     {
@@ -110,20 +119,24 @@ export default function ScheduleJobCard({
     {
       icon: <History size={11} />,
       label: t('schedule.card.stats.lastRun'),
-      value: job.last_run ? formatDateShort(job.last_run) : t('common.never'),
+      value: job.last_run ? formatDateCompact(job.last_run) : t('common.never'),
       tooltip: job.last_run ? formatDateTimeFull(job.last_run) : '',
       color: 'warning',
     },
     {
       icon: <CalendarCheck size={11} />,
       label: t('schedule.card.stats.nextRun'),
-      value: job.next_run ? formatDateShort(job.next_run) : t('common.never'),
-      tooltip: job.next_run ? formatDateTimeFull(job.next_run) : '',
+      value: nextRunDisplay?.value ?? t('common.never'),
+      tooltip: nextRunDisplay ? <ScheduledInstantTooltip display={nextRunDisplay} /> : '',
       color: 'success',
     },
   ]
 
   const meta: MetaItem[] = []
+  meta.push({
+    label: t('common.timezone', { defaultValue: 'Timezone' }),
+    value: scheduleTimezone,
+  })
   if (job.description) meta.push({ label: t('schedule.card.meta.note'), value: job.description })
   if (job.run_prune_after)
     meta.push({
@@ -134,7 +147,7 @@ export default function ScheduleJobCard({
   if (job.last_prune)
     meta.push({
       label: t('schedule.card.meta.lastPruned'),
-      value: formatDateShort(job.last_prune),
+      value: formatDateCompact(job.last_prune),
       tooltip: formatDateTimeFull(job.last_prune),
     })
   if (job.run_compact_after)
@@ -145,7 +158,7 @@ export default function ScheduleJobCard({
   if (job.last_compact)
     meta.push({
       label: t('schedule.card.meta.lastCompact'),
-      value: formatDateShort(job.last_compact),
+      value: formatDateCompact(job.last_compact),
       tooltip: formatDateTimeFull(job.last_compact),
     })
 
@@ -158,13 +171,6 @@ export default function ScheduleJobCard({
       hidden: !canManage,
     },
     {
-      icon: <Pencil size={16} />,
-      tooltip: t('common.buttons.edit'),
-      onClick: onEdit,
-      color: 'primary',
-      hidden: !canManage,
-    },
-    {
       icon: <Trash2 size={16} />,
       tooltip: t('common.buttons.delete'),
       onClick: onDelete,
@@ -173,7 +179,30 @@ export default function ScheduleJobCard({
     },
   ]
 
-  const badge = (
+  const editIcon = canManage ? (
+    <Tooltip title={t('common.buttons.edit')} arrow placement="left">
+      <IconButton
+        size="small"
+        onClick={onEdit}
+        aria-label={t('common.buttons.edit')}
+        sx={{
+          width: 28,
+          height: 28,
+          borderRadius: 1,
+          flexShrink: 0,
+          color: 'text.disabled',
+          '&:hover': {
+            color: 'text.primary',
+            bgcolor: isDark ? alpha('#fff', 0.07) : alpha('#000', 0.06),
+          },
+        }}
+      >
+        <SquarePen size={14} />
+      </IconButton>
+    </Tooltip>
+  ) : undefined
+
+  const toggle = (
     <Tooltip
       title={
         canManage
@@ -185,6 +214,7 @@ export default function ScheduleJobCard({
       arrow
     >
       <Box
+        component="label"
         sx={{
           display: 'flex',
           alignItems: 'center',
@@ -192,15 +222,13 @@ export default function ScheduleJobCard({
           cursor: canManage ? 'pointer' : 'default',
           userSelect: 'none',
         }}
-        onClick={canManage ? onToggle : undefined}
       >
         <Switch
           checked={job.enabled}
           size="small"
           color="success"
           disabled={!canManage}
-          onChange={() => {}} // controlled by parent Box onClick
-          sx={{ pointerEvents: 'none' }}
+          onChange={canManage ? onToggle : undefined}
         />
         <Typography
           variant="caption"
@@ -209,7 +237,6 @@ export default function ScheduleJobCard({
             fontSize: '0.7rem',
             color: job.enabled ? 'success.main' : 'text.disabled',
             lineHeight: 1,
-            mr: 0.5,
           }}
         >
           {job.enabled ? t('schedule.card.badge.enabled') : t('schedule.card.badge.disabled')}
@@ -222,9 +249,10 @@ export default function ScheduleJobCard({
     <EntityCard
       title={job.name}
       subtitle={job.description ?? undefined}
-      badge={badge}
+      badge={editIcon}
       stats={stats}
       meta={meta.length > 0 ? meta : undefined}
+      toggle={toggle}
       actions={actions}
       primaryAction={
         canManage
@@ -232,7 +260,7 @@ export default function ScheduleJobCard({
               label: t('schedule.card.actions.runNow'),
               icon: <Play size={13} />,
               onClick: onRunNow,
-              disabled: !job.enabled || isRunNowPending,
+              disabled: Boolean(isRunNowPending),
             }
           : undefined
       }

@@ -10,6 +10,31 @@
   body {
     @apply bg-gray-50 text-gray-900;
   }
+
+  /* WCAG AA: placeholder must hit the same 4.5:1 floor as body text. */
+  ::placeholder {
+    color: #4b5563;
+    opacity: 1;
+  }
+
+  .dark ::placeholder {
+    color: #a1a1aa;
+    opacity: 1;
+  }
+}
+
+/* Global reduced-motion override. Per-component reveals should still respect
+   prefers-reduced-motion locally; this is the floor for unscoped animations
+   and transitions that leak through the design system. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 @layer components {

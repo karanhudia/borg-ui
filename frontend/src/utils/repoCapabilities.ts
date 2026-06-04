@@ -12,7 +12,8 @@ export function getRepoCapabilities(repo: Record<string, unknown> | { mode?: 'fu
     canBackup: !isObserve,
     canPrune: !isObserve,
     canCompact: !isObserve,
-    canDelete: !isObserve,
+    canDeleteArchive: !isObserve,
+    canDeleteRepository: true,
     canMount: true,
     canRestore: true,
   }

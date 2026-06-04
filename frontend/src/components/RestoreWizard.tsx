@@ -1,23 +1,18 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Box,
-  Button,
-  Typography,
-} from '@mui/material'
+import { DialogActions, Box, Button } from '@mui/material'
 import { Files, HardDrive, CheckCircle } from 'lucide-react'
+import WizardDialog from './shared/WizardDialog'
 import {
-  WizardStepIndicator,
   WizardStepRestoreFiles,
   WizardStepRestoreDestination,
   WizardStepRestoreReview,
 } from './wizard'
 import FileExplorerDialog from './FileExplorerDialog'
 import { sshKeysAPI } from '../services/api'
+import type { Archive, Repository } from '../types'
+import type { RestoreLayout, RestorePathMetadata } from '../utils/restorePaths'
+import { DEFAULT_RESTORE_LAYOUT } from '../utils/restorePaths'
 
 interface SSHConnection {
   id: number
@@ -32,6 +27,7 @@ interface SSHConnection {
 
 interface ArchiveFile {
   path: string
+  type: 'file' | 'directory'
   mode: string
   user: string
   group: string
@@ -43,8 +39,8 @@ interface ArchiveFile {
 interface RestoreWizardProps {
   open: boolean
   onClose: () => void
-  archiveName: string
-  repositoryId: number
+  archive: Pick<Archive, 'id' | 'name'>
+  repository: Repository
   repositoryType: string
   onRestore: (data: RestoreData) => void
 }
@@ -55,11 +51,14 @@ export interface RestoreData {
   destination_connection_id: number | null
   restore_strategy: 'original' | 'custom'
   custom_path: string | null
+  restore_layout: RestoreLayout
+  path_metadata: RestorePathMetadata[]
 }
 
 interface WizardState {
   // Step 0: Files
   selectedPaths: string[]
+  selectedItems: RestorePathMetadata[]
 
   // Step 1: Destination
   destinationType: 'local' | 'ssh'
@@ -68,21 +67,24 @@ interface WizardState {
   // Step 2: Path
   restoreStrategy: 'original' | 'custom'
   customPath: string
+  restoreLayout: RestoreLayout
 }
 
 const initialState: WizardState = {
   selectedPaths: [],
+  selectedItems: [],
   destinationType: 'local',
   destinationConnectionId: '',
   restoreStrategy: 'original',
   customPath: '',
+  restoreLayout: DEFAULT_RESTORE_LAYOUT,
 }
 
 const RestoreWizard = ({
   open,
   onClose,
-  archiveName,
-  repositoryId,
+  archive,
+  repository,
   repositoryType,
   onRestore,
 }: RestoreWizardProps) => {
@@ -152,7 +154,26 @@ const RestoreWizard = ({
     if (repositoryType === 'ssh' && updates.destinationType === 'ssh') {
       return // Silently ignore
     }
-    setWizardState((prev) => ({ ...prev, ...updates }))
+    setWizardState((prev) => {
+      const next: WizardState = { ...prev, ...updates }
+
+      if (updates.selectedPaths && !updates.selectedItems) {
+        const selectedPathSet = new Set(updates.selectedPaths)
+        const retainedItems = prev.selectedItems.filter((item) => selectedPathSet.has(item.path))
+        const retainedPathSet = new Set(retainedItems.map((item) => item.path))
+        const fallbackItems = updates.selectedPaths
+          .filter((path) => !retainedPathSet.has(path))
+          .map((path) => ({ path, type: 'file' as const }))
+
+        next.selectedItems = [...retainedItems, ...fallbackItems]
+      }
+
+      if (updates.restoreStrategy === 'original') {
+        next.restoreLayout = DEFAULT_RESTORE_LAYOUT
+      }
+
+      return next
+    })
   }
 
   // Handle SSH connection selection
@@ -212,6 +233,13 @@ const RestoreWizard = ({
           : null,
       restore_strategy: wizardState.restoreStrategy,
       custom_path: wizardState.restoreStrategy === 'custom' ? wizardState.customPath : null,
+      restore_layout:
+        wizardState.restoreStrategy === 'custom'
+          ? wizardState.restoreLayout
+          : DEFAULT_RESTORE_LAYOUT,
+      path_metadata: wizardState.selectedItems.filter((item) =>
+        wizardState.selectedPaths.includes(item.path)
+      ),
     }
 
     onRestore(data)
@@ -224,6 +252,7 @@ const RestoreWizard = ({
     // Convert selectedPaths to ArchiveFile format for compatibility
     const selectedFiles: ArchiveFile[] = wizardState.selectedPaths.map((path) => ({
       path,
+      type: wizardState.selectedItems.find((item) => item.path === path)?.type || 'file',
       mode: '',
       user: '',
       group: '',
@@ -236,10 +265,11 @@ const RestoreWizard = ({
       case 'files':
         return (
           <WizardStepRestoreFiles
-            repositoryId={repositoryId}
-            archiveName={archiveName}
+            repository={repository}
+            archive={archive}
             data={{
               selectedPaths: wizardState.selectedPaths,
+              selectedItems: wizardState.selectedItems,
             }}
             onChange={handleStateChange}
           />
@@ -253,7 +283,9 @@ const RestoreWizard = ({
               destinationConnectionId: wizardState.destinationConnectionId,
               restoreStrategy: wizardState.restoreStrategy,
               customPath: wizardState.customPath,
+              restoreLayout: wizardState.restoreLayout,
             }}
+            selectedItems={wizardState.selectedItems}
             sshConnections={sshConnections}
             repositoryType={repositoryType}
             onChange={(updates) => {
@@ -279,10 +311,11 @@ const RestoreWizard = ({
               destinationConnectionId: wizardState.destinationConnectionId,
               restoreStrategy: wizardState.restoreStrategy,
               customPath: wizardState.customPath,
+              restoreLayout: wizardState.restoreLayout,
             }}
             selectedFiles={selectedFiles}
             sshConnections={sshConnections}
-            archiveName={archiveName}
+            archiveName={archive.name}
           />
         )
 
@@ -293,81 +326,54 @@ const RestoreWizard = ({
 
   return (
     <>
-      <Dialog
+      <WizardDialog
         open={open}
         onClose={onClose}
-        maxWidth="md"
-        fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: 3,
-            overflow: 'hidden',
-            backdropFilter: 'blur(10px)',
-            backgroundImage:
-              'linear-gradient(rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.05))',
-            boxShadow: (theme) =>
-              theme.palette.mode === 'dark'
-                ? '0 24px 48px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.1)'
-                : '0 24px 48px rgba(0,0,0,0.1)',
-          },
+        title={t('restoreWizard.title')}
+        subtitle={t('restoreWizard.fromArchive', { archiveName: archive.name })}
+        steps={steps}
+        currentStep={activeStep}
+        onStepClick={setActiveStep}
+        stepContentSx={{
+          height: { xs: 'auto', md: 450 },
+          minHeight: { xs: 'auto', md: 450 },
+          p: 0,
         }}
+        footer={
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={onClose}>{t('common.buttons.cancel')}</Button>
+            <Box sx={{ flex: 1 }} />
+            <Button disabled={activeStep === 0} onClick={handleBack}>
+              {t('common.buttons.back')}
+            </Button>
+            {activeStep < steps.length - 1 ? (
+              <Button
+                variant="contained"
+                onClick={handleNext}
+                disabled={!canProceed()}
+                sx={{ boxShadow: '0 2px 8px rgba(37,99,235,0.3)' }}
+              >
+                {t('common.buttons.next')}
+              </Button>
+            ) : (
+              <Button
+                variant="contained"
+                onClick={handleSubmit}
+                disabled={!canProceed()}
+                sx={{ boxShadow: '0 2px 8px rgba(37,99,235,0.3)' }}
+              >
+                {t('restoreWizard.buttons.restore')}
+              </Button>
+            )}
+          </DialogActions>
+        }
       >
-        <DialogTitle sx={{ pt: 3, pb: 1 }}>
-          <Typography variant="h5" component="div" fontWeight={700}>
-            {t('restoreWizard.title')}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            {t('restoreWizard.fromArchive', { archiveName })}
-          </Typography>
-        </DialogTitle>
-        <DialogContent>
-          <Box sx={{ mt: 2 }}>
-            {/* Step Indicator */}
-            <WizardStepIndicator
-              steps={steps}
-              currentStep={activeStep}
-              onStepClick={setActiveStep}
-            />
-
-            {/* Step Content - Fixed height to prevent layout shift */}
-            <Box sx={{ height: 450, overflow: 'auto' }}>
-              {activeStep === 0 ? (
-                // Files step fills entire height with its own layout
-                <Box sx={{ height: '100%', px: 3, py: 2 }}>{renderStepContent()}</Box>
-              ) : (
-                // Other steps just need padding and scroll naturally
-                <Box sx={{ px: 3, py: 2 }}>{renderStepContent()}</Box>
-              )}
-            </Box>
-          </Box>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={onClose}>{t('common.buttons.cancel')}</Button>
-          <Box sx={{ flex: 1 }} />
-          <Button disabled={activeStep === 0} onClick={handleBack}>
-            {t('common.buttons.back')}
-          </Button>
-          {activeStep < steps.length - 1 ? (
-            <Button
-              variant="contained"
-              onClick={handleNext}
-              disabled={!canProceed()}
-              sx={{ boxShadow: '0 2px 8px rgba(37,99,235,0.3)' }}
-            >
-              {t('common.buttons.next')}
-            </Button>
-          ) : (
-            <Button
-              variant="contained"
-              onClick={handleSubmit}
-              disabled={!canProceed()}
-              sx={{ boxShadow: '0 2px 8px rgba(37,99,235,0.3)' }}
-            >
-              {t('restoreWizard.buttons.restore')}
-            </Button>
-          )}
-        </DialogActions>
-      </Dialog>
+        {activeStep === 0 ? (
+          <Box sx={{ height: '100%', px: 3, py: 2 }}>{renderStepContent()}</Box>
+        ) : (
+          <Box sx={{ px: 3, py: 2 }}>{renderStepContent()}</Box>
+        )}
+      </WizardDialog>
 
       {/* File Explorer Dialog for custom path */}
       {showPathExplorer && (

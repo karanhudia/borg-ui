@@ -12,10 +12,12 @@ logger = structlog.get_logger()
 
 def upgrade(db):
     try:
-        db.execute(text("""
+        db.execute(
+            text("""
             ALTER TABLE system_settings
             DROP COLUMN mqtt_base_topic
-        """))
+        """)
+        )
         db.commit()
         logger.info("Migration 074_remove_mqtt_base_topic completed successfully")
     except Exception as e:
@@ -26,4 +28,6 @@ def upgrade(db):
 
 
 def downgrade(db):
-    logger.warning("Downgrade not supported: mqtt_base_topic column removal is irreversible")
+    logger.warning(
+        "Downgrade not supported: mqtt_base_topic column removal is irreversible"
+    )

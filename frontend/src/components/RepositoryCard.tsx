@@ -10,12 +10,20 @@ import {
   FolderOpen,
   Play,
   Trash2,
-  Pencil,
+  Eraser,
+  SquarePen,
   Archive,
   HardDrive,
   Clock,
+  Cloud,
+  CloudDownload,
+  CloudUpload,
   ScanSearch,
   RefreshCw,
+  ClipboardList,
+  Bot,
+  CalendarClock,
+  ListChecks,
 } from 'lucide-react'
 import { useMaintenanceJobs } from '../hooks/useMaintenanceJobs'
 import BorgVersionChip from './BorgVersionChip'
@@ -25,6 +33,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { Repository } from '../types'
 import type { RepoAction } from '../hooks/usePermissions'
+import OperationalCard from './OperationalCard'
 
 interface RepositoryCardProps {
   repository: Repository
@@ -33,10 +42,15 @@ interface RepositoryCardProps {
   onCheck: () => void
   onCompact: () => void
   onPrune: () => void
+  onWipeContents: () => void
   onEdit: () => void
   onDelete: () => void
   onBackupNow: () => void
   onViewArchives: () => void
+  onViewBackupPlans?: () => void
+  onCreateBackupPlan?: () => void
+  onRcloneSync?: () => void
+  onRcloneHydrate?: () => void
   getCompressionLabel: (compression: string) => string
   canManageRepository?: boolean
   canDo: (action: RepoAction) => boolean
@@ -62,10 +76,15 @@ export default function RepositoryCard({
   onCheck,
   onCompact,
   onPrune,
+  onWipeContents,
   onEdit,
   onDelete,
   onBackupNow,
   onViewArchives,
+  onViewBackupPlans,
+  onCreateBackupPlan,
+  onRcloneSync,
+  onRcloneHydrate,
   getCompressionLabel,
   canManageRepository = false,
   canDo,
@@ -78,8 +97,51 @@ export default function RepositoryCard({
   const { trackRepository, trackBackup, trackArchive, EventAction } = useAnalytics()
 
   const capabilities = getRepoCapabilities(repository)
-  const { hasRunningJobs, checkJob, compactJob, pruneJob } = useMaintenanceJobs(repository.id, true)
+  const { hasRunningJobs, checkJob, compactJob, pruneJob, wipeJob } = useMaintenanceJobs(
+    repository.id,
+    true
+  )
   const isMaintenanceRunning = hasRunningJobs
+  const hasManualBackupSources = Boolean(repository.source_directories?.length)
+  const canCreatePlan = Boolean(onCreateBackupPlan) && canDo('backup') && repository.mode === 'full'
+  const canRunLegacyBackup = canDo('backup') && repository.mode === 'full' && hasManualBackupSources
+  const rcloneStorage = repository.rclone_storage
+  const rcloneOperationRunning =
+    rcloneStorage?.sync_status === 'syncing' || rcloneStorage?.sync_status === 'hydrating'
+  const isSshPrimaryRepository =
+    repository.storage_backend === 'ssh' ||
+    repository.repository_type === 'ssh' ||
+    repository.execution_target === 'ssh' ||
+    Boolean(repository.connection_id)
+  const isLocalPrimaryRepository =
+    repository.storage_backend == null ||
+    repository.storage_backend === 'local' ||
+    repository.repository_type === 'local'
+  const isAgentPrimaryRepository =
+    repository.storage_backend === 'agent_local' ||
+    repository.execution_target === 'agent' ||
+    repository.executor_type === 'agent'
+  const agentMachineName =
+    typeof repository.agent_machine_name === 'string'
+      ? repository.agent_machine_name
+      : typeof rcloneStorage?.agent_machine_name === 'string'
+        ? rcloneStorage.agent_machine_name
+        : null
+  const agentMachineStatus =
+    typeof repository.agent_machine_status === 'string'
+      ? repository.agent_machine_status
+      : typeof rcloneStorage?.agent_machine_status === 'string'
+        ? rcloneStorage.agent_machine_status
+        : null
+  const canEnableCloudMirror =
+    canManageRepository &&
+    !rcloneStorage &&
+    repository.repository_type !== 'rclone' &&
+    (isLocalPrimaryRepository || isSshPrimaryRepository || isAgentPrimaryRepository)
+  const canHydrateRclone =
+    Boolean(rcloneStorage) &&
+    rcloneStorage?.sync_direction !== 'agent_to_remote' &&
+    rcloneStorage?.sync_direction !== 'sshfs_to_remote'
 
   const [elapsedTime, setElapsedTime] = useState('')
 
@@ -88,14 +150,21 @@ export default function RepositoryCard({
       setElapsedTime('')
       return
     }
-    const startTime = checkJob?.started_at || compactJob?.started_at || pruneJob?.started_at
+    const startTime =
+      checkJob?.started_at || compactJob?.started_at || pruneJob?.started_at || wipeJob?.started_at
     if (!startTime) return
     setElapsedTime(formatElapsedTime(startTime))
     const interval = setInterval(() => {
       setElapsedTime(formatElapsedTime(startTime))
     }, 1000)
     return () => clearInterval(interval)
-  }, [hasRunningJobs, checkJob?.started_at, compactJob?.started_at, pruneJob?.started_at])
+  }, [
+    hasRunningJobs,
+    checkJob?.started_at,
+    compactJob?.started_at,
+    pruneJob?.started_at,
+    wipeJob?.started_at,
+  ])
 
   useEffect(() => {
     if (!hasRunningJobs && isInJobsSet) {
@@ -151,17 +220,206 @@ export default function RepositoryCard({
           },
         ]
       : []),
+    ...(rcloneStorage
+      ? [
+          {
+            label: t('repositoryCard.rcloneMirror'),
+            value:
+              rcloneStorage.rclone_remote_name && rcloneStorage.rclone_remote_path
+                ? `${rcloneStorage.rclone_remote_name}:${rcloneStorage.rclone_remote_path}`
+                : rcloneStorage.rclone_target || rcloneStorage.rclone_remote_path,
+            tooltip: rcloneStorage.rclone_target || rcloneStorage.rclone_remote_path,
+          },
+        ]
+      : []),
   ]
+
+  const rcloneStatusBadge = (() => {
+    if (!rcloneStorage) return null
+
+    const failed = rcloneStorage.sync_status === 'failed'
+    const cacheMissing = rcloneStorage.cache_present === false
+    const status = cacheMissing ? 'cache_missing' : rcloneStorage.sync_status
+    const lastSyncedTitle = rcloneStorage.last_synced_at
+      ? t('repositoryCard.rcloneLastSynced', {
+          when: formatDateTimeFull(rcloneStorage.last_synced_at),
+        })
+      : ''
+
+    const byStatus: Record<
+      string,
+      { label: string; color: string; bg: string; border: string; title: string }
+    > = {
+      current: {
+        label: t('repositoryCard.rcloneSynced'),
+        color: theme.palette.success.main,
+        bg: alpha(theme.palette.success.main, isDark ? 0.12 : 0.09),
+        border: alpha(theme.palette.success.main, isDark ? 0.32 : 0.24),
+        title: lastSyncedTitle,
+      },
+      pending: {
+        label: t('repositoryCard.rclonePending'),
+        color: theme.palette.warning.main,
+        bg: alpha(theme.palette.warning.main, isDark ? 0.12 : 0.09),
+        border: alpha(theme.palette.warning.main, isDark ? 0.34 : 0.24),
+        title: lastSyncedTitle,
+      },
+      syncing: {
+        label: t('repositoryCard.rcloneSyncing'),
+        color: theme.palette.info.main,
+        bg: alpha(theme.palette.info.main, isDark ? 0.12 : 0.09),
+        border: alpha(theme.palette.info.main, isDark ? 0.34 : 0.24),
+        title: rcloneStorage.rclone_target || '',
+      },
+      failed: {
+        label: t('repositoryCard.rcloneFailed'),
+        color: theme.palette.error.main,
+        bg: alpha(theme.palette.error.main, isDark ? 0.12 : 0.08),
+        border: alpha(theme.palette.error.main, isDark ? 0.34 : 0.24),
+        title: rcloneStorage.last_sync_error
+          ? t('repositoryCard.rcloneError', { message: rcloneStorage.last_sync_error })
+          : '',
+      },
+      hydrating: {
+        label: t('repositoryCard.rcloneHydrating'),
+        color: theme.palette.info.main,
+        bg: alpha(theme.palette.info.main, isDark ? 0.12 : 0.09),
+        border: alpha(theme.palette.info.main, isDark ? 0.34 : 0.24),
+        title: rcloneStorage.rclone_target || '',
+      },
+      cache_missing: {
+        label: t('repositoryCard.rcloneHydrationRequired'),
+        color: theme.palette.warning.main,
+        bg: alpha(theme.palette.warning.main, isDark ? 0.12 : 0.09),
+        border: alpha(theme.palette.warning.main, isDark ? 0.34 : 0.24),
+        title: rcloneStorage.rclone_target || '',
+      },
+    }
+
+    return (
+      byStatus[status] || {
+        label: status,
+        color: theme.palette.text.secondary,
+        bg: alpha(theme.palette.text.secondary, isDark ? 0.12 : 0.08),
+        border: alpha(theme.palette.text.secondary, isDark ? 0.28 : 0.2),
+        title: failed ? rcloneStorage.last_sync_error || '' : rcloneStorage.rclone_target || '',
+      }
+    )
+  })()
+
+  const rcloneScheduledMirrorBadge = (() => {
+    if (!rcloneStorage || rcloneStorage.sync_policy !== 'scheduled') return null
+
+    const timezoneLabel = rcloneStorage.sync_timezone || 'UTC'
+    const latestScheduledJob =
+      rcloneStorage.latest_sync_job?.triggered_by === 'schedule'
+        ? rcloneStorage.latest_sync_job
+        : null
+    const hasLatestSyncJob = Boolean(rcloneStorage.latest_sync_job)
+    const scheduledFailure =
+      latestScheduledJob?.status === 'failed' ||
+      (!hasLatestSyncJob && rcloneStorage.sync_status === 'failed')
+    const failureMessage =
+      latestScheduledJob?.error_text ||
+      (!hasLatestSyncJob ? rcloneStorage.last_sync_error : undefined)
+
+    if (scheduledFailure) {
+      return {
+        label: t('repositoryCard.rcloneScheduledFailed'),
+        title: failureMessage
+          ? t('repositoryCard.rcloneScheduledError', { message: failureMessage })
+          : t('repositoryCard.rcloneScheduledFailed'),
+        color: theme.palette.error.main,
+        bg: alpha(theme.palette.error.main, isDark ? 0.12 : 0.08),
+        border: alpha(theme.palette.error.main, isDark ? 0.34 : 0.24),
+      }
+    }
+
+    if (!rcloneStorage.next_scheduled_sync_at) {
+      return {
+        label: t('repositoryCard.rcloneScheduled'),
+        title: t('repositoryCard.rcloneScheduledNoNextRun', { timezone: timezoneLabel }),
+        color: theme.palette.info.main,
+        bg: alpha(theme.palette.info.main, isDark ? 0.12 : 0.08),
+        border: alpha(theme.palette.info.main, isDark ? 0.32 : 0.24),
+      }
+    }
+
+    const nextRunDate = new Date(rcloneStorage.next_scheduled_sync_at)
+    if (Number.isNaN(nextRunDate.getTime())) {
+      return {
+        label: t('repositoryCard.rcloneScheduled'),
+        title: t('repositoryCard.rcloneScheduledNoNextRun', { timezone: timezoneLabel }),
+        color: theme.palette.info.main,
+        bg: alpha(theme.palette.info.main, isDark ? 0.12 : 0.08),
+        border: alpha(theme.palette.info.main, isDark ? 0.32 : 0.24),
+      }
+    }
+    let whenLabel = format(
+      nextRunDate,
+      isThisYear(nextRunDate) ? 'MMM d · h:mm a' : 'MMM d, yyyy · h:mm a'
+    )
+    if (isToday(nextRunDate)) {
+      whenLabel = format(nextRunDate, 'h:mm a')
+    } else if (isTomorrow(nextRunDate)) {
+      whenLabel = `${t('repositoryCard.tomorrow')} · ${format(nextRunDate, 'h:mm a')}`
+    }
+
+    return {
+      label: t('repositoryCard.rcloneNextSyncBadge', { when: whenLabel }),
+      title: t('repositoryCard.rcloneNextSyncWithSchedule', {
+        when: formatDateTimeFull(rcloneStorage.next_scheduled_sync_at),
+        cron: rcloneStorage.sync_cron_expression || t('repositoryCard.rcloneScheduleUnknown'),
+        timezone: timezoneLabel,
+      }),
+      color: theme.palette.info.main,
+      bg: alpha(theme.palette.info.main, isDark ? 0.12 : 0.08),
+      border: alpha(theme.palette.info.main, isDark ? 0.32 : 0.24),
+    }
+  })()
+
+  const agentStatusBadge = (() => {
+    if (!isAgentPrimaryRepository) return null
+    const normalized = (agentMachineStatus || '').toLowerCase()
+    const online = normalized === 'online'
+    const disabled = normalized === 'disabled' || normalized === 'revoked'
+    const color = online
+      ? theme.palette.success.main
+      : disabled
+        ? theme.palette.error.main
+        : theme.palette.warning.main
+    const label =
+      normalized === 'online'
+        ? t('repositoryCard.agentStatusOnline')
+        : normalized === 'offline'
+          ? t('repositoryCard.agentStatusOffline')
+          : normalized === 'disabled'
+            ? t('repositoryCard.agentStatusDisabled')
+            : normalized === 'revoked'
+              ? t('repositoryCard.agentStatusRevoked')
+              : t('repositoryCard.agentStatusUnknown')
+
+    return {
+      label,
+      color,
+      bg: alpha(color, isDark ? 0.12 : 0.09),
+      border: alpha(color, isDark ? 0.34 : 0.24),
+      title: agentMachineName
+        ? t('repositoryCard.agentStatusTitle', { name: agentMachineName, status: label })
+        : label,
+    }
+  })()
 
   const scheduleBadge = (() => {
     if (!repository.has_schedule) return null
+    const scheduleTimezone = repository.schedule_timezone || 'UTC'
 
     if (repository.schedule_enabled === false) {
       return {
         label: t('repositoryCard.schedulePaused'),
         title: repository.schedule_name
-          ? t('repositoryCard.schedulePausedWithName', { name: repository.schedule_name })
-          : t('repositoryCard.schedulePaused'),
+          ? `${t('repositoryCard.schedulePausedWithName', { name: repository.schedule_name })} (${scheduleTimezone})`
+          : `${t('repositoryCard.schedulePaused')} (${scheduleTimezone})`,
         color: theme.palette.warning.main,
         bg: alpha(theme.palette.warning.main, isDark ? 0.12 : 0.1),
         border: alpha(theme.palette.warning.main, isDark ? 0.34 : 0.28),
@@ -184,11 +442,13 @@ export default function RepositoryCard({
     return {
       label: t('repositoryCard.nextBackupBadge', { when: whenLabel }),
       title: repository.schedule_name
-        ? t('repositoryCard.nextBackupWithName', {
+        ? `${t('repositoryCard.nextBackupWithName', {
             name: repository.schedule_name,
             when: formatDateTimeFull(repository.next_run),
-          })
-        : t('repositoryCard.nextBackupBadge', { when: formatDateTimeFull(repository.next_run) }),
+          })} (${scheduleTimezone})`
+        : `${t('repositoryCard.nextBackupBadge', {
+            when: formatDateTimeFull(repository.next_run),
+          })} (${scheduleTimezone})`,
       color: theme.palette.success.main,
       bg: alpha(theme.palette.success.main, isDark ? 0.12 : 0.09),
       border: alpha(theme.palette.success.main, isDark ? 0.32 : 0.24),
@@ -231,29 +491,10 @@ export default function RepositoryCard({
   }
 
   return (
-    <Box
-      sx={{
-        position: 'relative',
-        borderRadius: 2,
-        bgcolor: 'background.paper',
-        overflow: 'hidden',
-        maxWidth: '100%',
-        minWidth: 0,
-        boxShadow: isMaintenanceRunning
-          ? `0 0 0 1px ${alpha(ACCENT_RUNNING, 0.4)}, 0 4px 16px ${alpha('#000', 0.2)}, 0 2px 6px ${alpha(ACCENT_RUNNING, 0.1)}`
-          : isDark
-            ? `0 0 0 1px ${alpha('#fff', 0.08)}, 0 4px 16px ${alpha('#000', 0.25)}`
-            : `0 0 0 1px ${alpha('#000', 0.08)}, 0 2px 8px ${alpha('#000', 0.07)}`,
-        transition: 'all 200ms cubic-bezier(0.16,1,0.3,1)',
-        '&:hover': {
-          transform: 'translateY(-2px)',
-          boxShadow: isMaintenanceRunning
-            ? `0 0 0 1px ${alpha(ACCENT_RUNNING, 0.55)}, 0 8px 24px ${alpha('#000', 0.28)}, 0 4px 12px ${alpha(ACCENT_RUNNING, 0.15)}`
-            : isDark
-              ? `0 0 0 1px ${alpha(ACCENT_IDLE, 0.4)}, 0 8px 24px ${alpha('#000', 0.3)}, 0 2px 8px ${alpha(ACCENT_IDLE, 0.1)}`
-              : `0 0 0 1px ${alpha(ACCENT_IDLE, 0.3)}, 0 8px 24px ${alpha('#000', 0.12)}, 0 2px 8px ${alpha(ACCENT_IDLE, 0.08)}`,
-        },
-      }}
+    <OperationalCard
+      isActive={isMaintenanceRunning}
+      idleAccent={ACCENT_IDLE}
+      activeAccent={ACCENT_RUNNING}
     >
       {/* Subtle ambient glow — only visible when maintenance is running */}
       {isMaintenanceRunning && (
@@ -303,6 +544,122 @@ export default function RepositoryCard({
                   />
                 )}
                 <BorgVersionChip borgVersion={repository.borg_version} />
+                {isAgentPrimaryRepository && (
+                  <Tooltip
+                    title={
+                      agentMachineName
+                        ? t('repositoryCard.agentTitle', { name: agentMachineName })
+                        : t('repositoryCard.agentUnknown')
+                    }
+                    arrow
+                  >
+                    <Chip
+                      icon={<Bot size={12} />}
+                      label={t('repositoryCard.agentLabel', {
+                        name: agentMachineName || t('repositoryCard.agentUnknown'),
+                      })}
+                      size="small"
+                      sx={{
+                        height: 20,
+                        maxWidth: { xs: 150, sm: 200 },
+                        bgcolor: isDark ? alpha('#fff', 0.05) : alpha('#000', 0.035),
+                        color: 'text.secondary',
+                        border: '1px solid',
+                        borderColor: isDark ? alpha('#fff', 0.12) : alpha('#000', 0.1),
+                        fontSize: '0.64rem',
+                        fontWeight: 700,
+                        '& .MuiChip-icon': {
+                          ml: 0.75,
+                          color: 'inherit',
+                        },
+                        '& .MuiChip-label': {
+                          px: 0.75,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        },
+                      }}
+                    />
+                  </Tooltip>
+                )}
+                {agentStatusBadge && (
+                  <Tooltip title={agentStatusBadge.title} arrow>
+                    <Chip
+                      label={agentStatusBadge.label}
+                      size="small"
+                      sx={{
+                        height: 20,
+                        maxWidth: { xs: 110, sm: 140 },
+                        bgcolor: agentStatusBadge.bg,
+                        color: agentStatusBadge.color,
+                        border: '1px solid',
+                        borderColor: agentStatusBadge.border,
+                        fontSize: '0.64rem',
+                        fontWeight: 700,
+                        '& .MuiChip-label': {
+                          px: 0.75,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        },
+                      }}
+                    />
+                  </Tooltip>
+                )}
+                {rcloneStatusBadge && (
+                  <Tooltip title={rcloneStatusBadge.title} arrow>
+                    <Chip
+                      icon={<Cloud size={12} />}
+                      label={rcloneStatusBadge.label}
+                      size="small"
+                      sx={{
+                        height: 20,
+                        maxWidth: { xs: 140, sm: 180 },
+                        bgcolor: rcloneStatusBadge.bg,
+                        color: rcloneStatusBadge.color,
+                        border: '1px solid',
+                        borderColor: rcloneStatusBadge.border,
+                        fontSize: '0.64rem',
+                        fontWeight: 700,
+                        '& .MuiChip-icon': {
+                          ml: 0.75,
+                          color: 'inherit',
+                        },
+                        '& .MuiChip-label': {
+                          px: 0.75,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        },
+                      }}
+                    />
+                  </Tooltip>
+                )}
+                {rcloneScheduledMirrorBadge && (
+                  <Tooltip title={rcloneScheduledMirrorBadge.title} arrow>
+                    <Chip
+                      icon={<CalendarClock size={12} />}
+                      label={rcloneScheduledMirrorBadge.label}
+                      size="small"
+                      sx={{
+                        height: 20,
+                        maxWidth: { xs: 150, sm: 190 },
+                        bgcolor: rcloneScheduledMirrorBadge.bg,
+                        color: rcloneScheduledMirrorBadge.color,
+                        border: '1px solid',
+                        borderColor: rcloneScheduledMirrorBadge.border,
+                        fontSize: '0.64rem',
+                        fontWeight: 700,
+                        '& .MuiChip-icon': {
+                          ml: 0.75,
+                          color: 'inherit',
+                        },
+                        '& .MuiChip-label': {
+                          px: 0.75,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        },
+                      }}
+                    />
+                  </Tooltip>
+                )}
               </Box>
             </Box>
 
@@ -361,7 +718,7 @@ export default function RepositoryCard({
                       },
                     }}
                   >
-                    <Pencil size={14} />
+                    <SquarePen size={14} />
                   </IconButton>
                 </Tooltip>
               )}
@@ -493,19 +850,59 @@ export default function RepositoryCard({
           ))}
         </Box>
 
+        {hasManualBackupSources && canCreatePlan && (
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: { xs: 'stretch', sm: 'center' },
+              justifyContent: 'space-between',
+              flexDirection: { xs: 'column', sm: 'row' },
+              gap: 1,
+              mb: 1.5,
+              px: 1.25,
+              py: 1,
+              borderRadius: 1.5,
+              border: '1px solid',
+              borderColor: alpha(theme.palette.primary.main, isDark ? 0.28 : 0.2),
+              bgcolor: alpha(theme.palette.primary.main, isDark ? 0.1 : 0.06),
+            }}
+          >
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="caption" fontWeight={700} color="primary.main">
+                {t('repositoryCard.legacySources.title')}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" display="block">
+                {t('repositoryCard.legacySources.description')}
+              </Typography>
+            </Box>
+          </Box>
+        )}
+
         {/* ── Action Bar ── */}
         <Box
           sx={{
             display: 'flex',
             alignItems: 'center',
-            gap: 0.5,
+            columnGap: 1,
+            rowGap: 0.75,
+            flexWrap: 'wrap',
+            justifyContent: 'space-between',
             pt: 1.25,
             borderTop: '1px solid',
             borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.07),
           }}
         >
           {/* Secondary icon actions — left cluster */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, flex: 1 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.25,
+              flex: '1 1 260px',
+              flexWrap: 'wrap',
+              minWidth: 0,
+            }}
+          >
             {canDo('view') && (
               <Tooltip title={t('repositoryCard.buttons.info')} arrow>
                 <span>
@@ -604,8 +1001,64 @@ export default function RepositoryCard({
               </Tooltip>
             )}
 
-            {/* Delete — separated with a vertical rule */}
-            {canManageRepository && capabilities.canDelete && (
+            {canDo('view') && onViewBackupPlans && (
+              <Tooltip title={t('repositoryCard.buttons.viewBackupPlans')} arrow>
+                <span>
+                  <IconButton
+                    size="small"
+                    onClick={() => {
+                      trackRepository(EventAction.VIEW, repository, {
+                        destination: 'backup_plans',
+                      })
+                      onViewBackupPlans()
+                    }}
+                    aria-label={t('repositoryCard.buttons.viewBackupPlans')}
+                    disabled={isMaintenanceRunning}
+                    sx={coloredIconBtnSx('primary')}
+                  >
+                    <ListChecks size={16} />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            )}
+
+            {rcloneStorage && canDo('maintenance') && (
+              <>
+                <Tooltip title={t('repositoryCard.buttons.rcloneSync')} arrow>
+                  <span>
+                    <IconButton
+                      size="small"
+                      onClick={onRcloneSync}
+                      aria-label={t('repositoryCard.buttons.rcloneSync')}
+                      disabled={!onRcloneSync || isMaintenanceRunning || rcloneOperationRunning}
+                      sx={coloredIconBtnSx('info')}
+                    >
+                      <CloudUpload size={16} />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                {canHydrateRclone && (
+                  <Tooltip title={t('repositoryCard.buttons.rcloneHydrate')} arrow>
+                    <span>
+                      <IconButton
+                        size="small"
+                        onClick={onRcloneHydrate}
+                        aria-label={t('repositoryCard.buttons.rcloneHydrate')}
+                        disabled={
+                          !onRcloneHydrate || isMaintenanceRunning || rcloneOperationRunning
+                        }
+                        sx={coloredIconBtnSx('primary')}
+                      >
+                        <CloudDownload size={16} />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                )}
+              </>
+            )}
+
+            {/* Destructive repository actions — separated with a vertical rule */}
+            {canManageRepository && capabilities.canDeleteRepository && (
               <>
                 <Box
                   sx={{
@@ -616,6 +1069,24 @@ export default function RepositoryCard({
                     flexShrink: 0,
                   }}
                 />
+                <Tooltip title={t('repositoryCard.buttons.wipeContents')} arrow>
+                  <IconButton
+                    size="small"
+                    onClick={onWipeContents}
+                    aria-label={t('repositoryCard.buttons.wipeContents')}
+                    disabled={isMaintenanceRunning}
+                    sx={{
+                      ...iconBtnSx,
+                      color: alpha(theme.palette.error.main, 0.56),
+                      '&:hover': {
+                        color: theme.palette.error.main,
+                        bgcolor: alpha(theme.palette.error.main, 0.09),
+                      },
+                    }}
+                  >
+                    <Eraser size={16} />
+                  </IconButton>
+                </Tooltip>
                 <Tooltip title={t('repositoryCard.buttons.delete')} arrow>
                   <IconButton
                     size="small"
@@ -637,49 +1108,109 @@ export default function RepositoryCard({
             )}
           </Box>
 
-          {/* Primary action — Backup Now */}
-          {canDo('backup') && repository.mode === 'full' && (
-            <Tooltip
-              title={isMaintenanceRunning ? '' : t('repositoryCard.buttons.backupNow')}
-              arrow
+          {(canEnableCloudMirror || canCreatePlan || canRunLegacyBackup) && (
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.75,
+                flex: '1 1 260px',
+                flexWrap: 'wrap',
+                justifyContent: { xs: 'flex-start', sm: 'flex-end' },
+                minWidth: 0,
+              }}
             >
-              <span>
-                <Button
-                  variant="contained"
-                  size="small"
-                  startIcon={<Play size={13} />}
-                  onClick={() => {
-                    trackBackup(EventAction.START, undefined, repository)
-                    onBackupNow()
-                  }}
-                  disabled={isMaintenanceRunning}
-                  sx={{
-                    bgcolor: ACCENT_IDLE,
-                    color: '#fff',
-                    fontSize: '0.78rem',
-                    height: 30,
-                    flexShrink: 0,
-                    px: { xs: 0.85, sm: 1.5 },
-                    minWidth: 'unset',
-                    boxShadow: `0 2px 10px ${alpha(ACCENT_IDLE, 0.38)}`,
-                    '& .MuiButton-startIcon': { mr: { xs: 0, sm: 0.5 }, ml: { xs: 0, sm: '-2px' } },
-                    '&:hover': {
-                      bgcolor: '#047857',
-                      boxShadow: `0 4px 18px ${alpha(ACCENT_IDLE, 0.5)}`,
-                    },
-                    '&.Mui-disabled': {
-                      bgcolor: isDark ? alpha('#fff', 0.08) : alpha('#000', 0.08),
-                      color: 'text.disabled',
-                      boxShadow: 'none',
-                    },
-                  }}
-                >
-                  <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
-                    {t('repositoryCard.buttons.backupNow')}
-                  </Box>
-                </Button>
-              </span>
-            </Tooltip>
+              {canEnableCloudMirror && (
+                <Tooltip title={t('repositoryCard.buttons.enableCloudMirror')} arrow>
+                  <span>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<Cloud size={13} />}
+                      onClick={onEdit}
+                      disabled={isMaintenanceRunning}
+                      sx={{
+                        fontSize: '0.76rem',
+                        height: 30,
+                        flexShrink: 0,
+                        px: { xs: 0.85, sm: 1.25 },
+                        minWidth: 'unset',
+                        '& .MuiButton-startIcon': {
+                          mr: { xs: 0, sm: 0.5 },
+                          ml: { xs: 0, sm: '-2px' },
+                        },
+                      }}
+                    >
+                      <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
+                        {t('repositoryCard.buttons.enableCloudMirror')}
+                      </Box>
+                    </Button>
+                  </span>
+                </Tooltip>
+              )}
+
+              {canRunLegacyBackup && (
+                <Tooltip title={t('repositoryCard.buttons.legacyBackupTooltip')} arrow>
+                  <span>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      color="success"
+                      startIcon={<Play size={13} />}
+                      onClick={() => {
+                        trackBackup(EventAction.START, 'legacy_repository', repository)
+                        onBackupNow()
+                      }}
+                      disabled={isMaintenanceRunning}
+                      sx={{
+                        fontSize: '0.76rem',
+                        height: 30,
+                        flexShrink: 0,
+                        px: { xs: 0.85, sm: 1.25 },
+                        minWidth: 'unset',
+                        '& .MuiButton-startIcon': {
+                          mr: { xs: 0, sm: 0.5 },
+                          ml: { xs: 0, sm: '-2px' },
+                        },
+                      }}
+                    >
+                      <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
+                        {t('repositoryCard.buttons.legacyBackup')}
+                      </Box>
+                    </Button>
+                  </span>
+                </Tooltip>
+              )}
+
+              {canCreatePlan && (
+                <Tooltip title={t('repositoryCard.buttons.createBackupPlan')} arrow>
+                  <span>
+                    <Button
+                      variant="contained"
+                      size="small"
+                      startIcon={<ClipboardList size={13} />}
+                      onClick={onCreateBackupPlan}
+                      disabled={isMaintenanceRunning}
+                      sx={{
+                        fontSize: '0.78rem',
+                        height: 30,
+                        flexShrink: 0,
+                        px: { xs: 0.85, sm: 1.5 },
+                        minWidth: 'unset',
+                        '& .MuiButton-startIcon': {
+                          mr: { xs: 0, sm: 0.5 },
+                          ml: { xs: 0, sm: '-2px' },
+                        },
+                      }}
+                    >
+                      <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
+                        {t('repositoryCard.buttons.createBackupPlan')}
+                      </Box>
+                    </Button>
+                  </span>
+                </Tooltip>
+              )}
+            </Box>
           )}
         </Box>
 
@@ -721,6 +1252,6 @@ export default function RepositoryCard({
           </Box>
         )}
       </Box>
-    </Box>
+    </OperationalCard>
   )
 }

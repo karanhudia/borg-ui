@@ -11,6 +11,7 @@ import {
   parseBytes,
   formatDateTimeFull,
   formatDateCompact,
+  formatScheduledInstantDisplay,
   convertCronToUTC,
   convertCronToLocal,
 } from '../dateUtils'
@@ -260,6 +261,7 @@ describe('formatDateTimeFull', () => {
     const result = formatDateTimeFull('2025-11-09T14:56:53Z')
     expect(result).toMatch(/November/)
     expect(result).toMatch(/2025/)
+    expect(result).toContain('at')
   })
 })
 
@@ -274,6 +276,21 @@ describe('formatDateCompact', () => {
     const result = formatDateCompact('2025-10-17T14:13:00Z')
     expect(result).toMatch(/2025/)
     expect(result).toMatch(/Oct/)
+  })
+})
+
+describe('formatScheduledInstantDisplay', () => {
+  it('separates schedule and local timezone values onto tooltip lines', () => {
+    const result = formatScheduledInstantDisplay(
+      '2024-01-01T20:30:00Z',
+      'Asia/Kolkata',
+      'Europe/Berlin'
+    )
+
+    expect(result.value).toBeTruthy()
+    expect(result.tooltip).toContain('Asia/Kolkata')
+    expect(result.tooltip).toContain('Europe/Berlin')
+    expect(result.tooltip).toContain('\nLocal:')
   })
 })
 

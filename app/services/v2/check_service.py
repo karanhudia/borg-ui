@@ -7,17 +7,20 @@ CheckJob table so the existing frontend polling endpoints work unchanged.
 
 import asyncio
 import json
-import os
+import shlex
 from datetime import datetime
 from pathlib import Path
 import structlog
 
 from app.database.models import CheckJob, Repository
 from app.database.database import SessionLocal
-from app.core.borg2 import borg2, _get_borg2_binary
+from app.core.borg2 import _get_borg2_binary
 from app.config import settings
+from app.utils.db_retries import commit_with_retry
 from app.utils.borg_env import build_repository_borg_env, cleanup_temp_key_file
-from app.utils.ssh_utils import resolve_repo_ssh_key_file  # Backward-compatible patch target for tests
+from app.utils.ssh_utils import (
+    resolve_repo_ssh_key_file,  # noqa: F401
+)  # Backward-compatible patch target for tests
 
 logger = structlog.get_logger()
 
@@ -55,18 +58,32 @@ class CheckV2Service:
             repo = db.query(Repository).filter(Repository.id == repository_id).first()
             if not repo:
                 logger.error("Repository not found", repository_id=repository_id)
-                job.status = "failed"
-                job.error_message = f"Repository not found (ID: {repository_id})"
-                job.completed_at = datetime.utcnow()
-                db.commit()
+                completed_at = datetime.utcnow()
+
+                def persist_missing_repo_state():
+                    job.status = "failed"
+                    job.error_message = f"Repository not found (ID: {repository_id})"
+                    job.completed_at = completed_at
+
+                await commit_with_retry(
+                    db,
+                    prepare=persist_missing_repo_state,
+                    logger=logger,
+                    action="borg2_check_missing_repo",
+                    job_id=job_id,
+                    repository_id=repository_id,
+                )
                 return
 
             # Job is pre-set to running by the endpoint; refresh to ensure we have latest state.
             # If the job was somehow already completed/cancelled (race), bail out.
             db.refresh(job)
             if job.status not in ("running", "pending"):
-                logger.warning("Check job already in terminal state, skipping",
-                               job_id=job_id, status=job.status)
+                logger.warning(
+                    "Check job already in terminal state, skipping",
+                    job_id=job_id,
+                    status=job.status,
+                )
                 return
 
             env, temp_key_file = build_repository_borg_env(
@@ -77,14 +94,47 @@ class CheckV2Service:
             )
 
             borg_cmd = _get_borg2_binary()
-            cmd = [borg_cmd, "--info", "-r", repo.path, "check", "--progress", "--log-json"]
+            cmd = [
+                borg_cmd,
+                "--info",
+                "-r",
+                repo.path,
+                "check",
+                "--progress",
+                "--log-json",
+            ]
             if job.max_duration and job.max_duration > 0:
-                cmd.extend(["--repository-only", "--max-duration", str(job.max_duration)])
+                cmd.extend(
+                    ["--repository-only", "--max-duration", str(job.max_duration)]
+                )
+            extra_flags_value = getattr(job, "extra_flags", None)
+            extra_flags = (
+                extra_flags_value.strip() if isinstance(extra_flags_value, str) else ""
+            )
+            if extra_flags:
+                try:
+                    cmd.extend(shlex.split(extra_flags))
+                    logger.info(
+                        "Added extra flags to borg2 check command",
+                        job_id=job_id,
+                        extra_flags=extra_flags,
+                    )
+                except ValueError as exc:
+                    logger.warning(
+                        "Failed to parse borg2 check extra flags, skipping",
+                        job_id=job_id,
+                        extra_flags=extra_flags,
+                        error=str(exc),
+                    )
             if repo.remote_path:
                 cmd.extend(["--remote-path", repo.remote_path])
 
-            logger.info("Starting borg2 check", job_id=job_id, repository=repo.path,
-                        command=" ".join(cmd))
+            logger.info(
+                "Starting borg2 check",
+                job_id=job_id,
+                repository=repo.path,
+                command=" ".join(cmd),
+            )
 
             process = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -93,9 +143,20 @@ class CheckV2Service:
                 env=env,
             )
 
-            job.process_pid = process.pid
-            job.process_start_time = _get_process_start_time(process.pid)
-            db.commit()
+            process_start_time = _get_process_start_time(process.pid)
+
+            def persist_pid_tracking():
+                job.process_pid = process.pid
+                job.process_start_time = process_start_time
+
+            await commit_with_retry(
+                db,
+                prepare=persist_pid_tracking,
+                logger=logger,
+                action="borg2_check_store_pid",
+                job_id=job_id,
+                repository_id=repository_id,
+            )
 
             self.running_processes[job_id] = process
             cancelled = False
@@ -145,7 +206,9 @@ class CheckV2Service:
                                         job.progress_message = message
                                         if not first_progress_committed:
                                             db.commit()
-                                            last_commit_time = asyncio.get_event_loop().time()
+                                            last_commit_time = (
+                                                asyncio.get_event_loop().time()
+                                            )
                                             first_progress_committed = True
 
                                 elif msg_type == "progress_percent":
@@ -157,7 +220,11 @@ class CheckV2Service:
 
                                     if message:
                                         progress_msg = f"{message} ({current}/{total})"
-                                        if now - last_progress_update.get(progress_msg, 0) >= PROGRESS_THROTTLE:
+                                        if (
+                                            now
+                                            - last_progress_update.get(progress_msg, 0)
+                                            >= PROGRESS_THROTTLE
+                                        ):
                                             job.progress_message = progress_msg
                                             last_progress_update[progress_msg] = now
 
@@ -168,7 +235,21 @@ class CheckV2Service:
                                             or now - last_commit_time >= COMMIT_INTERVAL
                                         )
                                         if should_commit:
-                                            db.commit()
+                                            progress = job.progress
+                                            progress_message = job.progress_message
+
+                                            def persist_progress():
+                                                job.progress = progress
+                                                job.progress_message = progress_message
+
+                                            await commit_with_retry(
+                                                db,
+                                                prepare=persist_progress,
+                                                logger=logger,
+                                                action="borg2_check_progress",
+                                                job_id=job_id,
+                                                repository_id=repository_id,
+                                            )
                                             last_commit_time = now
                                             first_progress_committed = True
                         except (json.JSONDecodeError, KeyError, ValueError):
@@ -176,11 +257,26 @@ class CheckV2Service:
                 except asyncio.CancelledError:
                     raise
                 finally:
-                    db.commit()
+                    final_progress = job.progress
+                    final_progress_message = job.progress_message
+
+                    def persist_stream_state():
+                        job.progress = final_progress
+                        job.progress_message = final_progress_message
+
+                    await commit_with_retry(
+                        db,
+                        prepare=persist_stream_state,
+                        logger=logger,
+                        action="borg2_check_stream_finalize",
+                        job_id=job_id,
+                        repository_id=repository_id,
+                    )
 
             try:
-                await asyncio.gather(check_cancellation(), stream_logs(),
-                                     return_exceptions=True)
+                await asyncio.gather(
+                    check_cancellation(), stream_logs(), return_exceptions=True
+                )
             except asyncio.CancelledError:
                 cancelled = True
                 process.terminate()
@@ -196,7 +292,9 @@ class CheckV2Service:
                 job.status = "completed"
                 job.progress = 100
                 if job.max_duration and job.max_duration > 0:
-                    job.progress_message = "Partial repository check completed successfully"
+                    job.progress_message = (
+                        "Partial repository check completed successfully"
+                    )
                 else:
                     job.progress_message = "Check completed successfully"
                 job.completed_at = datetime.utcnow()
@@ -205,22 +303,28 @@ class CheckV2Service:
             elif process.returncode == 1 or (100 <= process.returncode <= 127):
                 job.status = "completed_with_warnings"
                 job.progress = 100
-                job.progress_message = f"Check completed with warnings (exit code {process.returncode})"
+                job.progress_message = (
+                    f"Check completed with warnings (exit code {process.returncode})"
+                )
                 job.error_message = job.progress_message
                 job.completed_at = datetime.utcnow()
                 repo.last_check = datetime.utcnow()
-                logger.warning("Borg2 check warnings", job_id=job_id,
-                               exit_code=process.returncode)
+                logger.warning(
+                    "Borg2 check warnings", job_id=job_id, exit_code=process.returncode
+                )
             else:
                 job.status = "failed"
                 job.error_message = f"Check failed with exit code {process.returncode}"
                 job.completed_at = datetime.utcnow()
-                logger.error("Borg2 check failed", job_id=job_id,
-                             exit_code=process.returncode)
+                logger.error(
+                    "Borg2 check failed", job_id=job_id, exit_code=process.returncode
+                )
 
             if log_buffer:
-                log_file = (self.log_dir /
-                            f"check_job_{job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+                log_file = (
+                    self.log_dir
+                    / f"check_job_{job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+                )
                 try:
                     log_file.write_text("\n".join(log_buffer))
                     job.log_file_path = str(log_file)
@@ -229,17 +333,58 @@ class CheckV2Service:
                 except Exception as e:
                     job.has_logs = False
                     job.logs = f"Failed to save logs: {e}"
-                    logger.error("Failed to save borg2 check logs", job_id=job_id, error=str(e))
+                    logger.error(
+                        "Failed to save borg2 check logs", job_id=job_id, error=str(e)
+                    )
 
-            db.commit()
+            final_status = job.status
+            final_progress = job.progress
+            final_progress_message = job.progress_message
+            final_completed_at = job.completed_at
+            final_error_message = job.error_message
+            final_log_file_path = job.log_file_path
+            final_has_logs = job.has_logs
+            final_logs = job.logs
+            repo_last_check = repo.last_check
+
+            def persist_final_state():
+                job.status = final_status
+                job.progress = final_progress
+                job.progress_message = final_progress_message
+                job.completed_at = final_completed_at
+                job.error_message = final_error_message
+                job.log_file_path = final_log_file_path
+                job.has_logs = final_has_logs
+                job.logs = final_logs
+                repo.last_check = repo_last_check
+
+            await commit_with_retry(
+                db,
+                prepare=persist_final_state,
+                logger=logger,
+                action="borg2_check_finalize",
+                job_id=job_id,
+                repository_id=repository_id,
+            )
 
         except Exception as e:
             logger.error("Borg2 check execution failed", job_id=job_id, error=str(e))
             try:
-                job.status = "failed"
-                job.error_message = str(e)
-                job.completed_at = datetime.utcnow()
-                db.commit()
+                completed_at = datetime.utcnow()
+
+                def persist_failure_state():
+                    job.status = "failed"
+                    job.error_message = str(e)
+                    job.completed_at = completed_at
+
+                await commit_with_retry(
+                    db,
+                    prepare=persist_failure_state,
+                    logger=logger,
+                    action="borg2_check_fail",
+                    job_id=job_id,
+                    repository_id=repository_id,
+                )
             except Exception:
                 db.rollback()
         finally:

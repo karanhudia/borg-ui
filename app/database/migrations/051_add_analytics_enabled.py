@@ -7,6 +7,7 @@ to allow users to opt-out of analytics tracking.
 
 from sqlalchemy import text
 
+
 def upgrade(db):
     """Add analytics_enabled to users table"""
     print("Running migration 051: Add analytics_enabled to users")
@@ -16,11 +17,13 @@ def upgrade(db):
         result = db.execute(text("PRAGMA table_info(users)"))
         columns = {row[1] for row in result}
 
-        if 'analytics_enabled' not in columns:
-            db.execute(text("""
+        if "analytics_enabled" not in columns:
+            db.execute(
+                text("""
                 ALTER TABLE users
                 ADD COLUMN analytics_enabled BOOLEAN DEFAULT 1
-            """))
+            """)
+            )
             print("✓ Added analytics_enabled column to users")
         else:
             print("⊘ Column analytics_enabled already exists in users")
@@ -33,12 +36,15 @@ def upgrade(db):
         db.rollback()
         raise
 
+
 def downgrade(db):
     """Downgrade migration 051"""
     print("Running downgrade for migration 051")
     try:
         # SQLite doesn't support DROP COLUMN directly
-        print("! Note: SQLite doesn't support DROP COLUMN. Manual intervention required if needed.")
+        print(
+            "! Note: SQLite doesn't support DROP COLUMN. Manual intervention required if needed."
+        )
         print("! The analytics_enabled column will remain in the users table.")
         db.commit()
         print("✓ Downgrade noted for migration 051")

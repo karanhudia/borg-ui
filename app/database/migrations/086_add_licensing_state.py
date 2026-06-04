@@ -8,7 +8,8 @@ logger = structlog.get_logger()
 
 def upgrade(db):
     try:
-        db.execute(text("""
+        db.execute(
+            text("""
             CREATE TABLE IF NOT EXISTS licensing_state (
                 id INTEGER PRIMARY KEY,
                 instance_id VARCHAR NOT NULL UNIQUE,
@@ -31,7 +32,8 @@ def upgrade(db):
                 created_at DATETIME,
                 updated_at DATETIME
             )
-        """))
+        """)
+        )
         logger.info("Ensured licensing_state table exists")
     except Exception as e:
         logger.error("Failed to create licensing_state table", error=str(e))

@@ -4,6 +4,7 @@ Datetime utilities for consistent timezone handling across the application.
 All datetimes in the database are stored as UTC (naive format due to SQLite limitations).
 This module provides utilities to ensure consistent serialization to frontend.
 """
+
 from datetime import datetime, timezone
 from typing import Optional
 

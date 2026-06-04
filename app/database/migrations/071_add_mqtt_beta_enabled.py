@@ -24,62 +24,104 @@ def _add_column(db, column_name, ddl):
 def upgrade(db):
     """Add every mqtt_* column that the model now exposes."""
     columns = [
-        ("mqtt_beta_enabled", """
+        (
+            "mqtt_beta_enabled",
+            """
             ALTER TABLE system_settings
             ADD COLUMN mqtt_beta_enabled BOOLEAN DEFAULT 0 NOT NULL
-        """),
-        ("mqtt_enabled", """
+        """,
+        ),
+        (
+            "mqtt_enabled",
+            """
             ALTER TABLE system_settings
             ADD COLUMN mqtt_enabled BOOLEAN DEFAULT 0 NOT NULL
-        """),
-        ("mqtt_broker_url", """
+        """,
+        ),
+        (
+            "mqtt_broker_url",
+            """
             ALTER TABLE system_settings
             ADD COLUMN mqtt_broker_url TEXT
-        """),
-        ("mqtt_broker_port", """
+        """,
+        ),
+        (
+            "mqtt_broker_port",
+            """
             ALTER TABLE system_settings
             ADD COLUMN mqtt_broker_port INTEGER DEFAULT 1883 NOT NULL
-        """),
-        ("mqtt_username", """
+        """,
+        ),
+        (
+            "mqtt_username",
+            """
             ALTER TABLE system_settings
             ADD COLUMN mqtt_username TEXT
-        """),
-        ("mqtt_password", """
+        """,
+        ),
+        (
+            "mqtt_password",
+            """
             ALTER TABLE system_settings
             ADD COLUMN mqtt_password TEXT
-        """),
-        ("mqtt_client_id", """
+        """,
+        ),
+        (
+            "mqtt_client_id",
+            """
             ALTER TABLE system_settings
             ADD COLUMN mqtt_client_id TEXT DEFAULT 'borg-ui' NOT NULL
-        """),
-        ("mqtt_base_topic", """
+        """,
+        ),
+        (
+            "mqtt_base_topic",
+            """
             ALTER TABLE system_settings
             ADD COLUMN mqtt_base_topic TEXT DEFAULT 'borg-ui' NOT NULL
-        """),
-        ("mqtt_qos", """
+        """,
+        ),
+        (
+            "mqtt_qos",
+            """
             ALTER TABLE system_settings
             ADD COLUMN mqtt_qos INTEGER DEFAULT 1 NOT NULL
-        """),
-        ("mqtt_retain", """
+        """,
+        ),
+        (
+            "mqtt_retain",
+            """
             ALTER TABLE system_settings
             ADD COLUMN mqtt_retain BOOLEAN DEFAULT 0 NOT NULL
-        """),
-        ("mqtt_tls_enabled", """
+        """,
+        ),
+        (
+            "mqtt_tls_enabled",
+            """
             ALTER TABLE system_settings
             ADD COLUMN mqtt_tls_enabled BOOLEAN DEFAULT 0 NOT NULL
-        """),
-        ("mqtt_tls_ca_cert", """
+        """,
+        ),
+        (
+            "mqtt_tls_ca_cert",
+            """
             ALTER TABLE system_settings
             ADD COLUMN mqtt_tls_ca_cert TEXT
-        """),
-        ("mqtt_tls_client_cert", """
+        """,
+        ),
+        (
+            "mqtt_tls_client_cert",
+            """
             ALTER TABLE system_settings
             ADD COLUMN mqtt_tls_client_cert TEXT
-        """),
-        ("mqtt_tls_client_key", """
+        """,
+        ),
+        (
+            "mqtt_tls_client_key",
+            """
             ALTER TABLE system_settings
             ADD COLUMN mqtt_tls_client_key TEXT
-        """),
+        """,
+        ),
     ]
 
     for name, ddl in columns:
@@ -91,6 +133,4 @@ def upgrade(db):
 
 def downgrade(db):
     """Downgrade is not supported on SQLite, keep existing columns."""
-    logger.warning(
-        "Downgrade not supported: mqtt_* columns remain in SQLite"
-    )
+    logger.warning("Downgrade not supported: mqtt_* columns remain in SQLite")

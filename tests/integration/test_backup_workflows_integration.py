@@ -69,7 +69,9 @@ class TestMultiSourceBackupIntegration:
         notification_mock.send_backup_warning = AsyncMock(return_value=None)
         notification_mock.send_backup_failure = AsyncMock(return_value=None)
 
-        with patch("app.services.backup_service.notification_service", notification_mock):
+        with patch(
+            "app.services.backup_service.notification_service", notification_mock
+        ):
             with patch("app.services.backup_service.mqtt_service.sync_state_with_db"):
                 with patch.dict("os.environ", borg_env, clear=False):
                     await backup_service.execute_backup(job.id, repo.path, test_db)
@@ -78,7 +80,9 @@ class TestMultiSourceBackupIntegration:
         assert job.status in ["completed", "completed_with_warnings"]
 
         archive_name = get_latest_archive_name(borg_binary, repo_path, env=borg_env)
-        archive_paths = list_archive_paths(borg_binary, repo_path, archive_name, env=borg_env)
+        archive_paths = list_archive_paths(
+            borg_binary, repo_path, archive_name, env=borg_env
+        )
 
         assert any(path.endswith("alpha-only.txt") for path in archive_paths)
         assert any(path.endswith("beta-only.txt") for path in archive_paths)
@@ -149,8 +153,12 @@ class TestMultiRepoScheduledBackupIntegration:
         notification_mock.send_schedule_failure = AsyncMock(return_value=None)
 
         with patch("app.api.schedule.notification_service", notification_mock):
-            with patch("app.services.backup_service.notification_service", notification_mock):
-                with patch("app.services.backup_service.mqtt_service.sync_state_with_db"):
+            with patch(
+                "app.services.backup_service.notification_service", notification_mock
+            ):
+                with patch(
+                    "app.services.backup_service.mqtt_service.sync_state_with_db"
+                ):
                     with patch.dict("os.environ", borg_env, clear=False):
                         await execute_multi_repo_schedule(schedule, test_db)
 
@@ -163,7 +171,10 @@ class TestMultiRepoScheduledBackupIntegration:
             .all()
         )
         assert len(backup_jobs) == 2
-        assert all(job.status in ["completed", "completed_with_warnings"] for job in backup_jobs)
+        assert all(
+            job.status in ["completed", "completed_with_warnings"]
+            for job in backup_jobs
+        )
 
         archive1 = get_latest_archive_name(borg_binary, repo1_path, env=borg_env)
         archive2 = get_latest_archive_name(borg_binary, repo2_path, env=borg_env)

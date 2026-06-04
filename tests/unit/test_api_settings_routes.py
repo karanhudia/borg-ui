@@ -28,8 +28,9 @@ class TestSystemSettingsContracts:
         assert source is None
 
     def test_get_system_settings_creates_defaults_and_reports_timeout_sources(
-        self, test_client: TestClient, admin_headers, test_db
+        self, test_client: TestClient, admin_headers, test_db, monkeypatch
     ):
+        monkeypatch.setenv("TZ", "America/Chicago")
         response = test_client.get("/api/settings/system", headers=admin_headers)
 
         assert response.status_code == 200
@@ -37,9 +38,30 @@ class TestSystemSettingsContracts:
         assert body["success"] is True
         settings = body["settings"]
         assert settings["max_concurrent_backups"] == 2
+        assert settings["max_concurrent_scheduled_backups"] == 2
+        assert settings["max_concurrent_scheduled_checks"] == 4
         assert settings["log_retention_days"] == 30
         assert settings["timeout_sources"]["backup_timeout"] in (None, "env")
-        assert settings["app_version"] == "2.0.0"
+        assert settings["app_version"] == settings_api.app_settings.app_version
+        assert settings["backup_monitoring_enabled"] is False
+        assert settings["backup_monitoring_stale_after_days"] == 3
+        assert settings["backup_monitoring_interval_hours"] == 24
+        assert settings["backup_monitoring_alert_cooldown_hours"] == 24
+        assert settings["backup_monitoring_include_observe_repos"] is True
+        assert settings["backup_monitoring_last_checked_at"] is None
+        assert settings["backup_monitoring_last_alert_sent_at"] is None
+        assert settings["backup_reports_enabled"] is False
+        assert settings["backup_reports_frequency"] == "weekly"
+        assert settings["backup_reports_cron_expression"] == "0 8 * * 1"
+        assert settings["backup_reports_timezone"] == "America/Chicago"
+        assert settings["backup_reports_hour_utc"] == 8
+        assert settings["backup_reports_weekday"] == 0
+        assert settings["backup_reports_monthday"] == 1
+        assert settings["backup_reports_include_summary"] is True
+        assert settings["backup_reports_include_stale_repositories"] is True
+        assert settings["backup_reports_include_recent_activity"] is True
+        assert settings["backup_reports_last_sent_at"] is None
+        assert settings["lock_breaking_enabled"] is True
         assert test_db.query(SystemSettings).count() == 1
 
     def test_get_system_settings_falls_back_when_log_storage_lookup_fails(
@@ -67,7 +89,27 @@ class TestSystemSettingsContracts:
         )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.settings.invalidLogSavePolicy"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.settings.invalidLogSavePolicy"
+        )
+
+    def test_update_system_settings_persists_lock_breaking_enabled(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        response = test_client.put(
+            "/api/settings/system",
+            json={"lock_breaking_enabled": False},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        settings = test_db.query(SystemSettings).first()
+        assert settings.lock_breaking_enabled is False
+
+        readback = test_client.get("/api/settings/system", headers=admin_headers)
+        assert readback.status_code == 200
+        assert readback.json()["settings"]["lock_breaking_enabled"] is False
 
     def test_update_system_settings_rejects_too_small_log_limit(
         self, test_client: TestClient, admin_headers
@@ -79,7 +121,173 @@ class TestSystemSettingsContracts:
         )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.settings.logSizeTooSmall"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.settings.logSizeTooSmall"
+        )
+
+    def test_update_system_settings_rejects_negative_scheduler_limit(
+        self, test_client: TestClient, admin_headers
+    ):
+        response = test_client.put(
+            "/api/settings/system",
+            json={"max_concurrent_scheduled_checks": -1},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.settings.invalidConcurrencyLimit"
+        )
+
+    def test_update_system_settings_persists_backup_monitoring_and_reports(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        with (
+            patch("app.services.mqtt_service.mqtt_service.configure"),
+            patch(
+                "app.services.mqtt_service.build_mqtt_runtime_config",
+                return_value={"enabled": False},
+            ),
+        ):
+            response = test_client.put(
+                "/api/settings/system",
+                json={
+                    "backup_monitoring_enabled": True,
+                    "backup_monitoring_stale_after_days": 5,
+                    "backup_monitoring_interval_hours": 6,
+                    "backup_monitoring_alert_cooldown_hours": 12,
+                    "backup_monitoring_include_observe_repos": False,
+                    "backup_reports_enabled": True,
+                    "backup_reports_frequency": "daily",
+                    "backup_reports_cron_expression": "30 18 * * *",
+                    "backup_reports_timezone": "Asia/Kolkata",
+                    "backup_reports_hour_utc": 7,
+                    "backup_reports_weekday": 2,
+                    "backup_reports_monthday": 15,
+                    "backup_reports_include_summary": False,
+                    "backup_reports_include_stale_repositories": True,
+                    "backup_reports_include_recent_activity": False,
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        settings = test_db.query(SystemSettings).first()
+        assert settings.backup_monitoring_enabled is True
+        assert settings.backup_monitoring_stale_after_days == 5
+        assert settings.backup_monitoring_interval_hours == 6
+        assert settings.backup_monitoring_alert_cooldown_hours == 12
+        assert settings.backup_monitoring_include_observe_repos is False
+        assert settings.backup_reports_enabled is True
+        assert settings.backup_reports_frequency == "daily"
+        assert settings.backup_reports_cron_expression == "30 18 * * *"
+        assert settings.backup_reports_timezone == "Asia/Kolkata"
+        assert settings.backup_reports_hour_utc == 7
+        assert settings.backup_reports_weekday == 2
+        assert settings.backup_reports_monthday == 15
+        assert settings.backup_reports_include_summary is False
+        assert settings.backup_reports_include_stale_repositories is True
+        assert settings.backup_reports_include_recent_activity is False
+
+        readback = test_client.get("/api/settings/system", headers=admin_headers)
+        payload = readback.json()["settings"]
+        assert payload["backup_monitoring_enabled"] is True
+        assert payload["backup_reports_frequency"] == "daily"
+        assert payload["backup_reports_cron_expression"] == "30 18 * * *"
+        assert payload["backup_reports_timezone"] == "Asia/Kolkata"
+        assert payload["backup_reports_include_recent_activity"] is False
+
+    def test_update_system_settings_rejects_invalid_backup_monitoring_values(
+        self, test_client: TestClient, admin_headers
+    ):
+        response = test_client.put(
+            "/api/settings/system",
+            json={"backup_monitoring_stale_after_days": 0},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.settings.invalidBackupMonitoringSetting"
+        )
+
+    def test_update_system_settings_rejects_invalid_report_frequency(
+        self, test_client: TestClient, admin_headers
+    ):
+        response = test_client.put(
+            "/api/settings/system",
+            json={"backup_reports_frequency": "hourly"},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.settings.invalidBackupReportFrequency"
+        )
+
+    def test_update_system_settings_rejects_invalid_report_cron(
+        self, test_client: TestClient, admin_headers
+    ):
+        response = test_client.put(
+            "/api/settings/system",
+            json={"backup_reports_cron_expression": "not a cron"},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.settings.invalidBackupReportSchedule"
+        )
+
+    def test_update_system_settings_rejects_invalid_report_timezone(
+        self, test_client: TestClient, admin_headers
+    ):
+        response = test_client.put(
+            "/api/settings/system",
+            json={"backup_reports_timezone": "Mars/Olympus"},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.schedule.invalidTimezone"
+        )
+
+    def test_run_backup_monitoring_endpoint_returns_service_result(
+        self, test_client: TestClient, admin_headers
+    ):
+        with patch(
+            "app.api.settings.backup_monitoring_service.run_backup_monitoring",
+            new=AsyncMock(return_value={"stale_count": 2, "alert_sent": True}),
+        ) as mock_run:
+            response = test_client.post(
+                "/api/settings/backup-monitoring/run", headers=admin_headers
+            )
+
+        assert response.status_code == 200
+        assert response.json() == {"stale_count": 2, "alert_sent": True}
+        mock_run.assert_awaited_once()
+
+    def test_send_backup_report_endpoint_returns_service_result(
+        self, test_client: TestClient, admin_headers
+    ):
+        with patch(
+            "app.api.settings.backup_monitoring_service.send_backup_report_now",
+            new=AsyncMock(return_value={"sent": True, "repository_count": 3}),
+        ) as mock_send:
+            response = test_client.post(
+                "/api/settings/backup-reports/send", headers=admin_headers
+            )
+
+        assert response.status_code == 200
+        assert response.json() == {"sent": True, "repository_count": 3}
+        mock_send.assert_awaited_once()
 
     def test_update_system_settings_returns_warning_when_new_log_limit_is_below_current_usage(
         self, test_client: TestClient, admin_headers
@@ -87,9 +295,14 @@ class TestSystemSettingsContracts:
         fake_log_manager = Mock()
         fake_log_manager.calculate_log_storage.return_value = {"total_size_mb": 250}
 
-        with patch("app.services.log_manager.log_manager", fake_log_manager), patch(
-            "app.services.mqtt_service.mqtt_service.configure"
-        ), patch("app.services.mqtt_service.build_mqtt_runtime_config", return_value={"enabled": False}):
+        with (
+            patch("app.services.log_manager.log_manager", fake_log_manager),
+            patch("app.services.mqtt_service.mqtt_service.configure"),
+            patch(
+                "app.services.mqtt_service.build_mqtt_runtime_config",
+                return_value={"enabled": False},
+            ),
+        ):
             response = test_client.put(
                 "/api/settings/system",
                 json={"log_max_total_size_mb": 100, "mqtt_password": ""},
@@ -105,7 +318,9 @@ class TestSystemSettingsContracts:
 
 @pytest.mark.unit
 class TestSettingsUserContracts:
-    def test_create_user_rejects_duplicate_email(self, test_client: TestClient, admin_headers, test_db):
+    def test_create_user_rejects_duplicate_email(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         test_db.add(SystemSettings())
         state = test_db.query(LicensingState).first()
         if state is None:
@@ -135,9 +350,14 @@ class TestSettingsUserContracts:
         )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.settings.emailAlreadyExists"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.settings.emailAlreadyExists"
+        )
 
-    def test_update_user_role_normalizes_repository_scope(self, test_client: TestClient, admin_headers, test_db):
+    def test_update_user_role_normalizes_repository_scope(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         user = User(
             username="scoped-user",
             email="scoped@example.com",
@@ -160,16 +380,28 @@ class TestSettingsUserContracts:
         assert user.role == "viewer"
         assert user.all_repositories_role == "viewer"
 
-    def test_delete_user_rejects_deleting_self(self, test_client: TestClient, admin_headers, admin_user, test_db):
+    def test_delete_user_rejects_deleting_self(
+        self, test_client: TestClient, admin_headers, admin_user, test_db
+    ):
         test_db.add(
-            User(username="other-admin", email="other-admin@example.com", role="admin", password_hash="hash")
+            User(
+                username="other-admin",
+                email="other-admin@example.com",
+                role="admin",
+                password_hash="hash",
+            )
         )
         test_db.commit()
 
-        response = test_client.delete(f"/api/settings/users/{admin_user.id}", headers=admin_headers)
+        response = test_client.delete(
+            f"/api/settings/users/{admin_user.id}", headers=admin_headers
+        )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.settings.cannotDeleteOwnAccount"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.settings.cannotDeleteOwnAccount"
+        )
 
     def test_change_password_rejects_wrong_current_password(
         self, test_client: TestClient, admin_headers
@@ -181,10 +413,17 @@ class TestSettingsUserContracts:
         )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.auth.currentPasswordIncorrect"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.auth.currentPasswordIncorrect"
+        )
 
-    def test_get_profile_includes_deployment_metadata(self, test_client: TestClient, admin_headers, test_db):
-        settings = SystemSettings(deployment_type="enterprise", enterprise_name="Acme Inc")
+    def test_get_profile_includes_deployment_metadata(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        settings = SystemSettings(
+            deployment_type="enterprise", enterprise_name="Acme Inc"
+        )
         test_db.add(settings)
         test_db.commit()
 
@@ -195,7 +434,9 @@ class TestSettingsUserContracts:
         assert profile["deployment_type"] == "enterprise"
         assert profile["enterprise_name"] == "Acme Inc"
 
-    def test_get_preferences_returns_user_analytics_flags(self, test_client: TestClient, admin_headers, admin_user):
+    def test_get_preferences_returns_user_analytics_flags(
+        self, test_client: TestClient, admin_headers, admin_user
+    ):
         admin_user.analytics_enabled = False
         admin_user.analytics_consent_given = True
 
@@ -210,7 +451,9 @@ class TestSettingsUserContracts:
             },
         }
 
-    def test_update_preferences_persists_analytics_flags(self, test_client: TestClient, admin_headers, admin_user, test_db):
+    def test_update_preferences_persists_analytics_flags(
+        self, test_client: TestClient, admin_headers, admin_user, test_db
+    ):
         response = test_client.put(
             "/api/settings/preferences",
             json={"analytics_enabled": False, "analytics_consent_given": True},
@@ -221,26 +464,39 @@ class TestSettingsUserContracts:
         test_db.refresh(admin_user)
         assert admin_user.analytics_enabled is False
         assert admin_user.analytics_consent_given is True
-        assert response.json()["message"] == "backend.success.settings.preferencesUpdated"
+        assert (
+            response.json()["message"] == "backend.success.settings.preferencesUpdated"
+        )
 
 
 @pytest.mark.unit
 class TestCacheSettingsContracts:
-    def test_clear_cache_rejects_missing_repository(self, test_client: TestClient, admin_headers):
-        response = test_client.post("/api/settings/cache/clear?repository_id=99999", headers=admin_headers)
+    def test_clear_cache_rejects_missing_repository(
+        self, test_client: TestClient, admin_headers
+    ):
+        response = test_client.post(
+            "/api/settings/cache/clear?repository_id=99999", headers=admin_headers
+        )
 
         assert response.status_code == 404
-        assert response.json()["detail"]["key"] == "backend.errors.repo.repositoryNotFound"
+        assert (
+            response.json()["detail"]["key"] == "backend.errors.repo.repositoryNotFound"
+        )
 
     def test_clear_cache_for_repository_returns_cleared_count(
         self, test_client: TestClient, admin_headers, test_db
     ):
-        repository = Repository(name="Repo", path="/repos/main", encryption="none", repository_type="local")
+        repository = Repository(
+            name="Repo", path="/repos/main", encryption="none", repository_type="local"
+        )
         test_db.add(repository)
         test_db.commit()
         test_db.refresh(repository)
 
-        with patch("app.api.settings.archive_cache.clear_repository", new=AsyncMock(return_value=3)) as mock_clear:
+        with patch(
+            "app.api.settings.archive_cache.clear_repository",
+            new=AsyncMock(return_value=3),
+        ) as mock_clear:
             response = test_client.post(
                 f"/api/settings/cache/clear?repository_id={repository.id}",
                 headers=admin_headers,
@@ -250,13 +506,22 @@ class TestCacheSettingsContracts:
         assert response.json()["cleared_count"] == 3
         mock_clear.assert_awaited_once_with(repository.id)
 
-    def test_update_cache_settings_requires_at_least_one_value(self, test_client: TestClient, admin_headers):
-        response = test_client.put("/api/settings/cache/settings", headers=admin_headers)
+    def test_update_cache_settings_requires_at_least_one_value(
+        self, test_client: TestClient, admin_headers
+    ):
+        response = test_client.put(
+            "/api/settings/cache/settings", headers=admin_headers
+        )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.settings.atLeastOneSettingRequired"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.settings.atLeastOneSettingRequired"
+        )
 
-    def test_update_cache_settings_reconfigures_backend(self, test_client: TestClient, admin_headers, test_db):
+    def test_update_cache_settings_reconfigures_backend(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         with patch(
             "app.api.settings.archive_cache.reconfigure",
             return_value={"success": True, "backend": "in-memory"},
@@ -272,7 +537,9 @@ class TestCacheSettingsContracts:
         assert body["backend"] == "in-memory"
         assert body["cache_ttl_minutes"] == 90
         assert body["cache_max_size_mb"] == 256
-        mock_reconfigure.assert_called_once_with(redis_url="disabled", cache_max_size_mb=256)
+        mock_reconfigure.assert_called_once_with(
+            redis_url="disabled", cache_max_size_mb=256
+        )
         settings = test_db.query(SystemSettings).first()
         assert settings.cache_ttl_minutes == 90
         assert settings.cache_max_size_mb == 256
@@ -295,7 +562,9 @@ class TestCacheSettingsContracts:
         }
 
         with patch("app.services.log_manager.log_manager", fake_log_manager):
-            response = test_client.get("/api/settings/system/logs/storage", headers=admin_headers)
+            response = test_client.get(
+                "/api/settings/system/logs/storage", headers=admin_headers
+            )
 
         assert response.status_code == 200
         log_storage = response.json()["storage"]

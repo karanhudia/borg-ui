@@ -27,10 +27,12 @@ def upgrade(db):
     try:
         # Add include_job_name_in_title column (idempotent)
         if not column_exists(db, "notification_settings", "include_job_name_in_title"):
-            db.execute(text("""
+            db.execute(
+                text("""
                 ALTER TABLE notification_settings
                 ADD COLUMN include_job_name_in_title BOOLEAN NOT NULL DEFAULT FALSE
-            """))
+            """)
+            )
             print("  ✓ Added include_job_name_in_title column")
         else:
             print("  ℹ Column include_job_name_in_title already exists, skipping")
@@ -50,10 +52,12 @@ def downgrade(db):
 
     try:
         # Remove column
-        db.execute(text("""
+        db.execute(
+            text("""
             ALTER TABLE notification_settings
             DROP COLUMN IF EXISTS include_job_name_in_title
-        """))
+        """)
+        )
         print("  ✓ Removed include_job_name_in_title column")
 
         db.commit()

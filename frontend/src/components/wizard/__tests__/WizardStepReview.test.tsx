@@ -112,6 +112,52 @@ describe('WizardStepReview', () => {
 
       expect(screen.getByText('SSH Remote')).toBeInTheDocument()
     })
+
+    it('shows localized rclone sync policy labels', () => {
+      const rcloneData = {
+        ...defaultData,
+        repositoryLocation: 'local' as const,
+        cloudMirrorEnabled: true,
+        rcloneRemoteName: 'prod-s3',
+        rcloneRemotePath: 'borg-ui/repositories/app',
+        rcloneSyncPolicy: 'manual' as const,
+      }
+
+      render(
+        <WizardStepReview mode="create" data={rcloneData} sshConnections={mockSshConnections} />
+      )
+
+      expect(screen.getByText('Manual sync')).toBeInTheDocument()
+      expect(screen.queryByText('manual')).not.toBeInTheDocument()
+      expect(screen.getByText('Cloud Mirror')).toBeInTheDocument()
+      expect(screen.getByText('prod-s3:borg-ui/repositories/app')).toBeInTheDocument()
+    })
+
+    it('shows direct Borg 2 rclone tradeoffs without mirror sync controls', () => {
+      const directRcloneData = {
+        ...defaultData,
+        borgVersion: 2 as const,
+        repositoryLocation: 'rclone' as const,
+        path: 'rclone://prod-s3/borg-ui/direct',
+        cloudMirrorEnabled: false,
+      }
+
+      render(
+        <WizardStepReview
+          mode="create"
+          data={directRcloneData}
+          sshConnections={mockSshConnections}
+        />
+      )
+
+      expect(screen.getByText('Direct Borg 2 rclone')).toBeInTheDocument()
+      expect(screen.getByText(/Borg writes directly through rclone/i)).toBeInTheDocument()
+      expect(screen.getByText('rclone://prod-s3/borg-ui/direct')).toBeInTheDocument()
+      expect(screen.queryByText('Cloud Mirror')).not.toBeInTheDocument()
+      expect(screen.queryByText('Manual sync')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('backup-flow-preview')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('command-preview')).not.toBeInTheDocument()
+    })
   })
 
   describe('Data Source Section', () => {
@@ -141,6 +187,36 @@ describe('WizardStepReview', () => {
       )
 
       expect(screen.getByText('Remote Client')).toBeInTheDocument()
+    })
+
+    it('shows plan-owned source copy for managed-agent repositories without source paths', () => {
+      render(
+        <WizardStepReview
+          mode="create"
+          data={{
+            ...defaultData,
+            executionTarget: 'agent',
+            agentMachineId: 7,
+            sourceDirs: [],
+          }}
+          sshConnections={mockSshConnections}
+          agentMachines={[
+            {
+              id: 7,
+              name: 'Workstation',
+              hostname: 'workstation.local',
+              status: 'online',
+            },
+          ]}
+        />
+      )
+
+      expect(screen.getByText('PLAN SOURCES')).toBeInTheDocument()
+      expect(
+        screen.getByText(
+          'Source paths for managed-agent backups are configured on Backup Plans, not on the repository.'
+        )
+      ).toBeInTheDocument()
     })
 
     it('shows directory count for local source', () => {

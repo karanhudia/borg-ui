@@ -18,6 +18,7 @@ Exit codes:
     0  Password reset successfully
     1  Error (wrong arguments, user not found, empty password, DB error)
 """
+
 import sys
 import sqlite3
 import os

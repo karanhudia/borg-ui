@@ -12,6 +12,7 @@ from app.core.permissions import (
     is_repository_role_assignable_to_global_role,
 )
 from app.core.security import get_current_user, get_current_admin_user
+from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["permissions"])
@@ -38,6 +39,7 @@ class PermissionResponse(BaseModel):
 
     class Config:
         from_attributes = True
+        json_encoders = {datetime: lambda v: serialize_datetime(v)}
 
 
 class PermissionScopeResponse(BaseModel):
@@ -81,7 +83,9 @@ def _resolve_permission_scope_role(user: User, role: Optional[str]) -> Optional[
 def _get_user_or_404(db: Session, user_id: int) -> User:
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
-        raise HTTPException(status_code=404, detail={"key": "backend.errors.settings.userNotFound"})
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.settings.userNotFound"}
+        )
     return user
 
 
@@ -105,7 +109,11 @@ def _list_permission_rows(db: Session, user_id: int) -> list[PermissionResponse]
             UserRepositoryPermission.created_at,
             Repository.name.label("repository_name"),
         )
-        .join(Repository, Repository.id == UserRepositoryPermission.repository_id, isouter=True)
+        .join(
+            Repository,
+            Repository.id == UserRepositoryPermission.repository_id,
+            isouter=True,
+        )
         .filter(UserRepositoryPermission.user_id == user_id)
         .all()
     )
@@ -148,7 +156,9 @@ async def get_my_permissions(
 async def get_my_permission_scope(
     current_user: User = Depends(get_current_user),
 ):
-    return PermissionScopeResponse(all_repositories_role=current_user.all_repositories_role)
+    return PermissionScopeResponse(
+        all_repositories_role=current_user.all_repositories_role
+    )
 
 
 @router.get(
@@ -257,7 +267,9 @@ async def update_permission(
         .first()
     )
     if not perm:
-        raise HTTPException(status_code=404, detail={"key": "backend.errors.permissions.notFound"})
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.permissions.notFound"}
+        )
 
     repo = _get_repository_or_404(db, repo_id)
     perm.role = payload.role
@@ -284,7 +296,9 @@ async def remove_permission(
         .first()
     )
     if not perm:
-        raise HTTPException(status_code=404, detail={"key": "backend.errors.permissions.notFound"})
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.permissions.notFound"}
+        )
 
     db.delete(perm)
     db.commit()

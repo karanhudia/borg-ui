@@ -77,7 +77,6 @@ describe('RestoreJobCard', () => {
 
       const destinationElement = screen.getByText('/Users/karanhudia/Documents')
       expect(destinationElement).toBeInTheDocument()
-      expect(destinationElement).toHaveStyle({ fontFamily: 'monospace' })
     })
 
     it('displays arrow separator between archive and destination', () => {
@@ -89,7 +88,7 @@ describe('RestoreJobCard', () => {
   })
 
   describe('Completed status', () => {
-    it('displays completed status with checkmark', () => {
+    it('displays completed status as chip', () => {
       const job = {
         ...baseJob,
         archive: 'backup',
@@ -111,7 +110,6 @@ describe('RestoreJobCard', () => {
       }
       const { container } = render(<RestoreJobCard job={job} />)
 
-      // Completed state now includes the success icon
       const icons = container.querySelectorAll('svg')
       expect(icons.length).toBeGreaterThan(0)
     })
@@ -139,9 +137,7 @@ describe('RestoreJobCard', () => {
       }
       render(<RestoreJobCard job={job} />)
 
-      // Should show bullet separator and duration with "Duration:" prefix
-      expect(screen.getByText('•')).toBeInTheDocument()
-      expect(screen.getByText(/Duration:/)).toBeInTheDocument()
+      expect(screen.getByText(/5 min/)).toBeInTheDocument()
     })
 
     it('hides duration when it is 0 sec', () => {
@@ -154,14 +150,13 @@ describe('RestoreJobCard', () => {
       }
       render(<RestoreJobCard job={job} />)
 
-      // Should not show bullet or duration
-      expect(screen.queryByText('•')).not.toBeInTheDocument()
-      expect(screen.queryByText(/Duration:/)).not.toBeInTheDocument()
+      // Should not show duration
+      expect(screen.queryByText(/5 min/)).not.toBeInTheDocument()
     })
   })
 
   describe('Running status', () => {
-    it('displays running status with pulsing indicator', () => {
+    it('displays running status with chip', () => {
       const job = {
         ...baseJob,
         archive: 'backup',
@@ -356,9 +351,7 @@ describe('RestoreJobCard', () => {
       }
       render(<RestoreJobCard job={job} />)
 
-      // Without completed_at, the completed status section is not rendered
-      expect(screen.queryByText('✓ Completed')).not.toBeInTheDocument()
-      // But the job info should still be displayed
+      // Job info should still be displayed
       expect(screen.getByText('backup')).toBeInTheDocument()
     })
 

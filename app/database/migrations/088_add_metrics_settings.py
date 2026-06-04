@@ -1,6 +1,7 @@
 """
 Add metrics settings to system_settings.
 """
+
 from sqlalchemy import text
 import structlog
 

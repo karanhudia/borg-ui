@@ -2,10 +2,12 @@
 Comprehensive unit tests for schedule API endpoints.
 Each test verifies ONE specific expected outcome.
 """
+
 import pytest
-from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
-from app.database.models import Repository, ScheduledJob
+from unittest.mock import patch
+
+from app.database.models import BackupJob, Repository, ScheduledJob, SSHConnection
 from tests.unit.helpers import assert_auth_required
 
 
@@ -22,10 +24,17 @@ class TestScheduleList:
         assert data["success"] is True
         assert data["jobs"] == []
 
-    def test_list_schedules_with_data(self, test_client: TestClient, admin_headers, test_db):
+    def test_list_schedules_with_data(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test listing schedules returns 200 with schedule data"""
         # Create a test repository
-        repo = Repository(name="Test Repo", path="/test/repo", encryption="none", repository_type="local")
+        repo = Repository(
+            name="Test Repo",
+            path="/test/repo",
+            encryption="none",
+            repository_type="local",
+        )
         test_db.add(repo)
         test_db.commit()
         test_db.refresh(repo)
@@ -35,7 +44,7 @@ class TestScheduleList:
             repository="/test/repo",
             cron_expression="0 2 * * *",
             enabled=True,
-            name="Daily Backup"
+            name="Daily Backup",
         )
         test_db.add(schedule)
         test_db.commit()
@@ -59,17 +68,17 @@ class TestScheduleList:
 class TestScheduleCreate:
     """Test schedule creation"""
 
-    def test_create_schedule_missing_fields(self, test_client: TestClient, admin_headers):
+    def test_create_schedule_missing_fields(
+        self, test_client: TestClient, admin_headers
+    ):
         """Test creating schedule with missing fields returns 422"""
-        response = test_client.post(
-            "/api/schedule/",
-            json={},
-            headers=admin_headers
-        )
+        response = test_client.post("/api/schedule/", json={}, headers=admin_headers)
 
         assert response.status_code == 422  # Validation error
 
-    def test_create_schedule_invalid_repository(self, test_client: TestClient, admin_headers):
+    def test_create_schedule_invalid_repository(
+        self, test_client: TestClient, admin_headers
+    ):
         """Test creating schedule with invalid repository returns 404"""
         response = test_client.post(
             "/api/schedule/",
@@ -77,16 +86,23 @@ class TestScheduleCreate:
                 "repository_id": 99999,
                 "cron_expression": "0 2 * * *",  # Daily at 2 AM
                 "enabled": True,
-                "name": "Test Schedule"
+                "name": "Test Schedule",
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 404
 
-    def test_create_schedule_invalid_cron(self, test_client: TestClient, admin_headers, test_db):
+    def test_create_schedule_invalid_cron(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test creating schedule with invalid cron expression returns 422"""
-        repo = Repository(name="Test Repo", path="/test/repo", encryption="none", repository_type="local")
+        repo = Repository(
+            name="Test Repo",
+            path="/test/repo",
+            encryption="none",
+            repository_type="local",
+        )
         test_db.add(repo)
         test_db.commit()
         test_db.refresh(repo)
@@ -97,22 +113,48 @@ class TestScheduleCreate:
                 "repository_id": repo.id,
                 "cron_expression": "invalid cron",
                 "enabled": True,
-                "name": "Test Schedule"
+                "name": "Test Schedule",
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 400
+
+    def test_create_schedule_stores_timezone(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Test Repo",
+            path="/test/repo",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.post(
+            "/api/schedule/",
+            json={
+                "repository_id": repo.id,
+                "cron_expression": "0 2 * * *",
+                "timezone": "Asia/Kolkata",
+                "enabled": True,
+                "name": "India Schedule",
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["job"]["cron_expression"] == "0 2 * * *"
+        assert data["job"]["timezone"] == "Asia/Kolkata"
 
     def test_create_schedule_unauthorized(self, test_client: TestClient):
         """Test creating schedule without authentication returns 403"""
         response = test_client.post(
             "/api/schedule/",
-            json={
-                "repository_id": 1,
-                "cron_expression": "0 2 * * *",
-                "enabled": True
-            }
+            json={"repository_id": 1, "cron_expression": "0 2 * * *", "enabled": True},
         )
 
         assert_auth_required(response)
@@ -122,9 +164,16 @@ class TestScheduleCreate:
 class TestScheduleGet:
     """Test getting individual schedule"""
 
-    def test_get_schedule_success(self, test_client: TestClient, admin_headers, test_db):
+    def test_get_schedule_success(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test getting existing schedule returns 200"""
-        repo = Repository(name="Test Repo", path="/test/repo", encryption="none", repository_type="local")
+        repo = Repository(
+            name="Test Repo",
+            path="/test/repo",
+            encryption="none",
+            repository_type="local",
+        )
         test_db.add(repo)
         test_db.commit()
         test_db.refresh(repo)
@@ -133,13 +182,15 @@ class TestScheduleGet:
             repository="/test/repo",
             cron_expression="0 2 * * *",
             enabled=True,
-            name="Daily Backup"
+            name="Daily Backup",
         )
         test_db.add(schedule)
         test_db.commit()
         test_db.refresh(schedule)
 
-        response = test_client.get(f"/api/schedule/{schedule.id}", headers=admin_headers)
+        response = test_client.get(
+            f"/api/schedule/{schedule.id}", headers=admin_headers
+        )
 
         assert response.status_code == 200
         data = response.json()
@@ -164,9 +215,16 @@ class TestScheduleGet:
 class TestScheduleUpdate:
     """Test schedule update operations"""
 
-    def test_update_schedule_success(self, test_client: TestClient, admin_headers, test_db):
+    def test_update_schedule_success(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test updating existing schedule returns 200"""
-        repo = Repository(name="Test Repo", path="/test/repo", encryption="none", repository_type="local")
+        repo = Repository(
+            name="Test Repo",
+            path="/test/repo",
+            encryption="none",
+            repository_type="local",
+        )
         test_db.add(repo)
         test_db.commit()
         test_db.refresh(repo)
@@ -175,7 +233,7 @@ class TestScheduleUpdate:
             repository="/test/repo",
             cron_expression="0 2 * * *",
             enabled=True,
-            name="Daily Backup"
+            name="Daily Backup",
         )
         test_db.add(schedule)
         test_db.commit()
@@ -183,11 +241,8 @@ class TestScheduleUpdate:
 
         response = test_client.put(
             f"/api/schedule/{schedule.id}",
-            json={
-                "cron_expression": "0 3 * * *",
-                "enabled": False
-            },
-            headers=admin_headers
+            json={"cron_expression": "0 3 * * *", "enabled": False},
+            headers=admin_headers,
         )
 
         assert response.status_code == 200
@@ -196,18 +251,22 @@ class TestScheduleUpdate:
         """Test updating non-existent schedule returns 404"""
         response = test_client.put(
             "/api/schedule/99999",
-            json={
-                "cron_expression": "0 3 * * *",
-                "enabled": False
-            },
-            headers=admin_headers
+            json={"cron_expression": "0 3 * * *", "enabled": False},
+            headers=admin_headers,
         )
 
         assert response.status_code == 404
 
-    def test_update_schedule_invalid_cron(self, test_client: TestClient, admin_headers, test_db):
+    def test_update_schedule_invalid_cron(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test updating schedule with invalid cron returns 422"""
-        repo = Repository(name="Test Repo", path="/test/repo", encryption="none", repository_type="local")
+        repo = Repository(
+            name="Test Repo",
+            path="/test/repo",
+            encryption="none",
+            repository_type="local",
+        )
         test_db.add(repo)
         test_db.commit()
         test_db.refresh(repo)
@@ -216,7 +275,7 @@ class TestScheduleUpdate:
             repository="/test/repo",
             cron_expression="0 2 * * *",
             enabled=True,
-            name="Daily Backup"
+            name="Daily Backup",
         )
         test_db.add(schedule)
         test_db.commit()
@@ -224,20 +283,15 @@ class TestScheduleUpdate:
 
         response = test_client.put(
             f"/api/schedule/{schedule.id}",
-            json={
-                "cron_expression": "invalid cron"
-            },
-            headers=admin_headers
+            json={"cron_expression": "invalid cron"},
+            headers=admin_headers,
         )
 
         assert response.status_code == 400
 
     def test_update_schedule_unauthorized(self, test_client: TestClient):
         """Test updating schedule without authentication returns 403"""
-        response = test_client.put(
-            "/api/schedule/1",
-            json={"enabled": False}
-        )
+        response = test_client.put("/api/schedule/1", json={"enabled": False})
 
         assert response.status_code == 401
 
@@ -246,9 +300,16 @@ class TestScheduleUpdate:
 class TestScheduleDelete:
     """Test schedule deletion"""
 
-    def test_delete_schedule_success(self, test_client: TestClient, admin_headers, test_db):
+    def test_delete_schedule_success(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test deleting existing schedule returns 200"""
-        repo = Repository(name="Test Repo", path="/test/repo", encryption="none", repository_type="local")
+        repo = Repository(
+            name="Test Repo",
+            path="/test/repo",
+            encryption="none",
+            repository_type="local",
+        )
         test_db.add(repo)
         test_db.commit()
         test_db.refresh(repo)
@@ -257,13 +318,15 @@ class TestScheduleDelete:
             repository="/test/repo",
             cron_expression="0 2 * * *",
             enabled=True,
-            name="Daily Backup"
+            name="Daily Backup",
         )
         test_db.add(schedule)
         test_db.commit()
         test_db.refresh(schedule)
 
-        response = test_client.delete(f"/api/schedule/{schedule.id}", headers=admin_headers)
+        response = test_client.delete(
+            f"/api/schedule/{schedule.id}", headers=admin_headers
+        )
 
         assert response.status_code == 200
 
@@ -284,9 +347,16 @@ class TestScheduleDelete:
 class TestScheduleToggle:
     """Test schedule toggle functionality"""
 
-    def test_toggle_schedule_success(self, test_client: TestClient, admin_headers, test_db):
+    def test_toggle_schedule_success(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test toggling existing schedule returns 200"""
-        repo = Repository(name="Test Repo", path="/test/repo", encryption="none", repository_type="local")
+        repo = Repository(
+            name="Test Repo",
+            path="/test/repo",
+            encryption="none",
+            repository_type="local",
+        )
         test_db.add(repo)
         test_db.commit()
         test_db.refresh(repo)
@@ -295,13 +365,15 @@ class TestScheduleToggle:
             repository="/test/repo",
             cron_expression="0 2 * * *",
             enabled=True,
-            name="Daily Backup"
+            name="Daily Backup",
         )
         test_db.add(schedule)
         test_db.commit()
         test_db.refresh(schedule)
 
-        response = test_client.post(f"/api/schedule/{schedule.id}/toggle", headers=admin_headers)
+        response = test_client.post(
+            f"/api/schedule/{schedule.id}/toggle", headers=admin_headers
+        )
 
         assert response.status_code == 200
 
@@ -324,7 +396,9 @@ class TestScheduleRunNow:
 
     def test_run_schedule_now_nonexistent(self, test_client: TestClient, admin_headers):
         """Test running non-existent schedule returns 404"""
-        response = test_client.post("/api/schedule/99999/run-now", headers=admin_headers)
+        response = test_client.post(
+            "/api/schedule/99999/run-now", headers=admin_headers
+        )
 
         assert response.status_code == 404
 
@@ -333,6 +407,61 @@ class TestScheduleRunNow:
         response = test_client.post("/api/schedule/1/run-now")
 
         assert response.status_code == 401
+
+    def test_run_schedule_now_uses_remote_direct_for_same_ssh_source_and_repo(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        connection = SSHConnection(
+            host="docker-host.example",
+            username="backup",
+            port=22,
+            is_backup_source=True,
+            borg_binary_path="/usr/local/bin/borg-wrapper",
+        )
+        test_db.add(connection)
+        test_db.flush()
+        repo = Repository(
+            name="Remote Direct Repo",
+            path="/repos/remote-direct",
+            encryption="none",
+            repository_type="ssh",
+            connection_id=connection.id,
+            source_ssh_connection_id=connection.id,
+            source_directories='["/var/lib/docker/volumes/app"]',
+        )
+        test_db.add(repo)
+        test_db.flush()
+        schedule = ScheduledJob(
+            repository=repo.path,
+            repository_id=repo.id,
+            cron_expression="0 2 * * *",
+            enabled=True,
+            name="Daily Remote Direct",
+        )
+        test_db.add(schedule)
+        test_db.commit()
+
+        with (
+            patch(
+                "app.api.schedule.execute_scheduled_backup_with_maintenance",
+                new=lambda *args, **kwargs: object(),
+            ),
+            patch("app.api.schedule.asyncio.create_task"),
+            patch("app.api.schedule._track_scheduled_backup_task"),
+        ):
+            response = test_client.post(
+                f"/api/schedule/{schedule.id}/run-now", headers=admin_headers
+            )
+
+        assert response.status_code == 200
+        backup_job = (
+            test_db.query(BackupJob)
+            .filter(BackupJob.scheduled_job_id == schedule.id)
+            .one()
+        )
+        assert backup_job.route_strategy == "remote_direct"
+        assert backup_job.execution_mode == "remote_ssh"
+        assert backup_job.source_ssh_connection_id == connection.id
 
 
 @pytest.mark.unit
@@ -359,7 +488,7 @@ class TestScheduleHelpers:
                 "month": "*",
                 "day_of_week": "*",
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 200
@@ -380,7 +509,7 @@ class TestScheduleHelpers:
                 "month": "*",
                 "day_of_week": "*",
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 200
@@ -403,8 +532,7 @@ class TestScheduleHelpers:
     def test_validate_cron_unauthorized(self, test_client: TestClient):
         """Test validating cron without authentication returns 403"""
         response = test_client.post(
-            "/api/schedule/validate-cron",
-            json={"cron_expression": "0 2 * * *"}
+            "/api/schedule/validate-cron", json={"cron_expression": "0 2 * * *"}
         )
 
         # Auth is checked before validation
@@ -428,7 +556,10 @@ class TestScheduleRoleGuard:
             headers=auth_headers,
         )
         assert response.status_code == 403
-        assert response.json()["detail"]["key"] == "backend.errors.schedule.operatorAccessRequired"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.schedule.operatorAccessRequired"
+        )
 
     def test_viewer_cannot_update_schedule(self, test_client, auth_headers):
         response = test_client.put(
@@ -437,27 +568,42 @@ class TestScheduleRoleGuard:
             headers=auth_headers,
         )
         assert response.status_code == 403
-        assert response.json()["detail"]["key"] == "backend.errors.schedule.operatorAccessRequired"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.schedule.operatorAccessRequired"
+        )
 
     def test_viewer_cannot_delete_schedule(self, test_client, auth_headers):
         response = test_client.delete("/api/schedule/1", headers=auth_headers)
         assert response.status_code == 403
-        assert response.json()["detail"]["key"] == "backend.errors.schedule.operatorAccessRequired"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.schedule.operatorAccessRequired"
+        )
 
     def test_viewer_cannot_toggle_schedule(self, test_client, auth_headers):
         response = test_client.post("/api/schedule/1/toggle", headers=auth_headers)
         assert response.status_code == 403
-        assert response.json()["detail"]["key"] == "backend.errors.schedule.operatorAccessRequired"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.schedule.operatorAccessRequired"
+        )
 
     def test_viewer_cannot_duplicate_schedule(self, test_client, auth_headers):
         response = test_client.post("/api/schedule/1/duplicate", headers=auth_headers)
         assert response.status_code == 403
-        assert response.json()["detail"]["key"] == "backend.errors.schedule.operatorAccessRequired"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.schedule.operatorAccessRequired"
+        )
 
     def test_viewer_cannot_run_schedule_now(self, test_client, auth_headers):
         response = test_client.post("/api/schedule/1/run-now", headers=auth_headers)
         assert response.status_code == 403
-        assert response.json()["detail"]["key"] == "backend.errors.schedule.operatorAccessRequired"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.schedule.operatorAccessRequired"
+        )
 
     def test_viewer_can_list_schedules(self, test_client, auth_headers):
         """Read endpoints must remain accessible to viewers."""
@@ -469,7 +615,10 @@ class TestScheduleRoleGuard:
     ):
         """Operator passes global check but fails per-repo check if no explicit permission."""
         from app.database.models import Repository
-        repo = Repository(name="op-test-repo", path="/backup/op-test", encryption="none")
+
+        repo = Repository(
+            name="op-test-repo", path="/backup/op-test", encryption="none"
+        )
         test_db.add(repo)
         test_db.commit()
         test_db.refresh(repo)

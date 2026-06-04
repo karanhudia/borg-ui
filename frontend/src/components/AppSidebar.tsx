@@ -26,10 +26,12 @@ import {
   Zap,
   HardDrive,
   Sliders,
-  RotateCcw,
   Wifi,
+  ListChecks,
+  Activity,
+  Cloud,
 } from 'lucide-react'
-import api, { settingsAPI } from '../services/api'
+import api, { settingsAPI, backupPlansAPI } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import NavItem from './NavItem'
 import NavGroup from './NavGroup'
@@ -48,7 +50,14 @@ interface NavigationItem {
   href?: string
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   icon: React.ComponentType<any>
-  key: 'dashboard' | 'connections' | 'repositories' | 'backups' | 'archives' | 'schedule'
+  key:
+    | 'dashboard'
+    | 'connections'
+    | 'repositories'
+    | 'backupPlans'
+    | 'backups'
+    | 'archives'
+    | 'schedule'
   subItems?: Array<{
     name: string
     href?: string
@@ -86,6 +95,9 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
       Dashboard: t('navigation.items.dashboard'),
       Activity: t('navigation.items.activity'),
       'Remote Machines': t('navigation.items.remoteMachines'),
+      'Managed Agents': t('navigation.items.managedAgents'),
+      'Cloud Storage': t('navigation.items.cloudStorage'),
+      'Backup Plans': t('navigation.items.backupPlans'),
       Repositories: t('navigation.items.repositories'),
       Backup: t('navigation.items.backup'),
       Archives: t('navigation.items.archives'),
@@ -99,6 +111,7 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
       Appearance: t('navigation.settings.appearance'),
       Preferences: t('navigation.settings.preferences'),
       Notifications: t('navigation.settings.notifications'),
+      'Monitoring & Reports': t('navigation.settings.monitoringReports'),
       MQTT: t('navigation.settings.mqtt'),
       Cache: t('navigation.settings.cache'),
       Logs: t('navigation.settings.logs'),
@@ -114,7 +127,9 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
   }
 
   const sectionHeadingLabel = (heading: string): string => {
-    if (heading === 'BACKUP') return t('navigation.sections.backup')
+    if (heading === 'INFRASTRUCTURE') return t('navigation.sections.infrastructure')
+    if (heading === 'STORAGE') return t('navigation.sections.storage')
+    if (heading === 'BACKUPS') return t('navigation.sections.backups')
     if (heading === 'SETTINGS') return t('navigation.sections.settings')
     return heading
   }
@@ -127,16 +142,25 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
     },
   })
 
-  const showRestoreTab = systemData?.settings?.show_restore_tab ?? false
   const showMqttNav = systemData?.settings?.mqtt_beta_enabled ?? false
 
+  // Show a "NEW" badge on the Backup Plans nav item until the user has created
+  // at least one plan. The cache is invalidated on plan creation/deletion, so
+  // the badge disappears the moment they make one.
+  const { data: backupPlansData } = useQuery({
+    queryKey: ['backup-plans'],
+    queryFn: () => backupPlansAPI.list(),
+  })
+  const showBackupPlansNewBadge =
+    backupPlansData !== undefined && (backupPlansData?.data?.backup_plans?.length ?? 0) === 0
+
   const navigationSections = React.useMemo(() => {
-    const backupItems: Array<{
+    const infrastructureItems: Array<{
       name: string
       href: string
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       icon: React.ComponentType<any>
-      key: 'connections' | 'repositories' | 'backups' | 'archives' | 'schedule'
+      key: 'connections' | 'repositories'
     }> = [
       ...(canManageSsh
         ? [
@@ -146,23 +170,49 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
               icon: Computer,
               key: 'connections' as const,
             },
+            {
+              name: 'Managed Agents',
+              href: '/managed-agents',
+              icon: Server,
+              key: 'connections' as const,
+            },
           ]
         : []),
-      { name: 'Repositories', href: '/repositories', icon: Database, key: 'repositories' as const },
-      { name: 'Backup', href: '/backup', icon: FileText, key: 'backups' as const },
-      { name: 'Archives', href: '/archives', icon: Archive, key: 'archives' as const },
+      {
+        name: 'Cloud Storage',
+        href: '/cloud-storage',
+        icon: Cloud,
+        key: 'repositories' as const,
+      },
     ]
 
-    if (showRestoreTab) {
-      backupItems.push({
-        name: 'Restore',
-        href: '/restore',
-        icon: RotateCcw,
-        key: 'archives' as const,
-      })
-    }
+    const storageItems: Array<{
+      name: string
+      href: string
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      icon: React.ComponentType<any>
+      key: 'repositories'
+    }> = [
+      { name: 'Repositories', href: '/repositories', icon: Database, key: 'repositories' as const },
+    ]
 
-    backupItems.push({ name: 'Schedule', href: '/schedule', icon: Clock, key: 'schedule' as const })
+    const backupItems: Array<{
+      name: string
+      href: string
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      icon: React.ComponentType<any>
+      key: 'backupPlans' | 'backups' | 'archives' | 'schedule'
+    }> = [
+      {
+        name: 'Backup Plans',
+        href: '/backup-plans',
+        icon: ListChecks,
+        key: 'backupPlans' as const,
+      },
+      { name: 'Backup', href: '/backup', icon: FileText, key: 'backups' as const },
+      { name: 'Schedule', href: '/schedule', icon: Clock, key: 'schedule' as const },
+      { name: 'Archives', href: '/archives', icon: Archive, key: 'archives' as const },
+    ]
 
     return [
       {
@@ -172,10 +222,9 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
           { name: 'Activity', href: '/activity', icon: History, key: 'dashboard' as const },
         ],
       },
-      {
-        heading: 'BACKUP',
-        items: backupItems,
-      },
+      { heading: 'INFRASTRUCTURE', items: infrastructureItems },
+      { heading: 'STORAGE', items: storageItems },
+      { heading: 'BACKUPS', items: backupItems },
       {
         heading: 'SETTINGS',
         items: [
@@ -185,7 +234,6 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
             key: 'dashboard' as const,
             subItems: [
               { name: 'Account', href: '/settings/account', icon: User },
-              ...(canManageUsers ? [{ name: 'Users', href: '/settings/users', icon: Users }] : []),
               { name: 'Appearance', href: '/settings/appearance', icon: Palette },
               { name: 'Preferences', href: '/settings/preferences', icon: Sliders },
               { name: 'Notifications', href: '/settings/notifications', icon: Bell },
@@ -202,6 +250,11 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
                       ? [{ name: 'Licensing', href: '/settings/licensing', icon: SettingsIcon }]
                       : []),
                     { name: 'System', href: '/settings/system', icon: SettingsIcon },
+                    {
+                      name: 'Monitoring & Reports',
+                      href: '/settings/monitoring',
+                      icon: Activity,
+                    },
                     ...(showMqttNav && canManageMqtt
                       ? [{ name: 'MQTT', href: '/settings/mqtt', icon: Wifi }]
                       : []),
@@ -219,18 +272,15 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
             icon: HardDrive,
             key: 'dashboard' as const,
             subItems: [
+              ...(canManageUsers ? [{ name: 'Users', href: '/settings/users', icon: Users }] : []),
               ...(canManageMounts
                 ? [{ name: 'Mounts', href: '/settings/mounts', icon: HardDrive }]
                 : []),
-              ...(canManageScripts || canManageExportImport
-                ? [
-                    ...(canManageScripts
-                      ? [{ name: 'Scripts', href: '/settings/scripts', icon: FileCode }]
-                      : []),
-                    ...(canManageExportImport
-                      ? [{ name: 'Export/Import', href: '/settings/export', icon: DownloadIcon }]
-                      : []),
-                  ]
+              ...(canManageScripts
+                ? [{ name: 'Scripts', href: '/settings/scripts', icon: FileCode }]
+                : []),
+              ...(canManageExportImport
+                ? [{ name: 'Export/Import', href: '/settings/export', icon: DownloadIcon }]
                 : []),
             ],
           },
@@ -248,7 +298,6 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
       },
     ]
   }, [
-    showRestoreTab,
     showMqttNav,
     canManageUsers,
     canManageLicensing,
@@ -270,12 +319,12 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
         path.includes('/account') ||
         path.includes('/appearance') ||
         path.includes('/preferences') ||
-        path.includes('/notifications') ||
-        path.includes('/users')
+        path.includes('/notifications')
       ) {
         setExpandedMenus((prev) => ({ ...prev, Personal: true }))
       } else if (
         path.includes('/system') ||
+        path.includes('/monitoring') ||
         path.includes('/mqtt') ||
         path.includes('/cache') ||
         path.includes('/logs') ||
@@ -283,6 +332,7 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
       ) {
         setExpandedMenus((prev) => ({ ...prev, System: true }))
       } else if (
+        path.includes('/users') ||
         path.includes('/mounts') ||
         path.includes('/scripts') ||
         path.includes('/export')
@@ -445,6 +495,27 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
                     isEnabled={isEnabled}
                     disabledReason={disabledReason ?? undefined}
                     navLabel={navLabel}
+                    badge={
+                      item.key === 'backupPlans' && showBackupPlansNewBadge ? (
+                        <Box
+                          component="span"
+                          sx={{
+                            fontSize: '0.6rem',
+                            fontWeight: 700,
+                            letterSpacing: '0.06em',
+                            px: 0.65,
+                            py: 0.15,
+                            borderRadius: 0.75,
+                            color: '#fff',
+                            bgcolor: '#2563eb',
+                            lineHeight: 1.3,
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          {t('navigation.badges.new', { defaultValue: 'New' })}
+                        </Box>
+                      ) : undefined
+                    }
                   />
                 )
               })}

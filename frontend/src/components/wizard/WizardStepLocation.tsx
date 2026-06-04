@@ -9,20 +9,27 @@ import {
   MenuItem,
   Typography,
   Alert,
-  Card,
-  CardContent,
-  CardActionArea,
   InputAdornment,
   IconButton,
   alpha,
   ButtonBase,
   Tooltip,
   Chip,
+  Stack,
 } from '@mui/material'
-import { Server, Cloud } from 'lucide-react'
+import { Cloud, Lock } from 'lucide-react'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import { useTranslation } from 'react-i18next'
-import PlanGate from '../PlanGate'
+import PlanGate from '../shared/PlanGate'
+import { getDestinations, type DestinationKey } from './destinations'
+import {
+  formatDirectRcloneUrl,
+  normalizeRcloneRemotePath,
+  parseDirectRcloneUrl,
+} from './directRclonePath'
+import SshConnectionSelect from '../shared/SshConnectionSelect'
+import ManagedAgentSelect from '../shared/ManagedAgentSelect'
+import DestinationSelect from '../shared/DestinationSelect'
 
 interface SSHConnection {
   id: number
@@ -35,13 +42,37 @@ interface SSHConnection {
   status: string
 }
 
+interface AgentMachine {
+  id: number
+  name: string
+  hostname?: string | null
+  status: string
+}
+
+interface RcloneRemote {
+  id: number
+  name: string
+  provider: string
+  last_test_status?: string | null
+}
+
+interface RcloneStatus {
+  available: boolean
+  version?: string | null
+  error?: string | null
+}
+
 export interface LocationStepData {
   name: string
   borgVersion?: 1 | 2
   repositoryMode: 'full' | 'observe'
-  repositoryLocation: 'local' | 'ssh'
+  repositoryLocation: 'local' | 'ssh' | 'rclone'
+  executionTarget?: 'local' | 'agent'
+  agentMachineId?: number | ''
   path: string
   repoSshConnectionId: number | ''
+  rcloneRemoteId?: number | ''
+  rcloneRemotePath?: string
   bypassLock: boolean
 }
 
@@ -49,35 +80,148 @@ interface WizardStepLocationProps {
   mode: 'create' | 'edit' | 'import'
   data: LocationStepData
   sshConnections: SSHConnection[]
-  dataSource?: 'local' | 'remote' // Data source from step 2
-  sourceSshConnectionId?: number | '' // Source SSH connection ID
+  agentMachines?: AgentMachine[]
+  rcloneRemotes?: RcloneRemote[]
+  rcloneStatus?: RcloneStatus | null
+  dataSource?: 'local' | 'remote'
+  sourceSshConnectionId?: number | ''
+  canUseManagedAgents?: boolean
+  canUseRclone?: boolean
   onChange: (data: Partial<LocationStepData>) => void
   onBrowsePath: () => void
+  onBrowseDirectRclonePath?: () => void
 }
 
 export default function WizardStepLocation({
   mode,
   data,
   sshConnections,
+  agentMachines = [],
+  rcloneRemotes = [],
+  rcloneStatus = null,
   dataSource,
   sourceSshConnectionId,
+  canUseManagedAgents = true,
+  canUseRclone = true,
   onChange,
   onBrowsePath,
+  onBrowseDirectRclonePath,
 }: WizardStepLocationProps) {
   const { t } = useTranslation()
+  const executionTarget = data.executionTarget ?? 'local'
+  const agentMachineId = data.agentMachineId ?? ''
+  const isAgentExecution = executionTarget === 'agent'
+  const isDirectRclone = data.repositoryLocation === 'rclone'
+  const borgVersion = data.borgVersion ?? 1
+  const parsedDirectRclonePath = isDirectRclone ? parseDirectRcloneUrl(data.path) : null
+  const selectedDirectRcloneRemote =
+    data.rcloneRemoteId === '' || data.rcloneRemoteId == null
+      ? parsedDirectRclonePath
+        ? rcloneRemotes.find((remote) => remote.name === parsedDirectRclonePath.remoteName)
+        : undefined
+      : rcloneRemotes.find((remote) => remote.id === data.rcloneRemoteId)
+  const directRcloneRemotePath = data.rcloneRemotePath ?? parsedDirectRclonePath?.remotePath ?? ''
+  const directRcloneRemoteSelectEnabled =
+    isDirectRclone && rcloneStatus?.available === true && rcloneRemotes.length > 0
+  const directRcloneBrowseEnabled =
+    directRcloneRemoteSelectEnabled &&
+    Boolean(selectedDirectRcloneRemote) &&
+    Boolean(onBrowseDirectRclonePath)
 
-  // Disable SSH repository location if data source is remote (prevent remote-to-remote)
-  // Only enforce this in edit mode when we know the data source
-  const isRemoteLocationDisabled =
-    mode === 'edit' && dataSource === 'remote' && !!sourceSshConnectionId
+  // Legacy v1 repos with an attached remote data source can't be retargeted to another
+  // remote — remote-to-remote was never supported in the v1 mapping model.
+  const isLegacyRemoteSource = mode === 'edit' && dataSource === 'remote' && !!sourceSshConnectionId
+  const isRemoteLocationDisabled = isLegacyRemoteSource
+  const isAgentLocationDisabled = isLegacyRemoteSource
 
-  const handleLocationChange = (location: 'local' | 'ssh') => {
-    if (location === 'ssh' && isRemoteLocationDisabled) {
-      return // Don't allow switching to SSH if data source is remote
+  const queueableAgents = agentMachines.filter(
+    (agent) => agent.status !== 'revoked' && agent.status !== 'disabled'
+  )
+
+  const destinations = getDestinations({
+    t,
+    isRemoteLocationDisabled,
+    isAgentLocationDisabled: isAgentLocationDisabled || !canUseManagedAgents,
+  }).map((destination) =>
+    destination.key === 'agent' && !canUseManagedAgents
+      ? {
+          ...destination,
+          icon: <Lock size={16} />,
+          description: t('wizard.location.managedAgentRequiresPro'),
+          disabled: true,
+        }
+      : destination
+  )
+
+  const selectedDestinationKey: DestinationKey = isAgentExecution
+    ? 'agent'
+    : data.repositoryLocation === 'ssh'
+      ? 'ssh'
+      : 'server'
+
+  const handleDestinationChange = (key: DestinationKey) => {
+    if (key === 'ssh' && isRemoteLocationDisabled) return
+    if (key === 'agent' && (isAgentLocationDisabled || !canUseManagedAgents)) return
+
+    if (key === 'agent') {
+      onChange({
+        repositoryLocation: 'local',
+        executionTarget: 'agent',
+        repoSshConnectionId: '',
+      })
+      return
     }
+
     onChange({
-      repositoryLocation: location,
+      repositoryLocation: key === 'ssh' ? 'ssh' : 'local',
+      executionTarget: 'local',
+      agentMachineId: '',
+      repoSshConnectionId: key === 'ssh' ? data.repoSshConnectionId : '',
+    })
+  }
+
+  const handleDirectRcloneChange = (checked: boolean) => {
+    if (checked && !canUseRclone) return
+    onChange({
+      borgVersion: 2,
+      repositoryLocation: checked ? 'rclone' : 'local',
+      executionTarget: 'local',
+      agentMachineId: '',
       repoSshConnectionId: '',
+    })
+  }
+
+  const handleDirectRcloneRemoteChange = (remoteId: string) => {
+    const remote = rcloneRemotes.find((item) => String(item.id) === remoteId)
+    if (!remote) {
+      onChange({
+        rcloneRemoteId: '',
+      })
+      return
+    }
+
+    const remotePath = normalizeRcloneRemotePath(directRcloneRemotePath)
+    onChange({
+      rcloneRemoteId: remote.id,
+      rcloneRemotePath: remotePath,
+      path: formatDirectRcloneUrl(remote.name, remotePath),
+    })
+  }
+
+  const handleDirectRclonePathChange = (value: string) => {
+    const parsed = parseDirectRcloneUrl(value)
+    const matchingRemote = parsed
+      ? rcloneRemotes.find((remote) => remote.name === parsed.remoteName)
+      : undefined
+
+    onChange({
+      path: value,
+      ...(parsed
+        ? {
+            rcloneRemoteId: matchingRemote?.id ?? '',
+            rcloneRemotePath: parsed.remotePath,
+          }
+        : {}),
     })
   }
 
@@ -210,233 +354,202 @@ export default function WizardStepLocation({
         />
       )}
 
-      {/* Location Selection Cards */}
-      <Box>
-        <Typography variant="subtitle2" gutterBottom sx={{ mb: 2, fontWeight: 600 }}>
-          {t('wizard.location.whereToStore')}
+      {/* Destination picker */}
+      {!isDirectRclone && (
+        <DestinationSelect
+          value={selectedDestinationKey}
+          onChange={(key) => handleDestinationChange(key as DestinationKey)}
+          destinations={destinations}
+          label={t('wizard.location.whereToStore')}
+          labelId="destination-select-label"
+        />
+      )}
+
+      {isRemoteLocationDisabled && (
+        <Typography variant="body2" color="text.secondary">
+          <strong>{t('wizard.dataSource.remoteToRemoteTitle')}</strong>{' '}
+          {t('wizard.location.remoteDisabledInfo')}
         </Typography>
-        <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
-          <Card
-            variant="outlined"
-            sx={{
-              flex: 1,
-              border: data.repositoryLocation === 'local' ? 2 : 1,
-              borderColor: data.repositoryLocation === 'local' ? 'primary.main' : 'divider',
-              boxShadow:
-                data.repositoryLocation === 'local'
-                  ? (theme) => `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`
-                  : 'none',
-              bgcolor:
-                data.repositoryLocation === 'local'
-                  ? (theme) => alpha(theme.palette.primary.main, 0.08)
-                  : 'background.paper',
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              transform: data.repositoryLocation === 'local' ? 'translateY(-2px)' : 'none',
-              '&:hover': {
-                transform: 'translateY(-2px)',
-                boxShadow: (theme) => `0 4px 12px ${alpha(theme.palette.text.primary, 0.08)}`,
-                borderColor: data.repositoryLocation === 'local' ? 'primary.main' : 'text.primary',
-              },
-            }}
-          >
-            <CardActionArea onClick={() => handleLocationChange('local')} sx={{ p: 1 }}>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      width: 48,
-                      height: 48,
-                      borderRadius: 3,
-                      bgcolor:
-                        data.repositoryLocation === 'local' ? 'primary.main' : 'action.hover',
-                      color: data.repositoryLocation === 'local' ? 'white' : 'text.secondary',
-                      transition: 'all 0.3s ease',
-                      boxShadow:
-                        data.repositoryLocation === 'local'
-                          ? (theme) => `0 4px 12px ${alpha(theme.palette.primary.main, 0.4)}`
-                          : 'none',
-                    }}
-                  >
-                    <Server size={28} />
-                  </Box>
-                  <Box>
-                    <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600 }}>
-                      {t('wizard.borgUiServer')}
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ fontSize: '0.8125rem' }}
-                    >
-                      {t('wizard.location.borgUiServerDesc')}
-                    </Typography>
-                  </Box>
-                </Box>
-              </CardContent>
-            </CardActionArea>
-          </Card>
+      )}
 
-          <Card
-            variant="outlined"
-            sx={{
-              flex: 1,
-              border: data.repositoryLocation === 'ssh' ? 2 : 1,
-              borderColor: data.repositoryLocation === 'ssh' ? 'primary.main' : 'divider',
-              boxShadow:
-                data.repositoryLocation === 'ssh'
-                  ? (theme) => `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`
-                  : 'none',
-              bgcolor:
-                data.repositoryLocation === 'ssh'
-                  ? (theme) => alpha(theme.palette.primary.main, 0.08)
-                  : 'background.paper',
-              opacity: isRemoteLocationDisabled ? 0.5 : 1,
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              transform: data.repositoryLocation === 'ssh' ? 'translateY(-2px)' : 'none',
-              '&:hover': !isRemoteLocationDisabled
-                ? {
-                    transform: 'translateY(-2px)',
-                    boxShadow: (theme) => `0 4px 12px ${alpha(theme.palette.text.primary, 0.08)}`,
-                    borderColor:
-                      data.repositoryLocation === 'ssh' ? 'primary.main' : 'text.primary',
-                  }
-                : {},
-            }}
-          >
-            <CardActionArea
-              onClick={() => handleLocationChange('ssh')}
-              disabled={isRemoteLocationDisabled}
-              sx={{ p: 1 }}
-            >
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      width: 48,
-                      height: 48,
-                      borderRadius: 3,
-                      bgcolor: data.repositoryLocation === 'ssh' ? 'primary.main' : 'action.hover',
-                      color: data.repositoryLocation === 'ssh' ? 'white' : 'text.secondary',
-                      transition: 'all 0.3s ease',
-                      boxShadow:
-                        data.repositoryLocation === 'ssh'
-                          ? (theme) => `0 4px 12px ${alpha(theme.palette.primary.main, 0.4)}`
-                          : 'none',
-                    }}
-                  >
-                    <Cloud size={28} />
-                  </Box>
-                  <Box>
-                    <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600 }}>
-                      {t('wizard.remoteClient')}
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ fontSize: '0.8125rem' }}
-                    >
-                      {t('wizard.location.remoteClientDesc')}
-                    </Typography>
-                  </Box>
-                </Box>
-              </CardContent>
-            </CardActionArea>
-          </Card>
-        </Box>
-
-        {/* Warning when remote location is disabled due to remote data source */}
-        {isRemoteLocationDisabled && (
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
-            <strong>{t('wizard.dataSource.remoteToRemoteTitle')}</strong>{' '}
-            {t('wizard.location.remoteDisabledInfo')}
+      {/* Agent sub-form */}
+      {isAgentExecution && !isDirectRclone && canUseManagedAgents && (
+        <Stack spacing={1.25}>
+          <ManagedAgentSelect
+            value={agentMachineId}
+            onChange={(id) => onChange({ agentMachineId: id })}
+            agents={queueableAgents}
+            label={t('wizard.location.managedAgentSelectLabel')}
+            emptyMessage={t('wizard.location.noActiveManagedAgents')}
+            labelId="managed-agent-select-label"
+          />
+          <Typography variant="body2" color="text.secondary">
+            {t('wizard.location.agentStorageNote')}
           </Typography>
-        )}
-      </Box>
+        </Stack>
+      )}
 
-      {/* SSH Connection Selection */}
-      {data.repositoryLocation === 'ssh' && (
-        <>
-          {!Array.isArray(sshConnections) || sshConnections.length === 0 ? (
-            <Alert severity="warning">{t('wizard.noSshConnections')}</Alert>
-          ) : (
+      {isAgentExecution && !isDirectRclone && !canUseManagedAgents && (
+        <Alert severity="info" icon={<Lock size={18} />}>
+          {t('wizard.location.managedAgentRequiresPro')}
+        </Alert>
+      )}
+
+      {/* SSH sub-form */}
+      {!isAgentExecution && data.repositoryLocation === 'ssh' && (
+        <SshConnectionSelect
+          value={data.repoSshConnectionId}
+          onChange={(id) => onChange({ repoSshConnectionId: id })}
+          connections={sshConnections}
+          label={t('wizard.location.selectSshConnection')}
+          emptyMessage={t('wizard.noSshConnections')}
+          connectedTooltip={t('wizard.location.connected')}
+        />
+      )}
+
+      {borgVersion === 2 && (
+        <Box
+          sx={{
+            border: '1px solid',
+            borderColor: isDirectRclone ? 'warning.main' : 'divider',
+            bgcolor: (theme) => alpha(theme.palette.warning.main, isDirectRclone ? 0.08 : 0.03),
+            borderRadius: 1,
+            p: 2,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 1,
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+            <Typography variant="subtitle2" fontWeight={700}>
+              {t('wizard.location.directRcloneAdvancedTitle')}
+            </Typography>
+            <Chip
+              label="Borg 2"
+              size="small"
+              variant="outlined"
+              color="warning"
+              sx={{ height: 20, fontSize: '0.68rem', fontWeight: 700 }}
+            />
+          </Box>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={isDirectRclone}
+                disabled={!canUseRclone}
+                onChange={(event) => handleDirectRcloneChange(event.target.checked)}
+              />
+            }
+            label={
+              <Box>
+                <Typography variant="body2" fontWeight={600}>
+                  {t('wizard.location.directRcloneLabel')}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {t('wizard.location.directRcloneHelper')}
+                </Typography>
+              </Box>
+            }
+          />
+          {!canUseRclone && (
+            <Alert severity="info" icon={<Lock size={18} />} sx={{ mt: 0.5 }}>
+              {t('wizard.location.rcloneRequiresPro')}
+            </Alert>
+          )}
+        </Box>
+      )}
+
+      {isDirectRclone && (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+          {rcloneStatus && !rcloneStatus.available && (
+            <Alert severity="warning">
+              {rcloneStatus.error || t('wizard.location.rcloneUnavailable')}
+            </Alert>
+          )}
+
+          {directRcloneRemoteSelectEnabled && (
             <FormControl fullWidth>
-              <InputLabel>{t('wizard.location.selectSshConnection')}</InputLabel>
+              <InputLabel id="direct-rclone-remote-label">
+                {t('wizard.location.rcloneRemoteLabel')}
+              </InputLabel>
               <Select
-                value={data.repoSshConnectionId === '' ? '' : String(data.repoSshConnectionId)}
-                label={t('wizard.location.selectSshConnection')}
-                onChange={(e) => {
-                  const value = e.target.value
-                  if (value) {
-                    onChange({ repoSshConnectionId: Number(value) })
-                  }
+                labelId="direct-rclone-remote-label"
+                id="direct-rclone-remote"
+                value={selectedDirectRcloneRemote ? String(selectedDirectRcloneRemote.id) : ''}
+                label={t('wizard.location.rcloneRemoteLabel')}
+                onChange={(event) => handleDirectRcloneRemoteChange(event.target.value)}
+                renderValue={(selected) => {
+                  const remote = rcloneRemotes.find((item) => String(item.id) === selected)
+                  if (!remote) return null
+                  return renderRcloneRemoteRow(remote)
                 }}
-                sx={{
-                  '& .MuiSelect-select': {
-                    py: '16.5px',
-                    display: 'flex',
-                    alignItems: 'center',
-                  },
-                }}
+                sx={{ '& .MuiSelect-select': { minHeight: 36 } }}
               >
-                {sshConnections.map((conn) => (
-                  <MenuItem key={conn.id} value={String(conn.id)}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                      <Cloud size={16} />
-                      <Box sx={{ flex: 1 }}>
-                        <Typography variant="body2">
-                          {conn.username}@{conn.host}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Port {conn.port}
-                          {conn.mount_point && ` • ${conn.mount_point}`}
-                        </Typography>
-                      </Box>
-                      {conn.status === 'connected' && (
-                        <Box
-                          sx={{
-                            width: 8,
-                            height: 8,
-                            borderRadius: '50%',
-                            bgcolor: 'success.main',
-                          }}
-                          title={t('wizard.location.connected')}
-                        />
-                      )}
-                    </Box>
+                {rcloneRemotes.map((remote) => (
+                  <MenuItem key={remote.id} value={String(remote.id)} sx={{ py: 1 }}>
+                    {renderRcloneRemoteRow(remote)}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
           )}
-        </>
+
+          {rcloneStatus?.available === true && rcloneRemotes.length === 0 && (
+            <Alert severity="info">{t('wizard.location.rcloneNoRemotes')}</Alert>
+          )}
+        </Box>
       )}
 
       {/* Path Input */}
       <TextField
-        label={t('wizard.location.repositoryPathLabel')}
+        label={
+          isDirectRclone
+            ? t('wizard.location.directRclonePathLabel')
+            : t('wizard.location.repositoryPathLabel')
+        }
         value={data.path}
-        onChange={(e) => onChange({ path: e.target.value })}
+        onChange={(e) =>
+          isDirectRclone
+            ? handleDirectRclonePathChange(e.target.value)
+            : onChange({ path: e.target.value })
+        }
         placeholder={
-          data.repositoryLocation === 'local' ? '/backups/my-repo' : '/path/on/remote/server'
+          isDirectRclone
+            ? t('wizard.location.directRclonePathPlaceholder')
+            : data.repositoryLocation === 'local'
+              ? '/backups/my-repo'
+              : '/path/on/remote/server'
         }
         required
         fullWidth
-        helperText={t('wizard.location.repositoryPathHelper')}
+        helperText={
+          isDirectRclone
+            ? t('wizard.location.directRclonePathHelper')
+            : t('wizard.location.repositoryPathHelper')
+        }
         InputProps={{
           endAdornment: (
             <InputAdornment position="end">
               <IconButton
-                onClick={onBrowsePath}
+                onClick={isDirectRclone ? onBrowseDirectRclonePath : onBrowsePath}
                 edge="end"
                 size="small"
-                title={t('wizard.location.browseFilesystem')}
-                disabled={data.repositoryLocation === 'ssh' && !data.repoSshConnectionId}
+                title={
+                  isDirectRclone
+                    ? t('wizard.cloudMirror.browseRemote')
+                    : t('wizard.location.browseFilesystem')
+                }
+                aria-label={
+                  isDirectRclone
+                    ? t('wizard.cloudMirror.browseRemote')
+                    : t('wizard.location.browseFilesystem')
+                }
+                disabled={
+                  isDirectRclone
+                    ? !directRcloneBrowseEnabled
+                    : (isAgentExecution && !data.agentMachineId) ||
+                      (data.repositoryLocation === 'ssh' && !data.repoSshConnectionId)
+                }
               >
                 <FolderOpenIcon fontSize="small" />
               </IconButton>
@@ -444,6 +557,26 @@ export default function WizardStepLocation({
           ),
         }}
       />
+    </Box>
+  )
+}
+
+function renderRcloneRemoteRow(remote: RcloneRemote) {
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+      <Cloud size={16} />
+      <Typography variant="body2">{remote.name}</Typography>
+      <Chip
+        size="small"
+        label={remote.provider}
+        variant="outlined"
+        sx={{ height: 20, fontSize: '0.65rem' }}
+      />
+      {remote.last_test_status && (
+        <Typography variant="caption" color="text.secondary">
+          {remote.last_test_status}
+        </Typography>
+      )}
     </Box>
   )
 }

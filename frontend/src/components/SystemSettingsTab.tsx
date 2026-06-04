@@ -1,79 +1,97 @@
-import React, { useState, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import {
-  Box,
-  Typography,
-  Button,
-  Stack,
-  Alert,
-  TextField,
-  Divider,
-  CircularProgress,
-  FormControlLabel,
-  Switch,
-  IconButton,
-  Tooltip,
-  Tabs,
-  Tab,
-} from '@mui/material'
-import {
-  Save,
-  AlertTriangle,
-  Settings,
-  Clock,
-  RefreshCw,
-  Copy,
-  Check,
-  Key,
-  Info,
-} from 'lucide-react'
-import SettingsCard from './SettingsCard'
+import React, { useEffect, useMemo, useState } from 'react'
+import { Box, Button, CircularProgress, Stack, Typography } from '@mui/material'
+import { Save } from 'lucide-react'
 import { toast } from 'react-hot-toast'
-import { settingsAPI } from '../services/api'
-import { translateBackendKey } from '../utils/translateBackendKey'
+import { useTranslation } from 'react-i18next'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+
+import { authAPI, authAPIAdmin, settingsAPI } from '../services/api'
+import type { SystemSettings } from '../services/api'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { translateBackendKey } from '../utils/translateBackendKey'
+import ArchiveBrowsingLimitsSection from './system-settings/ArchiveBrowsingLimitsSection'
+import { buildProxyAuthHeaderRows, buildSectionTabs } from './system-settings/config'
+import MetricsAccessSection from './system-settings/MetricsAccessSection'
+import OidcSection from './system-settings/OidcSection'
+import {
+  hasActiveOidcAdmin as getHasActiveOidcAdmin,
+  hasOidcActiveAdminSignal as getHasOidcActiveAdminSignal,
+} from './system-settings/oidcAdminSignal'
+import OperationTimeoutsSection from './system-settings/OperationTimeoutsSection'
+import ProxyAuthSection from './system-settings/ProxyAuthSection'
+import RepositoryMonitoringSection from './system-settings/RepositoryMonitoringSection'
+import SettingsSectionsCard from './system-settings/SettingsSectionsCard'
+import { formatAuthEventType, formatAuthSource } from './system-settings/authFormatters'
+import type { AuthEventFilter, CacheStats } from './system-settings/types'
+import { getSystemSettingsValidationError } from './system-settings/validation'
+
+type SystemSettingsQueryData = {
+  settings?: Record<string, unknown>
+  [key: string]: unknown
+}
 
 const SystemSettingsTab: React.FC = () => {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { trackSystem, EventAction } = useAnalytics()
 
-  // Local state for browse limits
   const [browseMaxItems, setBrowseMaxItems] = useState(1_000_000)
   const [browseMaxMemoryMb, setBrowseMaxMemoryMb] = useState(1024)
-
-  // Local state for operation timeouts (in seconds)
   const [mountTimeout, setMountTimeout] = useState(120)
   const [infoTimeout, setInfoTimeout] = useState(600)
   const [listTimeout, setListTimeout] = useState(600)
   const [initTimeout, setInitTimeout] = useState(300)
   const [backupTimeout, setBackupTimeout] = useState(3600)
   const [sourceSizeTimeout, setSourceSizeTimeout] = useState(3600)
-
-  // Local state for stats refresh
+  const [maxConcurrentScheduledBackups, setMaxConcurrentScheduledBackups] = useState(2)
+  const [maxConcurrentScheduledChecks, setMaxConcurrentScheduledChecks] = useState(4)
   const [statsRefreshInterval, setStatsRefreshInterval] = useState(60)
+  const [dashboardBackupWarningDays, setDashboardBackupWarningDays] = useState(3)
+  const [dashboardBackupCriticalDays, setDashboardBackupCriticalDays] = useState(7)
+  const [dashboardCheckWarningDays, setDashboardCheckWarningDays] = useState(7)
+  const [dashboardCheckCriticalDays, setDashboardCheckCriticalDays] = useState(30)
+  const [dashboardCompactWarningDays, setDashboardCompactWarningDays] = useState(30)
+  const [dashboardCompactCriticalDays, setDashboardCompactCriticalDays] = useState(60)
+  const [dashboardRestoreCheckWarningDays, setDashboardRestoreCheckWarningDays] = useState(14)
+  const [dashboardRestoreCheckCriticalDays, setDashboardRestoreCheckCriticalDays] = useState(30)
+  const [dashboardObserveFreshnessWarningDays, setDashboardObserveFreshnessWarningDays] =
+    useState(2)
+  const [dashboardObserveFreshnessCriticalDays, setDashboardObserveFreshnessCriticalDays] =
+    useState(7)
   const [isRefreshingStats, setIsRefreshingStats] = useState(false)
   const [metricsEnabled, setMetricsEnabled] = useState(false)
   const [metricsRequireAuth, setMetricsRequireAuth] = useState(false)
   const [rotateMetricsToken, setRotateMetricsToken] = useState(false)
   const [newMetricsToken, setNewMetricsToken] = useState<string | null>(null)
   const [metricsTokenCopied, setMetricsTokenCopied] = useState(false)
-
+  const [oidcEnabled, setOidcEnabled] = useState(false)
+  const [oidcDisableLocalAuth, setOidcDisableLocalAuth] = useState(false)
+  const [oidcProviderName, setOidcProviderName] = useState('Single sign-on')
+  const [oidcTokenAuthMethod, setOidcTokenAuthMethod] = useState('client_secret_post')
+  const [oidcDiscoveryUrl, setOidcDiscoveryUrl] = useState('')
+  const [oidcClientId, setOidcClientId] = useState('')
+  const [oidcClientSecret, setOidcClientSecret] = useState('')
+  const [clearOidcClientSecret, setClearOidcClientSecret] = useState(false)
+  const [oidcScopes, setOidcScopes] = useState('openid profile email')
+  const [oidcRedirectUriOverride, setOidcRedirectUriOverride] = useState('')
+  const [oidcEndSessionEndpointOverride, setOidcEndSessionEndpointOverride] = useState('')
+  const [oidcClaimUsername, setOidcClaimUsername] = useState('preferred_username')
+  const [oidcClaimEmail, setOidcClaimEmail] = useState('email')
+  const [oidcClaimFullName, setOidcClaimFullName] = useState('name')
+  const [oidcGroupClaim, setOidcGroupClaim] = useState('')
+  const [oidcRoleClaim, setOidcRoleClaim] = useState('')
+  const [oidcAdminGroups, setOidcAdminGroups] = useState('')
+  const [oidcAllRepositoriesRoleClaim, setOidcAllRepositoriesRoleClaim] = useState('')
+  const [oidcNewUserMode, setOidcNewUserMode] = useState('viewer')
+  const [oidcTemplateUsername, setOidcTemplateUsername] = useState('')
+  const [oidcDefaultRole, setOidcDefaultRole] = useState('viewer')
+  const [oidcDefaultAllRepositoriesRole, setOidcDefaultAllRepositoriesRole] = useState('viewer')
   const [hasChanges, setHasChanges] = useState(false)
   const [browseChanged, setBrowseChanged] = useState(false)
   const [systemChanged, setSystemChanged] = useState(false)
   const [activeSection, setActiveSection] = useState(0)
+  const [authEventFilter, setAuthEventFilter] = useState<AuthEventFilter>('all')
 
-  interface CacheStats {
-    browse_max_items?: number
-    browse_max_memory_mb?: number
-    cache_ttl_minutes?: number
-    cache_max_size_mb?: number
-    redis_url?: string
-  }
-
-  // Fetch cache stats (which includes browse limits)
   const { data: cacheData, isLoading: cacheLoading } = useQuery({
     queryKey: ['cache-stats'],
     queryFn: async () => {
@@ -82,7 +100,6 @@ const SystemSettingsTab: React.FC = () => {
     },
   })
 
-  // Fetch system settings (which includes timeouts)
   const { data: systemData, isLoading: systemLoading } = useQuery({
     queryKey: ['systemSettings'],
     queryFn: async () => {
@@ -91,45 +108,34 @@ const SystemSettingsTab: React.FC = () => {
     },
   })
 
+  const { data: authConfigData } = useQuery({
+    queryKey: ['authConfig'],
+    queryFn: async () => {
+      const response = await authAPI.getAuthConfig()
+      return response.data
+    },
+  })
+
+  const {
+    data: authEventsData,
+    isLoading: authEventsLoading,
+    refetch: refetchAuthEvents,
+  } = useQuery({
+    queryKey: ['authEvents'],
+    queryFn: async () => {
+      const response = await authAPIAdmin.listEvents(20)
+      return response.data
+    },
+    enabled: activeSection === 5,
+  })
+
   const cacheStats = cacheData
   const systemSettings = systemData?.settings
-  const timeoutSources = systemData?.settings?.timeout_sources as
+  const timeoutSources = systemSettings?.timeout_sources as
     | Record<string, string | null>
     | undefined
+  const proxyAuthConfig = authConfigData
 
-  // Helper to render source label with color
-  const renderSourceLabel = (source: string | null | undefined) => {
-    if (source === 'saved') {
-      return (
-        <Typography
-          component="span"
-          sx={{ color: 'success.main', fontSize: '0.7rem', fontWeight: 500 }}
-        >
-          {' '}
-          {t('systemSettings.sourceCustomized')}
-        </Typography>
-      )
-    }
-    if (source === 'env') {
-      return (
-        <Typography
-          component="span"
-          sx={{ color: 'warning.main', fontSize: '0.7rem', fontWeight: 500 }}
-        >
-          {' '}
-          {t('systemSettings.sourceFromEnv')}
-        </Typography>
-      )
-    }
-    return (
-      <Typography component="span" sx={{ color: 'info.main', fontSize: '0.7rem', fontWeight: 500 }}>
-        {' '}
-        {t('systemSettings.sourceDefault')}
-      </Typography>
-    )
-  }
-
-  // Initialize form values from fetched settings
   useEffect(() => {
     if (cacheStats) {
       setBrowseMaxItems(cacheStats.browse_max_items || 1_000_000)
@@ -145,40 +151,129 @@ const SystemSettingsTab: React.FC = () => {
       setInitTimeout(systemSettings.init_timeout || 300)
       setBackupTimeout(systemSettings.backup_timeout || 3600)
       setSourceSizeTimeout(systemSettings.source_size_timeout || 3600)
+      setMaxConcurrentScheduledBackups(systemSettings.max_concurrent_scheduled_backups ?? 2)
+      setMaxConcurrentScheduledChecks(systemSettings.max_concurrent_scheduled_checks ?? 4)
       setStatsRefreshInterval(systemSettings.stats_refresh_interval_minutes ?? 60)
+      setDashboardBackupWarningDays(systemSettings.dashboard_backup_warning_days ?? 3)
+      setDashboardBackupCriticalDays(systemSettings.dashboard_backup_critical_days ?? 7)
+      setDashboardCheckWarningDays(systemSettings.dashboard_check_warning_days ?? 7)
+      setDashboardCheckCriticalDays(systemSettings.dashboard_check_critical_days ?? 30)
+      setDashboardCompactWarningDays(systemSettings.dashboard_compact_warning_days ?? 30)
+      setDashboardCompactCriticalDays(systemSettings.dashboard_compact_critical_days ?? 60)
+      setDashboardRestoreCheckWarningDays(systemSettings.dashboard_restore_check_warning_days ?? 14)
+      setDashboardRestoreCheckCriticalDays(
+        systemSettings.dashboard_restore_check_critical_days ?? 30
+      )
+      setDashboardObserveFreshnessWarningDays(
+        systemSettings.dashboard_observe_freshness_warning_days ?? 2
+      )
+      setDashboardObserveFreshnessCriticalDays(
+        systemSettings.dashboard_observe_freshness_critical_days ?? 7
+      )
       setMetricsEnabled(systemSettings.metrics_enabled ?? false)
       setMetricsRequireAuth(systemSettings.metrics_require_auth ?? false)
       setRotateMetricsToken(false)
+      setOidcEnabled(systemSettings.oidc_enabled ?? false)
+      setOidcDisableLocalAuth(systemSettings.oidc_disable_local_auth ?? false)
+      setOidcProviderName(systemSettings.oidc_provider_name ?? 'Single sign-on')
+      setOidcTokenAuthMethod(systemSettings.oidc_token_auth_method ?? 'client_secret_post')
+      setOidcDiscoveryUrl(systemSettings.oidc_discovery_url ?? '')
+      setOidcClientId(systemSettings.oidc_client_id ?? '')
+      setOidcClientSecret('')
+      setClearOidcClientSecret(false)
+      setOidcScopes(systemSettings.oidc_scopes ?? 'openid profile email')
+      setOidcRedirectUriOverride(systemSettings.oidc_redirect_uri_override ?? '')
+      setOidcEndSessionEndpointOverride(systemSettings.oidc_end_session_endpoint_override ?? '')
+      setOidcClaimUsername(systemSettings.oidc_claim_username ?? 'preferred_username')
+      setOidcClaimEmail(systemSettings.oidc_claim_email ?? 'email')
+      setOidcClaimFullName(systemSettings.oidc_claim_full_name ?? 'name')
+      setOidcGroupClaim(systemSettings.oidc_group_claim ?? '')
+      setOidcRoleClaim(systemSettings.oidc_role_claim ?? '')
+      setOidcAdminGroups(systemSettings.oidc_admin_groups ?? '')
+      setOidcAllRepositoriesRoleClaim(systemSettings.oidc_all_repositories_role_claim ?? '')
+      setOidcNewUserMode(systemSettings.oidc_new_user_mode ?? 'viewer')
+      setOidcTemplateUsername(systemSettings.oidc_new_user_template_username ?? '')
+      setOidcDefaultRole(systemSettings.oidc_default_role ?? 'viewer')
+      setOidcDefaultAllRepositoriesRole(
+        systemSettings.oidc_default_all_repositories_role ?? 'viewer'
+      )
       setHasChanges(false)
     }
   }, [systemSettings])
 
-  // Track form changes
   useEffect(() => {
     if (cacheStats && systemSettings) {
       const browseDirty =
         browseMaxItems !== (cacheStats.browse_max_items || 1_000_000) ||
         browseMaxMemoryMb !== (cacheStats.browse_max_memory_mb || 1024)
-
       const timeoutDirty =
         mountTimeout !== (systemSettings.mount_timeout || 120) ||
         infoTimeout !== (systemSettings.info_timeout || 600) ||
         listTimeout !== (systemSettings.list_timeout || 600) ||
         initTimeout !== (systemSettings.init_timeout || 300) ||
         backupTimeout !== (systemSettings.backup_timeout || 3600) ||
-        sourceSizeTimeout !== (systemSettings.source_size_timeout || 3600)
-
+        sourceSizeTimeout !== (systemSettings.source_size_timeout || 3600) ||
+        maxConcurrentScheduledBackups !== (systemSettings.max_concurrent_scheduled_backups ?? 2) ||
+        maxConcurrentScheduledChecks !== (systemSettings.max_concurrent_scheduled_checks ?? 4)
       const statsRefreshDirty =
         statsRefreshInterval !== (systemSettings.stats_refresh_interval_minutes ?? 60)
-
+      const dashboardThresholdDirty =
+        dashboardBackupWarningDays !== (systemSettings.dashboard_backup_warning_days ?? 3) ||
+        dashboardBackupCriticalDays !== (systemSettings.dashboard_backup_critical_days ?? 7) ||
+        dashboardCheckWarningDays !== (systemSettings.dashboard_check_warning_days ?? 7) ||
+        dashboardCheckCriticalDays !== (systemSettings.dashboard_check_critical_days ?? 30) ||
+        dashboardCompactWarningDays !== (systemSettings.dashboard_compact_warning_days ?? 30) ||
+        dashboardCompactCriticalDays !== (systemSettings.dashboard_compact_critical_days ?? 60) ||
+        dashboardRestoreCheckWarningDays !==
+          (systemSettings.dashboard_restore_check_warning_days ?? 14) ||
+        dashboardRestoreCheckCriticalDays !==
+          (systemSettings.dashboard_restore_check_critical_days ?? 30) ||
+        dashboardObserveFreshnessWarningDays !==
+          (systemSettings.dashboard_observe_freshness_warning_days ?? 2) ||
+        dashboardObserveFreshnessCriticalDays !==
+          (systemSettings.dashboard_observe_freshness_critical_days ?? 7)
       const metricsDirty =
         metricsEnabled !== (systemSettings.metrics_enabled ?? false) ||
         metricsRequireAuth !== (systemSettings.metrics_require_auth ?? false) ||
         rotateMetricsToken
+      const oidcDirty =
+        oidcEnabled !== (systemSettings.oidc_enabled ?? false) ||
+        oidcDisableLocalAuth !== (systemSettings.oidc_disable_local_auth ?? false) ||
+        oidcProviderName !== (systemSettings.oidc_provider_name ?? 'Single sign-on') ||
+        oidcTokenAuthMethod !== (systemSettings.oidc_token_auth_method ?? 'client_secret_post') ||
+        oidcDiscoveryUrl !== (systemSettings.oidc_discovery_url ?? '') ||
+        oidcClientId !== (systemSettings.oidc_client_id ?? '') ||
+        oidcClientSecret !== '' ||
+        clearOidcClientSecret ||
+        oidcScopes !== (systemSettings.oidc_scopes ?? 'openid profile email') ||
+        oidcRedirectUriOverride !== (systemSettings.oidc_redirect_uri_override ?? '') ||
+        oidcEndSessionEndpointOverride !==
+          (systemSettings.oidc_end_session_endpoint_override ?? '') ||
+        oidcClaimUsername !== (systemSettings.oidc_claim_username ?? 'preferred_username') ||
+        oidcClaimEmail !== (systemSettings.oidc_claim_email ?? 'email') ||
+        oidcClaimFullName !== (systemSettings.oidc_claim_full_name ?? 'name') ||
+        oidcGroupClaim !== (systemSettings.oidc_group_claim ?? '') ||
+        oidcRoleClaim !== (systemSettings.oidc_role_claim ?? '') ||
+        oidcAdminGroups !== (systemSettings.oidc_admin_groups ?? '') ||
+        oidcAllRepositoriesRoleClaim !== (systemSettings.oidc_all_repositories_role_claim ?? '') ||
+        oidcNewUserMode !== (systemSettings.oidc_new_user_mode ?? 'viewer') ||
+        oidcTemplateUsername !== (systemSettings.oidc_new_user_template_username ?? '') ||
+        oidcDefaultRole !== (systemSettings.oidc_default_role ?? 'viewer') ||
+        oidcDefaultAllRepositoriesRole !==
+          (systemSettings.oidc_default_all_repositories_role ?? 'viewer')
 
       setBrowseChanged(browseDirty)
-      setSystemChanged(timeoutDirty || statsRefreshDirty || metricsDirty)
-      setHasChanges(browseDirty || timeoutDirty || statsRefreshDirty || metricsDirty)
+      setSystemChanged(
+        timeoutDirty || statsRefreshDirty || dashboardThresholdDirty || metricsDirty || oidcDirty
+      )
+      setHasChanges(
+        browseDirty ||
+          timeoutDirty ||
+          statsRefreshDirty ||
+          dashboardThresholdDirty ||
+          metricsDirty ||
+          oidcDirty
+      )
     }
   }, [
     browseMaxItems,
@@ -189,50 +284,141 @@ const SystemSettingsTab: React.FC = () => {
     initTimeout,
     backupTimeout,
     sourceSizeTimeout,
+    maxConcurrentScheduledBackups,
+    maxConcurrentScheduledChecks,
     statsRefreshInterval,
+    dashboardBackupWarningDays,
+    dashboardBackupCriticalDays,
+    dashboardCheckWarningDays,
+    dashboardCheckCriticalDays,
+    dashboardCompactWarningDays,
+    dashboardCompactCriticalDays,
+    dashboardRestoreCheckWarningDays,
+    dashboardRestoreCheckCriticalDays,
+    dashboardObserveFreshnessWarningDays,
+    dashboardObserveFreshnessCriticalDays,
     metricsEnabled,
     metricsRequireAuth,
     rotateMetricsToken,
+    oidcEnabled,
+    oidcDisableLocalAuth,
+    oidcProviderName,
+    oidcTokenAuthMethod,
+    oidcDiscoveryUrl,
+    oidcClientId,
+    oidcClientSecret,
+    clearOidcClientSecret,
+    oidcScopes,
+    oidcRedirectUriOverride,
+    oidcEndSessionEndpointOverride,
+    oidcClaimUsername,
+    oidcClaimEmail,
+    oidcClaimFullName,
+    oidcGroupClaim,
+    oidcRoleClaim,
+    oidcAdminGroups,
+    oidcAllRepositoriesRoleClaim,
+    oidcNewUserMode,
+    oidcTemplateUsername,
+    oidcDefaultRole,
+    oidcDefaultAllRepositoriesRole,
     cacheStats,
     systemSettings,
   ])
 
-  // Validation constants
-  const MIN_FILES = 100_000
-  const MAX_FILES = 50_000_000
-  const MIN_MEMORY = 100
-  const MAX_MEMORY = 16384
-  const MIN_TIMEOUT = 10
-  const MAX_TIMEOUT = 86400 // 24 hours
-  const MAX_STATS_REFRESH = 1440 // 24 hours in minutes
+  const hasOidcActiveAdminSignal = getHasOidcActiveAdminSignal(systemSettings)
+  const hasActiveOidcAdmin = getHasActiveOidcAdmin(systemSettings)
 
-  const getValidationError = (): string | null => {
-    if (browseMaxItems < MIN_FILES || browseMaxItems > MAX_FILES) {
-      return `Max files must be between ${MIN_FILES.toLocaleString()} and ${MAX_FILES.toLocaleString()}`
-    }
-    if (browseMaxMemoryMb < MIN_MEMORY || browseMaxMemoryMb > MAX_MEMORY) {
-      return `Max memory must be between ${MIN_MEMORY} MB and ${MAX_MEMORY} MB`
-    }
-    const timeouts = [
-      mountTimeout,
-      infoTimeout,
-      listTimeout,
-      initTimeout,
-      backupTimeout,
-      sourceSizeTimeout,
-    ]
-    if (timeouts.some((t) => t < MIN_TIMEOUT || t > MAX_TIMEOUT)) {
-      return `Timeouts must be between ${MIN_TIMEOUT} seconds and ${MAX_TIMEOUT} seconds (24 hours)`
-    }
-    if (statsRefreshInterval < 0 || statsRefreshInterval > MAX_STATS_REFRESH) {
-      return `Stats refresh interval must be between 0 and ${MAX_STATS_REFRESH} minutes (0 = disabled)`
-    }
-    return null
+  const validationError = getSystemSettingsValidationError({
+    browseMaxItems,
+    browseMaxMemoryMb,
+    mountTimeout,
+    infoTimeout,
+    listTimeout,
+    initTimeout,
+    backupTimeout,
+    sourceSizeTimeout,
+    statsRefreshInterval,
+    maxConcurrentScheduledBackups,
+    maxConcurrentScheduledChecks,
+    dashboardBackupWarningDays,
+    dashboardBackupCriticalDays,
+    dashboardCheckWarningDays,
+    dashboardCheckCriticalDays,
+    dashboardCompactWarningDays,
+    dashboardCompactCriticalDays,
+    dashboardRestoreCheckWarningDays,
+    dashboardRestoreCheckCriticalDays,
+    dashboardObserveFreshnessWarningDays,
+    dashboardObserveFreshnessCriticalDays,
+    oidcEnabled,
+    oidcDiscoveryUrl,
+    oidcClientId,
+    oidcClientSecret,
+    oidcNewUserMode,
+    oidcTemplateUsername,
+    oidcDisableLocalAuth,
+    hasOidcActiveAdminSignal,
+    hasActiveOidcAdmin,
+    systemSettings,
+    t,
+  })
+
+  const buildSystemSettingsUpdatePayload = (): SystemSettings => ({
+    mount_timeout: mountTimeout,
+    info_timeout: infoTimeout,
+    list_timeout: listTimeout,
+    init_timeout: initTimeout,
+    backup_timeout: backupTimeout,
+    source_size_timeout: sourceSizeTimeout,
+    max_concurrent_scheduled_backups: maxConcurrentScheduledBackups,
+    max_concurrent_scheduled_checks: maxConcurrentScheduledChecks,
+    stats_refresh_interval_minutes: statsRefreshInterval,
+    dashboard_backup_warning_days: dashboardBackupWarningDays,
+    dashboard_backup_critical_days: dashboardBackupCriticalDays,
+    dashboard_check_warning_days: dashboardCheckWarningDays,
+    dashboard_check_critical_days: dashboardCheckCriticalDays,
+    dashboard_compact_warning_days: dashboardCompactWarningDays,
+    dashboard_compact_critical_days: dashboardCompactCriticalDays,
+    dashboard_restore_check_warning_days: dashboardRestoreCheckWarningDays,
+    dashboard_restore_check_critical_days: dashboardRestoreCheckCriticalDays,
+    dashboard_observe_freshness_warning_days: dashboardObserveFreshnessWarningDays,
+    dashboard_observe_freshness_critical_days: dashboardObserveFreshnessCriticalDays,
+    metrics_enabled: metricsEnabled,
+    metrics_require_auth: metricsRequireAuth,
+    rotate_metrics_token: rotateMetricsToken,
+    oidc_enabled: oidcEnabled,
+    oidc_disable_local_auth: oidcDisableLocalAuth,
+    oidc_provider_name: oidcProviderName,
+    oidc_token_auth_method: oidcTokenAuthMethod,
+    oidc_discovery_url: oidcDiscoveryUrl,
+    oidc_client_id: oidcClientId,
+    oidc_client_secret: oidcClientSecret || undefined,
+    clear_oidc_client_secret: clearOidcClientSecret,
+    oidc_scopes: oidcScopes,
+    oidc_redirect_uri_override: oidcRedirectUriOverride,
+    oidc_end_session_endpoint_override: oidcEndSessionEndpointOverride,
+    oidc_claim_username: oidcClaimUsername,
+    oidc_claim_email: oidcClaimEmail,
+    oidc_claim_full_name: oidcClaimFullName,
+    oidc_group_claim: oidcGroupClaim,
+    oidc_role_claim: oidcRoleClaim,
+    oidc_admin_groups: oidcAdminGroups,
+    oidc_all_repositories_role_claim: oidcAllRepositoriesRoleClaim,
+    oidc_new_user_mode: oidcNewUserMode,
+    oidc_new_user_template_username: oidcTemplateUsername,
+    oidc_default_role: oidcDefaultRole,
+    oidc_default_all_repositories_role: oidcDefaultAllRepositoriesRole,
+  })
+
+  const buildCacheableSystemSettings = (): Record<string, unknown> => {
+    const settings = { ...buildSystemSettingsUpdatePayload() } as Record<string, unknown>
+    delete settings.oidc_client_secret
+    delete settings.clear_oidc_client_secret
+    delete settings.rotate_metrics_token
+    return settings
   }
 
-  const validationError = getValidationError()
-
-  // Save browse limits mutation
   const saveBrowseLimitsMutation = useMutation({
     mutationFn: async () => {
       return await settingsAPI.updateCacheSettings(
@@ -252,7 +438,7 @@ const SystemSettingsTab: React.FC = () => {
       let errorMsg = t('systemSettings.failedToSaveBrowseLimits')
       if (Array.isArray(data)) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        errorMsg = data.map((e: any) => e.msg).join(', ')
+        errorMsg = data.map((errorItem: any) => errorItem.msg).join(', ')
       } else if (data?.detail) {
         errorMsg = translateBackendKey(data.detail)
       }
@@ -260,24 +446,32 @@ const SystemSettingsTab: React.FC = () => {
     },
   })
 
-  // Save timeouts and system settings mutation
   const saveTimeoutsMutation = useMutation({
     mutationFn: async () => {
-      return await settingsAPI.updateSystemSettings({
-        mount_timeout: mountTimeout,
-        info_timeout: infoTimeout,
-        list_timeout: listTimeout,
-        init_timeout: initTimeout,
-        backup_timeout: backupTimeout,
-        source_size_timeout: sourceSizeTimeout,
-        stats_refresh_interval_minutes: statsRefreshInterval,
-        metrics_enabled: metricsEnabled,
-        metrics_require_auth: metricsRequireAuth,
-        rotate_metrics_token: rotateMetricsToken,
-      })
+      return await settingsAPI.updateSystemSettings(buildSystemSettingsUpdatePayload())
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['systemSettings'] })
+    onSuccess: async (response) => {
+      const updatedSettings = response?.data?.settings
+      if (updatedSettings && typeof updatedSettings === 'object') {
+        queryClient.setQueryData<SystemSettingsQueryData>(['systemSettings'], (current) => ({
+          ...(current ?? {}),
+          settings: {
+            ...(current?.settings ?? {}),
+            ...buildCacheableSystemSettings(),
+            ...(updatedSettings as Record<string, unknown>),
+          },
+        }))
+      }
+
+      try {
+        const settingsResponse = await settingsAPI.getSystemSettings()
+        queryClient.setQueryData<SystemSettingsQueryData>(
+          ['systemSettings'],
+          settingsResponse.data as SystemSettingsQueryData
+        )
+      } catch {
+        return queryClient.invalidateQueries({ queryKey: ['systemSettings'] })
+      }
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
@@ -285,7 +479,7 @@ const SystemSettingsTab: React.FC = () => {
       let errorMsg = t('systemSettings.failedToSaveTimeoutSettings')
       if (Array.isArray(data)) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        errorMsg = data.map((e: any) => e.msg).join(', ')
+        errorMsg = data.map((errorItem: any) => errorItem.msg).join(', ')
       } else if (data?.detail) {
         errorMsg = translateBackendKey(data.detail)
       }
@@ -323,6 +517,8 @@ const SystemSettingsTab: React.FC = () => {
       toast.success(t('systemSettings.savedSuccessfully'))
       setHasChanges(false)
       setRotateMetricsToken(false)
+      setOidcClientSecret('')
+      setClearOidcClientSecret(false)
       if (generatedMetricsToken) {
         setNewMetricsToken(generatedMetricsToken)
         setMetricsTokenCopied(false)
@@ -337,10 +533,32 @@ const SystemSettingsTab: React.FC = () => {
         init_timeout: initTimeout,
         backup_timeout: backupTimeout,
         source_size_timeout: sourceSizeTimeout,
+        max_concurrent_scheduled_backups: maxConcurrentScheduledBackups,
+        max_concurrent_scheduled_checks: maxConcurrentScheduledChecks,
         stats_refresh_interval_minutes: statsRefreshInterval,
+        dashboard_backup_warning_days: dashboardBackupWarningDays,
+        dashboard_backup_critical_days: dashboardBackupCriticalDays,
+        dashboard_check_warning_days: dashboardCheckWarningDays,
+        dashboard_check_critical_days: dashboardCheckCriticalDays,
+        dashboard_compact_warning_days: dashboardCompactWarningDays,
+        dashboard_compact_critical_days: dashboardCompactCriticalDays,
+        dashboard_restore_check_warning_days: dashboardRestoreCheckWarningDays,
+        dashboard_restore_check_critical_days: dashboardRestoreCheckCriticalDays,
+        dashboard_observe_freshness_warning_days: dashboardObserveFreshnessWarningDays,
+        dashboard_observe_freshness_critical_days: dashboardObserveFreshnessCriticalDays,
         metrics_enabled: metricsEnabled,
         metrics_require_auth: metricsRequireAuth,
         rotate_metrics_token: rotateMetricsToken,
+        oidc_enabled: oidcEnabled,
+        oidc_disable_local_auth: oidcDisableLocalAuth,
+        oidc_token_auth_method: oidcTokenAuthMethod,
+        oidc_new_user_mode: oidcNewUserMode,
+        oidc_default_role: oidcDefaultRole,
+        oidc_default_all_repositories_role: oidcDefaultAllRepositoriesRole,
+        oidc_group_claim: oidcGroupClaim,
+        oidc_admin_groups: oidcAdminGroups,
+        oidc_redirect_uri_override: oidcRedirectUriOverride,
+        oidc_end_session_endpoint_override: oidcEndSessionEndpointOverride,
       })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
@@ -348,18 +566,6 @@ const SystemSettingsTab: React.FC = () => {
     }
   }
 
-  const formatTimeout = (seconds: number): string => {
-    if (seconds >= 3600) {
-      const hours = seconds / 3600
-      return `${hours.toFixed(1)} hour${hours !== 1 ? 's' : ''}`
-    } else if (seconds >= 60) {
-      const minutes = seconds / 60
-      return `${minutes.toFixed(0)} minute${minutes !== 1 ? 's' : ''}`
-    }
-    return `${seconds} second${seconds !== 1 ? 's' : ''}`
-  }
-
-  // Handler for manual stats refresh
   const handleRefreshStats = async () => {
     setIsRefreshingStats(true)
     try {
@@ -368,9 +574,8 @@ const SystemSettingsTab: React.FC = () => {
       toast.success(translateBackendKey(data.message) || t('systemSettings.statsRefreshStarted'))
       trackSystem(EventAction.START, { section: 'system_settings', operation: 'refresh_stats' })
 
-      // Poll for completion by checking last_stats_refresh
       const startTime = Date.now()
-      const maxWaitTime = 5 * 60 * 1000 // 5 minutes max polling
+      const maxWaitTime = 5 * 60 * 1000
       const pollInterval = setInterval(async () => {
         if (Date.now() - startTime > maxWaitTime) {
           clearInterval(pollInterval)
@@ -391,7 +596,7 @@ const SystemSettingsTab: React.FC = () => {
         } catch {
           // Ignore polling errors
         }
-      }, 3000) // Poll every 3 seconds
+      }, 3000)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       toast.error(
@@ -409,26 +614,38 @@ const SystemSettingsTab: React.FC = () => {
     setTimeout(() => setMetricsTokenCopied(false), 2000)
   }
 
+  const proxyAuthHeaderRows = buildProxyAuthHeaderRows(proxyAuthConfig)
+  const sectionTabs = buildSectionTabs(t)
+
+  const authEventStats = useMemo(() => {
+    const events = authEventsData ?? []
+    return {
+      total: events.length,
+      success: events.filter((event) => event.success).length,
+      failed: events.filter((event) => !event.success).length,
+      pending: events.filter((event) => event.event_type === 'oidc_user_pending').length,
+      oidc: events.filter((event) => event.auth_source === 'oidc').length,
+    }
+  }, [authEventsData])
+
+  const filteredAuthEvents = useMemo(() => {
+    const events = authEventsData ?? []
+    return events.filter((event) => {
+      if (authEventFilter === 'failed') {
+        return !event.success
+      }
+      if (authEventFilter === 'oidc') {
+        return event.auth_source === 'oidc'
+      }
+      if (authEventFilter === 'pending') {
+        return event.event_type === 'oidc_user_pending'
+      }
+      return true
+    })
+  }, [authEventFilter, authEventsData])
+
   const isLoading = cacheLoading || systemLoading
   const isSaving = saveBrowseLimitsMutation.isPending || saveTimeoutsMutation.isPending
-  const sectionTabs = [
-    {
-      label: t('systemSettings.operationTimeoutsTitle'),
-      description: t('systemSettings.operationTimeoutsDescription'),
-    },
-    {
-      label: t('systemSettings.repositoryMonitoringTitle'),
-      description: t('systemSettings.repositoryMonitoringDescription'),
-    },
-    {
-      label: t('systemSettings.metricsAccessTitle'),
-      description: t('systemSettings.metricsAccessDescription'),
-    },
-    {
-      label: t('systemSettings.archiveBrowsingLimitsTitle'),
-      description: t('systemSettings.archiveBrowsingLimitsDescription'),
-    },
-  ]
 
   if (isLoading) {
     return (
@@ -470,437 +687,155 @@ const SystemSettingsTab: React.FC = () => {
           </Button>
         </Box>
 
-        <SettingsCard sx={{ overflow: 'hidden' }} contentSx={{ p: 0 }}>
-          <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-            <Tabs
-              value={activeSection}
-              onChange={(_, value) => setActiveSection(value)}
-              variant="scrollable"
-              scrollButtons="auto"
-              allowScrollButtonsMobile
-              sx={{ px: { xs: 1, md: 2 } }}
-            >
-              {[
-                { label: sectionTabs[0].label, icon: <Clock size={15} /> },
-                { label: sectionTabs[1].label, icon: <RefreshCw size={15} /> },
-                { label: sectionTabs[2].label, icon: <Key size={15} /> },
-                { label: sectionTabs[3].label, icon: <AlertTriangle size={15} /> },
-              ].map((section) => (
-                <Tab
-                  key={section.label}
-                  label={section.label}
-                  icon={section.icon}
-                  iconPosition="start"
-                  sx={{ minHeight: 48, gap: 0.5, textTransform: 'none', fontWeight: 600 }}
-                />
-              ))}
-            </Tabs>
-          </Box>
+        <SettingsSectionsCard
+          activeSection={activeSection}
+          sectionTabs={sectionTabs}
+          onActiveSectionChange={setActiveSection}
+        >
+          {activeSection === 0 && (
+            <OperationTimeoutsSection
+              mountTimeout={mountTimeout}
+              infoTimeout={infoTimeout}
+              listTimeout={listTimeout}
+              initTimeout={initTimeout}
+              backupTimeout={backupTimeout}
+              sourceSizeTimeout={sourceSizeTimeout}
+              timeoutSources={timeoutSources}
+              setMountTimeout={setMountTimeout}
+              setInfoTimeout={setInfoTimeout}
+              setListTimeout={setListTimeout}
+              setInitTimeout={setInitTimeout}
+              setBackupTimeout={setBackupTimeout}
+              setSourceSizeTimeout={setSourceSizeTimeout}
+            />
+          )}
 
-          <Box sx={{ p: { xs: 2, md: 2.5 } }}>
-            <Stack spacing={3}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                {activeSection === 0 && <Clock size={22} />}
-                {activeSection === 1 && <RefreshCw size={22} />}
-                {activeSection === 2 && <Settings size={22} />}
-                {activeSection === 3 && <AlertTriangle size={22} />}
-                <Typography variant="h6">{sectionTabs[activeSection].label}</Typography>
-                {activeSection === 1 && (
-                  <Tooltip title={t('systemSettings.manualRefreshAlert')} placement="right">
-                    <Box
-                      component="span"
-                      sx={{ display: 'inline-flex', color: 'info.main', cursor: 'help', ml: 0.5 }}
-                    >
-                      <Info size={16} />
-                    </Box>
-                  </Tooltip>
-                )}
-                {activeSection === 2 && (
-                  <Tooltip title={t('systemSettings.metricsHeaderHelp')} placement="right">
-                    <Box
-                      component="span"
-                      sx={{ display: 'inline-flex', color: 'info.main', cursor: 'help', ml: 0.5 }}
-                    >
-                      <Info size={16} />
-                    </Box>
-                  </Tooltip>
-                )}
-                {activeSection === 3 && (
-                  <Tooltip
-                    title={
-                      <>
-                        <strong>{t('systemSettings.warningLabel')}</strong>{' '}
-                        {t('systemSettings.largeLimitsWarning')}
-                      </>
-                    }
-                    placement="right"
-                  >
-                    <Box
-                      component="span"
-                      sx={{
-                        display: 'inline-flex',
-                        color: 'warning.main',
-                        cursor: 'help',
-                        ml: 0.5,
-                      }}
-                    >
-                      <AlertTriangle size={16} />
-                    </Box>
-                  </Tooltip>
-                )}
-              </Box>
+          {activeSection === 1 && (
+            <RepositoryMonitoringSection
+              statsRefreshInterval={statsRefreshInterval}
+              maxConcurrentScheduledBackups={maxConcurrentScheduledBackups}
+              maxConcurrentScheduledChecks={maxConcurrentScheduledChecks}
+              dashboardBackupWarningDays={dashboardBackupWarningDays}
+              dashboardBackupCriticalDays={dashboardBackupCriticalDays}
+              dashboardCheckWarningDays={dashboardCheckWarningDays}
+              dashboardCheckCriticalDays={dashboardCheckCriticalDays}
+              dashboardCompactWarningDays={dashboardCompactWarningDays}
+              dashboardCompactCriticalDays={dashboardCompactCriticalDays}
+              dashboardRestoreCheckWarningDays={dashboardRestoreCheckWarningDays}
+              dashboardRestoreCheckCriticalDays={dashboardRestoreCheckCriticalDays}
+              dashboardObserveFreshnessWarningDays={dashboardObserveFreshnessWarningDays}
+              dashboardObserveFreshnessCriticalDays={dashboardObserveFreshnessCriticalDays}
+              isRefreshingStats={isRefreshingStats}
+              lastStatsRefresh={systemSettings?.last_stats_refresh}
+              setStatsRefreshInterval={setStatsRefreshInterval}
+              setMaxConcurrentScheduledBackups={setMaxConcurrentScheduledBackups}
+              setMaxConcurrentScheduledChecks={setMaxConcurrentScheduledChecks}
+              setDashboardBackupWarningDays={setDashboardBackupWarningDays}
+              setDashboardBackupCriticalDays={setDashboardBackupCriticalDays}
+              setDashboardCheckWarningDays={setDashboardCheckWarningDays}
+              setDashboardCheckCriticalDays={setDashboardCheckCriticalDays}
+              setDashboardCompactWarningDays={setDashboardCompactWarningDays}
+              setDashboardCompactCriticalDays={setDashboardCompactCriticalDays}
+              setDashboardRestoreCheckWarningDays={setDashboardRestoreCheckWarningDays}
+              setDashboardRestoreCheckCriticalDays={setDashboardRestoreCheckCriticalDays}
+              setDashboardObserveFreshnessWarningDays={setDashboardObserveFreshnessWarningDays}
+              setDashboardObserveFreshnessCriticalDays={setDashboardObserveFreshnessCriticalDays}
+              onRefreshStats={handleRefreshStats}
+            />
+          )}
 
-              <Typography variant="body2" color="text.secondary">
-                {sectionTabs[activeSection].description}
-              </Typography>
+          {activeSection === 2 && (
+            <MetricsAccessSection
+              metricsEnabled={metricsEnabled}
+              metricsRequireAuth={metricsRequireAuth}
+              rotateMetricsToken={rotateMetricsToken}
+              metricsTokenSet={systemSettings?.metrics_token_set}
+              newMetricsToken={newMetricsToken}
+              metricsTokenCopied={metricsTokenCopied}
+              setMetricsEnabled={setMetricsEnabled}
+              setMetricsRequireAuth={setMetricsRequireAuth}
+              setRotateMetricsToken={setRotateMetricsToken}
+              onCopyMetricsToken={handleCopyMetricsToken}
+            />
+          )}
 
-              <Divider />
+          {activeSection === 3 && (
+            <ArchiveBrowsingLimitsSection
+              browseMaxItems={browseMaxItems}
+              browseMaxMemoryMb={browseMaxMemoryMb}
+              setBrowseMaxItems={setBrowseMaxItems}
+              setBrowseMaxMemoryMb={setBrowseMaxMemoryMb}
+            />
+          )}
 
-              {activeSection === 0 && (
-                <Box
-                  sx={{
-                    display: 'grid',
-                    gridTemplateColumns: { xs: '1fr', md: '1fr 1fr', xl: '1fr 1fr 1fr' },
-                    gap: 2,
-                  }}
-                >
-                  <TextField
-                    label={t('systemSettings.mountTimeoutLabel')}
-                    type="number"
-                    fullWidth
-                    value={mountTimeout}
-                    onChange={(e) => setMountTimeout(Number(e.target.value))}
-                    inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 10 }}
-                    error={mountTimeout < MIN_TIMEOUT || mountTimeout > MAX_TIMEOUT}
-                    helperText={
-                      <>
-                        {t('systemSettings.mountTimeoutHelper')} {formatTimeout(mountTimeout)}
-                        {renderSourceLabel(timeoutSources?.mount_timeout)}
-                      </>
-                    }
-                  />
+          {activeSection === 4 && (
+            <ProxyAuthSection
+              proxyAuthConfig={proxyAuthConfig}
+              proxyAuthHeaderRows={proxyAuthHeaderRows}
+            />
+          )}
 
-                  <TextField
-                    label={t('systemSettings.infoTimeoutLabel')}
-                    type="number"
-                    fullWidth
-                    value={infoTimeout}
-                    onChange={(e) => setInfoTimeout(Number(e.target.value))}
-                    inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 60 }}
-                    error={infoTimeout < MIN_TIMEOUT || infoTimeout > MAX_TIMEOUT}
-                    helperText={
-                      <>
-                        {t('systemSettings.infoTimeoutHelper')} {formatTimeout(infoTimeout)}
-                        {renderSourceLabel(timeoutSources?.info_timeout)}
-                      </>
-                    }
-                  />
-
-                  <TextField
-                    label={t('systemSettings.listTimeoutLabel')}
-                    type="number"
-                    fullWidth
-                    value={listTimeout}
-                    onChange={(e) => setListTimeout(Number(e.target.value))}
-                    inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 60 }}
-                    error={listTimeout < MIN_TIMEOUT || listTimeout > MAX_TIMEOUT}
-                    helperText={
-                      <>
-                        {t('systemSettings.listTimeoutHelper')} {formatTimeout(listTimeout)}
-                        {renderSourceLabel(timeoutSources?.list_timeout)}
-                      </>
-                    }
-                  />
-
-                  <TextField
-                    label={t('systemSettings.initTimeoutLabel')}
-                    type="number"
-                    fullWidth
-                    value={initTimeout}
-                    onChange={(e) => setInitTimeout(Number(e.target.value))}
-                    inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 60 }}
-                    error={initTimeout < MIN_TIMEOUT || initTimeout > MAX_TIMEOUT}
-                    helperText={
-                      <>
-                        {t('systemSettings.initTimeoutHelper')} {formatTimeout(initTimeout)}
-                        {renderSourceLabel(timeoutSources?.init_timeout)}
-                      </>
-                    }
-                  />
-
-                  <TextField
-                    label={t('systemSettings.backupTimeoutLabel')}
-                    type="number"
-                    fullWidth
-                    value={backupTimeout}
-                    onChange={(e) => setBackupTimeout(Number(e.target.value))}
-                    inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 300 }}
-                    error={backupTimeout < MIN_TIMEOUT || backupTimeout > MAX_TIMEOUT}
-                    helperText={
-                      <>
-                        {t('systemSettings.backupTimeoutHelper')} {formatTimeout(backupTimeout)}
-                        {renderSourceLabel(timeoutSources?.backup_timeout)}
-                      </>
-                    }
-                  />
-
-                  <TextField
-                    label={t('systemSettings.sourceSizeTimeoutLabel')}
-                    type="number"
-                    fullWidth
-                    value={sourceSizeTimeout}
-                    onChange={(e) => setSourceSizeTimeout(Number(e.target.value))}
-                    inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 300 }}
-                    error={sourceSizeTimeout < MIN_TIMEOUT || sourceSizeTimeout > MAX_TIMEOUT}
-                    helperText={
-                      <>
-                        {t('systemSettings.sourceSizeTimeoutHelper')}{' '}
-                        {formatTimeout(sourceSizeTimeout)}
-                        {renderSourceLabel(timeoutSources?.source_size_timeout)}
-                      </>
-                    }
-                  />
-                </Box>
-              )}
-
-              {activeSection === 1 && (
-                <Stack spacing={2.5}>
-                  <Box
-                    sx={{
-                      display: 'grid',
-                      gridTemplateColumns: { xs: '1fr', md: 'minmax(280px, 340px) auto' },
-                      gap: 2,
-                      alignItems: 'start',
-                    }}
-                  >
-                    <TextField
-                      label={t('systemSettings.statsRefreshIntervalLabel')}
-                      type="number"
-                      value={statsRefreshInterval}
-                      onChange={(e) => setStatsRefreshInterval(Number(e.target.value))}
-                      inputProps={{ min: 0, max: MAX_STATS_REFRESH, step: 15 }}
-                      error={statsRefreshInterval < 0 || statsRefreshInterval > MAX_STATS_REFRESH}
-                      helperText={
-                        statsRefreshInterval === 0
-                          ? t('systemSettings.statsRefreshDisabled')
-                          : statsRefreshInterval < 0 || statsRefreshInterval > MAX_STATS_REFRESH
-                            ? t('systemSettings.statsRefreshRangeError', {
-                                max: MAX_STATS_REFRESH,
-                              })
-                            : t('systemSettings.statsRefreshIntervalHelper', {
-                                interval: statsRefreshInterval,
-                              })
-                      }
-                    />
-                    <Button
-                      variant="outlined"
-                      onClick={handleRefreshStats}
-                      disabled={isRefreshingStats}
-                      startIcon={
-                        isRefreshingStats ? <CircularProgress size={16} /> : <RefreshCw size={16} />
-                      }
-                      sx={{ justifySelf: { xs: 'stretch', md: 'start' }, height: 40 }}
-                    >
-                      {isRefreshingStats
-                        ? t('systemSettings.refreshing')
-                        : t('systemSettings.refreshNow')}
-                    </Button>
-                  </Box>
-
-                  {systemSettings?.last_stats_refresh && (
-                    <Alert severity="info">
-                      <Typography variant="body2">
-                        {t('systemSettings.lastRefreshed')}{' '}
-                        {new Date(systemSettings.last_stats_refresh).toLocaleString()}
-                      </Typography>
-                    </Alert>
-                  )}
-                </Stack>
-              )}
-
-              {activeSection === 2 && (
-                <Stack spacing={2}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={metricsEnabled}
-                        onChange={(e) => {
-                          const enabled = e.target.checked
-                          setMetricsEnabled(enabled)
-                          if (!enabled) {
-                            setMetricsRequireAuth(false)
-                            setRotateMetricsToken(false)
-                          }
-                        }}
-                      />
-                    }
-                    label={t('systemSettings.metricsEnabledLabel')}
-                  />
-
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={metricsRequireAuth}
-                        disabled={!metricsEnabled}
-                        onChange={(e) => {
-                          const enabled = e.target.checked
-                          setMetricsRequireAuth(enabled)
-                          if (!enabled) {
-                            setRotateMetricsToken(false)
-                          }
-                        }}
-                      />
-                    }
-                    label={t('systemSettings.metricsRequireAuthLabel')}
-                  />
-
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      flexDirection: { xs: 'column', md: 'row' },
-                      gap: 1.5,
-                      alignItems: { xs: 'stretch', md: 'center' },
-                    }}
-                  >
-                    <Button
-                      variant="outlined"
-                      startIcon={<Key size={16} />}
-                      disabled={!metricsEnabled || !metricsRequireAuth}
-                      onClick={() => setRotateMetricsToken(true)}
-                    >
-                      {systemSettings?.metrics_token_set
-                        ? t('systemSettings.metricsRotateToken')
-                        : t('systemSettings.metricsGenerateToken')}
-                    </Button>
-                    <Typography variant="body2" color="text.secondary">
-                      {!metricsEnabled || !metricsRequireAuth
-                        ? t('systemSettings.metricsTokenDisabledHelper')
-                        : rotateMetricsToken
-                          ? t('systemSettings.metricsTokenWillRotate')
-                          : systemSettings?.metrics_token_set
-                            ? t('systemSettings.metricsTokenConfigured')
-                            : t('systemSettings.metricsTokenWillGenerate')}
-                    </Typography>
-                  </Box>
-
-                  {newMetricsToken && (
-                    <Box
-                      sx={{
-                        p: 2,
-                        borderRadius: 2,
-                        border: '1px solid',
-                        borderColor: 'success.main',
-                        bgcolor: 'rgba(76, 175, 80, 0.06)',
-                      }}
-                    >
-                      <Stack spacing={1.5}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                          <AlertTriangle size={13} color="orange" />
-                          <Typography variant="caption" fontWeight={600} color="warning.main">
-                            {t('systemSettings.metricsTokenDialogWarning')}
-                          </Typography>
-                        </Box>
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 1,
-                            px: 1.5,
-                            py: 1,
-                            borderRadius: 1.5,
-                            bgcolor: 'background.default',
-                            border: '1px solid',
-                            borderColor: 'divider',
-                          }}
-                        >
-                          <Typography
-                            sx={{
-                              flex: 1,
-                              fontFamily: 'monospace',
-                              fontSize: '0.78rem',
-                              color: 'text.primary',
-                              wordBreak: 'break-all',
-                              lineHeight: 1.6,
-                              userSelect: 'all',
-                            }}
-                          >
-                            {newMetricsToken}
-                          </Typography>
-                          <Tooltip
-                            title={
-                              metricsTokenCopied
-                                ? t('systemSettings.metricsTokenCopied')
-                                : t('common.buttons.copy')
-                            }
-                          >
-                            <IconButton
-                              size="small"
-                              onClick={handleCopyMetricsToken}
-                              color={metricsTokenCopied ? 'success' : 'default'}
-                              sx={{ flexShrink: 0 }}
-                            >
-                              {metricsTokenCopied ? <Check size={15} /> : <Copy size={15} />}
-                            </IconButton>
-                          </Tooltip>
-                        </Box>
-                      </Stack>
-                    </Box>
-                  )}
-                </Stack>
-              )}
-
-              {activeSection === 3 && (
-                <Box
-                  sx={{
-                    display: 'grid',
-                    gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' },
-                    gap: 2,
-                  }}
-                >
-                  <TextField
-                    label={t('systemSettings.maxFilesToLoadLabel')}
-                    type="number"
-                    fullWidth
-                    value={browseMaxItems}
-                    onChange={(e) => setBrowseMaxItems(Number(e.target.value))}
-                    inputProps={{ min: MIN_FILES, max: MAX_FILES, step: 100_000 }}
-                    error={browseMaxItems < MIN_FILES || browseMaxItems > MAX_FILES}
-                    helperText={
-                      browseMaxItems < MIN_FILES || browseMaxItems > MAX_FILES
-                        ? t('systemSettings.maxFilesRangeError', {
-                            min: MIN_FILES.toLocaleString(),
-                            max: MAX_FILES.toLocaleString(),
-                          })
-                        : t('systemSettings.maxFilesHelperText', {
-                            current: (browseMaxItems / 1_000_000).toFixed(1),
-                          })
-                    }
-                  />
-
-                  <TextField
-                    label={t('systemSettings.maxMemoryLabel')}
-                    type="number"
-                    fullWidth
-                    value={browseMaxMemoryMb}
-                    onChange={(e) => setBrowseMaxMemoryMb(Number(e.target.value))}
-                    inputProps={{ min: MIN_MEMORY, max: MAX_MEMORY, step: 128 }}
-                    error={browseMaxMemoryMb < MIN_MEMORY || browseMaxMemoryMb > MAX_MEMORY}
-                    helperText={
-                      browseMaxMemoryMb < MIN_MEMORY || browseMaxMemoryMb > MAX_MEMORY
-                        ? t('systemSettings.maxMemoryRangeError', {
-                            min: MIN_MEMORY,
-                            max: MAX_MEMORY,
-                          })
-                        : t('systemSettings.maxMemoryHelperText', {
-                            current: (browseMaxMemoryMb / 1024).toFixed(2),
-                          })
-                    }
-                  />
-                </Box>
-              )}
-            </Stack>
-          </Box>
-        </SettingsCard>
+          {activeSection === 5 && (
+            <OidcSection
+              systemSettings={systemSettings}
+              oidcEnabled={oidcEnabled}
+              oidcDisableLocalAuth={oidcDisableLocalAuth}
+              oidcProviderName={oidcProviderName}
+              oidcTokenAuthMethod={oidcTokenAuthMethod}
+              oidcDiscoveryUrl={oidcDiscoveryUrl}
+              oidcClientId={oidcClientId}
+              oidcClientSecret={oidcClientSecret}
+              clearOidcClientSecret={clearOidcClientSecret}
+              oidcScopes={oidcScopes}
+              oidcRedirectUriOverride={oidcRedirectUriOverride}
+              oidcEndSessionEndpointOverride={oidcEndSessionEndpointOverride}
+              oidcClaimUsername={oidcClaimUsername}
+              oidcClaimEmail={oidcClaimEmail}
+              oidcClaimFullName={oidcClaimFullName}
+              oidcGroupClaim={oidcGroupClaim}
+              oidcRoleClaim={oidcRoleClaim}
+              oidcAdminGroups={oidcAdminGroups}
+              oidcAllRepositoriesRoleClaim={oidcAllRepositoriesRoleClaim}
+              oidcNewUserMode={oidcNewUserMode}
+              oidcTemplateUsername={oidcTemplateUsername}
+              oidcDefaultRole={oidcDefaultRole}
+              oidcDefaultAllRepositoriesRole={oidcDefaultAllRepositoriesRole}
+              hasOidcActiveAdminSignal={hasOidcActiveAdminSignal}
+              hasActiveOidcAdmin={hasActiveOidcAdmin}
+              authEventsLoading={authEventsLoading}
+              authEventsData={authEventsData}
+              authEventStats={authEventStats}
+              filteredAuthEvents={filteredAuthEvents}
+              authEventFilter={authEventFilter}
+              formatAuthEventType={(eventType) => formatAuthEventType(t, eventType)}
+              formatAuthSource={(source) => formatAuthSource(t, source)}
+              refetchAuthEvents={refetchAuthEvents}
+              setOidcEnabled={setOidcEnabled}
+              setOidcDisableLocalAuth={setOidcDisableLocalAuth}
+              setOidcProviderName={setOidcProviderName}
+              setOidcTokenAuthMethod={setOidcTokenAuthMethod}
+              setOidcDiscoveryUrl={setOidcDiscoveryUrl}
+              setOidcClientId={setOidcClientId}
+              setOidcClientSecret={setOidcClientSecret}
+              setClearOidcClientSecret={setClearOidcClientSecret}
+              setOidcScopes={setOidcScopes}
+              setOidcRedirectUriOverride={setOidcRedirectUriOverride}
+              setOidcEndSessionEndpointOverride={setOidcEndSessionEndpointOverride}
+              setOidcClaimUsername={setOidcClaimUsername}
+              setOidcClaimEmail={setOidcClaimEmail}
+              setOidcClaimFullName={setOidcClaimFullName}
+              setOidcGroupClaim={setOidcGroupClaim}
+              setOidcRoleClaim={setOidcRoleClaim}
+              setOidcAdminGroups={setOidcAdminGroups}
+              setOidcAllRepositoriesRoleClaim={setOidcAllRepositoriesRoleClaim}
+              setOidcNewUserMode={setOidcNewUserMode}
+              setOidcTemplateUsername={setOidcTemplateUsername}
+              setOidcDefaultRole={setOidcDefaultRole}
+              setOidcDefaultAllRepositoriesRole={setOidcDefaultAllRepositoriesRole}
+              setAuthEventFilter={setAuthEventFilter}
+            />
+          )}
+        </SettingsSectionsCard>
       </Stack>
     </Box>
   )

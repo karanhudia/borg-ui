@@ -1,8 +1,8 @@
 <div align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.png" />
-    <source media="(prefers-color-scheme: light)" srcset="assets/logo-light.png" />
-    <img alt="Borg UI Logo v2" src="assets/logo-light.png" width="360" />
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/karanhudia/borg-ui/main/assets/logo-dark.png" />
+    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/karanhudia/borg-ui/main/assets/logo-light.png" />
+    <img alt="Borg UI Logo v2" src="https://raw.githubusercontent.com/karanhudia/borg-ui/main/assets/logo-light.png" width="360" />
   </picture>
 </div>
 
@@ -52,6 +52,7 @@
 
 - Current generated line coverage reports: backend `58.82%`, frontend `81.66%`, combined `64.36%`
 - Release confidence is built on multiple test lanes: backend unit coverage, backend API integration, frontend unit coverage, frontend build validation, and core, extended, and SSH smoke suites against a built app
+- Docker Hub publishes the user-facing app image `ainullcode/borg-ui`; the separate `borg-ui-runtime-base` image is an internal CI artifact and should remain private
 
 ## Interface
 
@@ -60,15 +61,15 @@
 Track repository health, recent activity, storage, and day-to-day backup execution from the main product surfaces.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="screenshots/readme/dashboard-dark.png" />
-  <source media="(prefers-color-scheme: light)" srcset="screenshots/readme/dashboard-light.png" />
-  <img alt="Borg UI dashboard" src="screenshots/readme/dashboard-light.png" width="100%" />
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/karanhudia/borg-ui/main/screenshots/readme/dashboard-dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/karanhudia/borg-ui/main/screenshots/readme/dashboard-light.png" />
+  <img alt="Borg UI dashboard" src="https://raw.githubusercontent.com/karanhudia/borg-ui/main/screenshots/readme/dashboard-light.png" width="100%" />
 </picture>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="screenshots/readme/repositories-dark.png" />
-  <source media="(prefers-color-scheme: light)" srcset="screenshots/readme/repositories-light.png" />
-  <img alt="Repository management" src="screenshots/readme/repositories-light.png" width="100%" />
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/karanhudia/borg-ui/main/screenshots/readme/repositories-dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/karanhudia/borg-ui/main/screenshots/readme/repositories-light.png" />
+  <img alt="Repository management" src="https://raw.githubusercontent.com/karanhudia/borg-ui/main/screenshots/readme/repositories-light.png" width="100%" />
 </picture>
 
 ### Backup and Restore Workflows
@@ -76,15 +77,15 @@ Track repository health, recent activity, storage, and day-to-day backup executi
 Monitor live backup progress, inspect archives, and work through restore flows without dropping to the CLI.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="screenshots/readme/backup-progress-dark.png" />
-  <source media="(prefers-color-scheme: light)" srcset="screenshots/readme/backup-progress-light.png" />
-  <img alt="Live backup progress" src="screenshots/readme/backup-progress-light.png" width="100%" />
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/karanhudia/borg-ui/main/screenshots/readme/backup-progress-dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/karanhudia/borg-ui/main/screenshots/readme/backup-progress-light.png" />
+  <img alt="Live backup progress" src="https://raw.githubusercontent.com/karanhudia/borg-ui/main/screenshots/readme/backup-progress-light.png" width="100%" />
 </picture>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="screenshots/readme/archive-browser-dark.png" />
-  <source media="(prefers-color-scheme: light)" srcset="screenshots/readme/archive-browser-light.png" />
-  <img alt="Archive browser" src="screenshots/readme/archive-browser-light.png" width="100%" />
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/karanhudia/borg-ui/main/screenshots/readme/archive-browser-dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/karanhudia/borg-ui/main/screenshots/readme/archive-browser-light.png" />
+  <img alt="Archive browser" src="https://raw.githubusercontent.com/karanhudia/borg-ui/main/screenshots/readme/archive-browser-light.png" width="100%" />
 </picture>
 
 ### Automation and Integrations
@@ -92,21 +93,21 @@ Monitor live backup progress, inspect archives, and work through restore flows w
 Automate schedules, manage remote machines, and configure notifications for ongoing backup operations.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="screenshots/readme/schedule-dark.png" />
-  <source media="(prefers-color-scheme: light)" srcset="screenshots/readme/schedule-light.png" />
-  <img alt="Backup schedule management" src="screenshots/readme/schedule-light.png" width="100%" />
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/karanhudia/borg-ui/main/screenshots/readme/schedule-dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/karanhudia/borg-ui/main/screenshots/readme/schedule-light.png" />
+  <img alt="Backup schedule management" src="https://raw.githubusercontent.com/karanhudia/borg-ui/main/screenshots/readme/schedule-light.png" width="100%" />
 </picture>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="screenshots/readme/remote-machines-dark.png" />
-  <source media="(prefers-color-scheme: light)" srcset="screenshots/readme/remote-machines-light.png" />
-  <img alt="Remote machines management" src="screenshots/readme/remote-machines-light.png" width="100%" />
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/karanhudia/borg-ui/main/screenshots/readme/remote-machines-dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/karanhudia/borg-ui/main/screenshots/readme/remote-machines-light.png" />
+  <img alt="Remote machines management" src="https://raw.githubusercontent.com/karanhudia/borg-ui/main/screenshots/readme/remote-machines-light.png" width="100%" />
 </picture>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="screenshots/readme/notifications-dark.png" />
-  <source media="(prefers-color-scheme: light)" srcset="screenshots/readme/notifications-light.png" />
-  <img alt="Notification services" src="screenshots/readme/notifications-light.png" width="100%" />
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/karanhudia/borg-ui/main/screenshots/readme/notifications-dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/karanhudia/borg-ui/main/screenshots/readme/notifications-light.png" />
+  <img alt="Notification services" src="https://raw.githubusercontent.com/karanhudia/borg-ui/main/screenshots/readme/notifications-light.png" width="100%" />
 </picture>
 
 ## Getting Started

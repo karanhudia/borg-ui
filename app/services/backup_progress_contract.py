@@ -54,7 +54,9 @@ def get_backup_progress_fields(repo: Optional[Repository]) -> tuple[str, ...]:
     )
 
 
-def serialize_backup_progress_details(job: BackupJob, repo: Optional[Repository]) -> dict:
+def serialize_backup_progress_details(
+    job: BackupJob, repo: Optional[Repository]
+) -> dict:
     supported_fields = set(get_backup_progress_fields(repo))
     progress_details = {
         "current_file": job.current_file or "",

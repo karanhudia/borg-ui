@@ -61,7 +61,9 @@ def main() -> int:
         for repo_path in repo_paths:
             archives = client.list_archives(repo_path)
             if len(archives) != 1:
-                raise SmokeFailure(f"Expected exactly one archive after run-now for {repo_path}, got {archives}")
+                raise SmokeFailure(
+                    f"Expected exactly one archive after run-now for {repo_path}, got {archives}"
+                )
 
         client.log("Schedule run-now smoke passed")
         return 0

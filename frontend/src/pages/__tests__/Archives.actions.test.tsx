@@ -9,7 +9,17 @@ const trackArchive = vi.fn()
 const borgListArchivesMock = vi.fn()
 const borgGetInfoMock = vi.fn()
 const borgDeleteArchiveMock = vi.fn()
-const borgGetDownloadUrlMock = vi.fn()
+const borgDownloadFileMock = vi.fn()
+
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
 
 vi.mock('../../components/RepositorySelectorCard', () => ({
   default: ({ onChange }: { onChange: (id: number | string) => void }) => (
@@ -80,6 +90,8 @@ vi.mock('../../components/RestoreWizard', () => ({
       selected_paths: string[]
       destination_type: string
       destination_connection_id: number | null
+      restore_layout: string
+      path_metadata: Array<{ path: string; type: 'file' | 'directory' }>
     }) => void
   }) =>
     open ? (
@@ -91,6 +103,8 @@ vi.mock('../../components/RestoreWizard', () => ({
             selected_paths: ['/var/lib/app'],
             destination_type: 'local',
             destination_connection_id: null,
+            restore_layout: 'contents_only',
+            path_metadata: [{ path: '/var/lib/app', type: 'directory' }],
           })
         }
       >
@@ -118,7 +132,7 @@ vi.mock('../../services/borgApi', () => ({
       listArchives: borgListArchivesMock,
       getInfo: borgGetInfoMock,
       deleteArchive: borgDeleteArchiveMock,
-      getDownloadUrl: borgGetDownloadUrlMock,
+      downloadFile: borgDownloadFileMock,
     }
   }),
 }))
@@ -205,9 +219,7 @@ describe('Archives page actions', () => {
     })
     borgGetInfoMock.mockResolvedValue({ data: { info: {} } })
     borgDeleteArchiveMock.mockResolvedValue({ data: { job_id: 7 } })
-    borgGetDownloadUrlMock.mockReturnValue(
-      '/api/v2/archives/download?repository=1&archive=a1&file_path=%2Fetc%2Fhosts'
-    )
+    borgDownloadFileMock.mockResolvedValue(undefined)
   })
 
   it('tracks filter/view and calls download, restore, and mount APIs from archive actions', async () => {
@@ -231,11 +243,7 @@ describe('Archives page actions', () => {
     await user.click(screen.getByText('View Archive'))
     await user.click(await screen.findByText('Download File'))
 
-    expect(borgGetDownloadUrlMock).toHaveBeenCalledWith('a1', '/etc/hosts')
-    expect(window.open).toHaveBeenCalledWith(
-      '/api/v2/archives/download?repository=1&archive=a1&file_path=%2Fetc%2Fhosts',
-      '_blank'
-    )
+    expect(borgDownloadFileMock).toHaveBeenCalledWith('a1', '/etc/hosts')
     expect(trackArchive).toHaveBeenCalledWith('View', repository, {
       surface: 'archive_contents',
       operation: 'open_archive',
@@ -257,7 +265,9 @@ describe('Archives page actions', () => {
         '/restore/here',
         1,
         'local',
-        null
+        null,
+        'contents_only',
+        [{ path: '/var/lib/app', type: 'directory' }]
       )
     })
     expect(trackArchive).toHaveBeenCalledWith('View', repository, {
@@ -268,6 +278,7 @@ describe('Archives page actions', () => {
     expect(trackArchive).toHaveBeenCalledWith('Start', repository, {
       operation: 'restore',
       destination_type: 'local',
+      restore_layout: 'contents_only',
       restore_path_count: 1,
       uses_custom_destination: true,
       archive_age_bucket: expect.any(String),
@@ -304,6 +315,31 @@ describe('Archives page actions', () => {
       expect(toast.error).toHaveBeenCalledWith('Failed to start restore')
     })
     expect(trackArchive).not.toHaveBeenCalledWith('Start', repository)
+  })
+
+  it('loads repository info before requesting archives', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    })
+    const user = userEvent.setup()
+    const repoInfoDeferred = createDeferred<{ data: { info: Record<string, never> } }>()
+
+    borgGetInfoMock.mockImplementation(() => repoInfoDeferred.promise)
+
+    renderWithProviders(<Archives />, { queryClient })
+
+    await user.click(await screen.findByText('Select Repo'))
+
+    await waitFor(() => {
+      expect(borgGetInfoMock).toHaveBeenCalledTimes(1)
+    })
+    expect(borgListArchivesMock).not.toHaveBeenCalled()
+
+    repoInfoDeferred.resolve({ data: { info: {} } })
+
+    await waitFor(() => {
+      expect(borgListArchivesMock).toHaveBeenCalledTimes(1)
+    })
   })
 
   it('shows translated backend errors when archive deletion fails', async () => {

@@ -20,16 +20,20 @@ def upgrade(db):
 
     try:
         # Find all SSH repositories without connection_id
-        legacy_repos = db.execute(text("""
+        legacy_repos = db.execute(
+            text("""
             SELECT id, name, host, port, username, ssh_key_id, repository_type
             FROM repositories
             WHERE repository_type = 'ssh'
               AND connection_id IS NULL
               AND host IS NOT NULL
-        """)).fetchall()
+        """)
+        ).fetchall()
 
         if not legacy_repos:
-            print("✓ No legacy SSH repositories found - all repositories are up to date")
+            print(
+                "✓ No legacy SSH repositories found - all repositories are up to date"
+            )
             db.commit()
             return
 
@@ -42,36 +46,39 @@ def upgrade(db):
             repo_id, name, host, port, username, ssh_key_id, repo_type = repo
 
             # Try to find matching SSH connection
-            connection = db.execute(text("""
+            connection = db.execute(
+                text("""
                 SELECT id FROM ssh_connections
                 WHERE host = :host
                   AND port = :port
                   AND username = :username
                 LIMIT 1
-            """), {
-                'host': host,
-                'port': port or 22,
-                'username': username
-            }).fetchone()
+            """),
+                {"host": host, "port": port or 22, "username": username},
+            ).fetchone()
 
             if connection:
                 connection_id = connection[0]
 
                 # Update repository with connection_id
-                db.execute(text("""
+                db.execute(
+                    text("""
                     UPDATE repositories
                     SET connection_id = :connection_id
                     WHERE id = :repo_id
-                """), {
-                    'connection_id': connection_id,
-                    'repo_id': repo_id
-                })
+                """),
+                    {"connection_id": connection_id, "repo_id": repo_id},
+                )
 
                 migrated += 1
-                print(f"  ✓ Migrated '{name}' → connection_id={connection_id} ({username}@{host}:{port})")
+                print(
+                    f"  ✓ Migrated '{name}' → connection_id={connection_id} ({username}@{host}:{port})"
+                )
             else:
                 failed += 1
-                print(f"  ⚠ WARNING: No SSH connection found for '{name}' ({username}@{host}:{port})")
+                print(
+                    f"  ⚠ WARNING: No SSH connection found for '{name}' ({username}@{host}:{port})"
+                )
                 print(f"    → Repository will need manual configuration in the UI")
 
         db.commit()
@@ -95,12 +102,14 @@ def downgrade(db):
 
     try:
         # Reset connection_id to NULL for SSH repos that were migrated
-        db.execute(text("""
+        db.execute(
+            text("""
             UPDATE repositories
             SET connection_id = NULL
             WHERE repository_type = 'ssh'
               AND connection_id IS NOT NULL
-        """))
+        """)
+        )
 
         db.commit()
         print("✓ Downgrade completed for migration 057")

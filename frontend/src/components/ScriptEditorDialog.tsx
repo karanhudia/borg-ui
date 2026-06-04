@@ -21,7 +21,7 @@ import {
 
 type OnFailureMode = 'fail' | 'continue' | 'skip'
 import { Play, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
-import CodeEditor from './CodeEditor'
+import CodeEditor from './shared/CodeEditor'
 import api from '../services/api'
 import { translateBackendKey } from '../utils/translateBackendKey'
 

@@ -6,6 +6,7 @@ per-user fields to a system-level setting. The old user columns
 (profile_type, organization_name) are left in the database schema
 for SQLite compatibility but are removed from the ORM model.
 """
+
 from sqlalchemy import text
 import structlog
 

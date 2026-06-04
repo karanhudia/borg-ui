@@ -39,7 +39,7 @@ vi.mock('../../hooks/useAuth', () => ({
   }),
 }))
 
-vi.mock('../../components/CodeEditor', () => ({
+vi.mock('../../components/shared/CodeEditor', () => ({
   default: ({
     label,
     value,

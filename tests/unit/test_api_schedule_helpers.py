@@ -19,11 +19,21 @@ class TestScheduleHelperFunctions:
         assert _dedupe_repository_ids([]) == []
         assert _dedupe_repository_ids(None) == []
 
-    def test_get_schedule_target_repositories_returns_legacy_single_and_multi_repos(self, test_db):
-        legacy_repo = Repository(name="legacy", path="/repos/legacy", encryption="none", mode="full")
-        single_repo = Repository(name="single", path="/repos/single", encryption="none", mode="full")
-        multi_repo_a = Repository(name="multi-a", path="/repos/multi-a", encryption="none", mode="full")
-        multi_repo_b = Repository(name="multi-b", path="/repos/multi-b", encryption="none", mode="full")
+    def test_get_schedule_target_repositories_returns_legacy_single_and_multi_repos(
+        self, test_db
+    ):
+        legacy_repo = Repository(
+            name="legacy", path="/repos/legacy", encryption="none", mode="full"
+        )
+        single_repo = Repository(
+            name="single", path="/repos/single", encryption="none", mode="full"
+        )
+        multi_repo_a = Repository(
+            name="multi-a", path="/repos/multi-a", encryption="none", mode="full"
+        )
+        multi_repo_b = Repository(
+            name="multi-b", path="/repos/multi-b", encryption="none", mode="full"
+        )
         test_db.add_all([legacy_repo, single_repo, multi_repo_a, multi_repo_b])
         test_db.commit()
         test_db.refresh(legacy_repo)
@@ -43,7 +53,9 @@ class TestScheduleHelperFunctions:
         assert [repo.id for repo in multi] == [multi_repo_b.id, multi_repo_a.id]
         assert unique_ids == [multi_repo_b.id, multi_repo_a.id]
 
-    def test_get_schedule_target_repositories_raises_for_missing_repository_id(self, test_db):
+    def test_get_schedule_target_repositories_raises_for_missing_repository_id(
+        self, test_db
+    ):
         with pytest.raises(HTTPException) as exc:
             _get_schedule_target_repositories(test_db, None, 99999, None)
 
@@ -65,12 +77,22 @@ class TestScheduleHelperFunctions:
             _get_schedule_target_repositories(test_db, None, observe_repo.id, None)
 
         assert exc.value.status_code == 400
-        assert exc.value.detail["key"] == "backend.errors.schedule.observabilityOnlyRepo"
+        assert (
+            exc.value.detail["key"] == "backend.errors.schedule.observabilityOnlyRepo"
+        )
 
-    def test_require_schedule_payload_access_checks_each_repository(self, test_db, admin_user):
-        legacy_repo = Repository(name="legacy", path="/repos/legacy", encryption="none", mode="full")
-        single_repo = Repository(name="single", path="/repos/single", encryption="none", mode="full")
-        multi_repo = Repository(name="multi", path="/repos/multi", encryption="none", mode="full")
+    def test_require_schedule_payload_access_checks_each_repository(
+        self, test_db, admin_user
+    ):
+        legacy_repo = Repository(
+            name="legacy", path="/repos/legacy", encryption="none", mode="full"
+        )
+        single_repo = Repository(
+            name="single", path="/repos/single", encryption="none", mode="full"
+        )
+        multi_repo = Repository(
+            name="multi", path="/repos/multi", encryption="none", mode="full"
+        )
         test_db.add_all([legacy_repo, single_repo, multi_repo])
         test_db.commit()
         test_db.refresh(legacy_repo)

@@ -13,13 +13,35 @@ Integration tests (test_api_repositories_integration.py) handle:
 - Stats and info retrieval
 - Import existing repositories
 """
+
 import pytest
 import json
 import os
 from datetime import datetime
 from unittest.mock import AsyncMock, patch
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
-from app.database.models import LicensingState, Repository, ScheduledJob, SSHConnection, SystemSettings
+from sqlalchemy import text
+from app.core.agent_auth import AGENT_AUTH_HEADER
+from app.core.security import get_password_hash
+from app.database.models import (
+    AgentJob,
+    AgentMachine,
+    CheckJob,
+    CompactJob,
+    LicensingState,
+    PruneJob,
+    Repository,
+    RestoreCheckJob,
+    ScheduledJob,
+    SSHConnection,
+    SystemSettings,
+)
+from app.api.repositories import _build_repository_path_from_connection
+
+
+def _discard_background_coro(coro):
+    coro.close()
 
 
 def _enable_borg_v2(test_db):
@@ -28,15 +50,24 @@ def _enable_borg_v2(test_db):
         settings_row = SystemSettings()
         test_db.add(settings_row)
 
+    _set_plan(test_db, "pro")
+
+
+def _set_plan(test_db, plan: str) -> None:
     state = test_db.query(LicensingState).first()
     if state is None:
         state = LicensingState(instance_id="test-instance-v2-repository-api")
         test_db.add(state)
 
-    state.plan = "pro"
+    state.plan = plan
     state.status = "active"
     state.is_trial = False
     test_db.commit()
+
+
+@pytest.fixture(autouse=True)
+def _enable_paid_repository_features(test_db):
+    _set_plan(test_db, "pro")
 
 
 def _base_repository_payload(**overrides):
@@ -52,6 +83,44 @@ def _base_repository_payload(**overrides):
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    ("ssh_path_prefix", "raw_path", "expected_path"),
+    [
+        ("/.", "/xxx/yyy", "ssh://backup@rsync.example.com:22/./xxx/yyy"),
+        ("/./xxx", "/xxx/yyy", "ssh://backup@rsync.example.com:22/./xxx/yyy"),
+    ],
+)
+def test_build_repository_path_from_connection_preserves_borg_slashdot_prefix(
+    test_db, ssh_path_prefix, raw_path, expected_path
+):
+    connection = SSHConnection(
+        host="rsync.example.com",
+        username="backup",
+        port=22,
+        ssh_path_prefix=ssh_path_prefix,
+    )
+    test_db.add(connection)
+    test_db.commit()
+    test_db.refresh(connection)
+
+    assert (
+        _build_repository_path_from_connection(raw_path, connection.id, test_db)
+        == expected_path
+    )
+
+
+def _agent_machine_with_capabilities(*capabilities: str) -> AgentMachine:
+    return AgentMachine(
+        name="Agent",
+        agent_id="agt_repo_ops",
+        token_hash=get_password_hash("borgui_agent_secret"),
+        token_prefix="borgui_agent_secret"[:20],
+        status="online",
+        capabilities=list(capabilities),
+    )
+
+
+@pytest.mark.unit
 class TestRepositoriesListAndGet:
     """Test repository listing and retrieval"""
 
@@ -63,7 +132,9 @@ class TestRepositoriesListAndGet:
         data = response.json()
         assert "repositories" in data or isinstance(data, list)
 
-    def test_list_repositories_with_data(self, test_client: TestClient, admin_headers, test_db):
+    def test_list_repositories_with_data(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test listing repositories with data"""
         # Create a repository in the test database
         repo = Repository(
@@ -71,7 +142,7 @@ class TestRepositoriesListAndGet:
             path="/tmp/test",
             encryption="none",
             compression="lz4",
-            repository_type="local"
+            repository_type="local",
         )
         test_db.add(repo)
         test_db.commit()
@@ -89,11 +160,17 @@ class TestRepositoriesListAndGet:
 
         assert len(repos) >= 1
 
-    def test_list_repositories_success(self, test_client: TestClient, admin_headers, test_db):
+    def test_list_repositories_success(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test listing repositories returns 200 and correct structure"""
         # Create test repositories
-        repo1 = Repository(name="Repo 1", path="/repo1", encryption="none", repository_type="local")
-        repo2 = Repository(name="Repo 2", path="/repo2", encryption="repokey", repository_type="ssh")
+        repo1 = Repository(
+            name="Repo 1", path="/repo1", encryption="none", repository_type="local"
+        )
+        repo2 = Repository(
+            name="Repo 2", path="/repo2", encryption="repokey", repository_type="ssh"
+        )
         test_db.add_all([repo1, repo2])
         test_db.commit()
 
@@ -125,7 +202,9 @@ class TestRepositoriesListAndGet:
         repos = data["repositories"] if isinstance(data, dict) else data
         matching = next(item for item in repos if item["path"] == "/repo-with-params")
         assert matching["pre_backup_script_parameters"] == {"TARGET_DIR": "/srv/data"}
-        assert matching["post_backup_script_parameters"] == {"STATUS_FILE": "/tmp/status"}
+        assert matching["post_backup_script_parameters"] == {
+            "STATUS_FILE": "/tmp/status"
+        }
 
     def test_list_repositories_includes_schedule_summary(
         self, test_client: TestClient, admin_headers, test_db
@@ -172,7 +251,9 @@ class TestRepositoriesListAndGet:
 
         assert response.status_code == 401
 
-    def test_list_repositories_pagination(self, test_client: TestClient, admin_headers, test_db):
+    def test_list_repositories_pagination(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test listing repositories with pagination"""
         # Create multiple repositories
         for i in range(5):
@@ -181,7 +262,7 @@ class TestRepositoriesListAndGet:
                 path=f"/tmp/page-repo-{i}",
                 encryption="none",
                 compression="lz4",
-                repository_type="local"
+                repository_type="local",
             )
             test_db.add(repo)
         test_db.commit()
@@ -189,45 +270,49 @@ class TestRepositoriesListAndGet:
         response = test_client.get(
             "/api/repositories/",
             params={"limit": 2, "offset": 0},
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 200
 
-    def test_search_repositories_by_name(self, test_client: TestClient, admin_headers, test_db):
+    def test_search_repositories_by_name(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test searching repositories by name"""
         repo = Repository(
             name="Searchable Repository",
             path="/tmp/search-repo",
             encryption="none",
             compression="lz4",
-            repository_type="local"
+            repository_type="local",
         )
         test_db.add(repo)
         test_db.commit()
 
         response = test_client.get(
-            "/api/repositories/",
-            params={"search": "Searchable"},
-            headers=admin_headers
+            "/api/repositories/", params={"search": "Searchable"}, headers=admin_headers
         )
 
         assert response.status_code == 200
 
-    def test_get_repository_by_id(self, test_client: TestClient, admin_headers, test_db):
+    def test_get_repository_by_id(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test getting a specific repository"""
         repo = Repository(
             name="Test Repo",
             path="/tmp/test",
             encryption="none",
             compression="lz4",
-            repository_type="local"
+            repository_type="local",
         )
         test_db.add(repo)
         test_db.commit()
         test_db.refresh(repo)
 
-        response = test_client.get(f"/api/repositories/{repo.id}", headers=admin_headers)
+        response = test_client.get(
+            f"/api/repositories/{repo.id}", headers=admin_headers
+        )
 
         assert response.status_code == 200
 
@@ -245,15 +330,21 @@ class TestRepositoriesListAndGet:
         response = test_client.get("/api/repositories/99999", headers=admin_headers)
 
         assert response.status_code == 404
-        assert response.json()["detail"]["key"] == "backend.errors.repo.repositoryNotFound"
+        assert (
+            response.json()["detail"]["key"] == "backend.errors.repo.repositoryNotFound"
+        )
 
-    def test_get_repository_by_id_negative_id(self, test_client: TestClient, admin_headers):
+    def test_get_repository_by_id_negative_id(
+        self, test_client: TestClient, admin_headers
+    ):
         """Test getting repository with negative ID"""
         response = test_client.get("/api/repositories/-1", headers=admin_headers)
 
         assert response.status_code == 404
 
-    def test_get_repository_details(self, test_client: TestClient, admin_headers, test_db):
+    def test_get_repository_details(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test getting repository details"""
         repo = Repository(
             name="Detail Test Repo",
@@ -262,15 +353,14 @@ class TestRepositoriesListAndGet:
             compression="lz4",
             repository_type="local",
             source_directories=json.dumps(["/home/user"]),
-            exclude_patterns=json.dumps(["*.tmp"])
+            exclude_patterns=json.dumps(["*.tmp"]),
         )
         test_db.add(repo)
         test_db.commit()
         test_db.refresh(repo)
 
         response = test_client.get(
-            f"/api/repositories/{repo.id}",
-            headers=admin_headers
+            f"/api/repositories/{repo.id}", headers=admin_headers
         )
 
         assert response.status_code == 200
@@ -283,10 +373,17 @@ class TestRepositoriesListAndGet:
 class TestRepositoriesCreate:
     """Test repository creation"""
 
-    def test_create_local_repository(self, test_client: TestClient, admin_headers, test_db):
+    def test_create_local_repository(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test creating local repository"""
-        with patch("app.api.repositories.initialize_borg_repository", new=AsyncMock(return_value={"success": True})), \
-             patch("app.api.repositories.mqtt_service.sync_state_with_db"):
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
             response = test_client.post(
                 "/api/repositories/",
                 json={
@@ -295,22 +392,29 @@ class TestRepositoriesCreate:
                     "encryption": "none",
                     "compression": "lz4",
                     "repository_type": "local",
-                    "source_directories": ["/tmp/source"]
+                    "source_directories": ["/tmp/source"],
                 },
-                headers=admin_headers
+                headers=admin_headers,
             )
 
         assert response.status_code == 200
 
-    def test_create_ssh_repository(self, test_client: TestClient, admin_headers, test_db):
+    def test_create_ssh_repository(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test creating SSH repository"""
         connection = SSHConnection(host="server", username="user", port=22)
         test_db.add(connection)
         test_db.commit()
         test_db.refresh(connection)
 
-        with patch("app.api.repositories.initialize_borg_repository", new=AsyncMock(return_value={"success": True})), \
-             patch("app.api.repositories.mqtt_service.sync_state_with_db"):
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
             response = test_client.post(
                 "/api/repositories/",
                 json={
@@ -321,42 +425,676 @@ class TestRepositoriesCreate:
                     "compression": "zstd",
                     "repository_type": "ssh",
                     "connection_id": connection.id,
-                    "source_directories": ["/tmp/source"]
+                    "source_directories": ["/tmp/source"],
                 },
-                headers=admin_headers
+                headers=admin_headers,
             )
 
         assert response.status_code == 200
 
-    def test_create_repository_missing_name(self, test_client: TestClient, admin_headers):
+    def test_create_agent_repository_queues_init_and_waits_before_success(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Laptop",
+            agent_id="agt_laptop",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+            capabilities=["repository.init"],
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+        dispatch_init = AsyncMock(return_value=True)
+        wait_for_init = AsyncMock(return_value={"status": "completed"})
+
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ) as initialize,
+            patch(
+                "app.api.repositories.wait_for_agent_repository_operation_job",
+                wait_for_init,
+            ),
+            patch(
+                "app.api.repositories.dispatch_agent_job_best_effort",
+                dispatch_init,
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Agent Repo",
+                    "path": "/agent/repo",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "source_directories": ["/home/user/docs"],
+                    "execution_target": "agent",
+                    "agent_machine_id": agent.id,
+                },
+                headers=admin_headers,
+            )
+
+        wait_for_init.assert_awaited_once()
+        assert response.status_code == 200
+        initialize.assert_not_awaited()
+        agent_job = test_db.query(AgentJob).one()
+        assert agent_job.job_type == "repository"
+        assert agent_job.payload["job_kind"] == "repository.init"
+        assert agent_job.payload["repository"]["path"] == "/agent/repo"
+        assert agent_job.payload["operation"]["encryption"] == "none"
+        repo = test_db.query(Repository).filter_by(name="Agent Repo").first()
+        dispatch_init.assert_awaited_once_with(
+            test_db, agent_job, repository_id=repo.id
+        )
+        wait_for_init.assert_awaited_once_with(
+            test_db, agent_job.id, timeout_seconds=300
+        )
+        assert repo.execution_target == "agent"
+        assert repo.executor_type == "agent"
+        assert repo.agent_machine_id == agent.id
+        assert repo.path == "/agent/repo"
+
+    def test_create_agent_repository_requires_pro_plan(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _set_plan(test_db, "community")
+        agent = AgentMachine(
+            name="Laptop",
+            agent_id="agt_laptop_community",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+            capabilities=["repository.init"],
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ) as initialize,
+            patch(
+                "app.api.repositories.wait_for_agent_repository_operation_job",
+                new=AsyncMock(return_value={"status": "completed"}),
+            ),
+            patch(
+                "app.api.repositories.dispatch_agent_job_best_effort",
+                new=AsyncMock(return_value=True),
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Agent Repo",
+                    "path": "/agent/repo",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "source_directories": ["/home/user/docs"],
+                    "execution_target": "agent",
+                    "agent_machine_id": agent.id,
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 403
+        assert response.json()["detail"]["feature"] == "managed_agents"
+        initialize.assert_not_awaited()
+        assert test_db.query(Repository).filter_by(name="Agent Repo").first() is None
+
+    def test_create_agent_repository_init_failure_deletes_record(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Laptop",
+            agent_id="agt_laptop_init_failure",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+            capabilities=["repository.init"],
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+        wait_for_init = AsyncMock(
+            side_effect=HTTPException(
+                status_code=502,
+                detail={
+                    "key": "backend.errors.agents.repositoryOperationFailed",
+                    "message": "agent init failed",
+                },
+            )
+        )
+
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ) as initialize,
+            patch(
+                "app.api.repositories.wait_for_agent_repository_operation_job",
+                wait_for_init,
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Agent Init Failure Repo",
+                    "path": "/agent/fails-init",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "source_directories": ["/home/user/docs"],
+                    "execution_target": "agent",
+                    "agent_machine_id": agent.id,
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 502
+        initialize.assert_not_awaited()
+        assert (
+            test_db.query(Repository).filter_by(name="Agent Init Failure Repo").first()
+            is None
+        )
+        agent_job = test_db.query(AgentJob).one()
+        assert agent_job.job_type == "repository"
+        assert agent_job.payload["job_kind"] == "repository.init"
+        assert agent_job.payload["repository"]["path"] == "/agent/fails-init"
+        assert agent_job.payload["operation"]["encryption"] == "none"
+
+    def test_create_agent_repository_unexpected_init_failure_deletes_record(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Laptop",
+            agent_id="agt_laptop_init_crash",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+            capabilities=["repository.init"],
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ) as initialize,
+            patch(
+                "app.api.repositories.wait_for_agent_repository_operation_job",
+                new=AsyncMock(side_effect=RuntimeError("agent init crashed")),
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Agent Init Crash Repo",
+                    "path": "/agent/init-crash",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "execution_target": "agent",
+                    "agent_machine_id": agent.id,
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 500
+        initialize.assert_not_awaited()
+        assert (
+            test_db.query(Repository).filter_by(name="Agent Init Crash Repo").first()
+            is None
+        )
+        agent_job = test_db.query(AgentJob).one()
+        assert agent_job.payload["job_kind"] == "repository.init"
+
+    def test_create_agent_repository_without_source_paths(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Laptop",
+            agent_id="agt_laptop_no_sources",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+            capabilities=["repository.init"],
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ) as initialize,
+            patch(
+                "app.api.repositories.wait_for_agent_repository_operation_job",
+                new=AsyncMock(return_value={"status": "completed"}),
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Agent Repo Without Sources",
+                    "path": "/agent/repo-no-sources",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "execution_target": "agent",
+                    "agent_machine_id": agent.id,
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        initialize.assert_not_awaited()
+        repo = (
+            test_db.query(Repository).filter_by(name="Agent Repo Without Sources").one()
+        )
+        assert repo.execution_target == "agent"
+        assert repo.executor_type == "agent"
+        assert repo.agent_machine_id == agent.id
+        assert repo.source_directories is None
+        assert repo.source_locations is None
+        assert repo.source_ssh_connection_id is None
+
+    def test_create_agent_repository_rejects_ssh_target_axis(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Pi Agent",
+            agent_id="agt_pi",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+        )
+        connection = SSHConnection(host="pi.local", username="borg", port=22)
+        test_db.add_all([agent, connection])
+        test_db.commit()
+        test_db.refresh(agent)
+        test_db.refresh(connection)
+
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ) as initialize,
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Pi Agent SSH Repo",
+                    "path": "/backups/pi",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "source_directories": ["/home/pi"],
+                    "executor_type": "agent",
+                    "execution_target": "local",
+                    "agent_machine_id": agent.id,
+                    "connection_id": connection.id,
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.repo.agentRepositorySshUnsupported"
+        )
+        initialize.assert_not_awaited()
+        assert (
+            test_db.query(Repository).filter_by(name="Pi Agent SSH Repo").first()
+            is None
+        )
+
+    def test_create_agent_repository_without_source_paths_remains_supported(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Path Owner",
+            agent_id="agt_path_owner",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+            capabilities=["repository.init"],
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ) as initialize,
+            patch(
+                "app.api.repositories.wait_for_agent_repository_operation_job",
+                new=AsyncMock(return_value={"status": "completed"}),
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Agent Empty Source Repo",
+                    "path": "/backups/agent-empty",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "executor_type": "agent",
+                    "agent_machine_id": agent.id,
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        initialize.assert_not_awaited()
+        repo = test_db.query(Repository).filter_by(name="Agent Empty Source Repo").one()
+        assert repo.executor_type == "agent"
+        assert repo.execution_target == "agent"
+        assert repo.connection_id is None
+        assert repo.repository_type == "local"
+
+    def test_update_agent_repository_rejects_ssh_target(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Update Agent",
+            agent_id="agt_update",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+        )
+        connection = SSHConnection(host="update.local", username="borg", port=22)
+        repo = Repository(
+            name="Update Agent Repo",
+            path="/agent/repo",
+            encryption="none",
+            compression="lz4",
+            executor_type="agent",
+            execution_target="agent",
+            agent_machine_id=1,
+            repository_type="local",
+        )
+        test_db.add_all([agent, connection, repo])
+        test_db.commit()
+        repo.agent_machine_id = agent.id
+        test_db.commit()
+        test_db.refresh(repo)
+        test_db.refresh(connection)
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}",
+            json={"connection_id": connection.id},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.repo.agentRepositorySshUnsupported"
+        )
+        test_db.refresh(repo)
+        assert repo.connection_id is None
+        assert repo.repository_type == "local"
+
+    @pytest.mark.parametrize(
+        "endpoint,request_body,job_model,job_kind,capability",
+        [
+            (
+                "check",
+                {"max_duration": 600},
+                CheckJob,
+                "repository.check",
+                "repository.check",
+            ),
+            ("compact", None, CompactJob, "repository.compact", "repository.compact"),
+            (
+                "prune",
+                {"keep_daily": 7, "dry_run": False},
+                PruneJob,
+                "repository.prune",
+                "repository.prune",
+            ),
+        ],
+    )
+    def test_agent_repository_maintenance_routes_queue_agent_job(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+        endpoint,
+        request_body,
+        job_model,
+        job_kind,
+        capability,
+    ):
+        agent = _agent_machine_with_capabilities(capability)
+        repo = Repository(
+            name=f"Agent {endpoint} Repo",
+            path=f"/agent/{endpoint}/repo",
+            encryption="none",
+            compression="lz4",
+            executor_type="agent",
+            execution_target="agent",
+            agent_machine_id=1,
+            repository_type="local",
+        )
+        test_db.add_all([agent, repo])
+        test_db.commit()
+        repo.agent_machine_id = agent.id
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with (
+            patch(
+                "app.api.repositories.BorgRouter.check", new_callable=AsyncMock
+            ) as check,
+            patch(
+                "app.api.repositories.BorgRouter.compact", new_callable=AsyncMock
+            ) as compact,
+            patch(
+                "app.api.repositories.BorgRouter.prune", new_callable=AsyncMock
+            ) as prune,
+        ):
+            response = test_client.post(
+                f"/api/repositories/{repo.id}/{endpoint}",
+                json=request_body,
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        maintenance_job = (
+            test_db.query(job_model).filter_by(repository_id=repo.id).one()
+        )
+        agent_job = test_db.query(AgentJob).one()
+        assert response.json()["job_id"] == maintenance_job.id
+        assert agent_job.agent_machine_id == agent.id
+        assert agent_job.payload["job_kind"] == job_kind
+        assert agent_job.payload["repository"]["path"] == repo.path
+        assert agent_job.payload["operation"]["maintenance_job"] == {
+            "kind": endpoint,
+            "id": maintenance_job.id,
+        }
+        check.assert_not_called()
+        compact.assert_not_called()
+        prune.assert_not_called()
+
+    def test_agent_repository_info_queues_agent_job_and_returns_existing_shape(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = _agent_machine_with_capabilities("repository.info")
+        repo = Repository(
+            name="Agent Info Repo",
+            path="/agent/info/repo",
+            encryption="none",
+            compression="lz4",
+            executor_type="agent",
+            execution_target="agent",
+            agent_machine_id=1,
+            repository_type="local",
+        )
+        test_db.add_all([agent, repo])
+        test_db.commit()
+        repo.agent_machine_id = agent.id
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with (
+            patch(
+                "app.api.repositories.wait_for_agent_repository_operation_job",
+                new=AsyncMock(
+                    return_value={
+                        "data": {
+                            "repository": {"id": "abc"},
+                            "cache": {},
+                            "encryption": {"mode": "none"},
+                        }
+                    }
+                ),
+            ) as wait_for_agent,
+            patch(
+                "app.api.repositories._run_repository_command",
+                new=AsyncMock(return_value=(0, b"{}", b"")),
+            ) as run_local,
+        ):
+            response = test_client.get(
+                f"/api/repositories/{repo.id}/info", headers=admin_headers
+            )
+
+        assert response.status_code == 200
+        assert response.json()["info"]["repository"] == {"id": "abc"}
+        agent_job = test_db.query(AgentJob).one()
+        assert agent_job.payload["job_kind"] == "repository.info"
+        wait_for_agent.assert_awaited_once_with(test_db, agent_job.id)
+        run_local.assert_not_called()
+
+    def test_agent_repository_list_archives_queues_agent_job(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = _agent_machine_with_capabilities("repository.list_archives")
+        repo = Repository(
+            name="Agent Archives Repo",
+            path="/agent/archives/repo",
+            encryption="none",
+            compression="lz4",
+            executor_type="agent",
+            execution_target="agent",
+            agent_machine_id=1,
+            repository_type="local",
+        )
+        test_db.add_all([agent, repo])
+        test_db.commit()
+        repo.agent_machine_id = agent.id
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch(
+            "app.api.repositories.wait_for_agent_repository_operation_job",
+            new=AsyncMock(return_value={"data": {"archives": [{"name": "archive-1"}]}}),
+        ) as wait_for_agent:
+            response = test_client.get(
+                f"/api/repositories/{repo.id}/archives", headers=admin_headers
+            )
+
+        assert response.status_code == 200
+        assert response.json()["archives"][0]["name"] == "archive-1"
+        agent_job = test_db.query(AgentJob).one()
+        assert agent_job.payload["job_kind"] == "repository.list_archives"
+        wait_for_agent.assert_awaited_once_with(test_db, agent_job.id)
+
+    def test_agent_job_completion_updates_repository_maintenance_job(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        raw_token = "borgui_agent_secret"
+        agent = AgentMachine(
+            name="Agent Complete",
+            agent_id="agt_complete",
+            token_hash=get_password_hash(raw_token),
+            token_prefix=raw_token[:20],
+            status="online",
+            capabilities=["repository.check"],
+        )
+        repo = Repository(
+            name="Agent Complete Repo",
+            path="/agent/complete/repo",
+            encryption="none",
+            compression="lz4",
+            executor_type="agent",
+            execution_target="agent",
+            agent_machine_id=1,
+            repository_type="local",
+        )
+        test_db.add_all([agent, repo])
+        test_db.commit()
+        repo.agent_machine_id = agent.id
+        check_job = CheckJob(repository_id=repo.id, repository_path=repo.path)
+        test_db.add(check_job)
+        test_db.commit()
+        test_db.refresh(check_job)
+        agent_job = AgentJob(
+            agent_machine_id=agent.id,
+            job_type="repository",
+            status="running",
+            payload={
+                "job_kind": "repository.check",
+                "operation": {"maintenance_job": {"kind": "check", "id": check_job.id}},
+            },
+        )
+        test_db.add(agent_job)
+        test_db.commit()
+        test_db.refresh(agent_job)
+
+        response = test_client.post(
+            f"/api/agents/jobs/{agent_job.id}/complete",
+            json={"result": {"return_code": 0}},
+            headers={AGENT_AUTH_HEADER: f"Bearer {raw_token}"},
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(check_job)
+        test_db.refresh(repo)
+        assert check_job.status == "completed"
+        assert check_job.progress == 100
+        assert repo.last_check is not None
+
+    def test_create_repository_missing_name(
+        self, test_client: TestClient, admin_headers
+    ):
         """Test creating repository without name"""
         response = test_client.post(
             "/api/repositories/",
-            json={
-                "path": "/tmp/test-repo",
-                "encryption": "none",
-                "compression": "lz4"
-            },
-            headers=admin_headers
+            json={"path": "/tmp/test-repo", "encryption": "none", "compression": "lz4"},
+            headers=admin_headers,
         )
 
         assert response.status_code == 422  # Validation error
 
-    def test_create_repository_missing_path(self, test_client: TestClient, admin_headers):
+    def test_create_repository_missing_path(
+        self, test_client: TestClient, admin_headers
+    ):
         """Test creating repository without path"""
         response = test_client.post(
             "/api/repositories/",
-            json={
-                "name": "No Path Repo",
-                "encryption": "none",
-                "compression": "lz4"
-            },
-            headers=admin_headers
+            json={"name": "No Path Repo", "encryption": "none", "compression": "lz4"},
+            headers=admin_headers,
         )
 
         assert response.status_code == 422
 
-    def test_create_repository_invalid_encryption(self, test_client: TestClient, admin_headers):
+    def test_create_repository_invalid_encryption(
+        self, test_client: TestClient, admin_headers
+    ):
         """Test creating repository with invalid encryption type"""
         response = test_client.post(
             "/api/repositories/",
@@ -365,17 +1103,24 @@ class TestRepositoriesCreate:
                 "path": "/tmp/test-repo",
                 "encryption": "invalid-encryption-type",
                 "compression": "lz4",
-                "repository_type": "local"
+                "repository_type": "local",
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 400
 
-    def test_create_repository_with_source_directories(self, test_client: TestClient, admin_headers):
+    def test_create_repository_with_source_directories(
+        self, test_client: TestClient, admin_headers
+    ):
         """Test creating repository with source directories"""
-        with patch("app.api.repositories.initialize_borg_repository", new=AsyncMock(return_value={"success": True})), \
-             patch("app.api.repositories.mqtt_service.sync_state_with_db"):
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
             response = test_client.post(
                 "/api/repositories/",
                 json={
@@ -384,36 +1129,152 @@ class TestRepositoriesCreate:
                     "encryption": "none",
                     "compression": "lz4",
                     "repository_type": "local",
-                    "source_directories": ["/home/user/docs", "/home/user/photos"]
+                    "source_directories": ["/home/user/docs", "/home/user/photos"],
                 },
-                headers=admin_headers
+                headers=admin_headers,
             )
 
         assert response.status_code == 200
 
-    def test_create_repository_with_exclude_patterns(self, test_client: TestClient, admin_headers):
-        """Test creating repository with exclude patterns"""
-        response = test_client.post(
-            "/api/repositories/",
-            json={
-                "name": "Exclude Patterns Repo",
-                "path": "/tmp/exclude-repo",
-                "encryption": "none",
-                "compression": "lz4",
-                "repository_type": "local",
-                "exclude_patterns": ["*.tmp", "*.cache", "node_modules/"]
-            },
-            headers=admin_headers
+    def test_create_repository_with_multiple_source_locations(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Repositories can persist source groups from multiple machines."""
+        source_a = SSHConnection(host="server-a.example", username="backup-a", port=22)
+        source_b = SSHConnection(
+            host="server-b.example", username="backup-b", port=2222
         )
+        test_db.add_all([source_a, source_b])
+        test_db.commit()
+        test_db.refresh(source_a)
+        test_db.refresh(source_b)
+        source_locations = [
+            {
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "agent_machine_id": None,
+                "paths": ["/srv/app"],
+            },
+            {
+                "source_type": "remote",
+                "source_ssh_connection_id": source_a.id,
+                "agent_machine_id": None,
+                "paths": ["/home/app/data"],
+            },
+            {
+                "source_type": "remote",
+                "source_ssh_connection_id": source_b.id,
+                "agent_machine_id": None,
+                "paths": ["/var/lib/service"],
+            },
+        ]
 
-        assert response.status_code == 400
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Grouped Source Repo",
+                    "path": "/tmp/grouped-source",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "repository_type": "local",
+                    "source_directories": [
+                        "/srv/app",
+                        "/home/app/data",
+                        "/var/lib/service",
+                    ],
+                    "source_locations": source_locations,
+                },
+                headers=admin_headers,
+            )
 
-    def test_create_repository_validation_error(self, test_client: TestClient, admin_headers):
+        assert response.status_code == 200
+        repo = (
+            test_db.query(Repository)
+            .filter(Repository.name == "Grouped Source Repo")
+            .one()
+        )
+        assert json.loads(repo.source_directories) == [
+            "/srv/app",
+            "/home/app/data",
+            "/var/lib/service",
+        ]
+        assert repo.source_ssh_connection_id is None
+        assert json.loads(repo.source_locations) == source_locations
+
+    def test_create_repository_with_exclude_patterns(
+        self, test_client: TestClient, admin_headers
+    ):
+        """Test creating repository with exclude patterns"""
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Exclude Patterns Repo",
+                    "path": "/tmp/exclude-repo",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "repository_type": "local",
+                    "exclude_patterns": ["*.tmp", "*.cache", "node_modules/"],
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+
+    def test_create_repository_without_source_fields_stays_storage_only(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Test basic repository creation does not persist legacy backup source fields"""
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Storage Only Repo",
+                    "path": "/tmp/storage-only-repo",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "repository_type": "local",
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        repo = (
+            test_db.query(Repository)
+            .filter(Repository.name == "Storage Only Repo")
+            .one()
+        )
+        assert repo.source_directories is None
+        assert repo.exclude_patterns is None
+        assert repo.source_ssh_connection_id is None
+
+    def test_create_repository_validation_error(
+        self, test_client: TestClient, admin_headers
+    ):
         """Test repository creation with missing required fields returns 422"""
         response = test_client.post(
             "/api/repositories/",
             json={"name": "Incomplete Repo"},  # Missing path, encryption, etc.
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 422  # Validation error
@@ -422,7 +1283,7 @@ class TestRepositoriesCreate:
         """Test creating repository without authentication returns 403"""
         response = test_client.post(
             "/api/repositories/",
-            json={"name": "Test", "path": "/test", "encryption": "none"}
+            json={"name": "Test", "path": "/test", "encryption": "none"},
         )
 
         assert response.status_code == 401
@@ -434,7 +1295,14 @@ class TestRepositoriesCreate:
 
         with patch(
             "app.api.v2.repositories._rcreate",
-            new=AsyncMock(return_value={"success": True, "already_existed": False, "stdout": "", "stderr": ""}),
+            new=AsyncMock(
+                return_value={
+                    "success": True,
+                    "already_existed": False,
+                    "stdout": "",
+                    "stderr": "",
+                }
+            ),
         ):
             response = test_client.post(
                 "/api/repositories/",
@@ -450,7 +1318,11 @@ class TestRepositoriesCreate:
             )
 
         assert response.status_code == 200
-        repo = test_db.query(Repository).filter(Repository.name == "Delegated Borg2 Repo").first()
+        repo = (
+            test_db.query(Repository)
+            .filter(Repository.name == "Delegated Borg2 Repo")
+            .first()
+        )
         assert repo is not None
         assert repo.borg_version == 2
         assert repo.encryption == "repokey-aes-ocb"
@@ -459,25 +1331,36 @@ class TestRepositoriesCreate:
         self, test_client: TestClient, admin_headers, test_db
     ):
         _enable_borg_v2(test_db)
-        repo = Repository(**_base_repository_payload(name="Legacy Prune V2", borg_version=2))
+        repo = Repository(
+            **_base_repository_payload(name="Legacy Prune V2", borg_version=2)
+        )
         test_db.add(repo)
         test_db.commit()
         test_db.refresh(repo)
 
-        with patch("app.api.repositories.BorgRouter.prune", new_callable=AsyncMock) as mock_prune:
+        with patch(
+            "app.api.repositories.BorgRouter.prune", new_callable=AsyncMock
+        ) as mock_prune:
             response = test_client.post(
                 f"/api/repositories/{repo.id}/prune",
-                json={"keep_daily": 7},
+                json={"keep_daily": 7, "dry_run": True},
                 headers=admin_headers,
             )
 
         assert response.status_code == 200
         mock_prune.assert_awaited_once()
 
-    def test_create_repository_duplicate_path(self, test_client: TestClient, admin_headers, test_db):
+    def test_create_repository_duplicate_path(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test creating repository with duplicate path"""
         # Create first repository
-        repo = Repository(name="Existing", path="/duplicate/path", encryption="none", repository_type="local")
+        repo = Repository(
+            name="Existing",
+            path="/duplicate/path",
+            encryption="none",
+            repository_type="local",
+        )
         test_db.add(repo)
         test_db.commit()
 
@@ -489,9 +1372,9 @@ class TestRepositoriesCreate:
                 "path": "/duplicate/path",
                 "encryption": "none",
                 "repository_type": "local",
-                "source_directories": ["/tmp/source"]
+                "source_directories": ["/tmp/source"],
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 400
@@ -501,14 +1384,16 @@ class TestRepositoriesCreate:
 class TestRepositoriesUpdate:
     """Test repository update operations"""
 
-    def test_update_repository_name(self, test_client: TestClient, admin_headers, test_db):
+    def test_update_repository_name(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test updating repository name"""
         repo = Repository(
             name="Old Name",
             path="/tmp/update-repo",
             encryption="none",
             compression="lz4",
-            repository_type="local"
+            repository_type="local",
         )
         test_db.add(repo)
         test_db.commit()
@@ -517,19 +1402,21 @@ class TestRepositoriesUpdate:
         response = test_client.put(
             f"/api/repositories/{repo.id}",
             json={"name": "New Name"},
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 200
 
-    def test_update_repository_compression(self, test_client: TestClient, admin_headers, test_db):
+    def test_update_repository_compression(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test updating repository compression"""
         repo = Repository(
             name="Compression Test",
             path="/tmp/compression-repo",
             encryption="none",
             compression="lz4",
-            repository_type="local"
+            repository_type="local",
         )
         test_db.add(repo)
         test_db.commit()
@@ -538,17 +1425,19 @@ class TestRepositoriesUpdate:
         response = test_client.put(
             f"/api/repositories/{repo.id}",
             json={"compression": "zstd"},
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 200
 
-    def test_update_nonexistent_repository(self, test_client: TestClient, admin_headers):
+    def test_update_nonexistent_repository(
+        self, test_client: TestClient, admin_headers
+    ):
         """Test updating non-existent repository"""
         response = test_client.put(
             "/api/repositories/99999",
             json={"name": "Updated Name"},
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 404
@@ -556,16 +1445,21 @@ class TestRepositoriesUpdate:
     def test_update_repository_not_found(self, test_client: TestClient, admin_headers):
         """Test updating non-existent repository returns 404 or 403"""
         response = test_client.put(
-            "/api/repositories/99999",
-            json={"name": "Updated"},
-            headers=admin_headers
+            "/api/repositories/99999", json={"name": "Updated"}, headers=admin_headers
         )
 
         assert response.status_code == 404
 
-    def test_update_repository_empty_name(self, test_client: TestClient, admin_headers, test_db):
+    def test_update_repository_empty_name(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test updating repository with empty name"""
-        repo = Repository(name="Original", path="/test/repo", encryption="none", repository_type="local")
+        repo = Repository(
+            name="Original",
+            path="/test/repo",
+            encryption="none",
+            repository_type="local",
+        )
         test_db.add(repo)
         test_db.commit()
         test_db.refresh(repo)
@@ -573,12 +1467,14 @@ class TestRepositoriesUpdate:
         response = test_client.put(
             f"/api/repositories/{repo.id}",
             json={"name": ""},  # Empty name
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 200
 
-    def test_update_repository_clear_source_connection_id(self, test_client: TestClient, admin_headers, test_db):
+    def test_update_repository_clear_source_connection_id(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test clearing source_connection_id when switching from remote to local source"""
         # Create repository with a remote source
         repo = Repository(
@@ -588,7 +1484,7 @@ class TestRepositoriesUpdate:
             compression="lz4",
             repository_type="local",
             source_ssh_connection_id=1,  # Initially has remote source
-            source_directories=json.dumps(["/remote/data"])
+            source_directories=json.dumps(["/remote/data"]),
         )
         test_db.add(repo)
         test_db.commit()
@@ -602,9 +1498,9 @@ class TestRepositoriesUpdate:
             f"/api/repositories/{repo.id}",
             json={
                 "source_connection_id": None,  # Explicitly clear it
-                "source_directories": ["/local/data"]
+                "source_directories": ["/local/data"],
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 200
@@ -612,7 +1508,43 @@ class TestRepositoriesUpdate:
         assert repo.source_ssh_connection_id is None
         assert json.loads(repo.source_directories) == ["/local/data"]
 
-    def test_update_repository_type_local_to_ssh(self, test_client: TestClient, admin_headers, test_db):
+    def test_update_repository_empty_source_lists_clear_legacy_source_settings(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Test empty source and exclude lists remove legacy source settings"""
+        repo = Repository(
+            name="Legacy Source Repo",
+            path="/tmp/legacy-source-repo",
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+            source_ssh_connection_id=1,
+            source_directories=json.dumps(["/remote/data"]),
+            exclude_patterns=json.dumps(["*.tmp"]),
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}",
+            json={
+                "source_connection_id": None,
+                "source_directories": [],
+                "exclude_patterns": [],
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(repo)
+        assert repo.source_ssh_connection_id is None
+        assert repo.source_directories is None
+        assert repo.exclude_patterns is None
+
+    def test_update_repository_type_local_to_ssh(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test updating repository type from local to SSH"""
         # Create local repository
         repo = Repository(
@@ -620,7 +1552,7 @@ class TestRepositoriesUpdate:
             path="/tmp/local-repo",
             encryption="none",
             compression="lz4",
-            repository_type="local"
+            repository_type="local",
         )
         test_db.add(repo)
         test_db.commit()
@@ -631,21 +1563,28 @@ class TestRepositoriesUpdate:
         assert repo.host is None
         assert repo.username is None
 
-        ssh_conn = SSHConnection(host="backup.example.com", username="backupuser", port=22)
+        ssh_conn = SSHConnection(
+            host="backup.example.com", username="backupuser", port=22
+        )
         test_db.add(ssh_conn)
         test_db.commit()
         test_db.refresh(ssh_conn)
 
-        with patch("app.api.repositories.BorgRouter.verify_repository", new=AsyncMock(return_value={"success": False})), \
-             patch("app.api.repositories.BorgRouter.initialize_repository", new=AsyncMock(return_value={"success": True})), \
-             patch("app.api.repositories.mqtt_service.sync_state_with_db"):
+        with (
+            patch(
+                "app.api.repositories.BorgRouter.verify_repository",
+                new=AsyncMock(return_value={"success": False}),
+            ),
+            patch(
+                "app.api.repositories.BorgRouter.initialize_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
             response = test_client.put(
                 f"/api/repositories/{repo.id}",
-                json={
-                    "connection_id": ssh_conn.id,
-                    "path": "/home/borg-backup"
-                },
-                headers=admin_headers
+                json={"connection_id": ssh_conn.id, "path": "/home/borg-backup"},
+                headers=admin_headers,
             )
 
         assert response.status_code == 200
@@ -654,7 +1593,9 @@ class TestRepositoriesUpdate:
         assert repo.connection_id == ssh_conn.id
         assert repo.path == "ssh://backupuser@backup.example.com:22/home/borg-backup"
 
-    def test_update_ssh_repository_path_reconstruction(self, test_client: TestClient, admin_headers, test_db):
+    def test_update_ssh_repository_path_reconstruction(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test that updating an SSH repository path properly reconstructs the SSH URL"""
         from app.database.models import SSHConnection, SSHKey
 
@@ -662,17 +1603,14 @@ class TestRepositoriesUpdate:
         ssh_key = SSHKey(
             name="Test Key",
             private_key="encrypted_key_data",
-            public_key="ssh-rsa AAAA..."
+            public_key="ssh-rsa AAAA...",
         )
         test_db.add(ssh_key)
         test_db.commit()
 
         # Create SSH connection
         ssh_conn = SSHConnection(
-            host="host.local",
-            username="user",
-            port=22,
-            ssh_key_id=ssh_key.id
+            host="host.local", username="user", port=22, ssh_key_id=ssh_key.id
         )
         test_db.add(ssh_conn)
         test_db.commit()
@@ -683,7 +1621,7 @@ class TestRepositoriesUpdate:
             path="ssh://user@host.local:22/home/borg-backup",
             encryption="none",
             compression="lz4",
-            connection_id=ssh_conn.id
+            connection_id=ssh_conn.id,
         )
         test_db.add(repo)
         test_db.commit()
@@ -697,9 +1635,9 @@ class TestRepositoriesUpdate:
             f"/api/repositories/{repo.id}",
             json={
                 "path": "/home/borg-backup",  # Plain path without SSH URL
-                "source_directories": ["/data", "/config"]  # Adding source dirs
+                "source_directories": ["/data", "/config"],  # Adding source dirs
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 200
@@ -707,7 +1645,9 @@ class TestRepositoriesUpdate:
         assert repo.path == "ssh://user@host.local:22/home/borg-backup"
         assert json.loads(repo.source_directories) == ["/data", "/config"]
 
-    def test_update_repository_path_change_initializes_new_repo(self, test_client: TestClient, admin_headers, test_db):
+    def test_update_repository_path_change_initializes_new_repo(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test that changing repository path to a non-existent location initializes a new borg repository"""
         import tempfile
         import shutil
@@ -722,7 +1662,7 @@ class TestRepositoriesUpdate:
 
             # Create a minimal borg repository structure at initial path
             os.makedirs(f"{initial_path}/data", exist_ok=True)
-            with open(f"{initial_path}/config", 'w') as f:
+            with open(f"{initial_path}/config", "w") as f:
                 f.write("[repository]\nversion = 1\n")
 
             repo = Repository(
@@ -730,7 +1670,7 @@ class TestRepositoriesUpdate:
                 path=initial_path,
                 encryption="none",
                 compression="lz4",
-                repository_type="local"
+                repository_type="local",
             )
             test_db.add(repo)
             test_db.commit()
@@ -741,13 +1681,21 @@ class TestRepositoriesUpdate:
 
             # Update to a NEW path that doesn't exist yet
             new_path = f"{temp_dir}/new-repo"
-            with patch("app.api.repositories.BorgRouter.verify_repository", new=AsyncMock(side_effect=RuntimeError("missing repo"))), \
-                 patch("app.api.repositories.BorgRouter.initialize_repository", new=AsyncMock(return_value={"success": True})), \
-                 patch("app.api.repositories.mqtt_service.sync_state_with_db"):
+            with (
+                patch(
+                    "app.api.repositories.BorgRouter.verify_repository",
+                    new=AsyncMock(side_effect=RuntimeError("missing repo")),
+                ),
+                patch(
+                    "app.api.repositories.BorgRouter.initialize_repository",
+                    new=AsyncMock(return_value={"success": True}),
+                ),
+                patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+            ):
                 response = test_client.put(
                     f"/api/repositories/{repo.id}",
                     json={"path": new_path},
-                    headers=admin_headers
+                    headers=admin_headers,
                 )
 
             assert response.status_code == 200
@@ -757,7 +1705,9 @@ class TestRepositoriesUpdate:
             # Clean up temp directory
             shutil.rmtree(temp_dir, ignore_errors=True)
 
-    def test_update_repository_path_to_existing_repo_does_not_reinit(self, test_client: TestClient, admin_headers, test_db):
+    def test_update_repository_path_to_existing_repo_does_not_reinit(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test that changing path to an existing borg repository doesn't reinitialize it"""
         import tempfile
         import shutil
@@ -772,7 +1722,7 @@ class TestRepositoriesUpdate:
             for path in [initial_path, existing_repo_path]:
                 os.makedirs(path, exist_ok=True)
                 os.makedirs(f"{path}/data", exist_ok=True)
-                with open(f"{path}/config", 'w') as f:
+                with open(f"{path}/config", "w") as f:
                     f.write("[repository]\nversion = 1\n")
 
             repo = Repository(
@@ -780,19 +1730,24 @@ class TestRepositoriesUpdate:
                 path=initial_path,
                 encryption="none",
                 compression="lz4",
-                repository_type="local"
+                repository_type="local",
             )
             test_db.add(repo)
             test_db.commit()
             test_db.refresh(repo)
 
             # Update to point to the existing borg repository
-            with patch("app.api.repositories.BorgRouter.verify_repository", new=AsyncMock(return_value={"success": True})), \
-                 patch("app.api.repositories.mqtt_service.sync_state_with_db"):
+            with (
+                patch(
+                    "app.api.repositories.BorgRouter.verify_repository",
+                    new=AsyncMock(return_value={"success": True}),
+                ),
+                patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+            ):
                 response = test_client.put(
                     f"/api/repositories/{repo.id}",
                     json={"path": existing_repo_path},
-                    headers=admin_headers
+                    headers=admin_headers,
                 )
 
             assert response.status_code == 200
@@ -801,7 +1756,9 @@ class TestRepositoriesUpdate:
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
-    def test_update_repository_path_strips_whitespace(self, test_client: TestClient, admin_headers, test_db):
+    def test_update_repository_path_strips_whitespace(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         import tempfile
         import shutil
 
@@ -828,8 +1785,13 @@ class TestRepositoriesUpdate:
             test_db.commit()
             test_db.refresh(repo)
 
-            with patch("app.api.repositories.BorgRouter.verify_repository", new=AsyncMock(return_value={"success": True})), \
-                 patch("app.api.repositories.mqtt_service.sync_state_with_db"):
+            with (
+                patch(
+                    "app.api.repositories.BorgRouter.verify_repository",
+                    new=AsyncMock(return_value={"success": True}),
+                ),
+                patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+            ):
                 response = test_client.put(
                     f"/api/repositories/{repo.id}",
                     json={"path": f"  {existing_repo_path}  "},
@@ -857,17 +1819,20 @@ class TestRepositoriesUpdate:
         test_db.commit()
         test_db.refresh(repo)
 
-        with patch(
-            "app.api.repositories.BorgRouter.verify_repository",
-            new=AsyncMock(return_value={"success": False, "stderr": "missing"}),
-        ) as mock_verify, patch(
-            "app.api.repositories.BorgRouter.initialize_repository",
-            new=AsyncMock(return_value={"success": True, "stderr": ""}),
-        ) as mock_init, patch(
-            "app.api.repositories.initialize_borg_repository",
-            new=AsyncMock(return_value={"success": True}),
-        ) as mock_v1_init, patch(
-            "app.api.repositories.mqtt_service.sync_state_with_db"
+        with (
+            patch(
+                "app.api.repositories.BorgRouter.verify_repository",
+                new=AsyncMock(return_value={"success": False, "stderr": "missing"}),
+            ) as mock_verify,
+            patch(
+                "app.api.repositories.BorgRouter.initialize_repository",
+                new=AsyncMock(return_value={"success": True, "stderr": ""}),
+            ) as mock_init,
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ) as mock_v1_init,
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
         ):
             response = test_client.put(
                 f"/api/repositories/{repo.id}",
@@ -906,7 +1871,9 @@ class TestRepositoriesUpdate:
             "app.api.repositories.BorgRouter.export_keyfile",
             new=AsyncMock(side_effect=fake_export_keyfile),
         ) as mock_export:
-            response = test_client.get(f"/api/repositories/{repo.id}/keyfile", headers=admin_headers)
+            response = test_client.get(
+                f"/api/repositories/{repo.id}/keyfile", headers=admin_headers
+            )
 
         assert response.status_code == 200
         assert response.content == b"KEYDATA"
@@ -924,25 +1891,66 @@ class TestRepositoriesDelete:
             path="/tmp/delete-repo",
             encryption="none",
             compression="lz4",
-            repository_type="local"
+            repository_type="local",
         )
         test_db.add(repo)
         test_db.commit()
         test_db.refresh(repo)
 
         response = test_client.delete(
-            f"/api/repositories/{repo.id}",
-            headers=admin_headers
+            f"/api/repositories/{repo.id}", headers=admin_headers
         )
 
         assert response.status_code == 200
 
-    def test_delete_nonexistent_repository(self, test_client: TestClient, admin_headers):
-        """Test deleting non-existent repository"""
-        response = test_client.delete(
-            "/api/repositories/99999",
-            headers=admin_headers
+    def test_delete_observe_repository_with_restore_check_jobs(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Deleting observe-only repositories should clean up restore-check jobs."""
+        test_db.execute(text("PRAGMA foreign_keys=ON"))
+        test_db.commit()
+
+        repo = Repository(
+            name="Delete Observe Repo",
+            path="/tmp/delete-observe-repo",
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+            mode="observe",
         )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        restore_check_job = RestoreCheckJob(
+            repository_id=repo.id,
+            repository_path=repo.path,
+            archive_name="archive-2026-05-31",
+            status="completed",
+            started_at=datetime.utcnow(),
+            completed_at=datetime.utcnow(),
+        )
+        test_db.add(restore_check_job)
+        test_db.commit()
+        repo_id = repo.id
+
+        response = test_client.delete(
+            f"/api/repositories/{repo_id}", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        assert (
+            test_db.query(RestoreCheckJob)
+            .filter(RestoreCheckJob.repository_id == repo_id)
+            .count()
+            == 0
+        )
+
+    def test_delete_nonexistent_repository(
+        self, test_client: TestClient, admin_headers
+    ):
+        """Test deleting non-existent repository"""
+        response = test_client.delete("/api/repositories/99999", headers=admin_headers)
 
         assert response.status_code == 404
 
@@ -958,20 +1966,31 @@ class TestRepositoriesDelete:
 
         assert response.status_code == 401
 
-    def test_delete_repository_twice(self, test_client: TestClient, admin_headers, test_db):
+    def test_delete_repository_twice(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test deleting repository twice returns 404 on second attempt"""
-        repo = Repository(name="To Delete", path="/delete/repo", encryption="none", repository_type="local")
+        repo = Repository(
+            name="To Delete",
+            path="/delete/repo",
+            encryption="none",
+            repository_type="local",
+        )
         test_db.add(repo)
         test_db.commit()
         test_db.refresh(repo)
         repo_id = repo.id
 
         # First delete - may succeed or be forbidden
-        first_response = test_client.delete(f"/api/repositories/{repo_id}", headers=admin_headers)
+        first_response = test_client.delete(
+            f"/api/repositories/{repo_id}", headers=admin_headers
+        )
 
         # If first delete succeeded, second should return 404
         if first_response.status_code == 200:
-            second_response = test_client.delete(f"/api/repositories/{repo_id}", headers=admin_headers)
+            second_response = test_client.delete(
+                f"/api/repositories/{repo_id}", headers=admin_headers
+            )
             assert second_response.status_code == 404
 
 
@@ -979,23 +1998,27 @@ class TestRepositoriesDelete:
 class TestRepositoriesStatistics:
     """Test repository statistics and info"""
 
-    def test_get_repository_stats(self, test_client: TestClient, admin_headers, test_db):
+    def test_get_repository_stats(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test getting repository statistics"""
         repo = Repository(
             name="Stats Repo",
             path="/tmp/stats-repo",
             encryption="none",
             compression="lz4",
-            repository_type="local"
+            repository_type="local",
         )
         test_db.add(repo)
         test_db.commit()
         test_db.refresh(repo)
 
-        with patch("app.api.repositories.get_repository_stats", new=AsyncMock(return_value={"total_size": "1.00 GB"})):
+        with patch(
+            "app.api.repositories.get_repository_stats",
+            new=AsyncMock(return_value={"total_size": "1.00 GB"}),
+        ):
             response = test_client.get(
-                f"/api/repositories/{repo.id}/stats",
-                headers=admin_headers
+                f"/api/repositories/{repo.id}/stats", headers=admin_headers
             )
 
         assert response.status_code == 200
@@ -1007,7 +2030,7 @@ class TestRepositoriesStatistics:
             path="/tmp/info-repo",
             encryption="none",
             compression="lz4",
-            repository_type="local"
+            repository_type="local",
         )
         test_db.add(repo)
         test_db.commit()
@@ -1018,8 +2041,7 @@ class TestRepositoriesStatistics:
             new=AsyncMock(return_value=(0, b'{"repository":{"id":"abc"}}', b"")),
         ):
             response = test_client.get(
-                f"/api/repositories/{repo.id}/info",
-                headers=admin_headers
+                f"/api/repositories/{repo.id}/info", headers=admin_headers
             )
 
         assert response.status_code == 200
@@ -1039,10 +2061,13 @@ class TestRepositoriesStatistics:
         test_db.commit()
         test_db.refresh(repo)
 
-        with patch("app.core.borg2.borg2.borg_cmd", "borg2"), patch(
-            "app.api.repositories._run_repository_command",
-            new=AsyncMock(return_value=(0, b'{"repository":{"id":"abc"}}', b"")),
-        ) as mock_run:
+        with (
+            patch("app.core.borg2.borg2.borg_cmd", "borg2"),
+            patch(
+                "app.api.repositories._run_repository_command",
+                new=AsyncMock(return_value=(0, b'{"repository":{"id":"abc"}}', b"")),
+            ) as mock_run,
+        ):
             response = test_client.get(
                 f"/api/repositories/{repo.id}/info",
                 headers=admin_headers,
@@ -1054,15 +2079,23 @@ class TestRepositoriesStatistics:
         assert "-r" in cmd
         assert "info" in cmd
 
-    def test_get_repository_stats_not_found(self, test_client: TestClient, admin_headers):
+    def test_get_repository_stats_not_found(
+        self, test_client: TestClient, admin_headers
+    ):
         """Test getting stats for non-existent repository returns 404"""
-        response = test_client.get("/api/repositories/99999/stats", headers=admin_headers)
+        response = test_client.get(
+            "/api/repositories/99999/stats", headers=admin_headers
+        )
 
         assert response.status_code == 404
 
-    def test_get_repository_info_not_found(self, test_client: TestClient, admin_headers):
+    def test_get_repository_info_not_found(
+        self, test_client: TestClient, admin_headers
+    ):
         """Test getting info for non-existent repository returns 404"""
-        response = test_client.get("/api/repositories/99999/info", headers=admin_headers)
+        response = test_client.get(
+            "/api/repositories/99999/info", headers=admin_headers
+        )
 
         assert response.status_code == 404
 
@@ -1079,7 +2112,9 @@ class TestRepositoriesStatistics:
         assert response.status_code == 401
 
     @pytest.mark.asyncio
-    async def test_get_repository_stats_forwards_passphrase_for_encrypted_local_repo(self, test_db):
+    async def test_get_repository_stats_forwards_passphrase_for_encrypted_local_repo(
+        self, test_db
+    ):
         repo = Repository(
             name="Encrypted Stats Repo",
             path="/tmp/encrypted-stats-repo",
@@ -1089,13 +2124,24 @@ class TestRepositoriesStatistics:
             repository_type="local",
         )
 
-        with patch("app.api.repositories.resolve_repo_ssh_key_file", return_value=None), patch(
-            "app.api.repositories.borg._execute_command", new=AsyncMock(
-                return_value={"success": True, "stdout": "ok", "stderr": "", "return_code": 0}
-            )
-        ) as mock_exec, patch(
-            "app.api.repositories.BorgRouter.list_archives", new=AsyncMock(return_value=[])
-        ) as mock_list:
+        with (
+            patch("app.api.repositories.resolve_repo_ssh_key_file", return_value=None),
+            patch(
+                "app.api.repositories.borg._execute_command",
+                new=AsyncMock(
+                    return_value={
+                        "success": True,
+                        "stdout": "ok",
+                        "stderr": "",
+                        "return_code": 0,
+                    }
+                ),
+            ) as mock_exec,
+            patch(
+                "app.api.repositories.BorgRouter.list_archives",
+                new=AsyncMock(return_value=[]),
+            ) as mock_list,
+        ):
             from app.api.repositories import get_repository_stats
 
             stats = await get_repository_stats(repo, test_db)
@@ -1106,7 +2152,9 @@ class TestRepositoriesStatistics:
         mock_list.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_get_repository_stats_omits_passphrase_for_unencrypted_local_repo(self, test_db):
+    async def test_get_repository_stats_omits_passphrase_for_unencrypted_local_repo(
+        self, test_db
+    ):
         repo = Repository(
             name="Unencrypted Stats Repo",
             path="/tmp/unencrypted-stats-repo",
@@ -1116,12 +2164,23 @@ class TestRepositoriesStatistics:
             repository_type="local",
         )
 
-        with patch("app.api.repositories.resolve_repo_ssh_key_file", return_value=None), patch(
-            "app.api.repositories.borg._execute_command", new=AsyncMock(
-                return_value={"success": True, "stdout": "ok", "stderr": "", "return_code": 0}
-            )
-        ) as mock_exec, patch(
-            "app.api.repositories.BorgRouter.list_archives", new=AsyncMock(return_value=[])
+        with (
+            patch("app.api.repositories.resolve_repo_ssh_key_file", return_value=None),
+            patch(
+                "app.api.repositories.borg._execute_command",
+                new=AsyncMock(
+                    return_value={
+                        "success": True,
+                        "stdout": "ok",
+                        "stderr": "",
+                        "return_code": 0,
+                    }
+                ),
+            ) as mock_exec,
+            patch(
+                "app.api.repositories.BorgRouter.list_archives",
+                new=AsyncMock(return_value=[]),
+            ),
         ):
             from app.api.repositories import get_repository_stats
 
@@ -1145,18 +2204,33 @@ class TestRepositoriesStatistics:
             connection_id=7,
         )
 
-        with patch("app.api.repositories.resolve_repo_ssh_key_file", return_value="/tmp/test.key"), patch(
-            "app.api.repositories.borg._execute_command", new=AsyncMock(
-                return_value={"success": True, "stdout": "ok", "stderr": "", "return_code": 0}
-            )
-        ) as mock_exec, patch(
-            "app.api.repositories.BorgRouter.list_archives", new=AsyncMock(return_value=[])
-        ) as mock_list, patch("app.api.repositories.os.path.exists", return_value=False):
+        with (
+            patch(
+                "app.api.repositories.resolve_repo_ssh_key_file",
+                return_value="/tmp/test.key",
+            ),
+            patch(
+                "app.api.repositories.borg._execute_command",
+                new=AsyncMock(
+                    return_value={
+                        "success": True,
+                        "stdout": "ok",
+                        "stderr": "",
+                        "return_code": 0,
+                    }
+                ),
+            ) as mock_exec,
+            patch(
+                "app.api.repositories.BorgRouter.list_archives",
+                new=AsyncMock(return_value=[]),
+            ) as mock_list,
+            patch("app.api.repositories.os.path.exists", return_value=False),
+        ):
             from app.api.repositories import get_repository_stats
 
             await get_repository_stats(repo, test_db)
 
-        cmd, = mock_exec.call_args[0]
+        (cmd,) = mock_exec.call_args[0]
         assert "--remote-path" in cmd
         assert "/usr/local/bin/borg1" in cmd
         _, kwargs = mock_exec.call_args
@@ -1164,7 +2238,9 @@ class TestRepositoriesStatistics:
         mock_list.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_get_repository_stats_supports_bypass_lock_and_borg_info_failure(self, test_db):
+    async def test_get_repository_stats_supports_bypass_lock_and_borg_info_failure(
+        self, test_db
+    ):
         repo = Repository(
             name="Locked Stats Repo",
             path="/tmp/locked-stats-repo",
@@ -1173,18 +2249,30 @@ class TestRepositoriesStatistics:
             repository_type="local",
         )
 
-        with patch("app.api.repositories.resolve_repo_ssh_key_file", return_value=None), patch(
-            "app.api.repositories.borg._execute_command", new=AsyncMock(
-                return_value={"success": False, "stdout": "", "stderr": "stats failed", "return_code": 2}
-            )
-        ) as mock_exec:
+        with (
+            patch("app.api.repositories.resolve_repo_ssh_key_file", return_value=None),
+            patch(
+                "app.api.repositories.borg._execute_command",
+                new=AsyncMock(
+                    return_value={
+                        "success": False,
+                        "stdout": "",
+                        "stderr": "stats failed",
+                        "return_code": 2,
+                    }
+                ),
+            ) as mock_exec,
+        ):
             from app.api.repositories import get_repository_stats
 
             stats = await get_repository_stats(repo, test_db, bypass_lock=True)
 
-        cmd, = mock_exec.call_args[0]
+        (cmd,) = mock_exec.call_args[0]
         assert "--bypass-lock" in cmd
-        assert stats == {"error": "Failed to get repository info", "details": "stats failed"}
+        assert stats == {
+            "error": "Failed to get repository info",
+            "details": "stats failed",
+        }
 
     @pytest.mark.asyncio
     async def test_get_repository_stats_tolerates_archive_list_failure(self, test_db):
@@ -1196,12 +2284,23 @@ class TestRepositoriesStatistics:
             repository_type="local",
         )
 
-        with patch("app.api.repositories.resolve_repo_ssh_key_file", return_value=None), patch(
-            "app.api.repositories.borg._execute_command", new=AsyncMock(
-                return_value={"success": True, "stdout": "ok", "stderr": "", "return_code": 0}
-            )
-        ), patch(
-            "app.api.repositories.BorgRouter.list_archives", new=AsyncMock(return_value=[])
+        with (
+            patch("app.api.repositories.resolve_repo_ssh_key_file", return_value=None),
+            patch(
+                "app.api.repositories.borg._execute_command",
+                new=AsyncMock(
+                    return_value={
+                        "success": True,
+                        "stdout": "ok",
+                        "stderr": "",
+                        "return_code": 0,
+                    }
+                ),
+            ),
+            patch(
+                "app.api.repositories.BorgRouter.list_archives",
+                new=AsyncMock(return_value=[]),
+            ),
         ):
             from app.api.repositories import get_repository_stats
 
@@ -1209,49 +2308,19 @@ class TestRepositoriesStatistics:
 
         assert stats["archive_count"] == 0
 
-    def test_list_archive_files_uses_v2_router_for_borg2_repo(
-        self, test_client: TestClient, admin_headers, test_db
-    ):
-        repo = Repository(
-            name="V2 Files Repo",
-            path="/tmp/v2-files-repo",
-            encryption="none",
-            compression="lz4",
-            repository_type="local",
-            borg_version=2,
-        )
-        test_db.add(repo)
-        test_db.commit()
-        test_db.refresh(repo)
-
-        with patch(
-            "app.api.repositories.BorgRouter.list_archive_contents",
-            new_callable=AsyncMock,
-        ) as mock_list:
-            mock_list.return_value = {
-                "success": True,
-                "stdout": '{"path":"photo.jpg","type":"-","size":42}\n',
-            }
-            response = test_client.get(
-                f"/api/repositories/{repo.id}/archives/archive-1/files",
-                headers=admin_headers,
-            )
-
-        assert response.status_code == 200
-        assert response.json()["success"] is True
-        mock_list.assert_awaited_once()
-
 
 @pytest.mark.unit
 class TestRepositoriesImport:
     """Test repository import functionality"""
 
-    def test_import_repository_validation_error(self, test_client: TestClient, admin_headers):
+    def test_import_repository_validation_error(
+        self, test_client: TestClient, admin_headers
+    ):
         """Test importing repository with missing fields returns 422"""
         response = test_client.post(
             "/api/repositories/import",
             json={"name": "Incomplete"},
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 422
@@ -1260,7 +2329,7 @@ class TestRepositoriesImport:
         """Test importing repository without authentication returns 403"""
         response = test_client.post(
             "/api/repositories/import",
-            json={"name": "Test", "path": "/test", "encryption": "none"}
+            json={"name": "Test", "path": "/test", "encryption": "none"},
         )
 
         assert response.status_code == 401
@@ -1278,15 +2347,19 @@ class TestRepositoriesImport:
             "info": {"encryption": {"mode": "none"}},
         }
 
-        with patch(
-            "app.api.repositories.verify_existing_repository",
-            new=AsyncMock(return_value=verify_result),
-        ) as mock_verify, patch(
-            "app.core.borg_router.BorgRouter.update_stats",
-            new=AsyncMock(return_value=True),
-        ), patch(
-            "app.api.repositories.mqtt_service.sync_state_with_db",
-            return_value=None,
+        with (
+            patch(
+                "app.api.repositories.verify_existing_repository",
+                new=AsyncMock(return_value=verify_result),
+            ) as mock_verify,
+            patch(
+                "app.core.borg_router.BorgRouter.update_stats",
+                new=AsyncMock(return_value=True),
+            ),
+            patch(
+                "app.api.repositories.mqtt_service.sync_state_with_db",
+                return_value=None,
+            ),
         ):
             response = test_client.post(
                 "/api/repositories/import",
@@ -1324,7 +2397,10 @@ class TestRepositoriesImport:
         )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.repo.notValidBorgRepository"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.repo.notValidBorgRepository"
+        )
 
     def test_import_repository_delegates_borg2_payloads_to_v2_api(
         self, test_client: TestClient, admin_headers, test_db
@@ -1333,7 +2409,13 @@ class TestRepositoriesImport:
 
         with patch(
             "app.api.v2.repositories._rinfo",
-            new=AsyncMock(return_value={"success": True, "stdout": json.dumps({"repository": {"id": 1}}), "stderr": ""}),
+            new=AsyncMock(
+                return_value={
+                    "success": True,
+                    "stdout": json.dumps({"repository": {"id": 1}}),
+                    "stderr": "",
+                }
+            ),
         ):
             response = test_client.post(
                 "/api/repositories/import",
@@ -1348,7 +2430,11 @@ class TestRepositoriesImport:
             )
 
         assert response.status_code == 200
-        repo = test_db.query(Repository).filter(Repository.name == "Delegated Borg2 Import").first()
+        repo = (
+            test_db.query(Repository)
+            .filter(Repository.name == "Delegated Borg2 Import")
+            .first()
+        )
         assert repo is not None
         assert repo.borg_version == 2
 
@@ -1357,9 +2443,13 @@ class TestRepositoriesImport:
 class TestRepositoriesArchives:
     """Test repository archives listing"""
 
-    def test_list_repository_archives_not_found(self, test_client: TestClient, admin_headers):
+    def test_list_repository_archives_not_found(
+        self, test_client: TestClient, admin_headers
+    ):
         """Test listing archives for non-existent repository returns 404"""
-        response = test_client.get("/api/repositories/99999/archives", headers=admin_headers)
+        response = test_client.get(
+            "/api/repositories/99999/archives", headers=admin_headers
+        )
 
         assert response.status_code == 404
 
@@ -1368,85 +2458,255 @@ class TestRepositoriesArchives:
 class TestRepositoriesJobStatus:
     """Test repository job status endpoints"""
 
-    def test_get_repository_check_jobs(self, test_client: TestClient, admin_headers, test_db):
+    def test_get_repository_check_jobs(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test getting repository check jobs returns 200"""
-        repo = Repository(name="Job Repo", path="/job/repo", encryption="none", repository_type="local")
+        repo = Repository(
+            name="Job Repo",
+            path="/job/repo",
+            encryption="none",
+            repository_type="local",
+        )
         test_db.add(repo)
         test_db.commit()
         test_db.refresh(repo)
 
-        response = test_client.get(f"/api/repositories/{repo.id}/check-jobs", headers=admin_headers)
+        response = test_client.get(
+            f"/api/repositories/{repo.id}/check-jobs", headers=admin_headers
+        )
 
         assert response.status_code == 200
 
-    def test_get_repository_compact_jobs(self, test_client: TestClient, admin_headers, test_db):
+    def test_get_repository_check_jobs_scheduled_only(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Scheduled Check Repo",
+            path="/job/scheduled-check-repo",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        test_db.add_all(
+            [
+                CheckJob(
+                    repository_id=repo.id,
+                    status="completed",
+                    scheduled_check=True,
+                ),
+                CheckJob(
+                    repository_id=repo.id,
+                    status="completed",
+                    scheduled_check=False,
+                ),
+            ]
+        )
+        test_db.commit()
+
+        response = test_client.get(
+            f"/api/repositories/{repo.id}/check-jobs?scheduled_only=true",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        jobs = response.json()["jobs"]
+        assert len(jobs) == 1
+        assert jobs[0]["scheduled_check"] is True
+
+    def test_get_repository_compact_jobs(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test getting repository compact jobs returns 200"""
-        repo = Repository(name="Job Repo", path="/job/repo", encryption="none", repository_type="local")
+        repo = Repository(
+            name="Job Repo",
+            path="/job/repo",
+            encryption="none",
+            repository_type="local",
+        )
         test_db.add(repo)
         test_db.commit()
         test_db.refresh(repo)
 
-        response = test_client.get(f"/api/repositories/{repo.id}/compact-jobs", headers=admin_headers)
+        response = test_client.get(
+            f"/api/repositories/{repo.id}/compact-jobs", headers=admin_headers
+        )
 
         assert response.status_code == 200
 
-    def test_get_repository_prune_jobs(self, test_client: TestClient, admin_headers, test_db):
+    def test_get_repository_prune_jobs(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test getting repository prune jobs returns 200"""
-        repo = Repository(name="Job Repo", path="/job/repo", encryption="none", repository_type="local")
+        repo = Repository(
+            name="Job Repo",
+            path="/job/repo",
+            encryption="none",
+            repository_type="local",
+        )
         test_db.add(repo)
         test_db.commit()
         test_db.refresh(repo)
 
-        response = test_client.get(f"/api/repositories/{repo.id}/prune-jobs", headers=admin_headers)
+        response = test_client.get(
+            f"/api/repositories/{repo.id}/prune-jobs", headers=admin_headers
+        )
 
         assert response.status_code == 200
 
-    def test_get_repository_running_jobs(self, test_client: TestClient, admin_headers, test_db):
+    def test_get_repository_running_jobs(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test getting repository running jobs returns 200"""
-        repo = Repository(name="Job Repo", path="/job/repo", encryption="none", repository_type="local")
+        repo = Repository(
+            name="Job Repo",
+            path="/job/repo",
+            encryption="none",
+            repository_type="local",
+        )
         test_db.add(repo)
         test_db.commit()
         test_db.refresh(repo)
 
-        response = test_client.get(f"/api/repositories/{repo.id}/running-jobs", headers=admin_headers)
+        response = test_client.get(
+            f"/api/repositories/{repo.id}/running-jobs", headers=admin_headers
+        )
 
         assert response.status_code == 200
 
-    def test_get_check_jobs_repository_not_found(self, test_client: TestClient, admin_headers):
+    def test_get_check_jobs_repository_not_found(
+        self, test_client: TestClient, admin_headers
+    ):
         """Test getting check jobs for non-existent repository returns 200 with empty list"""
-        response = test_client.get("/api/repositories/99999/check-jobs", headers=admin_headers)
+        response = test_client.get(
+            "/api/repositories/99999/check-jobs", headers=admin_headers
+        )
 
         # Returns 200 with empty list, not 404
         assert response.status_code == 200
         data = response.json()
         assert "jobs" in data or isinstance(data, list)
 
-    def test_get_compact_jobs_repository_not_found(self, test_client: TestClient, admin_headers):
+    def test_get_compact_jobs_repository_not_found(
+        self, test_client: TestClient, admin_headers
+    ):
         """Test getting compact jobs for non-existent repository returns 200 with empty list"""
-        response = test_client.get("/api/repositories/99999/compact-jobs", headers=admin_headers)
+        response = test_client.get(
+            "/api/repositories/99999/compact-jobs", headers=admin_headers
+        )
 
         # Returns 200 with empty list, not 404
         assert response.status_code == 200
         data = response.json()
         assert "jobs" in data or isinstance(data, list)
 
-    def test_get_prune_jobs_repository_not_found(self, test_client: TestClient, admin_headers):
+    def test_get_prune_jobs_repository_not_found(
+        self, test_client: TestClient, admin_headers
+    ):
         """Test getting prune jobs for non-existent repository returns 200 with empty list"""
-        response = test_client.get("/api/repositories/99999/prune-jobs", headers=admin_headers)
+        response = test_client.get(
+            "/api/repositories/99999/prune-jobs", headers=admin_headers
+        )
 
         # Returns 200 with empty list, not 404
         assert response.status_code == 200
         data = response.json()
         assert "jobs" in data or isinstance(data, list)
 
-    def test_get_running_jobs_repository_not_found(self, test_client: TestClient, admin_headers):
+    def test_get_running_jobs_repository_not_found(
+        self, test_client: TestClient, admin_headers
+    ):
         """Test getting running jobs for non-existent repository returns 200 with status"""
-        response = test_client.get("/api/repositories/99999/running-jobs", headers=admin_headers)
+        response = test_client.get(
+            "/api/repositories/99999/running-jobs", headers=admin_headers
+        )
 
         # Returns 200 with status structure, not 404
         assert response.status_code == 200
         data = response.json()
         assert "has_running_jobs" in data or "jobs" in data or isinstance(data, list)
+
+
+@pytest.mark.unit
+class TestRepositoryCheck:
+    """Test repository check endpoints"""
+
+    def test_start_check_stores_extra_flags(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Manual repository checks should store advanced check flags on the job."""
+        repo = Repository(
+            name="Test Repo",
+            path="/tmp/test",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch(
+            "app.api.repositories.start_background_maintenance_job"
+        ) as mock_start:
+            mock_start.return_value = CheckJob(
+                id=42,
+                repository_id=repo.id,
+                status="pending",
+                max_duration=0,
+                extra_flags="--repair --archives-only",
+            )
+
+            response = test_client.post(
+                f"/api/repositories/{repo.id}/check",
+                headers=admin_headers,
+                json={
+                    "max_duration": 0,
+                    "check_extra_flags": "  --repair --archives-only  ",
+                },
+            )
+
+        assert response.status_code == 200
+        assert mock_start.call_args.kwargs["extra_fields"] == {
+            "max_duration": 0,
+            "extra_flags": "--repair --archives-only",
+        }
+
+    def test_start_check_rejects_full_check_flags_with_partial_duration(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Full-check flags should require unlimited/manual full check duration."""
+        repo = Repository(
+            name="Test Repo",
+            path="/tmp/test",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch(
+            "app.api.repositories.start_background_maintenance_job"
+        ) as mock_start:
+            response = test_client.post(
+                f"/api/repositories/{repo.id}/check",
+                headers=admin_headers,
+                json={
+                    "max_duration": 600,
+                    "check_extra_flags": " --verify-data ",
+                },
+            )
+
+        assert response.status_code == 422
+        assert response.json()["detail"]["key"] == (
+            "backend.errors.repo.checkFlagsRequireUnlimitedDuration"
+        )
+        assert response.json()["detail"]["params"]["flags"] == "--verify-data"
+        mock_start.assert_not_called()
+
 
 @pytest.mark.unit
 class TestRepositoryCheckSchedule:
@@ -1461,38 +2721,46 @@ class TestRepositoryCheckSchedule:
             repository_type="local",
             check_cron_expression="0 2 * * 0",  # Weekly on Sunday at 2 AM
             check_max_duration=3600,
+            check_extra_flags="--verify-data",
             notify_on_check_success=False,
-            notify_on_check_failure=True
+            notify_on_check_failure=True,
         )
         test_db.add(repo)
         test_db.commit()
         test_db.refresh(repo)
 
-        response = test_client.get(f"/api/repositories/{repo.id}/check-schedule", headers=admin_headers)
+        response = test_client.get(
+            f"/api/repositories/{repo.id}/check-schedule", headers=admin_headers
+        )
 
         assert response.status_code == 200
         data = response.json()
         assert data["repository_id"] == repo.id
         assert data["check_cron_expression"] == "0 2 * * 0"
         assert data["check_max_duration"] == 3600
+        assert data["check_extra_flags"] == "--verify-data"
         assert data["notify_on_check_success"] == False
         assert data["notify_on_check_failure"] == True
         assert data["enabled"] == True
 
-    def test_get_check_schedule_disabled(self, test_client: TestClient, admin_headers, test_db):
+    def test_get_check_schedule_disabled(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test getting check schedule for repository with no schedule"""
         repo = Repository(
             name="Test Repo",
             path="/tmp/test",
             encryption="none",
             repository_type="local",
-            check_cron_expression=None
+            check_cron_expression=None,
         )
         test_db.add(repo)
         test_db.commit()
         test_db.refresh(repo)
 
-        response = test_client.get(f"/api/repositories/{repo.id}/check-schedule", headers=admin_headers)
+        response = test_client.get(
+            f"/api/repositories/{repo.id}/check-schedule", headers=admin_headers
+        )
 
         assert response.status_code == 200
         data = response.json()
@@ -1500,13 +2768,15 @@ class TestRepositoryCheckSchedule:
         assert data["check_cron_expression"] is None
         assert data["enabled"] == False
 
-    def test_update_check_schedule(self, test_client: TestClient, admin_headers, test_db):
+    def test_update_check_schedule(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test updating check schedule for a repository"""
         repo = Repository(
             name="Test Repo",
             path="/tmp/test",
             encryption="none",
-            repository_type="local"
+            repository_type="local",
         )
         test_db.add(repo)
         test_db.commit()
@@ -1515,33 +2785,96 @@ class TestRepositoryCheckSchedule:
         # Update check schedule
         payload = {
             "cron_expression": "0 3 * * *",  # Daily at 3 AM
-            "max_duration": 7200,
+            "max_duration": 0,
+            "check_extra_flags": "  --repair --save-space  ",
             "notify_on_success": True,
-            "notify_on_failure": False
+            "notify_on_failure": False,
         }
         response = test_client.put(
             f"/api/repositories/{repo.id}/check-schedule",
             headers=admin_headers,
-            json=payload
+            json=payload,
         )
 
         assert response.status_code == 200
         data = response.json()
         assert data["success"] == True
         assert data["repository"]["check_cron_expression"] == "0 3 * * *"
-        assert data["repository"]["check_max_duration"] == 7200
+        assert data["repository"]["check_max_duration"] == 0
+        assert data["repository"]["check_extra_flags"] == "--repair --save-space"
         assert data["repository"]["notify_on_check_success"] == True
         assert data["repository"]["notify_on_check_failure"] == False
         assert data["repository"]["next_scheduled_check"] is not None
 
-    def test_update_check_schedule_disable(self, test_client: TestClient, admin_headers, test_db):
+    def test_update_check_schedule_rejects_full_check_flags_with_partial_duration(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Scheduled full-check flags must be paired with max_duration 0."""
+        repo = Repository(
+            name="Test Repo",
+            path="/tmp/test",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}/check-schedule",
+            headers=admin_headers,
+            json={
+                "cron_expression": "0 3 * * *",
+                "max_duration": 3600,
+                "check_extra_flags": " --verify-data ",
+            },
+        )
+
+        assert response.status_code == 422
+        assert response.json()["detail"]["key"] == (
+            "backend.errors.repo.checkFlagsRequireUnlimitedDuration"
+        )
+        assert response.json()["detail"]["params"]["flags"] == "--verify-data"
+
+    def test_update_check_schedule_allows_verify_data_with_unlimited_duration(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """`--verify-data` is valid when scheduled checks run without a max duration."""
+        repo = Repository(
+            name="Test Repo",
+            path="/tmp/test",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}/check-schedule",
+            headers=admin_headers,
+            json={
+                "cron_expression": "0 3 * * *",
+                "max_duration": 0,
+                "check_extra_flags": " --verify-data ",
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["repository"]["check_max_duration"] == 0
+        assert data["repository"]["check_extra_flags"] == "--verify-data"
+
+    def test_update_check_schedule_disable(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test disabling check schedule for a repository"""
         repo = Repository(
             name="Test Repo",
             path="/tmp/test",
             encryption="none",
             repository_type="local",
-            check_cron_expression="0 2 * * 0"  # Weekly on Sunday at 2 AM
+            check_cron_expression="0 2 * * 0",  # Weekly on Sunday at 2 AM
         )
         test_db.add(repo)
         test_db.commit()
@@ -1552,7 +2885,7 @@ class TestRepositoryCheckSchedule:
         response = test_client.put(
             f"/api/repositories/{repo.id}/check-schedule",
             headers=admin_headers,
-            json=payload
+            json=payload,
         )
 
         assert response.status_code == 200
@@ -1563,20 +2896,315 @@ class TestRepositoryCheckSchedule:
 
     def test_get_check_schedule_not_found(self, test_client: TestClient, admin_headers):
         """Test getting check schedule for non-existent repository"""
-        response = test_client.get("/api/repositories/99999/check-schedule", headers=admin_headers)
+        response = test_client.get(
+            "/api/repositories/99999/check-schedule", headers=admin_headers
+        )
 
         assert response.status_code == 404
 
-    def test_update_check_schedule_not_found(self, test_client: TestClient, admin_headers):
+    def test_update_check_schedule_not_found(
+        self, test_client: TestClient, admin_headers
+    ):
         """Test updating check schedule for non-existent repository"""
         payload = {"cron_expression": "0 2 * * 0"}
         response = test_client.put(
             "/api/repositories/99999/check-schedule",
             headers=admin_headers,
-            json=payload
+            json=payload,
         )
 
         assert response.status_code == 404
+
+
+@pytest.mark.unit
+class TestRepositoryRestoreCheckSchedule:
+    def test_get_restore_check_schedule(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Test Repo",
+            path="/tmp/test",
+            encryption="none",
+            repository_type="local",
+            restore_check_cron_expression="0 5 * * 1",
+            restore_check_timezone="Europe/Berlin",
+            restore_check_paths='["etc/hostname"]',
+            notify_on_restore_check_success=False,
+            notify_on_restore_check_failure=True,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.get(
+            f"/api/repositories/{repo.id}/restore-check-schedule", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["repository_id"] == repo.id
+        assert data["restore_check_cron_expression"] == "0 5 * * 1"
+        assert data["restore_check_timezone"] == "Europe/Berlin"
+        assert data["timezone"] == "Europe/Berlin"
+        assert data["restore_check_paths"] == ["etc/hostname"]
+        assert data["notify_on_restore_check_failure"] == True
+        assert data["restore_check_mode"] == "probe_paths"
+        assert data["restore_check_canary_enabled"] == False
+        assert data["enabled"] == True
+
+    def test_update_restore_check_schedule(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Test Repo",
+            path="/tmp/test",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        payload = {
+            "cron_expression": "0 6 * * *",
+            "timezone": "Asia/Kolkata",
+            "paths": ["etc/hostname", "var/log"],
+            "notify_on_success": True,
+            "notify_on_failure": False,
+        }
+        response = test_client.put(
+            f"/api/repositories/{repo.id}/restore-check-schedule",
+            headers=admin_headers,
+            json=payload,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] == True
+        assert data["repository"]["restore_check_cron_expression"] == "0 6 * * *"
+        assert data["repository"]["restore_check_timezone"] == "Asia/Kolkata"
+        assert data["repository"]["timezone"] == "Asia/Kolkata"
+        assert data["repository"]["restore_check_paths"] == [
+            "etc/hostname",
+            "var/log",
+        ]
+        assert data["repository"]["restore_check_mode"] == "probe_paths"
+        assert data["repository"]["restore_check_canary_enabled"] == False
+        assert data["repository"]["notify_on_restore_check_success"] == True
+        assert data["repository"]["notify_on_restore_check_failure"] == False
+        assert data["repository"]["next_scheduled_restore_check"] is not None
+
+    def test_update_restore_check_schedule_defaults_to_canary_mode(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Canary Repo",
+            path="/tmp/canary",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}/restore-check-schedule",
+            headers=admin_headers,
+            json={"cron_expression": "0 7 * * *", "paths": [], "full_archive": False},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["repository"]["restore_check_mode"] == "canary"
+        assert data["repository"]["restore_check_canary_enabled"] == True
+
+        test_db.refresh(repo)
+        assert repo.restore_check_canary_enabled is True
+
+        disable_response = test_client.put(
+            f"/api/repositories/{repo.id}/restore-check-schedule",
+            headers=admin_headers,
+            json={"cron_expression": ""},
+        )
+
+        assert disable_response.status_code == 200
+        assert (
+            disable_response.json()["repository"]["restore_check_canary_enabled"]
+            == False
+        )
+        test_db.refresh(repo)
+        assert repo.restore_check_canary_enabled is False
+
+    def test_update_restore_check_schedule_rejects_canary_for_observe_repo(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Observe Repo",
+            path="/tmp/observe",
+            encryption="none",
+            repository_type="local",
+            mode="observe",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}/restore-check-schedule",
+            headers=admin_headers,
+            json={"cron_expression": "0 7 * * *", "paths": [], "full_archive": False},
+        )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.repo.restoreCheckCanaryUnsupportedObserve"
+        )
+
+    def test_update_restore_check_schedule_allows_probe_paths_for_observe_repo(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Observe Repo",
+            path="/tmp/observe",
+            encryption="none",
+            repository_type="local",
+            mode="observe",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}/restore-check-schedule",
+            headers=admin_headers,
+            json={
+                "cron_expression": "0 7 * * *",
+                "paths": ["etc/hostname"],
+                "full_archive": False,
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["repository"]["restore_check_mode"] == "probe_paths"
+        assert data["repository"]["restore_check_canary_enabled"] == False
+
+    def test_start_restore_check_job(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Test Repo",
+            path="/tmp/test",
+            encryption="none",
+            repository_type="local",
+            restore_check_paths='["etc/hostname"]',
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch(
+            "app.api.repositories.start_background_maintenance_job"
+        ) as mock_start:
+            mock_start.return_value = RestoreCheckJob(
+                id=501,
+                repository_id=repo.id,
+                status="pending",
+                probe_paths='["etc/hostname"]',
+            )
+            response = test_client.post(
+                f"/api/repositories/{repo.id}/restore-check",
+                headers=admin_headers,
+                json={},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["job_id"] == 501
+        assert data["message"] == "backend.success.repo.restoreCheckJobStarted"
+
+    def test_manual_canary_restore_check_marks_canary_for_future_backups(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Canary Repo",
+            path="/tmp/canary",
+            encryption="none",
+            repository_type="local",
+            restore_check_canary_enabled=False,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch(
+            "app.api.maintenance_jobs.schedule_background_job",
+            side_effect=_discard_background_coro,
+        ):
+            response = test_client.post(
+                f"/api/repositories/{repo.id}/restore-check",
+                headers=admin_headers,
+                json={"paths": [], "full_archive": False},
+            )
+
+        assert response.status_code == 200
+        test_db.refresh(repo)
+        assert repo.restore_check_canary_enabled is True
+        assert repo.restore_check_paths == "[]"
+        assert repo.restore_check_full_archive is False
+
+    def test_manual_canary_restore_check_rejects_observe_repo(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Observe Repo",
+            path="/tmp/observe",
+            encryption="none",
+            repository_type="local",
+            mode="observe",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.post(
+            f"/api/repositories/{repo.id}/restore-check",
+            headers=admin_headers,
+            json={"paths": [], "full_archive": False},
+        )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.repo.restoreCheckCanaryUnsupportedObserve"
+        )
+
+    def test_manual_probe_restore_check_allows_observe_repo(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Observe Repo",
+            path="/tmp/observe",
+            encryption="none",
+            repository_type="local",
+            mode="observe",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch(
+            "app.api.maintenance_jobs.schedule_background_job",
+            side_effect=_discard_background_coro,
+        ):
+            response = test_client.post(
+                f"/api/repositories/{repo.id}/restore-check",
+                headers=admin_headers,
+                json={"paths": ["etc/hostname"], "full_archive": False},
+            )
+
+        assert response.status_code == 200
 
 
 @pytest.mark.unit

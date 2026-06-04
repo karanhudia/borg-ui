@@ -83,6 +83,7 @@ export interface DataTableProps<T> {
 
   // Additional features
   sx?: SxProps<Theme>
+  actionColumnWidth?: string
 
   // Mobile rendering
   mobileBreakpoint?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'
@@ -116,6 +117,7 @@ export default function DataTable<T>({
   rowsPerPageOptions = [5, 10, 25, 50, 100],
   tableId,
   sx,
+  actionColumnWidth,
   mobileBreakpoint = 'sm',
 }: DataTableProps<T>) {
   // Load saved rows per page from localStorage if available
@@ -138,6 +140,8 @@ export default function DataTable<T>({
   const [rowsPerPage, setRowsPerPage] = useState(getInitialRowsPerPage)
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down(mobileBreakpoint))
+  const headerActionColumnWidth = actionColumnWidth || '152px'
+  const bodyActionColumnWidth = actionColumnWidth || '130px'
 
   const handleChangePage = (_event: unknown, newPage: number) => {
     setPage(newPage)
@@ -246,9 +250,9 @@ export default function DataTable<T>({
                     fontSize: '0.7rem',
                     textTransform: 'uppercase',
                     letterSpacing: '0.05em',
-                    width: '152px',
-                    minWidth: '152px',
-                    maxWidth: '152px',
+                    width: headerActionColumnWidth,
+                    minWidth: headerActionColumnWidth,
+                    maxWidth: headerActionColumnWidth,
                   }}
                 >
                   {t('dataTable.actions')}
@@ -279,7 +283,14 @@ export default function DataTable<T>({
                   </TableCell>
                 ))}
                 {actions && actions.length > 0 && (
-                  <TableCell align="right" sx={{ width: '130px' }}>
+                  <TableCell
+                    align="right"
+                    sx={{
+                      width: bodyActionColumnWidth,
+                      minWidth: bodyActionColumnWidth,
+                      maxWidth: bodyActionColumnWidth,
+                    }}
+                  >
                     <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
                       {actions.slice(0, 3).map((_, ai) => (
                         <Skeleton
@@ -556,9 +567,9 @@ export default function DataTable<T>({
                   textTransform: 'uppercase',
                   letterSpacing: '0.05em',
                   whiteSpace: 'nowrap',
-                  width: '152px',
-                  minWidth: '152px',
-                  maxWidth: '152px',
+                  width: headerActionColumnWidth,
+                  minWidth: headerActionColumnWidth,
+                  maxWidth: headerActionColumnWidth,
                 }}
               >
                 {t('dataTable.actions')}
@@ -610,7 +621,11 @@ export default function DataTable<T>({
               {actions && actions.length > 0 && (
                 <TableCell
                   align="right"
-                  sx={{ width: '130px', minWidth: '130px', maxWidth: '130px' }}
+                  sx={{
+                    width: bodyActionColumnWidth,
+                    minWidth: bodyActionColumnWidth,
+                    maxWidth: bodyActionColumnWidth,
+                  }}
                 >
                   {renderActions(row)}
                 </TableCell>

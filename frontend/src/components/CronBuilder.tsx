@@ -18,8 +18,8 @@ import { Clock, Calendar, CalendarDays, CalendarRange, Code, Timer } from 'lucid
 import { useTranslation } from 'react-i18next'
 
 interface CronBuilderProps {
-  value: string // Cron expression in LOCAL time
-  onChange: (cronExpression: string) => void // Returns LOCAL cron (parent handles UTC conversion when saving)
+  value: string // Cron expression in the selected schedule timezone
+  onChange: (cronExpression: string) => void
   label?: string
   helperText?: string
 }
@@ -223,11 +223,9 @@ const generatePreview = (
 
 export default function CronBuilder({ value, onChange, label, helperText }: CronBuilderProps) {
   const { t } = useTranslation()
-  // value is already in local time, no conversion needed
   const [state, setState] = useState<CronState>(parseCron(value))
 
   useEffect(() => {
-    // value is already in local time, no conversion needed
     setState(parseCron(value))
   }, [value])
 
@@ -235,9 +233,7 @@ export default function CronBuilder({ value, onChange, label, helperText }: Cron
     const updatedState = { ...state, ...newState }
     setState(updatedState)
 
-    const localCron = buildCron(updatedState)
-    // CronBuilder works entirely in local time - parent handles UTC conversion
-    onChange(localCron)
+    onChange(buildCron(updatedState))
   }
 
   const hour12 = state.hour === 0 ? 12 : state.hour > 12 ? state.hour - 12 : state.hour

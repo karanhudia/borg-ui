@@ -13,10 +13,12 @@ logger = structlog.get_logger()
 def upgrade(db):
     """Add stats_refresh_interval_minutes to system_settings"""
     try:
-        db.execute(text("""
+        db.execute(
+            text("""
             ALTER TABLE system_settings
             ADD COLUMN stats_refresh_interval_minutes INTEGER DEFAULT 60
-        """))
+        """)
+        )
         logger.info("Added stats_refresh_interval_minutes column")
     except Exception as e:
         if "duplicate column" in str(e).lower():

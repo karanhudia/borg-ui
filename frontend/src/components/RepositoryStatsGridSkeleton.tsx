@@ -2,7 +2,7 @@ import { Box, Skeleton, alpha, useTheme } from '@mui/material'
 
 type ColorKey = 'primary' | 'success' | 'info' | 'secondary' | 'warning'
 
-const STAT_COLORS: ColorKey[] = ['primary', 'success', 'info', 'secondary', 'warning']
+const STAT_COLORS: ColorKey[] = ['primary', 'success', 'info', 'secondary']
 
 interface StatCardSkeletonProps {
   colorKey: ColorKey
@@ -38,14 +38,14 @@ function StatCardSkeleton({ colorKey, index }: StatCardSkeletonProps) {
           {/* Label */}
           <Skeleton
             variant="text"
-            width={[64, 72, 68, 76, 80][index]}
+            width={[64, 72, 84, 96][index]}
             height={10}
             sx={{ transform: 'none', mb: 1, borderRadius: 0.5 }}
           />
           {/* Value */}
           <Skeleton
             variant="text"
-            width={[48, 56, 52, 44, 56][index]}
+            width={[48, 56, 60, 62][index]}
             height={28}
             sx={{ transform: 'none', borderRadius: 0.5 }}
           />
@@ -67,7 +67,7 @@ export default function RepositoryStatsGridSkeleton() {
     <Box
       sx={{
         display: 'grid',
-        gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(5, 1fr)' },
+        gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
         gap: 2,
         mb: 0,
       }}

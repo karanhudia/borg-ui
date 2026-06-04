@@ -1,0 +1,173 @@
+/* Borg UI brand:
+ * Primary (logo green):  linear-gradient(135deg, #065f46 0%, #059669 100%)
+ * Accent (calls-to-action, links):  linear-gradient(135deg, #d97706, #f59e0b)
+ */
+
+:root {
+  /* Primary = brand green (used for logos, surfaces, badges) */
+  --vp-c-brand-1: #059669;
+  --vp-c-brand-2: #10b981;
+  --vp-c-brand-3: #34d399;
+  --vp-c-brand-soft: rgba(5, 150, 105, 0.14);
+
+  /* Accent = amber (used for buttons / CTAs) */
+  --bui-accent-1: #d97706;
+  --bui-accent-2: #f59e0b;
+  --bui-accent-3: #fbbf24;
+
+  --vp-button-brand-bg: var(--bui-accent-1);
+  --vp-button-brand-hover-bg: var(--bui-accent-2);
+  --vp-button-brand-active-bg: #b45309;
+  --vp-button-brand-border: var(--bui-accent-1);
+  --vp-button-brand-hover-border: var(--bui-accent-2);
+  --vp-button-brand-active-border: #b45309;
+
+  /* Hero gradient text uses brand green */
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(135deg, #065f46 0%, #059669 100%);
+
+  /* Background blur orb behind hero image - green not yellow */
+  --vp-home-hero-image-background-image: linear-gradient(135deg, #065f46 0%, #059669 100%);
+  --vp-home-hero-image-filter: blur(56px);
+}
+
+.dark {
+  --vp-c-bg: #0b0d10;
+  --vp-c-bg-alt: #15181d;
+  --vp-c-bg-soft: #1a1d23;
+  --vp-c-text-1: #e6e8eb;
+  --vp-c-text-2: #b8bcc4;
+  --vp-c-text-3: #7c8390;
+  --vp-c-divider: #2a2f38;
+  --vp-c-border: #2a2f38;
+
+  /* Slightly lighter green in dark mode for contrast */
+  --vp-c-brand-1: #10b981;
+  --vp-c-brand-2: #34d399;
+  --vp-c-brand-3: #6ee7b7;
+
+  --vp-home-hero-name-background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+  --vp-home-hero-image-background-image: linear-gradient(135deg, #065f46 0%, #059669 100%);
+}
+
+/* Logo: don't crop, scale cleanly */
+.VPNavBarTitle .logo {
+  height: 32px;
+  width: auto;
+  max-width: 200px;
+  margin-right: 0;
+}
+
+/* Sidebar active item: amber accent left border */
+.VPSidebarItem.is-active > .item .text {
+  color: var(--bui-accent-2);
+}
+
+.VPSidebarItem.is-active > .item .link {
+  position: relative;
+}
+
+.VPSidebarItem.is-active > .item .link::before {
+  content: '';
+  position: absolute;
+  left: -16px;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  background: var(--bui-accent-1);
+  border-radius: 2px;
+}
+
+/* Code block radius polish */
+.vp-doc div[class*='language-'] {
+  border-radius: 8px;
+}
+
+/* Hero image: cap PNG render size with max-* so VitePress can still shrink
+ * on smaller viewports. Source is 264px native; 528px @2x for retina. */
+.VPHero .image-src {
+  max-width: 280px;
+  max-height: 280px;
+  image-rendering: -webkit-optimize-contrast;
+}
+
+/* Desktop: cap the orb container so the green halo doesn't bleed everywhere */
+@media (min-width: 960px) {
+  .VPHero .image-container {
+    max-width: 320px;
+    max-height: 320px;
+  }
+  .VPHero .image-bg {
+    max-width: 280px;
+    max-height: 280px;
+  }
+}
+
+/* Mobile: shrink the orb + reduce blur so it doesn't overlap the heading */
+@media (max-width: 768px) {
+  .VPHero .image-src {
+    max-width: 180px;
+    max-height: 180px;
+  }
+  .VPHero .image-bg {
+    filter: blur(32px);
+    max-width: 200px;
+    max-height: 200px;
+  }
+}
+
+/* Feature cards: icon + title inline, details below */
+.VPFeature .box {
+  display: grid !important;
+  grid-template-columns: auto 1fr;
+  column-gap: 12px;
+  row-gap: 8px;
+  align-items: center;
+}
+
+.VPFeature .icon {
+  background: transparent !important;
+  color: var(--vp-c-brand-1) !important;
+  border: none !important;
+  padding: 0 !important;
+  width: auto !important;
+  height: auto !important;
+  margin: 0 !important;
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+}
+
+.VPFeature .icon svg {
+  width: 24px;
+  height: 24px;
+  display: block;
+}
+
+.VPFeature .title {
+  grid-column: 2;
+  grid-row: 1;
+  margin: 0 !important;
+  line-height: 1.2 !important;
+}
+
+.VPFeature .details {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  margin: 0 !important;
+}
+
+.dark .VPFeature .icon {
+  color: var(--vp-c-brand-2) !important;
+}
+
+/* Inline links use amber accent so they pop against green branding */
+.vp-doc a {
+  color: var(--bui-accent-2);
+  text-decoration-color: rgba(245, 158, 11, 0.4);
+}
+
+.vp-doc a:hover {
+  color: var(--bui-accent-3);
+}

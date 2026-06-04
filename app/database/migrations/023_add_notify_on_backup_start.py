@@ -1,5 +1,6 @@
 from sqlalchemy import text
 
+
 def upgrade(connection):
     """Add notify_on_backup_start column to notification_settings table
 
@@ -11,17 +12,24 @@ def upgrade(connection):
     result = connection.execute(text("PRAGMA table_info(notification_settings)"))
     columns = [row[1] for row in result]
 
-    if 'notify_on_backup_start' not in columns:
+    if "notify_on_backup_start" not in columns:
         # Add notify_on_backup_start column to notification_settings
-        connection.execute(text("""
+        connection.execute(
+            text("""
             ALTER TABLE notification_settings ADD COLUMN notify_on_backup_start BOOLEAN NOT NULL DEFAULT 0
-        """))
+        """)
+        )
 
-        print("✓ Migration 023: Added notify_on_backup_start column to notification_settings")
+        print(
+            "✓ Migration 023: Added notify_on_backup_start column to notification_settings"
+        )
     else:
-        print("⊘ Migration 023: notify_on_backup_start column already exists in notification_settings, skipping")
+        print(
+            "⊘ Migration 023: notify_on_backup_start column already exists in notification_settings, skipping"
+        )
 
     connection.commit()
+
 
 def downgrade(connection):
     """Remove notify_on_backup_start column from notification_settings table"""

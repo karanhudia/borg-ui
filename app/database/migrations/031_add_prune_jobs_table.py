@@ -7,13 +7,15 @@ prune operations, allowing them to appear in the activity feed with logs.
 
 from sqlalchemy import text
 
+
 def upgrade(db):
     """Create prune_jobs table"""
     print("Running migration 031: Add PruneJob Table")
 
     try:
         # Create prune_jobs table
-        db.execute(text("""
+        db.execute(
+            text("""
             CREATE TABLE IF NOT EXISTS prune_jobs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 repository_id INTEGER NOT NULL,
@@ -26,7 +28,8 @@ def upgrade(db):
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (repository_id) REFERENCES repositories(id)
             )
-        """))
+        """)
+        )
         print("✓ Created prune_jobs table")
 
         db.commit()
@@ -36,6 +39,7 @@ def upgrade(db):
         print(f"✗ Migration 031 failed: {e}")
         db.rollback()
         raise
+
 
 def downgrade(db):
     """Downgrade migration 031"""

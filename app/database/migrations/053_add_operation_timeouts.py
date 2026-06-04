@@ -14,10 +14,12 @@ def upgrade(db):
     """Add timeout columns to system_settings"""
     try:
         # Add mount_timeout column
-        db.execute(text("""
+        db.execute(
+            text("""
             ALTER TABLE system_settings
             ADD COLUMN mount_timeout INTEGER DEFAULT 120
-        """))
+        """)
+        )
         logger.info("Added mount_timeout column")
     except Exception as e:
         if "duplicate column" in str(e).lower():
@@ -27,10 +29,12 @@ def upgrade(db):
 
     try:
         # Add info_timeout column
-        db.execute(text("""
+        db.execute(
+            text("""
             ALTER TABLE system_settings
             ADD COLUMN info_timeout INTEGER DEFAULT 600
-        """))
+        """)
+        )
         logger.info("Added info_timeout column")
     except Exception as e:
         if "duplicate column" in str(e).lower():
@@ -40,10 +44,12 @@ def upgrade(db):
 
     try:
         # Add list_timeout column
-        db.execute(text("""
+        db.execute(
+            text("""
             ALTER TABLE system_settings
             ADD COLUMN list_timeout INTEGER DEFAULT 600
-        """))
+        """)
+        )
         logger.info("Added list_timeout column")
     except Exception as e:
         if "duplicate column" in str(e).lower():
@@ -53,10 +59,12 @@ def upgrade(db):
 
     try:
         # Add init_timeout column
-        db.execute(text("""
+        db.execute(
+            text("""
             ALTER TABLE system_settings
             ADD COLUMN init_timeout INTEGER DEFAULT 300
-        """))
+        """)
+        )
         logger.info("Added init_timeout column")
     except Exception as e:
         if "duplicate column" in str(e).lower():

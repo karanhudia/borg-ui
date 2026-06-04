@@ -17,7 +17,7 @@ import json
 import os
 import tempfile
 import shutil
-from typing import Set, List
+from typing import Set
 
 # Handle both pytest (relative import) and direct script execution (absolute import)
 try:
@@ -25,12 +25,14 @@ try:
 except ImportError:
     from test_helpers import DockerPathHelper
 
+
 class Colors:
-    GREEN = '\033[92m'
-    RED = '\033[91m'
-    YELLOW = '\033[93m'
-    BLUE = '\033[94m'
-    END = '\033[0m'
+    GREEN = "\033[92m"
+    RED = "\033[91m"
+    YELLOW = "\033[93m"
+    BLUE = "\033[94m"
+    END = "\033[0m"
+
 
 class ArchiveBrowsingTester:
     def __init__(self, base_url: str = "http://localhost:8082"):
@@ -46,7 +48,7 @@ class ArchiveBrowsingTester:
             "INFO": Colors.BLUE,
             "SUCCESS": Colors.GREEN,
             "ERROR": Colors.RED,
-            "WARNING": Colors.YELLOW
+            "WARNING": Colors.YELLOW,
         }
         color = colors.get(level, "")
         print(f"{color}{message}{Colors.END}")
@@ -57,7 +59,7 @@ class ArchiveBrowsingTester:
             response = self.session.post(
                 f"{self.base_url}/api/auth/login",
                 data={"username": "admin", "password": "admin123"},
-                timeout=10
+                timeout=10,
             )
             if response.status_code == 200:
                 self.auth_token = response.json().get("access_token")
@@ -70,7 +72,9 @@ class ArchiveBrowsingTester:
             self.log(f"✗ Authentication error: {e}", "ERROR")
             return False
 
-    def get_borg_directories(self, repo_path: str, archive: str, path: str = "") -> Set[str]:
+    def get_borg_directories(
+        self, repo_path: str, archive: str, path: str = ""
+    ) -> Set[str]:
         """
         Get directories at a specific path using borg CLI
         Returns set of directory names (not full paths)
@@ -88,19 +92,19 @@ class ArchiveBrowsingTester:
 
             # Parse JSON lines and extract immediate children
             items = set()
-            for line in result.stdout.strip().split('\n'):
+            for line in result.stdout.strip().split("\n"):
                 if line:
                     try:
                         item = json.loads(line)
-                        item_path = item.get('path', '')
-                        item_type = item.get('type', '')
+                        item_path = item.get("path", "")
+                        item_type = item.get("type", "")
 
-                        if not item_path or item_type != 'd':
+                        if not item_path or item_type != "d":
                             continue
 
                         # Get relative path
                         if path and item_path.startswith(path + "/"):
-                            relative_path = item_path[len(path) + 1:]
+                            relative_path = item_path[len(path) + 1 :]
                         elif path and item_path == path:
                             continue
                         else:
@@ -128,7 +132,9 @@ class ArchiveBrowsingTester:
             self.log(f"✗ Error getting borg directories: {e}", "ERROR")
             return set()
 
-    def get_ui_directories(self, repo_id: int, archive_name: str, path: str = "") -> Set[str]:
+    def get_ui_directories(
+        self, repo_id: int, archive_name: str, path: str = ""
+    ) -> Set[str]:
         """
         Get directories from Borg UI API at a specific path
         Returns set of directory names
@@ -141,19 +147,22 @@ class ArchiveBrowsingTester:
                 f"{self.base_url}/api/browse/{repo_id}/{archive_name}",
                 headers=headers,
                 params=params,
-                timeout=30
+                timeout=30,
             )
 
             if response.status_code != 200:
-                self.log(f"✗ UI API failed: {response.status_code} - {response.text}", "ERROR")
+                self.log(
+                    f"✗ UI API failed: {response.status_code} - {response.text}",
+                    "ERROR",
+                )
                 return set()
 
             data = response.json()
             items = set()
 
-            for item in data.get('items', []):
-                if item.get('type') == 'directory':
-                    items.add(item['name'])
+            for item in data.get("items", []):
+                if item.get("type") == "directory":
+                    items.add(item["name"])
 
             return items
 
@@ -161,8 +170,14 @@ class ArchiveBrowsingTester:
             self.log(f"✗ Error getting UI directories: {e}", "ERROR")
             return set()
 
-    def test_directory_level(self, repo_id: int, repo_path: str, archive: str, path: str,
-                           expected_min_dirs: int = None) -> bool:
+    def test_directory_level(
+        self,
+        repo_id: int,
+        repo_path: str,
+        archive: str,
+        path: str,
+        expected_min_dirs: int = None,
+    ) -> bool:
         """
         Test that a specific directory level shows all directories correctly
         """
@@ -182,15 +197,20 @@ class ArchiveBrowsingTester:
             self.log(f"  ✓ PASS - All directories shown correctly!", "SUCCESS")
 
             if expected_min_dirs and len(ui_dirs) < expected_min_dirs:
-                self.log(f"  ⚠ WARNING: Expected at least {expected_min_dirs} dirs, got {len(ui_dirs)}", "WARNING")
+                self.log(
+                    f"  ⚠ WARNING: Expected at least {expected_min_dirs} dirs, got {len(ui_dirs)}",
+                    "WARNING",
+                )
                 return False
 
-            self.test_results.append({
-                "path": path,
-                "status": "PASS",
-                "borg_count": len(borg_dirs),
-                "ui_count": len(ui_dirs)
-            })
+            self.test_results.append(
+                {
+                    "path": path,
+                    "status": "PASS",
+                    "borg_count": len(borg_dirs),
+                    "ui_count": len(ui_dirs),
+                }
+            )
             return True
         else:
             self.log(f"  ✗ FAIL - Directories don't match!", "ERROR")
@@ -199,22 +219,32 @@ class ArchiveBrowsingTester:
             extra = ui_dirs - borg_dirs
 
             if missing:
-                self.log(f"    Missing in UI ({len(missing)}): {sorted(list(missing)[:10])}", "ERROR")
+                self.log(
+                    f"    Missing in UI ({len(missing)}): {sorted(list(missing)[:10])}",
+                    "ERROR",
+                )
 
             if extra:
-                self.log(f"    Extra in UI ({len(extra)}): {sorted(list(extra)[:10])}", "WARNING")
+                self.log(
+                    f"    Extra in UI ({len(extra)}): {sorted(list(extra)[:10])}",
+                    "WARNING",
+                )
 
-            self.test_results.append({
-                "path": path,
-                "status": "FAIL",
-                "borg_count": len(borg_dirs),
-                "ui_count": len(ui_dirs),
-                "missing": list(missing)[:20],
-                "extra": list(extra)[:20]
-            })
+            self.test_results.append(
+                {
+                    "path": path,
+                    "status": "FAIL",
+                    "borg_count": len(borg_dirs),
+                    "ui_count": len(ui_dirs),
+                    "missing": list(missing)[:20],
+                    "extra": list(extra)[:20],
+                }
+            )
             return False
 
-    def test_response_size(self, repo_id: int, archive_name: str, path: str = "") -> bool:
+    def test_response_size(
+        self, repo_id: int, archive_name: str, path: str = ""
+    ) -> bool:
         """
         Test that response size is reasonable (not fetching all files)
         """
@@ -226,20 +256,25 @@ class ArchiveBrowsingTester:
                 f"{self.base_url}/api/browse/{repo_id}/{archive_name}",
                 headers=headers,
                 params=params,
-                timeout=30
+                timeout=30,
             )
 
             if response.status_code != 200:
                 return False
 
             response_size = len(response.content)
-            self.log(f"\n📊 Response size for path '{path}': {response_size:,} bytes", "INFO")
+            self.log(
+                f"\n📊 Response size for path '{path}': {response_size:,} bytes", "INFO"
+            )
 
             # Response should be reasonable (< 100kb for a directory level)
             # If it's > 100kb, it might be fetching too much data
             if response_size > 100000:
                 self.log(f"  ⚠ WARNING: Response size is large (> 100kb)", "WARNING")
-                self.log(f"  This might indicate fetching all files instead of one level", "WARNING")
+                self.log(
+                    f"  This might indicate fetching all files instead of one level",
+                    "WARNING",
+                )
                 return False
             else:
                 self.log(f"  ✓ Response size is reasonable (< 100kb)", "SUCCESS")
@@ -271,7 +306,9 @@ class ArchiveBrowsingTester:
         # Create some files
         with open(os.path.join(source_dir, "Photos/2023/January/photo1.jpg"), "w") as f:
             f.write("photo data")
-        with open(os.path.join(source_dir, "Documents/Work/Projects/report.txt"), "w") as f:
+        with open(
+            os.path.join(source_dir, "Documents/Work/Projects/report.txt"), "w"
+        ) as f:
             f.write("report")
 
         # Initialize borg repository
@@ -280,7 +317,7 @@ class ArchiveBrowsingTester:
                 ["borg", "init", "--encryption", "none", repo_dir],
                 capture_output=True,
                 check=True,
-                env={**os.environ, "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK": "yes"}
+                env={**os.environ, "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK": "yes"},
             )
         except subprocess.CalledProcessError as e:
             self.log(f"✗ Failed to init borg repo: {e.stderr.decode()}", "ERROR")
@@ -294,7 +331,7 @@ class ArchiveBrowsingTester:
                 capture_output=True,
                 check=True,
                 cwd=source_dir,  # Run from source_dir so paths are relative
-                env={**os.environ, "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK": "yes"}
+                env={**os.environ, "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK": "yes"},
             )
         except subprocess.CalledProcessError as e:
             self.log(f"✗ Failed to create archive: {e.stderr.decode()}", "ERROR")
@@ -314,7 +351,7 @@ class ArchiveBrowsingTester:
         try:
             headers = {
                 "X-Borg-Authorization": f"Bearer {self.auth_token}",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
             }
 
             # Convert path for Docker if needed
@@ -331,9 +368,9 @@ class ArchiveBrowsingTester:
                     "repository_type": "local",
                     "source_directories": [],
                     "exclude_patterns": [],
-                    "mode": "observe"  # Observe mode since we're importing existing repo
+                    "mode": "observe",  # Observe mode since we're importing existing repo
                 },
-                timeout=30
+                timeout=30,
             )
 
             if response.status_code == 200:
@@ -341,7 +378,10 @@ class ArchiveBrowsingTester:
                 self.log(f"✓ Added repository to UI with ID: {repo_id}", "SUCCESS")
                 return repo_id
             else:
-                self.log(f"✗ Failed to add repository: {response.status_code} - {response.text}", "ERROR")
+                self.log(
+                    f"✗ Failed to add repository: {response.status_code} - {response.text}",
+                    "ERROR",
+                )
                 return None
 
         except Exception as e:
@@ -355,16 +395,16 @@ class ArchiveBrowsingTester:
             self.session.delete(
                 f"{self.base_url}/api/repositories/{repo_id}",
                 headers=headers,
-                timeout=10
+                timeout=10,
             )
         except Exception:
             pass  # Ignore cleanup errors
 
     def run_tests(self, test_repo_path: str = None):
         """Run all tests"""
-        self.log(f"\n{'='*70}", "INFO")
+        self.log(f"\n{'=' * 70}", "INFO")
         self.log("🧪 Archive Directory Browsing Test Suite", "INFO")
-        self.log(f"{'='*70}\n", "INFO")
+        self.log(f"{'=' * 70}\n", "INFO")
 
         # Log environment detection
         self.path_helper.log_environment(lambda msg: self.log(msg, "INFO"))
@@ -389,37 +429,45 @@ class ArchiveBrowsingTester:
                 return False
 
             # Test root level (should show Photos, Documents)
-            self.log("\n" + "="*70, "INFO")
+            self.log("\n" + "=" * 70, "INFO")
             self.log("TEST 1: Root Level Directory Browsing", "INFO")
-            self.log("="*70, "INFO")
-            if not self.test_directory_level(repo_id, repo_path, "test-archive", "", expected_min_dirs=2):
+            self.log("=" * 70, "INFO")
+            if not self.test_directory_level(
+                repo_id, repo_path, "test-archive", "", expected_min_dirs=2
+            ):
                 all_tests_passed = False
 
             # Test Photos level (should show 2023, 2024)
-            self.log("\n" + "="*70, "INFO")
+            self.log("\n" + "=" * 70, "INFO")
             self.log("TEST 2: Photos Directory Level", "INFO")
-            self.log("="*70, "INFO")
-            if not self.test_directory_level(repo_id, repo_path, "test-archive", "Photos", expected_min_dirs=2):
+            self.log("=" * 70, "INFO")
+            if not self.test_directory_level(
+                repo_id, repo_path, "test-archive", "Photos", expected_min_dirs=2
+            ):
                 all_tests_passed = False
 
             # Test Photos/2023 level (should show January, February)
-            self.log("\n" + "="*70, "INFO")
+            self.log("\n" + "=" * 70, "INFO")
             self.log("TEST 3: Photos/2023 Directory Level", "INFO")
-            self.log("="*70, "INFO")
-            if not self.test_directory_level(repo_id, repo_path, "test-archive", "Photos/2023", expected_min_dirs=2):
+            self.log("=" * 70, "INFO")
+            if not self.test_directory_level(
+                repo_id, repo_path, "test-archive", "Photos/2023", expected_min_dirs=2
+            ):
                 all_tests_passed = False
 
             # Test Documents level (should show Work, Personal)
-            self.log("\n" + "="*70, "INFO")
+            self.log("\n" + "=" * 70, "INFO")
             self.log("TEST 4: Documents Directory Level", "INFO")
-            self.log("="*70, "INFO")
-            if not self.test_directory_level(repo_id, repo_path, "test-archive", "Documents", expected_min_dirs=2):
+            self.log("=" * 70, "INFO")
+            if not self.test_directory_level(
+                repo_id, repo_path, "test-archive", "Documents", expected_min_dirs=2
+            ):
                 all_tests_passed = False
 
             # Test response size
-            self.log("\n" + "="*70, "INFO")
+            self.log("\n" + "=" * 70, "INFO")
             self.log("TEST 5: Response Size Check", "INFO")
-            self.log("="*70, "INFO")
+            self.log("=" * 70, "INFO")
             if not self.test_response_size(repo_id, "test-archive", ""):
                 all_tests_passed = False
 
@@ -430,20 +478,20 @@ class ArchiveBrowsingTester:
             self.cleanup()
 
         # Summary
-        self.log(f"\n{'='*70}", "INFO")
+        self.log(f"\n{'=' * 70}", "INFO")
         self.log("📊 TEST SUMMARY", "INFO")
-        self.log(f"{'='*70}", "INFO")
+        self.log(f"{'=' * 70}", "INFO")
 
-        passed = sum(1 for r in self.test_results if r['status'] == 'PASS')
+        passed = sum(1 for r in self.test_results if r["status"] == "PASS")
         total = len(self.test_results)
 
         if total > 0:
             for result in self.test_results:
-                status_icon = "✓" if result['status'] == 'PASS' else "✗"
-                path_display = result['path'] if result['path'] else "(root)"
+                status_icon = "✓" if result["status"] == "PASS" else "✗"
+                path_display = result["path"] if result["path"] else "(root)"
                 self.log(
                     f"{status_icon} {path_display}: Borg={result['borg_count']}, UI={result['ui_count']}",
-                    "SUCCESS" if result['status'] == 'PASS' else "ERROR"
+                    "SUCCESS" if result["status"] == "PASS" else "ERROR",
                 )
 
             self.log(f"\n🎯 Result: {passed}/{total} tests passed", "INFO")
@@ -458,6 +506,7 @@ class ArchiveBrowsingTester:
 
         return all_tests_passed and passed == total
 
+
 def main():
     import argparse
 
@@ -470,6 +519,7 @@ def main():
     success = tester.run_tests(args.repo_path)
 
     exit(0 if success else 1)
+
 
 if __name__ == "__main__":
     main()

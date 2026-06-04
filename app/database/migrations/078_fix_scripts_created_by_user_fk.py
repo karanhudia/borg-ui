@@ -24,23 +24,25 @@ def upgrade(connection):
     """Add ON DELETE SET NULL to scripts.created_by_user_id foreign key"""
 
     # ── Idempotency guard ─────────────────────────────────────────────────────
-    fk_rows = connection.execute(
-        text("PRAGMA foreign_key_list(scripts)")
-    ).fetchall()
+    fk_rows = connection.execute(text("PRAGMA foreign_key_list(scripts)")).fetchall()
 
-    already_fixed = any(row[3] == "created_by_user_id" and row[6] == "SET NULL" for row in fk_rows)
+    already_fixed = any(
+        row[3] == "created_by_user_id" and row[6] == "SET NULL" for row in fk_rows
+    )
 
     if already_fixed:
-        print("✓ scripts.created_by_user_id FK already has ON DELETE SET NULL — skipping migration 078")
+        print(
+            "✓ scripts.created_by_user_id FK already has ON DELETE SET NULL — skipping migration 078"
+        )
         return
 
-    print("⚠️  Fixing scripts.created_by_user_id FK constraint (adding ON DELETE SET NULL)...")
+    print(
+        "⚠️  Fixing scripts.created_by_user_id FK constraint (adding ON DELETE SET NULL)..."
+    )
 
     try:
         # ── Build new table DDL from the live schema ──────────────────────────
-        col_rows = connection.execute(
-            text("PRAGMA table_info(scripts)")
-        ).fetchall()
+        col_rows = connection.execute(text("PRAGMA table_info(scripts)")).fetchall()
 
         col_defs = []
         for _cid, name, type_, notnull, dflt_value, pk in col_rows:
@@ -62,18 +64,24 @@ def upgrade(connection):
         new_ddl = "CREATE TABLE scripts_new (\n" + ",\n".join(col_defs) + "\n)"
 
         # ── Clean up orphaned created_by_user_id references ───────────────────
-        orphan_users = connection.execute(text(
-            "SELECT COUNT(*) FROM scripts"
-            " WHERE created_by_user_id IS NOT NULL"
-            " AND created_by_user_id NOT IN (SELECT id FROM users)"
-        )).scalar()
-        if orphan_users:
-            connection.execute(text(
-                "UPDATE scripts SET created_by_user_id = NULL"
+        orphan_users = connection.execute(
+            text(
+                "SELECT COUNT(*) FROM scripts"
                 " WHERE created_by_user_id IS NOT NULL"
                 " AND created_by_user_id NOT IN (SELECT id FROM users)"
-            ))
-            print(f"  Nulled {orphan_users} orphaned created_by_user_id reference(s) in scripts")
+            )
+        ).scalar()
+        if orphan_users:
+            connection.execute(
+                text(
+                    "UPDATE scripts SET created_by_user_id = NULL"
+                    " WHERE created_by_user_id IS NOT NULL"
+                    " AND created_by_user_id NOT IN (SELECT id FROM users)"
+                )
+            )
+            print(
+                f"  Nulled {orphan_users} orphaned created_by_user_id reference(s) in scripts"
+            )
 
         # ── Disable FK enforcement for the drop/rename swap ──────────────────
         # Required because scheduled_jobs and repository_scripts reference
@@ -87,22 +95,26 @@ def upgrade(connection):
 
             # ── Copy using explicit column names ──────────────────────────────
             col_names = ", ".join(row[1] for row in col_rows)
-            connection.execute(text(
-                f"INSERT INTO scripts_new ({col_names})"
-                f" SELECT {col_names} FROM scripts"
-            ))
+            connection.execute(
+                text(
+                    f"INSERT INTO scripts_new ({col_names})"
+                    f" SELECT {col_names} FROM scripts"
+                )
+            )
 
             # ── Swap tables ───────────────────────────────────────────────────
             connection.execute(text("DROP TABLE scripts"))
             connection.execute(text("ALTER TABLE scripts_new RENAME TO scripts"))
 
             # ── Recreate indexes ──────────────────────────────────────────────
-            connection.execute(text(
-                "CREATE UNIQUE INDEX IF NOT EXISTS ix_scripts_name ON scripts (name)"
-            ))
-            connection.execute(text(
-                "CREATE INDEX IF NOT EXISTS ix_scripts_id ON scripts (id)"
-            ))
+            connection.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS ix_scripts_name ON scripts (name)"
+                )
+            )
+            connection.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_scripts_id ON scripts (id)")
+            )
         finally:
             connection.execute(text("PRAGMA foreign_keys = ON"))
 
@@ -117,4 +129,6 @@ def upgrade(connection):
 
 def downgrade(connection):
     """No downgrade action - reverting would restore the IntegrityError bug"""
-    print("✓ Downgrade skipped — reverting ON DELETE SET NULL would restore the IntegrityError bug")
+    print(
+        "✓ Downgrade skipped — reverting ON DELETE SET NULL would restore the IntegrityError bug"
+    )

@@ -4,19 +4,18 @@ import RepositoryStatsGrid from '../RepositoryStatsGrid'
 
 describe('RepositoryStatsGrid', () => {
   const mockStats = {
-    unique_csize: 1073741824, // 1 GB
-    unique_size: 2147483648, // 2 GB
-    total_size: 5368709120, // 5 GB
+    original_size: 5368709120, // 5 GB
+    compressed_size: 2147483648, // 2 GB
+    deduplicated_size: 1073741824, // 1 GB
   }
 
   it('renders all stat cards', () => {
     render(<RepositoryStatsGrid stats={mockStats} archivesCount={10} />)
 
     expect(screen.getByText('Total Archives')).toBeInTheDocument()
-    expect(screen.getByText('Space Used')).toBeInTheDocument()
-    expect(screen.getByText('Space Saved')).toBeInTheDocument()
-    expect(screen.getByText('Compression')).toBeInTheDocument()
-    expect(screen.getByText('Deduplication')).toBeInTheDocument()
+    expect(screen.getByText('Total Archive Size')).toBeInTheDocument()
+    expect(screen.getByText('Compressed Archive Size')).toBeInTheDocument()
+    expect(screen.getByText('Repository Size')).toBeInTheDocument()
   })
 
   it('displays correct archives count', () => {
@@ -25,68 +24,59 @@ describe('RepositoryStatsGrid', () => {
     expect(screen.getByText('42')).toBeInTheDocument()
   })
 
-  it('formats space used correctly', () => {
+  it('formats deduplicated size correctly', () => {
     render(<RepositoryStatsGrid stats={mockStats} archivesCount={10} />)
 
     // 1 GB formatted
     expect(screen.getByText('1.00 GB')).toBeInTheDocument()
   })
 
-  it('calculates space saved correctly', () => {
+  it('formats original size correctly', () => {
     render(<RepositoryStatsGrid stats={mockStats} archivesCount={10} />)
 
-    // 5 GB - 1 GB = 4 GB
-    expect(screen.getByText('4.00 GB')).toBeInTheDocument()
+    expect(screen.getByText('5.00 GB')).toBeInTheDocument()
   })
 
-  it('calculates compression ratio correctly', () => {
+  it('formats compressed size correctly', () => {
     render(<RepositoryStatsGrid stats={mockStats} archivesCount={10} />)
 
-    // (1 - 1GB/2GB) * 100 = 50.0%
-    expect(screen.getByText('50.0%')).toBeInTheDocument()
-  })
-
-  it('calculates deduplication ratio correctly', () => {
-    render(<RepositoryStatsGrid stats={mockStats} archivesCount={10} />)
-
-    // (1 - 2GB/5GB) * 100 = 60.0%
-    expect(screen.getByText('60.0%')).toBeInTheDocument()
+    expect(screen.getByText('2.00 GB')).toBeInTheDocument()
   })
 
   it('handles zero values gracefully', () => {
     const zeroStats = {
-      unique_csize: 0,
-      unique_size: 0,
-      total_size: 0,
+      original_size: 0,
+      compressed_size: 0,
+      deduplicated_size: 0,
     }
 
     render(<RepositoryStatsGrid stats={zeroStats} archivesCount={0} />)
 
-    expect(screen.getAllByText('0 B')).toHaveLength(2) // Space used and space saved
-    expect(screen.getAllByText('0%')).toHaveLength(2) // Compression and Deduplication (when zero, no decimal)
-  })
-
-  it('handles no space saved scenario', () => {
-    const noSavingsStats = {
-      unique_csize: 1000000,
-      unique_size: 1000000,
-      total_size: 1000000,
-    }
-
-    render(<RepositoryStatsGrid stats={noSavingsStats} archivesCount={5} />)
-
-    expect(screen.getByText('0 B')).toBeInTheDocument() // Space Saved
+    expect(screen.getAllByText('0 B')).toHaveLength(3)
   })
 
   it('displays correct units for different sizes', () => {
     const smallStats = {
-      unique_csize: 1024, // 1 KB
-      unique_size: 2048, // 2 KB
-      total_size: 5120, // 5 KB
+      original_size: 5120, // 5 KB
+      compressed_size: 2048, // 2 KB
+      deduplicated_size: 1024, // 1 KB
     }
 
     render(<RepositoryStatsGrid stats={smallStats} archivesCount={1} />)
 
     expect(screen.getByText('1.00 KB')).toBeInTheDocument()
+  })
+
+  it('shows number of files instead of compressed size for Borg 2', () => {
+    render(
+      <RepositoryStatsGrid
+        stats={{ ...mockStats, total_files: 16 }}
+        archivesCount={10}
+        borgVersion={2}
+      />
+    )
+
+    expect(screen.getByText('Number of Files')).toBeInTheDocument()
+    expect(screen.getByText('16')).toBeInTheDocument()
   })
 })

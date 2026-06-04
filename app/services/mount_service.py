@@ -38,11 +38,19 @@ NO_FUSE_SUPPORT_MARKERS = (
     "borgfs is not supported",
 )
 
+SSHFS_NO_SUCH_FILE_MARKERS = (
+    "no such file or directory",
+    "no such file",
+    "not found",
+)
+
 
 class MountUnavailableError(Exception):
     """Raised when archive mounting is unavailable in the runtime environment."""
 
-    def __init__(self, message: str, *, error_key: str = "backend.errors.mounts.mountUnavailable"):
+    def __init__(
+        self, message: str, *, error_key: str = "backend.errors.mounts.mountUnavailable"
+    ):
         super().__init__(message)
         self.error_key = error_key
 
@@ -54,15 +62,40 @@ def _decrypt_with_module_secret(encrypted_value: str) -> str:
     return cipher.decrypt(encrypted_value.encode()).decode()
 
 
+def _sshfs_missing_remote_path(error_message: str) -> bool:
+    normalized = (error_message or "").lower()
+    return any(marker in normalized for marker in SSHFS_NO_SUCH_FILE_MARKERS)
+
+
+def _sshfs_login_relative_candidate(
+    remote_path: str, default_path: Optional[str] = None
+) -> Optional[str]:
+    normalized = (remote_path or "").strip()
+    if not normalized.startswith("/") or normalized == "/":
+        return None
+    if normalized.startswith("/./"):
+        relative_path = normalized.lstrip("/")
+        return relative_path or None
+
+    normalized_default_path = (default_path or "").strip()
+    if normalized_default_path not in {"", "/"}:
+        return None
+
+    relative_path = normalized.lstrip("/")
+    return relative_path or None
+
+
 class MountType(Enum):
     """Type of mount"""
-    SSHFS = "sshfs"              # Remote directory mounting
+
+    SSHFS = "sshfs"  # Remote directory mounting
     BORG_ARCHIVE = "borg_archive"  # Specific Borg archive
 
 
 @dataclass
 class MountInfo:
     """Information about an active mount"""
+
     mount_id: str
     mount_type: MountType
     mount_point: str
@@ -74,7 +107,9 @@ class MountInfo:
     connection_id: Optional[int] = None
     repository_id: Optional[int] = None
     borg_version: Optional[int] = None
-    process_pid: Optional[int] = None  # PID of borg mount process (for foreground mounts)
+    process_pid: Optional[int] = (
+        None  # PID of borg mount process (for foreground mounts)
+    )
 
 
 class MountService:
@@ -92,6 +127,9 @@ class MountService:
         # Clean up stale mounts (mounts in state file but not actually mounted)
         self._cleanup_stale_mounts()
 
+        # Clean up orphaned managed mount directories from previous sessions
+        self._cleanup_orphaned_mount_dirs()
+
         # Clean up orphaned temp directories (from crashed processes)
         self._cleanup_orphaned_temp_dirs()
 
@@ -101,25 +139,23 @@ class MountService:
             return
 
         try:
-            with open(self.state_file, 'r') as f:
+            with open(self.state_file, "r") as f:
                 data = json.load(f)
 
-            for mount_dict in data.get('mounts', []):
+            for mount_dict in data.get("mounts", []):
                 # Convert dict back to MountInfo
-                mount_dict['mount_type'] = MountType(mount_dict['mount_type'])
-                mount_dict['created_at'] = datetime.fromisoformat(mount_dict['created_at'])
+                mount_dict["mount_type"] = MountType(mount_dict["mount_type"])
+                mount_dict["created_at"] = datetime.fromisoformat(
+                    mount_dict["created_at"]
+                )
                 mount_info = MountInfo(**mount_dict)
                 self.active_mounts[mount_info.mount_id] = mount_info
 
             logger.info(
-                "Loaded mount state from disk",
-                mount_count=len(self.active_mounts)
+                "Loaded mount state from disk", mount_count=len(self.active_mounts)
             )
         except Exception as e:
-            logger.error(
-                "Failed to load mount state",
-                error=str(e)
-            )
+            logger.error("Failed to load mount state", error=str(e))
 
     def _save_state(self):
         """Persist mount state to disk"""
@@ -127,22 +163,16 @@ class MountService:
             mounts_list = []
             for mount_info in self.active_mounts.values():
                 mount_dict = asdict(mount_info)
-                mount_dict['mount_type'] = mount_info.mount_type.value
-                mount_dict['created_at'] = mount_info.created_at.isoformat()
+                mount_dict["mount_type"] = mount_info.mount_type.value
+                mount_dict["created_at"] = mount_info.created_at.isoformat()
                 mounts_list.append(mount_dict)
 
-            with open(self.state_file, 'w') as f:
-                json.dump({'mounts': mounts_list}, f, indent=2)
+            with open(self.state_file, "w") as f:
+                json.dump({"mounts": mounts_list}, f, indent=2)
 
-            logger.debug(
-                "Saved mount state to disk",
-                mount_count=len(mounts_list)
-            )
+            logger.debug("Saved mount state to disk", mount_count=len(mounts_list))
         except Exception as e:
-            logger.error(
-                "Failed to save mount state",
-                error=str(e)
-            )
+            logger.error("Failed to save mount state", error=str(e))
 
     def _cleanup_orphaned_temp_dirs(self):
         """
@@ -170,55 +200,30 @@ class MountService:
                         shutil.rmtree(temp_dir, ignore_errors=True)
                         orphaned_count += 1
                         logger.debug(
-                            "Cleaned up orphaned temp directory",
-                            temp_dir=temp_dir
+                            "Cleaned up orphaned temp directory", temp_dir=temp_dir
                         )
                     except Exception as e:
                         logger.warning(
                             "Failed to cleanup orphaned temp directory",
                             temp_dir=temp_dir,
-                            error=str(e)
+                            error=str(e),
                         )
 
             if orphaned_count > 0:
                 logger.info(
                     "Cleaned up orphaned temp directories from previous sessions",
-                    count=orphaned_count
+                    count=orphaned_count,
                 )
 
         except Exception as e:
-            logger.error(
-                "Failed to cleanup orphaned temp directories",
-                error=str(e)
-            )
+            logger.error("Failed to cleanup orphaned temp directories", error=str(e))
 
     def _cleanup_stale_mounts(self):
         """Remove mounts from state that are no longer active in the system"""
         try:
-            # Get list of active mount points from system
-            result = subprocess.run(
-                ["mount"],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-
-            if result.returncode != 0:
-                logger.warning("Failed to list system mounts for cleanup")
+            active_mount_points = self._get_active_mount_points()
+            if active_mount_points is None:
                 return
-
-            active_mount_points = set()
-            for line in result.stdout.split('\n'):
-                # Extract mount point from mount output
-                # Format: "source on /mount/point type filesystem (options)"
-                parts = line.split()
-                if len(parts) >= 3 and 'on' in parts:
-                    try:
-                        on_index = parts.index('on')
-                        if on_index + 1 < len(parts):
-                            active_mount_points.add(parts[on_index + 1])
-                    except:
-                        pass
 
             # Check each tracked mount
             stale_mounts = []
@@ -227,7 +232,7 @@ class MountService:
                     logger.info(
                         "Found stale mount in state file",
                         mount_id=mount_id,
-                        mount_point=mount_info.mount_point
+                        mount_point=mount_info.mount_point,
                     )
                     stale_mounts.append(mount_id)
 
@@ -237,6 +242,7 @@ class MountService:
 
                 # Clean up temp files for stale mount
                 self._cleanup_temp_files(mount_info.temp_root, mount_info.temp_key_file)
+                self._cleanup_managed_mount_dir(mount_info.mount_point)
 
                 del self.active_mounts[mount_id]
 
@@ -244,21 +250,109 @@ class MountService:
                 # Save updated state
                 self._save_state()
                 logger.info(
-                    "Cleaned up stale mounts and temp files",
-                    count=len(stale_mounts)
+                    "Cleaned up stale mounts and temp files", count=len(stale_mounts)
                 )
 
         except Exception as e:
-            logger.error(
-                "Failed to cleanup stale mounts",
-                error=str(e)
+            logger.error("Failed to cleanup stale mounts", error=str(e))
+
+    def _get_active_mount_points(self) -> Optional[set[str]]:
+        """Return active system mount points, or None if they cannot be listed."""
+        result = subprocess.run(["mount"], capture_output=True, text=True, timeout=5)
+
+        if result.returncode != 0:
+            logger.warning("Failed to list system mounts for cleanup")
+            return None
+
+        active_mount_points = set()
+        for line in result.stdout.split("\n"):
+            parts = line.split()
+            if len(parts) >= 3 and "on" in parts:
+                try:
+                    on_index = parts.index("on")
+                    if on_index + 1 < len(parts):
+                        active_mount_points.add(parts[on_index + 1])
+                except Exception:
+                    continue
+
+        return active_mount_points
+
+    def _cleanup_managed_mount_dir(self, mount_point: Optional[str]):
+        """Remove an empty directory only when it lives under the managed mount base."""
+        if not mount_point:
+            return
+
+        try:
+            mount_path = Path(mount_point).resolve()
+            managed_base = self.mount_base_dir.resolve()
+            mount_path.relative_to(managed_base)
+        except Exception:
+            return
+
+        if not mount_path.exists() or not mount_path.is_dir():
+            return
+
+        try:
+            if any(mount_path.iterdir()):
+                return
+        except Exception:
+            return
+
+        try:
+            mount_path.rmdir()
+            logger.debug(
+                "Removed empty managed mount directory", mount_point=str(mount_path)
+            )
+        except Exception as e:
+            logger.debug(
+                "Failed to remove managed mount directory",
+                mount_point=str(mount_path),
+                error=str(e),
             )
 
+    def _cleanup_orphaned_mount_dirs(self):
+        """Remove empty managed mount directories that are no longer mounted or tracked."""
+        try:
+            if not self.mount_base_dir.exists():
+                return
+
+            active_mount_points = self._get_active_mount_points()
+            if active_mount_points is None:
+                return
+
+            tracked_mount_points = {
+                str(Path(mount_info.mount_point).resolve())
+                for mount_info in self.active_mounts.values()
+            }
+
+            orphaned_count = 0
+            for child in self.mount_base_dir.iterdir():
+                if not child.is_dir():
+                    continue
+
+                child_path = str(child.resolve())
+                if (
+                    child_path in active_mount_points
+                    or child_path in tracked_mount_points
+                ):
+                    continue
+
+                if any(child.iterdir()):
+                    continue
+
+                self._cleanup_managed_mount_dir(child_path)
+                orphaned_count += 1
+
+            if orphaned_count:
+                logger.info(
+                    "Cleaned up orphaned managed mount directories",
+                    count=orphaned_count,
+                )
+        except Exception as e:
+            logger.error("Failed to cleanup orphaned mount directories", error=str(e))
+
     async def mount_ssh_directory(
-        self,
-        connection_id: int,
-        remote_path: str,
-        job_id: Optional[int] = None
+        self, connection_id: int, remote_path: str, job_id: Optional[int] = None
     ) -> Tuple[str, str]:
         """
         Mount a remote SSH directory via SSHFS with proper SSH key authentication
@@ -277,17 +371,19 @@ class MountService:
         db = SessionLocal()
         try:
             # Get SSH connection
-            connection = db.query(SSHConnection).filter(
-                SSHConnection.id == connection_id
-            ).first()
+            connection = (
+                db.query(SSHConnection)
+                .filter(SSHConnection.id == connection_id)
+                .first()
+            )
 
             if not connection:
                 raise Exception(f"SSH connection {connection_id} not found")
 
             # Get SSH key
-            ssh_key = db.query(SSHKey).filter(
-                SSHKey.id == connection.ssh_key_id
-            ).first()
+            ssh_key = (
+                db.query(SSHKey).filter(SSHKey.id == connection.ssh_key_id).first()
+            )
 
             if not ssh_key:
                 raise Exception(
@@ -310,7 +406,7 @@ class MountService:
             temp_root = tempfile.mkdtemp(prefix=f"sshfs_mount_{job_id or 'user'}_")
 
             # Strip leading slash from remote_path to create relative path under temp_root
-            relative_remote_path = remote_path.lstrip('/')
+            relative_remote_path = remote_path.lstrip("/")
             if relative_remote_path:
                 mount_dir = os.path.join(temp_root, relative_remote_path)
                 os.makedirs(mount_dir, exist_ok=True)
@@ -327,7 +423,7 @@ class MountService:
                 host=connection.host,
                 remote_path=remote_path,
                 mount_point=mount_dir,
-                job_id=job_id
+                job_id=job_id,
             )
 
             try:
@@ -336,7 +432,7 @@ class MountService:
                     connection=connection,
                     remote_path=remote_path,
                     mount_point=mount_dir,
-                    temp_key_file=temp_key_file
+                    temp_key_file=temp_key_file,
                 )
 
                 # Verify mount with READ-ONLY check (NEVER write to user data!)
@@ -352,7 +448,7 @@ class MountService:
                     job_id=job_id,
                     temp_root=temp_root,
                     temp_key_file=temp_key_file,
-                    connection_id=connection_id
+                    connection_id=connection_id,
                 )
 
                 logger.info(
@@ -360,7 +456,7 @@ class MountService:
                     mount_id=mount_id,
                     mount_point=mount_dir,
                     temp_root=temp_root,
-                    job_id=job_id
+                    job_id=job_id,
                 )
 
                 # Persist state
@@ -374,7 +470,7 @@ class MountService:
                     "Failed to mount SSH directory",
                     mount_id=mount_id,
                     error=str(e),
-                    job_id=job_id
+                    job_id=job_id,
                 )
                 self._cleanup_temp_files(temp_root, temp_key_file)
                 raise
@@ -386,7 +482,8 @@ class MountService:
         self,
         connection_id: int,
         remote_paths: List[str],
-        job_id: Optional[int] = None
+        job_id: Optional[int] = None,
+        temp_root: Optional[str] = None,
     ) -> Tuple[str, List[Tuple[str, str]]]:
         """
         Mount multiple remote SSH directories from the same connection under a single shared temp root.
@@ -396,6 +493,7 @@ class MountService:
             connection_id: SSHConnection ID to use
             remote_paths: List of remote paths to mount (all from the same connection)
             job_id: Optional backup job ID for tracking
+            temp_root: Optional existing temporary root to reuse across source connections
 
         Returns:
             Tuple of (temp_root, mount_info_list)
@@ -411,17 +509,19 @@ class MountService:
         db = SessionLocal()
         try:
             # Get SSH connection
-            connection = db.query(SSHConnection).filter(
-                SSHConnection.id == connection_id
-            ).first()
+            connection = (
+                db.query(SSHConnection)
+                .filter(SSHConnection.id == connection_id)
+                .first()
+            )
 
             if not connection:
                 raise Exception(f"SSH connection {connection_id} not found")
 
             # Get SSH key
-            ssh_key = db.query(SSHKey).filter(
-                SSHKey.id == connection.ssh_key_id
-            ).first()
+            ssh_key = (
+                db.query(SSHKey).filter(SSHKey.id == connection.ssh_key_id).first()
+            )
 
             if not ssh_key:
                 raise Exception(
@@ -437,8 +537,13 @@ class MountService:
             # Decrypt SSH key
             temp_key_file = self._decrypt_and_write_key(ssh_key)
 
-            # Create ONE shared temporary directory for all mounts from this connection
-            temp_root = tempfile.mkdtemp(prefix=f"sshfs_mount_{job_id or 'user'}_")
+            # Create ONE shared temporary directory, or reuse one supplied by the
+            # backup service when a backup spans multiple SSH source connections.
+            owns_temp_root = temp_root is None
+            if temp_root is None:
+                temp_root = tempfile.mkdtemp(prefix=f"sshfs_mount_{job_id or 'user'}_")
+            else:
+                os.makedirs(temp_root, exist_ok=True)
 
             logger.info(
                 "Mounting multiple SSH paths under shared temp root",
@@ -446,7 +551,7 @@ class MountService:
                 host=connection.host,
                 remote_paths=remote_paths,
                 temp_root=temp_root,
-                job_id=job_id
+                job_id=job_id,
             )
 
             mount_info_list = []
@@ -461,7 +566,7 @@ class MountService:
             # This way we mount /etc (parent) first, and reuse it for /etc/cron.d
             def path_depth(path: str) -> int:
                 """Return the depth of a path (number of components)"""
-                return len([p for p in path.strip('/').split('/') if p])
+                return len([p for p in path.strip("/").split("/") if p])
 
             # Sort by depth (shallowest first)
             sorted_remote_paths = sorted(remote_paths, key=path_depth)
@@ -470,21 +575,23 @@ class MountService:
                 "Sorted paths by depth to prevent mount shadowing",
                 original_paths=remote_paths,
                 sorted_paths=sorted_remote_paths,
-                job_id=job_id
+                job_id=job_id,
             )
 
             try:
                 for remote_path in sorted_remote_paths:
                     # First, check if this path is a file using fallback-safe method
-                    is_file = await self._check_remote_is_file(connection, remote_path, temp_key_file)
+                    is_file = await self._check_remote_is_file(
+                        connection, remote_path, temp_key_file
+                    )
 
                     # Decide what to mount based on file type
                     if is_file:
                         # For files: mount the parent directory
                         parent_dir = os.path.dirname(remote_path)
-                        mount_remote_path = parent_dir if parent_dir else '/'
+                        mount_remote_path = parent_dir if parent_dir else "/"
 
-                        relative_parent = parent_dir.lstrip('/')
+                        relative_parent = parent_dir.lstrip("/")
                         if relative_parent:
                             mount_dir = os.path.join(temp_root, relative_parent)
                             os.makedirs(mount_dir, exist_ok=True)
@@ -493,12 +600,12 @@ class MountService:
                             mount_dir = temp_root
 
                         # Relative path for backup is the full file path
-                        relative_path = remote_path.lstrip('/').rstrip('/')
+                        relative_path = remote_path.lstrip("/").rstrip("/")
                     else:
                         # For directories: mount the directory itself
                         mount_remote_path = remote_path
 
-                        relative_remote_path = remote_path.lstrip('/')
+                        relative_remote_path = remote_path.lstrip("/")
                         if relative_remote_path:
                             mount_dir = os.path.join(temp_root, relative_remote_path)
                             os.makedirs(mount_dir, exist_ok=True)
@@ -507,9 +614,9 @@ class MountService:
                             mount_dir = temp_root
 
                         # Compute relative path for backup command
-                        relative_path = remote_path.lstrip('/').rstrip('/')
+                        relative_path = remote_path.lstrip("/").rstrip("/")
                         if not relative_path:
-                            relative_path = '.'
+                            relative_path = "."
 
                     # CRITICAL FIX: Check if a parent directory is already mounted
                     # OR if we're about to mount a parent that would shadow existing children
@@ -521,13 +628,18 @@ class MountService:
 
                     for existing_mount_dir, existing_mount_id in mounted_dirs.items():
                         # Check if mount_dir is under an existing mount (new is child of existing)
-                        if mount_dir.startswith(existing_mount_dir + os.sep) or mount_dir == existing_mount_dir:
+                        if (
+                            mount_dir.startswith(existing_mount_dir + os.sep)
+                            or mount_dir == existing_mount_dir
+                        ):
                             parent_mount_id = existing_mount_id
                             parent_mount_dir = existing_mount_dir
                             break
                         # Check if existing mount is under mount_dir (existing is child of new)
                         elif existing_mount_dir.startswith(mount_dir + os.sep):
-                            child_mounts_to_replace.append((existing_mount_dir, existing_mount_id))
+                            child_mounts_to_replace.append(
+                                (existing_mount_dir, existing_mount_id)
+                            )
 
                     if parent_mount_id:
                         # Parent directory already mounted, reuse it
@@ -539,7 +651,7 @@ class MountService:
                             mount_dir=mount_dir,
                             backup_path=relative_path,
                             is_file=is_file,
-                            job_id=job_id
+                            job_id=job_id,
                         )
                         # Add to mount_info_list with parent mount_id
                         mount_info_list.append((parent_mount_id, relative_path))
@@ -553,7 +665,7 @@ class MountService:
                             parent_path=mount_dir,
                             child_mounts=[(d, m) for d, m in child_mounts_to_replace],
                             original_path=remote_path,
-                            job_id=job_id
+                            job_id=job_id,
                         )
 
                         # Unmount each child
@@ -563,20 +675,22 @@ class MountService:
                                 child_mount_id=child_mount_id,
                                 child_mount_dir=child_mount_dir,
                                 parent_mount_dir=mount_dir,
-                                job_id=job_id
+                                job_id=job_id,
                             )
                             # Unmount without cleanup (we'll remount parent immediately)
                             await self.unmount(
                                 child_mount_id,
                                 force=False,
-                                cleanup_temp_resources=False
+                                cleanup_temp_resources=False,
                             )
                             # Remove from mounted_dirs
                             del mounted_dirs[child_mount_dir]
 
                         # Note: We'll update mount_info_list entries after creating parent mount
                         # Store child mount IDs that need to be replaced
-                        child_ids_to_replace = [mid for _, mid in child_mounts_to_replace]
+                        child_ids_to_replace = [
+                            mid for _, mid in child_mounts_to_replace
+                        ]
 
                     # Check if we've already mounted this exact directory
                     if mount_dir in mounted_dirs:
@@ -589,7 +703,7 @@ class MountService:
                             mount_dir=mount_dir,
                             backup_path=relative_path,
                             is_file=is_file,
-                            job_id=job_id
+                            job_id=job_id,
                         )
                         # Just add to mount_info_list with the existing mount_id
                         mount_info_list.append((existing_mount_id, relative_path))
@@ -608,7 +722,7 @@ class MountService:
                         mount_point=mount_dir,
                         backup_path=relative_path,
                         temp_root=temp_root,
-                        job_id=job_id
+                        job_id=job_id,
                     )
 
                     # Mount with SSH key authentication
@@ -616,7 +730,7 @@ class MountService:
                         connection=connection,
                         remote_path=mount_remote_path,
                         mount_point=mount_dir,
-                        temp_key_file=temp_key_file
+                        temp_key_file=temp_key_file,
                     )
 
                     # Verify mount with READ-ONLY check (NEVER write to user data!)
@@ -632,7 +746,7 @@ class MountService:
                         job_id=job_id,
                         temp_root=temp_root,
                         temp_key_file=temp_key_file,
-                        connection_id=connection_id
+                        connection_id=connection_id,
                     )
 
                     mount_info_list.append((mount_id, relative_path))
@@ -641,15 +755,20 @@ class MountService:
 
                     # If we replaced child mounts, update mount_info_list entries to use new parent
                     if child_mounts_to_replace:
-                        for i, (existing_mount_id, existing_path) in enumerate(mount_info_list[:-1]):  # Exclude the one we just added
+                        for i, (existing_mount_id, existing_path) in enumerate(
+                            mount_info_list[:-1]
+                        ):  # Exclude the one we just added
                             if existing_mount_id in child_ids_to_replace:
-                                mount_info_list[i] = (mount_id, existing_path)  # Replace with parent mount_id
+                                mount_info_list[i] = (
+                                    mount_id,
+                                    existing_path,
+                                )  # Replace with parent mount_id
                                 logger.info(
                                     "Updated mount_info entry to use parent mount",
                                     old_mount_id=existing_mount_id,
                                     new_mount_id=mount_id,
                                     path=existing_path,
-                                    job_id=job_id
+                                    job_id=job_id,
                                 )
 
                     logger.info(
@@ -659,7 +778,7 @@ class MountService:
                         relative_path=relative_path,
                         is_file=is_file,
                         temp_root=temp_root,
-                        job_id=job_id
+                        job_id=job_id,
                     )
 
                 # Persist state
@@ -670,7 +789,7 @@ class MountService:
                     connection_id=connection_id,
                     temp_root=temp_root,
                     mount_count=len(mount_info_list),
-                    job_id=job_id
+                    job_id=job_id,
                 )
 
                 return temp_root, mount_info_list
@@ -682,7 +801,7 @@ class MountService:
                     connection_id=connection_id,
                     error=str(e),
                     mounted_count=len(mounted_successfully),
-                    job_id=job_id
+                    job_id=job_id,
                 )
 
                 # Unmount any successfully mounted paths
@@ -696,11 +815,13 @@ class MountService:
                         logger.warning(
                             "Failed to cleanup mount during error recovery",
                             mount_id=mount_id,
-                            error=str(cleanup_error)
+                            error=str(cleanup_error),
                         )
 
                 # Cleanup temp files
-                self._cleanup_temp_files(temp_root, temp_key_file)
+                self._cleanup_temp_files(
+                    temp_root if owns_temp_root else None, temp_key_file
+                )
                 raise
 
         finally:
@@ -710,7 +831,7 @@ class MountService:
         self,
         repository_id: int,
         archive_name: Optional[str] = None,
-        mount_point: Optional[str] = None
+        mount_point: Optional[str] = None,
     ) -> Tuple[str, str]:
         """
         Mount a Borg repository or specific archive for browsing
@@ -729,21 +850,25 @@ class MountService:
         db = SessionLocal()
         try:
             # Get repository
-            repository = db.query(Repository).filter(
-                Repository.id == repository_id
-            ).first()
+            repository = (
+                db.query(Repository).filter(Repository.id == repository_id).first()
+            )
 
             if not repository:
                 raise Exception(f"Repository {repository_id} not found")
 
             # Get system settings for mount timeout
             system_settings = db.query(SystemSettings).first()
-            mount_timeout = system_settings.mount_timeout if system_settings and system_settings.mount_timeout else 120
+            mount_timeout = (
+                system_settings.mount_timeout
+                if system_settings and system_settings.mount_timeout
+                else 120
+            )
 
             # Create or validate mount point
             if mount_point:
                 # If mount_point doesn't start with /, it's just a name - prepend /data/mounts/
-                if not mount_point.startswith('/'):
+                if not mount_point.startswith("/"):
                     mount_point = str(self.mount_base_dir / mount_point)
                 else:
                     # Absolute path provided - validate it
@@ -760,7 +885,7 @@ class MountService:
                             subprocess.run(
                                 ["fusermount", "-uz", mount_point],
                                 capture_output=True,
-                                timeout=5
+                                timeout=5,
                             )
                         except:
                             pass
@@ -768,10 +893,12 @@ class MountService:
                     os.makedirs(mount_point, exist_ok=True)
             else:
                 # Create auto mount point - use archive name for friendly path
-                safe_archive_name = archive_name.replace('/', '_').replace(' ', '_') if archive_name else 'repository'
-                mount_point = str(
-                    self.mount_base_dir / safe_archive_name
+                safe_archive_name = (
+                    archive_name.replace("/", "_").replace(" ", "_")
+                    if archive_name
+                    else "repository"
                 )
+                mount_point = str(self.mount_base_dir / safe_archive_name)
                 # If path exists, append unique suffix
                 if os.path.exists(mount_point):
                     mount_point = f"{mount_point}_{uuid.uuid4().hex[:8]}"
@@ -786,7 +913,7 @@ class MountService:
                 repository_id=repository_id,
                 repository_name=repository.name,
                 archive_name=archive_name,
-                mount_point=mount_point
+                mount_point=mount_point,
             )
 
             try:
@@ -797,32 +924,38 @@ class MountService:
                     "Repository details",
                     mount_id=mount_id,
                     connection_id=repository.connection_id,
-                    has_passphrase=bool(repository.passphrase)
+                    has_passphrase=bool(repository.passphrase),
                 )
 
                 # Handle SSH repositories
                 if repository.connection_id:
                     # Always disable strict host key checking for SSH repos
-                    ssh_opts = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+                    ssh_opts = (
+                        "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+                    )
 
                     if repository.connection_id:
                         # Repository linked to SSH connection
-                        connection = db.query(SSHConnection).filter(
-                            SSHConnection.id == repository.connection_id
-                        ).first()
+                        connection = (
+                            db.query(SSHConnection)
+                            .filter(SSHConnection.id == repository.connection_id)
+                            .first()
+                        )
 
                         logger.info(
                             "SSH connection details",
                             mount_id=mount_id,
                             connection_found=bool(connection),
                             connection_id=repository.connection_id,
-                            ssh_key_id=connection.ssh_key_id if connection else None
+                            ssh_key_id=connection.ssh_key_id if connection else None,
                         )
 
                         if connection and connection.ssh_key_id:
-                            ssh_key = db.query(SSHKey).filter(
-                                SSHKey.id == connection.ssh_key_id
-                            ).first()
+                            ssh_key = (
+                                db.query(SSHKey)
+                                .filter(SSHKey.id == connection.ssh_key_id)
+                                .first()
+                            )
 
                             if ssh_key:
                                 # Decrypt SSH key
@@ -832,7 +965,7 @@ class MountService:
                                 logger.info(
                                     "Set BORG_RSH with key",
                                     mount_id=mount_id,
-                                    borg_rsh=env["BORG_RSH"]
+                                    borg_rsh=env["BORG_RSH"],
                                 )
                             else:
                                 # No key found, use SSH options only
@@ -840,7 +973,7 @@ class MountService:
                                 logger.info(
                                     "Set BORG_RSH without key (key not found)",
                                     mount_id=mount_id,
-                                    borg_rsh=env["BORG_RSH"]
+                                    borg_rsh=env["BORG_RSH"],
                                 )
                         else:
                             # No key configured or connection not found
@@ -848,7 +981,7 @@ class MountService:
                             logger.info(
                                 "Set BORG_RSH without key (no connection or key)",
                                 mount_id=mount_id,
-                                borg_rsh=env["BORG_RSH"]
+                                borg_rsh=env["BORG_RSH"],
                             )
                     else:
                         # SSH repository without connection_id (embedded SSH URL)
@@ -856,13 +989,10 @@ class MountService:
                         logger.info(
                             "Set BORG_RSH for SSH repo without connection",
                             mount_id=mount_id,
-                            borg_rsh=env["BORG_RSH"]
+                            borg_rsh=env["BORG_RSH"],
                         )
                 else:
-                    logger.info(
-                        "Not an SSH repository",
-                        mount_id=mount_id
-                    )
+                    logger.info("Not an SSH repository", mount_id=mount_id)
 
                 # Set passphrase if encrypted
                 if repository.passphrase:
@@ -884,7 +1014,7 @@ class MountService:
                     mount_point=mount_point,
                     has_passphrase=bool(repository.passphrase),
                     has_ssh_key=bool(temp_key_file),
-                    has_borg_rsh="BORG_RSH" in env
+                    has_borg_rsh="BORG_RSH" in env,
                 )
 
                 # Execute mount in foreground mode
@@ -894,19 +1024,17 @@ class MountService:
                     env=env,
                     stdout=asyncio.subprocess.DEVNULL,
                     stderr=asyncio.subprocess.PIPE,
-                    stdin=asyncio.subprocess.DEVNULL
+                    stdin=asyncio.subprocess.DEVNULL,
                 )
 
-                logger.info(
-                    "Process created",
-                    mount_id=mount_id,
-                    pid=process.pid
-                )
+                logger.info("Process created", mount_id=mount_id, pid=process.pid)
 
                 # Wait for the mount to initialize with retries
                 # Large repositories (10TB+) can take 30-60+ seconds to mount
                 # In foreground mode, borg mount will continue running
-                max_wait_seconds = mount_timeout  # From system settings (default 120 seconds)
+                max_wait_seconds = (
+                    mount_timeout  # From system settings (default 120 seconds)
+                )
                 check_interval = 5  # Check every 5 seconds
                 total_waited = 0
                 mount_verified = False
@@ -920,8 +1048,7 @@ class MountService:
                         # Process exited - this means mount failed
                         try:
                             stderr = await asyncio.wait_for(
-                                process.stderr.read(),
-                                timeout=1
+                                process.stderr.read(), timeout=1
                             )
                             error_msg = stderr.decode() if stderr else "Unknown error"
                         except:
@@ -932,7 +1059,7 @@ class MountService:
                             mount_id=mount_id,
                             returncode=process.returncode,
                             error=error_msg,
-                            waited_seconds=total_waited
+                            waited_seconds=total_waited,
                         )
                         if self._is_fuse_unavailable_error(error_msg):
                             raise MountUnavailableError(
@@ -944,15 +1071,12 @@ class MountService:
                         "Process still running, checking mount status",
                         mount_id=mount_id,
                         pid=process.pid,
-                        waited_seconds=total_waited
+                        waited_seconds=total_waited,
                     )
 
                     # Verify mount is active
                     mount_check = subprocess.run(
-                        ["mount"],
-                        capture_output=True,
-                        text=True,
-                        timeout=5
+                        ["mount"], capture_output=True, text=True, timeout=5
                     )
 
                     if mount_point in mount_check.stdout:
@@ -961,7 +1085,7 @@ class MountService:
                             "Mount verified successfully",
                             mount_id=mount_id,
                             mount_point=mount_point,
-                            waited_seconds=total_waited
+                            waited_seconds=total_waited,
                         )
                         break
                     else:
@@ -970,7 +1094,7 @@ class MountService:
                             mount_id=mount_id,
                             mount_point=mount_point,
                             waited_seconds=total_waited,
-                            max_wait=max_wait_seconds
+                            max_wait=max_wait_seconds,
                         )
 
                 if not mount_verified:
@@ -979,7 +1103,7 @@ class MountService:
                         "Mount timeout - mount point not found after max wait",
                         mount_id=mount_id,
                         mount_point=mount_point,
-                        waited_seconds=total_waited
+                        waited_seconds=total_waited,
                     )
                     # Kill the process
                     try:
@@ -987,7 +1111,9 @@ class MountService:
                         await process.wait()
                     except:
                         pass
-                    raise Exception(f"Mount timeout: mount point not ready after {max_wait_seconds} seconds. Large repositories may need more time.")
+                    raise Exception(
+                        f"Mount timeout: mount point not ready after {max_wait_seconds} seconds. Large repositories may need more time."
+                    )
 
                 # Track mount
                 self.active_mounts[mount_id] = MountInfo(
@@ -999,7 +1125,7 @@ class MountService:
                     temp_key_file=temp_key_file,
                     repository_id=repository_id,
                     borg_version=repository.borg_version or 1,
-                    process_pid=process.pid  # Store PID for cleanup
+                    process_pid=process.pid,  # Store PID for cleanup
                 )
 
                 logger.info(
@@ -1007,7 +1133,7 @@ class MountService:
                     mount_id=mount_id,
                     mount_point=mount_point,
                     repository_name=repository.name,
-                    archive_name=archive_name
+                    archive_name=archive_name,
                 )
 
                 # Persist state
@@ -1020,7 +1146,7 @@ class MountService:
                     "Failed to mount Borg archive",
                     mount_id=mount_id,
                     error=str(e),
-                    repository_id=repository_id
+                    repository_id=repository_id,
                 )
                 # Cleanup on failure
                 if temp_key_file and os.path.exists(temp_key_file):
@@ -1033,10 +1159,7 @@ class MountService:
             db.close()
 
     async def unmount(
-        self,
-        mount_id: str,
-        force: bool = False,
-        cleanup_temp_resources: bool = True
+        self, mount_id: str, force: bool = False, cleanup_temp_resources: bool = True
     ) -> bool:
         """
         Unmount and cleanup a mount
@@ -1060,17 +1183,20 @@ class MountService:
             mount_id=mount_id,
             mount_type=mount_info.mount_type.value,
             mount_point=mount_info.mount_point,
-            force=force
+            force=force,
         )
 
         try:
             # For Borg mounts with foreground process, kill the process first
-            if mount_info.mount_type == MountType.BORG_ARCHIVE and mount_info.process_pid:
+            if (
+                mount_info.mount_type == MountType.BORG_ARCHIVE
+                and mount_info.process_pid
+            ):
                 try:
                     logger.info(
                         "Killing borg mount process",
                         mount_id=mount_id,
-                        pid=mount_info.process_pid
+                        pid=mount_info.process_pid,
                     )
                     os.kill(mount_info.process_pid, 15)  # SIGTERM
                     # Wait a bit for graceful shutdown
@@ -1082,7 +1208,7 @@ class MountService:
                         logger.warning(
                             "Process still alive, force killing",
                             mount_id=mount_id,
-                            pid=mount_info.process_pid
+                            pid=mount_info.process_pid,
                         )
                         os.kill(mount_info.process_pid, 9)  # SIGKILL
                     except OSError:
@@ -1093,7 +1219,7 @@ class MountService:
                         "Failed to kill borg mount process",
                         mount_id=mount_id,
                         pid=mount_info.process_pid,
-                        error=str(e)
+                        error=str(e),
                     )
 
             # Choose unmount method based on type
@@ -1115,7 +1241,10 @@ class MountService:
             other_mounts_using_temp_root = False
             if mount_info.temp_root:
                 for other_id, other_info in self.active_mounts.items():
-                    if other_id != mount_id and other_info.temp_root == mount_info.temp_root:
+                    if (
+                        other_id != mount_id
+                        and other_info.temp_root == mount_info.temp_root
+                    ):
                         other_mounts_using_temp_root = True
                         break
 
@@ -1124,7 +1253,7 @@ class MountService:
                     "Skipping temp resource cleanup for internal remount flow",
                     mount_id=mount_id,
                     temp_root=mount_info.temp_root,
-                    temp_key_file=mount_info.temp_key_file
+                    temp_key_file=mount_info.temp_key_file,
                 )
             elif other_mounts_using_temp_root:
                 # Don't cleanup temp_root (still in use by other mounts)
@@ -1140,19 +1269,19 @@ class MountService:
                 logger.debug(
                     "Skipping temp_root cleanup (still in use by other mounts)",
                     mount_id=mount_id,
-                    temp_root=mount_info.temp_root
+                    temp_root=mount_info.temp_root,
                 )
             else:
                 # This is the last mount using temp_root, safe to cleanup everything
-                self._cleanup_temp_files(
-                    mount_info.temp_root,
-                    mount_info.temp_key_file
-                )
+                self._cleanup_temp_files(mount_info.temp_root, mount_info.temp_key_file)
                 logger.debug(
                     "Cleaned up temp_root (last mount using it)",
                     mount_id=mount_id,
-                    temp_root=mount_info.temp_root
+                    temp_root=mount_info.temp_root,
                 )
+
+            if mount_info.mount_type == MountType.BORG_ARCHIVE:
+                self._cleanup_managed_mount_dir(mount_info.mount_point)
 
             if success:
                 # Remove from tracking
@@ -1171,7 +1300,7 @@ class MountService:
                 logger.error(
                     "Failed to unmount but removed from tracking",
                     mount_id=mount_id,
-                    mount_point=mount_info.mount_point
+                    mount_point=mount_info.mount_point,
                 )
                 return False
 
@@ -1197,9 +1326,10 @@ class MountService:
         """Check if SSHFS is installed"""
         try:
             process = await asyncio.create_subprocess_exec(
-                "which", "sshfs",
+                "which",
+                "sshfs",
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                stderr=asyncio.subprocess.PIPE,
             )
             await process.communicate()
             return process.returncode == 0
@@ -1207,10 +1337,7 @@ class MountService:
             return False
 
     async def _check_remote_is_file(
-        self,
-        connection: SSHConnection,
-        remote_path: str,
-        temp_key_file: str
+        self, connection: SSHConnection, remote_path: str, temp_key_file: str
     ) -> bool:
         """
         Check if a remote path is a file (not a directory)
@@ -1230,19 +1357,22 @@ class MountService:
             # Method 1: Try SSH shell command first (fast, but requires shell access)
             cmd = [
                 "ssh",
-                "-i", temp_key_file,
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "UserKnownHostsFile=/dev/null",
-                "-o", "ConnectTimeout=10",
-                "-p", str(connection.port),
+                "-i",
+                temp_key_file,
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-o",
+                "UserKnownHostsFile=/dev/null",
+                "-o",
+                "ConnectTimeout=10",
+                "-p",
+                str(connection.port),
                 f"{connection.username}@{connection.host}",
-                f"test -f '{remote_path}' && echo 'FILE' || echo 'DIR'"
+                f"test -f '{remote_path}' && echo 'FILE' || echo 'DIR'",
             ]
 
             process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
 
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=10)
@@ -1250,11 +1380,11 @@ class MountService:
             # Check if SSH command succeeded
             if process.returncode == 0:
                 result = stdout.decode().strip()
-                is_file = result == 'FILE'
+                is_file = result == "FILE"
                 logger.debug(
                     "Checked remote path type via SSH shell",
                     remote_path=remote_path,
-                    is_file=is_file
+                    is_file=is_file,
                 )
                 return is_file
             else:
@@ -1263,20 +1393,19 @@ class MountService:
                 logger.info(
                     "SSH shell check failed (possibly SFTP-only), will use SFTP stat",
                     remote_path=remote_path,
-                    stderr=stderr_msg
+                    stderr=stderr_msg,
                 )
                 # Fall through to SFTP method
 
         except asyncio.TimeoutError:
             logger.warning(
-                "SSH check timeout, will try SFTP method",
-                remote_path=remote_path
+                "SSH check timeout, will try SFTP method", remote_path=remote_path
             )
         except Exception as e:
             logger.warning(
                 "SSH check failed, will try SFTP method",
                 remote_path=remote_path,
-                error=str(e)
+                error=str(e),
             )
 
         # Method 2: Use SFTP stat (works on SFTP-only servers)
@@ -1288,15 +1417,12 @@ class MountService:
             logger.warning(
                 "SFTP check also failed, assuming directory",
                 remote_path=remote_path,
-                error=str(e)
+                error=str(e),
             )
             return False
 
     async def _check_remote_is_file_via_sftp(
-        self,
-        connection: SSHConnection,
-        remote_path: str,
-        temp_key_file: str
+        self, connection: SSHConnection, remote_path: str, temp_key_file: str
     ) -> bool:
         """
         Check if remote path is file using SFTP protocol (works on SFTP-only servers)
@@ -1309,17 +1435,21 @@ class MountService:
         Returns:
             True if file, False if directory
         """
-        import stat as stat_module
 
         # Use SFTP subsystem via SSH
         cmd = [
             "sftp",
-            "-i", temp_key_file,
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
-            "-o", "ConnectTimeout=10",
-            "-P", str(connection.port),
-            f"{connection.username}@{connection.host}"
+            "-i",
+            temp_key_file,
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            "-o",
+            "ConnectTimeout=10",
+            "-P",
+            str(connection.port),
+            f"{connection.username}@{connection.host}",
         ]
 
         # Send stat command via stdin
@@ -1329,12 +1459,11 @@ class MountService:
             *cmd,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.PIPE,
         )
 
         stdout, _ = await asyncio.wait_for(
-            process.communicate(input=sftp_commands.encode()),
-            timeout=15
+            process.communicate(input=sftp_commands.encode()), timeout=15
         )
 
         output = stdout.decode()
@@ -1345,20 +1474,23 @@ class MountService:
         # Or "Permissions:" line with mode bits
 
         # Simple heuristic: if output contains directory indicators
-        is_directory = any(indicator in output.lower() for indicator in [
-            'directory',
-            'type: directory',
-            'd---------',  # Mode bits starting with 'd'
-            'drwx',
-        ])
+        is_directory = any(
+            indicator in output.lower()
+            for indicator in [
+                "directory",
+                "type: directory",
+                "d---------",  # Mode bits starting with 'd'
+                "drwx",
+            ]
+        )
 
-        is_file = not is_directory and 'cannot' not in output.lower()
+        is_file = not is_directory and "cannot" not in output.lower()
 
         logger.debug(
             "Checked remote path type via SFTP",
             remote_path=remote_path,
             is_file=is_file,
-            is_directory=is_directory
+            is_directory=is_directory,
         )
 
         return is_file
@@ -1380,17 +1512,17 @@ class MountService:
             private_key = _decrypt_with_module_secret(ssh_key.private_key)
 
         # Ensure trailing newline
-        if not private_key.endswith('\n'):
-            private_key += '\n'
+        if not private_key.endswith("\n"):
+            private_key += "\n"
 
         # Create temporary key file with proper permissions
-        fd, temp_key_file = tempfile.mkstemp(suffix='.key', text=True)
+        fd, temp_key_file = tempfile.mkstemp(suffix=".key", text=True)
         try:
             os.chmod(temp_key_file, 0o600)
-            with os.fdopen(fd, 'w') as f:
+            with os.fdopen(fd, "w") as f:
                 f.write(private_key)
-                if not private_key.endswith('\n'):
-                    f.write('\n')
+                if not private_key.endswith("\n"):
+                    f.write("\n")
         except Exception:
             os.close(fd)
             raise
@@ -1404,11 +1536,11 @@ class MountService:
         connection: SSHConnection,
         remote_path: str,
         mount_point: str,
-        temp_key_file: str
+        temp_key_file: str,
     ):
         """Execute SSHFS mount command with SSH key authentication"""
         sftp_server_path = None
-        use_sudo = getattr(connection, 'use_sudo', False)
+        use_sudo = getattr(connection, "use_sudo", False)
 
         # Only run the diagnostic when sudo is needed — it resolves the remote sftp-server
         # path required to build the '-o sftp_server=sudo <path>' SSHFS option.
@@ -1416,11 +1548,16 @@ class MountService:
             try:
                 diag_ssh = [
                     "ssh",
-                    "-i", temp_key_file,
-                    "-o", "StrictHostKeyChecking=no",
-                    "-o", "UserKnownHostsFile=/dev/null",
-                    "-o", "ConnectTimeout=10",
-                    "-p", str(connection.port),
+                    "-i",
+                    temp_key_file,
+                    "-o",
+                    "StrictHostKeyChecking=no",
+                    "-o",
+                    "UserKnownHostsFile=/dev/null",
+                    "-o",
+                    "ConnectTimeout=10",
+                    "-p",
+                    str(connection.port),
                     f"{connection.username}@{connection.host}",
                     # Emit key=value lines for parsing; also locate sftp-server binary
                     "printf 'user=%s\\n' \"$(whoami)\"; "
@@ -1429,14 +1566,16 @@ class MountService:
                     "sudo -n true 2>/dev/null && printf 'sudo=yes\\n' || printf 'sudo=no\\n'; "
                     "printf 'sftp_server=%s\\n' \"$(command -v sftp-server 2>/dev/null || "
                     "ls /usr/libexec/openssh/sftp-server /usr/lib/openssh/sftp-server "
-                    "/usr/lib/misc/sftp-server 2>/dev/null | head -1)\""
+                    '/usr/lib/misc/sftp-server 2>/dev/null | head -1)"',
                 ]
                 diag_proc = await asyncio.create_subprocess_exec(
                     *diag_ssh,
                     stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
+                    stderr=asyncio.subprocess.PIPE,
                 )
-                diag_out, diag_err = await asyncio.wait_for(diag_proc.communicate(), timeout=15)
+                diag_out, diag_err = await asyncio.wait_for(
+                    diag_proc.communicate(), timeout=15
+                )
                 diag_text = diag_out.decode().strip()
 
                 # Parse sftp_server path from output
@@ -1464,60 +1603,112 @@ class MountService:
         current_uid = os.getuid()
         current_gid = os.getgid()
 
-        # Build SSHFS command WITH IdentityFile (this is the fix!)
-        cmd = [
-            "sshfs",
-            f"{connection.username}@{connection.host}:{remote_path}",
-            mount_point,
-            "-p", str(connection.port),
-            "-o", f"IdentityFile={temp_key_file}",  # CRITICAL: SSH key auth
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
-            "-o", "ConnectTimeout=30",
-            "-o", "ServerAliveInterval=15",
-            "-o", "ServerAliveCountMax=3",
-            "-o", "reconnect",
-            "-o", "follow_symlinks",
-            "-o", "allow_other",
-            "-o", f"uid={current_uid}",
-            "-o", f"gid={current_gid}",
-            "-o", "workaround=rename"
-        ]
+        def build_sshfs_command(path_to_mount: str) -> list[str]:
+            # Build SSHFS command WITH IdentityFile (this is the fix!)
+            cmd = [
+                "sshfs",
+                f"{connection.username}@{connection.host}:{path_to_mount}",
+                mount_point,
+                "-p",
+                str(connection.port),
+                "-o",
+                f"IdentityFile={temp_key_file}",  # CRITICAL: SSH key auth
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-o",
+                "UserKnownHostsFile=/dev/null",
+                "-o",
+                "ConnectTimeout=30",
+                "-o",
+                "ServerAliveInterval=15",
+                "-o",
+                "ServerAliveCountMax=3",
+                "-o",
+                "reconnect",
+                "-o",
+                "follow_symlinks",
+                "-o",
+                "allow_other",
+                "-o",
+                f"uid={current_uid}",
+                "-o",
+                f"gid={current_gid}",
+                "-o",
+                "workaround=rename",
+            ]
 
-        # When use_sudo is enabled, tell SSHFS to run the remote sftp-server via sudo.
-        # This allows reading files owned by root/other users (e.g. vault TLS keys, raft DB).
-        # Requires passwordless sudo for the SSH user on the remote host.
+            # When use_sudo is enabled, tell SSHFS to run the remote sftp-server via sudo.
+            # This allows reading files owned by root/other users (e.g. vault TLS keys, raft DB).
+            # Requires passwordless sudo for the SSH user on the remote host.
+            if use_sudo:
+                server = sftp_server_path or "/usr/lib/openssh/sftp-server"
+                cmd.extend(["-o", f"sftp_server=sudo {server}"])
+            return cmd
+
         if use_sudo:
-            server = sftp_server_path or "/usr/lib/openssh/sftp-server"
-            cmd.extend(["-o", f"sftp_server=sudo {server}"])
             logger.info(
                 "SSHFS: using sudo sftp-server for elevated file access",
                 host=connection.host,
-                sftp_server=server,
+                sftp_server=sftp_server_path or "/usr/lib/openssh/sftp-server",
             )
 
-        logger.info("Executing SSHFS mount", command=" ".join(cmd))
-
-        # Execute mount command
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            stdin=asyncio.subprocess.DEVNULL
+        mount_attempts = [remote_path]
+        connection_default_path = getattr(connection, "default_path", None)
+        if not isinstance(connection_default_path, str):
+            connection_default_path = None
+        login_relative_path = _sshfs_login_relative_candidate(
+            remote_path, connection_default_path
         )
+        if login_relative_path and login_relative_path != remote_path:
+            mount_attempts.append(login_relative_path)
 
-        # Give SSHFS a moment to start mounting
-        await asyncio.sleep(1)
+        for attempt_index, path_to_mount in enumerate(mount_attempts):
+            cmd = build_sshfs_command(path_to_mount)
 
-        # Check for immediate errors
-        try:
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=5)
-            if process.returncode is not None and process.returncode != 0:
-                error_msg = stderr.decode() if stderr else "Unknown error"
-                raise Exception(f"SSHFS mount failed: {error_msg}")
-        except asyncio.TimeoutError:
-            # SSHFS forks to background, timeout is expected for successful mounts
-            pass
+            logger.info(
+                "Executing SSHFS mount",
+                command=" ".join(cmd),
+                remote_path=path_to_mount,
+                retry=attempt_index > 0,
+            )
+
+            # Execute mount command
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                stdin=asyncio.subprocess.DEVNULL,
+            )
+
+            # Give SSHFS a moment to start mounting
+            await asyncio.sleep(1)
+
+            # Check for immediate errors
+            try:
+                stdout, stderr = await asyncio.wait_for(
+                    process.communicate(), timeout=5
+                )
+                if process.returncode is not None and process.returncode != 0:
+                    error_msg = (
+                        stderr.decode(errors="replace") if stderr else "Unknown error"
+                    )
+                    if (
+                        attempt_index == 0
+                        and login_relative_path
+                        and _sshfs_missing_remote_path(error_msg)
+                    ):
+                        logger.warning(
+                            "SSHFS absolute path missing, retrying relative to login directory",
+                            remote_path=remote_path,
+                            retry_remote_path=login_relative_path,
+                            error=error_msg.strip(),
+                        )
+                        continue
+                    raise Exception(f"SSHFS mount failed: {error_msg}")
+                return
+            except asyncio.TimeoutError:
+                # SSHFS forks to background, timeout is expected for successful mounts
+                return
 
     async def _verify_mount_readable(self, mount_point: str):
         """
@@ -1540,7 +1731,7 @@ class MountService:
                     "Mount verification successful (read-only check)",
                     mount_point=mount_point,
                     attempt=attempt + 1,
-                    entries_count=len(entries)
+                    entries_count=len(entries),
                 )
                 return  # Success!
 
@@ -1574,21 +1765,18 @@ class MountService:
         for attempt in range(3):
             try:
                 process = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
+                    *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
                 )
 
                 stdout, stderr = await asyncio.wait_for(
-                    process.communicate(),
-                    timeout=10
+                    process.communicate(), timeout=10
                 )
 
                 if process.returncode == 0:
                     logger.info(
                         "Successfully unmounted FUSE",
                         mount_point=mount_point,
-                        attempt=attempt + 1
+                        attempt=attempt + 1,
                     )
                     return True
                 else:
@@ -1596,12 +1784,15 @@ class MountService:
 
                     # "Invalid argument" means the mount point isn't mounted or doesn't exist
                     # Treat this as success since our goal is to ensure it's not mounted
-                    if "Invalid argument" in error_msg or "not mounted" in error_msg.lower():
+                    if (
+                        "Invalid argument" in error_msg
+                        or "not mounted" in error_msg.lower()
+                    ):
                         logger.info(
                             "Mount point not mounted or doesn't exist (treating as success)",
                             mount_point=mount_point,
                             attempt=attempt + 1,
-                            error=error_msg
+                            error=error_msg,
                         )
                         return True
 
@@ -1609,7 +1800,7 @@ class MountService:
                         "Unmount attempt failed",
                         mount_point=mount_point,
                         attempt=attempt + 1,
-                        error=error_msg
+                        error=error_msg,
                     )
 
                     # Wait before retry
@@ -1618,9 +1809,7 @@ class MountService:
 
             except asyncio.TimeoutError:
                 logger.warning(
-                    "Unmount timeout",
-                    mount_point=mount_point,
-                    attempt=attempt + 1
+                    "Unmount timeout", mount_point=mount_point, attempt=attempt + 1
                 )
                 if attempt < 2:
                     await asyncio.sleep(2)
@@ -1629,38 +1818,37 @@ class MountService:
                     "Unmount error",
                     mount_point=mount_point,
                     attempt=attempt + 1,
-                    error=str(e)
+                    error=str(e),
                 )
                 if attempt < 2:
                     await asyncio.sleep(2)
 
         return False
 
-    async def _unmount_borg(self, mount_point: str, borg_version: int = 1, force: bool = False) -> bool:
+    async def _unmount_borg(
+        self, mount_point: str, borg_version: int = 1, force: bool = False
+    ) -> bool:
         """Unmount a Borg mount"""
         # Try borg umount first
         for attempt in range(3):
             try:
-                cmd = BorgRouter(SimpleNamespace(borg_version=borg_version)).build_unmount_command(
-                    mount_point
-                )
+                cmd = BorgRouter(
+                    SimpleNamespace(borg_version=borg_version)
+                ).build_unmount_command(mount_point)
 
                 process = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
+                    *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
                 )
 
                 stdout, stderr = await asyncio.wait_for(
-                    process.communicate(),
-                    timeout=10
+                    process.communicate(), timeout=10
                 )
 
                 if process.returncode == 0:
                     logger.info(
                         "Successfully unmounted Borg",
                         mount_point=mount_point,
-                        attempt=attempt + 1
+                        attempt=attempt + 1,
                     )
                     return True
                 else:
@@ -1669,7 +1857,7 @@ class MountService:
                         "Borg unmount attempt failed",
                         mount_point=mount_point,
                         attempt=attempt + 1,
-                        error=error_msg
+                        error=error_msg,
                     )
 
                     # Try fusermount as fallback
@@ -1680,9 +1868,7 @@ class MountService:
 
             except asyncio.TimeoutError:
                 logger.warning(
-                    "Borg unmount timeout",
-                    mount_point=mount_point,
-                    attempt=attempt + 1
+                    "Borg unmount timeout", mount_point=mount_point, attempt=attempt + 1
                 )
                 if attempt < 2:
                     await asyncio.sleep(2)
@@ -1691,7 +1877,7 @@ class MountService:
                     "Borg unmount error",
                     mount_point=mount_point,
                     attempt=attempt + 1,
-                    error=str(e)
+                    error=str(e),
                 )
                 if attempt < 2:
                     await asyncio.sleep(2)
@@ -1699,9 +1885,7 @@ class MountService:
         return False
 
     def _cleanup_temp_files(
-        self,
-        temp_root: Optional[str],
-        temp_key_file: Optional[str]
+        self, temp_root: Optional[str], temp_key_file: Optional[str]
     ):
         """Cleanup temporary directories and key files"""
         # Cleanup temp root directory
@@ -1711,9 +1895,7 @@ class MountService:
                 logger.debug("Cleaned up temp root", temp_root=temp_root)
             except Exception as e:
                 logger.warning(
-                    "Failed to cleanup temp root",
-                    temp_root=temp_root,
-                    error=str(e)
+                    "Failed to cleanup temp root", temp_root=temp_root, error=str(e)
                 )
 
         # Cleanup temp key file
@@ -1725,7 +1907,7 @@ class MountService:
                 logger.warning(
                     "Failed to cleanup temp key file",
                     key_file=temp_key_file,
-                    error=str(e)
+                    error=str(e),
                 )
 
     def _validate_mount_point(self, path: str):
@@ -1736,13 +1918,13 @@ class MountService:
             Exception: If path is not safe
         """
         # Reject sensitive system paths
-        sensitive = ['/etc', '/root', '/sys', '/proc', '/boot', '/dev', '/var', '/usr']
+        sensitive = ["/etc", "/root", "/sys", "/proc", "/boot", "/dev", "/var", "/usr"]
         for s in sensitive:
             if path.startswith(s):
                 raise Exception(f"Cannot mount to sensitive path: {s}")
 
         # Prevent path traversal
-        if '..' in path:
+        if ".." in path:
             raise Exception("Path traversal not allowed")
 
         # Must be absolute path

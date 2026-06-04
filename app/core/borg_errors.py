@@ -12,17 +12,14 @@ Reference: https://borgbackup.readthedocs.io/en/stable/usage/general.html#return
 BORG_EXIT_CODES = {
     # Success
     0: "Success",
-
     # Legacy codes
     1: "Warning (legacy)",
     2: "Error (legacy)",
-
     # Runtime errors (3-6)
     3: "Cancelled by user",
     4: "Command error",
     5: "Formatting error",
     6: "Invalid placeholder",
-
     # Repository errors (10-21)
     10: "Repository already exists",
     11: "Attic repository detected",
@@ -36,17 +33,14 @@ BORG_EXIT_CODES = {
     19: "Path already exists",
     20: "Storage quota exceeded",
     21: "Permission denied",
-
     # Feature/Manifest errors (25-27)
     25: "Unsupported repository feature",
     26: "Repository has no manifest",
     27: "Unsupported manifest envelope",
-
     # Archive errors (30-32)
     30: "Archive already exists",
     31: "Archive does not exist",
     32: "Filesystem encoding error",
-
     # Key errors (40-48)
     40: "Invalid key data",
     41: "Key file mismatch",
@@ -57,20 +51,17 @@ BORG_EXIT_CODES = {
     46: "Key management not available for unencrypted repos",
     47: "Unknown key type",
     48: "Unsupported payload type",
-
     # Passphrase errors (50-53)
     50: "Cannot acquire passphrase",
     51: "Passcommand failed",
     52: "Passphrase incorrect",
     53: "Password retries exceeded",
-
     # Cache errors (60-64)
     60: "Cache initialization aborted",
     61: "Encryption method mismatch",
     62: "Repository access aborted",
     63: "Repository ID not unique",
     64: "Cache replay attack detected",
-
     # Lock errors (70-75) ⚠️ IMPORTANT
     70: "Failed to acquire the lock",
     71: "Failed to acquire the lock (with traceback)",
@@ -78,7 +69,6 @@ BORG_EXIT_CODES = {
     73: "Failed to create/acquire the lock (timeout)",
     74: "Failed to release the lock (was not locked)",
     75: "Failed to release the lock (not by me)",
-
     # Connection/RPC errors (80-87)
     80: "Connection closed by remote host",
     81: "Connection closed with hint",
@@ -88,7 +78,6 @@ BORG_EXIT_CODES = {
     85: "Unexpected RPC data format from client",
     86: "Unexpected RPC data format from server",
     87: "Connection broken",
-
     # Integrity errors (90-99)
     90: "Data integrity error",
     91: "File integrity error",
@@ -98,7 +87,6 @@ BORG_EXIT_CODES = {
     97: "Manifest TAM invalid",
     98: "Manifest authentication required",
     99: "Unsupported authentication suite",
-
     # Warnings (100-107)
     100: "Warning: File changed during backup",
     101: "Warning: Include pattern never matched",
@@ -117,108 +105,101 @@ BORG_MESSAGE_IDS = {
     "Repository.DoesNotExist": {
         "message": "Repository does not exist at the specified path",
         "suggestion": "Please check the repository path and ensure it has been initialized with 'borg init'",
-        "severity": "error"
+        "severity": "error",
     },
     "Repository.AlreadyExists": {
         "message": "Repository already exists at this location",
         "suggestion": "Use a different path or delete the existing repository first",
-        "severity": "error"
+        "severity": "error",
     },
     "Repository.InvalidRepository": {
         "message": "Not a valid BorgBackup repository",
         "suggestion": "Check that the path points to a valid Borg repository",
-        "severity": "error"
+        "severity": "error",
     },
     "Repository.CheckNeeded": {
         "message": "Repository check needed before operations can continue",
         "suggestion": "Run 'borg check' to verify and repair the repository",
-        "severity": "warning"
+        "severity": "warning",
     },
     "Repository.ObjectNotFound": {
         "message": "Repository object not found",
         "suggestion": "The repository may be corrupted. Run 'borg check'",
-        "severity": "error"
+        "severity": "error",
     },
-
     # Lock errors
     "LockTimeout": {
         "message": "Could not acquire repository lock - the repository is locked by another process or has a stale lock",
         "suggestion": "If no backup is currently running, this is likely a stale lock from a crashed backup. Use the 'Break Lock' button to remove it safely.",
         "severity": "error",
-        "is_lock_error": True
+        "is_lock_error": True,
     },
     "LockError": {
         "message": "Repository locking error",
         "suggestion": "Check if another process is using the repository. If not, use the 'Break Lock' button to remove the stale lock.",
         "severity": "error",
-        "is_lock_error": True
+        "is_lock_error": True,
     },
-
     # Authentication/Passphrase errors
     "PassphraseWrong": {
         "message": "Incorrect repository passphrase",
         "suggestion": "Check your passphrase and try again",
-        "severity": "error"
+        "severity": "error",
     },
     "PasscommandFailed": {
         "message": "Passphrase command failed",
         "suggestion": "Check your passphrase command configuration",
-        "severity": "error"
+        "severity": "error",
     },
-
     # Archive errors
     "Archive.DoesNotExist": {
         "message": "Archive does not exist",
         "suggestion": "Check the archive name and try again",
-        "severity": "error"
+        "severity": "error",
     },
     "Archive.AlreadyExists": {
         "message": "Archive with this name already exists",
         "suggestion": "Use a different archive name or delete the existing archive",
-        "severity": "error"
+        "severity": "error",
     },
-
     # Storage/Quota errors
     "NotEnoughSpace": {
         "message": "Not enough disk space",
         "suggestion": "Free up disk space on the repository storage device",
-        "severity": "error"
+        "severity": "error",
     },
     "QuotaExceeded": {
         "message": "Storage quota exceeded",
         "suggestion": "Delete old archives or increase storage quota",
-        "severity": "error"
+        "severity": "error",
     },
-
     # SSH/Remote errors
     "Connection.FailedToConnect": {
         "message": "Failed to connect to remote repository",
         "suggestion": "Check your SSH configuration, hostname, and credentials",
-        "severity": "error"
+        "severity": "error",
     },
     "Connection.ConnectionClosed": {
         "message": "Connection to remote repository was closed",
         "suggestion": "Check network connection and SSH server status",
-        "severity": "error"
+        "severity": "error",
     },
-
     # File access errors
     "FileNotFound": {
         "message": "Source file or directory not found",
         "suggestion": "Check that the source path exists and is accessible",
-        "severity": "warning"
+        "severity": "warning",
     },
     "PermissionDenied": {
         "message": "Permission denied accessing file",
         "suggestion": "Check file permissions or run with appropriate privileges",
-        "severity": "warning"
+        "severity": "warning",
     },
-
     # Integrity errors
     "IntegrityError": {
         "message": "Repository integrity error detected",
         "suggestion": "Run 'borg check' to verify and repair the repository",
-        "severity": "error"
+        "severity": "error",
     },
 }
 
@@ -240,7 +221,7 @@ def get_error_details(msgid: str, default_message: str = None):
     return {
         "message": default_message or f"Borg error: {msgid}",
         "suggestion": "Check the Borg documentation for more details",
-        "severity": "error"
+        "severity": "error",
     }
 
 
@@ -283,7 +264,14 @@ def is_lock_error(exit_code: int = None, msgid: str = None) -> bool:
         return True
 
     # Secondary: Check message ID (for operations using --log-json)
-    if msgid in ['LockError', 'LockErrorT', 'LockFailed', 'LockTimeout', 'NotLocked', 'NotMyLock']:
+    if msgid in [
+        "LockError",
+        "LockErrorT",
+        "LockFailed",
+        "LockTimeout",
+        "NotLocked",
+        "NotMyLock",
+    ]:
         return True
 
     return False
@@ -310,7 +298,9 @@ _MSGID_TO_LOCALE_KEY = {
 }
 
 
-def format_error_message(msgid: str = None, original_message: str = None, exit_code: int = None) -> str:
+def format_error_message(
+    msgid: str = None, original_message: str = None, exit_code: int = None
+) -> str:
     """
     Format a JSON-encoded locale key string for a Borg error.
 
@@ -326,9 +316,16 @@ def format_error_message(msgid: str = None, original_message: str = None, exit_c
         JSON-encoded locale key string
     """
     if msgid and msgid in _MSGID_TO_LOCALE_KEY:
-        return _json.dumps({"key": f"backend.errors.borg.{_MSGID_TO_LOCALE_KEY[msgid]}"})
+        return _json.dumps(
+            {"key": f"backend.errors.borg.{_MSGID_TO_LOCALE_KEY[msgid]}"}
+        )
 
     if exit_code is not None:
-        return _json.dumps({"key": "backend.errors.borg.exitCodeError", "params": {"exitCode": exit_code}})
+        return _json.dumps(
+            {
+                "key": "backend.errors.borg.exitCodeError",
+                "params": {"exitCode": exit_code},
+            }
+        )
 
     return _json.dumps({"key": "backend.errors.borg.unknownError"})

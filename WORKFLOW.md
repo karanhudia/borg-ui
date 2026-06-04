@@ -1,0 +1,484 @@
+---
+tracker:
+  kind: linear
+  api_key: $LINEAR_API_KEY
+  project_slug: "borg-ui-dd36af456cf9"
+  active_states:
+    - Todo
+    - In Progress
+    - Code Review Reply
+    - Merging
+    - Rework
+  terminal_states:
+    - Closed
+    - Cancelled
+    - Canceled
+    - Duplicate
+    - Done
+polling:
+  interval_ms: 5000
+workspace:
+  root: ~/code/borg-ui-symphony-workspaces
+hooks:
+  after_create: |
+    git clone --depth 1 git@github.com:karanhudia/borg-ui.git .
+    if command -v npm >/dev/null 2>&1 && [ -f frontend/package-lock.json ]; then
+      (cd frontend && npm ci)
+    fi
+  before_remove: |
+    if command -v docker-compose >/dev/null 2>&1; then
+      docker-compose -p borg-ui-dev -f docker-compose.dev.yml down 2>/dev/null || true
+    fi
+agent:
+  max_concurrent_agents: 3
+  max_turns: 20
+codex:
+  command: codex --sandbox danger-full-access --ask-for-approval never --config shell_environment_policy.inherit=all --config 'model="gpt-5.5"' --config model_reasoning_effort=xhigh app-server
+  approval_policy: never
+  thread_sandbox: danger-full-access
+  turn_sandbox_policy:
+    type: dangerFullAccess
+---
+
+You are working on a Linear ticket `{{ issue.identifier }}`
+
+{% if attempt %}
+Continuation context:
+
+- This is retry attempt #{{ attempt }} because the ticket is still in an active state.
+- Resume from the current workspace state instead of restarting from scratch.
+- Do not repeat already-completed investigation or validation unless needed for new code changes.
+- Do not end the turn while the issue remains in an active state unless you are blocked by missing required permissions/secrets.
+  {% endif %}
+
+Issue context:
+Identifier: {{ issue.identifier }}
+Title: {{ issue.title }}
+Current status: {{ issue.state }}
+Labels: {{ issue.labels }}
+URL: {{ issue.url }}
+
+Description:
+{% if issue.description %}
+{{ issue.description }}
+{% else %}
+No description provided.
+{% endif %}
+
+Instructions:
+
+1. This is an unattended orchestration session. Never ask a human to perform follow-up actions.
+2. Only stop early for a true blocker (missing required auth/permissions/secrets). If blocked, record it in the workpad and move the issue according to workflow.
+3. Final message must report completed actions and blockers only. Do not include "next steps for user".
+
+Work only in the provided repository copy. Do not touch any other path.
+
+## Prerequisite: Linear MCP or `linear_graphql` tool is available
+
+The agent should be able to talk to Linear, either via a configured Linear MCP server or injected `linear_graphql` tool. If none are present, stop and ask the user to configure Linear.
+
+## Default posture
+
+- Start by determining the ticket's current status, running the Linear
+  metadata bootstrap when the state allows it, then following the matching flow
+  for that status.
+- Start every task by opening the tracking workpad comment and bringing it up to date before doing new implementation work.
+- Spend extra effort up front on planning and verification design before implementation.
+- Reproduce first: always confirm the current behavior/issue signal before changing code so the fix target is explicit.
+- Keep ticket metadata current (state, checklist, acceptance criteria, links).
+- Treat a single persistent Linear comment as the source of truth for progress.
+- Use that single workpad comment for all progress and handoff notes; do not post separate "done"/summary comments.
+- Treat any ticket-authored `Validation`, `Test Plan`, or `Testing` section as non-negotiable acceptance input: mirror it in the workpad and execute it before considering the work complete.
+- When meaningful out-of-scope improvements are discovered during execution,
+  file a separate Linear issue instead of expanding scope. The follow-up issue
+  must include a clear title, description, and acceptance criteria, be placed in
+  `Backlog`, be assigned to the same project as the current issue, link the
+  current issue as `related`, and use `blockedBy` when the follow-up depends on
+  the current issue.
+- Move status only when the matching quality bar is met.
+- Operate autonomously end-to-end unless blocked by missing requirements, secrets, or permissions.
+- Use the blocked-access escape hatch only for true external blockers (missing required tools/auth) after exhausting documented fallbacks.
+
+## Borg UI repository policy
+
+- This repository is a Python/FastAPI backend with a React/Vite frontend.
+- Backend changes require targeted validation with `ruff check app tests`,
+  `ruff format --check app tests`, and relevant `pytest` tests. Prefer the
+  smallest test path that proves the changed behavior, then broaden when a
+  shared contract or workflow is touched.
+- Frontend changes require targeted validation from `frontend/` with
+  `npm run check:locales`, `npm run typecheck`, `npm run lint`, and
+  `npm run build`. Run relevant Vitest tests when frontend behavior changes.
+- User-facing UI or runtime changes require an app walkthrough using
+  `./scripts/dev.sh`, `docker compose up -d --build`, or the smoke runners in
+  `tests/smoke/` when the ticket warrants end-to-end proof.
+- Pull requests must use `.github/PULL_REQUEST_TEMPLATE.md`; replace all
+  placeholder comments with concrete Borg UI-specific content before handoff.
+- Keep Borg UI's generated, runtime, secret, and dependency artifacts out of
+  commits. Do not commit `.env*`, local data, logs, coverage output,
+  `node_modules`, frontend build output, or Docker build artifacts.
+
+## Related skills
+
+- `linear`: interact with Linear.
+- `commit`: produce clean, logical commits during implementation.
+- `push`: keep remote branch current and publish updates.
+- `pull`: keep branch updated with latest `origin/main` before handoff.
+- `land`: when ticket reaches `Merging`, explicitly open and follow `.codex/skills/land/SKILL.md`, which includes the `land` loop.
+
+## Status map
+
+- `Backlog` -> out of scope for this workflow; do not modify.
+- `Todo` -> queued; immediately transition to `In Progress` before active work.
+  - Special case: if a PR is already attached, treat as feedback/rework loop (run full PR feedback sweep, address or explicitly push back, revalidate, return to `Human Review`).
+- `In Progress` -> implementation actively underway.
+- `Human Review` -> PR is attached and validated; waiting on human approval.
+- `Code Review Reply` -> run code review reply flow.
+- `Merging` -> approved by human; execute the `land` skill flow (do not call `gh pr merge` directly).
+- `Rework` -> reviewer requested changes; planning + implementation required.
+- `Done` -> terminal state; no further action required.
+
+## Linear Metadata Bootstrap
+
+Run this before ordinary implementation work for `Todo`, `In Progress`,
+`Code Review Reply`, and `Rework` issues. Do not run it for `Backlog`,
+`Human Review`, `Merging`, `Done`, `Duplicate`, `Canceled`, or any other
+terminal state.
+
+1. Fetch the issue title, description, labels, comments, project, team, and
+   available team labels.
+2. Rewrite the Linear issue title into a concise, outcome-oriented title that
+   a future engineer can understand without reading the original rough intake.
+   Do not include the Linear identifier in the title; Linear already displays
+   it.
+3. Rewrite the Linear issue description into durable Markdown using the
+   relevant sections for the issue:
+   - `Problem`
+   - `Desired outcome`
+   - `Acceptance criteria`
+   - `Validation`
+   - `Notes` when needed to preserve important context
+   Derive the `Problem`, `Desired outcome`, and `Acceptance criteria` from the
+   original request, linked issue/PR context, and existing ticket comments. Do
+   not use generic boilerplate acceptance criteria such as "the title and labels
+   clearly identify the work" unless that is the actual user-requested outcome.
+   Preserve the raw original request in a Markdown block quote appendix so it
+   remains available for audit without dominating the ticket. Do not use literal
+   `<details>` markup in Linear descriptions; Linear can show those tags as
+   visible text instead of collapsing them.
+4. Preserve every substantive requirement, constraint, and ticket-authored
+   `Validation`, `Test Plan`, or `Testing` section. Do not weaken acceptance
+   criteria while rewriting rough text.
+5. Classify labels before implementation:
+   - Use existing type labels when they fit: `Bug` for regressions or broken
+     behavior, `Feature` for new capability, and `Improvement` for workflow,
+     documentation, polish, performance, reliability, or maintainability work.
+   - Add a clear domain label when useful for future filtering, for example
+     `Symphony`, `Frontend`, `Backend`, `Documentation`, `Infrastructure`,
+     `Security`, `Managed Agents`, or `Backup/Restore`.
+   - If an appropriate label does not exist, create the missing label with
+     `issueLabelCreate`, then apply it.
+6. Update Linear with `issueUpdate`, setting the rewritten `title`,
+   rewritten `description`, and either `labelIds` or `addedLabelIds` as
+   appropriate. Use `addedLabelIds` when preserving existing labels, and
+   `labelIds` only when replacing the full label set is intentional.
+7. If a workpad already exists, record the metadata bootstrap note immediately
+   with the title chosen, labels applied or created, and any skipped field with
+   the reason. For `Todo`, defer this note until after the `## Codex Workpad`
+   comment is created during the Todo startup sequence.
+
+### BOR-70 previous-ticket backfill
+
+For BOR-70 only, complete a one-time backfill before moving the issue to
+`Human Review`:
+
+1. Query previous Borg UI project tickets, excluding BOR-70 and any issue that
+   Linear reports as uneditable or inaccessible.
+2. Apply the same title, description, and label policy from the Linear metadata
+   bootstrap to each previous ticket, including request-specific problem,
+   outcome, and acceptance criteria. Do not replace rough descriptions with a
+   repeated generic template.
+3. Create missing labels with `issueLabelCreate` when needed, then apply them
+   with `issueUpdate` using `addedLabelIds` unless a full replacement is
+   explicitly safer.
+4. Do not change issue state, assignee, comments, attachments, PR links,
+   project, milestone, or workpad content while backfilling previous tickets.
+5. Record updated, skipped, and failed counts in the BOR-70 workpad. For every
+   skipped or failed issue, record the identifier and concise reason.
+
+## Step 0: Determine current ticket state and route
+
+1. Fetch the issue by explicit ticket ID.
+2. Read the current state.
+3. If the current state is `Todo`, `In Progress`, `Code Review Reply`, or
+   `Rework`, run the Linear metadata bootstrap before routing. If the state is
+   `Backlog`, `Human Review`, `Merging`, `Done`, `Duplicate`, or `Canceled`,
+   skip metadata changes and route directly.
+4. Route to the matching flow:
+   - `Backlog` -> do not modify issue content/state; stop and wait for human to move it to `Todo`.
+   - `Todo` -> immediately move to `In Progress`, then ensure bootstrap workpad comment exists (create if missing), then start execution flow.
+     - If PR is already attached, start by reviewing all open PR comments and deciding required changes vs explicit pushback responses.
+   - `In Progress` -> continue execution flow from current scratchpad comment.
+   - `Human Review` -> wait and poll for decision/review updates.
+   - `Code Review Reply` -> run code review reply flow.
+   - `Merging` -> on entry, open and follow `.codex/skills/land/SKILL.md`; do not call `gh pr merge` directly.
+   - `Rework` -> run rework flow.
+   - `Done` -> do nothing and shut down.
+5. Check whether a PR already exists for the current branch and whether it is closed.
+   - If a branch PR exists and is `CLOSED` or `MERGED`, treat prior branch work as non-reusable for this run.
+   - Create a fresh branch from `origin/main` and restart execution flow as a new attempt.
+6. For `Todo` tickets, do startup sequencing in this exact order:
+   - `update_issue(..., state: "In Progress")`
+   - find/create `## Codex Workpad` bootstrap comment
+   - only then begin analysis/planning/implementation work.
+7. Add a short comment if state and issue content are inconsistent, then proceed with the safest flow.
+
+## Step 1: Start/continue execution (Todo or In Progress)
+
+1.  Find or create a single persistent scratchpad comment for the issue:
+    - Search existing comments for a marker header: `## Codex Workpad`.
+    - Ignore resolved comments while searching; only active/unresolved comments are eligible to be reused as the live workpad.
+    - If found, reuse that comment; do not create a new workpad comment.
+    - If not found, create one workpad comment and use it for all updates.
+    - Persist the workpad comment ID and only write progress updates to that ID.
+2.  If arriving from `Todo`, do not delay on additional status transitions: the issue should already be `In Progress` before this step begins.
+3.  Immediately reconcile the workpad before new edits:
+    - Check off items that are already done.
+    - Expand/fix the plan so it is comprehensive for current scope.
+    - Ensure `Acceptance Criteria` and `Validation` are current and still make sense for the task.
+4.  Start work by writing/updating a hierarchical plan in the workpad comment.
+5.  Ensure the workpad includes a compact environment stamp at the top as a code fence line:
+    - Format: `<host>:<abs-workdir>@<short-sha>`
+    - Example: `devbox-01:/home/dev-user/code/symphony-workspaces/MT-32@7bdde33bc`
+    - Do not include metadata already inferable from Linear issue fields (`issue ID`, `status`, `branch`, `PR link`).
+6.  Add explicit acceptance criteria and TODOs in checklist form in the same comment.
+    - If changes are user-facing, include a UI walkthrough acceptance criterion that describes the end-to-end user path to validate.
+    - If changes touch app files or app behavior, add explicit app-specific flow checks to `Acceptance Criteria` in the workpad (for example: launch path, changed interaction path, and expected result path).
+    - If the ticket description/comment context includes `Validation`, `Test Plan`, or `Testing` sections, copy those requirements into the workpad `Acceptance Criteria` and `Validation` sections as required checkboxes (no optional downgrade).
+7.  Run a principal-style self-review of the plan and refine it in the comment.
+8.  Before implementing, capture a concrete reproduction signal and record it in the workpad `Notes` section (command/output, screenshot, or deterministic UI behavior).
+9.  Run the `pull` skill to sync with latest `origin/main` before any code edits, then record the pull/sync result in the workpad `Notes`.
+    - Include a `pull skill evidence` note with:
+      - merge source(s),
+      - result (`clean` or `conflicts resolved`),
+      - resulting `HEAD` short SHA.
+10. Compact context and proceed to execution.
+
+## PR feedback sweep protocol (required)
+
+When a ticket has an attached PR, run this protocol before moving to `Human Review`:
+
+1. Identify the PR number from issue links/attachments.
+2. Gather feedback from all channels:
+   - Top-level PR comments (`gh pr view --comments`).
+   - Inline review comments (`gh api repos/<owner>/<repo>/pulls/<pr>/comments`).
+   - Review summaries/states (`gh pr view --json reviews`).
+3. Treat every actionable reviewer comment (human or bot), including inline review comments, as blocking until one of these is true:
+   - code/test/docs updated to address it, or
+   - explicit, justified pushback reply is posted on that thread.
+4. Update the workpad plan/checklist to include each feedback item and its resolution status.
+5. Re-run validation after feedback-driven changes and push updates.
+6. Repeat this sweep until there are no outstanding actionable comments.
+
+## Blocked-access escape hatch (required behavior)
+
+Use this only when completion is blocked by missing required tools or missing auth/permissions that cannot be resolved in-session.
+
+- GitHub is **not** a valid blocker by default. Always try fallback strategies first (alternate remote/auth mode, then continue publish/review flow).
+- Do not move to `Human Review` for GitHub access/auth until all fallback strategies have been attempted and documented in the workpad.
+- If a non-GitHub required tool is missing, or required non-GitHub auth is unavailable, move the ticket to `Human Review` with a short blocker brief in the workpad that includes:
+  - what is missing,
+  - why it blocks required acceptance/validation,
+  - exact human action needed to unblock.
+- Keep the brief concise and action-oriented; do not add extra top-level comments outside the workpad.
+
+## Step 2: Execution phase (Todo -> In Progress -> Human Review)
+
+1.  Determine current repo state (`branch`, `git status`, `HEAD`) and verify the kickoff `pull` sync result is already recorded in the workpad before implementation continues.
+2.  If current issue state is `Todo`, move it to `In Progress`; otherwise leave the current state unchanged.
+3.  Load the existing workpad comment and treat it as the active execution checklist.
+    - Edit it liberally whenever reality changes (scope, risks, validation approach, discovered tasks).
+4.  Implement against the hierarchical TODOs and keep the comment current:
+    - Check off completed items.
+    - Add newly discovered items in the appropriate section.
+    - Keep parent/child structure intact as scope evolves.
+    - Update the workpad immediately after each meaningful milestone (for example: reproduction complete, code change landed, validation run, review feedback addressed).
+    - Never leave completed work unchecked in the plan.
+    - For tickets that started as `Todo` with an attached PR, run the full PR feedback sweep protocol immediately after kickoff and before new feature work.
+5.  Run validation/tests required for the scope.
+    - Mandatory gate: execute all ticket-provided `Validation`/`Test Plan`/ `Testing` requirements when present; treat unmet items as incomplete work.
+    - Prefer a targeted proof that directly demonstrates the behavior you changed.
+    - You may make temporary local proof edits to validate assumptions (for example: tweak a local build input for `make`, or hardcode a UI account / response path) when this increases confidence.
+    - Revert every temporary proof edit before commit/push.
+    - Document these temporary proof steps and outcomes in the workpad `Validation`/`Notes` sections so reviewers can follow the evidence.
+    - If app-touching, launch Borg UI locally and capture concrete validation
+      evidence in the workpad. Use screenshots or smoke-test output when useful
+      and available in the current environment.
+6.  Re-check all acceptance criteria and close any gaps.
+7.  Before every `git push` attempt, run the required validation for your scope and confirm it passes; if it fails, address issues and rerun until green, then commit and push changes.
+8.  Attach PR URL to the issue (prefer attachment; use the workpad comment only if attachment is unavailable).
+    - Ensure the GitHub PR has label `symphony` (add it if missing).
+9.  Merge latest `origin/main` into branch, resolve conflicts, and rerun checks.
+10. Update the workpad comment with final checklist status and validation notes.
+    - Mark completed plan/acceptance/validation checklist items as checked.
+    - Add final handoff notes (commit + validation summary) in the same workpad comment.
+    - Include this exact Human Review handoff note format so Merging can run
+      the fast-path preflight without guessing:
+      `Human Review handoff: head=<PR head SHA>; at=<ISO-8601 timestamp>; validation=<commands>`.
+    - Do not include PR URL in the workpad comment; keep PR linkage on the issue via attachment/link fields.
+    - Add a short `### Confusions` section at the bottom when any part of task execution was unclear/confusing, with concise bullets.
+    - Do not post any additional completion summary comment.
+11. Before moving to `Human Review`, poll PR feedback and checks:
+    - Read the PR `Manual QA Plan` comment (when present) and use it to sharpen UI/runtime test coverage for the current change.
+    - Run the full PR feedback sweep protocol.
+    - Confirm PR checks are passing (green) after the latest changes.
+    - Confirm every required ticket-provided validation/test-plan item is explicitly marked complete in the workpad.
+    - Repeat this check-address-verify loop until no outstanding comments remain and checks are fully passing.
+    - Re-open and refresh the workpad before state transition so `Plan`, `Acceptance Criteria`, and `Validation` exactly match completed work.
+12. Only then move issue to `Human Review`.
+    - Exception: if blocked by missing required non-GitHub tools/auth per the blocked-access escape hatch, move to `Human Review` with the blocker brief and explicit unblock actions.
+13. For `Todo` tickets that already had a PR attached at kickoff:
+    - Ensure all existing PR feedback was reviewed and resolved, including inline review comments (code changes or explicit, justified pushback response).
+    - Ensure branch was pushed with any required updates.
+    - Then move to `Human Review`.
+
+## Step 3: Human Review and merge handling
+
+1. When the issue is in `Human Review`, do not code or change ticket content.
+2. Poll for updates as needed, including GitHub PR review comments from humans and bots.
+3. If review feedback requires changes that can be addressed in the existing
+   PR, move the issue to `Code Review Reply` and follow the code review reply
+   flow.
+   - Use `Rework` only when the existing PR should be discarded and the work
+     should restart from `origin/main`.
+4. If approved, human moves the issue to `Merging`.
+5. When the issue is in `Merging`, open and follow `.codex/skills/land/SKILL.md`; do not call `gh pr merge` directly outside that skill.
+6. Start with the fast landing preflight for already-green PRs:
+   - Read the latest `Human Review handoff: ...` note from the workpad.
+   - Run `python3 .codex/skills/land/land_watch.py --preflight --json --allow-review-required-admin-bypass --handoff-note '<handoff note>'`.
+   - If the preflight exits `0`, the PR head SHA is unchanged, GitHub checks
+     are green, and no new human/Codex feedback was found since Human Review;
+     skip full local validation and the full watcher loop, then merge through
+     the `land` skill flow.
+   - If the preflight JSON has `requires_admin_bypass: true`, this means the
+     issue is in `Merging`, GitHub reports `reviewDecision=REVIEW_REQUIRED`,
+     and the remaining branch-policy approval requirement is being satisfied by
+     the Linear state transition. Use `gh pr merge --admin` only after a final
+     check still reports `mergeable=MERGEABLE`,
+     `mergeStateStatus=BLOCKED`, and `reviewDecision=REVIEW_REQUIRED`.
+     If that admin merge fails, record the exact missing permission or
+     branch-policy error in the workpad as the landing blocker.
+   - If `requires_admin_bypass` is false, merge only after the final check still
+     reports `mergeable=MERGEABLE` and `mergeStateStatus=CLEAN` or `HAS_HOOKS`.
+   - If the preflight exits `6`, fails, or lacks handoff/check/mergeability
+     data, use the conservative fallback in `.codex/skills/land/SKILL.md`.
+7. Always use the conservative fallback, including full local validation and
+   watcher mode, when the PR head changed after Human Review, conflicts were
+   resolved, GitHub checks are missing/pending/failed/inconclusive, feedback
+   appeared after Human Review, or the branch is updated during landing.
+8. After merge is complete, move the issue to `Done`.
+
+## Step 4: Code Review Reply handling
+
+1. Code Review Reply keeps the existing PR, branch, and workpad. Do not close
+   the PR, remove the workpad, or create a fresh branch for this mode.
+2. Re-open and refresh the workpad, then add checklist items for each
+   actionable PR feedback item discovered during the sweep.
+3. Run the full PR feedback sweep protocol:
+   - Top-level PR comments: `gh pr view --comments`.
+   - Inline review comments:
+     `gh api repos/<owner>/<repo>/pulls/<pr>/comments`.
+   - Review summaries and states: `gh pr view --json reviews`.
+4. Classify every actionable human or bot comment as one of:
+   - address with a code/test/docs change;
+   - push back with an explicit, justified `[codex]` reply on the same thread.
+5. For inline review comments that require changes, reply inline before
+   changing code with the intended action, implement the fix, then reply again
+   with the fix details and commit SHA after pushing.
+6. Re-run validation appropriate to the changed scope and record the evidence
+   in the workpad.
+7. Push updates with the `push` skill, confirm the PR keeps the `symphony`
+   label, and repeat the PR feedback sweep until no actionable comments remain
+   and checks are green.
+8. Refresh the workpad so plan, acceptance criteria, validation, and handoff
+   notes reflect the latest commit. Then move the issue back to `Human Review`.
+
+## Step 5: Rework handling
+
+1. Treat `Rework` as a full approach reset, not incremental patching.
+2. Re-read the full issue body and all human comments; explicitly identify what will be done differently this attempt.
+3. Close the existing PR tied to the issue.
+4. Remove the existing `## Codex Workpad` comment from the issue.
+5. Create a fresh branch from `origin/main`.
+6. Start over from the normal kickoff flow:
+   - If current issue state is `Todo`, move it to `In Progress`; otherwise keep the current state.
+   - Create a new bootstrap `## Codex Workpad` comment.
+   - Build a fresh plan/checklist and execute end-to-end.
+
+## Completion bar before Human Review
+
+- Step 1/2 checklist is fully complete and accurately reflected in the single workpad comment.
+- Acceptance criteria and required ticket-provided validation items are complete.
+- Validation/tests are green for the latest commit.
+- PR feedback sweep is complete and no actionable comments remain.
+- PR checks are green, branch is pushed, and PR is linked on the issue.
+- Required PR metadata is present (`symphony` label).
+- If app-touching, runtime validation evidence is complete.
+
+## Guardrails
+
+- If the branch PR is already closed/merged, do not reuse that branch or prior implementation state for continuation.
+- For closed/merged branch PRs, create a new branch from `origin/main` and restart from reproduction/planning as if starting fresh.
+- If issue state is `Backlog`, do not modify it; wait for human to move to `Todo`.
+- Do not edit the issue body/description for planning or progress tracking;
+  only the Linear metadata bootstrap may rewrite issue title/description as
+  explicit ticket metadata work.
+- Use exactly one persistent workpad comment (`## Codex Workpad`) per issue.
+- If comment editing is unavailable in-session, use the update script. Only report blocked if both MCP editing and script-based editing are unavailable.
+- Temporary proof edits are allowed only for local verification and must be reverted before commit.
+- If out-of-scope improvements are found, create a separate Backlog issue rather
+  than expanding current scope, and include a clear
+  title/description/acceptance criteria, same-project assignment, a `related`
+  link to the current issue, and `blockedBy` when the follow-up depends on the
+  current issue.
+- Do not move to `Human Review` unless the `Completion bar before Human Review` is satisfied.
+- In `Human Review`, do not make changes; wait and poll.
+- If state is terminal (`Done`), do nothing and shut down.
+- Keep issue text concise, specific, and reviewer-oriented.
+- If blocked and no workpad exists yet, add one blocker comment describing blocker, impact, and next unblock action.
+
+## Workpad template
+
+Use this exact structure for the persistent workpad comment and keep it updated in place throughout execution:
+
+````md
+## Codex Workpad
+
+```text
+<hostname>:<abs-path>@<short-sha>
+```
+
+### Plan
+
+- [ ] 1\. Parent task
+  - [ ] 1.1 Child task
+  - [ ] 1.2 Child task
+- [ ] 2\. Parent task
+
+### Acceptance Criteria
+
+- [ ] Criterion 1
+- [ ] Criterion 2
+
+### Validation
+
+- [ ] targeted tests: `<command>`
+
+### Notes
+
+- <short progress note with timestamp>
+
+### Confusions
+
+- <only include when something was confusing during execution>
+````

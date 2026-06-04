@@ -19,14 +19,21 @@ def wait_for_payload_status(
     """Poll a payload source until it reaches an expected status."""
     deadline = time.time() + timeout
     last_payload = None
-    terminal_statuses = terminal or {"completed", "completed_with_warnings", "failed", "cancelled"}
+    terminal_statuses = terminal or {
+        "completed",
+        "completed_with_warnings",
+        "failed",
+        "cancelled",
+    }
     while time.time() < deadline:
         last_payload = fetch_payload()
         status = last_payload.get(status_field)
         if status in expected:
             return last_payload
         if status in terminal_statuses and status not in expected:
-            raise TimeoutError(f"{description} reached unexpected status {status}: {last_payload}")
+            raise TimeoutError(
+                f"{description} reached unexpected status {status}: {last_payload}"
+            )
         time.sleep(poll_interval)
     raise TimeoutError(f"Timed out waiting for {description}: {last_payload}")
 

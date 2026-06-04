@@ -12,10 +12,12 @@ logger = structlog.get_logger()
 
 def upgrade(db):
     try:
-        db.execute(text("""
+        db.execute(
+            text("""
             ALTER TABLE system_settings
             ADD COLUMN plan VARCHAR DEFAULT 'pro'
-        """))
+        """)
+        )
         logger.info("Added plan column to system_settings")
     except Exception as e:
         if "duplicate column" in str(e).lower():

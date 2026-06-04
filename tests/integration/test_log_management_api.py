@@ -6,15 +6,10 @@ Tests /api/settings/system/logs/* endpoints for log management functionality.
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
 
 from app.main import app
-from app.database.database import get_db
 from app.database.models import User, SystemSettings
 from app.core.security import get_password_hash
-from datetime import datetime
-from pathlib import Path
-import tempfile
 
 
 @pytest.fixture
@@ -47,7 +42,7 @@ def admin_user(test_db):
         email="admin@test.com",
         password_hash=get_password_hash("admin123"),
         is_admin=True,
-        is_active=True
+        is_active=True,
     )
     test_db.add(user)
     test_db.commit()
@@ -63,7 +58,7 @@ def regular_user(test_db):
         email="user@test.com",
         password_hash=get_password_hash("user123"),
         is_admin=False,
-        is_active=True
+        is_active=True,
     )
     test_db.add(user)
     test_db.commit()
@@ -77,7 +72,7 @@ def admin_token(client, admin_user):
     response = client.post(
         "/api/auth/login",
         data={"username": "admin", "password": "admin123"},
-        headers={"Content-Type": "application/x-www-form-urlencoded"}
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
     assert response.status_code == 200
     return response.json()["access_token"]
@@ -89,7 +84,7 @@ def user_token(client, regular_user):
     response = client.post(
         "/api/auth/login",
         data={"username": "user", "password": "user123"},
-        headers={"Content-Type": "application/x-www-form-urlencoded"}
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
     assert response.status_code == 200
     return response.json()["access_token"]
@@ -119,14 +114,14 @@ class TestGetSystemSettings:
             log_retention_days=30,
             log_save_policy="failed_and_warnings",
             log_max_total_size_mb=500,
-            log_cleanup_on_startup=True
+            log_cleanup_on_startup=True,
         )
         test_db.add(settings)
         test_db.commit()
 
         response = client.get(
             "/api/settings/system",
-            headers={"X-Borg-Authorization": f"Bearer {admin_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {admin_token}"},
         )
 
         assert response.status_code == 200
@@ -153,7 +148,7 @@ class TestGetSystemSettings:
         """Should create default settings if none exist"""
         response = client.get(
             "/api/settings/system",
-            headers={"X-Borg-Authorization": f"Bearer {admin_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {admin_token}"},
         )
 
         assert response.status_code == 200
@@ -179,7 +174,7 @@ class TestUpdateSystemSettings:
         response = client.put(
             "/api/settings/system",
             json={"log_save_policy": "all_jobs"},
-            headers={"X-Borg-Authorization": f"Bearer {admin_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {admin_token}"},
         )
 
         assert response.status_code == 200
@@ -195,7 +190,7 @@ class TestUpdateSystemSettings:
         response = client.put(
             "/api/settings/system",
             json={"log_max_total_size_mb": 1000},
-            headers={"X-Borg-Authorization": f"Bearer {admin_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {admin_token}"},
         )
 
         assert response.status_code == 200
@@ -209,7 +204,7 @@ class TestUpdateSystemSettings:
         response = client.put(
             "/api/settings/system",
             json={"log_cleanup_on_startup": False},
-            headers={"X-Borg-Authorization": f"Bearer {admin_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {admin_token}"},
         )
 
         assert response.status_code == 200
@@ -223,35 +218,46 @@ class TestUpdateSystemSettings:
         response = client.put(
             "/api/settings/system",
             json={"log_save_policy": "invalid_policy"},
-            headers={"X-Borg-Authorization": f"Bearer {admin_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {admin_token}"},
         )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.settings.invalidLogSavePolicy"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.settings.invalidLogSavePolicy"
+        )
 
     def test_validate_log_max_size_minimum(self, client, admin_token):
         """Should enforce minimum log max size"""
         response = client.put(
             "/api/settings/system",
             json={"log_max_total_size_mb": 5},  # Below minimum of 10
-            headers={"X-Borg-Authorization": f"Bearer {admin_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {admin_token}"},
         )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.settings.logSizeTooSmall"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.settings.logSizeTooSmall"
+        )
 
     def test_update_requires_admin(self, client, user_token):
         """Should require admin access to update settings"""
         response = client.put(
             "/api/settings/system",
             json={"log_save_policy": "all_jobs"},
-            headers={"X-Borg-Authorization": f"Bearer {user_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {user_token}"},
         )
 
         assert response.status_code == 403
-        assert response.json()["detail"]["key"] == "backend.errors.settings.adminAccessRequired"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.settings.adminAccessRequired"
+        )
 
-    def test_warning_when_new_limit_below_usage(self, client, admin_token, test_db, monkeypatch):
+    def test_warning_when_new_limit_below_usage(
+        self, client, admin_token, test_db, monkeypatch
+    ):
         """Should warn when new limit is below current usage"""
         # Mock log_manager to return high usage
         from app.services import log_manager as lm
@@ -262,7 +268,7 @@ class TestUpdateSystemSettings:
                 "file_count": 100,
                 "oldest_log_date": None,
                 "newest_log_date": None,
-                "files_by_type": {}
+                "files_by_type": {},
             }
 
         monkeypatch.setattr(lm.log_manager, "calculate_log_storage", mock_calculate)
@@ -270,7 +276,7 @@ class TestUpdateSystemSettings:
         response = client.put(
             "/api/settings/system",
             json={"log_max_total_size_mb": 500},  # Below current usage
-            headers={"X-Borg-Authorization": f"Bearer {admin_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {admin_token}"},
         )
 
         assert response.status_code == 200
@@ -285,16 +291,13 @@ class TestGetLogStorageStats:
     def test_get_log_storage_stats(self, client, admin_token, test_db):
         """Should return detailed log storage statistics"""
         # Create settings
-        settings = SystemSettings(
-            log_retention_days=30,
-            log_max_total_size_mb=500
-        )
+        settings = SystemSettings(log_retention_days=30, log_max_total_size_mb=500)
         test_db.add(settings)
         test_db.commit()
 
         response = client.get(
             "/api/settings/system/logs/storage",
-            headers={"X-Borg-Authorization": f"Bearer {admin_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {admin_token}"},
         )
 
         assert response.status_code == 200
@@ -324,7 +327,7 @@ class TestGetLogStorageStats:
         """Should allow regular users to view log storage stats"""
         response = client.get(
             "/api/settings/system/logs/storage",
-            headers={"X-Borg-Authorization": f"Bearer {user_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {user_token}"},
         )
 
         assert response.status_code == 200
@@ -336,10 +339,7 @@ class TestManualLogCleanup:
     def test_manual_cleanup_success(self, client, admin_token, test_db, monkeypatch):
         """Should perform manual log cleanup"""
         # Create settings
-        settings = SystemSettings(
-            log_retention_days=30,
-            log_max_total_size_mb=500
-        )
+        settings = SystemSettings(log_retention_days=30, log_max_total_size_mb=500)
         test_db.add(settings)
         test_db.commit()
 
@@ -352,26 +352,26 @@ class TestManualLogCleanup:
                     "deleted_count": 5,
                     "deleted_size_mb": 10.5,
                     "skipped_count": 0,
-                    "errors": []
+                    "errors": [],
                 },
                 "size_cleanup": {
                     "deleted_count": 2,
                     "deleted_size_mb": 5.2,
                     "skipped_count": 1,
                     "final_size_mb": 100.0,
-                    "errors": []
+                    "errors": [],
                 },
                 "total_deleted_count": 7,
                 "total_deleted_size_mb": 15.7,
                 "total_errors": [],
-                "success": True
+                "success": True,
             }
 
         monkeypatch.setattr(lm.log_manager, "cleanup_logs_combined", mock_cleanup)
 
         response = client.post(
             "/api/settings/system/logs/cleanup",
-            headers={"X-Borg-Authorization": f"Bearer {admin_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {admin_token}"},
         )
 
         assert response.status_code == 200
@@ -390,19 +390,21 @@ class TestManualLogCleanup:
         """Should require admin access"""
         response = client.post(
             "/api/settings/system/logs/cleanup",
-            headers={"X-Borg-Authorization": f"Bearer {user_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {user_token}"},
         )
 
         assert response.status_code == 403
-        assert response.json()["detail"]["key"] == "backend.errors.settings.adminAccessRequired"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.settings.adminAccessRequired"
+        )
 
-    def test_manual_cleanup_uses_settings(self, client, admin_token, test_db, monkeypatch):
+    def test_manual_cleanup_uses_settings(
+        self, client, admin_token, test_db, monkeypatch
+    ):
         """Should use settings from database"""
         # Create custom settings
-        settings = SystemSettings(
-            log_retention_days=15,
-            log_max_total_size_mb=250
-        )
+        settings = SystemSettings(log_retention_days=15, log_max_total_size_mb=250)
         test_db.add(settings)
         test_db.commit()
 
@@ -417,19 +419,30 @@ class TestManualLogCleanup:
             captured_params["dry_run"] = dry_run
 
             return {
-                "age_cleanup": {"deleted_count": 0, "deleted_size_mb": 0, "skipped_count": 0, "errors": []},
-                "size_cleanup": {"deleted_count": 0, "deleted_size_mb": 0, "skipped_count": 0, "final_size_mb": 0, "errors": []},
+                "age_cleanup": {
+                    "deleted_count": 0,
+                    "deleted_size_mb": 0,
+                    "skipped_count": 0,
+                    "errors": [],
+                },
+                "size_cleanup": {
+                    "deleted_count": 0,
+                    "deleted_size_mb": 0,
+                    "skipped_count": 0,
+                    "final_size_mb": 0,
+                    "errors": [],
+                },
                 "total_deleted_count": 0,
                 "total_deleted_size_mb": 0,
                 "total_errors": [],
-                "success": True
+                "success": True,
             }
 
         monkeypatch.setattr(lm.log_manager, "cleanup_logs_combined", mock_cleanup)
 
         response = client.post(
             "/api/settings/system/logs/cleanup",
-            headers={"X-Borg-Authorization": f"Bearer {admin_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {admin_token}"},
         )
 
         assert response.status_code == 200
@@ -448,7 +461,7 @@ class TestLogManagementEndToEnd:
         # Step 1: Get initial settings
         response = client.get(
             "/api/settings/system",
-            headers={"X-Borg-Authorization": f"Bearer {admin_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {admin_token}"},
         )
         assert response.status_code == 200
         initial_settings = response.json()["settings"]
@@ -460,16 +473,16 @@ class TestLogManagementEndToEnd:
                 "log_save_policy": "all_jobs",
                 "log_retention_days": 15,
                 "log_max_total_size_mb": 250,
-                "log_cleanup_on_startup": False
+                "log_cleanup_on_startup": False,
             },
-            headers={"X-Borg-Authorization": f"Bearer {admin_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {admin_token}"},
         )
         assert response.status_code == 200
 
         # Step 3: Verify settings were updated
         response = client.get(
             "/api/settings/system",
-            headers={"X-Borg-Authorization": f"Bearer {admin_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {admin_token}"},
         )
         assert response.status_code == 200
         updated_settings = response.json()["settings"]
@@ -482,7 +495,7 @@ class TestLogManagementEndToEnd:
         # Step 4: Get log storage stats
         response = client.get(
             "/api/settings/system/logs/storage",
-            headers={"X-Borg-Authorization": f"Bearer {admin_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {admin_token}"},
         )
         assert response.status_code == 200
         storage_stats = response.json()["storage"]

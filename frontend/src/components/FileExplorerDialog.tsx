@@ -23,10 +23,19 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material'
-import { File, ChevronRight, Home, Search, Archive, HardDrive, FolderPlus } from 'lucide-react'
+import {
+  File,
+  ChevronRight,
+  Home,
+  Search,
+  Archive,
+  HardDrive,
+  FolderPlus,
+  Laptop,
+} from 'lucide-react'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import api from '../services/api'
-import { sshKeysAPI } from '../services/api'
+import { managedAgentsAPI, rcloneAPI, sshKeysAPI } from '../services/api'
 import { useTranslation } from 'react-i18next'
 
 interface FileSystemItem {
@@ -60,6 +69,39 @@ interface SSHNetworkConfig {
   port: number
 }
 
+type FileExplorerConnectionType = 'local' | 'ssh' | 'agent' | 'rclone'
+
+interface BrowseCacheEntry {
+  currentPath: string
+  items: FileSystemItem[]
+  isInsideLocalMount: boolean
+}
+
+function getAgentBrowseCacheKey(agentId: number, path: string, includeHidden: boolean) {
+  return `agent:${agentId}:${includeHidden ? 'hidden' : 'visible'}:${path || '/'}`
+}
+
+function resolveInitialBrowsePath(
+  connectionType: FileExplorerConnectionType,
+  initialPath: string,
+  agentDefaultPath?: string | null
+) {
+  const trimmedAgentDefaultPath = agentDefaultPath?.trim()
+  if (
+    connectionType === 'agent' &&
+    trimmedAgentDefaultPath &&
+    (!initialPath || initialPath === '/')
+  ) {
+    return trimmedAgentDefaultPath
+  }
+  return initialPath
+}
+
+function normalizeRcloneBrowsePath(path: string) {
+  if (!path || path === '/') return ''
+  return path.replace(/^\/+/, '')
+}
+
 interface FileExplorerDialogProps {
   open: boolean
   onClose: () => void
@@ -67,11 +109,16 @@ interface FileExplorerDialogProps {
   title?: string
   initialPath?: string
   multiSelect?: boolean
-  connectionType?: 'local' | 'ssh'
+  connectionType?: FileExplorerConnectionType
+  agentId?: number
+  agentName?: string
+  agentDefaultPath?: string | null
+  rcloneRemoteId?: number | null
   sshConfig?: SSHNetworkConfig
   selectMode?: 'directories' | 'files' | 'both'
   showSshMountPoints?: boolean // Set to false to hide SSH mount points (e.g., when repo is SSH to prevent remote-to-remote)
   allowedSshConnectionId?: number | null // Only show this SSH connection's mount point (used when source_connection_id is already set)
+  dialogContainer?: HTMLElement | (() => HTMLElement | null) | null
 }
 
 export default function FileExplorerDialog({
@@ -82,10 +129,15 @@ export default function FileExplorerDialog({
   initialPath = '/',
   multiSelect = false,
   connectionType = 'local',
+  agentId,
+  agentName,
+  agentDefaultPath,
+  rcloneRemoteId,
   sshConfig,
   selectMode = 'directories',
   showSshMountPoints = true,
   allowedSshConnectionId = null,
+  dialogContainer,
 }: FileExplorerDialogProps) {
   const { t } = useTranslation()
   const [currentPath, setCurrentPath] = useState(initialPath)
@@ -109,6 +161,7 @@ export default function FileExplorerDialog({
 
   // Track if initial load has been done to prevent re-triggering
   const initialLoadDone = useRef(false)
+  const browseCache = useRef(new Map<string, BrowseCacheEntry>())
 
   // Responsive dialog
   const theme = useTheme()
@@ -128,8 +181,7 @@ export default function FileExplorerDialog({
   }
 
   const loadDirectory = React.useCallback(
-    async (path: string, conn?: 'local' | 'ssh', config?: SSHNetworkConfig) => {
-      setLoading(true)
+    async (path: string, conn?: FileExplorerConnectionType, config?: SSHNetworkConfig) => {
       setError(null)
 
       // Update state if new connection params provided
@@ -142,8 +194,91 @@ export default function FileExplorerDialog({
 
       const useConnectionType = conn !== undefined ? conn : activeConnectionType
       const useSshConfig = config !== undefined ? config : activeSshConfig
+      const requestedPath = path || '/'
+      const includeHidden = false
 
       try {
+        if (useConnectionType === 'agent') {
+          if (!agentId) {
+            setError(t('fileExplorer.selectAgentFirst', 'Select an agent before browsing.'))
+            setItems([])
+            return
+          }
+
+          const cachedEntry = browseCache.current.get(
+            getAgentBrowseCacheKey(agentId, requestedPath, includeHidden)
+          )
+          if (cachedEntry) {
+            setItems(cachedEntry.items)
+            setCurrentPath(cachedEntry.currentPath)
+            setIsInsideLocalMount(cachedEntry.isInsideLocalMount)
+            return
+          }
+
+          setLoading(true)
+          const response = await managedAgentsAPI.browseFilesystem(
+            agentId,
+            requestedPath,
+            includeHidden
+          )
+          const agentItems = (response.data.items || []).map((item) => ({
+            name: item.name,
+            path: item.path,
+            is_directory: item.type === 'directory',
+            size: item.size,
+            modified: item.modified_at
+              ? new Date(item.modified_at * 1000).toISOString()
+              : undefined,
+            is_borg_repo: false,
+            permissions: item.hidden ? 'hidden' : undefined,
+          }))
+          const currentAgentPath = response.data.current_path || requestedPath
+          const entry = {
+            currentPath: currentAgentPath,
+            items: agentItems,
+            isInsideLocalMount: false,
+          }
+          browseCache.current.set(
+            getAgentBrowseCacheKey(agentId, requestedPath, includeHidden),
+            entry
+          )
+          browseCache.current.set(
+            getAgentBrowseCacheKey(agentId, currentAgentPath, includeHidden),
+            entry
+          )
+          setItems(agentItems)
+          setCurrentPath(currentAgentPath)
+          setIsInsideLocalMount(false)
+          return
+        }
+
+        if (useConnectionType === 'rclone') {
+          if (!rcloneRemoteId) {
+            setError(t('wizard.cloudMirror.selectRemoteFirst', 'Select a rclone remote first.'))
+            setItems([])
+            return
+          }
+
+          const rclonePath = normalizeRcloneBrowsePath(requestedPath)
+          setLoading(true)
+          const response = await rcloneAPI.browseRemote(rcloneRemoteId, rclonePath)
+          const currentRclonePath = normalizeRcloneBrowsePath(response.data.path || rclonePath)
+          setItems(
+            (response.data.entries || []).map(
+              (entry: { name: string; path: string; is_dir?: boolean }) => ({
+                name: entry.name,
+                path: normalizeRcloneBrowsePath(entry.path || entry.name),
+                is_directory: Boolean(entry.is_dir),
+                is_borg_repo: false,
+              })
+            )
+          )
+          setCurrentPath(currentRclonePath)
+          setIsInsideLocalMount(false)
+          return
+        }
+
+        setLoading(true)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const params: any = {
           path,
@@ -163,6 +298,12 @@ export default function FileExplorerDialog({
         setIsInsideLocalMount(response.data.is_inside_local_mount || false)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
+        if (useConnectionType === 'rclone') {
+          setError(t('wizard.cloudMirror.browseFailed'))
+          setItems([])
+          return
+        }
+
         const detail = err.response?.data?.detail
         if (detail && typeof detail === 'object' && detail.key) {
           setError(t(detail.key, detail.params) as string)
@@ -174,7 +315,7 @@ export default function FileExplorerDialog({
         setLoading(false)
       }
     },
-    [activeConnectionType, activeSshConfig, t]
+    [activeConnectionType, activeSshConfig, agentId, rcloneRemoteId, t]
   )
 
   // Initial load - only runs once when dialog opens
@@ -185,9 +326,10 @@ export default function FileExplorerDialog({
       setSelectedPaths([])
       setSearchTerm('')
 
-      if (initialPath) {
+      const startPath = resolveInitialBrowsePath(connectionType, initialPath, agentDefaultPath)
+      if (startPath) {
         // Use provided configuration for initial load
-        loadDirectory(initialPath, connectionType, sshConfig)
+        loadDirectory(startPath, connectionType, sshConfig)
       } else {
         // Load default/root path
         loadDirectory('', connectionType, sshConfig)
@@ -201,9 +343,14 @@ export default function FileExplorerDialog({
     // Reset when dialog closes
     if (!open) {
       initialLoadDone.current = false
+      browseCache.current.clear()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initialPath, connectionType, sshConfig])
+  }, [open, initialPath, connectionType, sshConfig, agentDefaultPath])
+
+  useEffect(() => {
+    browseCache.current.clear()
+  }, [agentId, connectionType, agentDefaultPath, rcloneRemoteId])
 
   const handleItemClick = (item: FileSystemItem) => {
     if (item.is_mount_point && item.ssh_connection) {
@@ -247,6 +394,8 @@ export default function FileExplorerDialog({
       setActiveConnectionType('local')
       setActiveSshConfig(undefined)
       loadDirectory('/', 'local', undefined)
+    } else if (activeConnectionType === 'rclone') {
+      loadDirectory(normalizeRcloneBrowsePath(path))
     } else {
       loadDirectory(path)
     }
@@ -271,9 +420,17 @@ export default function FileExplorerDialog({
     if (activeConnectionType === 'ssh' && activeSshConfig && connectionType === 'local') {
       // We're browsing a mount point - convert to SSH URL
       path = `ssh://${activeSshConfig.username}@${activeSshConfig.host}:${activeSshConfig.port}${currentPath}`
+    } else if (activeConnectionType === 'rclone') {
+      path = normalizeRcloneBrowsePath(path)
     }
     onSelect([path])
     onClose()
+  }
+
+  const buildChildPath = (parentPath: string, childName: string) => {
+    const cleanedChildName = childName.trim().replace(/\//g, '').replace(/\.\./g, '')
+    if (!parentPath || parentPath === '/') return `/${cleanedChildName}`
+    return `${parentPath.replace(/\/+$/, '')}/${cleanedChildName}`
   }
 
   const handleCreateFolder = async () => {
@@ -281,10 +438,11 @@ export default function FileExplorerDialog({
 
     setCreatingFolder(true)
     try {
+      const folderName = newFolderName.trim()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const params: any = {
         path: currentPath,
-        folder_name: newFolderName.trim(),
+        folder_name: folderName,
         connection_type: activeConnectionType,
       }
 
@@ -295,17 +453,16 @@ export default function FileExplorerDialog({
         params.port = activeSshConfig.port
       }
 
-      await api.post('/filesystem/create-folder', params)
+      const response = await api.post('/filesystem/create-folder', params)
+      const createdPath = response.data?.path || buildChildPath(currentPath, folderName)
 
-      // Refresh directory
-      await loadDirectory(currentPath)
+      await loadDirectory(createdPath)
 
-      // Close dialog and reset
       setShowCreateFolder(false)
       setNewFolderName('')
       setError(null)
-      setNewFolderName('')
-      setError(null)
+      setSearchTerm('')
+      setSelectedPaths([])
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error('Failed to create folder:', err)
@@ -384,6 +541,9 @@ export default function FileExplorerDialog({
   const filteredItems = allItems.filter((item) =>
     item.name.toLowerCase().includes(searchTerm.toLowerCase())
   )
+  const agentLabel =
+    agentName?.trim() ||
+    (agentId ? t('backupPlans.sourceChooser.agentFallback', { id: agentId }) : '')
 
   return (
     <>
@@ -393,6 +553,7 @@ export default function FileExplorerDialog({
         maxWidth="md"
         fullWidth
         fullScreen={fullScreen}
+        container={dialogContainer}
         PaperProps={{ sx: { height: fullScreen ? '100%' : '75vh' } }}
       >
         <DialogTitle sx={{ pb: 1, pt: 2 }}>
@@ -400,9 +561,24 @@ export default function FileExplorerDialog({
             <Typography variant="h6" fontWeight={600}>
               {title ?? t('dialogs.fileExplorer.selectDirectory')}
             </Typography>
-            {activeConnectionType === 'ssh' && activeSshConfig ? (
+            {activeConnectionType === 'agent' && agentId ? (
+              <Chip
+                icon={<Laptop size={14} />}
+                label={agentLabel}
+                size="small"
+                color="primary"
+                variant="outlined"
+              />
+            ) : activeConnectionType === 'ssh' && activeSshConfig ? (
               <Chip
                 label={`${activeSshConfig.username}@${activeSshConfig.host}`}
+                size="small"
+                color="primary"
+                variant="outlined"
+              />
+            ) : activeConnectionType === 'rclone' ? (
+              <Chip
+                label={t('wizard.location.rcloneRemoteLabel')}
                 size="small"
                 color="primary"
                 variant="outlined"
@@ -419,7 +595,15 @@ export default function FileExplorerDialog({
           </Box>
         </DialogTitle>
 
-        <DialogContent sx={{ p: 0 }}>
+        <DialogContent
+          sx={{
+            p: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            minHeight: 0,
+          }}
+        >
           {/* Breadcrumb Navigation */}
           <Box
             sx={{
@@ -486,20 +670,22 @@ export default function FileExplorerDialog({
                 },
               }}
             />
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<FolderPlus size={16} />}
-              onClick={() => setShowCreateFolder(true)}
-              sx={{
-                flexShrink: 0,
-                whiteSpace: 'nowrap',
-                height: '35px',
-                minHeight: '35px',
-              }}
-            >
-              {t('fileExplorer.newFolder')}
-            </Button>
+            {activeConnectionType !== 'agent' && activeConnectionType !== 'rclone' && (
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<FolderPlus size={16} />}
+                onClick={() => setShowCreateFolder(true)}
+                sx={{
+                  flexShrink: 0,
+                  whiteSpace: 'nowrap',
+                  height: '35px',
+                  minHeight: '35px',
+                }}
+              >
+                {t('fileExplorer.newFolder')}
+              </Button>
+            )}
           </Box>
 
           {/* Error Display */}
@@ -527,6 +713,7 @@ export default function FileExplorerDialog({
               flexDirection="column"
               alignItems="center"
               justifyContent="center"
+              sx={{ flex: 1, minHeight: 0 }}
               py={4}
             >
               <CircularProgress size={32} />
@@ -535,12 +722,23 @@ export default function FileExplorerDialog({
               </Typography>
             </Box>
           ) : (
-            <>
+            <Box
+              sx={{
+                flex: 1,
+                minHeight: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+              }}
+            >
               {/* File List */}
               <List
                 sx={{
                   flex: 1,
+                  minHeight: 0,
                   overflow: 'auto',
+                  overscrollBehavior: 'contain',
+                  WebkitOverflowScrolling: 'touch',
                   px: 0.5,
                   py: 0,
                 }}
@@ -672,6 +870,7 @@ export default function FileExplorerDialog({
               {/* Info Box */}
               {multiSelect && selectedPaths.length > 0 && (
                 <Box
+                  flexShrink={0}
                   sx={{ px: 2, py: 1, bgcolor: 'primary.50', borderTop: 1, borderColor: 'divider' }}
                 >
                   <Typography variant="caption" color="primary.main" fontWeight={600}>
@@ -679,7 +878,7 @@ export default function FileExplorerDialog({
                   </Typography>
                 </Box>
               )}
-            </>
+            </Box>
           )}
         </DialogContent>
 

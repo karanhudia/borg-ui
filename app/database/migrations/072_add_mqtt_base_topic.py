@@ -14,10 +14,12 @@ logger = structlog.get_logger()
 
 def upgrade(db):
     try:
-        db.execute(text("""
+        db.execute(
+            text("""
             ALTER TABLE system_settings
             ADD COLUMN mqtt_base_topic TEXT DEFAULT 'borg-ui' NOT NULL
-        """))
+        """)
+        )
         db.commit()
         logger.info("Migration 072_add_mqtt_base_topic completed successfully")
     except Exception as e:

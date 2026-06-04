@@ -2,13 +2,16 @@
 Pytest wrapper for integration tests
 This allows the existing integration tests to be run via pytest
 """
+
 import pytest
 import subprocess
 import sys
 import os
 
 
-@pytest.mark.skip(reason="Integration test requires running server with test credentials - run manually with test_app.py")
+@pytest.mark.skip(
+    reason="Integration test requires running server with test credentials - run manually with test_app.py"
+)
 @pytest.mark.integration
 @pytest.mark.requires_ui
 @pytest.mark.requires_borg
@@ -20,7 +23,7 @@ def test_api_endpoints(test_base_url):
         [sys.executable, "test_app.py", "--url", test_base_url],
         cwd=project_root,
         capture_output=True,
-        text=True
+        text=True,
     )
 
     print("\n=== API Test Output ===")
@@ -28,7 +31,9 @@ def test_api_endpoints(test_base_url):
     if result.stderr:
         print("STDERR:", result.stderr)
 
-    assert result.returncode == 0, f"API tests failed with exit code {result.returncode}"
+    assert result.returncode == 0, (
+        f"API tests failed with exit code {result.returncode}"
+    )
 
 
 @pytest.mark.integration
@@ -38,14 +43,22 @@ def test_api_endpoints(test_base_url):
 def test_archive_contents(test_base_url, test_directory):
     """Test archive contents browsing using test_archive_contents.py"""
     if not os.path.exists(test_directory):
-        pytest.skip(f"Test directory {test_directory} not found. Run setup_test_env.sh first.")
+        pytest.skip(
+            f"Test directory {test_directory} not found. Run setup_test_env.sh first."
+        )
 
     project_root = os.path.join(os.path.dirname(__file__), "..", "..")
     result = subprocess.run(
-        [sys.executable, "tests/integration/test_archive_contents.py", test_directory, "--url", test_base_url],
+        [
+            sys.executable,
+            "tests/integration/test_archive_contents.py",
+            test_directory,
+            "--url",
+            test_base_url,
+        ],
         cwd=project_root,
         capture_output=True,
-        text=True
+        text=True,
     )
 
     print("\n=== Archive Contents Test Output ===")
@@ -66,10 +79,15 @@ def test_multiple_source_directories(test_base_url):
     """Test multiple source directories backup using test_multiple_source_dirs.py"""
     project_root = os.path.join(os.path.dirname(__file__), "..", "..")
     result = subprocess.run(
-        [sys.executable, "tests/integration/test_multiple_source_dirs.py", "--url", test_base_url],
+        [
+            sys.executable,
+            "tests/integration/test_multiple_source_dirs.py",
+            "--url",
+            test_base_url,
+        ],
         cwd=project_root,
         capture_output=True,
-        text=True
+        text=True,
     )
 
     print("\n=== Multiple Source Directories Test Output ===")
@@ -89,10 +107,15 @@ def test_archive_directory_browsing(test_base_url):
     """Test archive directory browsing using test_archive_directory_browsing.py"""
     project_root = os.path.join(os.path.dirname(__file__), "..", "..")
     result = subprocess.run(
-        [sys.executable, "tests/integration/test_archive_directory_browsing.py", "--url", test_base_url],
+        [
+            sys.executable,
+            "tests/integration/test_archive_directory_browsing.py",
+            "--url",
+            test_base_url,
+        ],
         cwd=project_root,
         capture_output=True,
-        text=True
+        text=True,
     )
 
     print("\n=== Archive Directory Browsing Test Output ===")

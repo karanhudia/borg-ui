@@ -15,6 +15,17 @@ def test_validate_local_repository_access_requires_directory(tmp_path):
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    "repository_url",
+    ["rclone:prod-s3:borg-ui/direct", "rclone://prod-s3/borg-ui/direct"],
+)
+def test_validate_local_repository_access_skips_direct_rclone_urls(repository_url):
+    repo = SimpleNamespace(path=repository_url)
+
+    BackupV2Service().validate_local_repository_access(repo)
+
+
+@pytest.mark.unit
 def test_build_backup_create_command_uses_borg2_shape():
     with patch("app.services.v2.backup_service.borg2.borg_cmd", "borg2"):
         cmd = BackupV2Service().build_backup_create_command(
@@ -41,6 +52,28 @@ def test_build_backup_create_command_uses_borg2_shape():
         "--one-file-system",
         "manual-1",
     ]
+
+
+@pytest.mark.unit
+def test_build_backup_create_command_preserves_direct_rclone_url():
+    with patch("app.services.v2.backup_service.borg2.borg_cmd", "borg2"):
+        cmd = BackupV2Service().build_backup_create_command(
+            repository_path="rclone://prod-s3/borg-ui/direct",
+            archive_name="manual-1",
+            compression="lz4",
+            exclude_patterns=[],
+            custom_flags=[],
+        )
+
+    assert cmd[:6] == [
+        "borg2",
+        "--progress",
+        "--show-rc",
+        "--log-json",
+        "-r",
+        "rclone://prod-s3/borg-ui/direct",
+    ]
+    assert "create" in cmd
 
 
 @pytest.mark.unit

@@ -2,7 +2,6 @@
 Unit tests for mount API endpoints.
 """
 
-from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -36,7 +35,9 @@ class TestMountArchiveEndpoints:
             "mount_borg_archive",
             AsyncMock(return_value=("/mnt/repo", "mount-1")),
         )
-        monkeypatch.setattr(mounts.mount_service, "get_mount", lambda mount_id: mount_info)
+        monkeypatch.setattr(
+            mounts.mount_service, "get_mount", lambda mount_id: mount_info
+        )
 
         response = test_client.post(
             "/api/mounts/borg",
@@ -71,7 +72,10 @@ class TestMountArchiveEndpoints:
         )
 
         assert response.status_code == 500
-        assert response.json()["detail"]["key"] == "backend.errors.mounts.failedMountArchive"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.mounts.failedMountArchive"
+        )
 
     def test_mount_borg_archive_returns_503_when_fuse_unavailable(
         self,
@@ -96,7 +100,9 @@ class TestMountArchiveEndpoints:
         )
 
         assert response.status_code == 503
-        assert response.json()["detail"]["key"] == "backend.errors.mounts.mountUnavailable"
+        assert (
+            response.json()["detail"]["key"] == "backend.errors.mounts.mountUnavailable"
+        )
 
     def test_unmount_borg_archive_success(
         self,
@@ -113,8 +119,12 @@ class TestMountArchiveEndpoints:
             repository_id=1,
         )
 
-        monkeypatch.setattr(mounts.mount_service, "get_mount", lambda mount_id: mount_info)
-        monkeypatch.setattr(mounts.mount_service, "unmount", AsyncMock(return_value=True))
+        monkeypatch.setattr(
+            mounts.mount_service, "get_mount", lambda mount_id: mount_info
+        )
+        monkeypatch.setattr(
+            mounts.mount_service, "unmount", AsyncMock(return_value=True)
+        )
 
         response = test_client.post(
             "/api/mounts/borg/unmount/mount-1",
@@ -154,7 +164,9 @@ class TestMountArchiveEndpoints:
             source="sshfs",
             created_at=datetime.now(timezone.utc),
         )
-        monkeypatch.setattr(mounts.mount_service, "get_mount", lambda mount_id: mount_info)
+        monkeypatch.setattr(
+            mounts.mount_service, "get_mount", lambda mount_id: mount_info
+        )
 
         response = test_client.post(
             "/api/mounts/borg/unmount/mount-sshfs",
@@ -162,7 +174,10 @@ class TestMountArchiveEndpoints:
         )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.mounts.canOnlyUnmountBorgMounts"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.mounts.canOnlyUnmountBorgMounts"
+        )
 
 
 @pytest.mark.unit
@@ -203,7 +218,9 @@ class TestMountListingAndInfo:
             repository_id=None,
             job_id=None,
         )
-        monkeypatch.setattr(mounts.mount_service, "list_mounts", lambda: [borg_mount, sshfs_mount])
+        monkeypatch.setattr(
+            mounts.mount_service, "list_mounts", lambda: [borg_mount, sshfs_mount]
+        )
 
         response = test_client.get("/api/mounts", headers=admin_headers)
 
@@ -229,7 +246,9 @@ class TestMountListingAndInfo:
             repository_id=1,
             connection_id=2,
         )
-        monkeypatch.setattr(mounts.mount_service, "get_mount", lambda mount_id: mount_info)
+        monkeypatch.setattr(
+            mounts.mount_service, "get_mount", lambda mount_id: mount_info
+        )
 
         response = test_client.get("/api/mounts/mount-1", headers=admin_headers)
 

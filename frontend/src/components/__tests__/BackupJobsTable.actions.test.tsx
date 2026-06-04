@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { within } from '@testing-library/react'
 import { renderWithProviders, screen, userEvent, waitFor } from '../../test/test-utils'
 import BackupJobsTable from '../BackupJobsTable'
 import { QueryClient } from '@tanstack/react-query'
@@ -9,6 +10,11 @@ const { toastSuccess, toastError, buildDownloadUrlMock, repositoriesListMock } =
   buildDownloadUrlMock: vi.fn((path: string) => `https://example.test${path}`),
   repositoriesListMock: vi.fn(),
 }))
+const { cancelJobMock, deleteJobMock } = vi.hoisted(() => ({
+  cancelJobMock: vi.fn(),
+  deleteJobMock: vi.fn(),
+}))
+const borgDownloadFileMock = vi.fn()
 
 vi.mock('react-hot-toast', async () => {
   const actual = await vi.importActual<typeof import('react-hot-toast')>('react-hot-toast')
@@ -31,6 +37,8 @@ vi.mock('../DataTable', () => ({
       label: string
       onClick: (row: Record<string, unknown>) => void
       show?: (row: Record<string, unknown>) => boolean
+      disabled?: (row: Record<string, unknown>) => boolean
+      tooltip?: string | ((row: Record<string, unknown>) => string)
     }>
   }) => (
     <div>
@@ -39,11 +47,23 @@ vi.mock('../DataTable', () => ({
           <span>{String(row.id)}</span>
           {actions
             ?.filter((action) => (action.show ? action.show(row) : true))
-            .map((action) => (
-              <button key={`${row.id}-${action.label}`} onClick={() => action.onClick(row)}>
-                {action.label}
-              </button>
-            ))}
+            .map((action) => {
+              const tooltip =
+                typeof action.tooltip === 'function'
+                  ? action.tooltip(row)
+                  : action.tooltip || action.label
+              return (
+                <button
+                  key={`${row.id}-${action.label}`}
+                  aria-label={action.label}
+                  title={tooltip}
+                  disabled={action.disabled?.(row) ?? false}
+                  onClick={() => action.onClick(row)}
+                >
+                  {action.label}
+                </button>
+              )
+            })}
         </div>
       ))}
     </div>
@@ -118,10 +138,37 @@ vi.mock('../DeleteJobDialog', () => ({
     ) : null,
 }))
 
+vi.mock('../ArchiveContentsDialog', () => ({
+  default: ({
+    open,
+    onDownloadFile,
+  }: {
+    open: boolean
+    onDownloadFile?: (archiveName: string, filePath: string) => void
+  }) =>
+    open ? (
+      <button onClick={() => onDownloadFile?.('archive-77', '/srv/notes.txt')}>
+        Download File
+      </button>
+    ) : null,
+}))
+
 vi.mock('../../services/api', () => ({
   repositoriesAPI: {
     list: repositoriesListMock,
   },
+  activityAPI: {
+    cancelJob: cancelJobMock,
+    deleteJob: deleteJobMock,
+  },
+}))
+
+vi.mock('../../services/borgApi', () => ({
+  BorgApiClient: vi.fn(function MockBorgApiClient() {
+    return {
+      downloadFile: borgDownloadFileMock,
+    }
+  }),
 }))
 
 vi.mock('../../utils/downloadUrl', () => ({
@@ -145,10 +192,6 @@ describe('BackupJobsTable action internals', () => {
         ],
       },
     })
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: vi.fn(),
-    } as never)
   })
 
   it('downloads logs through the generated activity URL when no custom callback is provided', async () => {
@@ -199,6 +242,146 @@ describe('BackupJobsTable action internals', () => {
     clickSpy.mockRestore()
   })
 
+  it('downloads archive files from the finished backup archive modal through BorgApiClient', async () => {
+    const user = userEvent.setup()
+
+    renderWithProviders(
+      <BackupJobsTable
+        jobs={[
+          {
+            id: 11,
+            repository: '/backup/repo77',
+            repository_path: '/backup/repo77',
+            type: 'backup',
+            status: 'completed',
+            started_at: '2026-04-01T10:00:00Z',
+            archive_name: 'archive-77',
+          },
+        ]}
+        actions={{ viewArchive: true }}
+      />
+    )
+
+    await user.click(await screen.findByRole('button', { name: /view archive/i }))
+    await user.click(await screen.findByRole('button', { name: /download file/i }))
+
+    expect(borgDownloadFileMock).toHaveBeenCalledWith('archive-77', '/srv/notes.txt')
+  })
+
+  it('confirms and calls retry for failed manual backup jobs', async () => {
+    const user = userEvent.setup()
+    const onRetryJob = vi.fn()
+
+    renderWithProviders(
+      <BackupJobsTable
+        jobs={[
+          {
+            id: 12,
+            repository: '/backup/retryable',
+            repository_path: '/backup/retryable',
+            repository_id: 12,
+            type: 'backup',
+            status: 'failed',
+            started_at: '2026-04-01T10:00:00Z',
+            completed_at: '2026-04-01T10:05:00Z',
+          },
+        ]}
+        actions={{ retry: true }}
+        canRetryJob={() => true}
+        onRetryJob={onRetryJob}
+      />
+    )
+
+    await user.click(screen.getByRole('button', { name: /retry backup job/i }))
+
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByText('Retry backup job #12?')).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: /retry backup job/i }))
+
+    expect(onRetryJob).toHaveBeenCalledWith(expect.objectContaining({ id: 12 }))
+  })
+
+  it('does not show retry for active backup jobs', () => {
+    renderWithProviders(
+      <BackupJobsTable
+        jobs={[
+          {
+            id: 13,
+            repository: '/backup/running',
+            repository_path: '/backup/running',
+            repository_id: 13,
+            type: 'backup',
+            status: 'running',
+            started_at: '2026-04-01T10:00:00Z',
+          },
+        ]}
+        actions={{ retry: true }}
+        canRetryJob={() => true}
+        onRetryJob={vi.fn()}
+      />
+    )
+
+    expect(screen.queryByRole('button', { name: /retry/i })).not.toBeInTheDocument()
+  })
+
+  it('disables retry for destructive terminal jobs with a clear tooltip', () => {
+    renderWithProviders(
+      <BackupJobsTable
+        jobs={[
+          {
+            id: 14,
+            repository: '/backup/prune',
+            repository_path: '/backup/prune',
+            repository_id: 14,
+            type: 'prune',
+            status: 'failed',
+            started_at: '2026-04-01T10:00:00Z',
+            completed_at: '2026-04-01T10:05:00Z',
+          },
+        ]}
+        actions={{ retry: true }}
+        canRetryJob={() => true}
+        onRetryJob={vi.fn()}
+      />
+    )
+
+    const retryButton = screen.getByRole('button', { name: /retry backup job/i })
+    expect(retryButton).toBeDisabled()
+    expect(retryButton).toHaveAttribute(
+      'title',
+      'Prune jobs are not safe to retry from this table.'
+    )
+  })
+
+  it('disables retry for terminal backup jobs without operator permission', () => {
+    renderWithProviders(
+      <BackupJobsTable
+        jobs={[
+          {
+            id: 15,
+            repository: '/backup/no-permission',
+            repository_path: '/backup/no-permission',
+            repository_id: 15,
+            type: 'backup',
+            status: 'cancelled',
+            started_at: '2026-04-01T10:00:00Z',
+            completed_at: '2026-04-01T10:05:00Z',
+          },
+        ]}
+        actions={{ retry: true }}
+        canRetryJob={() => false}
+        onRetryJob={vi.fn()}
+      />
+    )
+
+    const retryButton = screen.getByRole('button', { name: /retry backup job/i })
+    expect(retryButton).toBeDisabled()
+    expect(retryButton).toHaveAttribute(
+      'title',
+      'Operator access is required to retry this backup job.'
+    )
+  })
+
   it('cancels running jobs through the activity API when using the built-in handler', async () => {
     const user = userEvent.setup()
 
@@ -222,22 +405,14 @@ describe('BackupJobsTable action internals', () => {
     await user.click(screen.getByRole('button', { name: /confirm cancel/i }))
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/activity/restore/20/cancel', {
-        method: 'POST',
-        headers: {
-          'X-Borg-Authorization': 'Bearer token-123',
-        },
-      })
+      expect(cancelJobMock).toHaveBeenCalledWith('restore', 20)
     })
     expect(toastSuccess).toHaveBeenCalled()
   })
 
   it('shows an error toast when built-in job cancellation fails', async () => {
     const user = userEvent.setup()
-    vi.mocked(global.fetch).mockResolvedValue({
-      ok: false,
-      json: vi.fn(),
-    } as never)
+    cancelJobMock.mockRejectedValueOnce(new Error('cancel failed'))
 
     renderWithProviders(
       <BackupJobsTable
@@ -304,10 +479,7 @@ describe('BackupJobsTable action internals', () => {
 
     queryClient.setQueryData(['backup-status-manual'], initialManualJobs)
     queryClient.setQueryData(['activity'], initialActivityData)
-    vi.mocked(global.fetch).mockResolvedValue({
-      ok: false,
-      json: vi.fn().mockResolvedValue({ detail: 'Delete failed from API' }),
-    } as never)
+    deleteJobMock.mockRejectedValueOnce(new Error('Delete failed from API'))
 
     renderWithProviders(
       <BackupJobsTable
@@ -332,12 +504,7 @@ describe('BackupJobsTable action internals', () => {
     await user.click(screen.getByRole('button', { name: /confirm delete/i }))
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/activity/backup/40', {
-        method: 'DELETE',
-        headers: {
-          'X-Borg-Authorization': 'Bearer token-123',
-        },
-      })
+      expect(deleteJobMock).toHaveBeenCalledWith('backup', 40)
     })
     await waitFor(() => {
       expect(toastError).toHaveBeenCalledWith('Delete failed from API')

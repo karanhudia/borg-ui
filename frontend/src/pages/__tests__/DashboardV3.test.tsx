@@ -2,10 +2,15 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import Dashboard from '../DashboardV3'
+import { formatDateTimeFull } from '../../utils/dateUtils'
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
 const mockNavigate = vi.fn()
+const { getOverviewMock } = vi.hoisted(() => ({
+  getOverviewMock: vi.fn(),
+}))
+
 vi.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
 }))
@@ -16,6 +21,12 @@ vi.mock('../../context/ThemeContext', () => ({
 
 vi.mock('../../utils/basePath', () => ({
   BASE_PATH: '',
+}))
+
+vi.mock('../../services/api', () => ({
+  dashboardAPI: {
+    getOverview: getOverviewMock,
+  },
 }))
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -30,6 +41,14 @@ function renderDashboard() {
   )
 }
 
+function mockFetchSuccess(data: unknown) {
+  getOverviewMock.mockResolvedValueOnce({ data })
+}
+
+function mockFetchError() {
+  getOverviewMock.mockRejectedValueOnce(new Error('Failed'))
+}
+
 function makeOverview(overrides: Record<string, unknown> = {}) {
   return {
     summary: {
@@ -38,6 +57,10 @@ function makeOverview(overrides: Record<string, unknown> = {}) {
       ssh_repositories: 1,
       active_schedules: 1,
       total_schedules: 2,
+      active_backup_plans: 1,
+      total_backup_plans: 2,
+      active_automations: 2,
+      total_automations: 4,
       success_rate_30d: 83.3,
       successful_jobs_30d: 5,
       failed_jobs_30d: 1,
@@ -62,6 +85,7 @@ function makeOverview(overrides: Record<string, unknown> = {}) {
         last_backup: '2026-03-30T10:00:00+00:00',
         last_check: '2026-03-29T10:00:00+00:00',
         last_compact: null,
+        last_restore_check: '2026-03-28T10:00:00+00:00',
         archive_count: 14,
         total_size: '6 GB',
         health_status: 'healthy' as const,
@@ -70,10 +94,18 @@ function makeOverview(overrides: Record<string, unknown> = {}) {
         has_schedule: true,
         schedule_enabled: true,
         schedule_name: 'Daily',
+        backup_plan_count: 1,
+        backup_plan_scheduled_count: 1,
+        backup_plan_names: ['Nightly Documents'],
+        backup_plan_next_run: '2026-03-31T09:00:00+00:00',
+        restore_check_configured: true,
+        latest_restore_check_status: 'completed',
+        latest_restore_check_error: null,
         dimension_health: {
           backup: 'healthy' as const,
           check: 'healthy' as const,
           compact: 'warning' as const,
+          restore: 'healthy' as const,
         },
       },
       {
@@ -84,6 +116,7 @@ function makeOverview(overrides: Record<string, unknown> = {}) {
         last_backup: null,
         last_check: null,
         last_compact: null,
+        last_restore_check: null,
         archive_count: 0,
         total_size: '0 B',
         health_status: 'critical' as const,
@@ -92,10 +125,18 @@ function makeOverview(overrides: Record<string, unknown> = {}) {
         has_schedule: false,
         schedule_enabled: false,
         schedule_name: null,
+        backup_plan_count: 0,
+        backup_plan_scheduled_count: 0,
+        backup_plan_names: [],
+        backup_plan_next_run: null,
+        restore_check_configured: false,
+        latest_restore_check_status: null,
+        latest_restore_check_error: null,
         dimension_health: {
           backup: 'critical' as const,
           check: 'unknown' as const,
           compact: 'critical' as const,
+          restore: 'unknown' as const,
         },
       },
     ],
@@ -134,28 +175,9 @@ function makeOverview(overrides: Record<string, unknown> = {}) {
   }
 }
 
-function mockFetchSuccess(data: unknown) {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(data),
-    })
-  )
-}
-
-function mockFetchError() {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn().mockResolvedValue({
-      ok: false,
-      json: () => Promise.resolve({}),
-    })
-  )
-}
-
 beforeEach(() => {
   vi.clearAllMocks()
+  getOverviewMock.mockResolvedValue({ data: makeOverview() })
   // Default: suppress localStorage access
   vi.stubGlobal('localStorage', { getItem: () => 'test-token' })
 })
@@ -164,52 +186,29 @@ beforeEach(() => {
 
 describe('DashboardV3', () => {
   describe('API calls', () => {
-    it('fetches from /api/dashboard/overview on mount', async () => {
-      const fetchMock = vi
-        .fn()
-        .mockResolvedValue({ ok: true, json: () => Promise.resolve(makeOverview()) })
-      vi.stubGlobal('fetch', fetchMock)
+    it('fetches overview through the shared dashboard API on mount', async () => {
       renderDashboard()
       await waitFor(() => screen.getAllByText('my-server'))
-      expect(fetchMock).toHaveBeenCalledWith(
-        '/api/dashboard/overview',
-        expect.objectContaining({
-          headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
-        })
-      )
+      expect(getOverviewMock).toHaveBeenCalledTimes(1)
     })
 
-    it('sends the stored access token in the Authorization header', async () => {
-      vi.stubGlobal('localStorage', {
-        getItem: (key: string) => (key === 'access_token' ? 'my-secret-token' : null),
-      })
-      const fetchMock = vi
-        .fn()
-        .mockResolvedValue({ ok: true, json: () => Promise.resolve(makeOverview()) })
-      vi.stubGlobal('fetch', fetchMock)
+    it('renders overview data returned by the shared API', async () => {
+      getOverviewMock.mockResolvedValueOnce({ data: makeOverview() })
       renderDashboard()
       await waitFor(() => screen.getAllByText('my-server'))
-      const [, options] = fetchMock.mock.calls[0]
-      expect(options.headers.Authorization).toBe('Bearer my-secret-token')
+      expect(screen.getAllByText('backup-nas').length).toBeGreaterThan(0)
     })
 
     it('fetches exactly once on initial render', async () => {
-      const fetchMock = vi
-        .fn()
-        .mockResolvedValue({ ok: true, json: () => Promise.resolve(makeOverview()) })
-      vi.stubGlobal('fetch', fetchMock)
       renderDashboard()
       await waitFor(() => screen.getAllByText('my-server'))
-      expect(fetchMock).toHaveBeenCalledTimes(1)
+      expect(getOverviewMock).toHaveBeenCalledTimes(1)
     })
   })
 
   describe('loading and error states', () => {
     it('shows loading skeletons before data arrives', () => {
-      vi.stubGlobal(
-        'fetch',
-        vi.fn(() => new Promise(() => {}))
-      ) // never resolves
+      getOverviewMock.mockReturnValueOnce(new Promise(() => {}) as never)
       renderDashboard()
       expect(document.querySelectorAll('.MuiSkeleton-root').length).toBeGreaterThan(0)
     })
@@ -228,7 +227,12 @@ describe('DashboardV3', () => {
           {
             ...makeOverview().repository_health[0],
             health_status: 'healthy',
-            dimension_health: { backup: 'healthy', check: 'healthy', compact: 'healthy' },
+            dimension_health: {
+              backup: 'healthy',
+              check: 'healthy',
+              compact: 'healthy',
+              restore: 'healthy',
+            },
           },
         ],
       })
@@ -258,10 +262,10 @@ describe('DashboardV3', () => {
       await waitFor(() => expect(screen.getAllByText('10.5 GB').length).toBeGreaterThan(0))
     })
 
-    it('renders schedule ratio', async () => {
+    it('renders automation ratio including backup plans and legacy schedules', async () => {
       mockFetchSuccess(makeOverview())
       renderDashboard()
-      await waitFor(() => expect(screen.getByText('1/2')).toBeInTheDocument())
+      await waitFor(() => expect(screen.getByText('2/4')).toBeInTheDocument())
     })
 
     it('shows "Never" when no repository has a past backup', async () => {
@@ -296,7 +300,7 @@ describe('DashboardV3', () => {
     it('shows job ratio label', async () => {
       mockFetchSuccess(makeOverview())
       renderDashboard()
-      await waitFor(() => expect(screen.getByText('5/6 OK')).toBeInTheDocument())
+      await waitFor(() => expect(screen.getByText('5/6')).toBeInTheDocument())
     })
   })
 
@@ -326,16 +330,30 @@ describe('DashboardV3', () => {
       expect(mockNavigate).toHaveBeenCalledWith('/repositories')
     })
 
-    it('shows "manual" badge for repos without a schedule', async () => {
+    it('omits the schedule badge for repos without a schedule', async () => {
       mockFetchSuccess(makeOverview())
       renderDashboard()
-      await waitFor(() => expect(screen.getByText('manual')).toBeInTheDocument())
+      // Wait for the dashboard to settle (the no-schedule repo's name renders in the grid).
+      await waitFor(() => expect(screen.getAllByText('backup-nas').length).toBeGreaterThan(0))
+      // The no-schedule repo (backup-nas) should render no "manual" label; absence of
+      // a schedule pill is what conveys "manual" now.
+      expect(screen.queryByText('manual')).not.toBeInTheDocument()
     })
 
     it('shows "paused" badge for repos with a disabled schedule', async () => {
       const data = makeOverview({
         repository_health: makeOverview().repository_health.map((r, i) =>
-          i === 0 ? { ...r, has_schedule: true, schedule_enabled: false } : r
+          i === 0
+            ? {
+                ...r,
+                has_schedule: true,
+                schedule_enabled: false,
+                backup_plan_count: 0,
+                backup_plan_scheduled_count: 0,
+                backup_plan_names: [],
+                backup_plan_next_run: null,
+              }
+            : r
         ),
       })
       mockFetchSuccess(data)
@@ -349,6 +367,111 @@ describe('DashboardV3', () => {
       await waitFor(() => expect(screen.getAllByText('Observe Only').length).toBeGreaterThan(0))
       expect(screen.getByText('FRESH')).toBeInTheDocument()
       expect(screen.getByText('ARCHIVES')).toBeInTheDocument()
+      expect(screen.getAllByText('RESTORE').length).toBeGreaterThan(0)
+    })
+
+    it('shows restore check status for observe repositories', async () => {
+      const observeRepo = {
+        ...makeOverview().repository_health[1],
+        restore_check_configured: true,
+        latest_restore_check_status: 'failed',
+        latest_restore_check_error: 'Probe path missing',
+        dimension_health: {
+          ...makeOverview().repository_health[1].dimension_health,
+          restore: 'critical',
+        },
+      }
+      mockFetchSuccess(makeOverview({ repository_health: [observeRepo] }))
+      renderDashboard()
+
+      await waitFor(() => expect(screen.getByText('Observe Only')).toBeInTheDocument())
+      expect(screen.getByText('RESTORE')).toBeInTheDocument()
+      expect(screen.getByText('Failed')).toBeInTheDocument()
+    })
+
+    it('shows restore verification as a health dimension for full repositories', async () => {
+      // Healthy repos collapse to a compact row without the dimension footer,
+      // so promote my-server to warning to exercise the full-card RESTORE cell.
+      const data = makeOverview({
+        repository_health: makeOverview().repository_health.map((r, i) =>
+          i === 0
+            ? {
+                ...r,
+                health_status: 'warning' as const,
+                dimension_health: { ...r.dimension_health, restore: 'warning' as const },
+              }
+            : r
+        ),
+      })
+      mockFetchSuccess(data)
+      renderDashboard()
+      await waitFor(() => screen.getAllByText('my-server'))
+
+      expect(screen.getAllByText('RESTORE').length).toBeGreaterThan(0)
+      expect(
+        screen.getAllByLabelText(formatDateTimeFull('2026-03-28T10:00:00+00:00')).length
+      ).toBeGreaterThan(0)
+    })
+
+    it('shows canary setup-needed restore checks as needs backup', async () => {
+      const data = makeOverview({
+        repository_health: makeOverview().repository_health.map((r, i) =>
+          i === 0
+            ? {
+                ...r,
+                // Healthy repos collapse to a compact row without the dim grid;
+                // a warning restore dimension implies the rollup is at least warning.
+                health_status: 'warning' as const,
+                last_restore_check: null,
+                latest_restore_check_status: 'needs_backup',
+                latest_restore_check_error: 'Run a backup, then run this restore check again.',
+                dimension_health: {
+                  ...r.dimension_health,
+                  restore: 'warning',
+                },
+              }
+            : r
+        ),
+      })
+      mockFetchSuccess(data)
+      renderDashboard()
+
+      await waitFor(() => expect(screen.getByText('Behind')).toBeInTheDocument())
+    })
+
+    it('shows backup plan coverage on repository cards', async () => {
+      // The compact healthy card omits the plan chip and plan name; promote
+      // my-server to warning so the full card (with plan coverage) renders.
+      const data = makeOverview({
+        repository_health: makeOverview().repository_health.map((r, i) =>
+          i === 0 ? { ...r, health_status: 'warning' as const } : r
+        ),
+      })
+      mockFetchSuccess(data)
+      renderDashboard()
+      await waitFor(() => expect(screen.getByText('Nightly Documents')).toBeInTheDocument())
+      expect(screen.getByText('1 plan')).toBeInTheDocument()
+    })
+
+    it('adds full timestamp tooltips to relative health times', async () => {
+      // Tooltips live in the full card's dimension grid; the compact healthy
+      // card has no per-dimension tooltips. Promote my-server to warning so
+      // its last_backup and last_check times render with the title attribute.
+      const data = makeOverview({
+        repository_health: makeOverview().repository_health.map((r, i) =>
+          i === 0 ? { ...r, health_status: 'warning' as const } : r
+        ),
+      })
+      mockFetchSuccess(data)
+      renderDashboard()
+      await waitFor(() => screen.getAllByText('my-server'))
+
+      expect(
+        screen.getAllByLabelText(formatDateTimeFull('2026-03-30T10:00:00+00:00')).length
+      ).toBeGreaterThan(0)
+      expect(
+        screen.getAllByLabelText(formatDateTimeFull('2026-03-29T10:00:00+00:00')).length
+      ).toBeGreaterThan(0)
     })
   })
 
@@ -427,20 +550,85 @@ describe('DashboardV3', () => {
       await waitFor(() => screen.getAllByText('my-server'))
       expect(screen.queryByText('Recent failures')).not.toBeInTheDocument()
     })
+
+    it('hides failed jobs that have a newer successful event for the same repository and type', async () => {
+      const data = makeOverview({
+        activity_feed: [
+          {
+            id: 11,
+            type: 'backup',
+            status: 'completed',
+            repository: 'backup-nas',
+            timestamp: '2026-03-30T11:00:00+00:00',
+            message: 'Backup completed',
+            error: null,
+          },
+          {
+            id: 10,
+            type: 'backup',
+            status: 'failed',
+            repository: 'backup-nas',
+            timestamp: '2026-03-30T10:00:00+00:00',
+            message: 'Backup failed',
+            error: 'Disk full before cleanup',
+          },
+          {
+            id: 12,
+            type: 'check',
+            status: 'failed',
+            repository: 'backup-nas',
+            timestamp: '2026-03-30T09:00:00+00:00',
+            message: 'Check failed',
+            error: 'Repository check still failing',
+          },
+        ],
+      })
+
+      mockFetchSuccess(data)
+      renderDashboard()
+
+      await waitFor(() => expect(screen.getByText('Recent failures')).toBeInTheDocument())
+      expect(screen.queryByText('Disk full before cleanup')).not.toBeInTheDocument()
+      expect(screen.getByText('Repository check still failing')).toBeInTheDocument()
+    })
+  })
+
+  describe('upcoming automation panel', () => {
+    it('renders scheduled backup plans from upcoming tasks', async () => {
+      mockFetchSuccess(
+        makeOverview({
+          upcoming_tasks: [
+            {
+              id: 7,
+              type: 'backup_plan',
+              name: 'Nightly Documents',
+              repositories: ['my-server', 'backup-nas'],
+              cron: '0 3 * * *',
+              timezone: 'UTC',
+              next_run: '2026-03-31T03:00:00+00:00',
+            },
+          ],
+        })
+      )
+
+      renderDashboard()
+
+      await waitFor(() => expect(screen.getByText('Upcoming backups')).toBeInTheDocument())
+      expect(screen.getByText('Backup Plan')).toBeInTheDocument()
+      expect(screen.getAllByText('Nightly Documents').length).toBeGreaterThan(0)
+      expect(screen.getByText('2 repositories')).toBeInTheDocument()
+    })
   })
 
   describe('refresh button', () => {
     it('triggers a new fetch when clicked', async () => {
-      const fetchMock = vi
-        .fn()
-        .mockResolvedValue({ ok: true, json: () => Promise.resolve(makeOverview()) })
-      vi.stubGlobal('fetch', fetchMock)
+      getOverviewMock.mockResolvedValue({ data: makeOverview() })
       renderDashboard()
       await waitFor(() => screen.getAllByText('my-server'))
 
-      const callsBefore = fetchMock.mock.calls.length
+      const callsBefore = getOverviewMock.mock.calls.length
       fireEvent.click(screen.getByText('Refresh'))
-      await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(callsBefore))
+      await waitFor(() => expect(getOverviewMock.mock.calls.length).toBeGreaterThan(callsBefore))
     })
   })
 })

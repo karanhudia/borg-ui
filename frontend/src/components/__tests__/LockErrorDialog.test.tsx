@@ -30,6 +30,7 @@ describe('LockErrorDialog', () => {
     repositoryName: 'test-repo',
     onLockBroken: mockOnLockBroken,
     canBreakLock: true, // Default to admin for existing tests
+    lockBreakingEnabled: true,
   }
 
   beforeEach(() => {
@@ -270,6 +271,7 @@ describe('LockErrorDialog', () => {
           repositoryId={1}
           repositoryName="test-repo"
           canBreakLock={true}
+          lockBreakingEnabled={true}
           // No onLockBroken callback
         />
       )
@@ -306,13 +308,25 @@ describe('LockErrorDialog', () => {
 
     it('shows the warning alert when permission is not granted', () => {
       render(<LockErrorDialog {...defaultProps} canBreakLock={false} />)
-      expect(screen.getByText(/Admin privileges required/)).toBeInTheDocument()
-      expect(screen.getByText(/Only administrators can break repository locks/)).toBeInTheDocument()
+      expect(screen.getByText(/Repository maintenance access required/)).toBeInTheDocument()
+      expect(
+        screen.getByText(/You need maintenance access to this repository to break its lock/)
+      ).toBeInTheDocument()
     })
 
     it('does not show the warning alert when permission is granted', () => {
       render(<LockErrorDialog {...defaultProps} canBreakLock={true} />)
-      expect(screen.queryByText(/Admin privileges required/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/Repository maintenance access required/)).not.toBeInTheDocument()
+    })
+
+    it('shows a global disabled alert when lock breaking is disabled', () => {
+      render(<LockErrorDialog {...defaultProps} canBreakLock={true} lockBreakingEnabled={false} />)
+
+      expect(screen.getByText(/Lock breaking disabled/)).toBeInTheDocument()
+      expect(
+        screen.getByText(/An administrator has disabled manual lock breaking/)
+      ).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Break Lock/ })).toBeDisabled()
     })
 
     it('does not call API when the disabled Break Lock button is clicked', async () => {

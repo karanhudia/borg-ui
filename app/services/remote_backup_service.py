@@ -10,10 +10,10 @@ import os
 import json
 import re
 import shlex
-import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict
+from urllib.parse import urlparse
 import structlog
 from sqlalchemy.orm import Session
 
@@ -42,7 +42,8 @@ class RemoteBackupService:
         source_paths: List[str],
         exclude_patterns: List[str] = None,
         compression: str = "lz4",
-        custom_flags: str = None
+        custom_flags: str = None,
+        upload_ratelimit_kib: int = None,
     ) -> dict:
         """
         Main method to execute backup on remote host
@@ -65,23 +66,31 @@ class RemoteBackupService:
             job.started_at = datetime.utcnow()
             db.commit()
 
-            logger.info("Starting remote backup",
-                       job_id=job_id,
-                       source_connection_id=source_ssh_connection_id,
-                       repository_id=repository_id)
+            logger.info(
+                "Starting remote backup",
+                job_id=job_id,
+                source_connection_id=source_ssh_connection_id,
+                repository_id=repository_id,
+            )
 
             # Load SSH connection
-            ssh_connection = db.query(SSHConnection).filter(
-                SSHConnection.id == source_ssh_connection_id
-            ).first()
+            ssh_connection = (
+                db.query(SSHConnection)
+                .filter(SSHConnection.id == source_ssh_connection_id)
+                .first()
+            )
             if not ssh_connection:
                 raise Exception(f"SSH connection {source_ssh_connection_id} not found")
 
             if not ssh_connection.is_backup_source:
-                raise Exception(f"SSH connection {source_ssh_connection_id} is not enabled as backup source")
+                raise Exception(
+                    f"SSH connection {source_ssh_connection_id} is not enabled as backup source"
+                )
 
             # Load repository
-            repository = db.query(Repository).filter(Repository.id == repository_id).first()
+            repository = (
+                db.query(Repository).filter(Repository.id == repository_id).first()
+            )
             if not repository:
                 raise Exception(f"Repository {repository_id} not found")
 
@@ -100,25 +109,29 @@ class RemoteBackupService:
             archive_name = f"{{hostname}}-{{now}}"
             borg_command = await self._build_remote_command(
                 repository=repository,
+                source_ssh_connection=ssh_connection,
                 archive_name=archive_name,
                 source_paths=source_paths or [],
                 exclude_patterns=exclude_patterns or [],
                 compression=compression,
                 custom_flags=custom_flags,
+                upload_ratelimit_kib=upload_ratelimit_kib,
                 borg_binary_path=ssh_connection.borg_binary_path,
-                use_sudo=ssh_connection.use_sudo
+                use_sudo=ssh_connection.use_sudo,
             )
 
-            logger.info("Built borg command for remote execution",
-                       job_id=job_id,
-                       command_preview=borg_command[:200])
+            logger.info(
+                "Built borg command for remote execution",
+                job_id=job_id,
+                command_preview=borg_command[:200],
+            )
 
             # Execute command on remote host
             result = await self._execute_ssh_command(
                 ssh_connection=ssh_connection,
                 command=borg_command,
                 job_id=job_id,
-                db=db
+                db=db,
             )
 
             # Update final job status
@@ -131,28 +144,29 @@ class RemoteBackupService:
             else:
                 job.status = "failed"
                 job.error_message = result.get("error", "Remote backup failed")
-                logger.error("Remote backup failed",
-                           job_id=job_id,
-                           error=result.get("error"))
+                logger.error(
+                    "Remote backup failed", job_id=job_id, error=result.get("error")
+                )
 
             job.completed_at = datetime.utcnow()
             db.commit()
 
-            # Send notification
-            await notification_service.send_backup_notification(
-                repository_name=repository.name,
-                job_id=job_id,
-                status=job.status,
-                error_message=job.error_message
+            await self._send_completion_notification(
+                db=db,
+                job=job,
+                repository=repository,
+                archive_name=archive_name,
             )
 
             return result
 
         except Exception as e:
-            logger.error("Remote backup execution failed",
-                        job_id=job_id,
-                        error=str(e),
-                        exc_info=True)
+            logger.error(
+                "Remote backup execution failed",
+                job_id=job_id,
+                error=str(e),
+                exc_info=True,
+            )
 
             # Update job status
             job = db.query(BackupJob).filter(BackupJob.id == job_id).first()
@@ -166,6 +180,44 @@ class RemoteBackupService:
         finally:
             db.close()
 
+    async def _send_completion_notification(
+        self,
+        db: Session,
+        job: BackupJob,
+        repository: Repository,
+        archive_name: str,
+    ) -> None:
+        try:
+            if job.status == "completed":
+                await notification_service.send_backup_success(
+                    db,
+                    repository.name,
+                    archive_name,
+                    stats={
+                        "original_size": job.original_size,
+                        "compressed_size": job.compressed_size,
+                        "deduplicated_size": job.deduplicated_size,
+                    },
+                    completion_time=job.completed_at,
+                    started_at=job.started_at,
+                    nfiles=job.nfiles,
+                )
+            else:
+                await notification_service.send_backup_failure(
+                    db,
+                    repository.name,
+                    job.error_message,
+                    job_id=job.id,
+                )
+        except Exception as e:
+            logger.warning(
+                "Remote backup notification failed",
+                job_id=job.id,
+                status=job.status,
+                error=str(e),
+                exc_info=True,
+            )
+
     async def _build_remote_command(
         self,
         repository: Repository,
@@ -174,8 +226,10 @@ class RemoteBackupService:
         exclude_patterns: List[str],
         compression: str = "lz4",
         custom_flags: str = None,
+        upload_ratelimit_kib: int = None,
         borg_binary_path: str = "/usr/bin/borg",
-        use_sudo: bool = False
+        use_sudo: bool = False,
+        source_ssh_connection: SSHConnection | None = None,
     ) -> str:
         """
         Build the borg create command for remote execution
@@ -190,15 +244,24 @@ class RemoteBackupService:
         # Get DB session for connection lookup
         db = SessionLocal()
         try:
-            repo_url = self._get_repository_url(repository, db)
+            repo_url = self._get_repository_url(
+                repository, db, source_ssh_connection=source_ssh_connection
+            )
         finally:
             db.close()
 
         # Build borg command parts
-        cmd_parts = []
+        cmd_parts = [
+            "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes",
+            "BORG_RELOCATED_REPO_ACCESS_IS_OK=yes",
+        ]
 
         # Add passphrase environment variable if needed
-        if repository.encryption and repository.encryption != "none" and repository.passphrase:
+        if (
+            repository.encryption
+            and repository.encryption != "none"
+            and repository.passphrase
+        ):
             # Use shlex.quote to safely escape the passphrase
             escaped_passphrase = shlex.quote(repository.passphrase)
             cmd_parts.append(f"BORG_PASSPHRASE={escaped_passphrase}")
@@ -217,6 +280,8 @@ class RemoteBackupService:
 
         # Flags
         cmd_parts.extend(["--progress", "--stats", "--json"])
+        if upload_ratelimit_kib:
+            cmd_parts.extend(["--upload-ratelimit", str(upload_ratelimit_kib)])
 
         # Compression
         if compression:
@@ -240,7 +305,24 @@ class RemoteBackupService:
 
         return " ".join(cmd_parts)
 
-    def _get_repository_url(self, repository: Repository, db: Session) -> str:
+    def _extract_remote_repository_path(self, repository_path: str) -> str:
+        """Return the path part of a repository location as seen from the SSH host."""
+        if repository_path.startswith("ssh://"):
+            parsed = urlparse(repository_path)
+            return parsed.path or "/"
+
+        scp_match = re.match(r"^[^@]+@[^:]+:(.+)$", repository_path)
+        if scp_match:
+            return scp_match.group(1)
+
+        return repository_path
+
+    def _get_repository_url(
+        self,
+        repository: Repository,
+        db: Session,
+        source_ssh_connection: SSHConnection | None = None,
+    ) -> str:
         """
         Get the repository URL that a remote host should use
 
@@ -248,10 +330,23 @@ class RemoteBackupService:
         - SSH repo: ssh://backup@repo-host:22/path
         """
         if repository.connection_id:
+            if (
+                source_ssh_connection is not None
+                and repository.connection_id == source_ssh_connection.id
+            ):
+                return self._extract_remote_repository_path(repository.path)
+
+            if repository.path.startswith("ssh://") or re.match(
+                r"^[^@]+@[^:]+:.+", repository.path
+            ):
+                return repository.path
+
             # Get SSH connection details
-            connection = db.query(SSHConnection).filter(
-                SSHConnection.id == repository.connection_id
-            ).first()
+            connection = (
+                db.query(SSHConnection)
+                .filter(SSHConnection.id == repository.connection_id)
+                .first()
+            )
             if not connection:
                 raise ValueError(f"SSH connection {repository.connection_id} not found")
             return f"ssh://{connection.username}@{connection.host}:{connection.port}{repository.path}"
@@ -262,11 +357,7 @@ class RemoteBackupService:
             )
 
     async def _execute_ssh_command(
-        self,
-        ssh_connection: SSHConnection,
-        command: str,
-        job_id: int,
-        db: Session
+        self, ssh_connection: SSHConnection, command: str, job_id: int, db: Session
     ) -> dict:
         """
         Execute command on remote host via SSH
@@ -274,7 +365,9 @@ class RemoteBackupService:
         """
         try:
             # Load SSH key
-            ssh_key = db.query(SSHKey).filter(SSHKey.id == ssh_connection.ssh_key_id).first()
+            ssh_key = (
+                db.query(SSHKey).filter(SSHKey.id == ssh_connection.ssh_key_id).first()
+            )
             if not ssh_key:
                 raise Exception(f"SSH key {ssh_connection.ssh_key_id} not found")
 
@@ -285,26 +378,34 @@ class RemoteBackupService:
                 # Build SSH command
                 ssh_cmd = [
                     "ssh",
-                    "-i", key_file_path,
-                    "-o", "StrictHostKeyChecking=no",
-                    "-o", "UserKnownHostsFile=/dev/null",
-                    "-o", "ServerAliveInterval=60",
-                    "-o", "ServerAliveCountMax=3",
-                    "-p", str(ssh_connection.port),
+                    "-i",
+                    key_file_path,
+                    "-o",
+                    "StrictHostKeyChecking=no",
+                    "-o",
+                    "UserKnownHostsFile=/dev/null",
+                    "-o",
+                    "ServerAliveInterval=60",
+                    "-o",
+                    "ServerAliveCountMax=3",
+                    "-p",
+                    str(ssh_connection.port),
                     f"{ssh_connection.username}@{ssh_connection.host}",
-                    command
+                    command,
                 ]
 
-                logger.info("Executing SSH command",
-                           job_id=job_id,
-                           host=ssh_connection.host,
-                           command_preview=command[:200])
+                logger.info(
+                    "Executing SSH command",
+                    job_id=job_id,
+                    host=ssh_connection.host,
+                    command_preview=command[:200],
+                )
 
                 # Execute command
                 process = await asyncio.create_subprocess_exec(
                     *ssh_cmd,
                     stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
+                    stderr=asyncio.subprocess.PIPE,
                 )
 
                 self.running_processes[job_id] = process
@@ -324,14 +425,16 @@ class RemoteBackupService:
                         line = await process.stdout.readline()
                         if not line:
                             break
-                        line_str = line.decode('utf-8', errors='replace').strip()
+                        line_str = line.decode("utf-8", errors="replace").strip()
                         stdout_lines.append(line_str)
 
                         # Try to parse Borg JSON progress
-                        if line_str.startswith('{'):
+                        if line_str.startswith("{"):
                             try:
                                 progress_data = json.loads(line_str)
-                                await self._update_progress_from_json(job_id, progress_data, db)
+                                await self._update_progress_from_json(
+                                    job_id, progress_data, db
+                                )
                             except json.JSONDecodeError:
                                 pass
 
@@ -340,11 +443,11 @@ class RemoteBackupService:
                         line = await process.stderr.readline()
                         if not line:
                             break
-                        line_str = line.decode('utf-8', errors='replace').strip()
+                        line_str = line.decode("utf-8", errors="replace").strip()
                         stderr_lines.append(line_str)
-                        logger.debug("Remote backup stderr",
-                                   job_id=job_id,
-                                   line=line_str)
+                        logger.debug(
+                            "Remote backup stderr", job_id=job_id, line=line_str
+                        )
 
                 # Read both streams concurrently
                 await asyncio.gather(read_stdout(), read_stderr())
@@ -362,7 +465,9 @@ class RemoteBackupService:
                     "returncode": returncode,
                     "stdout": "\n".join(stdout_lines),
                     "stderr": "\n".join(stderr_lines),
-                    "error": None if success else f"Remote backup failed with exit code {returncode}"
+                    "error": None
+                    if success
+                    else f"Remote backup failed with exit code {returncode}",
                 }
 
             finally:
@@ -370,21 +475,25 @@ class RemoteBackupService:
                 try:
                     os.unlink(key_file_path)
                 except Exception as e:
-                    logger.warning("Failed to delete temporary key file",
-                                 path=key_file_path,
-                                 error=str(e))
+                    logger.warning(
+                        "Failed to delete temporary key file",
+                        path=key_file_path,
+                        error=str(e),
+                    )
 
         except Exception as e:
-            logger.error("SSH command execution failed",
-                        job_id=job_id,
-                        error=str(e),
-                        exc_info=True)
+            logger.error(
+                "SSH command execution failed",
+                job_id=job_id,
+                error=str(e),
+                exc_info=True,
+            )
             return {
                 "success": False,
                 "returncode": -1,
                 "stdout": "",
                 "stderr": "",
-                "error": str(e)
+                "error": str(e),
             }
 
     async def _update_progress_from_json(self, job_id: int, data: dict, db: Session):
@@ -406,16 +515,18 @@ class RemoteBackupService:
 
             # Update progress percentage (estimate based on original size)
             if job.total_expected_size and job.total_expected_size > 0:
-                progress = min(100.0, (job.original_size / job.total_expected_size) * 100)
+                progress = min(
+                    100.0, (job.original_size / job.total_expected_size) * 100
+                )
                 job.progress_percent = progress
                 job.progress = int(progress)
 
             db.commit()
 
         except Exception as e:
-            logger.error("Failed to update progress from JSON",
-                        job_id=job_id,
-                        error=str(e))
+            logger.error(
+                "Failed to update progress from JSON", job_id=job_id, error=str(e)
+            )
 
     async def verify_remote_borg(self, ssh_connection_id: int) -> Dict:
         """
@@ -424,14 +535,18 @@ class RemoteBackupService:
         """
         db = SessionLocal()
         try:
-            ssh_connection = db.query(SSHConnection).filter(
-                SSHConnection.id == ssh_connection_id
-            ).first()
+            ssh_connection = (
+                db.query(SSHConnection)
+                .filter(SSHConnection.id == ssh_connection_id)
+                .first()
+            )
             if not ssh_connection:
                 raise Exception(f"SSH connection {ssh_connection_id} not found")
 
             # Load SSH key
-            ssh_key = db.query(SSHKey).filter(SSHKey.id == ssh_connection.ssh_key_id).first()
+            ssh_key = (
+                db.query(SSHKey).filter(SSHKey.id == ssh_connection.ssh_key_id).first()
+            )
             if not ssh_key:
                 raise Exception(f"SSH key {ssh_connection.ssh_key_id} not found")
 
@@ -445,73 +560,80 @@ class RemoteBackupService:
                 # Build SSH command to check borg
                 ssh_cmd = [
                     "ssh",
-                    "-i", key_file_path,
-                    "-o", "StrictHostKeyChecking=no",
-                    "-o", "UserKnownHostsFile=/dev/null",
-                    "-p", str(ssh_connection.port),
+                    "-i",
+                    key_file_path,
+                    "-o",
+                    "StrictHostKeyChecking=no",
+                    "-o",
+                    "UserKnownHostsFile=/dev/null",
+                    "-p",
+                    str(ssh_connection.port),
                     f"{ssh_connection.username}@{ssh_connection.host}",
-                    f"{borg_path} --version"
+                    f"{borg_path} --version",
                 ]
 
-                logger.info("Checking for Borg on remote host",
-                           connection_id=ssh_connection_id,
-                           host=ssh_connection.host)
+                logger.info(
+                    "Checking for Borg on remote host",
+                    connection_id=ssh_connection_id,
+                    host=ssh_connection.host,
+                )
 
                 process = await asyncio.create_subprocess_exec(
                     *ssh_cmd,
                     stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
+                    stderr=asyncio.subprocess.PIPE,
                 )
 
                 stdout, stderr = await process.communicate()
                 returncode = process.returncode
 
                 if returncode == 0:
-                    version_output = stdout.decode('utf-8', errors='replace').strip()
+                    version_output = stdout.decode("utf-8", errors="replace").strip()
                     # Parse version from output like "borg 1.2.4"
-                    version_match = re.search(r'borg\s+([\d.]+)', version_output, re.IGNORECASE)
+                    version_match = re.search(
+                        r"borg\s+([\d.]+)", version_output, re.IGNORECASE
+                    )
                     version = version_match.group(1) if version_match else "unknown"
 
-                    logger.info("Borg found on remote host",
-                               connection_id=ssh_connection_id,
-                               version=version,
-                               path=borg_path)
+                    logger.info(
+                        "Borg found on remote host",
+                        connection_id=ssh_connection_id,
+                        version=version,
+                        path=borg_path,
+                    )
 
-                    return {
-                        "installed": True,
-                        "version": version,
-                        "path": borg_path
-                    }
+                    return {"installed": True, "version": version, "path": borg_path}
                 else:
-                    logger.warning("Borg not found on remote host",
-                                 connection_id=ssh_connection_id,
-                                 stderr=stderr.decode('utf-8', errors='replace'))
+                    logger.warning(
+                        "Borg not found on remote host",
+                        connection_id=ssh_connection_id,
+                        stderr=stderr.decode("utf-8", errors="replace"),
+                    )
                     return {
                         "installed": False,
                         "version": None,
                         "path": None,
-                        "error": stderr.decode('utf-8', errors='replace')
+                        "error": stderr.decode("utf-8", errors="replace"),
                     }
 
             finally:
                 try:
                     os.unlink(key_file_path)
                 except Exception as e:
-                    logger.warning("Failed to delete temporary key file",
-                                 path=key_file_path,
-                                 error=str(e))
+                    logger.warning(
+                        "Failed to delete temporary key file",
+                        path=key_file_path,
+                        error=str(e),
+                    )
 
         except Exception as e:
-            logger.error("Failed to verify remote borg",
-                        connection_id=ssh_connection_id,
-                        error=str(e),
-                        exc_info=True)
-            return {
-                "installed": False,
-                "version": None,
-                "path": None,
-                "error": str(e)
-            }
+            logger.error(
+                "Failed to verify remote borg",
+                connection_id=ssh_connection_id,
+                error=str(e),
+                exc_info=True,
+            )
+            return {"installed": False, "version": None, "path": None, "error": str(e)}
         finally:
             db.close()
 
@@ -527,8 +649,9 @@ class RemoteBackupService:
                 try:
                     await asyncio.wait_for(process.wait(), timeout=5.0)
                 except asyncio.TimeoutError:
-                    logger.warning("Remote backup did not terminate, killing",
-                                 job_id=job_id)
+                    logger.warning(
+                        "Remote backup did not terminate, killing", job_id=job_id
+                    )
                     process.kill()
                     await process.wait()
 
@@ -552,10 +675,12 @@ class RemoteBackupService:
                 return False
 
         except Exception as e:
-            logger.error("Failed to cancel remote backup",
-                        job_id=job_id,
-                        error=str(e),
-                        exc_info=True)
+            logger.error(
+                "Failed to cancel remote backup",
+                job_id=job_id,
+                error=str(e),
+                exc_info=True,
+            )
             return False
 
 

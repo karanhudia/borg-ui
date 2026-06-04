@@ -12,7 +12,11 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from tests.smoke.live_helpers import SmokeClient, SmokeFailure
-from tests.smoke.ssh_smoke_helpers import add_ssh_smoke_args, ensure_public_key_authorized, require_ssh_smoke_config
+from tests.smoke.ssh_smoke_helpers import (
+    add_ssh_smoke_args,
+    ensure_public_key_authorized,
+    require_ssh_smoke_config,
+)
 
 
 def main() -> int:
@@ -31,10 +35,15 @@ def main() -> int:
         system_info = client.system_info()
         feature_access = system_info.get("feature_access", {})
         if not feature_access.get("borg_v2"):
-            print("Remote Borg 2 smoke skipped: borg_v2 feature not enabled", flush=True)
+            print(
+                "Remote Borg 2 smoke skipped: borg_v2 feature not enabled", flush=True
+            )
             return 0
         if not system_info.get("borg2_version"):
-            print("Remote Borg 2 smoke skipped: borg2 binary not available in app", flush=True)
+            print(
+                "Remote Borg 2 smoke skipped: borg2 binary not available in app",
+                flush=True,
+            )
             return 0
 
         ssh_key = client.generate_ssh_key(name="SSH V2 Smoke Key")
@@ -77,30 +86,47 @@ def main() -> int:
         backup_response = client.start_backup_v2(repo_id)
         backup_job_id = backup_response.get("job_id", 0)
         if backup_job_id:
-            client.wait_for_job("/api/backup/status", backup_job_id, expected={"completed", "completed_with_warnings"}, timeout=120)
+            client.wait_for_job(
+                "/api/backup/status",
+                backup_job_id,
+                expected={"completed", "completed_with_warnings"},
+                timeout=120,
+            )
 
         archives = client.list_archives_v2(repo_id)
         if len(archives) != 1:
-            raise SmokeFailure(f"Expected exactly one SSH Borg 2 archive, got {archives}")
+            raise SmokeFailure(
+                f"Expected exactly one SSH Borg 2 archive, got {archives}"
+            )
         archive_name = archives[0]["name"]
         archive_id = archives[0].get("id") or archive_name
 
-        repo_info = client.request_ok("GET", f"/api/v2/repositories/{repo_id}/info").json()
+        repo_info = client.request_ok(
+            "GET", f"/api/v2/repositories/{repo_id}/info"
+        ).json()
         if repo_info.get("borg_version") != 2:
             raise SmokeFailure(f"Unexpected SSH Borg 2 repository info: {repo_info}")
 
-        archive_info = client.get_archive_info_v2(archive_id, repo_id, include_files=True)
+        archive_info = client.get_archive_info_v2(
+            archive_id, repo_id, include_files=True
+        )
         if archive_info.get("name") != archive_name:
-            raise SmokeFailure(f"Unexpected SSH Borg 2 archive info payload: {archive_info}")
+            raise SmokeFailure(
+                f"Unexpected SSH Borg 2 archive info payload: {archive_info}"
+            )
 
         browse_items = client.browse_archive_contents_v2(repo_id, archive_id)
         if not browse_items:
             raise SmokeFailure("Expected SSH Borg 2 archive browse payload")
 
         repo_root = client.container_path(source_root).lstrip("/")
-        downloaded = client.download_archive_file_v2(repo_id, archive_name, f"{repo_root}/nested/notes.txt")
+        downloaded = client.download_archive_file_v2(
+            repo_id, archive_name, f"{repo_root}/nested/notes.txt"
+        )
         if downloaded != b"ssh borg2 nested\n":
-            raise SmokeFailure(f"Unexpected SSH Borg 2 download payload: {downloaded!r}")
+            raise SmokeFailure(
+                f"Unexpected SSH Borg 2 download payload: {downloaded!r}"
+            )
 
         check_response = client.request_ok(
             "POST",
@@ -110,8 +136,15 @@ def main() -> int:
         )
         check_job_id = check_response.json().get("job_id")
         if not isinstance(check_job_id, int):
-            raise SmokeFailure(f"Unexpected SSH Borg 2 check response: {check_response.json()}")
-        client.wait_for_job("/api/repositories/check-jobs", check_job_id, expected={"completed", "completed_with_warnings"}, timeout=120)
+            raise SmokeFailure(
+                f"Unexpected SSH Borg 2 check response: {check_response.json()}"
+            )
+        client.wait_for_job(
+            "/api/repositories/check-jobs",
+            check_job_id,
+            expected={"completed", "completed_with_warnings"},
+            timeout=120,
+        )
 
         compact_response = client.request_ok(
             "POST",
@@ -121,8 +154,15 @@ def main() -> int:
         )
         compact_job_id = compact_response.json().get("job_id")
         if not isinstance(compact_job_id, int):
-            raise SmokeFailure(f"Unexpected SSH Borg 2 compact response: {compact_response.json()}")
-        client.wait_for_job("/api/repositories/compact-jobs", compact_job_id, expected={"completed", "completed_with_warnings"}, timeout=120)
+            raise SmokeFailure(
+                f"Unexpected SSH Borg 2 compact response: {compact_response.json()}"
+            )
+        client.wait_for_job(
+            "/api/repositories/compact-jobs",
+            compact_job_id,
+            expected={"completed", "completed_with_warnings"},
+            timeout=120,
+        )
 
         delete_response = client.request_ok(
             "DELETE",
@@ -131,8 +171,15 @@ def main() -> int:
         )
         delete_job_id = delete_response.json().get("job_id")
         if not isinstance(delete_job_id, int):
-            raise SmokeFailure(f"Unexpected SSH Borg 2 delete response: {delete_response.json()}")
-        client.wait_for_job("/api/archives/delete-jobs", delete_job_id, expected={"completed"}, timeout=120)
+            raise SmokeFailure(
+                f"Unexpected SSH Borg 2 delete response: {delete_response.json()}"
+            )
+        client.wait_for_job(
+            "/api/archives/delete-jobs",
+            delete_job_id,
+            expected={"completed"},
+            timeout=120,
+        )
         if client.list_archives_v2(repo_id):
             raise SmokeFailure("Expected SSH Borg 2 delete to remove the final archive")
 
@@ -145,9 +192,13 @@ def main() -> int:
             source_dirs=[source_root],
             extra={"connection_id": connection["id"]},
         )
-        imported_info = client.request_ok("GET", f"/api/v2/repositories/{imported_repo_id}/info").json()
+        imported_info = client.request_ok(
+            "GET", f"/api/v2/repositories/{imported_repo_id}/info"
+        ).json()
         if imported_info.get("borg_version") != 2:
-            raise SmokeFailure(f"Expected imported SSH Borg 2 repository to report borg_version=2: {imported_info}")
+            raise SmokeFailure(
+                f"Expected imported SSH Borg 2 repository to report borg_version=2: {imported_info}"
+            )
 
         client.log("Remote SSH Borg 2 smoke passed")
         return 0

@@ -70,6 +70,14 @@ vi.mock('../../services/api', () => ({
     deleteUser: vi.fn(),
     resetUserPassword: vi.fn(),
   },
+  authAPI: {
+    getAuthConfig: vi.fn(),
+    getTotpStatus: vi.fn(),
+    listPasskeys: vi.fn(),
+    beginOidcLink: vi.fn(),
+    getOidcLinkUrl: vi.fn(),
+    unlinkOidc: vi.fn(),
+  },
 }))
 
 vi.mock('react-hot-toast', async () => {
@@ -114,7 +122,9 @@ describe('Settings account tab', () => {
         ['settings.users.manage', 'settings.system.manage', 'repositories.manage_all'].includes(
           permission
         ),
+      markRecentPasswordConfirmation: vi.fn(),
       refreshUser: vi.fn(),
+      proxyAuthEnabled: false,
     })
     vi.mocked(apiModule.settingsAPI.getSystemSettings).mockResolvedValue({
       data: { settings: {} },
@@ -123,6 +133,25 @@ describe('Settings account tab', () => {
       data: { users: [] },
     } as never)
     vi.mocked(apiModule.settingsAPI.changePassword).mockResolvedValue({ data: {} } as never)
+    vi.mocked(apiModule.authAPI.getAuthConfig).mockResolvedValue({
+      data: {
+        proxy_auth_enabled: false,
+        insecure_no_auth_enabled: false,
+        authentication_required: true,
+        oidc_enabled: false,
+      },
+    } as never)
+    vi.mocked(apiModule.authAPI.getTotpStatus).mockResolvedValue({
+      data: { enabled: false, recovery_codes_remaining: 0 },
+    } as never)
+    vi.mocked(apiModule.authAPI.listPasskeys).mockResolvedValue({ data: [] } as never)
+    vi.mocked(apiModule.authAPI.beginOidcLink).mockResolvedValue({
+      data: { authorization_url: 'https://id.example.com/auth?state=linked-state' },
+    } as never)
+    vi.mocked(apiModule.authAPI.getOidcLinkUrl).mockReturnValue(
+      '/api/auth/oidc/link?return_to=%2Fsettings%2Faccount'
+    )
+    vi.mocked(apiModule.authAPI.unlinkOidc).mockResolvedValue({ data: {} } as never)
   })
 
   it('tracks the account tab view on render', async () => {
@@ -132,7 +161,7 @@ describe('Settings account tab', () => {
       </ThemeProvider>
     )
 
-    await screen.findByText('Personal profile')
+    await screen.findByRole('tab', { name: 'Personal profile' })
 
     expect(trackSettings).toHaveBeenCalledWith('View', {
       section: 'settings',
@@ -140,7 +169,7 @@ describe('Settings account tab', () => {
     })
   })
 
-  it('shows the password action at the top when password change is required', async () => {
+  it('keeps the account password section in its normal state even when must_change_password is set', async () => {
     useAuthMock.mockReturnValue({
       user: {
         id: 1,
@@ -162,7 +191,9 @@ describe('Settings account tab', () => {
         ['settings.users.manage', 'settings.system.manage', 'repositories.manage_all'].includes(
           permission
         ),
+      markRecentPasswordConfirmation: vi.fn(),
       refreshUser: vi.fn(),
+      proxyAuthEnabled: false,
     })
 
     renderWithProviders(
@@ -171,11 +202,11 @@ describe('Settings account tab', () => {
       </ThemeProvider>
     )
 
-    await screen.findByText('Personal profile')
+    await screen.findByRole('tab', { name: 'Personal profile' })
 
-    const headings = screen.getAllByText('Account password')
-    expect(headings[0]).toBeInTheDocument()
-    expect(screen.getByText('Password update required')).toBeInTheDocument()
+    expect(screen.getAllByText('Account password').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Click to change your login credentials').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Password update required')).not.toBeInTheDocument()
     expect(screen.queryByText('Finish account setup')).not.toBeInTheDocument()
   })
 
@@ -188,7 +219,7 @@ describe('Settings account tab', () => {
       </ThemeProvider>
     )
 
-    await screen.findByText('Personal profile')
+    await screen.findByRole('tab', { name: 'Personal profile' })
     await user.click(screen.getByRole('button', { name: /account password/i }))
     const dialog = await screen.findByRole('dialog', { name: /change password/i })
     const newPasswordInput = within(dialog).getByLabelText(/new password/i)
@@ -219,7 +250,7 @@ describe('Settings account tab', () => {
       </ThemeProvider>
     )
 
-    await screen.findByText('Personal profile')
+    await screen.findByRole('tab', { name: 'Personal profile' })
     await user.click(screen.getByRole('button', { name: /account password/i }))
     const dialog = await screen.findByRole('dialog', { name: /change password/i })
     const newPasswordInput = within(dialog).getByLabelText(/new password/i)
@@ -244,7 +275,7 @@ describe('Settings account tab', () => {
       </ThemeProvider>
     )
 
-    await screen.findByText('Personal profile')
+    await screen.findByRole('tab', { name: 'Personal profile' })
     await user.click(screen.getByRole('button', { name: /account password/i }))
     const dialog = await screen.findByRole('dialog', { name: /change password/i })
     const newPasswordInput = within(dialog).getByLabelText(/new password/i)
@@ -260,5 +291,103 @@ describe('Settings account tab', () => {
       section: 'account',
       operation: 'change_password',
     })
+  })
+
+  it('shows linked SSO state and can unlink when the backend advertises support', async () => {
+    const user = userEvent.setup()
+    const refreshUser = vi.fn()
+    useAuthMock.mockReturnValue({
+      user: {
+        id: 1,
+        username: 'admin',
+        full_name: 'Admin User',
+        email: 'admin@example.com',
+        role: 'admin',
+        auth_source: 'oidc',
+        oidc_subject: 'issuer|admin',
+        oidc_unlink_supported: true,
+        created_at: '2024-01-01T00:00:00Z',
+        global_permissions: ['settings.system.manage', 'repositories.manage_all'],
+      },
+      hasGlobalPermission: (permission: string) =>
+        ['settings.system.manage', 'repositories.manage_all'].includes(permission),
+      markRecentPasswordConfirmation: vi.fn(),
+      refreshUser,
+      proxyAuthEnabled: false,
+    })
+    vi.mocked(apiModule.authAPI.getAuthConfig).mockResolvedValue({
+      data: {
+        proxy_auth_enabled: false,
+        insecure_no_auth_enabled: false,
+        authentication_required: true,
+        oidc_enabled: true,
+        oidc_unlink_supported: true,
+      },
+    } as never)
+
+    renderWithProviders(
+      <ThemeProvider>
+        <Settings />
+      </ThemeProvider>
+    )
+
+    await user.click(await screen.findByRole('tab', { name: /security/i }))
+    await screen.findByText('Single sign-on linked')
+    await user.click(screen.getByRole('button', { name: /unlink sso/i }))
+
+    await waitFor(() => {
+      expect(apiModule.authAPI.unlinkOidc).toHaveBeenCalled()
+    })
+    expect(refreshUser).toHaveBeenCalled()
+  })
+
+  it('starts SSO linking through an authenticated API request before redirecting', async () => {
+    const user = userEvent.setup()
+    const assignMock = vi.fn()
+    vi.spyOn(window.location, 'assign').mockImplementation(assignMock)
+    useAuthMock.mockReturnValue({
+      user: {
+        id: 1,
+        username: 'admin',
+        full_name: 'Admin User',
+        email: 'admin@example.com',
+        role: 'admin',
+        auth_source: 'local',
+        created_at: '2024-01-01T00:00:00Z',
+        global_permissions: ['settings.system.manage', 'repositories.manage_all'],
+      },
+      hasGlobalPermission: (permission: string) =>
+        ['settings.system.manage', 'repositories.manage_all'].includes(permission),
+      markRecentPasswordConfirmation: vi.fn(),
+      refreshUser: vi.fn(),
+      proxyAuthEnabled: false,
+    })
+    vi.mocked(apiModule.authAPI.getAuthConfig).mockResolvedValue({
+      data: {
+        proxy_auth_enabled: false,
+        insecure_no_auth_enabled: false,
+        authentication_required: true,
+        oidc_enabled: true,
+        oidc_link_supported: true,
+      },
+    } as never)
+
+    renderWithProviders(
+      <ThemeProvider>
+        <Settings />
+      </ThemeProvider>,
+      { initialRoute: '/settings/account' }
+    )
+
+    await user.click(await screen.findByRole('tab', { name: /security/i }))
+    await user.click(await screen.findByRole('button', { name: /link sso/i }))
+
+    await waitFor(() => {
+      expect(apiModule.authAPI.beginOidcLink).toHaveBeenCalledWith(
+        expect.stringMatching(/\/settings\/account$/)
+      )
+    })
+    expect(assignMock).toHaveBeenCalledWith('https://id.example.com/auth?state=linked-state')
+    expect(apiModule.authAPI.getOidcLinkUrl).not.toHaveBeenCalled()
   })
 })

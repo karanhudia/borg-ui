@@ -42,7 +42,8 @@ export const theme = createTheme({
     },
     text: {
       primary: '#111827', // Gray 900
-      secondary: '#6b7280', // Gray 500
+      secondary: '#4b5563', // Gray 600 (WCAG AA on tinted surfaces: 7.04:1 on gray-100)
+      disabled: '#6b7280', // Gray 500 (reserved for disabled states only)
     },
   },
   typography: {

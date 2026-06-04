@@ -8,7 +8,7 @@ Usage:
   python3 delete_ssh_key.py --name <key_name>
   python3 delete_ssh_key.py --system  # Delete the system key
 """
-import os
+
 import sys
 import sqlite3
 import argparse
@@ -29,11 +29,19 @@ def delete_ssh_key(key_id=None, key_name=None, is_system=False, force=False):
 
         # Find the key to delete
         if is_system:
-            cursor.execute("SELECT id, name, key_type, is_system_key FROM ssh_keys WHERE is_system_key = 1")
+            cursor.execute(
+                "SELECT id, name, key_type, is_system_key FROM ssh_keys WHERE is_system_key = 1"
+            )
         elif key_id:
-            cursor.execute("SELECT id, name, key_type, is_system_key FROM ssh_keys WHERE id = ?", (key_id,))
+            cursor.execute(
+                "SELECT id, name, key_type, is_system_key FROM ssh_keys WHERE id = ?",
+                (key_id,),
+            )
         elif key_name:
-            cursor.execute("SELECT id, name, key_type, is_system_key FROM ssh_keys WHERE name = ?", (key_name,))
+            cursor.execute(
+                "SELECT id, name, key_type, is_system_key FROM ssh_keys WHERE name = ?",
+                (key_name,),
+            )
         else:
             print("✗ Error: Must specify --id, --name, or --system", file=sys.stderr)
             conn.close()
@@ -53,10 +61,14 @@ def delete_ssh_key(key_id=None, key_name=None, is_system=False, force=False):
         found_id, found_name, key_type, is_system_key = row
 
         # Check for active connections and repositories
-        cursor.execute("SELECT COUNT(*) FROM ssh_connections WHERE ssh_key_id = ?", (found_id,))
+        cursor.execute(
+            "SELECT COUNT(*) FROM ssh_connections WHERE ssh_key_id = ?", (found_id,)
+        )
         connection_count = cursor.fetchone()[0]
 
-        cursor.execute("SELECT COUNT(*) FROM repositories WHERE ssh_key_id = ?", (found_id,))
+        cursor.execute(
+            "SELECT COUNT(*) FROM repositories WHERE ssh_key_id = ?", (found_id,)
+        )
         repository_count = cursor.fetchone()[0]
 
         # Show warning and ask for confirmation
@@ -74,17 +86,23 @@ def delete_ssh_key(key_id=None, key_name=None, is_system=False, force=False):
             print("  You can deploy a new key to these hosts to restore access.")
 
         if repository_count > 0:
-            print(f"\nℹ️  This key is used by {repository_count} repository/repositories.")
+            print(
+                f"\nℹ️  This key is used by {repository_count} repository/repositories."
+            )
             print("  The key reference will be cleared from these repositories.")
 
         if is_system_key:
-            print("\n⚠️  This is the SYSTEM KEY! Deleting it will remove the key used for remote access.")
-            print("  You will need to generate or import a new key and deploy it to your hosts.")
+            print(
+                "\n⚠️  This is the SYSTEM KEY! Deleting it will remove the key used for remote access."
+            )
+            print(
+                "  You will need to generate or import a new key and deploy it to your hosts."
+            )
 
         if not force:
-            print("\nType 'yes' to confirm deletion: ", end='')
+            print("\nType 'yes' to confirm deletion: ", end="")
             confirmation = input().strip().lower()
-            if confirmation != 'yes':
+            if confirmation != "yes":
                 print("Deletion cancelled.")
                 conn.close()
                 return 0
@@ -93,18 +111,22 @@ def delete_ssh_key(key_id=None, key_name=None, is_system=False, force=False):
         if repository_count > 0:
             cursor.execute(
                 "UPDATE repositories SET ssh_key_id = NULL WHERE ssh_key_id = ?",
-                (found_id,)
+                (found_id,),
             )
-            print(f"\n✓ Cleared SSH key from {repository_count} repository/repositories")
+            print(
+                f"\n✓ Cleared SSH key from {repository_count} repository/repositories"
+            )
 
         # Preserve SSH connections but mark them as failed
         if connection_count > 0:
             error_msg = f"SSH key '{found_name}' was deleted. Deploy a new key to restore access."
             cursor.execute(
                 "UPDATE ssh_connections SET ssh_key_id = NULL, status = 'failed', error_message = ? WHERE ssh_key_id = ?",
-                (error_msg, found_id)
+                (error_msg, found_id),
             )
-            print(f"✓ Preserved {connection_count} SSH connection(s) (marked as failed)")
+            print(
+                f"✓ Preserved {connection_count} SSH connection(s) (marked as failed)"
+            )
 
         # Delete the SSH key
         cursor.execute("DELETE FROM ssh_keys WHERE id = ?", (found_id,))
@@ -151,23 +173,22 @@ Examples:
 
   # Force delete without confirmation (use with caution!)
   python3 delete_ssh_key.py --system --force
-        """
+        """,
     )
 
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument('--id', type=int, help='ID of the SSH key to delete')
-    group.add_argument('--name', type=str, help='Name of the SSH key to delete')
-    group.add_argument('--system', action='store_true', help='Delete the system SSH key')
+    group.add_argument("--id", type=int, help="ID of the SSH key to delete")
+    group.add_argument("--name", type=str, help="Name of the SSH key to delete")
+    group.add_argument(
+        "--system", action="store_true", help="Delete the system SSH key"
+    )
 
-    parser.add_argument('--force', action='store_true', help='Skip confirmation prompt')
+    parser.add_argument("--force", action="store_true", help="Skip confirmation prompt")
 
     args = parser.parse_args()
 
     return delete_ssh_key(
-        key_id=args.id,
-        key_name=args.name,
-        is_system=args.system,
-        force=args.force
+        key_id=args.id, key_name=args.name, is_system=args.system, force=args.force
     )
 
 

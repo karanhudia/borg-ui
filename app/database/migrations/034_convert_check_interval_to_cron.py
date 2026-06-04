@@ -43,15 +43,17 @@ def upgrade(conn):
     result = conn.execute(text("PRAGMA table_info(repositories)"))
     existing_columns = {row[1] for row in result}
 
-    has_cron_column = 'check_cron_expression' in existing_columns
-    has_interval_column = 'check_interval_days' in existing_columns
+    has_cron_column = "check_cron_expression" in existing_columns
+    has_interval_column = "check_interval_days" in existing_columns
 
     # Step 1: Add new column (nullable initially) if it doesn't exist
     if not has_cron_column:
-        conn.execute(text("""
+        conn.execute(
+            text("""
             ALTER TABLE repositories
             ADD COLUMN check_cron_expression TEXT
-        """))
+        """)
+        )
         print("✓ Added check_cron_expression column")
     else:
         print("⊘ Column check_cron_expression already exists, skipping")
@@ -60,11 +62,13 @@ def upgrade(conn):
     # Only if the old column still exists
     if has_interval_column:
         # Get all repositories with check_interval_days set
-        result = conn.execute(text("""
+        result = conn.execute(
+            text("""
             SELECT id, check_interval_days
             FROM repositories
             WHERE check_interval_days IS NOT NULL
-        """))
+        """)
+        )
 
         repositories = result.fetchall()
 
@@ -77,23 +81,29 @@ def upgrade(conn):
                     SET check_cron_expression = :cron_expr
                     WHERE id = :repo_id
                 """),
-                {"cron_expr": cron_expr, "repo_id": repo_id}
+                {"cron_expr": cron_expr, "repo_id": repo_id},
             )
 
         if repositories:
-            print(f"✓ Migrated {len(repositories)} repositories from check_interval_days to check_cron_expression")
+            print(
+                f"✓ Migrated {len(repositories)} repositories from check_interval_days to check_cron_expression"
+            )
 
     # Step 3: Drop the old column if it still exists
     # Note: SQLite doesn't support DROP COLUMN easily, so we check first
     if has_interval_column:
         try:
-            conn.execute(text("""
+            conn.execute(
+                text("""
                 ALTER TABLE repositories
                 DROP COLUMN check_interval_days
-            """))
+            """)
+            )
             print("✓ Dropped check_interval_days column")
         except Exception as e:
-            print(f"! Could not drop check_interval_days column (may require SQLite 3.35+): {e}")
+            print(
+                f"! Could not drop check_interval_days column (may require SQLite 3.35+): {e}"
+            )
             print("! The column will remain but is no longer used")
     else:
         print("⊘ Column check_interval_days already removed, skipping")
@@ -110,26 +120,30 @@ def downgrade(conn):
     """
 
     # Step 1: Add back check_interval_days column
-    conn.execute(text("""
+    conn.execute(
+        text("""
         ALTER TABLE repositories
         ADD COLUMN check_interval_days INTEGER
-    """))
+    """)
+    )
 
     # Step 2: Convert cron expressions back to intervals (best effort)
     cron_to_interval_map = {
-        "0 2 * * *": 1,       # Daily
-        "0 2 * * 0": 7,       # Weekly
-        "0 2 */14 * *": 14,   # Every 14 days
-        "0 2 1 * *": 30,      # Monthly
-        "0 2 1 */3 *": 90,    # Quarterly
+        "0 2 * * *": 1,  # Daily
+        "0 2 * * 0": 7,  # Weekly
+        "0 2 */14 * *": 14,  # Every 14 days
+        "0 2 1 * *": 30,  # Monthly
+        "0 2 1 */3 *": 90,  # Quarterly
     }
 
     # Get all repositories with cron expressions
-    result = conn.execute(text("""
+    result = conn.execute(
+        text("""
         SELECT id, check_cron_expression
         FROM repositories
         WHERE check_cron_expression IS NOT NULL
-    """))
+    """)
+    )
 
     repositories = result.fetchall()
 
@@ -154,13 +168,15 @@ def downgrade(conn):
                     SET check_interval_days = :interval_days
                     WHERE id = :repo_id
                 """),
-                {"interval_days": interval_days, "repo_id": repo_id}
+                {"interval_days": interval_days, "repo_id": repo_id},
             )
 
     # Step 3: Drop cron_expression column
-    conn.execute(text("""
+    conn.execute(
+        text("""
         ALTER TABLE repositories
         DROP COLUMN check_cron_expression
-    """))
+    """)
+    )
 
     conn.commit()

@@ -29,10 +29,14 @@ def installed_package(db_session):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_start_install_job_creates_pending_job(package_service, db_session, installed_package):
+async def test_start_install_job_creates_pending_job(
+    package_service, db_session, installed_package
+):
     fake_task = object()
 
-    with patch("app.services.package_service.asyncio.create_task", return_value=fake_task) as mock_create_task:
+    with patch(
+        "app.services.package_service.asyncio.create_task", return_value=fake_task
+    ) as mock_create_task:
         job = await package_service.start_install_job(db_session, installed_package.id)
 
     assert job.id is not None
@@ -45,14 +49,18 @@ async def test_start_install_job_creates_pending_job(package_service, db_session
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_start_install_job_raises_for_missing_package(package_service, db_session):
+async def test_start_install_job_raises_for_missing_package(
+    package_service, db_session
+):
     with pytest.raises(ValueError, match="Package 999 not found"):
         await package_service.start_install_job(db_session, 999)
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_run_install_job_marks_package_installed(package_service, db_session, installed_package):
+async def test_run_install_job_marks_package_installed(
+    package_service, db_session, installed_package
+):
     job = PackageInstallJob(package_id=installed_package.id, status="pending")
     db_session.add(job)
     db_session.commit()
@@ -63,10 +71,15 @@ async def test_run_install_job_marks_package_installed(package_service, db_sessi
     process.returncode = 0
     process.communicate.return_value = (b"installed ok", b"")
 
-    testing_session_local = sessionmaker(bind=db_session.get_bind(), autocommit=False, autoflush=False)
+    testing_session_local = sessionmaker(
+        bind=db_session.get_bind(), autocommit=False, autoflush=False
+    )
 
     with patch("app.database.database.SessionLocal", testing_session_local):
-        with patch("app.services.package_service.asyncio.create_subprocess_shell", return_value=process):
+        with patch(
+            "app.services.package_service.asyncio.create_subprocess_shell",
+            return_value=process,
+        ):
             package_service.running_jobs[job.id] = object()
             await package_service._run_install_job(
                 job.id,
@@ -88,7 +101,9 @@ async def test_run_install_job_marks_package_installed(package_service, db_sessi
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_run_install_job_marks_failure_on_nonzero_exit(package_service, db_session, installed_package):
+async def test_run_install_job_marks_failure_on_nonzero_exit(
+    package_service, db_session, installed_package
+):
     job = PackageInstallJob(package_id=installed_package.id, status="pending")
     db_session.add(job)
     db_session.commit()
@@ -99,10 +114,15 @@ async def test_run_install_job_marks_failure_on_nonzero_exit(package_service, db
     process.returncode = 7
     process.communicate.return_value = (b"", b"permission denied")
 
-    testing_session_local = sessionmaker(bind=db_session.get_bind(), autocommit=False, autoflush=False)
+    testing_session_local = sessionmaker(
+        bind=db_session.get_bind(), autocommit=False, autoflush=False
+    )
 
     with patch("app.database.database.SessionLocal", testing_session_local):
-        with patch("app.services.package_service.asyncio.create_subprocess_shell", return_value=process):
+        with patch(
+            "app.services.package_service.asyncio.create_subprocess_shell",
+            return_value=process,
+        ):
             package_service.running_jobs[job.id] = object()
             await package_service._run_install_job(
                 job.id,
@@ -123,7 +143,9 @@ async def test_run_install_job_marks_failure_on_nonzero_exit(package_service, db
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_run_install_job_marks_timeout_failure(package_service, db_session, installed_package):
+async def test_run_install_job_marks_timeout_failure(
+    package_service, db_session, installed_package
+):
     job = PackageInstallJob(package_id=installed_package.id, status="pending")
     db_session.add(job)
     db_session.commit()
@@ -137,11 +159,19 @@ async def test_run_install_job_marks_timeout_failure(package_service, db_session
     async def passthrough_wait_for(awaitable, timeout):
         return await awaitable
 
-    testing_session_local = sessionmaker(bind=db_session.get_bind(), autocommit=False, autoflush=False)
+    testing_session_local = sessionmaker(
+        bind=db_session.get_bind(), autocommit=False, autoflush=False
+    )
 
     with patch("app.database.database.SessionLocal", testing_session_local):
-        with patch("app.services.package_service.asyncio.create_subprocess_shell", return_value=process):
-            with patch("app.services.package_service.asyncio.wait_for", side_effect=passthrough_wait_for):
+        with patch(
+            "app.services.package_service.asyncio.create_subprocess_shell",
+            return_value=process,
+        ):
+            with patch(
+                "app.services.package_service.asyncio.wait_for",
+                side_effect=passthrough_wait_for,
+            ):
                 package_service.running_jobs[job.id] = object()
                 await package_service._run_install_job(
                     job.id,
@@ -163,8 +193,12 @@ async def test_run_install_job_marks_timeout_failure(package_service, db_session
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_run_install_job_exits_gracefully_when_job_missing(package_service, db_session, installed_package):
-    testing_session_local = sessionmaker(bind=db_session.get_bind(), autocommit=False, autoflush=False)
+async def test_run_install_job_exits_gracefully_when_job_missing(
+    package_service, db_session, installed_package
+):
+    testing_session_local = sessionmaker(
+        bind=db_session.get_bind(), autocommit=False, autoflush=False
+    )
 
     with patch("app.database.database.SessionLocal", testing_session_local):
         await package_service._run_install_job(

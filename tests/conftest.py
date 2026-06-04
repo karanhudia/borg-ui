@@ -4,6 +4,7 @@ Pytest configuration and fixtures for Borg UI tests
 This is the main conftest.py that configures pytest and imports
 fixtures from the fixtures/ directory.
 """
+
 import pytest
 import asyncio
 import os
@@ -14,8 +15,12 @@ import warnings
 # Suppress asyncio ResourceWarning for unclosed transports during test cleanup
 # This is a known issue in Python 3.9+ where subprocess transports may not be
 # fully cleaned up before the event loop closes
-warnings.filterwarnings("ignore", message="unclosed transport", category=ResourceWarning)
-warnings.filterwarnings("ignore", message="unclosed", category=ResourceWarning, module="asyncio")
+warnings.filterwarnings(
+    "ignore", message="unclosed transport", category=ResourceWarning
+)
+warnings.filterwarnings(
+    "ignore", message="unclosed", category=ResourceWarning, module="asyncio"
+)
 
 # Set up test environment variables BEFORE importing app modules
 os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="borg-test-data-")
@@ -48,7 +53,7 @@ os.environ["BORG_SECURITY_DIR"] = _borg_security_dir
 os.environ["BORG_KEYS_DIR"] = _borg_keys_dir
 
 # Add parent directory to path so we can import from app/
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 # Import fixtures from fixtures directory
 pytest_plugins = [
@@ -96,9 +101,6 @@ def pytest_sessionfinish(session, exitstatus):
     asyncio.set_event_loop(None)
 
 
-
-
-
 def pytest_configure(config):
     """Register custom markers"""
     config.addinivalue_line(
@@ -107,9 +109,7 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "integration: Integration tests that require running services"
     )
-    config.addinivalue_line(
-        "markers", "slow: Tests that take a long time to run"
-    )
+    config.addinivalue_line("markers", "slow: Tests that take a long time to run")
     config.addinivalue_line(
         "markers", "requires_borg: Tests that require borg binary to be installed"
     )
@@ -135,7 +135,7 @@ def admin_credentials():
     """Default admin credentials for testing"""
     return {
         "username": os.environ.get("TEST_ADMIN_USER", "admin"),
-        "password": os.environ.get("TEST_ADMIN_PASSWORD", "admin123")
+        "password": os.environ.get("TEST_ADMIN_PASSWORD", "admin123"),
     }
 
 
@@ -143,6 +143,7 @@ def admin_credentials():
 def borg_available():
     """Check if borg is available on the system"""
     import shutil
+
     return shutil.which("borg") is not None
 
 

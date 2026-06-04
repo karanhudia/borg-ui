@@ -1,14 +1,18 @@
 """
 Comprehensive unit tests for dashboard API endpoints
 """
+
 import pytest
 from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
 from unittest.mock import MagicMock, patch
 
 from app.api.dashboard import (
+    DashboardHealthThresholds,
     ScheduledJobInfo,
     SystemMetrics,
+    build_full_repository_health,
+    build_observe_repository_health,
     format_bytes,
     get_recent_jobs,
     parse_size_to_bytes,
@@ -18,8 +22,10 @@ from app.database.models import (
     CheckJob,
     CompactJob,
     Repository,
+    RestoreCheckJob,
     ScheduledJob,
     SSHConnection,
+    SystemSettings,
 )
 
 
@@ -71,7 +77,9 @@ class TestDashboardStatus:
             "last_updated",
         }
 
-    def test_dashboard_status_contains_repositories(self, test_client: TestClient, admin_headers):
+    def test_dashboard_status_contains_repositories(
+        self, test_client: TestClient, admin_headers
+    ):
         """Test that dashboard status includes repository count"""
         with self._mock_dashboard_status():
             response = test_client.get("/api/dashboard/status", headers=admin_headers)
@@ -125,10 +133,19 @@ class TestDashboardStatus:
         }
 
         with patch("app.api.dashboard.get_system_metrics", return_value=metrics):
-            with patch("app.api.dashboard.get_scheduled_jobs", return_value=[scheduled_job]):
-                with patch("app.api.dashboard.get_recent_jobs", return_value=[recent_job]):
-                    with patch("app.api.dashboard.get_alerts", return_value=[{"type": "info", "message": "ok"}]):
-                        response = test_client.get("/api/dashboard/status", headers=admin_headers)
+            with patch(
+                "app.api.dashboard.get_scheduled_jobs", return_value=[scheduled_job]
+            ):
+                with patch(
+                    "app.api.dashboard.get_recent_jobs", return_value=[recent_job]
+                ):
+                    with patch(
+                        "app.api.dashboard.get_alerts",
+                        return_value=[{"type": "info", "message": "ok"}],
+                    ):
+                        response = test_client.get(
+                            "/api/dashboard/status", headers=admin_headers
+                        )
 
         assert response.status_code == 200
         data = response.json()
@@ -185,9 +202,7 @@ class TestDashboardMetrics:
     def test_metrics_time_range(self, test_client: TestClient, admin_headers):
         """Test metrics with time range parameters"""
         response = test_client.get(
-            "/api/dashboard/metrics",
-            params={"days": 7},
-            headers=admin_headers
+            "/api/dashboard/metrics", params={"days": 7}, headers=admin_headers
         )
 
         assert response.status_code == 200
@@ -195,14 +210,14 @@ class TestDashboardMetrics:
     def test_metrics_repository_specific(self, test_client: TestClient, admin_headers):
         """Test metrics for specific repository"""
         response = test_client.get(
-            "/api/dashboard/metrics",
-            params={"repository_id": 1},
-            headers=admin_headers
+            "/api/dashboard/metrics", params={"repository_id": 1}, headers=admin_headers
         )
 
         assert response.status_code == 200
 
-    def test_metrics_returns_network_and_load_fields(self, test_client: TestClient, admin_headers):
+    def test_metrics_returns_network_and_load_fields(
+        self, test_client: TestClient, admin_headers
+    ):
         """Test metrics contract includes the expected hardware summary fields."""
         response = test_client.get("/api/dashboard/metrics", headers=admin_headers)
 
@@ -255,7 +270,9 @@ class TestDashboardSummary:
 
     def test_dashboard_recent_backups(self, test_client: TestClient, admin_headers):
         """Test getting recent backups"""
-        response = test_client.get("/api/dashboard/recent-backups", headers=admin_headers)
+        response = test_client.get(
+            "/api/dashboard/recent-backups", headers=admin_headers
+        )
 
         assert response.status_code == 404
 
@@ -298,6 +315,156 @@ class TestDashboardHelpers:
     )
     def test_format_bytes(self, size_value, expected):
         assert format_bytes(size_value) == expected
+
+    def test_full_repository_health_keeps_unconfigured_restore_check_unknown(self):
+        now = datetime.utcnow()
+        repo = Repository(
+            name="Healthy Repo",
+            path="/srv/backups/healthy",
+            last_backup=now - timedelta(hours=1),
+            last_check=now - timedelta(hours=1),
+            last_compact=now - timedelta(hours=1),
+            last_restore_check=None,
+            restore_check_cron_expression=None,
+        )
+
+        health = build_full_repository_health(repo, now)
+
+        assert health["health_status"] == "healthy"
+        assert health["dimension_health"]["restore"] == "unknown"
+        assert health["restore_check_configured"] is False
+        assert not any("Restore check" in warning for warning in health["warnings"])
+
+    def test_full_repository_health_uses_configurable_backup_thresholds(self):
+        now = datetime.utcnow()
+        repo = Repository(
+            name="Monthly Repo",
+            path="/srv/backups/monthly",
+            last_backup=now - timedelta(days=20),
+            last_check=now - timedelta(hours=1),
+            last_compact=now - timedelta(hours=1),
+            last_restore_check=None,
+            restore_check_cron_expression=None,
+        )
+
+        health = build_full_repository_health(
+            repo,
+            now,
+            thresholds=DashboardHealthThresholds(
+                backup_warning_days=14,
+                backup_critical_days=31,
+            ),
+        )
+
+        assert health["health_status"] == "warning"
+        assert health["dimension_health"]["backup"] == "warning"
+        assert "Last backup 20 days ago" in health["warnings"]
+        assert not any("No backup in" in warning for warning in health["warnings"])
+
+    def test_full_repository_health_warns_when_restore_check_configured_never_ran(
+        self,
+    ):
+        now = datetime.utcnow()
+        repo = Repository(
+            name="Restore Pending Repo",
+            path="/srv/backups/restore-pending",
+            last_backup=now - timedelta(hours=1),
+            last_check=now - timedelta(hours=1),
+            last_compact=now - timedelta(hours=1),
+            last_restore_check=None,
+            restore_check_cron_expression="0 4 * * *",
+        )
+
+        health = build_full_repository_health(repo, now)
+
+        assert health["health_status"] == "warning"
+        assert health["dimension_health"]["restore"] == "warning"
+        assert health["restore_check_configured"] is True
+        assert "Restore check configured but never completed" in health["warnings"]
+
+    def test_full_repository_health_marks_latest_restore_check_failure_critical(self):
+        now = datetime.utcnow()
+        repo = Repository(
+            id=7,
+            name="Restore Failed Repo",
+            path="/srv/backups/restore-failed",
+            last_backup=now - timedelta(hours=1),
+            last_check=now - timedelta(hours=1),
+            last_compact=now - timedelta(hours=1),
+            last_restore_check=now - timedelta(days=1),
+            restore_check_cron_expression="0 4 * * *",
+        )
+        job = RestoreCheckJob(
+            repository_id=7,
+            repository_path=repo.path,
+            status="failed",
+            error_message="Canary manifest not found",
+            started_at=now - timedelta(minutes=30),
+        )
+
+        health = build_full_repository_health(repo, now, job)
+
+        assert health["health_status"] == "critical"
+        assert health["dimension_health"]["restore"] == "critical"
+        assert health["latest_restore_check_status"] == "failed"
+        assert health["latest_restore_check_error"] == "Canary manifest not found"
+        assert "Restore check failed: Canary manifest not found" in health["warnings"]
+
+    def test_full_repository_health_marks_canary_needs_backup_as_warning(self):
+        now = datetime.utcnow()
+        repo = Repository(
+            id=8,
+            name="Restore Needs Backup Repo",
+            path="/srv/backups/restore-needs-backup",
+            last_backup=now - timedelta(hours=1),
+            last_check=now - timedelta(hours=1),
+            last_compact=now - timedelta(hours=1),
+            last_restore_check=None,
+            restore_check_cron_expression="0 4 * * *",
+        )
+        job = RestoreCheckJob(
+            repository_id=8,
+            repository_path=repo.path,
+            status="needs_backup",
+            error_message="Run a backup, then run this restore check again.",
+            started_at=now - timedelta(minutes=30),
+        )
+
+        health = build_full_repository_health(repo, now, job)
+
+        assert health["health_status"] == "warning"
+        assert health["dimension_health"]["restore"] == "warning"
+        assert health["latest_restore_check_status"] == "needs_backup"
+        assert any("Run a backup" in warning for warning in health["warnings"])
+
+    def test_observe_repository_health_includes_restore_check_signal(self):
+        now = datetime.utcnow()
+        repo = Repository(
+            id=9,
+            name="Observe Restore Repo",
+            path="/srv/backups/observe-restore",
+            mode="observe",
+            archive_count=4,
+            last_backup=now - timedelta(hours=1),
+            last_check=now - timedelta(hours=1),
+            last_restore_check=None,
+            restore_check_cron_expression="0 4 * * *",
+        )
+        job = RestoreCheckJob(
+            repository_id=9,
+            repository_path=repo.path,
+            status="failed",
+            error_message="Probe path missing",
+            started_at=now - timedelta(minutes=30),
+        )
+
+        health = build_observe_repository_health(repo, now, job)
+
+        assert health["health_status"] == "critical"
+        assert health["dimension_health"]["restore"] == "critical"
+        assert health["restore_check_configured"] is True
+        assert health["latest_restore_check_status"] == "failed"
+        assert "Restore check failed: Probe path missing" in health["warnings"]
 
     def test_get_recent_jobs_normalizes_trigger_state_and_logs(self):
         now = datetime.now(timezone.utc)
@@ -352,10 +519,21 @@ class TestDashboardHelpers:
     def test_get_system_metrics_falls_back_when_component_reads_fail(self):
         from app.api.dashboard import get_system_metrics
 
-        with patch("app.api.dashboard.psutil.cpu_percent", side_effect=RuntimeError("cpu")):
-            with patch("app.api.dashboard.psutil.virtual_memory", side_effect=RuntimeError("memory")):
-                with patch("app.api.dashboard.psutil.disk_usage", side_effect=RuntimeError("disk")):
-                    with patch("app.api.dashboard.psutil.boot_time", side_effect=RuntimeError("uptime")):
+        with patch(
+            "app.api.dashboard.psutil.cpu_percent", side_effect=RuntimeError("cpu")
+        ):
+            with patch(
+                "app.api.dashboard.psutil.virtual_memory",
+                side_effect=RuntimeError("memory"),
+            ):
+                with patch(
+                    "app.api.dashboard.psutil.disk_usage",
+                    side_effect=RuntimeError("disk"),
+                ):
+                    with patch(
+                        "app.api.dashboard.psutil.boot_time",
+                        side_effect=RuntimeError("uptime"),
+                    ):
                         metrics = get_system_metrics()
 
         assert metrics.cpu_usage == 0.0
@@ -375,7 +553,9 @@ class TestDashboardStatistics:
 
     def test_storage_statistics(self, test_client: TestClient, admin_headers):
         """Test storage usage statistics"""
-        response = test_client.get("/api/dashboard/storage-stats", headers=admin_headers)
+        response = test_client.get(
+            "/api/dashboard/storage-stats", headers=admin_headers
+        )
 
         assert response.status_code == 404
 
@@ -387,7 +567,9 @@ class TestDashboardStatistics:
 
     def test_repository_health_summary(self, test_client: TestClient, admin_headers):
         """Test repository health summary"""
-        response = test_client.get("/api/dashboard/repository-health", headers=admin_headers)
+        response = test_client.get(
+            "/api/dashboard/repository-health", headers=admin_headers
+        )
 
         assert response.status_code == 404
 
@@ -404,7 +586,9 @@ class TestDashboardCharts:
 
     def test_storage_growth(self, test_client: TestClient, admin_headers):
         """Test getting storage growth data"""
-        response = test_client.get("/api/dashboard/storage-growth", headers=admin_headers)
+        response = test_client.get(
+            "/api/dashboard/storage-growth", headers=admin_headers
+        )
 
         assert response.status_code == 404
 
@@ -419,7 +603,9 @@ class TestDashboardCharts:
 class TestDashboardScheduleAndOverview:
     """Test the live dashboard schedule and overview contracts."""
 
-    def test_dashboard_schedule_uses_scheduled_jobs_contract(self, test_client: TestClient, admin_headers):
+    def test_dashboard_schedule_uses_scheduled_jobs_contract(
+        self, test_client: TestClient, admin_headers
+    ):
         job = ScheduledJobInfo(
             id=12,
             name="Weekly maintenance",
@@ -438,19 +624,33 @@ class TestDashboardScheduleAndOverview:
         assert data["jobs"][0]["name"] == "Weekly maintenance"
         assert data["next_execution"] is not None
 
-    def test_dashboard_status_returns_500_when_system_metrics_fail(self, test_client: TestClient, admin_headers):
-        with patch("app.api.dashboard.get_system_metrics", side_effect=RuntimeError("boom")):
+    def test_dashboard_status_returns_500_when_system_metrics_fail(
+        self, test_client: TestClient, admin_headers
+    ):
+        with patch(
+            "app.api.dashboard.get_system_metrics", side_effect=RuntimeError("boom")
+        ):
             response = test_client.get("/api/dashboard/status", headers=admin_headers)
 
         assert response.status_code == 500
-        assert response.json()["detail"]["key"] == "backend.errors.dashboard.failedGetDashboardStatus"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.dashboard.failedGetDashboardStatus"
+        )
 
-    def test_dashboard_metrics_returns_500_when_psutil_fails(self, test_client: TestClient, admin_headers):
-        with patch("app.api.dashboard.psutil.cpu_percent", side_effect=RuntimeError("boom")):
+    def test_dashboard_metrics_returns_500_when_psutil_fails(
+        self, test_client: TestClient, admin_headers
+    ):
+        with patch(
+            "app.api.dashboard.psutil.cpu_percent", side_effect=RuntimeError("boom")
+        ):
             response = test_client.get("/api/dashboard/metrics", headers=admin_headers)
 
         assert response.status_code == 500
-        assert response.json()["detail"]["key"] == "backend.errors.dashboard.failedGetMetrics"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.dashboard.failedGetMetrics"
+        )
 
     def test_dashboard_overview_aggregates_real_database_state(
         self,
@@ -542,6 +742,14 @@ class TestDashboardScheduleAndOverview:
                     started_at=now - timedelta(days=4),
                     completed_at=now - timedelta(days=4, minutes=20),
                 ),
+                RestoreCheckJob(
+                    repository_id=full_repo.id,
+                    repository_path=full_repo.path,
+                    status="failed",
+                    started_at=now - timedelta(hours=1),
+                    completed_at=now - timedelta(minutes=55),
+                    error_message="Canary manifest not found",
+                ),
             ]
         )
         test_db.commit()
@@ -583,16 +791,80 @@ class TestDashboardScheduleAndOverview:
         repo_health = {item["name"]: item for item in data["repository_health"]}
         assert repo_health["Full Repo"]["health_status"] == "critical"
         assert repo_health["Full Repo"]["schedule_name"] == "Nightly Full Repo"
+        assert repo_health["Full Repo"]["dimension_health"]["restore"] == "critical"
+        assert repo_health["Full Repo"]["latest_restore_check_status"] == "failed"
+        assert (
+            repo_health["Full Repo"]["latest_restore_check_error"]
+            == "Canary manifest not found"
+        )
         assert repo_health["Observe Repo"]["mode"] == "observe"
         assert repo_health["Observe Repo"]["dimension_health"] == {
             "backup": "healthy",
             "check": "unknown",
             "compact": "healthy",
+            "restore": "unknown",
         }
         assert len(data["repository_health"]) == 2
-        assert [item["type"] for item in data["activity_feed"]][:3] == ["backup", "backup", "check"]
+        assert [item["type"] for item in data["activity_feed"]][:3] == [
+            "restore_check",
+            "backup",
+            "backup",
+        ]
         assert data["activity_feed"][0]["repository"] == "Full Repo"
-        assert [item["name"] for item in data["upcoming_tasks"]] == ["Nightly Full Repo"]
-        assert data["upcoming_tasks"][0]["next_run"].startswith(schedule.next_run.isoformat())
+        assert [item["name"] for item in data["upcoming_tasks"]] == [
+            "Nightly Full Repo"
+        ]
+        assert data["upcoming_tasks"][0]["next_run"].startswith(
+            schedule.next_run.isoformat()
+        )
         assert data["system_metrics"]["cpu_usage"] == 12.5
         assert data["last_updated"].endswith("+00:00")
+
+    def test_dashboard_overview_uses_configured_backup_health_thresholds(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+    ):
+        now = datetime.now(timezone.utc)
+        test_db.add(
+            SystemSettings(
+                dashboard_backup_warning_days=14,
+                dashboard_backup_critical_days=31,
+            )
+        )
+        test_db.add(
+            Repository(
+                name="Monthly Repo",
+                path="/srv/backups/monthly",
+                repository_type="local",
+                mode="full",
+                archive_count=1,
+                total_size="1 GB",
+                last_backup=now - timedelta(days=20),
+                last_check=now - timedelta(hours=1),
+                last_compact=now - timedelta(hours=1),
+            )
+        )
+        test_db.commit()
+
+        metrics = SystemMetrics(
+            cpu_usage=12.5,
+            cpu_count=8,
+            memory_usage=43.0,
+            memory_total=1024,
+            memory_available=512,
+            disk_usage=55.0,
+            disk_total=2048,
+            disk_free=1024,
+            uptime=123456,
+        )
+
+        with patch("app.api.dashboard.get_system_metrics", return_value=metrics):
+            response = test_client.get("/api/dashboard/overview", headers=admin_headers)
+
+        assert response.status_code == 200
+        repo_health = response.json()["repository_health"][0]
+        assert repo_health["health_status"] == "warning"
+        assert repo_health["dimension_health"]["backup"] == "warning"
+        assert repo_health["warnings"] == ["Last backup 20 days ago"]

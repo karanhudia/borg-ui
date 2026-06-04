@@ -33,10 +33,12 @@ def main() -> int:
         restore_root = client.temp_dir / "restore"
         restore_root.mkdir(parents=True, exist_ok=True)
 
-        repo_id, repo_path, _backup_job_id, backup_data = client.create_repository_and_backup(
-            name="Smoke Repo",
-            repo_path=client.temp_dir / "repo",
-            source_dirs=[source_root],
+        repo_id, repo_path, _backup_job_id, backup_data = (
+            client.create_repository_and_backup(
+                name="Smoke Repo",
+                repo_path=client.temp_dir / "repo",
+                source_dirs=[source_root],
+            )
         )
         client.log(f"Backup completed with status {backup_data['status']}")
 
@@ -45,7 +47,9 @@ def main() -> int:
             raise SmokeFailure(f"Expected exactly one archive, got {archives}")
         archive_name = archives[0]["name"]
 
-        archive_info = client.get_archive_info(archive_name, repo_id, include_files=True)
+        archive_info = client.get_archive_info(
+            archive_name, repo_id, include_files=True
+        )
         if archive_info["name"] != archive_name:
             raise SmokeFailure(f"Archive info mismatch: {archive_info}")
 
@@ -72,7 +76,9 @@ def main() -> int:
         if "nested" not in nested_names or "root.txt" not in nested_names:
             raise SmokeFailure(f"Unexpected nested listing: {nested_names}")
 
-        file_bytes = client.download_archive_file(repo_id, archive_name, f"{repo_root}/nested/notes.txt")
+        file_bytes = client.download_archive_file(
+            repo_id, archive_name, f"{repo_root}/nested/notes.txt"
+        )
         if file_bytes != b"nested smoke data\n":
             raise SmokeFailure(f"Archive download content mismatch: {file_bytes!r}")
 
@@ -83,12 +89,22 @@ def main() -> int:
             destination=restore_root,
             paths=[f"{repo_root}/nested"],
         )
-        client.wait_for_job("/api/restore/status", restore_job_id, expected={"completed"}, timeout=90)
-        restored_files = sorted(path.relative_to(restore_root).as_posix() for path in restore_root.rglob("*") if path.is_file())
+        client.wait_for_job(
+            "/api/restore/status", restore_job_id, expected={"completed"}, timeout=90
+        )
+        restored_files = sorted(
+            path.relative_to(restore_root).as_posix()
+            for path in restore_root.rglob("*")
+            if path.is_file()
+        )
         if not any(path.endswith("nested/notes.txt") for path in restored_files):
-            raise SmokeFailure(f"Selected restore did not yield expected file set: {restored_files}")
+            raise SmokeFailure(
+                f"Selected restore did not yield expected file set: {restored_files}"
+            )
         if any(path.endswith("root.txt") for path in restored_files):
-            raise SmokeFailure(f"Selected restore unexpectedly included root file: {restored_files}")
+            raise SmokeFailure(
+                f"Selected restore unexpectedly included root file: {restored_files}"
+            )
 
         delete_response = client.request_ok(
             "DELETE",
@@ -96,7 +112,12 @@ def main() -> int:
             params={"repository": repo_path},
         )
         delete_job_id = delete_response.json()["job_id"]
-        client.wait_for_job("/api/archives/delete-jobs", delete_job_id, expected={"completed"}, timeout=90)
+        client.wait_for_job(
+            "/api/archives/delete-jobs",
+            delete_job_id,
+            expected={"completed"},
+            timeout=90,
+        )
 
         if client.list_archives(repo_path):
             raise SmokeFailure("Expected archive deletion to remove the final archive")

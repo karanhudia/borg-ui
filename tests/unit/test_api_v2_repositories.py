@@ -1,4 +1,6 @@
+import asyncio
 import base64
+import contextlib
 import json
 from unittest.mock import AsyncMock, patch
 
@@ -8,9 +10,17 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import sessionmaker
 
+from app.api.v2 import repositories as repositories_v2_api
 from app.core.borg2 import BORG2_ENCRYPTION_MODES
 from app.config import settings
-from app.database.models import LicensingState, Repository, SystemSettings
+from app.database.models import (
+    BackupJob,
+    BackupPlan,
+    BackupPlanRun,
+    LicensingState,
+    Repository,
+    SystemSettings,
+)
 from app.database.models import SSHConnection, SSHKey
 
 
@@ -49,7 +59,9 @@ def _create_v2_repo(
         compression="lz4",
         repository_type=repository_type,
         borg_version=2,
-        source_directories=json.dumps(source_directories) if source_directories is not None else None,
+        source_directories=json.dumps(source_directories)
+        if source_directories is not None
+        else None,
         bypass_lock=bypass_lock,
     )
     test_db.add(repo)
@@ -60,36 +72,96 @@ def _create_v2_repo(
 
 @pytest.mark.unit
 class TestV2RepositoryRoutes:
-    def test_encryption_modes_are_feature_gated(self, test_client: TestClient, admin_headers):
-        response = test_client.get("/api/v2/repositories/encryption-modes", headers=admin_headers)
+    def test_encryption_modes_are_feature_gated(
+        self, test_client: TestClient, admin_headers
+    ):
+        response = test_client.get(
+            "/api/v2/repositories/encryption-modes", headers=admin_headers
+        )
 
         assert response.status_code == 403
-        assert response.json()["detail"]["key"] == "backend.errors.plan.featureNotAvailable"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.plan.featureNotAvailable"
+        )
 
-    def test_encryption_modes_success(self, test_client: TestClient, admin_headers, test_db):
+    def test_encryption_modes_success(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         _enable_borg_v2(test_db)
 
-        response = test_client.get("/api/v2/repositories/encryption-modes", headers=admin_headers)
+        response = test_client.get(
+            "/api/v2/repositories/encryption-modes", headers=admin_headers
+        )
 
         assert response.status_code == 200
         assert response.json()["encryption_modes"] == BORG2_ENCRYPTION_MODES
 
-    def test_create_repository_success(self, test_client: TestClient, admin_headers, test_db):
+    def test_create_repository_success(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         _enable_borg_v2(test_db)
+        source_a = SSHConnection(
+            host="server-a.example", username="backup-a", port=22, status="connected"
+        )
+        source_b = SSHConnection(
+            host="server-b.example",
+            username="backup-b",
+            port=2222,
+            status="connected",
+        )
+        test_db.add_all([source_a, source_b])
+        test_db.commit()
+        test_db.refresh(source_a)
+        test_db.refresh(source_b)
+        source_locations = [
+            {
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "agent_machine_id": None,
+                "paths": ["/data/source-a"],
+            },
+            {
+                "source_type": "remote",
+                "source_ssh_connection_id": source_a.id,
+                "agent_machine_id": None,
+                "paths": ["/remote/source-b"],
+            },
+            {
+                "source_type": "remote",
+                "source_ssh_connection_id": source_b.id,
+                "agent_machine_id": None,
+                "paths": ["/remote/source-c"],
+            },
+        ]
         payload = {
             "name": "Borg 2 Repo",
             "path": "/tmp/v2-create-repo",
             "encryption": "repokey-aes-ocb",
             "compression": "lz4",
-            "source_directories": ["/data/source-a", "/data/source-b"],
-            "source_connection_id": 44,
+            "source_directories": [
+                "/data/source-a",
+                "/remote/source-b",
+                "/remote/source-c",
+            ],
+            "source_connection_id": None,
+            "source_locations": source_locations,
         }
 
         with patch(
             "app.api.v2.repositories._rcreate",
-            new=AsyncMock(return_value={"success": True, "already_existed": False, "stdout": "", "stderr": ""}),
+            new=AsyncMock(
+                return_value={
+                    "success": True,
+                    "already_existed": False,
+                    "stdout": "",
+                    "stderr": "",
+                }
+            ),
         ) as mock_rcreate:
-            response = test_client.post("/api/v2/repositories/", json=payload, headers=admin_headers)
+            response = test_client.post(
+                "/api/v2/repositories/", json=payload, headers=admin_headers
+            )
 
         assert response.status_code == 201
         body = response.json()
@@ -99,14 +171,19 @@ class TestV2RepositoryRoutes:
         assert body["already_existed"] is False
         assert body["message"] == "backend.success.repo.created"
 
-        repo = test_db.query(Repository).filter(Repository.name == payload["name"]).first()
+        repo = (
+            test_db.query(Repository).filter(Repository.name == payload["name"]).first()
+        )
         assert repo is not None
         assert repo.borg_version == 2
         assert json.loads(repo.source_directories) == payload["source_directories"]
-        assert repo.source_ssh_connection_id == 44
+        assert repo.source_ssh_connection_id is None
+        assert json.loads(repo.source_locations) == source_locations
         mock_rcreate.assert_awaited_once()
 
-    def test_create_repository_rejects_invalid_encryption(self, test_client: TestClient, admin_headers, test_db):
+    def test_create_repository_rejects_invalid_encryption(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         _enable_borg_v2(test_db)
 
         response = test_client.post(
@@ -120,9 +197,13 @@ class TestV2RepositoryRoutes:
         )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.repo.invalidEncryption"
+        assert (
+            response.json()["detail"]["key"] == "backend.errors.repo.invalidEncryption"
+        )
 
-    def test_create_repository_requires_admin(self, test_client: TestClient, auth_headers, test_db):
+    def test_create_repository_requires_admin(
+        self, test_client: TestClient, auth_headers, test_db
+    ):
         _enable_borg_v2(test_db)
 
         response = test_client.post(
@@ -136,9 +217,14 @@ class TestV2RepositoryRoutes:
         )
 
         assert response.status_code == 403
-        assert response.json()["detail"]["key"] == "backend.errors.repo.adminAccessRequired"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.repo.adminAccessRequired"
+        )
 
-    def test_create_repository_rejects_missing_ssh_connection(self, test_client: TestClient, admin_headers, test_db):
+    def test_create_repository_rejects_missing_ssh_connection(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         _enable_borg_v2(test_db)
 
         response = test_client.post(
@@ -152,9 +238,14 @@ class TestV2RepositoryRoutes:
         )
 
         assert response.status_code == 404
-        assert response.json()["detail"]["key"] == "backend.errors.repo.sshConnectionNotFound"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.repo.sshConnectionNotFound"
+        )
 
-    def test_create_repository_with_ssh_connection_uses_ssh_key_rsh(self, test_client: TestClient, admin_headers, test_db):
+    def test_create_repository_with_ssh_connection_uses_ssh_key_rsh(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         _enable_borg_v2(test_db)
 
         cipher = Fernet(base64.urlsafe_b64encode(settings.secret_key.encode()[:32]))
@@ -182,9 +273,14 @@ class TestV2RepositoryRoutes:
         process.returncode = 0
         process.communicate.return_value = (b"", b"")
 
-        session_factory = sessionmaker(bind=test_db.get_bind(), autocommit=False, autoflush=False)
+        session_factory = sessionmaker(
+            bind=test_db.get_bind(), autocommit=False, autoflush=False
+        )
         with patch("app.services.v2.repository_service.SessionLocal", session_factory):
-            with patch("app.services.v2.repository_service.borg2._run", return_value={"success": True, "stdout": "", "stderr": ""}) as mock_run:
+            with patch(
+                "app.services.v2.repository_service.borg2._run",
+                return_value={"success": True, "stdout": "", "stderr": ""},
+            ) as mock_run:
                 response = test_client.post(
                     "/api/v2/repositories/",
                     json={
@@ -201,12 +297,21 @@ class TestV2RepositoryRoutes:
         assert env["BORG_RSH"].startswith("ssh ")
         assert "-i" in env["BORG_RSH"]
 
-    def test_create_repository_reports_init_failure(self, test_client: TestClient, admin_headers, test_db):
+    def test_create_repository_reports_init_failure(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         _enable_borg_v2(test_db)
 
         with patch(
             "app.api.v2.repositories._rcreate",
-            new=AsyncMock(return_value={"success": False, "already_existed": False, "stdout": "", "stderr": "boom"}),
+            new=AsyncMock(
+                return_value={
+                    "success": False,
+                    "already_existed": False,
+                    "stdout": "",
+                    "stderr": "boom",
+                }
+            ),
         ):
             response = test_client.post(
                 "/api/v2/repositories/",
@@ -221,7 +326,9 @@ class TestV2RepositoryRoutes:
         assert response.status_code == 500
         assert response.json()["detail"]["key"] == "backend.errors.repo.initFailed"
 
-    def test_create_repository_rejects_duplicate_name(self, test_client: TestClient, admin_headers, test_db):
+    def test_create_repository_rejects_duplicate_name(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         _enable_borg_v2(test_db)
         _create_v2_repo(test_db, name="Existing Repo", path="/tmp/existing-repo")
 
@@ -238,7 +345,9 @@ class TestV2RepositoryRoutes:
         assert response.status_code == 409
         assert response.json()["detail"]["key"] == "backend.errors.repo.nameExists"
 
-    def test_import_repository_rejects_verification_failure(self, test_client: TestClient, admin_headers, test_db):
+    def test_import_repository_rejects_verification_failure(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         _enable_borg_v2(test_db)
 
         with patch(
@@ -256,14 +365,24 @@ class TestV2RepositoryRoutes:
             )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.repo.verificationFailed"
+        assert (
+            response.json()["detail"]["key"] == "backend.errors.repo.verificationFailed"
+        )
 
-    def test_import_repository_success(self, test_client: TestClient, admin_headers, test_db):
+    def test_import_repository_success(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         _enable_borg_v2(test_db)
 
         with patch(
             "app.api.v2.repositories._rinfo",
-            new=AsyncMock(return_value={"success": True, "stdout": json.dumps({"repository": {"id": 1}}), "stderr": ""}),
+            new=AsyncMock(
+                return_value={
+                    "success": True,
+                    "stdout": json.dumps({"repository": {"id": 1}}),
+                    "stderr": "",
+                }
+            ),
         ):
             response = test_client.post(
                 "/api/v2/repositories/import",
@@ -284,7 +403,9 @@ class TestV2RepositoryRoutes:
         body = response.json()
         assert body["name"] == "Imported Repo"
         assert body["borg_version"] == 2
-        repo = test_db.query(Repository).filter(Repository.name == "Imported Repo").first()
+        repo = (
+            test_db.query(Repository).filter(Repository.name == "Imported Repo").first()
+        )
         assert repo is not None
         assert repo.source_ssh_connection_id == 55
         assert repo.custom_flags == "--stats"
@@ -299,9 +420,21 @@ class TestV2RepositoryRoutes:
         fake_home = tmp_path / "home"
         fake_home.mkdir()
 
-        with patch("app.api.v2.repositories.os.path.expanduser", return_value=str(fake_home)), patch(
-            "app.api.v2.repositories._rinfo",
-            new=AsyncMock(return_value={"success": True, "stdout": json.dumps({"repository": {"id": 1}}), "stderr": ""}),
+        with (
+            patch(
+                "app.api.v2.repositories.os.path.expanduser",
+                return_value=str(fake_home),
+            ),
+            patch(
+                "app.api.v2.repositories._rinfo",
+                new=AsyncMock(
+                    return_value={
+                        "success": True,
+                        "stdout": json.dumps({"repository": {"id": 1}}),
+                        "stderr": "",
+                    }
+                ),
+            ),
         ):
             response = test_client.post(
                 "/api/v2/repositories/import",
@@ -316,13 +449,19 @@ class TestV2RepositoryRoutes:
             )
 
         assert response.status_code == 201
-        repo = test_db.query(Repository).filter(Repository.name == "Imported Keyfile Repo").first()
+        repo = (
+            test_db.query(Repository)
+            .filter(Repository.name == "Imported Keyfile Repo")
+            .first()
+        )
         assert repo is not None
         assert repo.has_keyfile is True
         keyfile_name = "tmp_v2_import_keyfile"
         assert (fake_home / ".config" / "borg" / "keys" / keyfile_name).exists()
 
-    def test_import_repository_rejects_duplicate_path(self, test_client: TestClient, admin_headers, test_db):
+    def test_import_repository_rejects_duplicate_path(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         _enable_borg_v2(test_db)
         _create_v2_repo(test_db, name="Existing Import", path="/tmp/existing-import")
 
@@ -339,7 +478,88 @@ class TestV2RepositoryRoutes:
         assert response.status_code == 409
         assert response.json()["detail"]["key"] == "backend.errors.repo.pathExists"
 
-    def test_get_repository_info_merges_rinfo_and_disk_usage(self, test_client: TestClient, admin_headers, test_db):
+    @pytest.mark.asyncio
+    async def test_v2_metadata_routes_serialize_borg_commands_per_repository(
+        self, test_db
+    ):
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(
+            test_db, name="Serialized Repo", path="/tmp/v2-serialized"
+        )
+        state = {"active": 0, "max_active": 0}
+
+        async def fake_info_repo(*args, **kwargs):
+            state["active"] += 1
+            state["max_active"] = max(state["max_active"], state["active"])
+            await asyncio.sleep(0.05)
+            state["active"] -= 1
+            return {
+                "success": True,
+                "stdout": json.dumps({"repository": {}, "encryption": {}}),
+                "stderr": "",
+                "return_code": 0,
+            }
+
+        async def fake_list_archives(*args, **kwargs):
+            state["active"] += 1
+            state["max_active"] = max(state["max_active"], state["active"])
+            await asyncio.sleep(0.05)
+            state["active"] -= 1
+            return {
+                "success": True,
+                "stdout": json.dumps({"archives": []}),
+                "stderr": "",
+                "return_code": 0,
+            }
+
+        with (
+            patch(
+                "app.api.v2.repositories.repository_borg_env",
+                side_effect=lambda *args, **kwargs: contextlib.nullcontext({}),
+            ),
+            patch.object(
+                repositories_v2_api.borg2,
+                "info_repo",
+                side_effect=fake_info_repo,
+            ),
+            patch.object(
+                repositories_v2_api.borg2,
+                "rinfo",
+                new=AsyncMock(
+                    return_value={
+                        "success": True,
+                        "stdout": json.dumps({"repository": {}, "encryption": {}}),
+                        "stderr": "",
+                        "return_code": 0,
+                    }
+                ),
+            ),
+            patch.object(
+                repositories_v2_api.borg2,
+                "list_archives",
+                side_effect=fake_list_archives,
+            ),
+            patch(
+                "app.api.v2.repositories.calculate_path_size_bytes",
+                new=AsyncMock(return_value=0),
+            ),
+        ):
+            archives_result, info_result = await asyncio.gather(
+                repositories_v2_api.list_archives(
+                    repo.id, current_user=object(), db=test_db
+                ),
+                repositories_v2_api.get_repository_info(
+                    repo.id, current_user=object(), db=test_db
+                ),
+            )
+
+        assert state["max_active"] == 1
+        assert archives_result["archives"] == []
+        assert info_result["borg_version"] == 2
+
+    def test_get_repository_info_merges_rinfo_and_disk_usage(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(test_db, path="/tmp/v2-info-repo")
 
@@ -368,8 +588,13 @@ class TestV2RepositoryRoutes:
                     }
                 ),
             ) as mock_rinfo:
-                with patch("app.api.v2.repositories.calculate_path_size_bytes", new=AsyncMock(return_value=12345)) as mock_size:
-                    response = test_client.get(f"/api/v2/repositories/{repo.id}/info", headers=admin_headers)
+                with patch(
+                    "app.api.v2.repositories.calculate_path_size_bytes",
+                    new=AsyncMock(return_value=12345),
+                ) as mock_size:
+                    response = test_client.get(
+                        f"/api/v2/repositories/{repo.id}/info", headers=admin_headers
+                    )
 
         assert response.status_code == 200
         info = response.json()["info"]
@@ -380,15 +605,21 @@ class TestV2RepositoryRoutes:
         mock_rinfo.assert_awaited_once()
         mock_size.assert_awaited_once_with([repo.path], timeout=30)
 
-    def test_get_repository_info_returns_500_on_info_failure(self, test_client: TestClient, admin_headers, test_db):
+    def test_get_repository_info_returns_500_on_info_failure(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(test_db, path="/tmp/v2-info-fail")
 
         with patch(
             "app.api.v2.repositories.borg2.info_repo",
-            new=AsyncMock(return_value={"success": False, "stdout": "", "stderr": "info failed"}),
+            new=AsyncMock(
+                return_value={"success": False, "stdout": "", "stderr": "info failed"}
+            ),
         ):
-            response = test_client.get(f"/api/v2/repositories/{repo.id}/info", headers=admin_headers)
+            response = test_client.get(
+                f"/api/v2/repositories/{repo.id}/info", headers=admin_headers
+            )
 
         assert response.status_code == 500
         assert response.json()["detail"]["key"] == "backend.errors.repo.infoFailed"
@@ -399,101 +630,223 @@ class TestV2RepositoryRoutes:
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(test_db, path="/tmp/v2-lock-retry")
 
-        with patch(
-            "app.api.v2.repositories.borg2.info_repo",
-            new=AsyncMock(
-                side_effect=[
-                    {
-                        "success": False,
-                        "stdout": "",
-                        "stderr": "ObjectNotFound: locks/ddba06e6e875813a",
-                        "return_code": 2,
-                    },
-                    {
+        with (
+            patch(
+                "app.api.v2.repositories.borg2.info_repo",
+                new=AsyncMock(
+                    side_effect=[
+                        {
+                            "success": False,
+                            "stdout": "",
+                            "stderr": "ObjectNotFound: locks/ddba06e6e875813a",
+                            "return_code": 2,
+                        },
+                        {
+                            "success": True,
+                            "stdout": json.dumps(
+                                {"archives": [], "repository": {"id": 9}}
+                            ),
+                            "stderr": "",
+                            "return_code": 0,
+                        },
+                    ]
+                ),
+            ) as mock_info,
+            patch(
+                "app.api.v2.repositories.borg2.rinfo",
+                new=AsyncMock(
+                    return_value={
                         "success": True,
-                        "stdout": json.dumps({"archives": [], "repository": {"id": 9}}),
+                        "stdout": json.dumps({}),
                         "stderr": "",
-                        "return_code": 0,
-                    },
-                ]
+                    }
+                ),
             ),
-        ) as mock_info, patch(
-            "app.api.v2.repositories.borg2.rinfo",
-            new=AsyncMock(return_value={"success": True, "stdout": json.dumps({}), "stderr": ""}),
         ):
-            response = test_client.get(f"/api/v2/repositories/{repo.id}/info", headers=admin_headers)
+            response = test_client.get(
+                f"/api/v2/repositories/{repo.id}/info", headers=admin_headers
+            )
 
         assert response.status_code == 200
         assert mock_info.await_count == 2
         assert mock_info.await_args_list[0].kwargs["bypass_lock"] is False
         assert mock_info.await_args_list[1].kwargs["bypass_lock"] is True
 
-    def test_get_repository_info_returns_404_for_missing_repo(self, test_client: TestClient, admin_headers, test_db):
+    def test_get_repository_info_returns_404_for_missing_repo(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         _enable_borg_v2(test_db)
 
-        response = test_client.get("/api/v2/repositories/999/info", headers=admin_headers)
+        response = test_client.get(
+            "/api/v2/repositories/999/info", headers=admin_headers
+        )
 
         assert response.status_code == 404
         assert response.json()["detail"]["key"] == "backend.errors.repo.notFound"
 
-    def test_list_archives_respects_system_bypass_lock(self, test_client: TestClient, admin_headers, test_db):
+    def test_list_archives_respects_system_bypass_lock(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         _enable_borg_v2(test_db, bypass_lock_on_list=True)
         repo = _create_v2_repo(test_db, path="/tmp/v2-list-repo")
 
         with patch(
             "app.api.v2.repositories.borg2.list_archives",
-            new=AsyncMock(return_value={"success": True, "stdout": json.dumps({"archives": [{"name": "one"}]}), "stderr": ""}),
+            new=AsyncMock(
+                return_value={
+                    "success": True,
+                    "stdout": json.dumps({"archives": [{"name": "one"}]}),
+                    "stderr": "",
+                }
+            ),
         ) as mock_list:
-            response = test_client.get(f"/api/v2/repositories/{repo.id}/archives", headers=admin_headers)
+            response = test_client.get(
+                f"/api/v2/repositories/{repo.id}/archives", headers=admin_headers
+            )
 
         assert response.status_code == 200
         assert response.json() == {"archives": [{"name": "one"}], "borg_version": 2}
         mock_list.assert_awaited_once()
         assert mock_list.call_args.kwargs["bypass_lock"] is True
 
-    def test_get_repository_info_respects_system_bypass_lock(self, test_client: TestClient, admin_headers, test_db):
+    def test_list_archives_marks_manual_backup_plan_archive(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db, path="/tmp/v2-plan-repo")
+        plan = BackupPlan(
+            name="Monthly Plan",
+            enabled=True,
+            source_type="local",
+            source_directories='["/srv/project"]',
+            exclude_patterns="[]",
+            archive_name_template="{plan_name}-{repo_name}-{now}",
+            compression="lz4",
+            repository_run_mode="series",
+            max_parallel_repositories=1,
+            failure_behavior="continue",
+            schedule_enabled=False,
+            timezone="UTC",
+        )
+        test_db.add(plan)
+        test_db.flush()
+        run = BackupPlanRun(
+            backup_plan_id=plan.id,
+            trigger="manual",
+            status="completed",
+        )
+        test_db.add(run)
+        test_db.flush()
+        test_db.add(
+            BackupJob(
+                repository=repo.path,
+                repository_id=repo.id,
+                backup_plan_id=plan.id,
+                backup_plan_run_id=run.id,
+                archive_name="Monthly-Plan-V2-Repo",
+                status="completed",
+            )
+        )
+        test_db.commit()
+
+        with patch(
+            "app.api.v2.repositories.borg2.list_archives",
+            new=AsyncMock(
+                return_value={
+                    "success": True,
+                    "stdout": json.dumps(
+                        {"archives": [{"name": "Monthly-Plan-V2-Repo"}]}
+                    ),
+                    "stderr": "",
+                }
+            ),
+        ):
+            response = test_client.get(
+                f"/api/v2/repositories/{repo.id}/archives", headers=admin_headers
+            )
+
+        assert response.status_code == 200
+        archive = response.json()["archives"][0]
+        assert archive["triggered_by"] == "manual"
+        assert archive["backup_plan_id"] == plan.id
+        assert archive["backup_plan_run_id"] == run.id
+
+    def test_get_repository_info_respects_system_bypass_lock(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         _enable_borg_v2(test_db, bypass_lock_on_info=True)
         repo = _create_v2_repo(test_db, path="/tmp/v2-info-bypass")
 
-        with patch(
-            "app.api.v2.repositories.borg2.info_repo",
-            new=AsyncMock(return_value={"success": True, "stdout": json.dumps({}), "stderr": ""}),
-        ) as mock_info, patch(
-            "app.api.v2.repositories.borg2.rinfo",
-            new=AsyncMock(return_value={"success": True, "stdout": json.dumps({}), "stderr": ""}),
+        with (
+            patch(
+                "app.api.v2.repositories.borg2.info_repo",
+                new=AsyncMock(
+                    return_value={
+                        "success": True,
+                        "stdout": json.dumps({}),
+                        "stderr": "",
+                    }
+                ),
+            ) as mock_info,
+            patch(
+                "app.api.v2.repositories.borg2.rinfo",
+                new=AsyncMock(
+                    return_value={
+                        "success": True,
+                        "stdout": json.dumps({}),
+                        "stderr": "",
+                    }
+                ),
+            ),
         ):
-            response = test_client.get(f"/api/v2/repositories/{repo.id}/info", headers=admin_headers)
+            response = test_client.get(
+                f"/api/v2/repositories/{repo.id}/info", headers=admin_headers
+            )
 
         assert response.status_code == 200
         assert mock_info.await_args.kwargs["bypass_lock"] is True
 
-    def test_list_archives_returns_500_on_borg_failure(self, test_client: TestClient, admin_headers, test_db):
+    def test_list_archives_returns_500_on_borg_failure(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(test_db)
 
         with patch(
             "app.api.v2.repositories.borg2.list_archives",
-            new=AsyncMock(return_value={"success": False, "stdout": "", "stderr": "list failed"}),
+            new=AsyncMock(
+                return_value={"success": False, "stdout": "", "stderr": "list failed"}
+            ),
         ):
-            response = test_client.get(f"/api/v2/repositories/{repo.id}/archives", headers=admin_headers)
+            response = test_client.get(
+                f"/api/v2/repositories/{repo.id}/archives", headers=admin_headers
+            )
 
         assert response.status_code == 500
         assert response.json()["detail"]["key"] == "backend.errors.repo.listFailed"
 
-    def test_list_archives_returns_500_on_borg_failure(self, test_client: TestClient, admin_headers, test_db):
+    def test_list_archives_returns_500_on_borg_failure(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(test_db)
 
         with patch(
             "app.api.v2.repositories.borg2.list_archives",
-            new=AsyncMock(return_value={"success": False, "stdout": "", "stderr": "boom"}),
+            new=AsyncMock(
+                return_value={"success": False, "stdout": "", "stderr": "boom"}
+            ),
         ):
-            response = test_client.get(f"/api/v2/repositories/{repo.id}/archives", headers=admin_headers)
+            response = test_client.get(
+                f"/api/v2/repositories/{repo.id}/archives", headers=admin_headers
+            )
 
         assert response.status_code == 500
         assert response.json()["detail"]["key"] == "backend.errors.repo.listFailed"
 
-    def test_get_repository_stats_success(self, test_client: TestClient, admin_headers, test_db):
+    def test_get_repository_stats_success(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(test_db)
 
@@ -502,40 +855,59 @@ class TestV2RepositoryRoutes:
             new=AsyncMock(
                 return_value={
                     "success": True,
-                    "stdout": json.dumps({"repository": {"id": 7}, "encryption": {"mode": "none"}}),
+                    "stdout": json.dumps(
+                        {"repository": {"id": 7}, "encryption": {"mode": "none"}}
+                    ),
                     "stderr": "",
                 }
             ),
         ) as mock_rinfo:
-            response = test_client.get(f"/api/v2/repositories/{repo.id}/stats", headers=admin_headers)
+            response = test_client.get(
+                f"/api/v2/repositories/{repo.id}/stats", headers=admin_headers
+            )
 
         assert response.status_code == 200
-        assert response.json()["stats"] == {"repository": {"id": 7}, "encryption": {"mode": "none"}}
+        assert response.json()["stats"] == {
+            "repository": {"id": 7},
+            "encryption": {"mode": "none"},
+        }
         assert response.json()["borg_version"] == 2
         mock_rinfo.assert_awaited_once()
 
-    def test_get_repository_stats_returns_500_on_borg_failure(self, test_client: TestClient, admin_headers, test_db):
+    def test_get_repository_stats_returns_500_on_borg_failure(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(test_db)
 
         with patch(
             "app.api.v2.repositories.borg2.rinfo",
-            new=AsyncMock(return_value={"success": False, "stdout": "", "stderr": "stats failed"}),
+            new=AsyncMock(
+                return_value={"success": False, "stdout": "", "stderr": "stats failed"}
+            ),
         ):
-            response = test_client.get(f"/api/v2/repositories/{repo.id}/stats", headers=admin_headers)
+            response = test_client.get(
+                f"/api/v2/repositories/{repo.id}/stats", headers=admin_headers
+            )
 
         assert response.status_code == 500
         assert response.json()["detail"]["key"] == "backend.errors.repo.infoFailed"
 
-    def test_get_repository_stats_respects_system_bypass_lock(self, test_client: TestClient, admin_headers, test_db):
+    def test_get_repository_stats_respects_system_bypass_lock(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         _enable_borg_v2(test_db, bypass_lock_on_info=True)
         repo = _create_v2_repo(test_db)
 
         with patch(
             "app.api.v2.repositories.borg2.rinfo",
-            new=AsyncMock(return_value={"success": True, "stdout": json.dumps({}), "stderr": ""}),
+            new=AsyncMock(
+                return_value={"success": True, "stdout": json.dumps({}), "stderr": ""}
+            ),
         ) as mock_rinfo:
-            response = test_client.get(f"/api/v2/repositories/{repo.id}/stats", headers=admin_headers)
+            response = test_client.get(
+                f"/api/v2/repositories/{repo.id}/stats", headers=admin_headers
+            )
 
         assert response.status_code == 200
         assert mock_rinfo.await_args.kwargs["bypass_lock"] is True

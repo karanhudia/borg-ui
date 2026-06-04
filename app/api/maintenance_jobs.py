@@ -8,6 +8,11 @@ from sqlalchemy.orm import Session
 
 from app.core.security import check_repo_access
 from app.database.models import Repository, User
+from app.services.job_admission import (
+    ACTIVE_MAINTENANCE_STATUSES,
+    ensure_repository_admission,
+    operation_for_maintenance_model,
+)
 from app.utils.datetime_utils import serialize_datetime
 
 
@@ -20,7 +25,9 @@ def get_repository_with_access(
 ) -> Repository:
     repository = db.query(Repository).filter(Repository.id == repo_id).first()
     if not repository:
-        raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"}
+        )
     check_repo_access(db, current_user, repository, required_role)
     return repository
 
@@ -46,10 +53,14 @@ def ensure_no_running_job(
     *,
     error_key: str,
 ) -> None:
-    running_job = db.query(job_model).filter(
-        job_model.repository_id == repository_id,
-        job_model.status == "running",
-    ).first()
+    running_job = (
+        db.query(job_model)
+        .filter(
+            job_model.repository_id == repository_id,
+            job_model.status.in_(ACTIVE_MAINTENANCE_STATUSES),
+        )
+        .first()
+    )
     if running_job:
         raise HTTPException(status_code=409, detail={"key": error_key})
 
@@ -129,11 +140,12 @@ def start_background_maintenance_job(
     status: str = "pending",
     extra_fields: Optional[dict[str, Any]] = None,
 ):
-    ensure_no_running_job(
+    operation = operation_for_maintenance_model(job_model)
+    ensure_repository_admission(
         db,
-        job_model,
-        repository.id,
-        error_key=error_key,
+        repository,
+        operation,
+        duplicate_error_key=error_key,
     )
     job = create_started_maintenance_job(
         db,
@@ -161,7 +173,9 @@ def get_job_with_repository(
 
     repository = db.query(Repository).filter(Repository.id == job.repository_id).first()
     if not repository:
-        raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"}
+        )
 
     check_repo_access(db, current_user, repository, required_role)
     return job, repository
@@ -185,9 +199,13 @@ def get_repository_jobs(
     if not repository:
         return []
 
-    return db.query(job_model).filter(
-        job_model.repository_id == repo_id
-    ).order_by(job_model.id.desc()).limit(limit).all()
+    return (
+        db.query(job_model)
+        .filter(job_model.repository_id == repo_id)
+        .order_by(job_model.id.desc())
+        .limit(limit)
+        .all()
+    )
 
 
 def read_job_logs(job: Any, *, fallback_to_logs: bool = True) -> str:

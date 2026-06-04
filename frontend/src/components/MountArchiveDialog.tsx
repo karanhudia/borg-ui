@@ -9,7 +9,7 @@ import {
   TextField,
   Tooltip,
 } from '@mui/material'
-import ResponsiveDialog from './ResponsiveDialog'
+import ResponsiveDialog from './shared/ResponsiveDialog'
 import { useTranslation } from 'react-i18next'
 import { HardDrive, Info } from 'lucide-react'
 import { Archive } from '../types'

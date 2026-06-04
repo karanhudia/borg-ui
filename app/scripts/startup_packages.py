@@ -4,9 +4,9 @@ Start package installation jobs on container startup.
 This ensures packages are automatically installed when the container starts.
 Non-blocking - jobs run in the background via the FastAPI app's package service.
 """
+
 import os
 import sys
-import asyncio
 import sqlite3
 from pathlib import Path
 
@@ -14,13 +14,11 @@ from pathlib import Path
 def is_package_actually_installed(package_name):
     """Check if a package is actually installed in the OS"""
     import subprocess
+
     try:
         # Try to check with dpkg (Debian/Ubuntu)
         result = subprocess.run(
-            ["dpkg", "-s", package_name],
-            capture_output=True,
-            text=True,
-            timeout=5
+            ["dpkg", "-s", package_name], capture_output=True, text=True, timeout=5
         )
         # If exit code is 0, package is installed
         return result.returncode == 0
@@ -64,14 +62,19 @@ def get_packages_to_install():
 
             if not actually_installed:
                 # Package is in DB but not actually installed - need to install
-                print(f"📦 Package '{pkg_name}' (DB status: {db_status}) not found in OS, will install")
+                print(
+                    f"📦 Package '{pkg_name}' (DB status: {db_status}) not found in OS, will install"
+                )
                 packages_to_install.append((pkg_id, pkg_name, "pending", install_cmd))
 
                 # Update DB status to pending if it was marked as installed
                 if db_status == "installed":
                     conn = sqlite3.connect(str(db_path))
                     cursor = conn.cursor()
-                    cursor.execute("UPDATE installed_packages SET status='pending' WHERE id=?", (pkg_id,))
+                    cursor.execute(
+                        "UPDATE installed_packages SET status='pending' WHERE id=?",
+                        (pkg_id,),
+                    )
                     conn.commit()
                     conn.close()
             else:
@@ -82,6 +85,7 @@ def get_packages_to_install():
     except Exception as e:
         print(f"✗ Error querying packages: {e}", file=sys.stderr)
         import traceback
+
         traceback.print_exc()
         return []
 
@@ -104,15 +108,18 @@ def trigger_package_installations(packages):
     for package_id, package_name, status, install_command in packages:
         try:
             print(f"")
-            print(f"{'='*60}")
+            print(f"{'=' * 60}")
             print(f"📦 Installing: {package_name}")
-            print(f"{'='*60}")
+            print(f"{'=' * 60}")
             print(f"Command: {install_command}")
 
             # Update package status to installing
             conn = sqlite3.connect("/data/borg.db")
             cursor = conn.cursor()
-            cursor.execute("UPDATE installed_packages SET status='installing' WHERE id=?", (package_id,))
+            cursor.execute(
+                "UPDATE installed_packages SET status='installing' WHERE id=?",
+                (package_id,),
+            )
             conn.commit()
             conn.close()
 
@@ -124,7 +131,7 @@ def trigger_package_installations(packages):
                 capture_output=True,
                 text=True,
                 timeout=300,  # 5 minute timeout
-                env={**os.environ, 'DEBIAN_FRONTEND': 'noninteractive'}
+                env={**os.environ, "DEBIAN_FRONTEND": "noninteractive"},
             )
             duration = time.time() - start_time
 
@@ -133,23 +140,37 @@ def trigger_package_installations(packages):
             cursor = conn.cursor()
 
             if result.returncode == 0:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     UPDATE installed_packages
                     SET status='installed',
                         installed_at=datetime('now'),
                         install_log=?,
                         last_check=datetime('now')
                     WHERE id=?
-                """, (f"STDOUT:\n{result.stdout}\n\nSTDERR:\n{result.stderr}", package_id))
+                """,
+                    (
+                        f"STDOUT:\n{result.stdout}\n\nSTDERR:\n{result.stderr}",
+                        package_id,
+                    ),
+                )
                 print(f"✓ Successfully installed {package_name} in {duration:.1f}s")
             else:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     UPDATE installed_packages
                     SET status='failed',
                         install_log=?
                     WHERE id=?
-                """, (f"Exit code: {result.returncode}\n\nSTDOUT:\n{result.stdout}\n\nSTDERR:\n{result.stderr}", package_id))
-                print(f"✗ Failed to install {package_name} (exit code: {result.returncode})")
+                """,
+                    (
+                        f"Exit code: {result.returncode}\n\nSTDOUT:\n{result.stdout}\n\nSTDERR:\n{result.stderr}",
+                        package_id,
+                    ),
+                )
+                print(
+                    f"✗ Failed to install {package_name} (exit code: {result.returncode})"
+                )
                 print(f"STDERR: {result.stderr[:200]}")
 
             conn.commit()
@@ -159,7 +180,10 @@ def trigger_package_installations(packages):
             print(f"✗ Installation of {package_name} timed out (5 minute limit)")
             conn = sqlite3.connect("/data/borg.db")
             cursor = conn.cursor()
-            cursor.execute("UPDATE installed_packages SET status='failed', install_log='Installation timed out' WHERE id=?", (package_id,))
+            cursor.execute(
+                "UPDATE installed_packages SET status='failed', install_log='Installation timed out' WHERE id=?",
+                (package_id,),
+            )
             conn.commit()
             conn.close()
 
@@ -167,7 +191,10 @@ def trigger_package_installations(packages):
             print(f"✗ Error installing {package_name}: {e}")
             conn = sqlite3.connect("/data/borg.db")
             cursor = conn.cursor()
-            cursor.execute("UPDATE installed_packages SET status='failed', install_log=? WHERE id=?", (str(e), package_id))
+            cursor.execute(
+                "UPDATE installed_packages SET status='failed', install_log=? WHERE id=?",
+                (str(e), package_id),
+            )
             conn.commit()
             conn.close()
 

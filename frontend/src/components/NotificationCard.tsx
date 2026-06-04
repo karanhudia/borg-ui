@@ -12,6 +12,8 @@ import {
   RotateCcw,
   ShieldCheck,
   AlertCircle,
+  BellRing,
+  FileText,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import EntityCard, { ActionItem, StatItem } from './EntityCard'
@@ -27,12 +29,17 @@ interface NotificationSetting {
   include_job_name_in_title: boolean
   notify_on_backup_start: boolean
   notify_on_backup_success: boolean
+  notify_on_backup_warning: boolean
   notify_on_backup_failure: boolean
   notify_on_restore_success: boolean
   notify_on_restore_failure: boolean
   notify_on_check_success: boolean
   notify_on_check_failure: boolean
+  notify_on_restore_check_success: boolean
+  notify_on_restore_check_failure: boolean
   notify_on_schedule_failure: boolean
+  notify_on_stale_backup: boolean
+  notify_on_backup_report: boolean
   monitor_all_repositories: boolean
   repositories: { id: number; name: string }[]
   created_at: string
@@ -86,12 +93,17 @@ export default function NotificationCard({
   const eventCount = [
     notification.notify_on_backup_start,
     notification.notify_on_backup_success,
+    notification.notify_on_backup_warning,
     notification.notify_on_backup_failure,
     notification.notify_on_restore_success,
     notification.notify_on_restore_failure,
     notification.notify_on_check_success,
     notification.notify_on_check_failure,
+    notification.notify_on_restore_check_success,
+    notification.notify_on_restore_check_failure,
     notification.notify_on_schedule_failure,
+    notification.notify_on_stale_backup,
+    notification.notify_on_backup_report,
   ].filter(Boolean).length
 
   const stats: StatItem[] = [
@@ -150,11 +162,13 @@ export default function NotificationCard({
       active:
         notification.notify_on_backup_start ||
         notification.notify_on_backup_success ||
+        notification.notify_on_backup_warning ||
         notification.notify_on_backup_failure,
       tooltip:
         [
           notification.notify_on_backup_start && t('notifications.card.events.start'),
           notification.notify_on_backup_success && t('notifications.card.events.success'),
+          notification.notify_on_backup_warning && t('notifications.card.events.warning'),
           notification.notify_on_backup_failure && t('notifications.card.events.failure'),
         ]
           .filter(Boolean)
@@ -185,11 +199,41 @@ export default function NotificationCard({
           .join(' · ') || t('notifications.card.events.off'),
     },
     {
+      icon: <TestTube size={10} />,
+      label: t('notifications.card.categories.restoreCheck'),
+      active:
+        notification.notify_on_restore_check_success ||
+        notification.notify_on_restore_check_failure,
+      tooltip:
+        [
+          notification.notify_on_restore_check_success && t('notifications.card.events.success'),
+          notification.notify_on_restore_check_failure && t('notifications.card.events.failure'),
+        ]
+          .filter(Boolean)
+          .join(' · ') || t('notifications.card.events.off'),
+    },
+    {
       icon: <AlertCircle size={10} />,
       label: t('notifications.card.categories.schedule'),
       active: notification.notify_on_schedule_failure,
       tooltip: notification.notify_on_schedule_failure
         ? t('notifications.card.events.errors')
+        : t('notifications.card.events.off'),
+    },
+    {
+      icon: <BellRing size={10} />,
+      label: t('notifications.card.categories.monitoring'),
+      active: notification.notify_on_stale_backup,
+      tooltip: notification.notify_on_stale_backup
+        ? t('notifications.card.events.staleBackup')
+        : t('notifications.card.events.off'),
+    },
+    {
+      icon: <FileText size={10} />,
+      label: t('notifications.card.categories.reports'),
+      active: notification.notify_on_backup_report,
+      tooltip: notification.notify_on_backup_report
+        ? t('notifications.card.events.reports')
         : t('notifications.card.events.off'),
     },
   ]

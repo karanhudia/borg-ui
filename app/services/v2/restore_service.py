@@ -18,12 +18,24 @@ class RestoreV2Service:
         paths: Optional[List[str]] = None,
         remote_path: Optional[str] = None,
         bypass_lock: bool = False,
+        strip_components: Optional[int] = None,
     ) -> List[str]:
-        cmd = [borg2.borg_cmd, "-r", repository_path, "extract", "--log-json", archive_name]
+        cmd = [
+            borg2.borg_cmd,
+            "-r",
+            repository_path,
+            "extract",
+            "--log-json",
+            "--umask",
+            "0022",
+        ]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
         if bypass_lock:
             cmd.append("--bypass-lock")
+        if strip_components:
+            cmd.extend(["--strip-components", str(strip_components)])
+        cmd.append(archive_name)
         if paths:
             cmd.extend(paths)
         return cmd
@@ -56,6 +68,7 @@ class RestoreV2Service:
         archive: str,
         path: str = "",
         max_lines: int = 1_000_000,
+        browse_depth: Optional[int] = None,
         env: Optional[dict] = None,
     ) -> dict:
         kwargs = {
@@ -67,6 +80,8 @@ class RestoreV2Service:
             "max_lines": max_lines,
             "bypass_lock": repo.bypass_lock,
         }
+        if browse_depth is not None:
+            kwargs["browse_depth"] = browse_depth
         if env is not None:
             kwargs["env"] = env
         return await borg2.list_archive_contents(**kwargs)

@@ -33,7 +33,9 @@ class DockerPathHelper:
     and converts paths accordingly.
     """
 
-    def __init__(self, base_url: str = "http://localhost:8081", container_mode: bool = False):
+    def __init__(
+        self, base_url: str = "http://localhost:8081", container_mode: bool = False
+    ):
         """
         Initialize path helper with environment detection.
 
@@ -45,16 +47,24 @@ class DockerPathHelper:
         # Port-based detection: 8081/8082 = Docker, 8000 = local dev
         # Can be overridden with container_mode parameter or BORG_UI_CONTAINER env var
         is_container_port = base_url.endswith(":8081") or base_url.endswith(":8082")
-        env_container_mode = os.environ.get('BORG_UI_CONTAINER', '').lower() in ('true', '1', 'yes')
+        env_container_mode = os.environ.get("BORG_UI_CONTAINER", "").lower() in (
+            "true",
+            "1",
+            "yes",
+        )
 
         # Use /local prefix if:
         # 1. Explicitly set via container_mode parameter, OR
         # 2. Explicitly set via BORG_UI_CONTAINER env var, OR
         # 3. Port suggests Docker AND not explicitly disabled
         self.use_local_prefix = (
-            container_mode or
-            env_container_mode or
-            (is_container_port and os.environ.get('BORG_UI_CONTAINER', '').lower() not in ('false', '0', 'no'))
+            container_mode
+            or env_container_mode
+            or (
+                is_container_port
+                and os.environ.get("BORG_UI_CONTAINER", "").lower()
+                not in ("false", "0", "no")
+            )
         )
 
         self.base_url = base_url
@@ -73,12 +83,12 @@ class DockerPathHelper:
             return host_path
 
         # Already has /local prefix
-        if host_path.startswith('/local/'):
+        if host_path.startswith("/local/"):
             return host_path
 
         # Add /local prefix for absolute paths
-        if host_path.startswith('/'):
-            return f'/local{host_path}'
+        if host_path.startswith("/"):
+            return f"/local{host_path}"
 
         return host_path
 
@@ -96,7 +106,7 @@ class DockerPathHelper:
             return container_path
 
         # Remove /local prefix if present
-        if container_path.startswith('/local/'):
+        if container_path.startswith("/local/"):
             return container_path[6:]  # Remove '/local' prefix
 
         return container_path
@@ -127,6 +137,7 @@ def wait_for_job_terminal_status(
     terminal_statuses=("completed", "completed_with_warnings", "failed", "cancelled"),
 ):
     """Poll a job endpoint until it reaches a terminal state."""
+
     def fetch_payload():
         response = test_client.get(f"{job_endpoint}/{job_id}", headers=headers)
         response.raise_for_status()

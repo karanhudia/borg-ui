@@ -4,7 +4,7 @@ import base64
 import json
 import os
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database.models import LicensingState
+from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
 PLAN_RANK = {"community": 0, "pro": 1, "enterprise": 2}
@@ -44,7 +45,9 @@ def _parse_dt(value: Any) -> datetime | None:
 
 
 def _canonical_payload(payload: dict[str, Any]) -> bytes:
-    return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    return json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
 
 
 def _get_public_key() -> str | None:
@@ -58,7 +61,9 @@ def _get_auth_headers() -> dict[str, str]:
 def _validate_signature(payload: dict[str, Any], signature: str) -> bool:
     public_key_value = _get_public_key()
     if not public_key_value:
-        logger.info("Skipping entitlement signature validation; no activation public key configured")
+        logger.info(
+            "Skipping entitlement signature validation; no activation public key configured"
+        )
         return True
 
     try:
@@ -137,16 +142,16 @@ def get_entitlement_summary(db: Session) -> dict[str, Any]:
         "access_level": _access_level(state),
         "is_full_access": is_full_access,
         "full_access_consumed": state.trial_consumed,
-        "expires_at": state.expires_at.isoformat() if state.expires_at else None,
-        "starts_at": state.starts_at.isoformat() if state.starts_at else None,
-        "refresh_after": refresh_after.isoformat() if refresh_after else None,
+        "expires_at": serialize_datetime(state.expires_at),
+        "starts_at": serialize_datetime(state.starts_at),
+        "refresh_after": serialize_datetime(refresh_after),
         "instance_id": state.instance_id,
         "entitlement_id": state.entitlement_id,
         "key_id": state.key_id,
         "license_id": state.license_id,
         "customer_id": state.customer_id,
         "ui_state": _ui_state(state),
-        "last_refresh_at": state.last_refresh_at.isoformat() if state.last_refresh_at else None,
+        "last_refresh_at": serialize_datetime(state.last_refresh_at),
         "last_refresh_error": state.last_refresh_error,
     }
 
@@ -205,11 +210,15 @@ def _normalize_service_error(response: httpx.Response) -> str:
 
     error = payload.get("error")
     if isinstance(error, dict):
-        return error.get("message") or error.get("code") or f"HTTP {response.status_code}"
+        return (
+            error.get("message") or error.get("code") or f"HTTP {response.status_code}"
+        )
     return response.text or f"HTTP {response.status_code}"
 
 
-def _validate_entitlement_document(state: LicensingState, payload: Any, signature: Any) -> str | None:
+def _validate_entitlement_document(
+    state: LicensingState, payload: Any, signature: Any
+) -> str | None:
     if not isinstance(payload, dict) or not isinstance(signature, str):
         return "Activation service returned malformed entitlement"
 
@@ -250,13 +259,17 @@ def _apply_entitlement(
     db.commit()
 
 
-async def _post_activation(endpoint_path: str, request_payload: dict[str, Any]) -> dict[str, Any]:
+async def _post_activation(
+    endpoint_path: str, request_payload: dict[str, Any]
+) -> dict[str, Any]:
     if not settings.activation_service_url:
         raise RuntimeError("Activation service URL is not configured.")
 
     endpoint = settings.activation_service_url.rstrip("/") + endpoint_path
     async with httpx.AsyncClient(timeout=settings.activation_timeout_seconds) as client:
-        response = await client.post(endpoint, json=request_payload, headers=_get_auth_headers())
+        response = await client.post(
+            endpoint, json=request_payload, headers=_get_auth_headers()
+        )
         if response.status_code >= 400:
             raise RuntimeError(_normalize_service_error(response))
         return response.json()
@@ -364,7 +377,9 @@ async def attempt_auto_full_access_activation(db: Session, app_version: str) -> 
         state.last_refresh_at = utc_now()
         state.last_refresh_error = error
         db.commit()
-        logger.warning("Automatic full access activation returned invalid entitlement", error=error)
+        logger.warning(
+            "Automatic full access activation returned invalid entitlement", error=error
+        )
         return
 
     _apply_entitlement(db, state, payload, signature, key_id=key_id)
@@ -415,7 +430,9 @@ async def refresh_entitlement(db: Session, *, app_version: str) -> dict[str, Any
     return {"result": result or "updated", "entitlement": get_entitlement_summary(db)}
 
 
-async def activate_paid_license(db: Session, *, license_key: str, app_version: str) -> dict[str, Any]:
+async def activate_paid_license(
+    db: Session, *, license_key: str, app_version: str
+) -> dict[str, Any]:
     state = get_or_create_licensing_state(db)
     data = await _post_activation(
         "/v1/licenses/activate",
@@ -438,7 +455,10 @@ async def activate_paid_license(db: Session, *, license_key: str, app_version: s
         raise RuntimeError(error)
 
     _apply_entitlement(db, state, payload, signature, key_id=key_id)
-    return {"result": data.get("result") or "activated", "entitlement": get_entitlement_summary(db)}
+    return {
+        "result": data.get("result") or "activated",
+        "entitlement": get_entitlement_summary(db),
+    }
 
 
 async def deactivate_paid_license(db: Session) -> dict[str, Any]:
@@ -454,7 +474,10 @@ async def deactivate_paid_license(db: Session) -> dict[str, Any]:
         },
     )
     _clear_entitlement(db, state, status="none")
-    return {"result": data.get("result") or "deactivated", "entitlement": get_entitlement_summary(db)}
+    return {
+        "result": data.get("result") or "deactivated",
+        "entitlement": get_entitlement_summary(db),
+    }
 
 
 def import_offline_entitlement(db: Session, document: dict[str, Any]) -> dict[str, Any]:

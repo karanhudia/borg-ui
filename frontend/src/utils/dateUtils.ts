@@ -1,4 +1,4 @@
-import { format, formatDistance, intervalToDuration } from 'date-fns'
+import { formatDistance, intervalToDuration } from 'date-fns'
 
 /**
  * Format a date string to a compact, locale-aware format.
@@ -34,7 +34,11 @@ export const formatDateShort = (dateString: string | null | undefined): string =
 
   try {
     const date = new Date(dateString)
-    return format(date, 'MMM d, yyyy')
+    return date.toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    })
   } catch (error) {
     console.error('Error formatting date:', error)
     return dateString
@@ -573,6 +577,56 @@ export const convertCronToLocal = (cronExpression: string): string => {
   }
 }
 
+export const getBrowserTimeZone = (): string => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+  } catch {
+    return 'UTC'
+  }
+}
+
+const FALLBACK_TIME_ZONES = [
+  'UTC',
+  'Africa/Cairo',
+  'Africa/Johannesburg',
+  'America/Chicago',
+  'America/Denver',
+  'America/Los_Angeles',
+  'America/New_York',
+  'America/Sao_Paulo',
+  'Asia/Dubai',
+  'Asia/Kolkata',
+  'Asia/Singapore',
+  'Asia/Tokyo',
+  'Australia/Sydney',
+  'Europe/Berlin',
+  'Europe/London',
+  'Europe/Paris',
+  'Pacific/Auckland',
+]
+
+export const getSupportedTimeZones = (includeTimeZone?: string): string[] => {
+  let timeZones: string[] = []
+
+  try {
+    const intlWithSupportedValues = Intl as typeof Intl & {
+      supportedValuesOf?: (key: 'timeZone') => string[]
+    }
+    timeZones = intlWithSupportedValues.supportedValuesOf?.('timeZone') || []
+  } catch {
+    timeZones = []
+  }
+
+  const browserTimeZone = getBrowserTimeZone()
+  return Array.from(
+    new Set(
+      [...timeZones, ...FALLBACK_TIME_ZONES, browserTimeZone, includeTimeZone].filter(
+        (timeZone): timeZone is string => Boolean(timeZone)
+      )
+    )
+  ).sort()
+}
+
 /**
  * Format a date string to full datetime with timezone
  * Example: "2025-11-09T14:56:53Z" -> "November 9, 2025 at 2:56:53 PM UTC"
@@ -582,9 +636,18 @@ export const formatDateTimeFull = (dateString: string | null | undefined): strin
 
   try {
     const date = new Date(dateString)
-
-    // Format: "November 9, 2025 at 2:56:53 PM UTC"
-    return format(date, "MMMM d, yyyy 'at' h:mm:ss a 'UTC'")
+    const datePart = date.toLocaleDateString(undefined, {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    })
+    const timePart = date.toLocaleTimeString(undefined, {
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      timeZoneName: 'short',
+    })
+    return `${datePart} at ${timePart}`
   } catch (error) {
     console.error('Error formatting full datetime:', error)
     return dateString
@@ -600,10 +663,109 @@ export const formatDateCompact = (dateString: string | null | undefined): string
 
   try {
     const date = new Date(dateString)
-    // Format: "17 Oct 2025, 2:13 PM" (no seconds, abbreviated month)
-    return format(date, 'd MMM yyyy, h:mm a')
+    return date.toLocaleString(undefined, {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    })
   } catch (error) {
     console.error('Error formatting compact date:', error)
     return dateString
+  }
+}
+
+export const formatDateCompactInTimeZone = (
+  dateString: string | null | undefined,
+  timeZone: string
+): string => {
+  if (!dateString) return 'Never'
+
+  try {
+    const date = new Date(dateString)
+    return date.toLocaleString(undefined, {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone,
+    })
+  } catch (error) {
+    console.error('Error formatting compact date in timezone:', error)
+    return formatDateCompact(dateString)
+  }
+}
+
+export const formatDateTimeFullInTimeZone = (
+  dateString: string | null | undefined,
+  timeZone: string
+): string => {
+  if (!dateString) return 'Never'
+
+  try {
+    const date = new Date(dateString)
+    const datePart = date.toLocaleDateString(undefined, {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone,
+    })
+    const timePart = date.toLocaleTimeString(undefined, {
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      timeZone,
+      timeZoneName: 'short',
+    })
+    return `${datePart} at ${timePart}`
+  } catch (error) {
+    console.error('Error formatting full datetime in timezone:', error)
+    return formatDateTimeFull(dateString)
+  }
+}
+
+export interface ScheduledInstantDisplay {
+  value: string
+  tooltip: string
+  scheduledTime: string
+  scheduledTimeZone: string
+  localTime?: string
+  localTimeZone?: string
+}
+
+export const formatScheduledInstantDisplay = (
+  dateString: string | null | undefined,
+  scheduleTimeZone: string,
+  browserTimeZone: string = getBrowserTimeZone()
+): ScheduledInstantDisplay => {
+  if (!dateString) {
+    return {
+      value: 'Never',
+      tooltip: '',
+      scheduledTime: 'Never',
+      scheduledTimeZone: scheduleTimeZone || 'UTC',
+    }
+  }
+
+  const timeZone = scheduleTimeZone || 'UTC'
+  const value = formatDateCompactInTimeZone(dateString, timeZone)
+  const scheduledTime = formatDateTimeFullInTimeZone(dateString, timeZone)
+  const tooltipParts = [`${scheduledTime} (${timeZone})`]
+  let localTime: string | undefined
+
+  if (browserTimeZone !== timeZone) {
+    localTime = formatDateTimeFullInTimeZone(dateString, browserTimeZone)
+    tooltipParts.push(`Local: ${localTime} (${browserTimeZone})`)
+  }
+
+  return {
+    value,
+    tooltip: tooltipParts.join('\n'),
+    scheduledTime,
+    scheduledTimeZone: timeZone,
+    localTime,
+    localTimeZone: localTime ? browserTimeZone : undefined,
   }
 }

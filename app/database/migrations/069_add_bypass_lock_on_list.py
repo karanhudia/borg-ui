@@ -15,10 +15,12 @@ logger = structlog.get_logger()
 def upgrade(db):
     """Add bypass_lock_on_list to system_settings"""
     try:
-        db.execute(text("""
+        db.execute(
+            text("""
             ALTER TABLE system_settings
             ADD COLUMN bypass_lock_on_list BOOLEAN DEFAULT 0 NOT NULL
-        """))
+        """)
+        )
         logger.info("Added bypass_lock_on_list column to system_settings")
     except Exception as e:
         if "duplicate column" in str(e).lower():

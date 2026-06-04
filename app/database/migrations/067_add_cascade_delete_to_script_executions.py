@@ -28,13 +28,19 @@ def upgrade(connection):
         text("PRAGMA foreign_key_list(script_executions)")
     ).fetchall()
 
-    already_cascades = any(row[3] == "backup_job_id" and row[6] == "CASCADE" for row in fk_rows)
+    already_cascades = any(
+        row[3] == "backup_job_id" and row[6] == "CASCADE" for row in fk_rows
+    )
 
     if already_cascades:
-        print("✓ script_executions.backup_job_id FK already has ON DELETE CASCADE — skipping migration 067")
+        print(
+            "✓ script_executions.backup_job_id FK already has ON DELETE CASCADE — skipping migration 067"
+        )
         return
 
-    print("⚠️  Fixing script_executions foreign key constraint (adding ON DELETE CASCADE to backup_job_id)...")
+    print(
+        "⚠️  Fixing script_executions foreign key constraint (adding ON DELETE CASCADE to backup_job_id)..."
+    )
 
     try:
         # ── Build new table DDL from the live schema ─────────────────────────
@@ -63,7 +69,9 @@ def upgrade(connection):
         )
         col_defs.append("    FOREIGN KEY (triggered_by_user_id) REFERENCES users (id)")
 
-        new_ddl = "CREATE TABLE script_executions_new (\n" + ",\n".join(col_defs) + "\n)"
+        new_ddl = (
+            "CREATE TABLE script_executions_new (\n" + ",\n".join(col_defs) + "\n)"
+        )
 
         # ── Guard against stale temp table from a previous interrupted run ───
         connection.execute(text("DROP TABLE IF EXISTS script_executions_new"))
@@ -71,31 +79,43 @@ def upgrade(connection):
 
         # ── Copy using explicit column names (avoids column count mismatch) ─────
         col_names = ", ".join(row[1] for row in col_rows)
-        connection.execute(text(
-            f"INSERT INTO script_executions_new ({col_names})"
-            f" SELECT {col_names} FROM script_executions"
-        ))
+        connection.execute(
+            text(
+                f"INSERT INTO script_executions_new ({col_names})"
+                f" SELECT {col_names} FROM script_executions"
+            )
+        )
 
         # ── Swap tables ───────────────────────────────────────────────────────
         connection.execute(text("DROP TABLE script_executions"))
-        connection.execute(text("ALTER TABLE script_executions_new RENAME TO script_executions"))
+        connection.execute(
+            text("ALTER TABLE script_executions_new RENAME TO script_executions")
+        )
 
         # ── Recreate indexes ──────────────────────────────────────────────────
-        connection.execute(text(
-            "CREATE INDEX IF NOT EXISTS ix_script_executions_script_id"
-            " ON script_executions (script_id)"
-        ))
-        connection.execute(text(
-            "CREATE INDEX IF NOT EXISTS ix_script_executions_repository_id"
-            " ON script_executions (repository_id)"
-        ))
-        connection.execute(text(
-            "CREATE INDEX IF NOT EXISTS ix_script_executions_backup_job_id"
-            " ON script_executions (backup_job_id)"
-        ))
+        connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_script_executions_script_id"
+                " ON script_executions (script_id)"
+            )
+        )
+        connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_script_executions_repository_id"
+                " ON script_executions (repository_id)"
+            )
+        )
+        connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_script_executions_backup_job_id"
+                " ON script_executions (backup_job_id)"
+            )
+        )
 
         print("✓ script_executions.backup_job_id FK now has ON DELETE CASCADE")
-        print("✓ Backup jobs can now be deleted without leaving orphaned script execution rows")
+        print(
+            "✓ Backup jobs can now be deleted without leaving orphaned script execution rows"
+        )
 
     except Exception as e:
         print(f"✗ Error fixing script_executions foreign key constraint: {e}")
@@ -105,4 +125,6 @@ def upgrade(connection):
 
 def downgrade(connection):
     """No downgrade action - removing CASCADE would re-introduce the IntegrityError bug"""
-    print("✓ Downgrade skipped — reverting ON DELETE CASCADE would restore the IntegrityError bug")
+    print(
+        "✓ Downgrade skipped — reverting ON DELETE CASCADE would restore the IntegrityError bug"
+    )

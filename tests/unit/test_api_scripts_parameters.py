@@ -31,7 +31,7 @@ class TestScriptParameters:
             path="/backups/test",
             encryption="none",
             compression="lz4",
-            mode="full"
+            mode="full",
         )
         test_db.add(repo)
         test_db.commit()
@@ -44,9 +44,17 @@ class TestScriptParameters:
             category="custom",
             timeout=300,
             run_on="always",
-            parameters=json.dumps([
-                {"name": "MY_PARAM", "type": "text", "default": "", "required": False, "description": ""}
-            ])
+            parameters=json.dumps(
+                [
+                    {
+                        "name": "MY_PARAM",
+                        "type": "text",
+                        "default": "",
+                        "required": False,
+                        "description": "",
+                    }
+                ]
+            ),
         )
         test_db.add(script)
         test_db.commit()
@@ -60,10 +68,8 @@ class TestScriptParameters:
                 "hook_type": "pre-backup",
                 "enabled": True,
                 "execution_order": 1,
-                "parameter_values": {
-                    "MY_PARAM": "x" * 10001
-                }
-            }
+                "parameter_values": {"MY_PARAM": "x" * 10001},
+            },
         )
 
         assert response.status_code == 400
@@ -77,7 +83,7 @@ class TestScriptParameters:
             path="/backups/test",
             encryption="none",
             compression="lz4",
-            mode="full"
+            mode="full",
         )
         test_db.add(repo)
         test_db.commit()
@@ -90,9 +96,17 @@ class TestScriptParameters:
             category="custom",
             timeout=300,
             run_on="always",
-            parameters=json.dumps([
-                {"name": "SECRET_KEY", "type": "password", "default": "", "required": True, "description": ""}
-            ])
+            parameters=json.dumps(
+                [
+                    {
+                        "name": "SECRET_KEY",
+                        "type": "password",
+                        "default": "",
+                        "required": True,
+                        "description": "",
+                    }
+                ]
+            ),
         )
         test_db.add(script)
         test_db.commit()
@@ -107,19 +121,21 @@ class TestScriptParameters:
                 "hook_type": "pre-backup",
                 "enabled": True,
                 "execution_order": 1,
-                "parameter_values": {
-                    "SECRET_KEY": plaintext_secret
-                }
-            }
+                "parameter_values": {"SECRET_KEY": plaintext_secret},
+            },
         )
 
         assert response.status_code == 200
 
         # Query database directly to check encryption
-        repo_script = test_db.query(RepositoryScript).filter(
-            RepositoryScript.repository_id == repo.id,
-            RepositoryScript.script_id == script.id
-        ).first()
+        repo_script = (
+            test_db.query(RepositoryScript)
+            .filter(
+                RepositoryScript.repository_id == repo.id,
+                RepositoryScript.script_id == script.id,
+            )
+            .first()
+        )
 
         assert repo_script is not None
         assert repo_script.parameter_values is not None

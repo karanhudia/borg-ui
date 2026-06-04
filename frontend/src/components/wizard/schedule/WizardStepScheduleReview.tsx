@@ -11,6 +11,7 @@ interface WizardStepScheduleReviewProps {
     description: string
     repositoryIds: number[]
     cronExpression: string
+    timezone?: string
     archiveNameTemplate: string
     preBackupScriptId: number | null
     postBackupScriptId: number | null
@@ -264,6 +265,9 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
           )}
           <AttrRow label={t('wizard.scheduleWizard.review.schedule')}>
             <CodePill>{data.cronExpression}</CodePill>
+          </AttrRow>
+          <AttrRow label={t('wizard.scheduleWizard.review.timezone', { defaultValue: 'Timezone' })}>
+            <CodePill>{data.timezone || 'UTC'}</CodePill>
           </AttrRow>
           <AttrRow label={t('wizard.scheduleWizard.review.archiveNameTemplate')}>
             <CodePill>{data.archiveNameTemplate}</CodePill>

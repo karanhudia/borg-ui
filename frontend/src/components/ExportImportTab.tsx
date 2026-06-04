@@ -40,6 +40,18 @@ interface ImportResult {
   errors?: string[]
 }
 
+const normalizeHeaderValue = (value: unknown): string | undefined => {
+  if (typeof value === 'string') {
+    return value
+  }
+
+  if (Array.isArray(value)) {
+    return value.join(', ')
+  }
+
+  return undefined
+}
+
 const ExportImportTab: React.FC = () => {
   const { t } = useTranslation()
   const { hasGlobalPermission } = useAuth()
@@ -75,8 +87,9 @@ const ExportImportTab: React.FC = () => {
     },
     onSuccess: (response) => {
       // Get content type and filename from headers
-      const contentType = response.headers['content-type'] || 'application/octet-stream'
-      const contentDisposition = response.headers['content-disposition'] || ''
+      const contentType =
+        normalizeHeaderValue(response.headers['content-type']) || 'application/octet-stream'
+      const contentDisposition = normalizeHeaderValue(response.headers['content-disposition']) || ''
 
       // Extract filename from Content-Disposition header
       let filename = 'borg-ui-export.yaml'

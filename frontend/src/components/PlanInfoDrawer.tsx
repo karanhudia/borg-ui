@@ -1,32 +1,75 @@
 import { useEffect, useState } from 'react'
-import { Alert, Box, Button, Chip, Divider, Drawer, IconButton, Typography } from '@mui/material'
+import {
+  Alert,
+  Box,
+  Button,
+  Chip,
+  Divider,
+  Drawer,
+  type DrawerProps,
+  IconButton,
+  Typography,
+} from '@mui/material'
+import { useTheme } from '@mui/material/styles'
 import { X, Check, Sparkles, Clock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { Plan, PLAN_COLOR } from '../core/features'
+import type { Plan } from '../core/features'
 import { useAnalytics } from '../hooks/useAnalytics'
 import type { EntitlementInfo } from '../hooks/useSystemInfo'
 import { usePlanContent } from '../hooks/usePlanContent'
+import { compareVersions } from '../utils/announcements'
 import { BUY_URL } from '../utils/externalLinks'
+import { getPlanDrawerColors } from './planDrawerColors'
 
 interface PlanInfoDrawerProps {
   open: boolean
   onClose: () => void
   plan: Plan
+  appVersion?: string
   initialSelectedPlan?: Plan
   features?: Record<string, Plan>
   entitlement?: EntitlementInfo
+  container?: DrawerProps['container']
 }
 
 const UPGRADE_PLANS: Plan[] = ['pro', 'enterprise']
+const REPLACED_PLAN_CONTENT_FEATURE_IDS: Record<string, string> = {
+  multi_source_policies: 'backup_plan_mixed_sources',
+  rclone_support: 'rclone',
+}
 
 type ActiveTab = 'your-plan' | 'upgrade'
 
-function isVersionedUpcomingFeature(feature: { available_in?: string }) {
-  return Boolean(feature.available_in)
+function isFeatureAvailableInCurrentVersion(
+  feature: { available_in?: string },
+  appVersion?: string
+) {
+  return Boolean(
+    feature.available_in && appVersion && compareVersions(appVersion, feature.available_in) >= 0
+  )
+}
+
+function isVersionedUpcomingFeature(feature: { available_in?: string }, appVersion?: string) {
+  return Boolean(feature.available_in) && !isFeatureAvailableInCurrentVersion(feature, appVersion)
 }
 
 function isComingSoonFeature(feature: { availability?: string }) {
   return feature.availability === 'coming_soon'
+}
+
+function isFeatureIncluded(
+  feature: { availability?: string; available_in?: string },
+  appVersion?: string
+) {
+  return (
+    feature.availability === 'included' || isFeatureAvailableInCurrentVersion(feature, appVersion)
+  )
+}
+
+function isReplacedByVisibleFeature(featureId: string, visibleFeatureIds: Set<string>) {
+  const replacementFeatureId = REPLACED_PLAN_CONTENT_FEATURE_IDS[featureId]
+
+  return Boolean(replacementFeatureId && visibleFeatureIds.has(replacementFeatureId))
 }
 
 function getDefaultSelectedPlan(plan: Plan, initialSelectedPlan?: Plan): Plan {
@@ -41,21 +84,33 @@ function getDefaultActiveTab(plan: Plan): ActiveTab {
   return plan === 'community' ? 'upgrade' : 'your-plan'
 }
 
+function normalizePlan(plan: Plan | string | null | undefined): Plan {
+  if (plan === 'pro' || plan === 'enterprise') {
+    return plan
+  }
+
+  return 'community'
+}
+
 export default function PlanInfoDrawer({
   open,
   onClose,
   plan,
+  appVersion,
   initialSelectedPlan,
   features,
   entitlement,
+  container,
 }: PlanInfoDrawerProps) {
   const { t } = useTranslation()
+  const muiTheme = useTheme()
   const { trackPlan, EventAction } = useAnalytics()
   const { features: planContentFeatures } = usePlanContent()
+  const normalizedPlan = normalizePlan(plan)
   const [selectedPlan, setSelectedPlan] = useState<Plan>(
-    getDefaultSelectedPlan(plan, initialSelectedPlan)
+    getDefaultSelectedPlan(normalizedPlan, initialSelectedPlan)
   )
-  const [activeTab, setActiveTab] = useState<ActiveTab>(getDefaultActiveTab(plan))
+  const [activeTab, setActiveTab] = useState<ActiveTab>(getDefaultActiveTab(normalizedPlan))
   const [referenceNowMs, setReferenceNowMs] = useState<number | null>(null)
 
   const fullAccessExpiry = entitlement?.expires_at
@@ -74,10 +129,15 @@ export default function PlanInfoDrawer({
         )
       : null
 
-  const color = isFullAccess ? PLAN_COLOR.enterprise : PLAN_COLOR[plan]
-  const label = isFullAccess ? t('plan.fullAccessLabel') : planLabel(plan)
+  const drawerColors = getPlanDrawerColors(muiTheme)
+  const currentPlanColors = drawerColors.plans[isFullAccess ? 'enterprise' : normalizedPlan]
+  const selectedPlanColors = drawerColors.plans[selectedPlan]
+  const communityPlanColors = drawerColors.plans.community
+  const fullAccessPlanColors = drawerColors.plans.enterprise
+  const color = currentPlanColors.accent
+  const label = isFullAccess ? t('plan.fullAccessLabel') : planLabel(normalizedPlan)
 
-  const selectedColor = PLAN_COLOR[selectedPlan]
+  const selectedColor = selectedPlanColors.accent
   const visibleFeatureIds = Object.entries(features ?? {}).filter(
     ([, required]) => required === selectedPlan
   )
@@ -86,7 +146,11 @@ export default function PlanInfoDrawer({
     (feature) => feature.plan === selectedPlan
   )
   const visibleFeatures = manifestFeaturesForPlan
-    .filter((feature) => feature.availability === 'included')
+    .filter(
+      (feature) =>
+        (visibleFeatureIdSet.has(feature.id) || isFeatureIncluded(feature, appVersion)) &&
+        !isReplacedByVisibleFeature(feature.id, visibleFeatureIdSet)
+    )
     .map((feature) => ({
       id: feature.id,
       label: feature.label,
@@ -108,9 +172,7 @@ export default function PlanInfoDrawer({
     visibleFeatures.length > 0 || backendOnlyVisibleFeatures.length > 0
       ? [...visibleFeatures, ...backendOnlyVisibleFeatures]
       : manifestFeaturesForPlan
-          .filter(
-            (feature) => feature.availability === 'included' && !isVersionedUpcomingFeature(feature)
-          )
+          .filter((feature) => isFeatureIncluded(feature, appVersion))
           .map((feature) => ({
             id: feature.id,
             label: feature.label,
@@ -118,27 +180,31 @@ export default function PlanInfoDrawer({
           }))
 
   const upcomingVersionedFeatures = manifestFeaturesForPlan.filter(
-    (feature) => isVersionedUpcomingFeature(feature) && !visibleFeatureIdSet.has(feature.id)
+    (feature) =>
+      isVersionedUpcomingFeature(feature, appVersion) &&
+      !visibleFeatureIdSet.has(feature.id) &&
+      !isReplacedByVisibleFeature(feature.id, visibleFeatureIdSet)
   )
 
   const comingSoonFeatures = manifestFeaturesForPlan.filter(
     (feature) =>
-      !isVersionedUpcomingFeature(feature) &&
-      (isComingSoonFeature(feature) ||
-        (feature.availability === undefined && !visibleFeatureIdSet.has(feature.id)))
+      !isVersionedUpcomingFeature(feature, appVersion) &&
+      !visibleFeatureIdSet.has(feature.id) &&
+      !isReplacedByVisibleFeature(feature.id, visibleFeatureIdSet) &&
+      (isComingSoonFeature(feature) || feature.availability === undefined)
   )
 
   const communityFeatures = planContentFeatures.filter(
-    (f) => f.plan === 'community' && f.availability === 'included'
+    (f) => f.plan === 'community' && isFeatureIncluded(f, appVersion)
   )
 
   useEffect(() => {
     if (open) {
-      setSelectedPlan(getDefaultSelectedPlan(plan, initialSelectedPlan))
-      setActiveTab(getDefaultActiveTab(plan))
+      setSelectedPlan(getDefaultSelectedPlan(normalizedPlan, initialSelectedPlan))
+      setActiveTab(getDefaultActiveTab(normalizedPlan))
       setReferenceNowMs(Date.now())
     }
-  }, [initialSelectedPlan, open, plan])
+  }, [initialSelectedPlan, normalizedPlan, open])
 
   const handleBuyClick = () => {
     trackPlan(EventAction.VIEW, {
@@ -156,13 +222,20 @@ export default function PlanInfoDrawer({
       anchor="right"
       open={open}
       onClose={onClose}
+      container={container}
       SlideProps={{
         onExited: () => {
-          setSelectedPlan(getDefaultSelectedPlan(plan, initialSelectedPlan))
-          setActiveTab(getDefaultActiveTab(plan))
+          setSelectedPlan(getDefaultSelectedPlan(normalizedPlan, initialSelectedPlan))
+          setActiveTab(getDefaultActiveTab(normalizedPlan))
         },
       }}
-      sx={{ '& .MuiDrawer-paper': { width: 340, boxSizing: 'border-box' } }}
+      sx={{
+        '& .MuiDrawer-paper': {
+          width: 340,
+          boxSizing: 'border-box',
+          bgcolor: drawerColors.paper,
+        },
+      }}
     >
       <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         {/* Header */}
@@ -174,9 +247,9 @@ export default function PlanInfoDrawer({
                   width: 32,
                   height: 32,
                   borderRadius: '8px',
-                  bgcolor: `${color}18`,
+                  bgcolor: currentPlanColors.iconSurface,
                   border: '1px solid',
-                  borderColor: `${color}35`,
+                  borderColor: currentPlanColors.iconBorder,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -188,7 +261,7 @@ export default function PlanInfoDrawer({
                 <Typography
                   variant="caption"
                   sx={{
-                    color: 'text.secondary',
+                    color: drawerColors.sectionText,
                     fontSize: '0.65rem',
                     fontWeight: 600,
                     textTransform: 'uppercase',
@@ -246,7 +319,7 @@ export default function PlanInfoDrawer({
                   sx={{
                     fontSize: '0.72rem',
                     fontWeight: isActive ? 700 : 500,
-                    color: isActive ? tabColor : 'text.secondary',
+                    color: isActive ? tabColor : drawerColors.secondaryText,
                     letterSpacing: '0.01em',
                   }}
                 >
@@ -279,22 +352,29 @@ export default function PlanInfoDrawer({
                     mb: 2,
                     p: 1.5,
                     borderRadius: '8px',
-                    bgcolor: 'rgba(99,102,241,0.08)',
-                    border: '1px solid rgba(99,102,241,0.2)',
+                    bgcolor: fullAccessPlanColors.surface,
+                    border: '1px solid',
+                    borderColor: fullAccessPlanColors.border,
                   }}
                 >
                   <Typography
                     sx={{
                       fontSize: '0.78rem',
                       fontWeight: 700,
-                      color: '#6366f1',
+                      color: fullAccessPlanColors.accent,
                       lineHeight: 1.3,
                       mb: 0.5,
                     }}
                   >
                     {t('plan.fullAccessCountdown', { count: daysRemaining })}
                   </Typography>
-                  <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary', lineHeight: 1.5 }}>
+                  <Typography
+                    sx={{
+                      fontSize: '0.7rem',
+                      color: fullAccessPlanColors.description,
+                      lineHeight: 1.5,
+                    }}
+                  >
                     {t('plan.fullAccessEndsNotice', { date: fullAccessExpiry })}
                   </Typography>
                 </Box>
@@ -308,7 +388,7 @@ export default function PlanInfoDrawer({
                   fontSize: '0.6rem',
                   letterSpacing: '0.08em',
                   textTransform: 'uppercase',
-                  color: 'text.disabled',
+                  color: drawerColors.sectionText,
                   display: 'block',
                   mb: 1.25,
                 }}
@@ -324,9 +404,9 @@ export default function PlanInfoDrawer({
                       width: 16,
                       height: 16,
                       borderRadius: '4px',
-                      bgcolor: `${PLAN_COLOR.community}20`,
+                      bgcolor: communityPlanColors.iconSurface,
                       border: '1px solid',
-                      borderColor: `${PLAN_COLOR.community}40`,
+                      borderColor: communityPlanColors.iconBorder,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -334,7 +414,11 @@ export default function PlanInfoDrawer({
                       mt: 0.125,
                     }}
                   >
-                    <Check size={10} style={{ color: PLAN_COLOR.community }} strokeWidth={3} />
+                    <Check
+                      size={10}
+                      style={{ color: communityPlanColors.accent }}
+                      strokeWidth={3}
+                    />
                   </Box>
                   <Box>
                     <Typography
@@ -350,7 +434,7 @@ export default function PlanInfoDrawer({
                     <Typography
                       sx={{
                         fontSize: '0.7rem',
-                        color: 'text.secondary',
+                        color: communityPlanColors.description,
                         lineHeight: 1.4,
                         mt: 0.25,
                       }}
@@ -386,7 +470,7 @@ export default function PlanInfoDrawer({
                   fontSize: '0.6rem',
                   letterSpacing: '0.08em',
                   textTransform: 'uppercase',
-                  color: 'text.disabled',
+                  color: drawerColors.sectionText,
                   display: 'block',
                   mb: 1.25,
                 }}
@@ -401,45 +485,50 @@ export default function PlanInfoDrawer({
                   mb: 2.5,
                 }}
               >
-                {UPGRADE_PLANS.map((p) => (
-                  <Box
-                    key={p}
-                    onClick={() => {
-                      setSelectedPlan(p)
-                      trackPlan(EventAction.VIEW, {
-                        surface: 'plan_drawer',
-                        operation: 'select_plan',
-                        selected_plan: p,
-                      })
-                    }}
-                    sx={{
-                      p: 1,
-                      borderRadius: '6px',
-                      border: '1px solid',
-                      borderColor: p === selectedPlan ? `${PLAN_COLOR[p]}50` : 'divider',
-                      bgcolor: p === selectedPlan ? `${PLAN_COLOR[p]}10` : 'transparent',
-                      textAlign: 'center',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
-                      '&:hover': {
-                        borderColor: `${PLAN_COLOR[p]}50`,
-                        bgcolor: `${PLAN_COLOR[p]}10`,
-                      },
-                    }}
-                  >
-                    <Typography
+                {UPGRADE_PLANS.map((p) => {
+                  const planColors = drawerColors.plans[p]
+                  const isSelected = p === selectedPlan
+
+                  return (
+                    <Box
+                      key={p}
+                      onClick={() => {
+                        setSelectedPlan(p)
+                        trackPlan(EventAction.VIEW, {
+                          surface: 'plan_drawer',
+                          operation: 'select_plan',
+                          selected_plan: p,
+                        })
+                      }}
                       sx={{
-                        fontSize: '0.65rem',
-                        fontWeight: 700,
-                        color: p === selectedPlan ? PLAN_COLOR[p] : 'text.secondary',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.04em',
+                        p: 1,
+                        borderRadius: '6px',
+                        border: '1px solid',
+                        borderColor: isSelected ? planColors.border : 'divider',
+                        bgcolor: isSelected ? planColors.surface : 'transparent',
+                        textAlign: 'center',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                        '&:hover': {
+                          borderColor: planColors.border,
+                          bgcolor: planColors.hoverSurface,
+                        },
                       }}
                     >
-                      {planLabel(p)}
-                    </Typography>
-                  </Box>
-                ))}
+                      <Typography
+                        sx={{
+                          fontSize: '0.65rem',
+                          fontWeight: 700,
+                          color: isSelected ? planColors.accent : drawerColors.secondaryText,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.04em',
+                        }}
+                      >
+                        {planLabel(p)}
+                      </Typography>
+                    </Box>
+                  )
+                })}
               </Box>
 
               <Divider sx={{ mb: 2 }} />
@@ -461,7 +550,7 @@ export default function PlanInfoDrawer({
                         fontSize: '0.6rem',
                         letterSpacing: '0.08em',
                         textTransform: 'uppercase',
-                        color: 'text.disabled',
+                        color: drawerColors.sectionText,
                       }}
                     >
                       {t('plan.planFeatures', { plan: planLabel(selectedPlan) })}
@@ -474,9 +563,9 @@ export default function PlanInfoDrawer({
                           width: 16,
                           height: 16,
                           borderRadius: '4px',
-                          bgcolor: `${selectedColor}20`,
+                          bgcolor: selectedPlanColors.iconSurface,
                           border: '1px solid',
-                          borderColor: `${selectedColor}40`,
+                          borderColor: selectedPlanColors.iconBorder,
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -500,7 +589,7 @@ export default function PlanInfoDrawer({
                         <Typography
                           sx={{
                             fontSize: '0.7rem',
-                            color: 'text.secondary',
+                            color: selectedPlanColors.description,
                             lineHeight: 1.4,
                             mt: 0.25,
                           }}
@@ -531,7 +620,7 @@ export default function PlanInfoDrawer({
                         fontSize: '0.6rem',
                         letterSpacing: '0.08em',
                         textTransform: 'uppercase',
-                        color: 'text.disabled',
+                        color: drawerColors.sectionText,
                       }}
                     >
                       {t('plan.plannedReleases', { plan: planLabel(selectedPlan) })}
@@ -544,9 +633,9 @@ export default function PlanInfoDrawer({
                           width: 16,
                           height: 16,
                           borderRadius: '4px',
-                          bgcolor: `${selectedColor}14`,
+                          bgcolor: selectedPlanColors.iconSurface,
                           border: '1px dashed',
-                          borderColor: `${selectedColor}45`,
+                          borderColor: selectedPlanColors.iconBorder,
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -570,7 +659,7 @@ export default function PlanInfoDrawer({
                         <Typography
                           sx={{
                             fontSize: '0.7rem',
-                            color: 'text.secondary',
+                            color: selectedPlanColors.description,
                             lineHeight: 1.4,
                             mt: 0.25,
                           }}
@@ -614,7 +703,7 @@ export default function PlanInfoDrawer({
                         fontSize: '0.6rem',
                         letterSpacing: '0.08em',
                         textTransform: 'uppercase',
-                        color: 'text.disabled',
+                        color: drawerColors.sectionText,
                       }}
                     >
                       {t('plan.upcomingFeatures', { plan: planLabel(selectedPlan) })}
@@ -627,10 +716,10 @@ export default function PlanInfoDrawer({
                         height: 18,
                         fontSize: '0.6rem',
                         fontWeight: 600,
-                        bgcolor: `${selectedColor}14`,
+                        bgcolor: selectedPlanColors.statusSurface,
                         color: selectedColor,
                         border: '1px solid',
-                        borderColor: `${selectedColor}30`,
+                        borderColor: selectedPlanColors.statusBorder,
                         '& .MuiChip-icon': { color: selectedColor, ml: 0.5 },
                         '& .MuiChip-label': { px: 0.75 },
                       }}
@@ -643,9 +732,9 @@ export default function PlanInfoDrawer({
                           width: 16,
                           height: 16,
                           borderRadius: '4px',
-                          bgcolor: `${selectedColor}14`,
+                          bgcolor: selectedPlanColors.iconSurface,
                           border: '1px dashed',
-                          borderColor: `${selectedColor}45`,
+                          borderColor: selectedPlanColors.iconBorder,
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -669,7 +758,7 @@ export default function PlanInfoDrawer({
                         <Typography
                           sx={{
                             fontSize: '0.7rem',
-                            color: 'text.secondary',
+                            color: selectedPlanColors.description,
                             lineHeight: 1.4,
                             mt: 0.25,
                           }}
@@ -705,7 +794,9 @@ export default function PlanInfoDrawer({
           {isFullAccess && fullAccessExpiry && (
             <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
               <Clock size={13} style={{ color, flexShrink: 0, marginTop: 2 }} />
-              <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary', lineHeight: 1.5 }}>
+              <Typography
+                sx={{ fontSize: '0.7rem', color: drawerColors.secondaryText, lineHeight: 1.5 }}
+              >
                 {t('plan.fullAccessActiveNotice', { date: fullAccessExpiry })}
               </Typography>
             </Box>

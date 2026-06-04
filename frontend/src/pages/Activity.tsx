@@ -3,10 +3,13 @@ import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { Box, IconButton, MenuItem, Select, Typography } from '@mui/material'
 import { History, Info, RefreshCw } from 'lucide-react'
-import { activityAPI } from '../services/api'
+import { activityAPI, repositoriesAPI } from '../services/api'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { useAuth } from '../hooks/useAuth'
+import { useLockBreakPermissions } from '../hooks/useLockBreakPermissions'
 import BackupJobsTable from '../components/BackupJobsTable'
+import LogViewerDialog from '../components/LogViewerDialog'
+import RunningCloudStorageJobsSection from '../components/RunningCloudStorageJobsSection'
 
 interface ActivityItem {
   id: number
@@ -16,6 +19,7 @@ interface ActivityItem {
   completed_at: string | null
   error_message: string | null
   repository: string | null
+  repository_id?: number | null
   log_file_path: string | null
   archive_name: string | null
   package_name: string | null
@@ -23,6 +27,9 @@ interface ActivityItem {
   triggered_by?: string // 'manual' or 'schedule'
   schedule_id?: number | null
   schedule_name?: string | null // Schedule name if triggered by schedule
+  backup_plan_id?: number | null
+  backup_plan_run_id?: number | null
+  backup_plan_name?: string | null
   has_logs?: boolean
 }
 
@@ -33,6 +40,7 @@ const Activity: React.FC = () => {
   const canManageActivityJobs = hasGlobalPermission('repositories.manage_all')
   const [typeFilter, setTypeFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [logJob, setLogJob] = useState<ActivityItem | null>(null)
 
   // Fetch activity data
   const {
@@ -50,6 +58,18 @@ const Activity: React.FC = () => {
       return response.data
     },
     refetchInterval: 3000, // Refresh every 3 seconds
+  })
+
+  const { data: repositoriesData } = useQuery({
+    queryKey: ['repositories'],
+    queryFn: repositoriesAPI.getRepositories,
+  })
+  const repositories = React.useMemo(
+    () => repositoriesData?.data?.repositories ?? [],
+    [repositoriesData?.data?.repositories]
+  )
+  const { canBreakLock: canBreakLockForActivity, lockBreakingEnabled } = useLockBreakPermissions({
+    repositories,
   })
 
   const handleTypeFilterChange = (value: string) => {
@@ -73,6 +93,15 @@ const Activity: React.FC = () => {
     if (!activities) return { grouped: [], individual: [] }
     return { grouped: [], individual: activities }
   }, [activities])
+  const activeCloudStorageJobs = React.useMemo(
+    () =>
+      ((activities || []) as ActivityItem[]).filter(
+        (activity: ActivityItem) =>
+          (activity.type === 'rclone_sync' || activity.type === 'rclone_hydrate') &&
+          (activity.status === 'pending' || activity.status === 'running')
+      ),
+    [activities]
+  )
 
   return (
     <Box>
@@ -116,10 +145,16 @@ const Activity: React.FC = () => {
           <MenuItem value="all">{t('activity.filters.allTypes')}</MenuItem>
           <MenuItem value="backup">{t('activity.filters.types.backup')}</MenuItem>
           <MenuItem value="restore">{t('activity.filters.types.restore')}</MenuItem>
+          <MenuItem value="restore_check">{t('activity.filters.types.restoreCheck')}</MenuItem>
           <MenuItem value="check">{t('activity.filters.types.check')}</MenuItem>
           <MenuItem value="compact">{t('activity.filters.types.compact')}</MenuItem>
           <MenuItem value="prune">{t('activity.filters.types.prune')}</MenuItem>
           <MenuItem value="package">{t('activity.filters.types.package')}</MenuItem>
+          <MenuItem value="rclone_sync">{t('activity.filters.types.rcloneSync')}</MenuItem>
+          <MenuItem value="rclone_hydrate">{t('activity.filters.types.rcloneHydrate')}</MenuItem>
+          <MenuItem value="script_execution">
+            {t('activity.filters.types.scriptExecution')}
+          </MenuItem>
         </Select>
 
         <Select
@@ -130,11 +165,17 @@ const Activity: React.FC = () => {
         >
           <MenuItem value="all">{t('activity.filters.allStatus')}</MenuItem>
           <MenuItem value="completed">{t('activity.filters.statuses.completed')}</MenuItem>
+          <MenuItem value="needs_backup">{t('activity.filters.statuses.needsBackup')}</MenuItem>
           <MenuItem value="failed">{t('activity.filters.statuses.failed')}</MenuItem>
           <MenuItem value="running">{t('activity.filters.statuses.running')}</MenuItem>
           <MenuItem value="pending">{t('activity.filters.statuses.pending')}</MenuItem>
         </Select>
       </Box>
+
+      <RunningCloudStorageJobsSection
+        jobs={activeCloudStorageJobs}
+        onViewLogs={(job) => setLogJob(job as ActivityItem)}
+      />
 
       {/* Activity List */}
       {isLoading ? (
@@ -150,7 +191,8 @@ const Activity: React.FC = () => {
             breakLock: true,
             delete: true,
           }}
-          canBreakLocks={canManageActivityJobs}
+          canBreakLocks={canBreakLockForActivity}
+          lockBreakingEnabled={lockBreakingEnabled}
           canDeleteJobs={canManageActivityJobs}
           getRowKey={(activity) => `${activity.type}-${activity.id}`}
           headerBgColor="background.default"
@@ -170,7 +212,8 @@ const Activity: React.FC = () => {
             breakLock: true,
             delete: true,
           }}
-          canBreakLocks={canManageActivityJobs}
+          canBreakLocks={canBreakLockForActivity}
+          lockBreakingEnabled={lockBreakingEnabled}
           canDeleteJobs={canManageActivityJobs}
           getRowKey={(activity) => `${activity.type}-${activity.id}`}
           headerBgColor="background.default"
@@ -183,6 +226,7 @@ const Activity: React.FC = () => {
           }}
         />
       )}
+      <LogViewerDialog job={logJob} open={Boolean(logJob)} onClose={() => setLogJob(null)} />
     </Box>
   )
 }

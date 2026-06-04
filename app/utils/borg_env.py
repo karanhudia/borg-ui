@@ -97,7 +97,9 @@ def build_repository_borg_env(
 ):
     """Build Borg env for a stored repository and return env + temp key path."""
     temp_key_file = resolve_repo_ssh_key_file(repository, db)
-    ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file, keepalive=keepalive)
+    ssh_opts = get_standard_ssh_opts(
+        include_key_path=temp_key_file, keepalive=keepalive
+    )
     env = setup_borg_env(
         base_env=base_env,
         passphrase=getattr(repository, "passphrase", None),
@@ -124,7 +126,9 @@ def build_ssh_key_borg_env(
     if ssh_key_id and path.startswith("ssh://"):
         temp_key_file = resolve_ssh_key_file_by_id(ssh_key_id, db=db)
 
-    ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file, keepalive=keepalive)
+    ssh_opts = get_standard_ssh_opts(
+        include_key_path=temp_key_file, keepalive=keepalive
+    )
     env = setup_borg_env(
         base_env=base_env,
         passphrase=passphrase,

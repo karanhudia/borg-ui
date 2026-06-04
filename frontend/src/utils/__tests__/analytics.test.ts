@@ -21,6 +21,23 @@ import {
   EventAction,
 } from '../analytics'
 
+const { getAuthConfigMock } = vi.hoisted(() => ({
+  getAuthConfigMock: vi.fn(),
+}))
+
+const fetchJsonForAuthModeMock = vi.fn()
+
+vi.mock('../../services/api', () => ({
+  authAPI: {
+    getAuthConfig: getAuthConfigMock,
+  },
+}))
+
+vi.mock('../../services/authRequest', () => ({
+  fetchJsonForAuthMode: (path: string, init?: RequestInit, mode?: string) =>
+    fetchJsonForAuthModeMock(path, init, mode),
+}))
+
 interface UmamiWindow extends Window {
   umami?: {
     track: ReturnType<typeof vi.fn>
@@ -41,6 +58,8 @@ describe('analytics (umami)', () => {
       value: vi.fn().mockReturnValue(true),
       configurable: true,
     })
+    getAuthConfigMock.mockReset()
+    fetchJsonForAuthModeMock.mockReset()
   })
 
   afterEach(() => {
@@ -60,10 +79,7 @@ describe('analytics (umami)', () => {
   describe('loadUserPreference', () => {
     it('sets opted-out when no token in JWT mode', async () => {
       Storage.prototype.getItem = vi.fn().mockReturnValue(null)
-      global.fetch = vi.fn().mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ proxy_auth_enabled: false }),
-      } as Response)
+      getAuthConfigMock.mockResolvedValueOnce({ data: { proxy_auth_enabled: false } })
 
       await loadUserPreference()
 
@@ -73,18 +89,13 @@ describe('analytics (umami)', () => {
 
     it('loads analytics preference from API when token exists', async () => {
       Storage.prototype.getItem = vi.fn().mockReturnValue('test-token')
-      global.fetch = vi
-        .fn()
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ proxy_auth_enabled: false }),
-        } as Response)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            preferences: { analytics_enabled: true, analytics_consent_given: true },
-          }),
-        } as Response)
+      getAuthConfigMock.mockResolvedValueOnce({ data: { proxy_auth_enabled: false } })
+      global.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          preferences: { analytics_enabled: true, analytics_consent_given: true },
+        }),
+      } as Response)
 
       await loadUserPreference()
 
@@ -93,13 +104,8 @@ describe('analytics (umami)', () => {
 
     it('defaults to opt-out when API fails', async () => {
       Storage.prototype.getItem = vi.fn().mockReturnValue('test-token')
-      global.fetch = vi
-        .fn()
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ proxy_auth_enabled: false }),
-        } as Response)
-        .mockResolvedValueOnce({ ok: false } as Response)
+      getAuthConfigMock.mockResolvedValueOnce({ data: { proxy_auth_enabled: false } })
+      global.fetch = vi.fn().mockResolvedValueOnce({ ok: false } as Response)
 
       await loadUserPreference()
 
@@ -109,7 +115,7 @@ describe('analytics (umami)', () => {
 
     it('defaults to opt-out on network error', async () => {
       Storage.prototype.getItem = vi.fn().mockReturnValue('test-token')
-      global.fetch = vi.fn().mockRejectedValue(new Error('Network error'))
+      getAuthConfigMock.mockRejectedValueOnce(new Error('Network error'))
 
       await loadUserPreference()
 
@@ -119,22 +125,40 @@ describe('analytics (umami)', () => {
 
     it('handles proxy auth mode without token', async () => {
       Storage.prototype.getItem = vi.fn().mockReturnValue(null)
-      global.fetch = vi
-        .fn()
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ proxy_auth_enabled: true }),
-        } as Response)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            preferences: { analytics_enabled: true, analytics_consent_given: true },
-          }),
-        } as Response)
+      getAuthConfigMock.mockResolvedValueOnce({ data: { proxy_auth_enabled: true } })
+      fetchJsonForAuthModeMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          preferences: { analytics_enabled: true, analytics_consent_given: true },
+        }),
+      } as Response)
 
       await loadUserPreference()
 
       expect(arePreferencesLoaded()).toBe(true)
+    })
+
+    it('loads analytics preference in insecure no-auth mode without a token', async () => {
+      Storage.prototype.getItem = vi.fn().mockReturnValue(null)
+      getAuthConfigMock.mockResolvedValueOnce({
+        data: { proxy_auth_enabled: false, insecure_no_auth_enabled: true },
+      })
+      fetchJsonForAuthModeMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          preferences: { analytics_enabled: true, analytics_consent_given: true },
+        }),
+      } as Response)
+
+      await loadUserPreference()
+
+      expect(fetchJsonForAuthModeMock).toHaveBeenCalledWith(
+        '/settings/preferences',
+        {},
+        'insecure-no-auth'
+      )
+      expect(arePreferencesLoaded()).toBe(true)
+      expect(hasConsentBeenGiven()).toBe(true)
     })
   })
 

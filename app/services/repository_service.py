@@ -18,6 +18,7 @@ from app.utils.borg_env import setup_borg_env, ssh_key_borg_env
 
 logger = structlog.get_logger()
 
+
 def _get_operation_timeouts() -> dict:
     timeouts = {
         "info_timeout": settings.borg_info_timeout,
@@ -52,7 +53,6 @@ class RepositoryService:
                 passphrase=passphrase,
                 ssh_key_id=ssh_key_id,
             ) as env:
-
                 cmd = [borg.borg_cmd, "info"]
                 if remote_path:
                     cmd.extend(["--remote-path", remote_path])
@@ -68,7 +68,8 @@ class RepositoryService:
                 if not result["success"]:
                     return {
                         "success": False,
-                        "error": result.get("stderr") or "Repository verification failed",
+                        "error": result.get("stderr")
+                        or "Repository verification failed",
                     }
 
                 import json
@@ -77,7 +78,10 @@ class RepositoryService:
                     return {"success": True, "info": json.loads(result["stdout"])}
                 except json.JSONDecodeError as exc:
                     logger.error("Failed to parse borg info output", error=str(exc))
-                    return {"success": False, "error": f"Failed to parse repository info: {exc}"}
+                    return {
+                        "success": False,
+                        "error": f"Failed to parse repository info: {exc}",
+                    }
         except asyncio.TimeoutError:
             return {"success": False, "error": "Repository verification timed out"}
         except Exception as exc:
@@ -114,7 +118,6 @@ class RepositoryService:
                 passphrase=passphrase,
                 ssh_key_id=ssh_key_id,
             ) as env:
-
                 process = await asyncio.create_subprocess_exec(
                     *cmd,
                     stdout=asyncio.subprocess.PIPE,
@@ -133,7 +136,10 @@ class RepositoryService:
                 }
         except (FileNotFoundError, OSError) as exc:
             logger.error("Borg not available", error=str(exc))
-            return {"success": False, "error": f"Borg not available on this system: {exc}"}
+            return {
+                "success": False,
+                "error": f"Borg not available on this system: {exc}",
+            }
         except asyncio.TimeoutError:
             return {"success": False, "error": "Repository initialization timed out"}
         except Exception as exc:

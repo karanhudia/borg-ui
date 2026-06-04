@@ -21,9 +21,15 @@ def _mount_prerequisites_available() -> bool:
 
     system = platform.system()
     if system == "Linux":
-        return shutil.which("fusermount") is not None or shutil.which("fusermount3") is not None
+        return (
+            shutil.which("fusermount") is not None
+            or shutil.which("fusermount3") is not None
+        )
     if system == "Darwin":
-        return shutil.which("mount_macfuse") is not None or shutil.which("mount_osxfuse") is not None
+        return (
+            shutil.which("mount_macfuse") is not None
+            or shutil.which("mount_osxfuse") is not None
+        )
 
     return shutil.which("umount") is not None
 
@@ -31,7 +37,9 @@ def _mount_prerequisites_available() -> bool:
 def _require_borg2_binary() -> str:
     borg2_path = shutil.which("borg2")
     if not borg2_path:
-        pytest.skip("Borg 2 binary not found. Install borg2 to run this integration test.")
+        pytest.skip(
+            "Borg 2 binary not found. Install borg2 to run this integration test."
+        )
     return borg2_path
 
 
@@ -69,7 +77,9 @@ def _create_borg2_repo_with_archives(test_db, tmp_path):
     (source_path / "mount.txt").write_text("borg2 mount data\n", encoding="utf-8")
     create_archive(borg2_binary, repo_path, "mount-archive-1", [source_path], env=env)
 
-    (source_path / "mount.txt").write_text("borg2 mount data updated\n", encoding="utf-8")
+    (source_path / "mount.txt").write_text(
+        "borg2 mount data updated\n", encoding="utf-8"
+    )
     (source_path / "mount-2.txt").write_text("borg2 mount data 2\n", encoding="utf-8")
     create_archive(borg2_binary, repo_path, "mount-archive-2", [source_path], env=env)
 
@@ -103,7 +113,9 @@ class TestMountArchiveIntegration:
         tmp_path,
     ):
         if not _mount_prerequisites_available():
-            pytest.skip("borg mount prerequisites are not available in this environment")
+            pytest.skip(
+                "borg mount prerequisites are not available in this environment"
+            )
 
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
         mount_name = f"integration-mount-{int(time.time())}"
@@ -122,7 +134,8 @@ class TestMountArchiveIntegration:
             payload = mount_response.json()
             if (
                 mount_response.status_code == 503
-                and payload.get("detail", {}).get("key") == "backend.errors.mounts.mountUnavailable"
+                and payload.get("detail", {}).get("key")
+                == "backend.errors.mounts.mountUnavailable"
             ):
                 pytest.skip(f"borg mount unavailable in this environment: {payload}")
             pytest.skip(f"borg mount failed in this environment: {payload}")
@@ -140,14 +153,18 @@ class TestMountArchiveIntegration:
                 time.sleep(0.5)
 
             assert mount_point.exists()
-            assert any(mount_point.iterdir()), "mounted archive should expose filesystem contents"
+            assert any(mount_point.iterdir()), (
+                "mounted archive should expose filesystem contents"
+            )
 
             list_response = test_client.get("/api/mounts", headers=admin_headers)
             assert list_response.status_code == 200
             mount_ids = [item["mount_id"] for item in list_response.json()]
             assert mount_id in mount_ids
 
-            info_response = test_client.get(f"/api/mounts/{mount_id}", headers=admin_headers)
+            info_response = test_client.get(
+                f"/api/mounts/{mount_id}", headers=admin_headers
+            )
             assert info_response.status_code == 200
             info_data = info_response.json()
             assert info_data["mount_id"] == mount_id
@@ -181,7 +198,9 @@ class TestMountArchiveIntegration:
         test_db,
         tmp_path,
     ):
-        repo, _repo_path, _source_path, archive_names = _create_borg2_repo_with_archives(test_db, tmp_path)
+        repo, _repo_path, _source_path, archive_names = (
+            _create_borg2_repo_with_archives(test_db, tmp_path)
+        )
         archive_name = archive_names[0]
 
         mount_response = test_client.post(
@@ -200,7 +219,9 @@ class TestMountArchiveIntegration:
             return
 
         if mount_response.status_code == 500:
-            pytest.skip(f"borg2 mount failed in this environment: {mount_response.json()}")
+            pytest.skip(
+                f"borg2 mount failed in this environment: {mount_response.json()}"
+            )
 
         assert mount_response.status_code == 200, mount_response.json()
         mount_data = mount_response.json()

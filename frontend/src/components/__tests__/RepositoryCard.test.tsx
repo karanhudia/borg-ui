@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { renderWithProviders } from '../../test/test-utils'
 import RepositoryCard from '../RepositoryCard'
 import * as useMaintenanceJobsModule from '../../hooks/useMaintenanceJobs'
@@ -39,10 +38,13 @@ describe('RepositoryCard', () => {
     onCheck: vi.fn(),
     onCompact: vi.fn(),
     onPrune: vi.fn(),
+    onWipeContents: vi.fn(),
     onEdit: vi.fn(),
     onDelete: vi.fn(),
     onBackupNow: vi.fn(),
     onViewArchives: vi.fn(),
+    onViewBackupPlans: vi.fn(),
+    onCreateBackupPlan: vi.fn(),
     onJobCompleted: vi.fn(),
     canDo: vi.fn().mockReturnValue(true),
   }
@@ -121,6 +123,7 @@ describe('RepositoryCard', () => {
     checkJob: null,
     compactJob: null,
     pruneJob: null,
+    wipeJob: null,
     isLoading: false,
   }
 
@@ -218,6 +221,93 @@ describe('RepositoryCard', () => {
       )
 
       expect(screen.getByText('Schedule paused')).toBeInTheDocument()
+    })
+
+    it('renders scheduled cloud mirror next-run state and failure state', () => {
+      const scheduledMirrorStorage = {
+        repository_id: 1,
+        backend: 'rclone' as const,
+        rclone_remote_id: 10,
+        rclone_remote_name: 'prod-s3',
+        rclone_remote_path: 'borg-ui/repositories/app',
+        rclone_target: 'prod-s3:borg-ui/repositories/app',
+        cache_present: true,
+        sync_policy: 'scheduled' as const,
+        sync_status: 'current',
+        sync_cron_expression: '0 */6 * * *',
+        sync_timezone: 'UTC',
+        next_scheduled_sync_at: '2099-04-14T02:00:00Z',
+      }
+
+      const { rerender } = renderWithProviders(
+        <RepositoryCard
+          repository={{
+            ...mockRepository,
+            rclone_storage: scheduledMirrorStorage,
+          }}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(screen.getByText(/Mirror:/)).toBeInTheDocument()
+
+      rerender(
+        <RepositoryCard
+          repository={{
+            ...mockRepository,
+            rclone_storage: {
+              ...scheduledMirrorStorage,
+              sync_status: 'failed',
+              last_sync_error: 'manual sync failed',
+              latest_sync_job: {
+                id: 3,
+                triggered_by: 'manual',
+                status: 'failed',
+                completed_at: '2099-04-14T01:00:05Z',
+                error_text: 'manual sync failed',
+                has_log: true,
+              },
+            },
+          }}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(screen.queryByText('Mirror failed')).not.toBeInTheDocument()
+
+      rerender(
+        <RepositoryCard
+          repository={{
+            ...mockRepository,
+            rclone_storage: {
+              ...scheduledMirrorStorage,
+              sync_status: 'failed',
+              last_sync_error: 'remote unavailable',
+              latest_sync_job: {
+                id: 4,
+                triggered_by: 'schedule',
+                status: 'failed',
+                scheduled_for: '2099-04-14T02:00:00Z',
+                completed_at: '2099-04-14T02:00:05Z',
+                error_text: 'remote unavailable',
+                has_log: true,
+              },
+            },
+          }}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(screen.getByText('Mirror failed')).toBeInTheDocument()
     })
 
     it('renders N/A for missing total size', () => {
@@ -348,7 +438,7 @@ describe('RepositoryCard', () => {
       expect(screen.queryByText('Observe Only')).not.toBeInTheDocument()
     })
 
-    it('does not show "Backup Now" button for observe mode', () => {
+    it('does not show legacy backup button for observe mode', () => {
       const observeRepo = { ...mockRepository, mode: 'observe' as const }
       renderWithProviders(
         <RepositoryCard
@@ -360,10 +450,10 @@ describe('RepositoryCard', () => {
         />
       )
 
-      expect(screen.queryByRole('button', { name: /Backup Now/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /Legacy Backup/i })).not.toBeInTheDocument()
     })
 
-    it('shows "Backup Now" button for full mode', () => {
+    it('shows legacy backup button for full mode repositories with source paths', () => {
       renderWithProviders(
         <RepositoryCard
           repository={mockRepository}
@@ -374,10 +464,25 @@ describe('RepositoryCard', () => {
         />
       )
 
-      expect(screen.getByRole('button', { name: /Backup Now/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Legacy Backup/i })).toBeInTheDocument()
     })
 
-    it('hides Compact, Prune, and Delete buttons for observe mode', () => {
+    it('shows Create Backup Plan as the primary repository backup action', () => {
+      renderWithProviders(
+        <RepositoryCard
+          repository={{ ...mockRepository, source_directories: [] }}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(screen.getByRole('button', { name: /Create Backup Plan/i })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /Legacy Backup/i })).not.toBeInTheDocument()
+    })
+
+    it('hides Compact and Prune buttons for observe mode but still allows Delete', () => {
       const observeRepo = { ...mockRepository, mode: 'observe' as const }
       renderWithProviders(
         <RepositoryCard
@@ -391,7 +496,7 @@ describe('RepositoryCard', () => {
 
       expect(screen.queryByRole('button', { name: /Compact/i })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /Prune/i })).not.toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: /Delete/i })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Delete/i })).toBeInTheDocument()
     })
 
     it('shows Compact, Prune, and Delete buttons for full mode', () => {
@@ -407,6 +512,7 @@ describe('RepositoryCard', () => {
 
       expect(screen.getByRole('button', { name: /Compact/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Prune/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Wipe contents/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Delete/i })).toBeInTheDocument()
     })
 
@@ -472,13 +578,13 @@ describe('RepositoryCard', () => {
       expect(screen.queryByRole('button', { name: /Info/i })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /Check/i })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /Compact/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /Wipe contents/i })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /Delete/i })).not.toBeInTheDocument()
     })
   })
 
   describe('Action Buttons', () => {
-    it('calls onEdit when Edit button is clicked', async () => {
-      const user = userEvent.setup()
+    it('calls onEdit when Edit button is clicked', () => {
       renderWithProviders(
         <RepositoryCard
           repository={mockRepository}
@@ -489,12 +595,11 @@ describe('RepositoryCard', () => {
         />
       )
 
-      await user.click(screen.getByRole('button', { name: /Edit/i }))
+      fireEvent.click(screen.getByRole('button', { name: /Edit/i }))
       expect(mockCallbacks.onEdit).toHaveBeenCalledTimes(1)
     })
 
-    it('calls onViewInfo and tracks event when Info button is clicked', async () => {
-      const user = userEvent.setup()
+    it('calls onViewInfo and tracks event when Info button is clicked', () => {
       renderWithProviders(
         <RepositoryCard
           repository={mockRepository}
@@ -505,13 +610,12 @@ describe('RepositoryCard', () => {
         />
       )
 
-      await user.click(screen.getByRole('button', { name: /Info/i }))
+      fireEvent.click(screen.getByRole('button', { name: /Info/i }))
       expect(mockCallbacks.onViewInfo).toHaveBeenCalledTimes(1)
       expect(mockAnalyticsTracking.trackRepository).toHaveBeenCalledWith('View', mockRepository)
     })
 
-    it('calls onCheck when Check button is clicked', async () => {
-      const user = userEvent.setup()
+    it('calls onCheck when Check button is clicked', () => {
       renderWithProviders(
         <RepositoryCard
           repository={mockRepository}
@@ -522,12 +626,11 @@ describe('RepositoryCard', () => {
         />
       )
 
-      await user.click(screen.getByRole('button', { name: /Check/i }))
+      fireEvent.click(screen.getByRole('button', { name: /Check/i }))
       expect(mockCallbacks.onCheck).toHaveBeenCalledTimes(1)
     })
 
-    it('calls onCompact when Compact button is clicked', async () => {
-      const user = userEvent.setup()
+    it('calls onCompact when Compact button is clicked', () => {
       renderWithProviders(
         <RepositoryCard
           repository={mockRepository}
@@ -538,12 +641,11 @@ describe('RepositoryCard', () => {
         />
       )
 
-      await user.click(screen.getByRole('button', { name: /Compact/i }))
+      fireEvent.click(screen.getByRole('button', { name: /Compact/i }))
       expect(mockCallbacks.onCompact).toHaveBeenCalledTimes(1)
     })
 
-    it('calls onPrune when Prune button is clicked', async () => {
-      const user = userEvent.setup()
+    it('calls onPrune when Prune button is clicked', () => {
       renderWithProviders(
         <RepositoryCard
           repository={mockRepository}
@@ -554,12 +656,11 @@ describe('RepositoryCard', () => {
         />
       )
 
-      await user.click(screen.getByRole('button', { name: /Prune/i }))
+      fireEvent.click(screen.getByRole('button', { name: /Prune/i }))
       expect(mockCallbacks.onPrune).toHaveBeenCalledTimes(1)
     })
 
-    it('calls onBackupNow and tracks event when Backup Now button is clicked', async () => {
-      const user = userEvent.setup()
+    it('calls onWipeContents when Wipe contents button is clicked', () => {
       renderWithProviders(
         <RepositoryCard
           repository={mockRepository}
@@ -570,17 +671,46 @@ describe('RepositoryCard', () => {
         />
       )
 
-      await user.click(screen.getByRole('button', { name: /Backup Now/i }))
+      fireEvent.click(screen.getByRole('button', { name: /Wipe contents/i }))
+      expect(mockCallbacks.onWipeContents).toHaveBeenCalledTimes(1)
+    })
+
+    it('calls onBackupNow and tracks event when Legacy Backup button is clicked', () => {
+      renderWithProviders(
+        <RepositoryCard
+          repository={mockRepository}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: /Legacy Backup/i }))
       expect(mockCallbacks.onBackupNow).toHaveBeenCalledTimes(1)
       expect(mockAnalyticsTracking.trackBackup).toHaveBeenCalledWith(
         'Start',
-        undefined,
+        'legacy_repository',
         mockRepository
       )
     })
 
-    it('calls onViewArchives and tracks event when View Archives button is clicked', async () => {
-      const user = userEvent.setup()
+    it('calls onCreateBackupPlan when Create Backup Plan button is clicked', () => {
+      renderWithProviders(
+        <RepositoryCard
+          repository={{ ...mockRepository, source_directories: [] }}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: /Create Backup Plan/i }))
+      expect(mockCallbacks.onCreateBackupPlan).toHaveBeenCalledTimes(1)
+    })
+
+    it('calls onViewArchives and tracks event when View Archives button is clicked', () => {
       renderWithProviders(
         <RepositoryCard
           repository={mockRepository}
@@ -591,13 +721,31 @@ describe('RepositoryCard', () => {
         />
       )
 
-      await user.click(screen.getByRole('button', { name: /View Archives/i }))
+      fireEvent.click(screen.getByRole('button', { name: /View Archives/i }))
       expect(mockCallbacks.onViewArchives).toHaveBeenCalledTimes(1)
       expect(mockAnalyticsTracking.trackArchive).toHaveBeenCalledWith('View', mockRepository)
     })
 
-    it('calls onDelete when Delete button is clicked', async () => {
-      const user = userEvent.setup()
+    it('calls onViewBackupPlans and tracks event when View linked backup plans button is clicked', () => {
+      renderWithProviders(
+        <RepositoryCard
+          repository={mockRepository}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: /View linked backup plans/i }))
+
+      expect(mockCallbacks.onViewBackupPlans).toHaveBeenCalledTimes(1)
+      expect(mockAnalyticsTracking.trackRepository).toHaveBeenCalledWith('View', mockRepository, {
+        destination: 'backup_plans',
+      })
+    })
+
+    it('calls onDelete when Delete button is clicked', () => {
       renderWithProviders(
         <RepositoryCard
           repository={mockRepository}
@@ -610,7 +758,7 @@ describe('RepositoryCard', () => {
 
       const deleteButtons = screen.getAllByRole('button', { name: /Delete/i })
       // The last Delete button is the main delete action (first one is Prune button icon)
-      await user.click(deleteButtons[deleteButtons.length - 1])
+      fireEvent.click(deleteButtons[deleteButtons.length - 1])
       expect(mockCallbacks.onDelete).toHaveBeenCalledTimes(1)
     })
   })
@@ -636,7 +784,8 @@ describe('RepositoryCard', () => {
       expect(screen.getByRole('button', { name: /Check/i })).toBeDisabled()
       expect(screen.getByRole('button', { name: /Compact/i })).toBeDisabled()
       expect(screen.getByRole('button', { name: /Prune/i })).toBeDisabled()
-      expect(screen.getByRole('button', { name: /Backup Now/i })).toBeDisabled()
+      expect(screen.getByRole('button', { name: /Legacy Backup/i })).toBeDisabled()
+      expect(screen.getByRole('button', { name: /Create Backup Plan/i })).toBeDisabled()
       expect(screen.getByRole('button', { name: /View Archives/i })).toBeDisabled()
     })
 
@@ -808,6 +957,209 @@ describe('RepositoryCard', () => {
     })
   })
 
+  describe('Rclone Storage', () => {
+    it('exposes enable cloud mirror for eligible local repositories', () => {
+      const onEdit = vi.fn()
+
+      renderWithProviders(
+        <RepositoryCard
+          repository={{
+            ...mockRepository,
+            repository_type: 'local',
+            storage_backend: 'local',
+            execution_target: 'local',
+            connection_id: null,
+            rclone_storage: null,
+          }}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+          onEdit={onEdit}
+        />
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: /Enable cloud mirror/i }))
+
+      expect(onEdit).toHaveBeenCalled()
+    })
+
+    it('exposes enable cloud mirror for eligible SSH repositories', () => {
+      const onEdit = vi.fn()
+
+      renderWithProviders(
+        <RepositoryCard
+          repository={{
+            ...mockRepository,
+            repository_type: 'ssh',
+            storage_backend: 'ssh',
+            execution_target: 'ssh',
+            executor_type: 'server',
+            connection_id: 1,
+            rclone_storage: null,
+          }}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+          onEdit={onEdit}
+        />
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: /Enable cloud mirror/i }))
+
+      expect(onEdit).toHaveBeenCalled()
+    })
+
+    it('exposes enable cloud mirror for eligible managed-agent repositories', () => {
+      const onEdit = vi.fn()
+
+      renderWithProviders(
+        <RepositoryCard
+          repository={{
+            ...mockRepository,
+            repository_type: 'local',
+            storage_backend: 'agent_local',
+            execution_target: 'agent',
+            executor_type: 'agent',
+            agent_machine_id: 101,
+            agent_machine_name: 'workstation.local',
+            agent_machine_status: 'online',
+            rclone_storage: null,
+          }}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+          onEdit={onEdit}
+        />
+      )
+
+      expect(screen.getByText('Agent: workstation.local')).toBeInTheDocument()
+      expect(screen.getByText('Online')).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: /Enable cloud mirror/i }))
+
+      expect(onEdit).toHaveBeenCalled()
+    })
+
+    it('renders rclone sync status, target, and mirror actions', () => {
+      const rcloneRepository = {
+        ...mockRepository,
+        repository_type: 'rclone' as const,
+        storage_backend: 'rclone' as const,
+        path: '/data/rclone-cache/repositories/1',
+        rclone_storage: {
+          repository_id: 1,
+          backend: 'rclone' as const,
+          rclone_remote_id: 10,
+          rclone_remote_name: 'local-test',
+          rclone_remote_path: 'borg-ui/app',
+          rclone_target: 'local-test:borg-ui/app',
+          cache_path: '/data/rclone-cache/repositories/1',
+          cache_present: true,
+          sync_policy: 'after_success' as const,
+          sync_status: 'current',
+          last_synced_at: '2024-01-20T10:30:00Z',
+        },
+      }
+
+      renderWithProviders(
+        <RepositoryCard
+          repository={rcloneRepository}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+          onRcloneSync={vi.fn()}
+          onRcloneHydrate={vi.fn()}
+        />
+      )
+
+      expect(screen.getByText('Synced')).toBeInTheDocument()
+      expect(screen.getByText('local-test:borg-ui/app')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Sync cloud mirror/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Hydrate local cache/i })).toBeInTheDocument()
+    })
+
+    it('renders failed rclone sync state clearly', () => {
+      const rcloneRepository = {
+        ...mockRepository,
+        repository_type: 'rclone' as const,
+        storage_backend: 'rclone' as const,
+        rclone_storage: {
+          repository_id: 1,
+          backend: 'rclone' as const,
+          rclone_remote_id: 10,
+          rclone_remote_name: 'local-test',
+          rclone_remote_path: 'borg-ui/app',
+          rclone_target: 'local-test:borg-ui/app',
+          cache_present: true,
+          sync_policy: 'manual' as const,
+          sync_status: 'failed',
+          last_sync_error: 'remote unavailable',
+        },
+      }
+
+      renderWithProviders(
+        <RepositoryCard
+          repository={rcloneRepository}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(screen.getByText('Sync failed')).toBeInTheDocument()
+    })
+
+    it('renders managed-agent mirror sync status with agent state', () => {
+      const agentMirrorRepository = {
+        ...mockRepository,
+        repository_type: 'local' as const,
+        storage_backend: 'agent_local' as const,
+        execution_target: 'agent' as const,
+        executor_type: 'agent' as const,
+        agent_machine_id: 101,
+        agent_machine_name: 'workstation.local',
+        agent_machine_status: 'offline',
+        rclone_storage: {
+          repository_id: 1,
+          backend: 'rclone' as const,
+          rclone_remote_id: 10,
+          rclone_remote_name: 'prod-s3',
+          rclone_remote_path: 'borg-ui/agent',
+          rclone_target: 'prod-s3:borg-ui/agent',
+          cache_path: null,
+          cache_present: true,
+          sync_direction: 'agent_to_remote',
+          sync_policy: 'manual' as const,
+          sync_status: 'pending',
+          agent_machine_name: 'workstation.local',
+          agent_machine_status: 'offline',
+        },
+      }
+
+      renderWithProviders(
+        <RepositoryCard
+          repository={agentMirrorRepository}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+          onRcloneSync={vi.fn()}
+          onRcloneHydrate={vi.fn()}
+        />
+      )
+
+      expect(screen.getByText('Agent: workstation.local')).toBeInTheDocument()
+      expect(screen.getByText('Offline')).toBeInTheDocument()
+      expect(screen.getByText('Sync pending')).toBeInTheDocument()
+      expect(screen.getByText('prod-s3:borg-ui/agent')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /Hydrate local cache/i })).not.toBeInTheDocument()
+    })
+  })
+
   describe('Progress Display', () => {
     it('displays progress information when jobs are running', () => {
       const startTime = new Date('2024-01-20T10:00:00Z').toISOString()
@@ -913,7 +1265,8 @@ describe('RepositoryCard', () => {
       expect(screen.getByRole('button', { name: /Check/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Compact/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Prune/i })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /Backup Now/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Legacy Backup/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Create Backup Plan/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /View Archives/i })).toBeInTheDocument()
 
       // Delete button (last one in list)

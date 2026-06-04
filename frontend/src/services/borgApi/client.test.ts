@@ -1,9 +1,39 @@
+import MockAdapter from 'axios-mock-adapter'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 describe('BorgApiClient', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
+  })
+
+  it('attaches X-Borg-Authorization on httpClient requests', async () => {
+    const clientModule = await import('./client')
+    const mock = new MockAdapter(clientModule.httpClient)
+    localStorage.setItem('access_token', 'client-token')
+
+    mock.onGet('/test').reply((config) => {
+      expect(config.headers?.['X-Borg-Authorization']).toBe('Bearer client-token')
+      return [200, { success: true }]
+    })
+
+    await clientModule.httpClient.get('/test')
+    mock.restore()
+  })
+
+  it('downloads files in the same tab', async () => {
+    const assignMock = vi.fn()
+    vi.spyOn(window.location, 'assign').mockImplementation(assignMock)
+    const clientModule = await import('./client')
+    const { BorgApiClient } = clientModule
+    const client = new BorgApiClient({ id: 9, borg_version: 2 } as never)
+
+    client.downloadFile('archive-2', '/srv/data.txt')
+
+    expect(assignMock).toHaveBeenCalledWith(expect.stringContaining('/api/v2/archives/download?'))
+    expect(assignMock).toHaveBeenCalledWith(expect.stringContaining('repository=9'))
+    expect(assignMock).toHaveBeenCalledWith(expect.stringContaining('archive=archive-2'))
+    expect(assignMock).toHaveBeenCalledWith(expect.stringContaining('file_path=%2Fsrv%2Fdata.txt'))
   })
 
   it('uses v1 routes for non-v2 repositories', async () => {
@@ -97,6 +127,27 @@ describe('BorgApiClient', () => {
     expect(postMock).toHaveBeenCalledWith('/v2/backup/check', {
       repository_id: 11,
       max_duration: 3600,
+    })
+  })
+
+  it('passes advanced check flags to Borg check routes', async () => {
+    const clientModule = await import('./client')
+    const postMock = vi.spyOn(clientModule.httpClient, 'post').mockResolvedValue({} as never)
+    const { BorgApiClient } = clientModule
+    const v1Client = new BorgApiClient({ id: 12, borg_version: 1 } as never)
+    const v2Client = new BorgApiClient({ id: 13, borg_version: 2 } as never)
+
+    v1Client.checkRepository({ maxDuration: 7200, checkExtraFlags: '--repair --save-space' })
+    v2Client.checkRepository({ maxDuration: 0, checkExtraFlags: '--verify-data' })
+
+    expect(postMock).toHaveBeenCalledWith('/repositories/12/check', {
+      max_duration: 7200,
+      check_extra_flags: '--repair --save-space',
+    })
+    expect(postMock).toHaveBeenCalledWith('/v2/backup/check', {
+      repository_id: 13,
+      max_duration: 0,
+      check_extra_flags: '--verify-data',
     })
   })
 

@@ -1,6 +1,7 @@
 """
 Add optional profile fields to users for account personalization.
 """
+
 from sqlalchemy import text
 import structlog
 

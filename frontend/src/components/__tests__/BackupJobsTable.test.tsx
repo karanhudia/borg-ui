@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '../../test/test-utils'
 import BackupJobsTable from '../BackupJobsTable'
 import { MockBackupJob, MockRepository } from '../../test/factories'
+import { formatDateTimeFull } from '../../utils/dateUtils'
 
 describe('BackupJobsTable', () => {
   const mockJobs: MockBackupJob[] = [
@@ -121,6 +122,12 @@ describe('BackupJobsTable', () => {
       expect(startedCells.length).toBeGreaterThan(0)
     })
 
+    it('adds a full timestamp tooltip to started dates', () => {
+      renderWithProviders(<BackupJobsTable jobs={mockJobs} />)
+
+      expect(screen.getByLabelText(formatDateTimeFull(mockJobs[0].started_at))).toBeInTheDocument()
+    })
+
     it('renders table headers', () => {
       renderWithProviders(<BackupJobsTable jobs={mockJobs} />)
 
@@ -129,6 +136,42 @@ describe('BackupJobsTable', () => {
       expect(screen.getByText('Status')).toBeInTheDocument()
       expect(screen.getByText('Started')).toBeInTheDocument()
       expect(screen.getByText('Duration')).toBeInTheDocument()
+    })
+
+    it('displays managed-agent transport for agent backup jobs', () => {
+      renderWithProviders(
+        <BackupJobsTable
+          jobs={[
+            {
+              ...mockJobs[0],
+              id: 44,
+              execution_mode: 'agent',
+            } as MockBackupJob & { execution_mode: 'agent' },
+          ]}
+        />
+      )
+
+      expect(screen.getByText('Agent')).toBeInTheDocument()
+    })
+
+    it('displays remote SSH transport for remote-direct backup jobs', () => {
+      renderWithProviders(
+        <BackupJobsTable
+          jobs={[
+            {
+              ...mockJobs[0],
+              id: 45,
+              execution_mode: 'remote_ssh',
+              route_strategy: 'remote_direct',
+            } as MockBackupJob & {
+              execution_mode: 'remote_ssh'
+              route_strategy: 'remote_direct'
+            },
+          ]}
+        />
+      )
+
+      expect(screen.getByText('Remote SSH')).toBeInTheDocument()
     })
   })
 
@@ -208,19 +251,26 @@ describe('BackupJobsTable', () => {
         {
           id: 4,
           repository: '/test',
-          type: 'compact',
+          type: 'restore_check',
           status: 'completed',
           started_at: '2024-01-20T10:00:00Z',
         },
         {
           id: 5,
           repository: '/test',
-          type: 'prune',
+          type: 'compact',
           status: 'completed',
           started_at: '2024-01-20T10:00:00Z',
         },
         {
           id: 6,
+          repository: '/test',
+          type: 'prune',
+          status: 'completed',
+          started_at: '2024-01-20T10:00:00Z',
+        },
+        {
+          id: 7,
           repository: '/test',
           type: 'package',
           status: 'completed',
@@ -232,6 +282,8 @@ describe('BackupJobsTable', () => {
 
       expect(screen.getByText('Backup')).toBeInTheDocument()
       expect(screen.getByText('Restore')).toBeInTheDocument()
+      expect(screen.getByText('Restore Check')).toBeInTheDocument()
+      expect(screen.queryByText('restore_check')).not.toBeInTheDocument()
       expect(screen.getByText('Repository Check')).toBeInTheDocument()
       expect(screen.getByText('Compact')).toBeInTheDocument()
       expect(screen.getByText('Prune')).toBeInTheDocument()
@@ -411,6 +463,49 @@ describe('BackupJobsTable', () => {
     expect(breakLockButtons.length).toBe(1)
   })
 
+  it('supports per-job Break Lock permissions', () => {
+    const jobsWithLockErrors = [
+      {
+        id: 4,
+        repository_id: 4,
+        repository: '/backup/repo4',
+        repository_path: '/backup/repo4',
+        type: 'backup',
+        status: 'failed',
+        started_at: '2024-01-20T12:00:00Z',
+        completed_at: '2024-01-20T12:05:00Z',
+        triggered_by: 'manual',
+        error_message:
+          'LOCK_ERROR::/backup/repo4\n[Exit Code 73] Failed to create/acquire the lock (timeout)',
+      },
+      {
+        id: 5,
+        repository_id: 5,
+        repository: '/backup/repo5',
+        repository_path: '/backup/repo5',
+        type: 'backup',
+        status: 'failed',
+        started_at: '2024-01-20T13:00:00Z',
+        completed_at: '2024-01-20T13:05:00Z',
+        triggered_by: 'manual',
+        error_message:
+          'LOCK_ERROR::/backup/repo5\n[Exit Code 73] Failed to create/acquire the lock (timeout)',
+      },
+    ]
+
+    renderWithProviders(
+      <BackupJobsTable
+        jobs={jobsWithLockErrors}
+        canBreakLocks={(job) => job.repository_id === 4}
+        actions={{ breakLock: true }}
+        onBreakLock={mockCallbacks.onBreakLock}
+      />
+    )
+
+    const breakLockButtons = screen.getAllByRole('button', { name: 'Break Lock' })
+    expect(breakLockButtons.length).toBe(1)
+  })
+
   it('does not show Break Lock button for non-admin users', () => {
     const jobsWithLockError = [
       {
@@ -438,6 +533,36 @@ describe('BackupJobsTable', () => {
     )
 
     // Break Lock buttons should NOT be visible for non-admin
+    const breakLockButtons = screen.queryAllByRole('button', { name: 'Break Lock' })
+    expect(breakLockButtons.length).toBe(0)
+  })
+
+  it('does not show Break Lock button when lock breaking is globally disabled', () => {
+    const jobsWithLockError = [
+      {
+        id: 4,
+        repository: '/backup/repo4',
+        repository_path: '/backup/repo4',
+        type: 'backup',
+        status: 'failed',
+        started_at: '2024-01-20T12:00:00Z',
+        completed_at: '2024-01-20T12:05:00Z',
+        triggered_by: 'manual',
+        error_message:
+          'LOCK_ERROR::/backup/repo4\n[Exit Code 73] Failed to create/acquire the lock (timeout)',
+      },
+    ]
+
+    renderWithProviders(
+      <BackupJobsTable
+        jobs={jobsWithLockError}
+        canBreakLocks={true}
+        lockBreakingEnabled={false}
+        actions={{ breakLock: true }}
+        onBreakLock={mockCallbacks.onBreakLock}
+      />
+    )
+
     const breakLockButtons = screen.queryAllByRole('button', { name: 'Break Lock' })
     expect(breakLockButtons.length).toBe(0)
   })

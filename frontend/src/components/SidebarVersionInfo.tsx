@@ -76,6 +76,7 @@ export default function SidebarVersionInfo({ systemInfo }: SidebarVersionInfoPro
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         plan={plan}
+        appVersion={systemInfo?.app_version}
         initialSelectedPlan={displayedPlan}
         features={features}
         entitlement={entitlement}

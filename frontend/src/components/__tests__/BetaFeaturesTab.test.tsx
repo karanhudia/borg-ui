@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { QueryClient } from '@tanstack/react-query'
 import BetaFeaturesTab from '../BetaFeaturesTab'
-import { settingsAPI } from '@/services/api.ts'
+import { settingsAPI } from '../../services/api'
 import { renderWithProviders } from '../../test/test-utils'
 import { AxiosResponse } from 'axios'
 
@@ -29,7 +30,8 @@ describe('BetaFeaturesTab', () => {
     settings: {
       bypass_lock_on_info: false,
       bypass_lock_on_list: false,
-      show_restore_tab: false,
+      lock_breaking_enabled: true,
+      borg2_fast_browse_beta_enabled: false,
       mqtt_beta_enabled: false,
     },
   }
@@ -40,6 +42,23 @@ describe('BetaFeaturesTab', () => {
       data: mockSystemSettings,
     } as AxiosResponse)
   })
+
+  function createSystemSettingsClient(settings: Record<string, unknown>) {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, staleTime: Infinity },
+        mutations: { retry: false },
+      },
+    })
+    queryClient.setQueryData(['systemSettings'], { settings })
+    return queryClient
+  }
+
+  function getSwitchByLabel(label: string) {
+    const labelElement = screen.getByText(label).closest('label')
+    expect(labelElement).not.toBeNull()
+    return within(labelElement as HTMLElement).getByRole('switch')
+  }
 
   describe('Rendering', () => {
     it('shows loading spinner while fetching settings', () => {
@@ -84,10 +103,10 @@ describe('BetaFeaturesTab', () => {
       })
     })
 
-    it('renders show restore tab toggle', async () => {
+    it('renders manual lock breaking toggle', async () => {
       renderWithProviders(<BetaFeaturesTab />)
       await waitFor(() => {
-        expect(screen.getByText('Show the dedicated Restore tab in navigation')).toBeInTheDocument()
+        expect(screen.getByText('Allow manual repository lock breaking')).toBeInTheDocument()
       })
     })
 
@@ -98,13 +117,43 @@ describe('BetaFeaturesTab', () => {
       })
     })
 
+    it('renders Borg 2 fast browse toggle', async () => {
+      renderWithProviders(<BetaFeaturesTab />)
+      await waitFor(() => {
+        expect(screen.getByText('Enable faster Borg 2 archive browsing')).toBeInTheDocument()
+      })
+    })
+
     it('renders section headers', async () => {
       renderWithProviders(<BetaFeaturesTab />)
       await waitFor(() => {
         expect(screen.getByText('Bypass Locks for Info Commands')).toBeInTheDocument()
         expect(screen.getByText('Bypass Locks for List Commands')).toBeInTheDocument()
-        expect(screen.getByText('Show Legacy Restore Tab')).toBeInTheDocument()
+        expect(screen.getByText('Manual Lock Breaking')).toBeInTheDocument()
+        expect(screen.getByText('Fast Borg 2 Archive Browse')).toBeInTheDocument()
         expect(screen.getByText('MQTT Integration')).toBeInTheDocument()
+      })
+    })
+  })
+
+  describe('Manual Lock Breaking', () => {
+    it('can disable manual lock breaking', async () => {
+      const user = userEvent.setup()
+      vi.mocked(settingsAPI.updateSystemSettings).mockResolvedValue({} as AxiosResponse)
+
+      renderWithProviders(<BetaFeaturesTab />)
+
+      await waitFor(() => {
+        expect(screen.getByText('Allow manual repository lock breaking')).toBeInTheDocument()
+      })
+
+      const lockBreakingSwitch = getSwitchByLabel('Allow manual repository lock breaking')
+      await user.click(lockBreakingSwitch)
+
+      await waitFor(() => {
+        expect(settingsAPI.updateSystemSettings).toHaveBeenCalledWith({
+          lock_breaking_enabled: false,
+        })
       })
     })
   })
@@ -119,8 +168,7 @@ describe('BetaFeaturesTab', () => {
         ).toBeInTheDocument()
       })
 
-      const switches = screen.getAllByRole('switch')
-      const infoSwitch = switches[0] // First switch is bypass lock on info
+      const infoSwitch = getSwitchByLabel('Enable bypass-lock for all borg info commands')
       expect(infoSwitch).not.toBeChecked()
     })
 
@@ -136,20 +184,14 @@ describe('BetaFeaturesTab', () => {
         ).toBeInTheDocument()
       })
 
-      const switches = screen.getAllByRole('switch')
-      const infoSwitch = switches.find((sw) =>
-        sw.parentElement?.textContent?.includes('Enable bypass-lock for all borg info commands')
-      )
+      const infoSwitch = getSwitchByLabel('Enable bypass-lock for all borg info commands')
+      await user.click(infoSwitch)
 
-      if (infoSwitch) {
-        await user.click(infoSwitch)
-
-        await waitFor(() => {
-          expect(settingsAPI.updateSystemSettings).toHaveBeenCalledWith({
-            bypass_lock_on_info: true,
-          })
+      await waitFor(() => {
+        expect(settingsAPI.updateSystemSettings).toHaveBeenCalledWith({
+          bypass_lock_on_info: true,
         })
-      }
+      })
     })
 
     it('shows success toast after enabling', async () => {
@@ -165,18 +207,12 @@ describe('BetaFeaturesTab', () => {
         ).toBeInTheDocument()
       })
 
-      const switches = screen.getAllByRole('switch')
-      const infoSwitch = switches.find((sw) =>
-        sw.parentElement?.textContent?.includes('Enable bypass-lock for all borg info commands')
-      )
+      const infoSwitch = getSwitchByLabel('Enable bypass-lock for all borg info commands')
+      await user.click(infoSwitch)
 
-      if (infoSwitch) {
-        await user.click(infoSwitch)
-
-        await waitFor(() => {
-          expect(toast.success).toHaveBeenCalledWith('Setting updated successfully')
-        })
-      }
+      await waitFor(() => {
+        expect(toast.success).toHaveBeenCalledWith('Setting updated successfully')
+      })
     })
 
     it('reverts state on error', async () => {
@@ -192,19 +228,13 @@ describe('BetaFeaturesTab', () => {
         ).toBeInTheDocument()
       })
 
-      const switches = screen.getAllByRole('switch')
-      const infoSwitch = switches.find((sw) =>
-        sw.parentElement?.textContent?.includes('Enable bypass-lock for all borg info commands')
-      )
+      const infoSwitch = getSwitchByLabel('Enable bypass-lock for all borg info commands')
+      await user.click(infoSwitch)
 
-      if (infoSwitch) {
-        await user.click(infoSwitch)
-
-        await waitFor(() => {
-          expect(toast.error).toHaveBeenCalledWith('Failed to update setting: API Error')
-          expect(infoSwitch).not.toBeChecked()
-        })
-      }
+      await waitFor(() => {
+        expect(toast.error).toHaveBeenCalledWith('Failed to update setting: API Error')
+        expect(infoSwitch).not.toBeChecked()
+      })
     })
 
     it('shows bypass lock info description', async () => {
@@ -236,8 +266,7 @@ describe('BetaFeaturesTab', () => {
         ).toBeInTheDocument()
       })
 
-      const switches = screen.getAllByRole('switch')
-      const listSwitch = switches[1] // Second switch is bypass lock on list
+      const listSwitch = getSwitchByLabel('Enable bypass-lock for all borg list commands')
       expect(listSwitch).not.toBeChecked()
     })
 
@@ -253,20 +282,14 @@ describe('BetaFeaturesTab', () => {
         ).toBeInTheDocument()
       })
 
-      const switches = screen.getAllByRole('switch')
-      const listSwitch = switches.find((sw) =>
-        sw.parentElement?.textContent?.includes('Enable bypass-lock for all borg list commands')
-      )
+      const listSwitch = getSwitchByLabel('Enable bypass-lock for all borg list commands')
+      await user.click(listSwitch)
 
-      if (listSwitch) {
-        await user.click(listSwitch)
-
-        await waitFor(() => {
-          expect(settingsAPI.updateSystemSettings).toHaveBeenCalledWith({
-            bypass_lock_on_list: true,
-          })
+      await waitFor(() => {
+        expect(settingsAPI.updateSystemSettings).toHaveBeenCalledWith({
+          bypass_lock_on_list: true,
         })
-      }
+      })
     })
 
     it('shows bypass lock list description', async () => {
@@ -288,52 +311,45 @@ describe('BetaFeaturesTab', () => {
     })
   })
 
-  describe('Show Restore Tab', () => {
+  describe('Borg 2 Fast Browse', () => {
     it('toggle is initially unchecked', async () => {
       renderWithProviders(<BetaFeaturesTab />)
 
       await waitFor(() => {
-        expect(screen.getByText('Show the dedicated Restore tab in navigation')).toBeInTheDocument()
+        expect(screen.getByText('Enable faster Borg 2 archive browsing')).toBeInTheDocument()
       })
 
-      const switches = screen.getAllByRole('switch')
-      const restoreSwitch = switches[2] // Third switch is restore tab
-      expect(restoreSwitch).not.toBeChecked()
+      const fastBrowseSwitch = getSwitchByLabel('Enable faster Borg 2 archive browsing')
+      expect(fastBrowseSwitch).not.toBeChecked()
     })
 
-    it('can enable restore tab', async () => {
+    it('can enable Borg 2 fast browse', async () => {
       const user = userEvent.setup()
       vi.mocked(settingsAPI.updateSystemSettings).mockResolvedValue({} as AxiosResponse)
 
       renderWithProviders(<BetaFeaturesTab />)
 
       await waitFor(() => {
-        expect(screen.getByText('Show the dedicated Restore tab in navigation')).toBeInTheDocument()
+        expect(screen.getByText('Enable faster Borg 2 archive browsing')).toBeInTheDocument()
       })
 
-      const switches = screen.getAllByRole('switch')
-      const restoreSwitch = switches.find((sw) =>
-        sw.parentElement?.textContent?.includes('Show the dedicated Restore tab in navigation')
-      )
+      const fastBrowseSwitch = getSwitchByLabel('Enable faster Borg 2 archive browsing')
+      await user.click(fastBrowseSwitch)
 
-      if (restoreSwitch) {
-        await user.click(restoreSwitch)
-
-        await waitFor(() => {
-          expect(settingsAPI.updateSystemSettings).toHaveBeenCalledWith({
-            show_restore_tab: true,
-          })
+      await waitFor(() => {
+        expect(settingsAPI.updateSystemSettings).toHaveBeenCalledWith({
+          borg2_fast_browse_beta_enabled: true,
         })
-      }
+      })
     })
 
-    it('shows restore tab description', async () => {
+    it('shows Borg 2 fast browse description', async () => {
       renderWithProviders(<BetaFeaturesTab />)
 
       await waitFor(() => {
         expect(
           screen.getByText(
-            /Enable this to access the legacy Restore tab. Restore functionality is now integrated into the Archives page/
+            /Uses depth-limited browsing for Borg 2 repositories to reduce payload size and improve responsiveness on very large archives/
           )
         ).toBeInTheDocument()
       })
@@ -348,8 +364,7 @@ describe('BetaFeaturesTab', () => {
         expect(screen.getByText('Enable MQTT')).toBeInTheDocument()
       })
 
-      const switches = screen.getAllByRole('switch')
-      const mqttSwitch = switches[3] // Fourth switch is MQTT
+      const mqttSwitch = getSwitchByLabel('Enable MQTT')
       expect(mqttSwitch).not.toBeChecked()
     })
 
@@ -363,20 +378,14 @@ describe('BetaFeaturesTab', () => {
         expect(screen.getByText('Enable MQTT')).toBeInTheDocument()
       })
 
-      const switches = screen.getAllByRole('switch')
-      const mqttSwitch = switches.find((sw) =>
-        sw.parentElement?.textContent?.includes('Enable MQTT')
-      )
+      const mqttSwitch = getSwitchByLabel('Enable MQTT')
+      await user.click(mqttSwitch)
 
-      if (mqttSwitch) {
-        await user.click(mqttSwitch)
-
-        await waitFor(() => {
-          expect(settingsAPI.updateSystemSettings).toHaveBeenCalledWith({
-            mqtt_beta_enabled: true,
-          })
+      await waitFor(() => {
+        expect(settingsAPI.updateSystemSettings).toHaveBeenCalledWith({
+          mqtt_beta_enabled: true,
         })
-      }
+      })
     })
 
     it('shows MQTT description', async () => {
@@ -386,6 +395,21 @@ describe('BetaFeaturesTab', () => {
         expect(screen.getByText('Activates MQTT integration in the UI.')).toBeInTheDocument()
       })
     })
+  })
+
+  it('does not render managed CLI agents as a beta feature', async () => {
+    renderWithProviders(<BetaFeaturesTab />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Beta Features')).toBeInTheDocument()
+    })
+
+    expect(screen.queryByText('Enable managed CLI agents')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(
+        'Shows the Managed Agents navigation item and server-side agent enrollment workflow.'
+      )
+    ).not.toBeInTheDocument()
   })
 
   describe('Loading State', () => {
@@ -401,20 +425,15 @@ describe('BetaFeaturesTab', () => {
         ).toBeInTheDocument()
       })
 
+      const infoSwitch = getSwitchByLabel('Enable bypass-lock for all borg info commands')
       const switches = screen.getAllByRole('switch')
-      const infoSwitch = switches.find((sw) =>
-        sw.parentElement?.textContent?.includes('Enable bypass-lock for all borg info commands')
-      )
+      await user.click(infoSwitch)
 
-      if (infoSwitch) {
-        await user.click(infoSwitch)
-
-        await waitFor(() => {
-          switches.forEach((sw) => {
-            expect(sw).toBeDisabled()
-          })
+      await waitFor(() => {
+        switches.forEach((sw) => {
+          expect(sw).toBeDisabled()
         })
-      }
+      })
     })
   })
 
@@ -424,16 +443,15 @@ describe('BetaFeaturesTab', () => {
         settings: {
           bypass_lock_on_info: true,
           bypass_lock_on_list: true,
-          show_restore_tab: true,
+          lock_breaking_enabled: true,
+          borg2_fast_browse_beta_enabled: true,
           mqtt_beta_enabled: true,
         },
       }
 
-      vi.mocked(settingsAPI.getSystemSettings).mockResolvedValue({
-        data: existingSettings,
-      } as AxiosResponse)
-
-      renderWithProviders(<BetaFeaturesTab />)
+      renderWithProviders(<BetaFeaturesTab />, {
+        queryClient: createSystemSettingsClient(existingSettings.settings),
+      })
 
       await waitFor(() => {
         const switches = screen.getAllByRole('switch')
@@ -448,17 +466,16 @@ describe('BetaFeaturesTab', () => {
         settings: {},
       }
 
-      vi.mocked(settingsAPI.getSystemSettings).mockResolvedValue({
-        data: settingsWithNulls,
-      } as AxiosResponse)
-
-      renderWithProviders(<BetaFeaturesTab />)
+      renderWithProviders(<BetaFeaturesTab />, {
+        queryClient: createSystemSettingsClient(settingsWithNulls.settings),
+      })
 
       await waitFor(() => {
-        const switches = screen.getAllByRole('switch')
-        switches.forEach((sw) => {
-          expect(sw).not.toBeChecked()
-        })
+        expect(getSwitchByLabel('Enable bypass-lock for all borg info commands')).not.toBeChecked()
+        expect(getSwitchByLabel('Enable bypass-lock for all borg list commands')).not.toBeChecked()
+        expect(getSwitchByLabel('Allow manual repository lock breaking')).toBeChecked()
+        expect(getSwitchByLabel('Enable faster Borg 2 archive browsing')).not.toBeChecked()
+        expect(getSwitchByLabel('Enable MQTT')).not.toBeChecked()
       })
     })
   })
@@ -476,33 +493,26 @@ describe('BetaFeaturesTab', () => {
         ).toBeInTheDocument()
       })
 
-      const switches = screen.getAllByRole('switch')
-      const infoSwitch = switches.find((sw) =>
-        sw.parentElement?.textContent?.includes('Enable bypass-lock for all borg info commands')
-      )
-      const listSwitch = switches.find((sw) =>
-        sw.parentElement?.textContent?.includes('Enable bypass-lock for all borg list commands')
-      )
+      const infoSwitch = getSwitchByLabel('Enable bypass-lock for all borg info commands')
+      const listSwitch = getSwitchByLabel('Enable bypass-lock for all borg list commands')
 
-      if (infoSwitch && listSwitch) {
-        // Enable info
-        await user.click(infoSwitch)
-        await waitFor(() => {
-          expect(settingsAPI.updateSystemSettings).toHaveBeenCalledWith({
-            bypass_lock_on_info: true,
-          })
+      // Enable info
+      await user.click(infoSwitch)
+      await waitFor(() => {
+        expect(settingsAPI.updateSystemSettings).toHaveBeenCalledWith({
+          bypass_lock_on_info: true,
         })
+      })
 
-        // Enable list
-        await user.click(listSwitch)
-        await waitFor(() => {
-          expect(settingsAPI.updateSystemSettings).toHaveBeenCalledWith({
-            bypass_lock_on_list: true,
-          })
+      // Enable list
+      await user.click(listSwitch)
+      await waitFor(() => {
+        expect(settingsAPI.updateSystemSettings).toHaveBeenCalledWith({
+          bypass_lock_on_list: true,
         })
+      })
 
-        expect(settingsAPI.updateSystemSettings).toHaveBeenCalledTimes(2)
-      }
+      expect(settingsAPI.updateSystemSettings).toHaveBeenCalledTimes(2)
     })
 
     it('can disable after enabling', async () => {
@@ -515,38 +525,34 @@ describe('BetaFeaturesTab', () => {
         expect(screen.getByText('Enable MQTT')).toBeInTheDocument()
       })
 
-      const switches = screen.getAllByRole('switch')
-      const mqttSwitch = switches.find((sw) =>
-        sw.parentElement?.textContent?.includes('Enable MQTT')
-      )
+      const mqttSwitch = getSwitchByLabel('Enable MQTT')
 
-      if (mqttSwitch) {
-        // Enable
-        await user.click(mqttSwitch)
-        await waitFor(() => {
-          expect(settingsAPI.updateSystemSettings).toHaveBeenCalledWith({
+      // Enable
+      await user.click(mqttSwitch)
+      await waitFor(() => {
+        expect(settingsAPI.updateSystemSettings).toHaveBeenCalledWith({
+          mqtt_beta_enabled: true,
+        })
+      })
+
+      // Mock updated settings
+      vi.mocked(settingsAPI.getSystemSettings).mockResolvedValue({
+        data: {
+          settings: {
+            ...mockSystemSettings.settings,
+            borg2_fast_browse_beta_enabled: false,
             mqtt_beta_enabled: true,
-          })
-        })
-
-        // Mock updated settings
-        vi.mocked(settingsAPI.getSystemSettings).mockResolvedValue({
-          data: {
-            settings: {
-              ...mockSystemSettings.settings,
-              mqtt_beta_enabled: true,
-            },
           },
-        } as AxiosResponse)
+        },
+      } as AxiosResponse)
 
-        // Disable
-        await user.click(mqttSwitch)
-        await waitFor(() => {
-          expect(settingsAPI.updateSystemSettings).toHaveBeenCalledWith({
-            mqtt_beta_enabled: false,
-          })
+      // Disable
+      await user.click(mqttSwitch)
+      await waitFor(() => {
+        expect(settingsAPI.updateSystemSettings).toHaveBeenCalledWith({
+          mqtt_beta_enabled: false,
         })
-      }
+      })
     })
   })
 })

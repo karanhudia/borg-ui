@@ -2,6 +2,11 @@
 /frontend/node_modules
 /frontend/build
 /frontend/dist
+/frontend/.playwright-host-libs
+/frontend/storybook-static
+/frontend/visual-screenshots
+/frontend/visual-report
+/frontend/storybook-snapshots
 /updates-worker/node_modules
 /updates-worker/.wrangler
 
@@ -97,6 +102,7 @@ Thumbs.db
 
 # Docker
 .dockerignore
+docker/frontend-build-output/
 
 # Claude Code
 .claude/worktrees/

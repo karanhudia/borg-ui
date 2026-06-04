@@ -21,7 +21,9 @@ def run_script(*args: str) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run Borg UI core smoke tests")
-    parser.add_argument("--url", default="http://localhost:8082", help="Base URL of the running app")
+    parser.add_argument(
+        "--url", default="http://localhost:8082", help="Base URL of the running app"
+    )
     args = parser.parse_args()
 
     failures = []
@@ -35,6 +37,7 @@ def main() -> int:
         ("tests/smoke/test_schedule_run_now_smoke.py", "--url", args.url),
         ("tests/smoke/test_permissions_failure_smoke.py", "--url", args.url),
         ("tests/smoke/test_failed_backup_logs_smoke.py", "--url", args.url),
+        ("tests/smoke/test_oidc_smoke.py", "--url", args.url),
     ]
 
     for script in scripts:

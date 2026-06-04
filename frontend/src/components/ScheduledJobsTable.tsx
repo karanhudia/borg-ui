@@ -7,6 +7,7 @@ interface ScheduledJob {
   id: number
   name: string
   cron_expression: string
+  timezone?: string | null
   repository: string | null
   repository_id: number | null
   repository_ids: number[] | null
@@ -42,6 +43,8 @@ interface ScheduledJobsTableProps {
   jobs: ScheduledJob[]
   repositories: Repository[]
   isLoading: boolean
+  title?: string
+  description?: string
   canManageJob: (job: ScheduledJob) => boolean
   onEdit: (job: ScheduledJob) => void
   onDelete: (job: ScheduledJob) => void
@@ -56,6 +59,8 @@ const ScheduledJobsTable = ({
   jobs,
   repositories,
   isLoading,
+  title,
+  description,
   canManageJob,
   onEdit,
   onDelete,
@@ -186,7 +191,15 @@ const ScheduledJobsTable = ({
 
     if (jobs.length === 0) {
       return (
-        <Box sx={{ py: 6, textAlign: 'center', color: 'text.secondary' }}>
+        <Box
+          sx={{
+            py: 6,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            color: 'text.secondary',
+          }}
+        >
           <Clock size={40} style={{ opacity: 0.25, marginBottom: 12 }} />
           <Typography variant="body1" gutterBottom>
             {t('scheduledJobsTableSection.noJobsFound')}
@@ -222,8 +235,13 @@ const ScheduledJobsTable = ({
   return (
     <Box>
       <Typography variant="h6" fontWeight={600} sx={{ mb: 2 }}>
-        {t('scheduledJobsTableSection.title')}
+        {title || t('scheduledJobsTableSection.title')}
       </Typography>
+      {description && (
+        <Typography variant="body2" color="text.secondary" sx={{ mt: -1, mb: 2 }}>
+          {description}
+        </Typography>
+      )}
       {renderContent()}
     </Box>
   )

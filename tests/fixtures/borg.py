@@ -1,6 +1,7 @@
 """
 Borg fixtures for integration testing with real borg repositories
 """
+
 import pytest
 import os
 from app.database.models import Repository
@@ -82,7 +83,7 @@ def db_borg_repo(test_db, temp_borg_repo):
         path=str(repo_path),
         encryption="none",
         compression="lz4",
-        repository_type="local"
+        repository_type="local",
     )
     test_db.add(repo)
     test_db.commit()
@@ -106,7 +107,7 @@ def db_borg_repo_with_archives(test_db, borg_repo_with_archives):
         encryption="none",
         compression="lz4",
         repository_type="local",
-        archive_count=len(archive_names)
+        archive_count=len(archive_names),
     )
     test_db.add(repo)
     test_db.commit()
@@ -138,7 +139,9 @@ def encrypted_borg_repo(tmp_path, borg_binary):
     (test_data_path / "secret.txt").write_text("Secret data")
 
     # Create an archive
-    create_archive(borg_binary, repo_path, "encrypted-archive", [test_data_path], env=env)
+    create_archive(
+        borg_binary, repo_path, "encrypted-archive", [test_data_path], env=env
+    )
 
     yield repo_path, test_data_path, passphrase
 
@@ -157,7 +160,7 @@ def db_encrypted_borg_repo(test_db, encrypted_borg_repo):
         passphrase=passphrase,
         compression="lz4",
         repository_type="local",
-        archive_count=1
+        archive_count=1,
     )
     test_db.add(repo)
     test_db.commit()
@@ -191,6 +194,7 @@ def keyfile_borg_repo(tmp_path, borg_binary):
     # Export the keyfile for import testing
     # This simulates a user who has an existing keyfile-encrypted repository
     from tests.utils.borg import run_borg
+
     result = run_borg(
         borg_binary,
         ["key", "export", str(repo_path), str(keyfile_export_path)],

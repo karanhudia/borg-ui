@@ -15,6 +15,9 @@ export default defineConfig({
   },
   server: {
     port: 7879,
+    fs: {
+      allow: [path.resolve(__dirname, '..')],
+    },
     proxy: {
       '/api': {
         target: proxyTarget,

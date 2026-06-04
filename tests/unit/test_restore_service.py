@@ -1,7 +1,7 @@
 import asyncio
 import json
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, call, patch
 
 import pytest
 from sqlalchemy.orm import sessionmaker
@@ -12,7 +12,10 @@ from app.services.restore_service import RestoreService
 
 class AsyncReadStream:
     def __init__(self, chunks=None):
-        self._chunks = [chunk if isinstance(chunk, bytes) else chunk.encode("utf-8") for chunk in (chunks or [])]
+        self._chunks = [
+            chunk if isinstance(chunk, bytes) else chunk.encode("utf-8")
+            for chunk in (chunks or [])
+        ]
         self._index = 0
 
     async def read(self, _size):
@@ -25,7 +28,10 @@ class AsyncReadStream:
 
 class AsyncIterStream:
     def __init__(self, lines=None):
-        self._lines = [line if isinstance(line, bytes) else line.encode("utf-8") for line in (lines or [])]
+        self._lines = [
+            line if isinstance(line, bytes) else line.encode("utf-8")
+            for line in (lines or [])
+        ]
         self._index = 0
 
     def __aiter__(self):
@@ -109,17 +115,29 @@ class TestRestoreServiceRouting:
     async def test_execute_restore_routes_local_to_local(self):
         service = RestoreService()
 
-        with patch.object(service, "_execute_local_to_local", new=AsyncMock()) as mock_exec:
+        with patch.object(
+            service, "_execute_local_to_local", new=AsyncMock()
+        ) as mock_exec:
             await service.execute_restore(1, "/repo", "arch", "/dest")
 
-        mock_exec.assert_awaited_once_with(1, "/repo", "arch", "/dest", None)
+        mock_exec.assert_awaited_once_with(
+            1,
+            "/repo",
+            "arch",
+            "/dest",
+            None,
+            restore_layout="preserve_path",
+            path_metadata=None,
+        )
 
     @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_execute_restore_routes_ssh_to_local(self):
         service = RestoreService()
 
-        with patch.object(service, "_execute_ssh_to_local", new=AsyncMock()) as mock_exec:
+        with patch.object(
+            service, "_execute_ssh_to_local", new=AsyncMock()
+        ) as mock_exec:
             await service.execute_restore(
                 1,
                 "/repo",
@@ -136,7 +154,9 @@ class TestRestoreServiceRouting:
     async def test_execute_restore_routes_local_to_ssh(self):
         service = RestoreService()
 
-        with patch.object(service, "_execute_local_to_ssh", new=AsyncMock()) as mock_exec:
+        with patch.object(
+            service, "_execute_local_to_ssh", new=AsyncMock()
+        ) as mock_exec:
             await service.execute_restore(
                 1,
                 "/repo",
@@ -147,7 +167,16 @@ class TestRestoreServiceRouting:
                 destination_connection_id=9,
             )
 
-        mock_exec.assert_awaited_once_with(1, "/repo", "arch", "/dest", None, 9)
+        mock_exec.assert_awaited_once_with(
+            1,
+            "/repo",
+            "arch",
+            "/dest",
+            None,
+            9,
+            restore_layout="preserve_path",
+            path_metadata=None,
+        )
 
     @pytest.mark.unit
     @pytest.mark.asyncio
@@ -167,7 +196,11 @@ class TestRestoreServiceRouting:
             )
 
         verification = testing_session_local()
-        refreshed = verification.query(RestoreJob).filter(RestoreJob.id == restore_job.id).first()
+        refreshed = (
+            verification.query(RestoreJob)
+            .filter(RestoreJob.id == restore_job.id)
+            .first()
+        )
         assert refreshed.status == "failed"
         assert "unsupportedExecutionMode" in refreshed.error_message
         verification.close()
@@ -191,9 +224,12 @@ class TestRestoreServiceExecution:
     ):
         service = RestoreService()
 
-        with patch("app.services.restore_service.SessionLocal", testing_session_local), patch(
-            "app.services.restore_service.Path.mkdir",
-            side_effect=PermissionError("no permission"),
+        with (
+            patch("app.services.restore_service.SessionLocal", testing_session_local),
+            patch(
+                "app.services.restore_service.Path.mkdir",
+                side_effect=PermissionError("no permission"),
+            ),
         ):
             await service._execute_local_to_local(
                 restore_job.id,
@@ -204,7 +240,11 @@ class TestRestoreServiceExecution:
             )
 
         verification = testing_session_local()
-        refreshed = verification.query(RestoreJob).filter(RestoreJob.id == restore_job.id).first()
+        refreshed = (
+            verification.query(RestoreJob)
+            .filter(RestoreJob.id == restore_job.id)
+            .first()
+        )
         assert refreshed.status == "failed"
         assert "failedCreateDestinationDir" in refreshed.error_message
         verification.close()
@@ -237,12 +277,16 @@ class TestRestoreServiceExecution:
             send_restore_failure=AsyncMock(return_value=None),
         )
 
-        with patch("app.services.restore_service.SessionLocal", testing_session_local), patch(
-            "app.services.restore_service.asyncio.create_subprocess_exec",
-            return_value=process,
-        ), patch(
-            "app.services.restore_service.notification_service",
-            notification_mock,
+        with (
+            patch("app.services.restore_service.SessionLocal", testing_session_local),
+            patch(
+                "app.services.restore_service.asyncio.create_subprocess_exec",
+                return_value=process,
+            ),
+            patch(
+                "app.services.restore_service.notification_service",
+                notification_mock,
+            ),
         ):
             await service._execute_local_to_local(
                 restore_job.id,
@@ -253,11 +297,68 @@ class TestRestoreServiceExecution:
             )
 
         verification = testing_session_local()
-        refreshed = verification.query(RestoreJob).filter(RestoreJob.id == restore_job.id).first()
+        refreshed = (
+            verification.query(RestoreJob)
+            .filter(RestoreJob.id == restore_job.id)
+            .first()
+        )
         assert refreshed.status == "completed"
         assert refreshed.progress == 100
         assert refreshed.progress_percent == 100.0
         assert "STDOUT:" in refreshed.logs
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_local_restore_root_created_destination_inherits_existing_parent_owner(
+        self, testing_session_local, restore_job, tmp_path
+    ):
+        parent = tmp_path / "parent"
+        parent.mkdir()
+        destination = parent / "new" / "child"
+        parent_stat = parent.stat()
+        service = RestoreService()
+        process = FakeRestoreProcess(
+            returncode=0,
+            stderr_chunks=[
+                b'{"type":"progress_percent","current":1,"total":1,"finished":true}\n'
+            ],
+            stdout_lines=[b"restored\n"],
+        )
+
+        notification_mock = SimpleNamespace(
+            send_restore_success=AsyncMock(return_value=None),
+            send_restore_failure=AsyncMock(return_value=None),
+        )
+
+        with (
+            patch("app.services.restore_service.SessionLocal", testing_session_local),
+            patch("app.services.restore_service.os.geteuid", return_value=0),
+            patch("app.services.restore_service.os.chown") as chown_mock,
+            patch(
+                "app.services.restore_service.asyncio.create_subprocess_exec",
+                return_value=process,
+            ),
+            patch(
+                "app.services.restore_service.notification_service",
+                notification_mock,
+            ),
+        ):
+            await service._execute_local_to_local(
+                restore_job.id,
+                restore_job.repository,
+                restore_job.archive,
+                str(destination),
+                None,
+            )
+
+        assert destination.exists()
+        chown_mock.assert_has_calls(
+            [
+                call(str(parent / "new"), parent_stat.st_uid, parent_stat.st_gid),
+                call(str(destination), parent_stat.st_uid, parent_stat.st_gid),
+            ],
+            any_order=False,
+        )
 
     @pytest.mark.unit
     @pytest.mark.asyncio
@@ -273,7 +374,9 @@ class TestRestoreServiceExecution:
         service = RestoreService()
         process = FakeRestoreProcess(
             returncode=0,
-            stderr_chunks=[b'{"type":"progress_percent","current":1,"total":1,"finished":true}\n'],
+            stderr_chunks=[
+                b'{"type":"progress_percent","current":1,"total":1,"finished":true}\n'
+            ],
             stdout_lines=[b"restored\n"],
         )
 
@@ -282,14 +385,17 @@ class TestRestoreServiceExecution:
             send_restore_failure=AsyncMock(return_value=None),
         )
 
-        with patch("app.services.restore_service.SessionLocal", testing_session_local), patch(
-            "app.services.restore_service.asyncio.create_subprocess_exec",
-            return_value=process,
-        ) as mock_exec, patch(
-            "app.services.restore_service.notification_service",
-            notification_mock,
-        ), patch(
-            "app.core.borg2.borg2.borg_cmd", "borg2"
+        with (
+            patch("app.services.restore_service.SessionLocal", testing_session_local),
+            patch(
+                "app.services.restore_service.asyncio.create_subprocess_exec",
+                return_value=process,
+            ) as mock_exec,
+            patch(
+                "app.services.restore_service.notification_service",
+                notification_mock,
+            ),
+            patch("app.core.borg2.borg2.borg_cmd", "borg2"),
         ):
             await service._execute_local_to_local(
                 restore_job.id,
@@ -309,6 +415,53 @@ class TestRestoreServiceExecution:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
+    async def test_local_restore_contents_only_adds_strip_components(
+        self, testing_session_local, restore_job, restore_repository
+    ):
+        service = RestoreService()
+        process = FakeRestoreProcess(
+            returncode=0,
+            stderr_chunks=[
+                b'{"type":"progress_percent","current":1,"total":1,"finished":true}\n'
+            ],
+            stdout_lines=[b"restored\n"],
+        )
+
+        notification_mock = SimpleNamespace(
+            send_restore_success=AsyncMock(return_value=None),
+            send_restore_failure=AsyncMock(return_value=None),
+        )
+
+        with (
+            patch("app.services.restore_service.SessionLocal", testing_session_local),
+            patch(
+                "app.services.restore_service.asyncio.create_subprocess_exec",
+                return_value=process,
+            ) as mock_exec,
+            patch(
+                "app.services.restore_service.notification_service",
+                notification_mock,
+            ),
+        ):
+            await service._execute_local_to_local(
+                restore_job.id,
+                restore_job.repository,
+                restore_job.archive,
+                restore_job.destination,
+                ["home/username/folder1/folder2"],
+                restore_layout="contents_only",
+                path_metadata=[
+                    {"path": "home/username/folder1/folder2", "type": "directory"}
+                ],
+            )
+
+        cmd = list(mock_exec.call_args.args)
+        assert "--strip-components" in cmd
+        strip_index = cmd.index("--strip-components")
+        assert cmd[strip_index + 1] == "4"
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
     async def test_local_restore_warning_with_zero_files_becomes_failed(
         self, testing_session_local, restore_job
     ):
@@ -324,12 +477,16 @@ class TestRestoreServiceExecution:
             send_restore_failure=AsyncMock(return_value=None),
         )
 
-        with patch("app.services.restore_service.SessionLocal", testing_session_local), patch(
-            "app.services.restore_service.asyncio.create_subprocess_exec",
-            return_value=process,
-        ), patch(
-            "app.services.restore_service.notification_service",
-            notification_mock,
+        with (
+            patch("app.services.restore_service.SessionLocal", testing_session_local),
+            patch(
+                "app.services.restore_service.asyncio.create_subprocess_exec",
+                return_value=process,
+            ),
+            patch(
+                "app.services.restore_service.notification_service",
+                notification_mock,
+            ),
         ):
             await service._execute_local_to_local(
                 restore_job.id,
@@ -340,7 +497,11 @@ class TestRestoreServiceExecution:
             )
 
         verification = testing_session_local()
-        refreshed = verification.query(RestoreJob).filter(RestoreJob.id == restore_job.id).first()
+        refreshed = (
+            verification.query(RestoreJob)
+            .filter(RestoreJob.id == restore_job.id)
+            .first()
+        )
         assert refreshed.status == "failed"
         assert "restoreFailedZeroFilesPermission" in refreshed.error_message
         notification_mock.send_restore_failure.assert_awaited_once()
@@ -374,12 +535,16 @@ class TestRestoreServiceExecution:
             send_restore_failure=AsyncMock(return_value=None),
         )
 
-        with patch("app.services.restore_service.SessionLocal", testing_session_local), patch(
-            "app.services.restore_service.asyncio.create_subprocess_exec",
-            return_value=process,
-        ), patch(
-            "app.services.restore_service.notification_service",
-            notification_mock,
+        with (
+            patch("app.services.restore_service.SessionLocal", testing_session_local),
+            patch(
+                "app.services.restore_service.asyncio.create_subprocess_exec",
+                return_value=process,
+            ),
+            patch(
+                "app.services.restore_service.notification_service",
+                notification_mock,
+            ),
         ):
             await service._execute_local_to_local(
                 restore_job.id,
@@ -390,7 +555,11 @@ class TestRestoreServiceExecution:
             )
 
         verification = testing_session_local()
-        refreshed = verification.query(RestoreJob).filter(RestoreJob.id == restore_job.id).first()
+        refreshed = (
+            verification.query(RestoreJob)
+            .filter(RestoreJob.id == restore_job.id)
+            .first()
+        )
         assert refreshed.status == "completed_with_warnings"
         assert "restoreCompletedWithWarnings" in refreshed.error_message
         notification_mock.send_restore_success.assert_awaited_once()
@@ -402,19 +571,25 @@ class TestRestoreServiceExecution:
         self, testing_session_local, restore_job
     ):
         service = RestoreService()
-        process = FakeRestoreProcess(returncode=2, stderr_chunks=[b"boom\n"], stdout_lines=[])
+        process = FakeRestoreProcess(
+            returncode=2, stderr_chunks=[b"boom\n"], stdout_lines=[]
+        )
 
         notification_mock = SimpleNamespace(
             send_restore_success=AsyncMock(return_value=None),
             send_restore_failure=AsyncMock(return_value=None),
         )
 
-        with patch("app.services.restore_service.SessionLocal", testing_session_local), patch(
-            "app.services.restore_service.asyncio.create_subprocess_exec",
-            return_value=process,
-        ), patch(
-            "app.services.restore_service.notification_service",
-            notification_mock,
+        with (
+            patch("app.services.restore_service.SessionLocal", testing_session_local),
+            patch(
+                "app.services.restore_service.asyncio.create_subprocess_exec",
+                return_value=process,
+            ),
+            patch(
+                "app.services.restore_service.notification_service",
+                notification_mock,
+            ),
         ):
             await service._execute_local_to_local(
                 restore_job.id,
@@ -425,7 +600,11 @@ class TestRestoreServiceExecution:
             )
 
         verification = testing_session_local()
-        refreshed = verification.query(RestoreJob).filter(RestoreJob.id == restore_job.id).first()
+        refreshed = (
+            verification.query(RestoreJob)
+            .filter(RestoreJob.id == restore_job.id)
+            .first()
+        )
         assert refreshed.status == "failed"
         assert "restoreFailedExitCode" in refreshed.error_message
         notification_mock.send_restore_failure.assert_awaited_once()
@@ -470,7 +649,9 @@ class TestRestoreServiceCancellation:
                 raise outcome
             return await awaitable
 
-        with patch("app.services.restore_service.asyncio.wait_for", side_effect=fake_wait_for):
+        with patch(
+            "app.services.restore_service.asyncio.wait_for", side_effect=fake_wait_for
+        ):
             result = await service.cancel_restore(9)
 
         assert result is True

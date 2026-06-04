@@ -1,13 +1,23 @@
 """
 Unit tests for SSH keys API endpoints
 """
+
 from datetime import datetime
 import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import AsyncMock, MagicMock, patch
 import asyncio
 
+from pydantic import ValidationError
+
+from app.core.security import encrypt_secret
 from app.api import ssh_keys as ssh_keys_api
+from app.api.ssh_keys import (
+    SSHConnectionCreate,
+    SSHConnectionTest,
+    SSHConnectionUpdate,
+    SSHQuickSetup,
+)
 from app.database.models import SSHConnection, SSHKey
 
 
@@ -29,56 +39,60 @@ class TestSSHKeysEndpoints:
 
         assert response.status_code == 401
 
-    def test_generate_ssh_key_missing_fields(self, test_client: TestClient, admin_headers):
+    def test_generate_ssh_key_missing_fields(
+        self, test_client: TestClient, admin_headers
+    ):
         """Test generating SSH key with missing fields"""
         response = test_client.post(
-            "/api/ssh-keys/generate",
-            json={},
-            headers=admin_headers
+            "/api/ssh-keys/generate", json={}, headers=admin_headers
         )
 
         assert response.status_code == 422  # Validation error
 
-    def test_generate_ssh_key_invalid_type(self, test_client: TestClient, admin_headers):
+    def test_generate_ssh_key_invalid_type(
+        self, test_client: TestClient, admin_headers
+    ):
         """Test generating SSH key with invalid key type"""
         response = test_client.post(
             "/api/ssh-keys/generate",
-            json={
-                "name": "test-key",
-                "key_type": "invalid-type"
-            },
-            headers=admin_headers
+            json={"name": "test-key", "key_type": "invalid-type"},
+            headers=admin_headers,
         )
 
         assert response.status_code == 400
 
-    def test_upload_ssh_key_missing_fields(self, test_client: TestClient, admin_headers):
+    def test_upload_ssh_key_missing_fields(
+        self, test_client: TestClient, admin_headers
+    ):
         """Test uploading SSH key with missing fields"""
         response = test_client.post(
-            "/api/ssh-keys/upload",
-            json={},
-            headers=admin_headers
+            "/api/ssh-keys/upload", json={}, headers=admin_headers
         )
 
         assert response.status_code == 405
 
     def test_get_ssh_key_nonexistent(self, test_client: TestClient, admin_headers):
         """Test getting non-existent SSH key"""
-        response = test_client.get("/api/ssh-keys/nonexistent-key", headers=admin_headers)
+        response = test_client.get(
+            "/api/ssh-keys/nonexistent-key", headers=admin_headers
+        )
 
         assert response.status_code == 422
 
     def test_delete_ssh_key_nonexistent(self, test_client: TestClient, admin_headers):
         """Test deleting non-existent SSH key"""
-        response = test_client.delete("/api/ssh-keys/nonexistent-key", headers=admin_headers)
+        response = test_client.delete(
+            "/api/ssh-keys/nonexistent-key", headers=admin_headers
+        )
 
         assert response.status_code == 422
 
-    def test_get_ssh_public_key_nonexistent(self, test_client: TestClient, admin_headers):
+    def test_get_ssh_public_key_nonexistent(
+        self, test_client: TestClient, admin_headers
+    ):
         """Test getting public key for non-existent SSH key"""
         response = test_client.get(
-            "/api/ssh-keys/nonexistent-key/public",
-            headers=admin_headers
+            "/api/ssh-keys/nonexistent-key/public", headers=admin_headers
         )
 
         assert response.status_code == 404
@@ -87,11 +101,8 @@ class TestSSHKeysEndpoints:
         """Test SSH connection with invalid parameters"""
         response = test_client.post(
             "/api/ssh-keys/test-connection",
-            json={
-                "host": "invalid-host",
-                "key_name": "nonexistent-key"
-            },
-            headers=admin_headers
+            json={"host": "invalid-host", "key_name": "nonexistent-key"},
+            headers=admin_headers,
         )
 
         assert response.status_code == 405
@@ -99,33 +110,32 @@ class TestSSHKeysEndpoints:
     def test_import_ssh_key_missing_path(self, test_client: TestClient, admin_headers):
         """Test importing SSH key without providing private key path"""
         response = test_client.post(
-            "/api/ssh-keys/import",
-            json={
-                "name": "imported-key"
-            },
-            headers=admin_headers
+            "/api/ssh-keys/import", json={"name": "imported-key"}, headers=admin_headers
         )
 
         assert response.status_code == 422  # Validation error
 
-    def test_import_ssh_key_nonexistent_file(self, test_client: TestClient, admin_headers):
+    def test_import_ssh_key_nonexistent_file(
+        self, test_client: TestClient, admin_headers
+    ):
         """Test importing SSH key with non-existent file path"""
         response = test_client.post(
             "/api/ssh-keys/import",
             json={
                 "name": "imported-key",
-                "private_key_path": "/nonexistent/path/id_rsa"
+                "private_key_path": "/nonexistent/path/id_rsa",
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 404
 
-    def test_test_existing_connection_nonexistent(self, test_client: TestClient, admin_headers):
+    def test_test_existing_connection_nonexistent(
+        self, test_client: TestClient, admin_headers
+    ):
         """Test testing non-existent connection"""
         response = test_client.post(
-            "/api/ssh-keys/connections/999999/test",
-            headers=admin_headers
+            "/api/ssh-keys/connections/999999/test", headers=admin_headers
         )
 
         assert response.status_code == 404
@@ -135,6 +145,337 @@ class TestSSHKeysEndpoints:
         response = test_client.post("/api/ssh-keys/connections/1/test")
 
         assert response.status_code == 401
+
+    def test_connection_test_dns_failure_stores_diagnostic_details(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """DNS failures should be returned and stored with the original stderr details."""
+        from app.core.security import encrypt_secret
+
+        fake_private_key = "-----BEGIN OPENSSH PRIVATE KEY-----\ntest\n-----END OPENSSH PRIVATE KEY-----\n"
+        ssh_key = SSHKey(
+            name="DNS failure key",
+            public_key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAItest test@test",
+            private_key=encrypt_secret(fake_private_key),
+            is_active=True,
+        )
+        test_db.add(ssh_key)
+        test_db.commit()
+        test_db.refresh(ssh_key)
+
+        dns_stderr = (
+            b"ssh: Could not resolve hostname missing.example: "
+            b"Name or service not known\r\n"
+        )
+
+        async def mock_subprocess(*cmd, **kwargs):
+            mock_process = AsyncMock()
+            mock_process.communicate = AsyncMock(return_value=(b"", dns_stderr))
+            mock_process.returncode = 255
+            return mock_process
+
+        with patch(
+            "app.api.ssh_keys.asyncio.create_subprocess_exec",
+            side_effect=mock_subprocess,
+        ):
+            response = test_client.post(
+                f"/api/ssh-keys/{ssh_key.id}/test-connection",
+                json={"host": "missing.example", "username": "backup", "port": 22},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        error_message = data["connection"]["error_message"]
+
+        assert data["success"] is False
+        assert data["connection"]["status"] == "failed"
+        assert "Host did not resolve: missing.example" in error_message
+        assert "saved host value" in error_message
+        assert dns_stderr.decode().strip() in error_message
+
+        stored_connection = (
+            test_db.query(SSHConnection)
+            .filter(
+                SSHConnection.ssh_key_id == ssh_key.id,
+                SSHConnection.host == "missing.example",
+                SSHConnection.username == "backup",
+                SSHConnection.port == 22,
+            )
+            .one()
+        )
+        assert stored_connection.error_message == error_message
+
+        list_response = test_client.get(
+            "/api/ssh-keys/connections", headers=admin_headers
+        )
+        assert list_response.status_code == 200
+        listed_connection = next(
+            connection
+            for connection in list_response.json()["connections"]
+            if connection["id"] == stored_connection.id
+        )
+        assert listed_connection["error_message"] == error_message
+
+    def _create_diagnostics_connection(self, test_db):
+        fake_private_key = "-----BEGIN OPENSSH PRIVATE KEY-----\ntest\n-----END OPENSSH PRIVATE KEY-----\n"
+        ssh_key = SSHKey(
+            name="System SSH Key",
+            public_key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAItest test@test",
+            private_key=encrypt_secret(fake_private_key),
+            is_system_key=True,
+            is_active=True,
+        )
+        test_db.add(ssh_key)
+        test_db.commit()
+        test_db.refresh(ssh_key)
+
+        connection = SSHConnection(
+            ssh_key_id=ssh_key.id,
+            host="backup.example.com",
+            username="borg",
+            port=2222,
+            status="connected",
+            default_path="/srv",
+            mount_point="backup-box",
+        )
+        test_db.add(connection)
+        test_db.commit()
+        test_db.refresh(connection)
+        return ssh_key, connection
+
+    def _patch_monotonic(self, monkeypatch, values: list[float]):
+        sequence = iter(values)
+        last_value = 0.0
+
+        def fake_monotonic():
+            nonlocal last_value
+            try:
+                last_value = next(sequence)
+            except StopIteration:
+                last_value += 0.001
+            return last_value
+
+        monkeypatch.setattr(ssh_keys_api, "_monotonic", fake_monotonic, raising=False)
+
+    def test_connection_diagnostics_returns_latency_tcp_and_throughput(
+        self, test_client: TestClient, admin_headers, test_db, monkeypatch
+    ):
+        _, connection = self._create_diagnostics_connection(test_db)
+        commands: list[list[str]] = []
+
+        async def fake_run_ssh_process(cmd, timeout_seconds):
+            commands.append(cmd)
+            if "-W" in cmd:
+                return 0, b"", b""
+            if cmd[-1].startswith("dd if=/dev/zero"):
+                return 0, b"x" * 131072, b""
+            return 0, b"/srv\n", b""
+
+        monkeypatch.setattr(
+            ssh_keys_api, "_run_ssh_process", fake_run_ssh_process, raising=False
+        )
+        self._patch_monotonic(
+            monkeypatch,
+            [10.0, 10.0, 10.0, 10.025, 10.026, 10.026, 10.03, 10.031, 10.031, 10.281],
+        )
+
+        response = test_client.post(
+            f"/api/ssh-keys/connections/{connection.id}/diagnostics",
+            json={
+                "target": {
+                    "host": "postgres.internal",
+                    "port": 5432,
+                    "timeout_seconds": 3,
+                },
+                "timeout_seconds": 4,
+                "speed_probe_bytes": 131072,
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["connection"]["host"] == "backup.example.com"
+        assert data["session"] == {
+            "status": "success",
+            "elapsed_ms": 25,
+            "output": "/srv",
+        }
+        assert data["latency"] == {"status": "success", "elapsed_ms": 25}
+        assert data["tcp"] == {
+            "target": {
+                "host": "postgres.internal",
+                "port": 5432,
+                "timeout_seconds": 3.0,
+            },
+            "status": "success",
+            "elapsed_ms": 4,
+        }
+        assert data["throughput"] == {
+            "status": "success",
+            "direction": "download",
+            "probe_size_bytes": 131072,
+            "bytes_transferred": 131072,
+            "elapsed_ms": 250,
+            "mbps": 0.5,
+        }
+        assert any("-W" in cmd for cmd in commands)
+        assert any(cmd[-1].startswith("dd if=/dev/zero") for cmd in commands)
+
+    def test_connection_diagnostics_keeps_failed_tcp_as_partial_result(
+        self, test_client: TestClient, admin_headers, test_db, monkeypatch
+    ):
+        _, connection = self._create_diagnostics_connection(test_db)
+
+        async def fake_run_ssh_process(cmd, timeout_seconds):
+            if "-W" in cmd:
+                return (
+                    255,
+                    b"",
+                    b"channel 0: open failed: connect failed: Connection refused",
+                )
+            if cmd[-1].startswith("dd if=/dev/zero"):
+                return 0, b"x" * 65536, b""
+            return 0, b"/srv\n", b""
+
+        monkeypatch.setattr(
+            ssh_keys_api, "_run_ssh_process", fake_run_ssh_process, raising=False
+        )
+        self._patch_monotonic(
+            monkeypatch,
+            [10.0, 10.0, 10.0, 10.01, 10.011, 10.011, 10.017, 10.018, 10.018, 10.118],
+        )
+
+        response = test_client.post(
+            f"/api/ssh-keys/connections/{connection.id}/diagnostics",
+            json={
+                "target": {
+                    "host": "postgres.internal",
+                    "port": 5432,
+                    "timeout_seconds": 3,
+                }
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["session"]["status"] == "success"
+        assert data["tcp"]["status"] == "failed"
+        assert data["tcp"]["elapsed_ms"] == 6
+        assert data["tcp"]["error"] == "connection_refused"
+        assert "Connection refused" in data["tcp"]["message"]
+        assert data["throughput"]["status"] == "success"
+
+    def test_connection_diagnostics_reports_session_timeout(
+        self, test_client: TestClient, admin_headers, test_db, monkeypatch
+    ):
+        _, connection = self._create_diagnostics_connection(test_db)
+
+        async def fake_run_ssh_process(cmd, timeout_seconds):
+            raise asyncio.TimeoutError
+
+        monkeypatch.setattr(
+            ssh_keys_api, "_run_ssh_process", fake_run_ssh_process, raising=False
+        )
+        self._patch_monotonic(monkeypatch, [10.0, 10.0, 10.0, 15.0])
+
+        response = test_client.post(
+            f"/api/ssh-keys/connections/{connection.id}/diagnostics",
+            json={},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["session"] == {
+            "status": "timeout",
+            "elapsed_ms": 5000,
+            "error": "timeout",
+            "message": "SSH diagnostic command timed out",
+        }
+        assert data["latency"]["status"] == "timeout"
+        assert data["tcp"] is None
+        assert data["throughput"] is None
+
+    def test_connection_diagnostics_stops_when_timeout_budget_is_exhausted(
+        self, test_client: TestClient, admin_headers, test_db, monkeypatch
+    ):
+        _, connection = self._create_diagnostics_connection(test_db)
+        commands: list[list[str]] = []
+
+        async def fake_run_ssh_process(cmd, timeout_seconds):
+            commands.append(cmd)
+            return 0, b"/srv\n", b""
+
+        monkeypatch.setattr(
+            ssh_keys_api, "_run_ssh_process", fake_run_ssh_process, raising=False
+        )
+        self._patch_monotonic(monkeypatch, [10.0, 10.0, 10.0, 14.0, 14.0])
+
+        response = test_client.post(
+            f"/api/ssh-keys/connections/{connection.id}/diagnostics",
+            json={"timeout_seconds": 4, "speed_probe_bytes": 131072},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["session"]["status"] == "success"
+        assert data["session"]["elapsed_ms"] == 4000
+        assert data["throughput"] == {
+            "status": "timeout",
+            "direction": "download",
+            "probe_size_bytes": 131072,
+            "elapsed_ms": 4000,
+            "error": "timeout",
+            "message": "SSH diagnostics timeout budget exhausted before speed probe started",
+        }
+        assert len(commands) == 1
+        assert not any(cmd[-1].startswith("dd if=/dev/zero") for cmd in commands)
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {"target": {"host": "", "port": 5432, "timeout_seconds": 3}},
+            {"target": {"host": "bad host", "port": 5432, "timeout_seconds": 3}},
+            {"target": {"host": "postgres.internal", "port": 0, "timeout_seconds": 3}},
+            {
+                "target": {
+                    "host": "postgres.internal",
+                    "port": 5432,
+                    "timeout_seconds": 0,
+                }
+            },
+            {"timeout_seconds": 0},
+            {"speed_probe_bytes": 1024},
+            {"speed_probe_bytes": 10485760},
+        ],
+    )
+    def test_connection_diagnostics_rejects_invalid_inputs(
+        self, test_client: TestClient, admin_headers, test_db, payload
+    ):
+        _, connection = self._create_diagnostics_connection(test_db)
+
+        response = test_client.post(
+            f"/api/ssh-keys/connections/{connection.id}/diagnostics",
+            json=payload,
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 422
+
+    def test_connection_diagnostics_missing_connection(
+        self, test_client: TestClient, admin_headers
+    ):
+        response = test_client.post(
+            "/api/ssh-keys/connections/999999/diagnostics",
+            json={},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 404
 
 
 @pytest.mark.unit
@@ -162,12 +503,18 @@ class TestRunDfCommand:
 
         mock_process = AsyncMock()
         mock_process.returncode = 0
-        mock_process.communicate = AsyncMock(return_value=(english_output.encode(), b""))
+        mock_process.communicate = AsyncMock(
+            return_value=(english_output.encode(), b"")
+        )
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_process):
             with patch("asyncio.wait_for", return_value=(english_output.encode(), b"")):
-                mock_process.communicate = AsyncMock(return_value=(english_output.encode(), b""))
-                result = await _run_df_command(mock_connection, "/tmp/key", "/home", use_locale=True)
+                mock_process.communicate = AsyncMock(
+                    return_value=(english_output.encode(), b"")
+                )
+                result = await _run_df_command(
+                    mock_connection, "/tmp/key", "/home", use_locale=True
+                )
 
         assert result is not None
         assert result["total"] == 102400000 * 1024
@@ -191,7 +538,9 @@ class TestRunDfCommand:
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_process):
             with patch("asyncio.wait_for", return_value=(german_output.encode(), b"")):
-                result = await _run_df_command(mock_connection, "/tmp/key", "/home", use_locale=False)
+                result = await _run_df_command(
+                    mock_connection, "/tmp/key", "/home", use_locale=False
+                )
 
         assert result is not None
         assert result["total"] == 102400000 * 1024
@@ -210,11 +559,15 @@ u331525-sub1        10485760000 8665169920 1820590080  83% /home"""
 
         mock_process = AsyncMock()
         mock_process.returncode = 0
-        mock_process.communicate = AsyncMock(return_value=(hetzner_output.encode(), b""))
+        mock_process.communicate = AsyncMock(
+            return_value=(hetzner_output.encode(), b"")
+        )
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_process):
             with patch("asyncio.wait_for", return_value=(hetzner_output.encode(), b"")):
-                result = await _run_df_command(mock_connection, "/tmp/key", "/home", use_locale=False)
+                result = await _run_df_command(
+                    mock_connection, "/tmp/key", "/home", use_locale=False
+                )
 
         assert result is not None
         assert result["percent_used"] == 83.0
@@ -232,7 +585,9 @@ u331525-sub1        10485760000 8665169920 1820590080  83% /home"""
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_process):
             with patch("asyncio.wait_for", return_value=(b"", b"Command not found")):
-                result = await _run_df_command(mock_connection, "/tmp/key", "/home", use_locale=True)
+                result = await _run_df_command(
+                    mock_connection, "/tmp/key", "/home", use_locale=True
+                )
 
         assert result is None
 
@@ -247,7 +602,9 @@ u331525-sub1        10485760000 8665169920 1820590080  83% /home"""
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_process):
             with patch("asyncio.wait_for", return_value=(b"", b"")):
-                result = await _run_df_command(mock_connection, "/tmp/key", "/home", use_locale=True)
+                result = await _run_df_command(
+                    mock_connection, "/tmp/key", "/home", use_locale=True
+                )
 
         assert result is None
 
@@ -264,7 +621,9 @@ u331525-sub1        10485760000 8665169920 1820590080  83% /home"""
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_process):
             with patch("asyncio.wait_for", return_value=(header_only.encode(), b"")):
-                result = await _run_df_command(mock_connection, "/tmp/key", "/home", use_locale=True)
+                result = await _run_df_command(
+                    mock_connection, "/tmp/key", "/home", use_locale=True
+                )
 
         assert result is None
 
@@ -278,11 +637,17 @@ u331525-sub1        10485760000 8665169920 1820590080  83% /home"""
 
         mock_process = AsyncMock()
         mock_process.returncode = 0
-        mock_process.communicate = AsyncMock(return_value=(malformed_output.encode(), b""))
+        mock_process.communicate = AsyncMock(
+            return_value=(malformed_output.encode(), b"")
+        )
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_process):
-            with patch("asyncio.wait_for", return_value=(malformed_output.encode(), b"")):
-                result = await _run_df_command(mock_connection, "/tmp/key", "/home", use_locale=True)
+            with patch(
+                "asyncio.wait_for", return_value=(malformed_output.encode(), b"")
+            ):
+                result = await _run_df_command(
+                    mock_connection, "/tmp/key", "/home", use_locale=True
+                )
 
         # Should skip the malformed line (second column isn't numeric)
         assert result is None
@@ -301,7 +666,9 @@ u331525-sub1        10485760000 8665169920 1820590080  83% /home"""
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_process):
             with patch("asyncio.wait_for", return_value=(short_output.encode(), b"")):
-                result = await _run_df_command(mock_connection, "/tmp/key", "/home", use_locale=True)
+                result = await _run_df_command(
+                    mock_connection, "/tmp/key", "/home", use_locale=True
+                )
 
         assert result is None
 
@@ -316,11 +683,17 @@ u331525-sub1        10485760000 8665169920 1820590080  83% /home"""
 
         mock_process = AsyncMock()
         mock_process.returncode = 0
-        mock_process.communicate = AsyncMock(return_value=(multi_fs_output.encode(), b""))
+        mock_process.communicate = AsyncMock(
+            return_value=(multi_fs_output.encode(), b"")
+        )
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_process):
-            with patch("asyncio.wait_for", return_value=(multi_fs_output.encode(), b"")):
-                result = await _run_df_command(mock_connection, "/tmp/key", "/", use_locale=True)
+            with patch(
+                "asyncio.wait_for", return_value=(multi_fs_output.encode(), b"")
+            ):
+                result = await _run_df_command(
+                    mock_connection, "/tmp/key", "/", use_locale=True
+                )
 
         assert result is not None
         # Should pick the first data line
@@ -344,7 +717,9 @@ u331525-sub1        10485760000 8665169920 1820590080  83% /home"""
 
         with patch("asyncio.create_subprocess_exec", side_effect=capture_subprocess):
             with patch("asyncio.wait_for", return_value=(b"", b"")):
-                await _run_df_command(mock_connection, "/tmp/key", "/home", use_locale=True)
+                await _run_df_command(
+                    mock_connection, "/tmp/key", "/home", use_locale=True
+                )
 
         assert captured_cmd is not None
         # The last argument should contain LC_ALL=C
@@ -367,7 +742,9 @@ u331525-sub1        10485760000 8665169920 1820590080  83% /home"""
 
         with patch("asyncio.create_subprocess_exec", side_effect=capture_subprocess):
             with patch("asyncio.wait_for", return_value=(b"", b"")):
-                await _run_df_command(mock_connection, "/tmp/key", "/home", use_locale=False)
+                await _run_df_command(
+                    mock_connection, "/tmp/key", "/home", use_locale=False
+                )
 
         assert captured_cmd is not None
         # The last argument should NOT contain LC_ALL=C
@@ -382,6 +759,174 @@ class TestSSHKeyHelpers:
         assert ssh_keys_api.format_bytes(1024) == "1.00 KB"
         assert ssh_keys_api.format_bytes(1024 * 1024) == "1.00 MB"
         assert ssh_keys_api.format_bytes(5 * 1024 * 1024 * 1024) == "5.00 GB"
+
+
+@pytest.mark.unit
+class TestSSHConnectionHostValidation:
+    @pytest.mark.parametrize(
+        ("raw_host", "expected_host"),
+        [
+            ("  u123456.your-storagebox.de  ", "u123456.your-storagebox.de"),
+            ("\tbackup.example.com\n", "backup.example.com"),
+            ("192.0.2.10", "192.0.2.10"),
+            ("2001:db8::1", "2001:db8::1"),
+        ],
+    )
+    def test_connection_host_models_normalize_safe_hosts(self, raw_host, expected_host):
+        assert (
+            SSHConnectionCreate(host=raw_host, username="borg", password="secret").host
+            == expected_host
+        )
+        assert SSHConnectionUpdate(host=raw_host).host == expected_host
+        assert SSHConnectionTest(host=raw_host, username="borg").host == expected_host
+        assert (
+            SSHQuickSetup(
+                name="key",
+                host=raw_host,
+                username="borg",
+                password="secret",
+            ).host
+            == expected_host
+        )
+
+    @pytest.mark.parametrize(
+        "raw_host",
+        [
+            "http://host",
+            "ssh://user@host",
+            "host:23",
+            "example.com/path",
+            "user@example.com",
+            "[example.com]",
+            "[2001:db8::1]",
+            "[host](https://host)",
+            "host name",
+            "host\u200bname",
+            "",
+            "   ",
+        ],
+    )
+    def test_connection_host_models_reject_malformed_hosts(self, raw_host):
+        with pytest.raises(ValidationError):
+            SSHConnectionCreate(host=raw_host, username="borg", password="secret")
+        with pytest.raises(ValidationError):
+            SSHConnectionTest(host=raw_host, username="borg")
+        with pytest.raises(ValidationError):
+            SSHConnectionUpdate(host=raw_host)
+        with pytest.raises(ValidationError):
+            SSHQuickSetup(
+                name="key",
+                host=raw_host,
+                username="borg",
+                password="secret",
+            )
+
+    def test_audit_ssh_connection_hosts_reports_suspicious_saved_hosts(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        test_db.add_all(
+            [
+                SSHConnection(
+                    host="valid.example.com",
+                    username="borg",
+                    port=22,
+                    status="connected",
+                ),
+                SSHConnection(
+                    host=" u123456.your-storagebox.de ",
+                    username="borg",
+                    port=22,
+                    status="failed",
+                ),
+                SSHConnection(
+                    host="http://bad.example.com",
+                    username="borg",
+                    port=22,
+                    status="failed",
+                ),
+            ]
+        )
+        test_db.commit()
+
+        response = test_client.get(
+            "/api/ssh-keys/connections/host-audit",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["summary"] == {
+            "total": 3,
+            "valid": 1,
+            "normalizable": 1,
+            "suspicious": 1,
+        }
+        assert data["normalizable"][0]["host"] == " u123456.your-storagebox.de "
+        assert (
+            data["normalizable"][0]["normalized_host"] == "u123456.your-storagebox.de"
+        )
+        assert data["suspicious"][0]["host"] == "http://bad.example.com"
+
+    def test_cleanup_ssh_connection_hosts_dry_run_does_not_modify_saved_hosts(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        connection = SSHConnection(
+            host=" u123456.your-storagebox.de ",
+            username="borg",
+            port=22,
+            status="failed",
+        )
+        test_db.add(connection)
+        test_db.commit()
+        test_db.refresh(connection)
+
+        response = test_client.post(
+            "/api/ssh-keys/connections/host-cleanup",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["dry_run"] is True
+        assert data["summary"]["cleaned"] == 0
+        assert data["summary"]["normalizable"] == 1
+        test_db.refresh(connection)
+        assert connection.host == " u123456.your-storagebox.de "
+
+    def test_cleanup_ssh_connection_hosts_applies_only_safe_normalizations(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        normalizable = SSHConnection(
+            host=" u123456.your-storagebox.de ",
+            username="borg",
+            port=22,
+            status="failed",
+        )
+        suspicious = SSHConnection(
+            host="host:23",
+            username="borg",
+            port=22,
+            status="failed",
+        )
+        test_db.add_all([normalizable, suspicious])
+        test_db.commit()
+        test_db.refresh(normalizable)
+        test_db.refresh(suspicious)
+
+        response = test_client.post(
+            "/api/ssh-keys/connections/host-cleanup?dry_run=false",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["dry_run"] is False
+        assert data["summary"]["cleaned"] == 1
+        assert data["summary"]["suspicious"] == 1
+        test_db.refresh(normalizable)
+        test_db.refresh(suspicious)
+        assert normalizable.host == "u123456.your-storagebox.de"
+        assert suspicious.host == "host:23"
 
 
 @pytest.mark.unit
@@ -413,7 +958,9 @@ class TestCollectStorageInfo:
         return key
 
     @pytest.mark.asyncio
-    async def test_success_on_first_attempt_with_locale(self, mock_connection, mock_ssh_key):
+    async def test_success_on_first_attempt_with_locale(
+        self, mock_connection, mock_ssh_key
+    ):
         """Test successful storage collection on first attempt (with LC_ALL=C)"""
         from app.api.ssh_keys import collect_storage_info
 
@@ -432,7 +979,7 @@ class TestCollectStorageInfo:
                     "available": 51200000 * 1024,
                     "percent_used": 50.0,
                     "filesystem": "/dev/sda1",
-                    "mount_point": "/home"
+                    "mount_point": "/home",
                 }
             return None
 
@@ -441,14 +988,18 @@ class TestCollectStorageInfo:
                 with patch("os.chmod"):
                     with patch("os.path.exists", return_value=True):
                         with patch("os.unlink"):
-                            result = await collect_storage_info(mock_connection, mock_ssh_key)
+                            result = await collect_storage_info(
+                                mock_connection, mock_ssh_key
+                            )
 
         assert result is not None
         assert result["percent_used"] == 50.0
         assert call_count == 1  # Should succeed on first attempt
 
     @pytest.mark.asyncio
-    async def test_fallback_to_plain_df_for_restricted_shell(self, mock_connection, mock_ssh_key):
+    async def test_fallback_to_plain_df_for_restricted_shell(
+        self, mock_connection, mock_ssh_key
+    ):
         """Test fallback to plain df when LC_ALL=C fails (restricted shell like Hetzner)"""
         from app.api.ssh_keys import collect_storage_info
 
@@ -466,7 +1017,7 @@ class TestCollectStorageInfo:
                     "available": 1820590080 * 1024,
                     "percent_used": 83.0,
                     "filesystem": "u331525-sub1",
-                    "mount_point": "/home"
+                    "mount_point": "/home",
                 }
 
         with patch("app.api.ssh_keys._run_df_command", side_effect=mock_run_df):
@@ -474,7 +1025,9 @@ class TestCollectStorageInfo:
                 with patch("os.chmod"):
                     with patch("os.path.exists", return_value=True):
                         with patch("os.unlink"):
-                            result = await collect_storage_info(mock_connection, mock_ssh_key)
+                            result = await collect_storage_info(
+                                mock_connection, mock_ssh_key
+                            )
 
         assert result is not None
         assert result["percent_used"] == 83.0
@@ -497,7 +1050,9 @@ class TestCollectStorageInfo:
                 with patch("os.chmod"):
                     with patch("os.path.exists", return_value=True):
                         with patch("os.unlink"):
-                            result = await collect_storage_info(mock_connection, mock_ssh_key)
+                            result = await collect_storage_info(
+                                mock_connection, mock_ssh_key
+                            )
 
         assert result is None
         assert call_count == 2  # Should have tried both
@@ -515,12 +1070,16 @@ class TestCollectStorageInfo:
                 with patch("os.chmod"):
                     with patch("os.path.exists", return_value=True):
                         with patch("os.unlink"):
-                            result = await collect_storage_info(mock_connection, mock_ssh_key)
+                            result = await collect_storage_info(
+                                mock_connection, mock_ssh_key
+                            )
 
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_uses_default_path_from_connection(self, mock_connection, mock_ssh_key):
+    async def test_uses_default_path_from_connection(
+        self, mock_connection, mock_ssh_key
+    ):
         """Test that default_path from connection is used"""
         from app.api.ssh_keys import collect_storage_info
 
@@ -529,7 +1088,14 @@ class TestCollectStorageInfo:
         async def mock_run_df(conn, key_file, path, use_locale):
             nonlocal captured_path
             captured_path = path
-            return {"total": 1024, "used": 512, "available": 512, "percent_used": 50.0, "filesystem": "test", "mount_point": path}
+            return {
+                "total": 1024,
+                "used": 512,
+                "available": 512,
+                "percent_used": 50.0,
+                "filesystem": "test",
+                "mount_point": path,
+            }
 
         mock_connection.default_path = "/custom/path"
 
@@ -552,7 +1118,14 @@ class TestCollectStorageInfo:
         async def mock_run_df(conn, key_file, path, use_locale):
             nonlocal captured_path
             captured_path = path
-            return {"total": 1024, "used": 512, "available": 512, "percent_used": 50.0, "filesystem": "test", "mount_point": path}
+            return {
+                "total": 1024,
+                "used": 512,
+                "available": 512,
+                "percent_used": 50.0,
+                "filesystem": "test",
+                "mount_point": path,
+            }
 
         mock_connection.default_path = None
 
@@ -584,7 +1157,9 @@ class TestCollectStorageInfo:
                 with patch("os.chmod"):
                     with patch("os.path.exists", return_value=True):
                         with patch("os.unlink", side_effect=mock_unlink):
-                            result = await collect_storage_info(mock_connection, mock_ssh_key)
+                            result = await collect_storage_info(
+                                mock_connection, mock_ssh_key
+                            )
 
         assert unlink_called
 
@@ -611,7 +1186,11 @@ class TestSSHConnectionDelete:
         All FK columns must be NULLed before the DELETE so no constraint fires.
         """
         from app.database.models import (
-            SSHConnection, Repository, BackupJob, RestoreJob, ScheduledJob,
+            SSHConnection,
+            Repository,
+            BackupJob,
+            RestoreJob,
+            ScheduledJob,
         )
 
         conn = SSHConnection(host="test-host.example.com", username="testuser", port=22)
@@ -667,22 +1246,33 @@ class TestSSHConnectionDelete:
 
         test_db.expire_all()
 
-        assert test_db.query(SSHConnection).filter(SSHConnection.id == conn_id).first() is None
+        assert (
+            test_db.query(SSHConnection).filter(SSHConnection.id == conn_id).first()
+            is None
+        )
 
         repo_after = test_db.query(Repository).filter(Repository.id == repo_id).first()
         assert repo_after is not None
         assert repo_after.connection_id is None
         assert repo_after.source_ssh_connection_id is None
 
-        backup_after = test_db.query(BackupJob).filter(BackupJob.id == backup_job_id).first()
+        backup_after = (
+            test_db.query(BackupJob).filter(BackupJob.id == backup_job_id).first()
+        )
         assert backup_after is not None
         assert backup_after.source_ssh_connection_id is None
 
-        restore_after = test_db.query(RestoreJob).filter(RestoreJob.id == restore_job_id).first()
+        restore_after = (
+            test_db.query(RestoreJob).filter(RestoreJob.id == restore_job_id).first()
+        )
         assert restore_after is not None
         assert restore_after.destination_connection_id is None
 
-        scheduled_after = test_db.query(ScheduledJob).filter(ScheduledJob.id == scheduled_job_id).first()
+        scheduled_after = (
+            test_db.query(ScheduledJob)
+            .filter(ScheduledJob.id == scheduled_job_id)
+            .first()
+        )
         assert scheduled_after is not None
         assert scheduled_after.source_ssh_connection_id is None
 
@@ -702,7 +1292,9 @@ class TestSSHConnectionDelete:
 
 @pytest.mark.unit
 class TestSSHKeyStorageAndHelpers:
-    def test_get_system_key_empty_returns_exists_false(self, test_client: TestClient, admin_headers):
+    def test_get_system_key_empty_returns_exists_false(
+        self, test_client: TestClient, admin_headers
+    ):
         response = test_client.get("/api/ssh-keys/system-key", headers=admin_headers)
 
         assert response.status_code == 200
@@ -784,7 +1376,11 @@ class TestSSHKeyStorageAndHelpers:
             "percent_used": 66.7,
         }
 
-        with patch.object(ssh_keys_api, "collect_storage_info", new=AsyncMock(return_value=storage_info)) as mock_collect:
+        with patch.object(
+            ssh_keys_api,
+            "collect_storage_info",
+            new=AsyncMock(return_value=storage_info),
+        ) as mock_collect:
             response = test_client.post(
                 f"/api/ssh-keys/connections/{connection.id}/refresh-storage",
                 headers=admin_headers,
@@ -799,7 +1395,11 @@ class TestSSHKeyStorageAndHelpers:
         mock_collect.assert_awaited_once()
 
         test_db.expire_all()
-        refreshed = test_db.query(SSHConnection).filter(SSHConnection.id == connection.id).first()
+        refreshed = (
+            test_db.query(SSHConnection)
+            .filter(SSHConnection.id == connection.id)
+            .first()
+        )
         assert refreshed.ssh_key_id == system_key.id
         assert refreshed.storage_total == 1536
         assert refreshed.storage_used == 1024

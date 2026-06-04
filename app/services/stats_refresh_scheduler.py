@@ -39,9 +39,7 @@ class StatsRefreshScheduler:
                 logger.debug("No repositories to refresh stats for", time=now)
                 return
 
-            logger.info("Starting repository stats refresh",
-                       count=len(repos),
-                       time=now)
+            logger.info("Starting repository stats refresh", count=len(repos), time=now)
 
             success_count = 0
             error_count = 0
@@ -51,21 +49,27 @@ class StatsRefreshScheduler:
                     result = await BorgRouter(repo).update_stats(db)
                     if result:
                         success_count += 1
-                        logger.debug("Refreshed stats for repository",
-                                   repo_id=repo.id,
-                                   repo_name=repo.name)
+                        logger.debug(
+                            "Refreshed stats for repository",
+                            repo_id=repo.id,
+                            repo_name=repo.name,
+                        )
                     else:
                         error_count += 1
-                        logger.warning("Failed to refresh stats for repository",
-                                     repo_id=repo.id,
-                                     repo_name=repo.name)
+                        logger.warning(
+                            "Failed to refresh stats for repository",
+                            repo_id=repo.id,
+                            repo_name=repo.name,
+                        )
 
                 except Exception as e:
                     error_count += 1
-                    logger.error("Error refreshing stats for repository",
-                               repo_id=repo.id,
-                               repo_name=repo.name if repo else "Unknown",
-                               error=str(e))
+                    logger.error(
+                        "Error refreshing stats for repository",
+                        repo_id=repo.id,
+                        repo_name=repo.name if repo else "Unknown",
+                        error=str(e),
+                    )
                     # Continue with other repositories even if one fails
                     continue
 
@@ -82,13 +86,18 @@ class StatsRefreshScheduler:
                 mqtt_service.sync_state_with_db(db, reason="repository refresh")
                 logger.info("Synced MQTT state after stats refresh")
             except Exception as mqtt_error:
-                logger.warning("Failed to sync MQTT state after stats refresh", error=str(mqtt_error))
+                logger.warning(
+                    "Failed to sync MQTT state after stats refresh",
+                    error=str(mqtt_error),
+                )
 
-            logger.info("Completed repository stats refresh",
-                       total=len(repos),
-                       success=success_count,
-                       errors=error_count,
-                       duration_repos=len(repos))
+            logger.info(
+                "Completed repository stats refresh",
+                total=len(repos),
+                success=success_count,
+                errors=error_count,
+                duration_repos=len(repos),
+            )
 
         except Exception as e:
             logger.error("Error in refresh_all_repository_stats", error=str(e))
@@ -121,8 +130,10 @@ class StatsRefreshScheduler:
             logger.info("Stats refresh scheduler disabled (interval=0)")
             return
 
-        logger.info("Stats refresh scheduler started",
-                   refresh_interval_minutes=self._current_interval_minutes)
+        logger.info(
+            "Stats refresh scheduler started",
+            refresh_interval_minutes=self._current_interval_minutes,
+        )
 
         while self.running:
             try:
@@ -134,9 +145,11 @@ class StatsRefreshScheduler:
                     break
 
                 if new_interval != self._current_interval_minutes:
-                    logger.info("Stats refresh interval changed",
-                               old_minutes=self._current_interval_minutes,
-                               new_minutes=new_interval)
+                    logger.info(
+                        "Stats refresh interval changed",
+                        old_minutes=self._current_interval_minutes,
+                        new_minutes=new_interval,
+                    )
                     self._current_interval_minutes = new_interval
 
                 # Run the refresh

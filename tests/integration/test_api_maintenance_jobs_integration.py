@@ -56,9 +56,15 @@ class TestMaintenanceJobApiIntegration:
         )
         test_db.commit()
 
-        check_response = test_client.get(f"/api/repositories/{repo.id}/check-jobs", headers=admin_headers)
-        compact_response = test_client.get(f"/api/repositories/{repo.id}/compact-jobs", headers=admin_headers)
-        prune_response = test_client.get(f"/api/repositories/{repo.id}/prune-jobs", headers=admin_headers)
+        check_response = test_client.get(
+            f"/api/repositories/{repo.id}/check-jobs", headers=admin_headers
+        )
+        compact_response = test_client.get(
+            f"/api/repositories/{repo.id}/compact-jobs", headers=admin_headers
+        )
+        prune_response = test_client.get(
+            f"/api/repositories/{repo.id}/prune-jobs", headers=admin_headers
+        )
 
         assert check_response.status_code == 200
         assert compact_response.status_code == 200
@@ -82,18 +88,39 @@ class TestMaintenanceJobApiIntegration:
         compact_log.write_text("compact streamed\n", encoding="utf-8")
         prune_log.write_text("prune streamed\n", encoding="utf-8")
 
-        check_job = CheckJob(repository_id=repo.id, status="completed", log_file_path=str(check_log), has_logs=True)
-        compact_job = CompactJob(repository_id=repo.id, status="completed", log_file_path=str(compact_log), has_logs=True)
-        prune_job = PruneJob(repository_id=repo.id, status="completed", log_file_path=str(prune_log), has_logs=True)
+        check_job = CheckJob(
+            repository_id=repo.id,
+            status="completed",
+            log_file_path=str(check_log),
+            has_logs=True,
+        )
+        compact_job = CompactJob(
+            repository_id=repo.id,
+            status="completed",
+            log_file_path=str(compact_log),
+            has_logs=True,
+        )
+        prune_job = PruneJob(
+            repository_id=repo.id,
+            status="completed",
+            log_file_path=str(prune_log),
+            has_logs=True,
+        )
         test_db.add_all([check_job, compact_job, prune_job])
         test_db.commit()
         test_db.refresh(check_job)
         test_db.refresh(compact_job)
         test_db.refresh(prune_job)
 
-        check_response = test_client.get(f"/api/repositories/check-jobs/{check_job.id}", headers=admin_headers)
-        compact_response = test_client.get(f"/api/repositories/compact-jobs/{compact_job.id}", headers=admin_headers)
-        prune_response = test_client.get(f"/api/repositories/prune-jobs/{prune_job.id}", headers=admin_headers)
+        check_response = test_client.get(
+            f"/api/repositories/check-jobs/{check_job.id}", headers=admin_headers
+        )
+        compact_response = test_client.get(
+            f"/api/repositories/compact-jobs/{compact_job.id}", headers=admin_headers
+        )
+        prune_response = test_client.get(
+            f"/api/repositories/prune-jobs/{prune_job.id}", headers=admin_headers
+        )
 
         assert check_response.status_code == 200
         assert compact_response.status_code == 200

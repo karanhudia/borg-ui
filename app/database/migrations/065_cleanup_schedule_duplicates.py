@@ -27,13 +27,15 @@ def _table_exists(db, table_name: str) -> bool:
     )
     return result.first() is not None
 
+
 def upgrade(db):
     """Clean up duplicates/orphans and add CASCADE delete to scheduled_job_repositories"""
 
     try:
         # STEP 1: Clean up orphaned junction entries (pointing to deleted schedules or repositories)
         logger.info("STEP 1: Checking for orphaned junction entries...")
-        result = db.execute(text("""
+        result = db.execute(
+            text("""
             SELECT sjr.id, sjr.scheduled_job_id, sjr.repository_id,
                    CASE
                        WHEN sj.id IS NULL THEN 'scheduled_job'
@@ -43,12 +45,15 @@ def upgrade(db):
             LEFT JOIN scheduled_jobs sj ON sjr.scheduled_job_id = sj.id
             LEFT JOIN repositories r ON sjr.repository_id = r.id
             WHERE sj.id IS NULL OR r.id IS NULL
-        """))
+        """)
+        )
 
         orphans = result.fetchall()
 
         if orphans:
-            logger.warning(f"Found {len(orphans)} orphaned junction entries, cleaning up...")
+            logger.warning(
+                f"Found {len(orphans)} orphaned junction entries, cleaning up..."
+            )
             for orphan in orphans:
                 entry_id, schedule_id, repo_id, missing_parent = orphan
                 logger.debug(
@@ -58,7 +63,10 @@ def upgrade(db):
                     repository_id=repo_id,
                     missing_parent=missing_parent,
                 )
-                db.execute(text("DELETE FROM scheduled_job_repositories WHERE id = :id"), {"id": entry_id})
+                db.execute(
+                    text("DELETE FROM scheduled_job_repositories WHERE id = :id"),
+                    {"id": entry_id},
+                )
 
             db.commit()
             logger.info(f"STEP 1: Removed {len(orphans)} orphaned junction entries")
@@ -67,31 +75,40 @@ def upgrade(db):
 
         # STEP 2: Remove duplicate entries
         logger.info("STEP 2: Checking for duplicate entries...")
-        result = db.execute(text("""
+        result = db.execute(
+            text("""
             SELECT scheduled_job_id, repository_id, COUNT(*) as count
             FROM scheduled_job_repositories
             GROUP BY scheduled_job_id, repository_id
             HAVING COUNT(*) > 1
-        """))
+        """)
+        )
 
         duplicates = result.fetchall()
 
         if duplicates:
-            logger.warning(f"Found {len(duplicates)} duplicate schedule-repository combinations, cleaning up...")
+            logger.warning(
+                f"Found {len(duplicates)} duplicate schedule-repository combinations, cleaning up..."
+            )
 
             total_removed = 0
             for dup in duplicates:
                 schedule_id, repo_id, count = dup
-                logger.info(f"Cleaning: schedule_id={schedule_id}, repo_id={repo_id}, duplicates={count}")
+                logger.info(
+                    f"Cleaning: schedule_id={schedule_id}, repo_id={repo_id}, duplicates={count}"
+                )
 
                 # Get all entries for this combination, ordered by id (keep oldest)
-                entries_result = db.execute(text("""
+                entries_result = db.execute(
+                    text("""
                     SELECT id, execution_order
                     FROM scheduled_job_repositories
                     WHERE scheduled_job_id = :schedule_id
                     AND repository_id = :repo_id
                     ORDER BY id ASC
-                """), {"schedule_id": schedule_id, "repo_id": repo_id})
+                """),
+                    {"schedule_id": schedule_id, "repo_id": repo_id},
+                )
 
                 entries = entries_result.fetchall()
 
@@ -100,10 +117,17 @@ def upgrade(db):
                     keep_id = entries[0][0]
                     delete_ids = [entry[0] for entry in entries[1:]]
 
-                    logger.debug(f"  Keeping entry id={keep_id}, deleting ids={delete_ids}")
+                    logger.debug(
+                        f"  Keeping entry id={keep_id}, deleting ids={delete_ids}"
+                    )
 
                     for delete_id in delete_ids:
-                        db.execute(text("DELETE FROM scheduled_job_repositories WHERE id = :id"), {"id": delete_id})
+                        db.execute(
+                            text(
+                                "DELETE FROM scheduled_job_repositories WHERE id = :id"
+                            ),
+                            {"id": delete_id},
+                        )
                         total_removed += 1
 
             db.commit()
@@ -112,16 +136,21 @@ def upgrade(db):
             logger.info("STEP 2: No duplicate entries found")
 
         # STEP 3: Recreate table with CASCADE delete
-        logger.info("STEP 3: Adding CASCADE delete to scheduled_job_repositories table...")
+        logger.info(
+            "STEP 3: Adding CASCADE delete to scheduled_job_repositories table..."
+        )
 
         # Previous interrupted runs can leave the temp table behind. Make this migration restart-safe.
         if _table_exists(db, "scheduled_job_repositories_new"):
-            logger.warning("Found leftover scheduled_job_repositories_new table from a previous run, dropping it")
+            logger.warning(
+                "Found leftover scheduled_job_repositories_new table from a previous run, dropping it"
+            )
             db.execute(text("DROP TABLE scheduled_job_repositories_new"))
             db.commit()
 
         # Create new table with CASCADE
-        db.execute(text("""
+        db.execute(
+            text("""
             CREATE TABLE scheduled_job_repositories_new (
                 id INTEGER PRIMARY KEY,
                 scheduled_job_id INTEGER NOT NULL,
@@ -132,38 +161,49 @@ def upgrade(db):
                 FOREIGN KEY (repository_id) REFERENCES repositories(id) ON DELETE CASCADE,
                 UNIQUE (scheduled_job_id, repository_id)
             )
-        """))
+        """)
+        )
 
         # Copy data from old table to new table
-        db.execute(text("""
+        db.execute(
+            text("""
             INSERT INTO scheduled_job_repositories_new
                 (id, scheduled_job_id, repository_id, execution_order, created_at)
             SELECT id, scheduled_job_id, repository_id, execution_order, created_at
             FROM scheduled_job_repositories
-        """))
+        """)
+        )
 
         # Drop old table
         db.execute(text("DROP TABLE scheduled_job_repositories"))
 
         # Rename new table to old name
-        db.execute(text("""
+        db.execute(
+            text("""
             ALTER TABLE scheduled_job_repositories_new
             RENAME TO scheduled_job_repositories
-        """))
+        """)
+        )
 
         # Recreate indexes
-        db.execute(text("""
+        db.execute(
+            text("""
             CREATE INDEX ix_scheduled_job_repositories_scheduled_job_id
             ON scheduled_job_repositories(scheduled_job_id)
-        """))
+        """)
+        )
 
-        db.execute(text("""
+        db.execute(
+            text("""
             CREATE INDEX ix_scheduled_job_repositories_repository_id
             ON scheduled_job_repositories(repository_id)
-        """))
+        """)
+        )
 
         db.commit()
-        logger.info("STEP 3: CASCADE delete added successfully to scheduled_job_repositories")
+        logger.info(
+            "STEP 3: CASCADE delete added successfully to scheduled_job_repositories"
+        )
 
         logger.info("✓ Migration 065 completed successfully")
 
@@ -181,12 +221,15 @@ def downgrade(db):
         logger.info("Removing CASCADE delete from scheduled_job_repositories...")
 
         if _table_exists(db, "scheduled_job_repositories_old"):
-            logger.warning("Found leftover scheduled_job_repositories_old table from a previous run, dropping it")
+            logger.warning(
+                "Found leftover scheduled_job_repositories_old table from a previous run, dropping it"
+            )
             db.execute(text("DROP TABLE scheduled_job_repositories_old"))
             db.commit()
 
         # Create table without CASCADE
-        db.execute(text("""
+        db.execute(
+            text("""
             CREATE TABLE scheduled_job_repositories_old (
                 id INTEGER PRIMARY KEY,
                 scheduled_job_id INTEGER NOT NULL,
@@ -197,33 +240,42 @@ def downgrade(db):
                 FOREIGN KEY (repository_id) REFERENCES repositories(id),
                 UNIQUE (scheduled_job_id, repository_id)
             )
-        """))
+        """)
+        )
 
         # Copy data
-        db.execute(text("""
+        db.execute(
+            text("""
             INSERT INTO scheduled_job_repositories_old
                 (id, scheduled_job_id, repository_id, execution_order, created_at)
             SELECT id, scheduled_job_id, repository_id, execution_order, created_at
             FROM scheduled_job_repositories
-        """))
+        """)
+        )
 
         # Drop and rename
         db.execute(text("DROP TABLE scheduled_job_repositories"))
-        db.execute(text("""
+        db.execute(
+            text("""
             ALTER TABLE scheduled_job_repositories_old
             RENAME TO scheduled_job_repositories
-        """))
+        """)
+        )
 
         # Recreate indexes
-        db.execute(text("""
+        db.execute(
+            text("""
             CREATE INDEX ix_scheduled_job_repositories_scheduled_job_id
             ON scheduled_job_repositories(scheduled_job_id)
-        """))
+        """)
+        )
 
-        db.execute(text("""
+        db.execute(
+            text("""
             CREATE INDEX ix_scheduled_job_repositories_repository_id
             ON scheduled_job_repositories(repository_id)
-        """))
+        """)
+        )
 
         db.commit()
         logger.info("CASCADE delete removed")
