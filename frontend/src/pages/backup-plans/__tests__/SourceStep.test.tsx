@@ -278,6 +278,19 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.databaseDumpPath': 'Dump path',
   'backupPlans.sourceChooser.databaseBackupPaths': 'Final Borg paths',
   'backupPlans.sourceChooser.databaseBackupTitle': 'Add database backup',
+  'backupPlans.sourceChooser.containerTitle': 'Docker container',
+  'backupPlans.sourceChooser.containerBackupTitle': 'Add Docker container backup',
+  'backupPlans.sourceChooser.containerName': 'Container name or ID',
+  'backupPlans.sourceChooser.containerImage': 'Image (optional)',
+  'backupPlans.sourceChooser.containerExportPath': 'Export staging path',
+  'backupPlans.sourceChooser.containerExportHint':
+    'Borg UI exports the container filesystem to a staging path before Borg reads it. Docker named volumes are not included.',
+  'backupPlans.sourceChooser.containerSourceMachine': 'Docker host',
+  'backupPlans.sourceChooser.containerBackupPath': 'Export staging path',
+  'backupPlans.sourceChooser.containerModeExport': 'docker export',
+  'backupPlans.sourceChooser.addContainer': 'Add container',
+  'backupPlans.sourceChooser.selectedContainers': 'Selected containers',
+  'backupPlans.sourceChooser.containerScriptsAssigned': 'Export scripts assigned',
   'backupPlans.sourceChooser.addSourceGroup': 'Add source group',
   'backupPlans.sourceChooser.localSource': 'Borg UI server',
   'backupPlans.sourceChooser.borgUiServer': 'Borg UI server',
@@ -602,12 +615,78 @@ describe('SourceStep', () => {
     expect(screen.getByRole('tab', { name: /^files$/i })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('tab', { name: /^database$/i })).toBeInTheDocument()
     const containerTab = screen.getByRole('tab', { name: /container/i })
-    expect(containerTab).toHaveAttribute('aria-disabled', 'true')
-    expect(containerTab).toHaveTextContent(/soon/i)
+    expect(containerTab).not.toHaveAttribute('aria-disabled', 'true')
+    expect(containerTab).not.toHaveTextContent(/soon/i)
     expect(screen.queryByText(/planned/i)).not.toBeInTheDocument()
     expect(
       screen.queryByRole('button', { name: /scan a database instead/i })
     ).not.toBeInTheDocument()
+  }, 45000)
+
+  it('configures a Docker container source', async () => {
+    apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
+    const updateState = vi.fn()
+    const onCreateScript = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 201 })
+      .mockResolvedValueOnce({ id: 202 })
+    renderSourceStep({ updateState, onCreateScript })
+
+    fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
+    const containerTab = await screen.findByRole('tab', { name: /container/i })
+    fireEvent.click(containerTab)
+
+    expect(screen.getByText('Add Docker container backup')).toBeInTheDocument()
+    expect(screen.getByText(/Borg UI exports the container filesystem/i)).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText(/container name or id/i), {
+      target: { value: 'postgres' },
+    })
+    fireEvent.change(screen.getByLabelText(/image/i), {
+      target: { value: 'postgres:17' },
+    })
+    fireEvent.change(screen.getByLabelText(/export staging path/i), {
+      target: { value: '/var/tmp/borg-ui/container-exports/postgres' },
+    })
+    clickExistingTextButton(/add container/i)
+    expect(screen.getByText('Selected containers')).toBeInTheDocument()
+    expect(screen.getByText('postgres')).toBeInTheDocument()
+    expect(screen.getByText('/var/tmp/borg-ui/container-exports/postgres')).toBeInTheDocument()
+
+    clickExistingTextButton(/use these paths/i)
+
+    await waitFor(() => {
+      expect(onCreateScript).toHaveBeenCalledTimes(2)
+      expect(updateState).toHaveBeenCalledTimes(1)
+    })
+    expect(onCreateScript.mock.calls[0][0].content).toContain('docker export')
+    expect(onCreateScript.mock.calls[1][0].content).toContain('rm -rf')
+    expect(updateState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceType: 'local',
+        sourceSshConnectionId: '',
+        sourceDirectories: ['/var/tmp/borg-ui/container-exports/postgres'],
+        databaseTemplateId: null,
+        sourceLocations: [
+          expect.objectContaining({
+            source_type: 'local',
+            source_ssh_connection_id: null,
+            agent_machine_id: null,
+            paths: ['/var/tmp/borg-ui/container-exports/postgres'],
+            container: expect.objectContaining({
+              container_name: 'postgres',
+              display_name: 'postgres',
+              image: 'postgres:17',
+              backup_mode: 'export',
+              export_path: '/var/tmp/borg-ui/container-exports/postgres',
+              script_execution_target: 'source',
+              pre_backup_script_id: 201,
+              post_backup_script_id: 202,
+              script_execution_order: 1,
+            }),
+          }),
+        ],
+      })
+    )
   }, 45000)
 
   it('keeps a files and folders summary after selecting paths on a scripted plan', async () => {

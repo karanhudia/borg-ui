@@ -3,6 +3,7 @@ import { getBrowserTimeZone } from '../../utils/dateUtils'
 import type {
   BackupPlan,
   BackupPlanScriptHook,
+  SourceContainerSelection,
   SourceDatabaseSelection,
   SourceLocation,
   SourceType,
@@ -121,6 +122,41 @@ function normalizePlanSourceLocations(plan: BackupPlan): SourceLocation[] {
     return normalized
   }
 
+  const normalizeContainer = (
+    location: SourceLocation,
+    paths: string[]
+  ): SourceContainerSelection | undefined => {
+    if (!location.container) return undefined
+    const containerName = location.container.container_name?.trim()
+    const exportPath = location.container.export_path?.trim() || paths[0]
+    if (!containerName || !exportPath) return undefined
+    const normalized: SourceContainerSelection = {
+      container_name: containerName,
+      display_name: location.container.display_name?.trim() || containerName,
+      image: location.container.image?.trim() || null,
+      backup_mode: 'export',
+      export_path: exportPath,
+      script_execution_target: location.container.script_execution_target || 'source',
+    }
+    const preScriptId = normalizeScriptId(location.container.pre_backup_script_id)
+    const postScriptId = normalizeScriptId(location.container.post_backup_script_id)
+    if (preScriptId) normalized.pre_backup_script_id = preScriptId
+    if (postScriptId) normalized.post_backup_script_id = postScriptId
+    if (preScriptId || location.container.pre_backup_script_parameters) {
+      normalized.pre_backup_script_parameters = normalizeScriptParameters(
+        location.container.pre_backup_script_parameters
+      )
+    }
+    if (postScriptId || location.container.post_backup_script_parameters) {
+      normalized.post_backup_script_parameters = normalizeScriptParameters(
+        location.container.post_backup_script_parameters
+      )
+    }
+    const scriptExecutionOrder = normalizeScriptId(location.container.script_execution_order)
+    if (scriptExecutionOrder) normalized.script_execution_order = scriptExecutionOrder
+    return normalized
+  }
+
   const grouped: SourceLocation[] = (plan.source_locations || [])
     .map<SourceLocation | null>((location) => {
       const paths = (location.paths || []).map((path) => path.trim()).filter(Boolean)
@@ -129,33 +165,39 @@ function normalizePlanSourceLocations(plan: BackupPlan): SourceLocation[] {
         const connectionId = location.source_ssh_connection_id
         if (!connectionId) return null
         const database = normalizeDatabase(location, paths)
+        const container = normalizeContainer(location, paths)
         return {
           source_type: 'remote' as const,
           source_ssh_connection_id: Number(connectionId),
           agent_machine_id: null,
           paths,
           ...(database ? { database } : {}),
+          ...(container ? { container } : {}),
         }
       }
       if (location.source_type === 'agent') {
         const agentMachineId = location.agent_machine_id
         if (!agentMachineId) return null
         const database = normalizeDatabase(location, paths)
+        const container = normalizeContainer(location, paths)
         return {
           source_type: 'agent' as const,
           source_ssh_connection_id: null,
           agent_machine_id: Number(agentMachineId),
           paths,
           ...(database ? { database } : {}),
+          ...(container ? { container } : {}),
         }
       }
       const database = normalizeDatabase(location, paths)
+      const container = normalizeContainer(location, paths)
       return {
         source_type: 'local' as const,
         source_ssh_connection_id: null,
         agent_machine_id: null,
         paths,
         ...(database ? { database } : {}),
+        ...(container ? { container } : {}),
       }
     })
     .filter((location): location is SourceLocation => location !== null)

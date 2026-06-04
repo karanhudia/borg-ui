@@ -3,6 +3,7 @@ import { alpha, Box, Button, Chip, Stack, TextField, Typography } from '@mui/mat
 import {
   ChevronDown,
   ChevronUp,
+  Container as ContainerIcon,
   Database,
   FolderOpen,
   HardDrive,
@@ -55,21 +56,35 @@ export function SourceStep({
   const sourcePaths = sourceLocations.flatMap((location) => location.paths)
   const hasSources = sourcePaths.length > 0
   const hasDatabaseSource = sourceLocations.some((location) => Boolean(location.database))
-  const hasFileSource = sourceLocations.some((location) => !location.database)
+  const hasContainerSource = sourceLocations.some((location) => Boolean(location.container))
+  const hasFileSource = sourceLocations.some(
+    (location) => !location.database && !location.container
+  )
   const isLegacyDatabaseSource =
     !hasDatabaseSource &&
+    !hasContainerSource &&
     sourcePaths.length > 0 &&
     sourcePaths.every(
       (sourceDirectory) =>
         sourceDirectory === DATABASE_DUMP_ROOT ||
         sourceDirectory.startsWith(`${DATABASE_DUMP_ROOT}/`)
     )
-  const isDatabaseSource = (hasDatabaseSource && !hasFileSource) || isLegacyDatabaseSource
-  const sourceKindLabel = isDatabaseSource
-    ? t('backupPlans.sourceChooser.databaseTitle')
-    : hasDatabaseSource && hasFileSource
+  const isDatabaseSource =
+    (hasDatabaseSource && !hasFileSource && !hasContainerSource) || isLegacyDatabaseSource
+  const isContainerSource = hasContainerSource && !hasDatabaseSource && !hasFileSource
+  const sourceKindCount = [
+    hasDatabaseSource || isLegacyDatabaseSource,
+    hasContainerSource,
+    hasFileSource,
+  ].filter(Boolean).length
+  const sourceKindLabel =
+    sourceKindCount > 1
       ? t('backupPlans.sourceChooser.mixedSources')
-      : t('backupPlans.sourceChooser.filesTitle')
+      : isDatabaseSource
+        ? t('backupPlans.sourceChooser.databaseTitle')
+        : isContainerSource
+          ? t('backupPlans.sourceChooser.containerTitle')
+          : t('backupPlans.sourceChooser.filesTitle')
 
   return (
     <Stack spacing={3}>
@@ -124,7 +139,13 @@ export function SourceStep({
                   width: 36,
                 }}
               >
-                {isDatabaseSource ? <Database size={18} /> : <FolderOpen size={18} />}
+                {isDatabaseSource ? (
+                  <Database size={18} />
+                ) : isContainerSource ? (
+                  <ContainerIcon size={18} />
+                ) : (
+                  <FolderOpen size={18} />
+                )}
               </Box>
               <Stack spacing={0.5} sx={{ minWidth: 0 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
@@ -213,7 +234,9 @@ export function SourceStep({
                         },
                       }}
                     >
-                      {location.source_type === 'remote' ? (
+                      {location.container ? (
+                        <ContainerIcon size={14} style={{ flexShrink: 0 }} />
+                      ) : location.source_type === 'remote' ? (
                         <Server size={14} style={{ flexShrink: 0 }} />
                       ) : location.source_type === 'agent' ? (
                         <Laptop size={14} style={{ flexShrink: 0 }} />
@@ -236,6 +259,14 @@ export function SourceStep({
                           size="small"
                           variant="outlined"
                           label={location.database.display_name}
+                          sx={{ height: 20, flexShrink: 0 }}
+                        />
+                      )}
+                      {location.container && (
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          label={location.container.display_name}
                           sx={{ height: 20, flexShrink: 0 }}
                         />
                       )}
@@ -303,7 +334,9 @@ export function SourceStep({
                     </Box>
                     {isExpanded && (
                       <Box sx={{ borderTop: 1, borderColor: 'divider', px: 1.25, py: 1 }}>
-                        {location.database ? (
+                        {location.container ? (
+                          <ContainerSourcePathDetails location={location} t={t} />
+                        ) : location.database ? (
                           <DatabaseSourcePathDetails location={location} t={t} />
                         ) : (
                           <Stack spacing={0.25} sx={{ pl: 3 }}>
@@ -364,7 +397,11 @@ export function SourceStep({
 }
 
 function sourceLocationKey(location: SourceLocation) {
-  const suffix = location.database ? `:database:${location.database.template_id}` : ''
+  const suffix = location.container
+    ? `:container:${location.container.container_name}:${location.container.export_path}`
+    : location.database
+      ? `:database:${location.database.template_id}`
+      : ''
   if (location.source_type === 'agent') {
     return `agent:${location.agent_machine_id || 'agent'}${suffix}`
   }
@@ -442,6 +479,10 @@ function databaseBackupPathLabel(location: SourceLocation) {
   return (backupPaths.length > 0 ? backupPaths : location.paths).join(', ')
 }
 
+function containerBackupPathLabel(location: SourceLocation) {
+  return location.container?.export_path || location.paths.join(', ')
+}
+
 function DatabaseSourcePathDetails({
   location,
   t,
@@ -469,6 +510,35 @@ function DatabaseSourcePathDetails({
       <DatabasePathLine
         label={t('backupPlans.sourceChooser.databaseBackupPaths')}
         value={backupPathLabel}
+      />
+    </Stack>
+  )
+}
+
+function ContainerSourcePathDetails({
+  location,
+  t,
+}: {
+  location: SourceLocation
+  t: SourceStepProps['t']
+}) {
+  const container = location.container
+  if (!container) return null
+
+  return (
+    <Stack spacing={0.75} sx={{ pl: 3, minWidth: 0 }}>
+      <Typography variant="subtitle2" sx={{ fontSize: '0.8125rem', fontWeight: 700 }}>
+        {container.display_name}
+      </Typography>
+      {container.image && (
+        <DatabasePathLine
+          label={t('backupPlans.sourceChooser.containerImage')}
+          value={container.image}
+        />
+      )}
+      <DatabasePathLine
+        label={t('backupPlans.sourceChooser.containerBackupPath')}
+        value={containerBackupPathLabel(location)}
       />
     </Stack>
   )

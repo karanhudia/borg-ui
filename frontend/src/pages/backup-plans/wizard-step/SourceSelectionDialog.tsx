@@ -63,6 +63,7 @@ import {
 import type {
   DatabaseCaptureMode,
   Repository,
+  SourceContainerSelection,
   SourceDatabaseSelection,
   SourceLocation,
   SourceSnapshotConfig,
@@ -77,7 +78,7 @@ import {
   type ScanTargetState,
 } from './DatabaseScanDialog'
 
-type SourceChoiceView = 'paths' | 'database' | 'database-detail'
+type SourceChoiceView = 'paths' | 'database' | 'database-detail' | 'container'
 type ScriptMode = 'create' | 'reuse' | 'skip'
 type SourceKey = 'local' | `remote:${number}` | `agent:${number}`
 type SnapshotProviderDraft = 'none' | 'btrfs' | 'zfs'
@@ -100,7 +101,23 @@ interface DatabaseScriptAssignment {
   postBackupScriptParameters?: Record<string, string> | null
 }
 
+interface QueuedContainerScriptDraft {
+  container: SourceContainerSelection
+  preBackup: SourceDiscoveryScriptDraft
+  postBackup: SourceDiscoveryScriptDraft
+  preScriptName: string
+  postScriptName: string
+}
+
+interface ContainerScriptAssignment {
+  preBackupScriptId: number | null
+  postBackupScriptId: number | null
+  preBackupScriptParameters?: Record<string, string> | null
+  postBackupScriptParameters?: Record<string, string> | null
+}
+
 const DEFAULT_SNAPSHOT_STAGING_PATH = '/var/tmp/borg-ui/snapshots'
+const DEFAULT_CONTAINER_EXPORT_ROOT = '/var/tmp/borg-ui/container-exports'
 
 interface SnapshotDraft {
   provider: SnapshotProviderDraft
@@ -339,6 +356,92 @@ function databaseWithScriptAssignment(
   }
 }
 
+function containerExportSlug(containerName: string): string {
+  const slug = containerName
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_.-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return slug || 'container'
+}
+
+function defaultContainerExportPath(containerName: string): string {
+  return `${DEFAULT_CONTAINER_EXPORT_ROOT}/${containerExportSlug(containerName)}`
+}
+
+function containerScriptDrafts(
+  containerName: string,
+  exportPath: string
+): { preBackup: SourceDiscoveryScriptDraft; postBackup: SourceDiscoveryScriptDraft } {
+  const displayName = containerName.trim() || 'container'
+  return {
+    preBackup: {
+      name: `Export Docker container: ${displayName}`,
+      description: 'Export a Docker container filesystem into a Borg-readable staging path.',
+      content: [
+        '#!/usr/bin/env bash',
+        'set -euo pipefail',
+        'CONTAINER_NAME="${BORG_UI_CONTAINER_NAME:?Set BORG_UI_CONTAINER_NAME}"',
+        'EXPORT_DIR="${BORG_UI_CONTAINER_EXPORT_DIR:?Set BORG_UI_CONTAINER_EXPORT_DIR}"',
+        'rm -rf "$EXPORT_DIR"',
+        'mkdir -p "$EXPORT_DIR"',
+        'docker inspect "$CONTAINER_NAME" > "$EXPORT_DIR/inspect.json"',
+        'docker export "$CONTAINER_NAME" -o "$EXPORT_DIR/filesystem.tar"',
+        '',
+      ].join('\n'),
+      timeout: 900,
+    },
+    postBackup: {
+      name: `Clean Docker export: ${displayName}`,
+      description: `Remove the transient Docker export staged at ${exportPath}.`,
+      content: [
+        '#!/usr/bin/env bash',
+        'set -euo pipefail',
+        'EXPORT_DIR="${BORG_UI_CONTAINER_EXPORT_DIR:?Set BORG_UI_CONTAINER_EXPORT_DIR}"',
+        'rm -rf "$EXPORT_DIR"',
+        '',
+      ].join('\n'),
+      timeout: 120,
+    },
+  }
+}
+
+function defaultContainerScriptParameters(
+  container: SourceContainerSelection,
+  hook: 'pre' | 'post'
+): Record<string, string> {
+  if (hook === 'post') {
+    return { BORG_UI_CONTAINER_EXPORT_DIR: container.export_path }
+  }
+  return {
+    BORG_UI_CONTAINER_NAME: container.container_name,
+    BORG_UI_CONTAINER_EXPORT_DIR: container.export_path,
+  }
+}
+
+function containerWithScriptAssignment(
+  container: SourceContainerSelection,
+  assignment: ContainerScriptAssignment,
+  scriptExecutionOrder: number
+): SourceContainerSelection {
+  const preScriptId = cleanOptionalScriptId(assignment.preBackupScriptId)
+  const postScriptId = cleanOptionalScriptId(assignment.postBackupScriptId)
+  return {
+    ...container,
+    ...(preScriptId ? { pre_backup_script_id: preScriptId } : {}),
+    ...(postScriptId ? { post_backup_script_id: postScriptId } : {}),
+    pre_backup_script_parameters: cleanScriptParameters({
+      ...defaultContainerScriptParameters(container, 'pre'),
+      ...(assignment.preBackupScriptParameters || {}),
+    }),
+    post_backup_script_parameters: cleanScriptParameters({
+      ...defaultContainerScriptParameters(container, 'post'),
+      ...(assignment.postBackupScriptParameters || {}),
+    }),
+    script_execution_order: scriptExecutionOrder,
+  }
+}
+
 function cleanDatabaseSelection(
   database: SourceDatabaseSelection | undefined,
   paths: string[]
@@ -379,6 +482,41 @@ function cleanDatabaseSelection(
   return cleaned
 }
 
+function cleanContainerSelection(
+  container: SourceContainerSelection | undefined,
+  paths: string[]
+): SourceContainerSelection | undefined {
+  if (!container) return undefined
+  const containerName = container.container_name?.trim()
+  const exportPath = container.export_path?.trim() || paths[0]
+  if (!containerName || !exportPath) return undefined
+  const cleaned: SourceContainerSelection = {
+    container_name: containerName,
+    display_name: container.display_name?.trim() || containerName,
+    image: container.image?.trim() || null,
+    backup_mode: 'export',
+    export_path: exportPath,
+    script_execution_target: container.script_execution_target || 'source',
+  }
+  const preScriptId = cleanOptionalScriptId(container.pre_backup_script_id)
+  const postScriptId = cleanOptionalScriptId(container.post_backup_script_id)
+  if (preScriptId) cleaned.pre_backup_script_id = preScriptId
+  if (postScriptId) cleaned.post_backup_script_id = postScriptId
+  if (preScriptId || container.pre_backup_script_parameters) {
+    cleaned.pre_backup_script_parameters = cleanScriptParameters(
+      container.pre_backup_script_parameters
+    )
+  }
+  if (postScriptId || container.post_backup_script_parameters) {
+    cleaned.post_backup_script_parameters = cleanScriptParameters(
+      container.post_backup_script_parameters
+    )
+  }
+  const scriptExecutionOrder = cleanOptionalScriptId(container.script_execution_order)
+  if (scriptExecutionOrder) cleaned.script_execution_order = scriptExecutionOrder
+  return cleaned
+}
+
 function cleanLocations(locations: SourceLocation[]): SourceLocation[] {
   return locations
     .map((location) => {
@@ -396,6 +534,10 @@ function cleanLocations(locations: SourceLocation[]): SourceLocation[] {
       const database = cleanDatabaseSelection(location.database, paths)
       if (database) {
         cleaned.database = database
+      }
+      const container = cleanContainerSelection(location.container, paths)
+      if (container) {
+        cleaned.container = container
       }
       return cleaned
     })
@@ -442,6 +584,12 @@ function locationKey(location: SourceLocation): SourceKey {
 
 function draftLocationKey(location: SourceLocation) {
   const baseKey = locationKey(location)
+  if (location.container) {
+    return `${baseKey}:container:${JSON.stringify([
+      location.container.container_name,
+      location.container.export_path,
+    ])}`
+  }
   if (!location.database) return `${baseKey}:files`
   return `${baseKey}:database:${JSON.stringify([
     location.database.template_id,
@@ -623,6 +771,13 @@ export function SourceSelectionDialog({
   const [queuedDatabaseScriptDrafts, setQueuedDatabaseScriptDrafts] = useState<
     Record<string, QueuedDatabaseScriptDraft>
   >({})
+  const [containerName, setContainerName] = useState('')
+  const [containerImage, setContainerImage] = useState('')
+  const [containerExportPath, setContainerExportPath] = useState(DEFAULT_CONTAINER_EXPORT_ROOT)
+  const [containerExportPathTouched, setContainerExportPathTouched] = useState(false)
+  const [queuedContainerScriptDrafts, setQueuedContainerScriptDrafts] = useState<
+    Record<string, QueuedContainerScriptDraft>
+  >({})
   const [applying, setApplying] = useState(false)
   const [selectedSourceKey, setSelectedSourceKey] = useState<SourceKey>('local')
   const [sourcePath, setSourcePath] = useState('')
@@ -642,6 +797,7 @@ export function SourceSelectionDialog({
     if (!open) return
     const nextLocations = locationsFromWizardState(wizardState)
     const databaseLocation = nextLocations.find((location) => location.database)
+    const containerLocation = nextLocations.find((location) => location.container)
     const hydratedTemplateId =
       wizardState.databaseTemplateId ?? databaseLocation?.database?.template_id ?? null
     const initialDetailDatabase =
@@ -677,6 +833,13 @@ export function SourceSelectionDialog({
     setPreExistingScriptId(databaseLocation?.database?.pre_backup_script_id || '')
     setPostExistingScriptId(databaseLocation?.database?.post_backup_script_id || '')
     setQueuedDatabaseScriptDrafts({})
+    setContainerName(containerLocation?.container?.container_name || '')
+    setContainerImage(containerLocation?.container?.image || '')
+    setContainerExportPath(
+      containerLocation?.container?.export_path || DEFAULT_CONTAINER_EXPORT_ROOT
+    )
+    setContainerExportPathTouched(Boolean(containerLocation?.container?.export_path))
+    setQueuedContainerScriptDrafts({})
     setDatabaseCaptureMode(databaseLocation?.database?.capture_mode || 'dump')
     setDatabaseDumpPath(
       databaseLocation?.database?.dump_path ||
@@ -919,7 +1082,8 @@ export function SourceSelectionDialog({
 
     setDraftSourceLocations((current) => {
       const existingIndex = current.findIndex(
-        (location) => locationKey(location) === sourceKey && !location.database
+        (location) =>
+          locationKey(location) === sourceKey && !location.database && !location.container
       )
       if (existingIndex === -1) {
         const snapshot = sourceKey === 'local' ? snapshotFromDraft(snapshotDraft) : undefined
@@ -954,6 +1118,63 @@ export function SourceSelectionDialog({
     setSourcePath('')
   }
 
+  const handleContainerNameChange = (value: string) => {
+    setContainerName(value)
+    if (!containerExportPathTouched) {
+      setContainerExportPath(
+        value.trim() ? defaultContainerExportPath(value) : DEFAULT_CONTAINER_EXPORT_ROOT
+      )
+    }
+  }
+
+  const handleContainerExportPathChange = (value: string) => {
+    setContainerExportPath(value)
+    setContainerExportPathTouched(true)
+  }
+
+  const queueContainerSource = () => {
+    const nextContainerName = containerName.trim()
+    const nextExportPath =
+      containerExportPath.trim() || defaultContainerExportPath(nextContainerName)
+    if (!nextContainerName || !nextExportPath) return
+
+    const locationBase = locationForKey(selectedSourceKey)
+    const container: SourceContainerSelection = {
+      container_name: nextContainerName,
+      display_name: nextContainerName,
+      image: containerImage.trim() || null,
+      backup_mode: 'export',
+      export_path: nextExportPath,
+      script_execution_target: 'source',
+    }
+    const nextLocation: SourceLocation = {
+      ...locationBase,
+      paths: [nextExportPath],
+      container,
+    }
+    const nextLocationKey = draftLocationKey(nextLocation)
+    const scriptDrafts = containerScriptDrafts(nextContainerName, nextExportPath)
+
+    setDraftSourceLocations((current) => [
+      ...current.filter((location) => draftLocationKey(location) !== nextLocationKey),
+      nextLocation,
+    ])
+    setQueuedContainerScriptDrafts((current) => ({
+      ...current,
+      [nextLocationKey]: {
+        container,
+        preBackup: scriptDrafts.preBackup,
+        postBackup: scriptDrafts.postBackup,
+        preScriptName: scriptDrafts.preBackup.name,
+        postScriptName: scriptDrafts.postBackup.name,
+      },
+    }))
+    setContainerName('')
+    setContainerImage('')
+    setContainerExportPath(DEFAULT_CONTAINER_EXPORT_ROOT)
+    setContainerExportPathTouched(false)
+  }
+
   const removeSourcePath = (sourceKey: string, path: string) => {
     setDraftSourceLocations((current) =>
       current
@@ -972,19 +1193,19 @@ export function SourceSelectionDialog({
     )
   }
 
-  const resolveDatabaseSourceScripts = async (
+  const resolveSourceScripts = async (
     sourceLocations: SourceLocation[]
   ): Promise<SourceLocation[]> => {
     const createdScripts = new Map<string, Promise<number>>()
-    let databaseOrder = 0
+    let sourceScriptOrder = 0
 
     const createReusableScript = async (
-      database: SourceDatabaseSelection,
+      scopeKey: string,
       hook: 'pre' | 'post',
       payload: SourceScriptCreateInput
     ) => {
       const cacheKey = JSON.stringify([
-        database.template_id,
+        scopeKey,
         hook,
         payload.name,
         payload.content,
@@ -1001,58 +1222,109 @@ export function SourceSelectionDialog({
 
     const resolvedLocations: SourceLocation[] = []
     for (const location of sourceLocations) {
-      if (!location.database) {
+      if (location.database) {
+        sourceScriptOrder += 1
+
+        const draft = queuedDatabaseScriptDrafts[draftLocationKey(location)]
+        if (draft) {
+          const preBackupScriptId = await createReusableScript(
+            `database:${location.database.template_id}`,
+            'pre',
+            scriptPayload(
+              { ...draft.preBackup, content: draft.preScriptContent },
+              draft.preScriptName
+            )
+          )
+          const postBackupScriptId = await createReusableScript(
+            `database:${location.database.template_id}`,
+            'post',
+            scriptPayload(
+              { ...draft.postBackup, content: draft.postScriptContent },
+              draft.postScriptName
+            )
+          )
+          resolvedLocations.push({
+            ...location,
+            database: databaseWithScriptAssignment(
+              location.database,
+              {
+                preBackupScriptId,
+                postBackupScriptId,
+              },
+              sourceScriptOrder
+            ),
+          })
+          continue
+        }
+
+        if (location.database.pre_backup_script_id || location.database.post_backup_script_id) {
+          resolvedLocations.push({
+            ...location,
+            database: databaseWithScriptAssignment(
+              location.database,
+              {
+                preBackupScriptId: location.database.pre_backup_script_id ?? null,
+                postBackupScriptId: location.database.post_backup_script_id ?? null,
+                preBackupScriptParameters: location.database.pre_backup_script_parameters,
+                postBackupScriptParameters: location.database.post_backup_script_parameters,
+              },
+              sourceScriptOrder
+            ),
+          })
+          continue
+        }
+
         resolvedLocations.push(location)
         continue
       }
 
-      databaseOrder += 1
-      const draft = queuedDatabaseScriptDrafts[draftLocationKey(location)]
-      if (draft) {
-        const preBackupScriptId = await createReusableScript(
-          location.database,
-          'pre',
-          scriptPayload(
-            { ...draft.preBackup, content: draft.preScriptContent },
-            draft.preScriptName
-          )
-        )
-        const postBackupScriptId = await createReusableScript(
-          location.database,
-          'post',
-          scriptPayload(
-            { ...draft.postBackup, content: draft.postScriptContent },
-            draft.postScriptName
-          )
-        )
-        resolvedLocations.push({
-          ...location,
-          database: databaseWithScriptAssignment(
-            location.database,
-            {
-              preBackupScriptId,
-              postBackupScriptId,
-            },
-            databaseOrder
-          ),
-        })
-        continue
-      }
+      if (location.container) {
+        sourceScriptOrder += 1
 
-      if (location.database.pre_backup_script_id || location.database.post_backup_script_id) {
-        resolvedLocations.push({
-          ...location,
-          database: databaseWithScriptAssignment(
-            location.database,
-            {
-              preBackupScriptId: location.database.pre_backup_script_id ?? null,
-              postBackupScriptId: location.database.post_backup_script_id ?? null,
-              preBackupScriptParameters: location.database.pre_backup_script_parameters,
-              postBackupScriptParameters: location.database.post_backup_script_parameters,
-            },
-            databaseOrder
-          ),
-        })
+        const draft = queuedContainerScriptDrafts[draftLocationKey(location)]
+        if (draft) {
+          const preBackupScriptId = await createReusableScript(
+            `container:${location.container.container_name}`,
+            'pre',
+            scriptPayload(draft.preBackup, draft.preScriptName)
+          )
+          const postBackupScriptId = await createReusableScript(
+            `container:${location.container.container_name}`,
+            'post',
+            scriptPayload(draft.postBackup, draft.postScriptName)
+          )
+          resolvedLocations.push({
+            ...location,
+            container: containerWithScriptAssignment(
+              location.container,
+              {
+                preBackupScriptId,
+                postBackupScriptId,
+              },
+              sourceScriptOrder
+            ),
+          })
+          continue
+        }
+
+        if (location.container.pre_backup_script_id || location.container.post_backup_script_id) {
+          resolvedLocations.push({
+            ...location,
+            container: containerWithScriptAssignment(
+              location.container,
+              {
+                preBackupScriptId: location.container.pre_backup_script_id ?? null,
+                postBackupScriptId: location.container.post_backup_script_id ?? null,
+                preBackupScriptParameters: location.container.pre_backup_script_parameters,
+                postBackupScriptParameters: location.container.post_backup_script_parameters,
+              },
+              sourceScriptOrder
+            ),
+          })
+          continue
+        }
+
+        resolvedLocations.push(location)
         continue
       }
 
@@ -1082,7 +1354,7 @@ export function SourceSelectionDialog({
     if (!canUseMixedSourceTypes && hasMixedSourceTypes(sourceLocations)) return
     setApplying(true)
     try {
-      const sourceLocationsWithScripts = await resolveDatabaseSourceScripts(sourceLocations)
+      const sourceLocationsWithScripts = await resolveSourceScripts(sourceLocations)
       const databaseLocation = sourceLocationsWithScripts.find((location) => location.database)
       updateState({
         sourceType: sourceTypeFromLocations(sourceLocationsWithScripts),
@@ -2394,9 +2666,357 @@ export function SourceSelectionDialog({
     )
   }
 
+  const renderContainer = () => {
+    const sourceKind: 'local' | 'remote' | 'agent' = selectedSourceKey.startsWith('remote:')
+      ? 'remote'
+      : selectedSourceKey.startsWith('agent:')
+        ? 'agent'
+        : 'local'
+    const selectedRemoteIdNum = selectedSourceKey.startsWith('remote:')
+      ? Number(selectedSourceKey.split(':')[1])
+      : 0
+    const selectedAgentIdNum = selectedSourceKey.startsWith('agent:')
+      ? Number(selectedSourceKey.split(':')[1])
+      : 0
+    const agentRepoConstraint = getAgentRepoConstraint(wizardState, fullRepositories, agentMachines)
+    const hasRemoteOptions = sshConnections.length > 0
+    const hasAgentOptions = agentMachines.length > 0
+    const remoteDisabled = sourceKind === 'remote' && !hasRemoteOptions
+    const agentDisabled = sourceKind === 'agent' && (!canUseManagedAgents || !hasAgentOptions)
+    const lockedByAgentRepo = !!agentRepoConstraint
+    const queuedContainerLocations = draftSourceLocations.filter((location) => location.container)
+    const effectiveExportPath =
+      containerExportPath.trim() ||
+      (containerName.trim()
+        ? defaultContainerExportPath(containerName)
+        : DEFAULT_CONTAINER_EXPORT_ROOT)
+
+    const handleSourceKindChange = (key: string) => {
+      if (key === 'local') {
+        selectSourceKey('local')
+        return
+      }
+      if (key === 'remote') {
+        if (!hasRemoteOptions) return
+        const targetId =
+          selectedRemoteIdNum &&
+          sshConnections.some((connection) => connection.id === selectedRemoteIdNum)
+            ? selectedRemoteIdNum
+            : sshConnections[0].id
+        selectSourceKey(`remote:${targetId}`)
+        return
+      }
+      if (key === 'agent') {
+        if (!canUseManagedAgents || !hasAgentOptions) return
+        if (agentRepoConstraint) {
+          selectSourceKey(`agent:${agentRepoConstraint.agentId}`)
+          return
+        }
+        const targetId =
+          selectedAgentIdNum && agentMachines.some((agent) => agent.id === selectedAgentIdNum)
+            ? selectedAgentIdNum
+            : agentMachines[0].id
+        selectSourceKey(`agent:${targetId}`)
+      }
+    }
+
+    const sourceKindDestinations: DestinationOption[] = [
+      {
+        key: 'local',
+        icon: lockedByAgentRepo ? <Lock size={16} /> : <HardDrive size={16} />,
+        label: t('backupPlans.sourceChooser.borgUiServer'),
+        description: lockedByAgentRepo
+          ? t('backupPlans.sourceChooser.agentRepoLockedLocal', {
+              agent: agentRepoConstraint.agentName,
+            })
+          : t('backupPlans.sourceChooser.localSourceDescription'),
+        disabled: lockedByAgentRepo,
+      },
+      {
+        key: 'remote',
+        icon: lockedByAgentRepo ? <Lock size={16} /> : <Server size={16} />,
+        label: t('backupPlans.sourceChooser.remoteMachine'),
+        description: lockedByAgentRepo
+          ? t('backupPlans.sourceChooser.agentRepoLockedRemote', {
+              agent: agentRepoConstraint.agentName,
+            })
+          : hasRemoteOptions
+            ? t('backupPlans.sourceChooser.remoteMachineDescription')
+            : t('backupPlans.sourceChooser.noRemoteMachines'),
+        disabled: !hasRemoteOptions || lockedByAgentRepo,
+      },
+      {
+        key: 'agent',
+        icon: !canUseManagedAgents ? <Lock size={16} /> : <Laptop size={16} />,
+        label: t('backupPlans.sourceChooser.managedAgent'),
+        description: !canUseManagedAgents
+          ? t('backupPlans.sourceChooser.managedAgentRequiresPro')
+          : hasAgentOptions
+            ? t('backupPlans.sourceChooser.managedAgentDescription')
+            : t('backupPlans.sourceChooser.noManagedAgents'),
+        disabled: !canUseManagedAgents || !hasAgentOptions,
+      },
+    ]
+
+    return (
+      <Stack spacing={2.5}>
+        {agentRepoConstraint && (
+          <Alert
+            severity="info"
+            icon={<Info size={18} />}
+            sx={{ py: 0.5, '& .MuiAlert-message': { py: 0.5 } }}
+          >
+            {t('backupPlans.sourceChooser.agentRepoConstraintBanner', {
+              agent: agentRepoConstraint.agentName,
+            })}
+          </Alert>
+        )}
+
+        <Stack spacing={2}>
+          <DestinationSelect
+            value={sourceKind}
+            onChange={handleSourceKindChange}
+            destinations={sourceKindDestinations}
+            label={t('backupPlans.sourceChooser.containerSourceMachine')}
+          />
+          {sourceKind === 'remote' && hasRemoteOptions ? (
+            <SshConnectionSelect
+              value={selectedRemoteIdNum || ''}
+              onChange={(id) => selectSourceKey(`remote:${id}`)}
+              connections={sshConnections}
+              label={t('backupPlans.sourceChooser.selectRemoteMachine')}
+              emptyMessage={t('backupPlans.sourceChooser.noRemoteMachines')}
+              hideEmptyAlert
+            />
+          ) : sourceKind === 'agent' &&
+            canUseManagedAgents &&
+            hasAgentOptions &&
+            agentRepoConstraint ? (
+            <Box
+              sx={{
+                border: 1,
+                borderColor: 'divider',
+                borderRadius: 1,
+                bgcolor: 'action.hover',
+                color: 'text.secondary',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                px: 1.5,
+                height: 56,
+              }}
+            >
+              <Lock size={14} />
+              <Typography variant="body2" color="text.secondary">
+                {t('backupPlans.sourceChooser.agentRepoLockedAgentPicker', {
+                  agent: agentRepoConstraint.agentName,
+                })}
+              </Typography>
+            </Box>
+          ) : sourceKind === 'agent' && canUseManagedAgents && hasAgentOptions ? (
+            <ManagedAgentSelect
+              value={selectedAgentIdNum || ''}
+              onChange={(id) => selectSourceKey(`agent:${id}`)}
+              agents={agentMachines}
+              label={t('backupPlans.sourceChooser.selectManagedAgent')}
+              emptyMessage={t('backupPlans.sourceChooser.noManagedAgents')}
+              labelId="container-agent-machine-label"
+              hideEmptyAlert
+            />
+          ) : (
+            <Box
+              sx={{
+                border: 1,
+                borderColor: 'divider',
+                borderRadius: 1,
+                bgcolor: 'action.hover',
+                color: 'text.secondary',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                px: 1.5,
+                height: 56,
+              }}
+            >
+              {sourceKind === 'agent' ? <Laptop size={14} /> : <HardDrive size={14} />}
+              <Typography variant="body2" color="text.secondary">
+                {agentDisabled
+                  ? t(
+                      canUseManagedAgents
+                        ? 'backupPlans.sourceChooser.noManagedAgents'
+                        : 'backupPlans.sourceChooser.managedAgentRequiresPro'
+                    )
+                  : remoteDisabled
+                    ? t('backupPlans.sourceChooser.noRemoteMachines')
+                    : t('backupPlans.sourceChooser.readingFromLocal')}
+              </Typography>
+            </Box>
+          )}
+        </Stack>
+
+        <Alert
+          severity="info"
+          icon={<Info size={18} />}
+          sx={{ '& .MuiAlert-message': { width: '100%' } }}
+        >
+          <Typography variant="body2">
+            {t('backupPlans.sourceChooser.containerExportHint')}
+          </Typography>
+        </Alert>
+
+        <Stack spacing={1.5}>
+          <TextField
+            label={t('backupPlans.sourceChooser.containerName')}
+            value={containerName}
+            onChange={(event) => handleContainerNameChange(event.target.value)}
+            size="small"
+            fullWidth
+            disabled={remoteDisabled || agentDisabled}
+          />
+          <TextField
+            label={t('backupPlans.sourceChooser.containerImage')}
+            value={containerImage}
+            onChange={(event) => setContainerImage(event.target.value)}
+            size="small"
+            fullWidth
+            disabled={remoteDisabled || agentDisabled}
+          />
+          <TextField
+            label={t('backupPlans.sourceChooser.containerExportPath')}
+            value={containerExportPath}
+            onChange={(event) => handleContainerExportPathChange(event.target.value)}
+            size="small"
+            fullWidth
+            disabled={remoteDisabled || agentDisabled}
+          />
+          <Button
+            variant="contained"
+            startIcon={<Plus size={16} />}
+            onClick={queueContainerSource}
+            disabled={
+              !containerName.trim() ||
+              !effectiveExportPath.trim() ||
+              remoteDisabled ||
+              agentDisabled
+            }
+            sx={{ alignSelf: 'flex-start' }}
+          >
+            {t('backupPlans.sourceChooser.addContainer')}
+          </Button>
+        </Stack>
+
+        {queuedContainerLocations.length > 0 && (
+          <Box>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              {t('backupPlans.sourceChooser.selectedContainers')}
+            </Typography>
+            <Stack spacing={1}>
+              {queuedContainerLocations.map((location) => {
+                const key = draftLocationKey(location)
+                const container = location.container
+                if (!container) return null
+                const hasSourceScript =
+                  Boolean(container.pre_backup_script_id || container.post_backup_script_id) ||
+                  Boolean(queuedContainerScriptDrafts[key])
+                return (
+                  <Paper
+                    key={key}
+                    variant="outlined"
+                    sx={{ p: 1.25, borderRadius: 1, bgcolor: 'background.default' }}
+                  >
+                    <Stack
+                      direction={{ xs: 'column', sm: 'row' }}
+                      spacing={1.25}
+                      alignItems={{ xs: 'stretch', sm: 'center' }}
+                      sx={{ minWidth: 0 }}
+                    >
+                      <Stack
+                        direction="row"
+                        spacing={1.25}
+                        alignItems="center"
+                        sx={{ minWidth: 0, flex: 1 }}
+                      >
+                        <ContainerIcon size={16} />
+                        <Stack spacing={0.2} sx={{ minWidth: 0, flex: 1 }}>
+                          <Typography variant="subtitle2" noWrap>
+                            {container.display_name}
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{
+                              fontFamily:
+                                'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {sourceLocationLabel(location, sshConnections, agentMachines, t)}
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            title={container.export_path}
+                            sx={{
+                              fontFamily:
+                                'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {container.export_path}
+                          </Typography>
+                        </Stack>
+                      </Stack>
+                      <Stack
+                        direction="row"
+                        spacing={0.75}
+                        useFlexGap
+                        flexWrap="wrap"
+                        justifyContent={{ xs: 'flex-start', sm: 'flex-end' }}
+                        alignItems="center"
+                      >
+                        {container.image && (
+                          <Chip size="small" variant="outlined" label={container.image} />
+                        )}
+                        <Chip
+                          size="small"
+                          variant={hasSourceScript ? 'filled' : 'outlined'}
+                          color={hasSourceScript ? 'primary' : 'default'}
+                          label={t('backupPlans.sourceChooser.containerScriptsAssigned')}
+                        />
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          label={t('backupPlans.sourceChooser.containerModeExport')}
+                        />
+                        <Tooltip title={t('backupPlans.sourceChooser.removeSourceGroup')}>
+                          <IconButton
+                            aria-label={t('backupPlans.sourceChooser.removeSourceGroup')}
+                            onClick={() => removeSourceLocation(key)}
+                            size="small"
+                          >
+                            <Trash2 size={14} />
+                          </IconButton>
+                        </Tooltip>
+                      </Stack>
+                    </Stack>
+                  </Paper>
+                )
+              })}
+            </Stack>
+          </Box>
+        )}
+      </Stack>
+    )
+  }
+
   const content = (() => {
     if (view === 'database') return renderDatabaseList()
     if (view === 'database-detail') return renderDatabaseDetail()
+    if (view === 'container') return renderContainer()
     return renderPaths()
   })()
 
@@ -2421,7 +3041,7 @@ export function SourceSelectionDialog({
               surface the same button on both so the user can quick-add a
               detected SQLite from the database tab and apply without
               bouncing to the files tab. */}
-          {(view === 'paths' || view === 'database') && (
+          {(view === 'paths' || view === 'database' || view === 'container') && (
             <Button
               variant="contained"
               onClick={applyPaths}
@@ -2468,6 +3088,7 @@ export function SourceSelectionDialog({
           <Typography component="span" variant="h6" sx={{ fontWeight: 600 }} noWrap>
             {view === 'database' && t('backupPlans.sourceChooser.databaseBackupTitle')}
             {view === 'database-detail' && databaseDisplayTitle(selectedDatabase, t)}
+            {view === 'container' && t('backupPlans.sourceChooser.containerBackupTitle')}
             {view === 'paths' && t('backupPlans.sourceChooser.title')}
           </Typography>
         </Stack>
@@ -2480,9 +3101,10 @@ export function SourceSelectionDialog({
               onChange={(next) => setView(next)}
               counts={{
                 files: draftSourceLocations
-                  .filter((location) => !location.database)
+                  .filter((location) => !location.database && !location.container)
                   .reduce((sum, location) => sum + location.paths.length, 0),
                 database: draftSourceLocations.filter((location) => location.database).length,
+                container: draftSourceLocations.filter((location) => location.container).length,
               }}
               t={t}
             />
@@ -2505,7 +3127,7 @@ export function SourceSelectionDialog({
   )
 }
 
-type SourceKindCounts = { files: number; database: number }
+type SourceKindCounts = { files: number; database: number; container: number }
 
 interface SourceKindPivotProps {
   view: SourceChoiceView
@@ -2517,11 +3139,9 @@ interface SourceKindPivotProps {
 function SourceKindPivot({ view, onChange, counts, t }: SourceKindPivotProps) {
   const segments: {
     key: 'files' | 'database' | 'container'
-    target: SourceChoiceView | null
+    target: SourceChoiceView
     labelKey: string
     Icon: typeof FileText
-    disabled?: boolean
-    badgeKey?: string
   }[] = [
     {
       key: 'files',
@@ -2537,16 +3157,18 @@ function SourceKindPivot({ view, onChange, counts, t }: SourceKindPivotProps) {
     },
     {
       key: 'container',
-      target: null,
+      target: 'container',
       labelKey: 'backupPlans.sourceChooser.kindContainer',
       Icon: ContainerIcon,
-      disabled: true,
-      badgeKey: 'backupPlans.sourceChooser.kindContainerSoonBadge',
     },
   ]
 
   const activeKey: 'files' | 'database' | 'container' =
-    view === 'database' || view === 'database-detail' ? 'database' : 'files'
+    view === 'database' || view === 'database-detail'
+      ? 'database'
+      : view === 'container'
+        ? 'container'
+        : 'files'
 
   return (
     <Box
@@ -2568,10 +3190,7 @@ function SourceKindPivot({ view, onChange, counts, t }: SourceKindPivotProps) {
             key={segment.key}
             role="tab"
             aria-selected={selected}
-            aria-disabled={segment.disabled || undefined}
-            disabled={segment.disabled}
             onClick={() => {
-              if (segment.disabled || !segment.target) return
               if (segment.target !== view) onChange(segment.target)
             }}
             sx={{
@@ -2586,46 +3205,27 @@ function SourceKindPivot({ view, onChange, counts, t }: SourceKindPivotProps) {
               boxShadow: selected ? 1 : 0,
               fontWeight: selected ? 600 : 500,
               fontSize: '0.8125rem',
-              color: segment.disabled
-                ? 'text.disabled'
-                : selected
-                  ? 'text.primary'
-                  : 'text.secondary',
-              opacity: segment.disabled ? 0.6 : 1,
-              cursor: segment.disabled ? 'not-allowed' : 'pointer',
+              color: selected ? 'text.primary' : 'text.secondary',
+              cursor: 'pointer',
               transition: 'all 0.15s ease',
-              '&:hover': segment.disabled || selected ? undefined : { color: 'text.primary' },
+              '&:hover': selected ? undefined : { color: 'text.primary' },
             }}
           >
             <segment.Icon size={14} />
             {t(segment.labelKey)}
             {/* Count chip surfaces "this tab has N items queued" so the user
                 knows where things landed without switching tabs to check. */}
-            {segment.key !== 'container' &&
-              (segment.key === 'files' ? counts.files : counts.database) > 0 && (
-                <Chip
-                  label={segment.key === 'files' ? counts.files : counts.database}
-                  size="small"
-                  color="success"
-                  sx={{
-                    height: 18,
-                    minWidth: 18,
-                    fontSize: '0.6875rem',
-                    fontWeight: 700,
-                    '& .MuiChip-label': { px: 0.625 },
-                  }}
-                />
-              )}
-            {segment.badgeKey && (
+            {counts[segment.key] > 0 && (
               <Chip
-                label={t(segment.badgeKey)}
+                label={counts[segment.key]}
                 size="small"
+                color="success"
                 sx={{
-                  height: 16,
-                  fontSize: '0.625rem',
+                  height: 18,
+                  minWidth: 18,
+                  fontSize: '0.6875rem',
                   fontWeight: 700,
-                  letterSpacing: 0.2,
-                  '& .MuiChip-label': { px: 0.75 },
+                  '& .MuiChip-label': { px: 0.625 },
                 }}
               />
             )}

@@ -493,9 +493,8 @@ def _source_types() -> list[SourceTypeOption]:
         SourceTypeOption(
             id="container",
             label="Docker containers",
-            description="Container scanning will use the same source chooser later.",
-            status="planned",
-            disabled=True,
+            description="Export a Docker container filesystem into a Borg-readable staging path.",
+            status="enabled",
         ),
     ]
 

@@ -586,6 +586,17 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.databaseLivePath': 'Live database path',
   'backupPlans.sourceChooser.databaseDumpPath': 'Dump path',
   'backupPlans.sourceChooser.databaseBackupPaths': 'Final Borg paths',
+  'backupPlans.sourceChooser.containerBackupTitle': 'Add Docker container backup',
+  'backupPlans.sourceChooser.containerName': 'Container name or ID',
+  'backupPlans.sourceChooser.containerImage': 'Image (optional)',
+  'backupPlans.sourceChooser.containerExportPath': 'Export staging path',
+  'backupPlans.sourceChooser.containerExportHint':
+    'Borg UI exports the container filesystem to a staging path before Borg reads it. Docker named volumes are not included.',
+  'backupPlans.sourceChooser.containerSourceMachine': 'Docker host',
+  'backupPlans.sourceChooser.containerModeExport': 'docker export',
+  'backupPlans.sourceChooser.addContainer': 'Add container',
+  'backupPlans.sourceChooser.selectedContainers': 'Selected containers',
+  'backupPlans.sourceChooser.containerScriptsAssigned': 'Export scripts assigned',
   'backupPlans.sourceChooser.discoveredAtHint':
     'Live data directory. The pre-backup script targets this instance; Borg does not read these files directly.',
   'backupPlans.sourceChooser.borgWillBackUpHint':
@@ -680,7 +691,7 @@ const t = (key: string, options?: Record<string, unknown>) => {
 interface DialogStoryArgs {
   wizardState: WizardState
   mockOptions: MockOptions
-  initialView?: 'paths' | 'database' | 'database-detail'
+  initialView?: 'paths' | 'database' | 'database-detail' | 'container'
   initialScanTarget?: { type: 'local' | 'remote'; sshId: number | '' }
   initialCaptureModeExpanded?: boolean
   initialSelectedDatabase?: SourceDiscoveryDatabase
@@ -781,6 +792,24 @@ export const PathPickerWithLocalSelections: Story = {
   render: () => (
     <DialogStory wizardState={localPathsState} mockOptions={{ scanStatus: 'detected' }} />
   ),
+}
+
+export const ContainerPickerEmpty: Story = {
+  render: () => (
+    <DialogStory
+      wizardState={emptyWizardState}
+      mockOptions={{ scanStatus: 'detected' }}
+      initialView="container"
+    />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Docker container source picker with host selection, generated export staging path, and queued source scripts.',
+      },
+    },
+  },
 }
 
 export const PathPickerCaptureModeExpanded: Story = {

@@ -30,8 +30,8 @@ class TestSourceDiscovery:
         }
         assert source_types["paths"]["status"] == "enabled"
         assert source_types["database"]["status"] == "enabled"
-        assert source_types["container"]["status"] == "planned"
-        assert source_types["container"]["disabled"] is True
+        assert source_types["container"]["status"] == "enabled"
+        assert source_types["container"]["disabled"] is False
 
     def test_database_discovery_returns_supported_templates(
         self, test_client, admin_headers
