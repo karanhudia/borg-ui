@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-06-04T12:20:38.531Z",
+  "generatedAt": "2026-06-04T15:10:27.251Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #623 visual report",
-    "commitSha": "336ca8a4af84",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26951121498"
+    "commitSha": "7095c4e441fe",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26960427031"
   },
   "totals": {
-    "baseline": 312,
-    "actual": 320,
-    "compared": 312,
+    "baseline": 316,
+    "actual": 324,
+    "compared": 316,
     "changed": 20,
     "added": 8,
     "removed": 0,
-    "unchanged": 292
+    "unchanged": 296
   },
   "changed": [
     {
@@ -57,9 +57,9 @@
       "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--database-queued-multiple-selection--mobile.png",
       "actualPath": "images/actual/backup-plans-sourceselectiondialog--database-queued-multiple-selection--mobile.png",
       "diffPath": "images/diff/backup-plans-sourceselectiondialog--database-queued-multiple-selection--mobile.png",
-      "diffPixels": 2106,
+      "diffPixels": 2108,
       "totalPixels": 329160,
-      "diffRatio": 0.006398104265402844,
+      "diffRatio": 0.006404180337829627,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -93,9 +93,9 @@
       "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--database-queued-multiple-sqlite-selection--mobile.png",
       "actualPath": "images/actual/backup-plans-sourceselectiondialog--database-queued-multiple-sqlite-selection--mobile.png",
       "diffPath": "images/diff/backup-plans-sourceselectiondialog--database-queued-multiple-sqlite-selection--mobile.png",
-      "diffPixels": 2124,
+      "diffPixels": 2108,
       "totalPixels": 329160,
-      "diffRatio": 0.006452788917243894,
+      "diffRatio": 0.006404180337829627,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -237,9 +237,9 @@
       "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups--mobile.png",
       "actualPath": "images/actual/backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups--mobile.png",
       "diffPath": "images/diff/backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups--mobile.png",
-      "diffPixels": 2125,
+      "diffPixels": 2101,
       "totalPixels": 329160,
-      "diffRatio": 0.006455826953457285,
+      "diffRatio": 0.0063829140843358854,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -345,9 +345,9 @@
       "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--path-picker-with-local-selections--mobile.png",
       "actualPath": "images/actual/backup-plans-sourceselectiondialog--path-picker-with-local-selections--mobile.png",
       "diffPath": "images/diff/backup-plans-sourceselectiondialog--path-picker-with-local-selections--mobile.png",
-      "diffPixels": 3748,
+      "diffPixels": 3688,
       "totalPixels": 329160,
-      "diffRatio": 0.011386559727791956,
+      "diffRatio": 0.011204277554988455,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -1270,6 +1270,18 @@
     },
     {
       "fileName": "remote-machines-connectiondiagnosticsdialog--timeout.png"
+    },
+    {
+      "fileName": "remote-machines-deploykeydialog--custom-defaults--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-deploykeydialog--custom-defaults.png"
+    },
+    {
+      "fileName": "remote-machines-deploykeydialog--hetzner-defaults--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-deploykeydialog--hetzner-defaults.png"
     },
     {
       "fileName": "remote-machines-remotemachinecard--with-run-diagnostics--mobile.png"
