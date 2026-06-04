@@ -1,21 +1,93 @@
 {
-  "generatedAt": "2026-06-04T04:26:54.025Z",
+  "generatedAt": "2026-06-04T04:38:01.950Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #622 visual report",
-    "commitSha": "d6c7e8a7c068",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26930510792"
+    "commitSha": "15c3e4edcff9",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26930921083"
   },
   "totals": {
     "baseline": 304,
     "actual": 312,
     "compared": 304,
-    "changed": 12,
+    "changed": 16,
     "added": 8,
     "removed": 0,
-    "unchanged": 292
+    "unchanged": 288
   },
   "changed": [
+    {
+      "fileName": "components-planinfodrawer--community-upgrade-drawer--mobile.png",
+      "baselinePath": "images/baseline/components-planinfodrawer--community-upgrade-drawer--mobile.png",
+      "actualPath": "images/actual/components-planinfodrawer--community-upgrade-drawer--mobile.png",
+      "diffPath": "images/diff/components-planinfodrawer--community-upgrade-drawer--mobile.png",
+      "diffPixels": 4995,
+      "totalPixels": 329160,
+      "diffRatio": 0.01517499088589136,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-planinfodrawer--community-upgrade-drawer.png",
+      "baselinePath": "images/baseline/components-planinfodrawer--community-upgrade-drawer.png",
+      "actualPath": "images/actual/components-planinfodrawer--community-upgrade-drawer.png",
+      "diffPath": "images/diff/components-planinfodrawer--community-upgrade-drawer.png",
+      "diffPixels": 4668,
+      "totalPixels": 1024000,
+      "diffRatio": 0.00455859375,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-planinfodrawer--dark-community-upgrade-drawer--mobile.png",
+      "baselinePath": "images/baseline/components-planinfodrawer--dark-community-upgrade-drawer--mobile.png",
+      "actualPath": "images/actual/components-planinfodrawer--dark-community-upgrade-drawer--mobile.png",
+      "diffPath": "images/diff/components-planinfodrawer--dark-community-upgrade-drawer--mobile.png",
+      "diffPixels": 4990,
+      "totalPixels": 329160,
+      "diffRatio": 0.015159800704824401,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-planinfodrawer--dark-community-upgrade-drawer.png",
+      "baselinePath": "images/baseline/components-planinfodrawer--dark-community-upgrade-drawer.png",
+      "actualPath": "images/actual/components-planinfodrawer--dark-community-upgrade-drawer.png",
+      "diffPath": "images/diff/components-planinfodrawer--dark-community-upgrade-drawer.png",
+      "diffPixels": 4663,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0045537109375,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
     {
       "fileName": "pages-managedagents--agent-diagnostics-partial-failure--mobile.png",
       "baselinePath": "images/baseline/pages-managedagents--agent-diagnostics-partial-failure--mobile.png",
@@ -694,18 +766,6 @@
     },
     {
       "fileName": "components-pathselectorfield--filesystem-browse.png"
-    },
-    {
-      "fileName": "components-planinfodrawer--community-upgrade-drawer--mobile.png"
-    },
-    {
-      "fileName": "components-planinfodrawer--community-upgrade-drawer.png"
-    },
-    {
-      "fileName": "components-planinfodrawer--dark-community-upgrade-drawer--mobile.png"
-    },
-    {
-      "fileName": "components-planinfodrawer--dark-community-upgrade-drawer.png"
     },
     {
       "fileName": "components-prunerepositorydialog--retention-preview--mobile.png"
