@@ -25,7 +25,6 @@ import {
   TableCell,
   TableHead,
   TableRow,
-  TextField,
   Tooltip,
   Typography,
   useTheme,
@@ -63,6 +62,7 @@ import PageHeader from '../components/PageHeader'
 import PlanGate from '../components/shared/PlanGate'
 import LogViewerDialog, { type LogViewerFetchLogs } from '../components/shared/LogViewerDialog'
 import ResponsiveDialog from '../components/shared/ResponsiveDialog'
+import DiagnosticsTcpTargetFields from '../components/shared/DiagnosticsTcpTargetFields'
 import AddAgentDialog from './managed-agents/AddAgentDialog'
 import { resolveAgentServerUrl } from './managed-agents/agentServerUrl'
 import {
@@ -850,45 +850,32 @@ export function AgentDiagnosticsDialog({
             </Typography>
           </Box>
 
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 1fr) 120px 140px' },
-              gap: 1.25,
+          <DiagnosticsTcpTargetFields
+            targetHost={targetHost}
+            targetPort={targetPort}
+            targetTimeout={targetTimeout}
+            onTargetHostChange={setTargetHost}
+            onTargetPortChange={setTargetPort}
+            onTargetTimeoutChange={setTargetTimeout}
+            hasTarget={hasTarget}
+            portInvalid={portInvalid}
+            timeoutInvalid={timeoutInvalid}
+            timeoutInputProps={{ min: 0.5, max: 10, step: 0.5 }}
+            labels={{
+              summary: 'Advanced: test another service',
+              description:
+                'Checks whether this agent can reach a separate service. Leave blank for normal diagnostics.',
+              host: 'Service host',
+              hostPlaceholder: 'postgres.internal',
+              hostHelper: 'Optional service to test from this agent',
+              port: 'Service port',
+              portPlaceholder: '5432',
+              portError: '1-65535',
+              timeout: 'Timeout',
+              timeoutHelper: 'Seconds',
+              timeoutError: '0.5-10 seconds',
             }}
-          >
-            <TextField
-              label="Target host"
-              value={targetHost}
-              onChange={(event) => setTargetHost(event.target.value)}
-              placeholder="postgres.internal"
-              size="small"
-              helperText="Optional TCP target"
-            />
-            <TextField
-              label="Port"
-              value={targetPort}
-              onChange={(event) => setTargetPort(event.target.value)}
-              placeholder="5432"
-              size="small"
-              type="number"
-              inputProps={{ min: 1, max: 65535 }}
-              required={hasTarget}
-              error={portInvalid}
-              helperText={portInvalid ? '1-65535' : undefined}
-            />
-            <TextField
-              label="Timeout"
-              value={targetTimeout}
-              onChange={(event) => setTargetTimeout(event.target.value)}
-              size="small"
-              type="number"
-              inputProps={{ min: 0.5, max: 10, step: 0.5 }}
-              required={hasTarget}
-              error={timeoutInvalid}
-              helperText={timeoutInvalid ? '0.5-10 seconds' : 'Seconds'}
-            />
-          </Box>
+          />
 
           {targetError && (
             <Alert severity="warning" role="alert" sx={{ borderRadius: 1.5 }}>

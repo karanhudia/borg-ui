@@ -306,7 +306,7 @@
         "de": "Erstellen Sie tägliche, wöchentliche, monatliche oder benutzerdefinierte Backup-Berichte.",
         "it": "Genera report di backup giornalieri, settimanali, mensili o personalizzati."
       },
-      "availability": "coming_soon"
+      "availability": "included"
     },
     {
       "id": "alerting_monitoring",
@@ -323,7 +323,7 @@
         "de": "Erstellen Sie Backup-Warnungen und Regeln, zum Beispiel wenn Downloads seit 3 Tagen nicht gesichert wurde.",
         "it": "Crea avvisi e regole di backup, ad esempio quando Download non viene salvato da 3 giorni."
       },
-      "availability": "coming_soon"
+      "availability": "included"
     },
     {
       "id": "database_discovery",
@@ -340,7 +340,7 @@
         "de": "Erkennt unterstützte Datenbanken und erstellt geführte Backup-Konfigurationen mit sicheren Stop-Backup-Start-Abläufen.",
         "it": "Rileva i database supportati e genera configurazioni guidate con flussi sicuri stop-backup-start."
       },
-      "availability": "coming_soon"
+      "availability": "included"
     },
     {
       "id": "container_backups",

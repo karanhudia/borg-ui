@@ -1,5 +1,6 @@
 import { Box, Skeleton, Stack } from '@mui/material'
 import type { Tokens } from './tokens'
+import { ResourceGaugeGrid } from './ResourceGaugeGrid'
 
 /**
  * DashboardSkeleton mirrors the real DashboardV3 layout so the page does
@@ -180,7 +181,7 @@ export function DashboardSkeleton({ T }: { T: Tokens }) {
               bgcolor: T.bgCard,
               border: `1px solid ${T.border}`,
               borderRadius: '14px',
-              p: 2.5,
+              p: 2,
             }}
           >
             <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 2 }}>
@@ -192,13 +193,13 @@ export function DashboardSkeleton({ T }: { T: Tokens }) {
                 sx={{ transform: 'none', borderRadius: 0.5 }}
               />
             </Stack>
-            <Stack direction="row" justifyContent="space-around">
+            <ResourceGaugeGrid>
               {[0, 1, 2].map((i) => (
-                <Box key={i} sx={{ textAlign: 'center' }}>
+                <Box key={i} sx={{ textAlign: 'center', width: '100%', minWidth: 0 }}>
                   <Skeleton
                     variant="circular"
-                    width={52}
-                    height={52}
+                    width={44}
+                    height={44}
                     sx={{ mx: 'auto', mb: 0.75 }}
                   />
                   <Skeleton
@@ -215,7 +216,7 @@ export function DashboardSkeleton({ T }: { T: Tokens }) {
                   />
                 </Box>
               ))}
-            </Stack>
+            </ResourceGaugeGrid>
           </Box>
 
           {/* Storage donut card */}
