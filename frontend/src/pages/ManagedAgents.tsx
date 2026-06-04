@@ -866,8 +866,10 @@ export function AgentDiagnosticsDialog({
               description:
                 'Checks whether this agent can reach a separate service. Leave blank for normal diagnostics.',
               host: 'Service host',
+              hostPlaceholder: 'postgres.internal',
               hostHelper: 'Optional service to test from this agent',
               port: 'Service port',
+              portPlaceholder: '5432',
               portError: '1-65535',
               timeout: 'Timeout',
               timeoutHelper: 'Seconds',

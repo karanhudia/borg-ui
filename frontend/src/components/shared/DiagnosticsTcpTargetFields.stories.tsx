@@ -1,16 +1,20 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { Box } from '@mui/material'
 
-import DiagnosticsTcpTargetFields from './DiagnosticsTcpTargetFields'
+import DiagnosticsTcpTargetFields, {
+  type DiagnosticsTcpTargetLabels,
+} from './DiagnosticsTcpTargetFields'
 
 const labels = {
   summary: 'Advanced: test another service',
   description:
     'Checks whether this machine can reach a separate service. Leave blank for normal diagnostics.',
   host: 'Service host',
+  hostPlaceholder: 'postgres.internal',
   hostHelper: 'Optional service to test from this machine',
   port: 'Service port',
+  portPlaceholder: '5432',
   portError: '1-65535',
   timeout: 'Timeout',
   timeoutHelper: 'Seconds',
@@ -45,19 +49,42 @@ function DiagnosticsTcpTargetPreview({
   defaultExpanded = false,
   initialHost = '',
   initialPort = '',
+  initialTimeout = '3',
+  fieldLabels = labels,
+  timeoutInputProps = { min: 0.5, max: 15, step: 0.5 },
 }: {
   defaultExpanded?: boolean
   initialHost?: string
   initialPort?: string
+  initialTimeout?: string
+  fieldLabels?: DiagnosticsTcpTargetLabels
+  timeoutInputProps?: {
+    min: number
+    max: number
+    step: number
+  }
 }) {
   const [targetHost, setTargetHost] = useState(initialHost)
   const [targetPort, setTargetPort] = useState(initialPort)
-  const [targetTimeout, setTargetTimeout] = useState('3')
+  const [targetTimeout, setTargetTimeout] = useState(initialTimeout)
   const hasTarget = Boolean(targetHost.trim())
+
+  useEffect(() => {
+    setTargetHost(initialHost)
+  }, [initialHost])
+
+  useEffect(() => {
+    setTargetPort(initialPort)
+  }, [initialPort])
+
+  useEffect(() => {
+    setTargetTimeout(initialTimeout)
+  }, [initialTimeout])
 
   return (
     <Box sx={{ width: 640, maxWidth: 'calc(100vw - 32px)' }}>
       <DiagnosticsTcpTargetFields
+        key={String(defaultExpanded)}
         targetHost={targetHost}
         targetPort={targetPort}
         targetTimeout={targetTimeout}
@@ -67,8 +94,8 @@ function DiagnosticsTcpTargetPreview({
         hasTarget={hasTarget}
         portInvalid={hasTarget && parsePort(targetPort) === null}
         timeoutInvalid={hasTarget && parseTimeout(targetTimeout) === null}
-        timeoutInputProps={{ min: 0.5, max: 15, step: 0.5 }}
-        labels={labels}
+        timeoutInputProps={timeoutInputProps}
+        labels={fieldLabels}
         defaultExpanded={defaultExpanded}
       />
     </Box>
@@ -89,7 +116,16 @@ export const Collapsed: Story = {
     timeoutInputProps: { min: 0.5, max: 15, step: 0.5 },
     labels,
   },
-  render: () => <DiagnosticsTcpTargetPreview />,
+  render: (args) => (
+    <DiagnosticsTcpTargetPreview
+      defaultExpanded={args.defaultExpanded}
+      initialHost={args.targetHost}
+      initialPort={args.targetPort}
+      initialTimeout={args.targetTimeout}
+      fieldLabels={args.labels}
+      timeoutInputProps={args.timeoutInputProps}
+    />
+  ),
 }
 
 export const ExpandedWithInvalidPort: Story = {
@@ -107,7 +143,14 @@ export const ExpandedWithInvalidPort: Story = {
     labels,
     defaultExpanded: true,
   },
-  render: () => (
-    <DiagnosticsTcpTargetPreview defaultExpanded initialHost="postgres.internal" initialPort="" />
+  render: (args) => (
+    <DiagnosticsTcpTargetPreview
+      defaultExpanded={args.defaultExpanded}
+      initialHost={args.targetHost}
+      initialPort={args.targetPort}
+      initialTimeout={args.targetTimeout}
+      fieldLabels={args.labels}
+      timeoutInputProps={args.timeoutInputProps}
+    />
   ),
 }

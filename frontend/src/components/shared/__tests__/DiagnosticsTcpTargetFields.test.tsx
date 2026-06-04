@@ -9,8 +9,10 @@ const labels = {
   description:
     'Checks whether this machine can reach a separate service. Leave blank for normal diagnostics.',
   host: 'Service host',
+  hostPlaceholder: 'postgres.internal',
   hostHelper: 'Optional service to test from this machine',
   port: 'Service port',
+  portPlaceholder: '5432',
   timeout: 'Timeout',
   timeoutHelper: 'Seconds',
 }
@@ -42,6 +44,11 @@ describe('DiagnosticsTcpTargetFields', () => {
 
     await user.click(screen.getByRole('button', { name: /advanced: test another service/i }))
     expect(screen.getByLabelText(/service host/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/service host/i)).toHaveAttribute(
+      'placeholder',
+      'postgres.internal'
+    )
+    expect(screen.getByLabelText(/service port/i)).toHaveAttribute('placeholder', '5432')
 
     await user.click(screen.getByRole('button', { name: /advanced: test another service/i }))
     expect(screen.getByLabelText(/service host/i)).toBeInTheDocument()

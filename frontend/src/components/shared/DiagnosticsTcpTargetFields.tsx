@@ -15,8 +15,10 @@ export interface DiagnosticsTcpTargetLabels {
   summary: string
   description: string
   host: string
+  hostPlaceholder: string
   hostHelper: string
   port: string
+  portPlaceholder: string
   portHelper?: string
   portError?: string
   timeout: string
@@ -125,7 +127,7 @@ export default function DiagnosticsTcpTargetFields({
               label={labels.host}
               value={targetHost}
               onChange={(event) => onTargetHostChange(event.target.value)}
-              placeholder="postgres.internal"
+              placeholder={labels.hostPlaceholder}
               size="small"
               helperText={labels.hostHelper}
             />
@@ -133,7 +135,7 @@ export default function DiagnosticsTcpTargetFields({
               label={labels.port}
               value={targetPort}
               onChange={(event) => onTargetPortChange(event.target.value)}
-              placeholder="5432"
+              placeholder={labels.portPlaceholder}
               size="small"
               type="number"
               inputProps={{ min: 1, max: 65535 }}

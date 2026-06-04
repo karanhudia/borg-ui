@@ -329,11 +329,17 @@ export function ConnectionDiagnosticsDialog({
               host: t('sshConnections.diagnostics.serviceHost', {
                 defaultValue: 'Service host',
               }),
+              hostPlaceholder: t('sshConnections.diagnostics.serviceHostPlaceholder', {
+                defaultValue: 'postgres.internal',
+              }),
               hostHelper: t('sshConnections.diagnostics.serviceHostHelper', {
                 defaultValue: 'Optional service to test from this remote machine',
               }),
               port: t('sshConnections.diagnostics.servicePort', {
                 defaultValue: 'Service port',
+              }),
+              portPlaceholder: t('sshConnections.diagnostics.servicePortPlaceholder', {
+                defaultValue: '5432',
               }),
               portError: t('sshConnections.diagnostics.servicePortRangeShort', {
                 defaultValue: '1-65535',
