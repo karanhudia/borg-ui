@@ -54,6 +54,20 @@ function isValidPlanContentFeature(feature: unknown): feature is PlanContentFeat
   )
 }
 
+export function mergePlanContentFeatures(features: PlanContentFeature[]) {
+  const mergedFeatures = [...features]
+  const featureIds = new Set(features.map((feature) => feature.id))
+
+  for (const feature of DEFAULT_PLAN_CONTENT_MANIFEST.features) {
+    if (!featureIds.has(feature.id)) {
+      mergedFeatures.push(feature)
+      featureIds.add(feature.id)
+    }
+  }
+
+  return mergedFeatures
+}
+
 export async function fetchPlanContentManifest(url = getPlanContentUrl()) {
   const configuredUrl = import.meta.env.VITE_PLAN_CONTENT_URL?.trim()
   const candidateUrls =
@@ -85,12 +99,14 @@ export async function fetchPlanContentManifest(url = getPlanContentUrl()) {
       lastStatus = null
       continue
     }
+    const features = Array.isArray(data.features)
+      ? data.features.filter(isValidPlanContentFeature)
+      : DEFAULT_PLAN_CONTENT_MANIFEST.features
+
     return {
       version,
       generated_at: data.generated_at,
-      features: Array.isArray(data.features)
-        ? data.features.filter(isValidPlanContentFeature)
-        : DEFAULT_PLAN_CONTENT_MANIFEST.features,
+      features: mergePlanContentFeatures(features),
     } satisfies PlanContentManifest
   }
 

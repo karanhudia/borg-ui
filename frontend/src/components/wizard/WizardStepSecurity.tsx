@@ -2,21 +2,15 @@ import { useState } from 'react'
 import {
   Box,
   TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Typography,
   Alert,
   Button,
   ToggleButton,
   ToggleButtonGroup,
-  InputAdornment,
-  IconButton,
 } from '@mui/material'
-import { Shield, Key, FileKey, Upload, FileText, Eye, EyeOff } from 'lucide-react'
+import { FileKey, Upload, FileText } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { usePlan } from '../../hooks/usePlan'
+import RepositoryEncryptionFields from './RepositoryEncryptionFields'
 
 export interface SecurityStepData {
   encryption: string
@@ -25,40 +19,12 @@ export interface SecurityStepData {
   selectedKeyfile: File | null
 }
 
-// Encryption options grouped by borg version — defined once, used in the Select below
-const BORG1_ENCRYPTION_OPTIONS = [
-  { value: 'repokey', label: 'Repository Key', desc: 'Key stored in repository (recommended)' },
-  { value: 'repokey-blake2', label: 'Repository Key (BLAKE2)', desc: 'Faster hashing variant' },
-  { value: 'keyfile', label: 'Key File', desc: 'Key stored in a separate file' },
-  { value: 'keyfile-blake2', label: 'Key File (BLAKE2)', desc: 'Key file with faster hashing' },
-  { value: 'none', label: 'None', desc: 'No encryption (not recommended)' },
-]
-
-const BORG2_ENCRYPTION_OPTIONS = [
-  {
-    value: 'repokey-aes-ocb',
-    label: 'Repository Key (AES-OCB)',
-    desc: 'Default for Borg 2 · recommended',
-  },
-  {
-    value: 'repokey-chacha20-poly1305',
-    label: 'Repository Key (ChaCha20)',
-    desc: 'Alternative AEAD cipher',
-  },
-  { value: 'keyfile-aes-ocb', label: 'Key File (AES-OCB)', desc: 'Key stored in a separate file' },
-  {
-    value: 'keyfile-chacha20-poly1305',
-    label: 'Key File (ChaCha20)',
-    desc: 'Key file with ChaCha20',
-  },
-  { value: 'none', label: 'None', desc: 'No encryption (not recommended)' },
-]
-
 interface WizardStepSecurityProps {
   mode: 'create' | 'edit' | 'import'
   borgVersion?: 1 | 2
   data: SecurityStepData
   onChange: (data: Partial<SecurityStepData>) => void
+  showRemotePath?: boolean
 }
 
 export default function WizardStepSecurity({
@@ -66,12 +32,11 @@ export default function WizardStepSecurity({
   borgVersion = 1,
   data,
   onChange,
+  showRemotePath = true,
 }: WizardStepSecurityProps) {
   const { t } = useTranslation()
-  const { can } = usePlan()
   const [keyfileMode, setKeyfileMode] = useState<'file' | 'paste'>('file')
   const [keyfileText, setKeyfileText] = useState('')
-  const [showPassphrase, setShowPassphrase] = useState(false)
 
   const handleKeyfileModeChange = (_: unknown, newMode: 'file' | 'paste' | null) => {
     if (newMode === null) return
@@ -90,102 +55,19 @@ export default function WizardStepSecurity({
     }
   }
 
-  const encryptionOptions =
-    borgVersion === 2 && can('borg_v2') ? BORG2_ENCRYPTION_OPTIONS : BORG1_ENCRYPTION_OPTIONS
   const isKeyfileEncryption = data.encryption.includes('keyfile')
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-      {/* Encryption Selection - create and import mode */}
-      {(mode === 'create' || mode === 'import') && (
-        <>
-          <FormControl fullWidth>
-            <InputLabel>{t('wizard.security.encryptionMethodLabel')}</InputLabel>
-            <Select
-              value={data.encryption}
-              label={t('wizard.security.encryptionMethodLabel')}
-              onChange={(e) => onChange({ encryption: e.target.value })}
-            >
-              {encryptionOptions.map((opt) => (
-                <MenuItem key={opt.value} value={opt.value}>
-                  <Box>
-                    <Typography variant="body2" fontWeight={600}>
-                      {opt.label}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {opt.desc}
-                    </Typography>
-                  </Box>
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-
-          {data.encryption === 'none' && (
-            <Alert severity="warning">
-              <Typography variant="body2" fontWeight={600} gutterBottom>
-                {t('wizard.security.securityWarningTitle')}
-              </Typography>
-              <Typography variant="body2">{t('wizard.security.securityWarningBody')}</Typography>
-            </Alert>
-          )}
-        </>
-      )}
-
-      {/* Encryption info for edit mode only */}
-      {mode === 'edit' && (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-          <Shield size={14} style={{ color: 'inherit', opacity: 0.45, flexShrink: 0 }} />
-          <Typography variant="body2" color="text.secondary">
-            {t('wizard.security.encryptionReadonly')}
-          </Typography>
-        </Box>
-      )}
-
-      {/* Passphrase Input */}
-      {data.encryption !== 'none' && (
-        <TextField
-          label={
-            mode === 'edit'
-              ? t('wizard.security.passphraseOptional')
-              : t('wizard.security.passphraseRequired')
-          }
-          type={showPassphrase ? 'text' : 'password'}
-          value={data.passphrase}
-          onChange={(e) => onChange({ passphrase: e.target.value })}
-          placeholder={
-            mode === 'edit'
-              ? t('wizard.security.passphrasePlaceholderEdit')
-              : t('wizard.security.passphrasePlaceholderCreate')
-          }
-          required={mode !== 'edit'}
-          fullWidth
-          helperText={
-            mode === 'edit'
-              ? t('wizard.security.passphraseHelperEdit')
-              : t('wizard.security.passphraseHelperCreate')
-          }
-          InputProps={{
-            startAdornment: (
-              <Box sx={{ mr: 1, display: 'flex', color: 'text.secondary' }}>
-                <Key size={18} />
-              </Box>
-            ),
-            endAdornment: (
-              <InputAdornment position="end">
-                <IconButton
-                  aria-label={showPassphrase ? 'Hide passphrase' : 'Show passphrase'}
-                  onClick={() => setShowPassphrase((v) => !v)}
-                  edge="end"
-                  size="small"
-                >
-                  {showPassphrase ? <EyeOff size={18} /> : <Eye size={18} />}
-                </IconButton>
-              </InputAdornment>
-            ),
-          }}
-        />
-      )}
+      <RepositoryEncryptionFields
+        mode={mode}
+        borgVersion={borgVersion}
+        data={{
+          encryption: data.encryption,
+          passphrase: data.passphrase,
+        }}
+        onChange={onChange}
+      />
 
       {/* Keyfile Upload - import mode only, and only when encryption is keyfile-based */}
       {mode === 'import' && isKeyfileEncryption && (
@@ -271,15 +153,16 @@ export default function WizardStepSecurity({
         </Box>
       )}
 
-      {/* Remote Path */}
-      <TextField
-        label={t('wizard.security.remoteBorgPath')}
-        value={data.remotePath}
-        onChange={(e) => onChange({ remotePath: e.target.value })}
-        placeholder={borgVersion === 2 ? '/usr/local/bin/borg2' : '/usr/local/bin/borg'}
-        fullWidth
-        helperText={t('wizard.security.remoteBorgPathHelper')}
-      />
+      {showRemotePath && (
+        <TextField
+          label={t('wizard.security.remoteBorgPath')}
+          value={data.remotePath}
+          onChange={(e) => onChange({ remotePath: e.target.value })}
+          placeholder={borgVersion === 2 ? '/usr/local/bin/borg2' : '/usr/local/bin/borg'}
+          fullWidth
+          helperText={t('wizard.security.remoteBorgPathHelper')}
+        />
+      )}
     </Box>
   )
 }

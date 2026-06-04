@@ -475,7 +475,7 @@ class Borg2Interface:
         env: Optional[Dict] = None,
     ) -> Dict:
         """Extract files from an archive."""
-        cmd = [self.borg_cmd, "-r", repository, "extract"]
+        cmd = [self.borg_cmd, "-r", repository, "extract", "--umask", "0022"]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
         if dry_run:

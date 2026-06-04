@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from datetime import datetime, timedelta, timezone
 
 from app.database.models import (
+    BackupJob,
     CheckJob,
     Repository,
     RestoreCheckJob,
@@ -35,7 +36,8 @@ async def test_check_scheduler_creates_job_and_updates_next_run(db_session):
         compression="lz4",
         repository_type="local",
         check_cron_expression="0 2 * * *",
-        check_max_duration=123,
+        check_max_duration=0,
+        check_extra_flags="--verify-data",
     )
     db_session.add(repo)
     db_session.commit()
@@ -52,6 +54,7 @@ async def test_check_scheduler_creates_job_and_updates_next_run(db_session):
                 repository_id=repo.id,
                 status="pending",
                 max_duration=kwargs["extra_fields"]["max_duration"],
+                extra_flags=kwargs["extra_fields"]["extra_flags"],
                 scheduled_check=True,
             )
             await run_due_scheduled_checks(db_session)
@@ -60,6 +63,8 @@ async def test_check_scheduler_creates_job_and_updates_next_run(db_session):
     assert repo.last_scheduled_check is not None
     assert repo.next_scheduled_check is not None
     mock_start.assert_called_once()
+    assert mock_start.call_args.kwargs["extra_fields"]["max_duration"] == 0
+    assert mock_start.call_args.kwargs["extra_fields"]["extra_flags"] == "--verify-data"
 
 
 @pytest.mark.unit
@@ -399,11 +404,20 @@ async def test_shared_scheduler_loop_runs_due_checks_each_cycle(db_session):
         patch(
             "app.api.schedule.run_due_scheduled_checks", new=AsyncMock()
         ) as mock_checks,
+        patch(
+            "app.services.backup_plan_execution_service.backup_plan_execution_service.dispatch_due_runs",
+            return_value=0,
+        ) as mock_plan_dispatch,
+        patch(
+            "app.api.schedule.run_backup_monitoring_and_reports", new=AsyncMock()
+        ) as mock_monitoring,
     ):
         with pytest.raises(RuntimeError, match="stop loop"):
             await check_scheduled_jobs()
 
     assert mock_checks.await_count == 1
+    assert mock_plan_dispatch.call_count == 1
+    assert mock_monitoring.await_count == 1
 
 
 @pytest.mark.unit
@@ -440,6 +454,106 @@ async def test_shared_scheduler_dispatch_limits_scheduled_backups(db_session):
         await dispatch_due_scheduled_backups(db_session, datetime.now(timezone.utc))
 
     assert mock_dispatch.call_count == 2
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_shared_scheduler_counts_active_scheduled_backup_jobs_from_db(
+    db_session,
+):
+    schedule_api._active_scheduled_backup_runs.clear()
+    repo = Repository(
+        name="Repo",
+        path="/tmp/repo",
+        encryption="none",
+        compression="lz4",
+        repository_type="local",
+    )
+    db_session.add(repo)
+    db_session.add(SystemSettings(max_concurrent_scheduled_backups=1))
+    db_session.flush()
+
+    active_schedule = ScheduledJob(
+        name="Already Running",
+        cron_expression="0 2 * * *",
+        enabled=True,
+        repository_id=repo.id,
+        next_run=datetime.now(timezone.utc) + timedelta(days=1),
+    )
+    due_schedule = ScheduledJob(
+        name="Due Schedule",
+        cron_expression="0 3 * * *",
+        enabled=True,
+        repository_id=repo.id,
+        next_run=datetime.now(timezone.utc) - timedelta(minutes=1),
+    )
+    db_session.add_all([active_schedule, due_schedule])
+    db_session.flush()
+    db_session.add(
+        BackupJob(
+            repository=repo.path,
+            repository_id=repo.id,
+            status="pending",
+            scheduled_job_id=active_schedule.id,
+        )
+    )
+    db_session.commit()
+
+    with patch.object(
+        schedule_api,
+        "_dispatch_due_scheduled_job",
+        side_effect=["run-1"],
+    ) as mock_dispatch:
+        await dispatch_due_scheduled_backups(db_session, datetime.now(timezone.utc))
+
+    mock_dispatch.assert_not_called()
+
+
+@pytest.mark.unit
+def test_dispatch_due_scheduled_borg2_job_uses_stable_archive_name(db_session):
+    repo = Repository(
+        name="Primary Repo",
+        path="/tmp/borg2-repo",
+        encryption="none",
+        compression="lz4",
+        repository_type="local",
+        borg_version=2,
+    )
+    db_session.add(repo)
+    db_session.flush()
+    job = ScheduledJob(
+        name="Monthly Backup",
+        cron_expression="0 2 * * *",
+        enabled=True,
+        repository_id=repo.id,
+        archive_name_template="{job_name}-{repo_name}-{now}",
+        next_run=datetime.now(timezone.utc) - timedelta(minutes=1),
+    )
+    db_session.add(job)
+    db_session.commit()
+
+    def discard_background_task(coro):
+        coro.close()
+        return MagicMock()
+
+    with (
+        patch(
+            "app.api.schedule.execute_scheduled_backup_with_maintenance",
+            new_callable=AsyncMock,
+        ) as mock_execute,
+        patch(
+            "app.api.schedule.asyncio.create_task", side_effect=discard_background_task
+        ),
+        patch("app.api.schedule._track_scheduled_backup_task"),
+    ):
+        run_key = schedule_api._dispatch_due_scheduled_job(
+            db_session, job, datetime.now(timezone.utc)
+        )
+
+    assert run_key is not None
+    assert (
+        mock_execute.call_args.kwargs["archive_name"] == "Monthly-Backup-Primary-Repo"
+    )
 
 
 @pytest.mark.unit

@@ -41,6 +41,7 @@ describe('ScheduleCheckCard', () => {
         onEdit={vi.fn()}
         onDelete={vi.fn()}
         onRunNow={vi.fn()}
+        onToggle={vi.fn()}
       />
     )
 
@@ -80,6 +81,7 @@ describe('ScheduleCheckCard', () => {
         onEdit={vi.fn()}
         onDelete={vi.fn()}
         onRunNow={vi.fn()}
+        onToggle={vi.fn()}
       />
     )
 
@@ -107,5 +109,28 @@ describe('ScheduleCheckCard', () => {
       value: expectedScheduleTime,
     })
     expect(nextCheckStat?.tooltip?.props?.display?.scheduledTimeZone).toBe(baseCheck.check_timezone)
+  })
+
+  it('surfaces configured advanced check flags in card metadata', () => {
+    renderWithProviders(
+      <ScheduleCheckCard
+        check={{ ...baseCheck, check_extra_flags: '--verify-data' }}
+        canManage
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onRunNow={vi.fn()}
+        onToggle={vi.fn()}
+      />
+    )
+
+    const props = entityCardMock.mock.lastCall?.[0] as
+      | {
+          meta: Array<{ label: string; value: string }>
+        }
+      | undefined
+
+    expect(props?.meta).toEqual(
+      expect.arrayContaining([expect.objectContaining({ value: '--verify-data' })])
+    )
   })
 })

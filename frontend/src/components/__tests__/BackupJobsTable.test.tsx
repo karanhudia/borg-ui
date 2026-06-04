@@ -137,6 +137,42 @@ describe('BackupJobsTable', () => {
       expect(screen.getByText('Started')).toBeInTheDocument()
       expect(screen.getByText('Duration')).toBeInTheDocument()
     })
+
+    it('displays managed-agent transport for agent backup jobs', () => {
+      renderWithProviders(
+        <BackupJobsTable
+          jobs={[
+            {
+              ...mockJobs[0],
+              id: 44,
+              execution_mode: 'agent',
+            } as MockBackupJob & { execution_mode: 'agent' },
+          ]}
+        />
+      )
+
+      expect(screen.getByText('Agent')).toBeInTheDocument()
+    })
+
+    it('displays remote SSH transport for remote-direct backup jobs', () => {
+      renderWithProviders(
+        <BackupJobsTable
+          jobs={[
+            {
+              ...mockJobs[0],
+              id: 45,
+              execution_mode: 'remote_ssh',
+              route_strategy: 'remote_direct',
+            } as MockBackupJob & {
+              execution_mode: 'remote_ssh'
+              route_strategy: 'remote_direct'
+            },
+          ]}
+        />
+      )
+
+      expect(screen.getByText('Remote SSH')).toBeInTheDocument()
+    })
   })
 
   describe('Empty State', () => {
@@ -427,6 +463,49 @@ describe('BackupJobsTable', () => {
     expect(breakLockButtons.length).toBe(1)
   })
 
+  it('supports per-job Break Lock permissions', () => {
+    const jobsWithLockErrors = [
+      {
+        id: 4,
+        repository_id: 4,
+        repository: '/backup/repo4',
+        repository_path: '/backup/repo4',
+        type: 'backup',
+        status: 'failed',
+        started_at: '2024-01-20T12:00:00Z',
+        completed_at: '2024-01-20T12:05:00Z',
+        triggered_by: 'manual',
+        error_message:
+          'LOCK_ERROR::/backup/repo4\n[Exit Code 73] Failed to create/acquire the lock (timeout)',
+      },
+      {
+        id: 5,
+        repository_id: 5,
+        repository: '/backup/repo5',
+        repository_path: '/backup/repo5',
+        type: 'backup',
+        status: 'failed',
+        started_at: '2024-01-20T13:00:00Z',
+        completed_at: '2024-01-20T13:05:00Z',
+        triggered_by: 'manual',
+        error_message:
+          'LOCK_ERROR::/backup/repo5\n[Exit Code 73] Failed to create/acquire the lock (timeout)',
+      },
+    ]
+
+    renderWithProviders(
+      <BackupJobsTable
+        jobs={jobsWithLockErrors}
+        canBreakLocks={(job) => job.repository_id === 4}
+        actions={{ breakLock: true }}
+        onBreakLock={mockCallbacks.onBreakLock}
+      />
+    )
+
+    const breakLockButtons = screen.getAllByRole('button', { name: 'Break Lock' })
+    expect(breakLockButtons.length).toBe(1)
+  })
+
   it('does not show Break Lock button for non-admin users', () => {
     const jobsWithLockError = [
       {
@@ -454,6 +533,36 @@ describe('BackupJobsTable', () => {
     )
 
     // Break Lock buttons should NOT be visible for non-admin
+    const breakLockButtons = screen.queryAllByRole('button', { name: 'Break Lock' })
+    expect(breakLockButtons.length).toBe(0)
+  })
+
+  it('does not show Break Lock button when lock breaking is globally disabled', () => {
+    const jobsWithLockError = [
+      {
+        id: 4,
+        repository: '/backup/repo4',
+        repository_path: '/backup/repo4',
+        type: 'backup',
+        status: 'failed',
+        started_at: '2024-01-20T12:00:00Z',
+        completed_at: '2024-01-20T12:05:00Z',
+        triggered_by: 'manual',
+        error_message:
+          'LOCK_ERROR::/backup/repo4\n[Exit Code 73] Failed to create/acquire the lock (timeout)',
+      },
+    ]
+
+    renderWithProviders(
+      <BackupJobsTable
+        jobs={jobsWithLockError}
+        canBreakLocks={true}
+        lockBreakingEnabled={false}
+        actions={{ breakLock: true }}
+        onBreakLock={mockCallbacks.onBreakLock}
+      />
+    )
+
     const breakLockButtons = screen.queryAllByRole('button', { name: 'Break Lock' })
     expect(breakLockButtons.length).toBe(0)
   })

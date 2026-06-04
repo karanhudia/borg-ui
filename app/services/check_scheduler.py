@@ -136,6 +136,7 @@ async def run_due_scheduled_checks(db: Session, now: Optional[datetime] = None) 
         .filter(
             Repository.check_cron_expression.isnot(None),
             Repository.check_cron_expression != "",
+            Repository.check_schedule_enabled.is_(True),
             or_(
                 Repository.next_scheduled_check.is_(None),
                 Repository.next_scheduled_check <= now,
@@ -171,7 +172,12 @@ async def run_due_scheduled_checks(db: Session, now: Optional[datetime] = None) 
                     borg_version=repo.borg_version,
                 ): BorgRouter(router_repo).check(job.id),
                 extra_fields={
-                    "max_duration": repo.check_max_duration or 3600,
+                    "max_duration": (
+                        repo.check_max_duration
+                        if repo.check_max_duration is not None
+                        else 3600
+                    ),
+                    "extra_flags": repo.check_extra_flags,
                     "scheduled_check": True,
                 },
             )

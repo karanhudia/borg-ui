@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import PruneRepositoryDialog from '../PruneRepositoryDialog'
@@ -146,6 +146,30 @@ describe('PruneRepositoryDialog', () => {
       await user.type(dailyInput, '14')
 
       expect(dailyInput).toHaveValue(14)
+    })
+
+    it('updates the retention preview example when values change', () => {
+      render(
+        <PruneRepositoryDialog
+          open={true}
+          repository={mockRepository}
+          onClose={vi.fn()}
+          onDryRun={vi.fn()}
+          onConfirmPrune={vi.fn()}
+          isLoading={false}
+          results={null}
+        />
+      )
+
+      const inputs = screen.getAllByRole('spinbutton')
+      fireEvent.change(inputs[1], { target: { value: '14' } })
+      fireEvent.change(inputs[2], { target: { value: '2' } })
+
+      expect(
+        screen.getByText(
+          "Example: With these settings, you'll keep the last 14 daily, 2 weekly, 6 monthly, and 1 yearly backup. Older archives will be deleted."
+        )
+      ).toBeInTheDocument()
     })
   })
 

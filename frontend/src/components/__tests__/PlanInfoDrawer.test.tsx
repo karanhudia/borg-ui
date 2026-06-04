@@ -1,7 +1,48 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders, screen, userEvent } from '../../test/test-utils'
+import { darkTheme, theme } from '../../theme'
 import PlanInfoDrawer from '../PlanInfoDrawer'
+import { getPlanDrawerContrastPairs } from '../planDrawerColors'
 import { BUY_URL } from '../../utils/externalLinks'
+import type { Plan } from '../../core/features'
+
+type Rgb = [number, number, number]
+
+function hexToRgb(color: string): Rgb {
+  const match = color.match(/^#([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i)
+
+  if (!match) {
+    throw new Error(`Expected a hex color, received ${color}`)
+  }
+
+  return [
+    Number.parseInt(match[1], 16),
+    Number.parseInt(match[2], 16),
+    Number.parseInt(match[3], 16),
+  ]
+}
+
+function linearizeChannel(channel: number) {
+  const value = channel / 255
+  return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+}
+
+function relativeLuminance([red, green, blue]: Rgb) {
+  return (
+    0.2126 * linearizeChannel(red) +
+    0.7152 * linearizeChannel(green) +
+    0.0722 * linearizeChannel(blue)
+  )
+}
+
+function contrastRatio(foreground: string, background: string) {
+  const foregroundLuminance = relativeLuminance(hexToRgb(foreground))
+  const backgroundLuminance = relativeLuminance(hexToRgb(background))
+  const lighter = Math.max(foregroundLuminance, backgroundLuminance)
+  const darker = Math.min(foregroundLuminance, backgroundLuminance)
+
+  return (lighter + 0.05) / (darker + 0.05)
+}
 
 const { trackPlan } = vi.hoisted(() => ({
   trackPlan: vi.fn(),
@@ -33,10 +74,54 @@ const { usePlanContentMock } = vi.hoisted(() => ({
         availability: 'included',
       },
       {
+        id: 'backup_plan_multi_repository',
+        plan: 'pro',
+        label: 'Multi-repository backup',
+        description: 'Back up to multiple destinations from one config.',
+        availability: 'included',
+      },
+      {
+        id: 'backup_plan_mixed_sources',
+        plan: 'pro',
+        label: 'Multi-source backup',
+        description:
+          'Back up local, SSH, managed-agent, and database sources from one backup definition.',
+        availability: 'included',
+      },
+      {
+        id: 'rclone',
+        plan: 'pro',
+        label: 'Cloud storage with rclone',
+        description:
+          'Mirror repositories to managed rclone remotes and use direct Borg 2 rclone targets.',
+        availability: 'included',
+      },
+      {
+        id: 'managed_agents',
+        plan: 'pro',
+        label: 'Managed agents',
+        description: 'Enroll machines as agents and back them up without opening inbound SSH.',
+        availability: 'included',
+      },
+      {
+        id: 'multi_source_policies',
+        plan: 'pro',
+        label: 'Multi-source backup',
+        description: 'Back up remote and local sources from one backup definition.',
+        availability: 'coming_soon',
+      },
+      {
         id: 'backup_reports',
         plan: 'pro',
         label: 'Backup reports',
         description: 'Generate daily, weekly, monthly, or custom backup reports.',
+        availability: 'coming_soon',
+      },
+      {
+        id: 'rclone_support',
+        plan: 'pro',
+        label: 'Rclone support',
+        description: 'Use Rclone-backed destinations as backup targets.',
         availability: 'coming_soon',
       },
       {
@@ -107,6 +192,10 @@ vi.mock('../../hooks/useAuth', () => ({
 
 const featureMap = {
   borg_v2: 'pro',
+  backup_plan_multi_repository: 'pro',
+  backup_plan_mixed_sources: 'pro',
+  rclone: 'pro',
+  managed_agents: 'pro',
   multi_user: 'community',
   extra_users: 'pro',
 } as const
@@ -114,6 +203,18 @@ const featureMap = {
 describe('PlanInfoDrawer', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  it('keeps plan drawer text colors above WCAG AA contrast in light and dark themes', () => {
+    const minimumNormalTextContrast = 4.5
+
+    for (const muiTheme of [theme, darkTheme]) {
+      for (const pair of getPlanDrawerContrastPairs(muiTheme)) {
+        expect(contrastRatio(pair.foreground, pair.background), pair.name).toBeGreaterThanOrEqual(
+          minimumNormalTextContrast
+        )
+      }
+    }
   })
 
   it('shows upcoming features and tracks plan selection', async () => {
@@ -133,6 +234,21 @@ describe('PlanInfoDrawer', () => {
       selected_plan: 'enterprise',
     })
     expect(screen.getByText('Upcoming for Enterprise')).toBeInTheDocument()
+  })
+
+  it('falls back to community styling when a runtime plan value is unknown', () => {
+    renderWithProviders(
+      <PlanInfoDrawer
+        open={true}
+        onClose={vi.fn()}
+        plan={'free' as Plan}
+        initialSelectedPlan="pro"
+        features={featureMap}
+      />
+    )
+
+    expect(screen.getByText('Community')).toBeInTheDocument()
+    expect(screen.getByText('Upcoming for Pro')).toBeInTheDocument()
   })
 
   it('does not show a versioned roadmap section when the selected plan has no version-targeted features', () => {
@@ -204,6 +320,16 @@ describe('PlanInfoDrawer', () => {
     expect(screen.getByText('Borg v2 beta testing')).toBeInTheDocument()
     expect(screen.getByText('Up to 10 users')).toBeInTheDocument()
     expect(screen.getByText('Deployment on 3 servers')).toBeInTheDocument()
+    expect(screen.getByText('Multi-repository backup')).toBeInTheDocument()
+    expect(screen.getByText('Multi-source backup')).toBeInTheDocument()
+    expect(screen.getByText('Cloud storage with rclone')).toBeInTheDocument()
+    expect(screen.getByText('Managed agents')).toBeInTheDocument()
+    expect(screen.queryByText('backup_plan_multi_repository')).not.toBeInTheDocument()
+    expect(screen.queryByText('backup_plan_mixed_sources')).not.toBeInTheDocument()
+    expect(screen.queryByText('rclone')).not.toBeInTheDocument()
+    expect(screen.queryByText('managed_agents')).not.toBeInTheDocument()
+    expect(screen.queryByText('Rclone support')).not.toBeInTheDocument()
+    expect(screen.getAllByText('Multi-source backup')).toHaveLength(1)
 
     await user.click(screen.getByText('Enterprise'))
 

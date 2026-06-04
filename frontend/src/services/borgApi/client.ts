@@ -55,6 +55,11 @@ export interface PruneOptions {
   dry_run?: boolean
 }
 
+export interface CheckRepositoryOptions {
+  maxDuration?: number
+  checkExtraFlags?: string | null
+}
+
 export class BorgApiClient {
   /** Version-aware URL prefix — the single routing decision point. */
   private readonly v: string
@@ -66,18 +71,18 @@ export class BorgApiClient {
   constructor(repo: Repository) {
     this.repoId = repo.id
     this.repoPath = typeof repo.path === 'string' ? repo.path : undefined
-    this.v = isV2Repo(repo) ? '/v2' : ''
+    this.v = repo.execution_target === 'agent' ? '' : isV2Repo(repo) ? '/v2' : ''
   }
 
   // ── Pre-creation (no repo ID yet) ────────────────────────────────────────
 
   static createRepository(data: Omit<Repository, 'id'>) {
-    const v = isV2Repo(data) ? '/v2' : ''
+    const v = data.execution_target === 'agent' ? '' : isV2Repo(data) ? '/v2' : ''
     return httpClient.post(`${v}/repositories/`, data)
   }
 
   static importRepository(data: Omit<Repository, 'id'>) {
-    const v = isV2Repo(data) ? '/v2' : ''
+    const v = data.execution_target === 'agent' ? '' : isV2Repo(data) ? '/v2' : ''
     return httpClient.post(`${v}/repositories/import`, data)
   }
 
@@ -167,15 +172,22 @@ export class BorgApiClient {
     return httpClient.post(`/repositories/${this.repoId}/compact`)
   }
 
-  checkRepository(maxDuration?: number) {
+  checkRepository(optionsOrMaxDuration?: number | CheckRepositoryOptions) {
+    const options =
+      typeof optionsOrMaxDuration === 'number'
+        ? { maxDuration: optionsOrMaxDuration }
+        : optionsOrMaxDuration || {}
+    const payload = {
+      ...(options.maxDuration !== undefined && { max_duration: options.maxDuration }),
+      ...(options.checkExtraFlags !== undefined && { check_extra_flags: options.checkExtraFlags }),
+    }
+
     if (this.v === '/v2') {
       return httpClient.post(`/v2/backup/check`, {
         repository_id: this.repoId,
-        ...(maxDuration !== undefined && { max_duration: maxDuration }),
+        ...payload,
       })
     }
-    return httpClient.post(`/repositories/${this.repoId}/check`, {
-      ...(maxDuration !== undefined && { max_duration: maxDuration }),
-    })
+    return httpClient.post(`/repositories/${this.repoId}/check`, payload)
   }
 }

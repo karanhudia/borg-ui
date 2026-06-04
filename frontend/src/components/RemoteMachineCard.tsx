@@ -12,6 +12,7 @@ import {
   CheckCircle,
   XCircle,
   AlertTriangle,
+  Activity,
   Edit,
   Trash2,
   RefreshCw,
@@ -57,6 +58,7 @@ interface RemoteMachineCardProps {
   onRefreshStorage: (machine: RemoteMachine) => void
   onTestConnection: (machine: RemoteMachine) => void
   onDeployKey: (machine: RemoteMachine) => void
+  onRunDiagnostics?: (machine: RemoteMachine) => void
   canManageConnections?: boolean
 }
 
@@ -93,6 +95,7 @@ export default function RemoteMachineCard({
   onRefreshStorage,
   onTestConnection,
   onDeployKey,
+  onRunDiagnostics,
   canManageConnections = true,
 }: RemoteMachineCardProps) {
   const { t } = useTranslation()
@@ -177,7 +180,9 @@ export default function RemoteMachineCard({
                   lineHeight: 1,
                 }}
               >
-                {machine.status}
+                {t(`remoteMachineCard.status.${machine.status}`, {
+                  defaultValue: t('remoteMachineCard.status.unknown'),
+                })}
               </Typography>
             </Box>
 
@@ -305,7 +310,8 @@ export default function RemoteMachineCard({
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                   <Typography sx={{ fontSize: '0.58rem', color: 'text.disabled', lineHeight: 1 }}>
-                    {machine.storage.percent_used.toFixed(1)}% used
+                    {machine.storage.percent_used.toFixed(1)}
+                    {t('remoteMachine.percentUsed')}
                   </Typography>
                 </Box>
                 <Typography
@@ -316,7 +322,7 @@ export default function RemoteMachineCard({
                     fontVariantNumeric: 'tabular-nums',
                   }}
                 >
-                  {machine.storage.total_formatted} total
+                  {t('remoteMachine.total', { value: machine.storage.total_formatted })}
                 </Typography>
               </Box>
               <LinearProgress
@@ -489,6 +495,18 @@ export default function RemoteMachineCard({
                 <RefreshCw size={16} />
               </IconButton>
             </Tooltip>
+            {onRunDiagnostics && (
+              <Tooltip title={t('remoteMachine.actions.runDiagnostics')} arrow>
+                <IconButton
+                  size="small"
+                  aria-label={t('remoteMachine.actions.runDiagnostics')}
+                  onClick={() => onRunDiagnostics(machine)}
+                  sx={coloredIconBtnSx('warning')}
+                >
+                  <Activity size={16} />
+                </IconButton>
+              </Tooltip>
+            )}
             {canManageConnections && (
               <Tooltip title={t('remoteMachineCard.actions.deploy')} arrow>
                 <IconButton

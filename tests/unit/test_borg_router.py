@@ -477,6 +477,7 @@ def test_build_backup_create_command_uses_v2_shape():
         compression="zstd",
         exclude_patterns=["*.tmp"],
         custom_flags=["--one-file-system"],
+        upload_ratelimit_kib=None,
     )
 
 
@@ -638,6 +639,8 @@ def test_build_restore_extract_command_adds_strip_components_for_v1():
         "extract",
         "--progress",
         "--log-json",
+        "--umask",
+        "0022",
         "--remote-path",
         "/usr/bin/borg",
         "--bypass-lock",

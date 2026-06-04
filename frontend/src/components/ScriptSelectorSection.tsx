@@ -16,6 +16,7 @@ import ScriptParameterInputs, { ScriptParameter } from './ScriptParameterInputs'
 interface Script {
   id: number
   name: string
+  description?: string | null
   parameters?: ScriptParameter[] | null
 }
 
@@ -34,6 +35,10 @@ interface ScriptSelectorSectionProps {
   onPostParametersChange?: (params: Record<string, string>) => void
   disabled?: boolean
   size?: 'small' | 'medium'
+  title?: string
+  description?: string
+  runRepositoryScriptsLabel?: string
+  runRepositoryScriptsDescription?: string
 }
 
 const ScriptSelectorSection: React.FC<ScriptSelectorSectionProps> = ({
@@ -50,19 +55,77 @@ const ScriptSelectorSection: React.FC<ScriptSelectorSectionProps> = ({
   onPostParametersChange,
   disabled = false,
   size = 'medium',
+  title,
+  description,
+  runRepositoryScriptsLabel,
+  runRepositoryScriptsDescription,
 }) => {
   // Find selected scripts to get their parameters
   const { t } = useTranslation()
   const selectedPreScript = scripts.find((s) => s.id === preBackupScriptId)
   const selectedPostScript = scripts.find((s) => s.id === postBackupScriptId)
+  const noneLabel = t('scriptSelector.none')
+
+  const renderScriptOption = (script: Script) => (
+    <Box sx={{ minWidth: 0, width: '100%' }}>
+      <Typography
+        variant="body2"
+        title={script.name}
+        sx={{
+          fontWeight: 500,
+          lineHeight: 1.25,
+          overflowWrap: 'anywhere',
+          whiteSpace: 'normal',
+        }}
+      >
+        {script.name}
+      </Typography>
+      {script.description && (
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          title={script.description}
+          sx={{
+            display: 'block',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {script.description}
+        </Typography>
+      )}
+    </Box>
+  )
+
+  const renderSelectedScript = (script: Script | undefined) => {
+    if (!script) return <em>{noneLabel}</em>
+    return (
+      <Box sx={{ minWidth: 0 }}>
+        <Typography
+          component="span"
+          variant="body2"
+          title={script.name}
+          sx={{
+            display: 'block',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {script.name}
+        </Typography>
+      </Box>
+    )
+  }
 
   return (
     <Box sx={{ p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
       <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-        {t('scriptSelector.title')}
+        {title || t('scriptSelector.title')}
       </Typography>
       <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
-        {t('scriptSelector.subtitle')}
+        {description || t('scriptSelector.subtitle')}
       </Typography>
 
       <Stack spacing={2}>
@@ -75,17 +138,22 @@ const ScriptSelectorSection: React.FC<ScriptSelectorSectionProps> = ({
             onChange={(e) => onPreChange(e.target.value ? Number(e.target.value) : null)}
             label={t('scriptSelector.preBackup')}
             disabled={disabled}
+            renderValue={() => renderSelectedScript(selectedPreScript)}
+            SelectDisplayProps={{ title: selectedPreScript?.name || noneLabel }}
             sx={{
               fontSize: size === 'medium' ? '1.1rem' : '0.875rem',
               minHeight: size === 'medium' ? 56 : undefined,
+              '& .MuiSelect-select': {
+                minWidth: 0,
+              },
             }}
           >
             <MenuItem value="">
-              <em>{t('scriptSelector.none')}</em>
+              <em>{noneLabel}</em>
             </MenuItem>
             {scripts.map((script) => (
-              <MenuItem key={script.id} value={script.id}>
-                {script.name}
+              <MenuItem key={script.id} value={script.id} title={script.name}>
+                {renderScriptOption(script)}
               </MenuItem>
             ))}
           </Select>
@@ -115,17 +183,22 @@ const ScriptSelectorSection: React.FC<ScriptSelectorSectionProps> = ({
             onChange={(e) => onPostChange(e.target.value ? Number(e.target.value) : null)}
             label={t('scriptSelector.postBackup')}
             disabled={disabled}
+            renderValue={() => renderSelectedScript(selectedPostScript)}
+            SelectDisplayProps={{ title: selectedPostScript?.name || noneLabel }}
             sx={{
               fontSize: size === 'medium' ? '1.1rem' : '0.875rem',
               minHeight: size === 'medium' ? 56 : undefined,
+              '& .MuiSelect-select': {
+                minWidth: 0,
+              },
             }}
           >
             <MenuItem value="">
-              <em>{t('scriptSelector.none')}</em>
+              <em>{noneLabel}</em>
             </MenuItem>
             {scripts.map((script) => (
-              <MenuItem key={script.id} value={script.id}>
-                {script.name}
+              <MenuItem key={script.id} value={script.id} title={script.name}>
+                {renderScriptOption(script)}
               </MenuItem>
             ))}
           </Select>
@@ -156,9 +229,11 @@ const ScriptSelectorSection: React.FC<ScriptSelectorSectionProps> = ({
           }
           label={
             <Box>
-              <Typography variant="body2">{t('scriptSelector.runRepoScripts')}</Typography>
+              <Typography variant="body2">
+                {runRepositoryScriptsLabel || t('scriptSelector.runRepoScripts')}
+              </Typography>
               <Typography variant="caption" color="text.secondary">
-                {t('scriptSelector.runRepoScriptsDesc')}
+                {runRepositoryScriptsDescription || t('scriptSelector.runRepoScriptsDesc')}
               </Typography>
             </Box>
           }

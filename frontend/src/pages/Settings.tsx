@@ -20,6 +20,7 @@ import BetaFeaturesTab from '../components/BetaFeaturesTab'
 import MqttSettingsTab from '../components/MqttSettingsTab'
 import UsersTab from '../components/UsersTab'
 import SettingsTabContent from '../components/SettingsTabContent'
+import MonitoringReportsTab from '../components/MonitoringReportsTab'
 import Scripts from './Scripts'
 import Activity from './Activity'
 
@@ -61,6 +62,7 @@ const Settings: React.FC = () => {
       ...baseTabs,
       ...(canManageLicensing ? ['licensing'] : []),
       ...(canManageSystem ? ['system'] : []),
+      ...(canManageSystem ? ['monitoring'] : []),
       ...(mqttBetaEnabled && canManageMqtt ? ['mqtt'] : []),
       ...(canManageBeta ? ['beta'] : []),
       ...(canManageCache ? ['cache'] : []),
@@ -152,6 +154,13 @@ const Settings: React.FC = () => {
       {currentTabId === 'system' && canManageSystem && (
         <SettingsTabContent>
           <SystemSettingsTab />
+        </SettingsTabContent>
+      )}
+
+      {/* Monitoring & Reports Tab - Admin Only */}
+      {currentTabId === 'monitoring' && canManageSystem && (
+        <SettingsTabContent>
+          <MonitoringReportsTab />
         </SettingsTabContent>
       )}
 

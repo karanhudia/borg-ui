@@ -6,10 +6,12 @@ and script execution history.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
-from typing import List, Optional
+from typing import Dict, List, Optional
 from pydantic import BaseModel
 from datetime import datetime
+from collections import Counter
 from pathlib import Path
 import os
 import hashlib
@@ -21,6 +23,8 @@ from app.database.models import (
     ScriptExecution,
     Repository,
     ScheduledJob,
+    BackupPlan,
+    BackupPlanScript,
     User,
 )
 from app.core.security import get_current_user, encrypt_secret
@@ -159,6 +163,67 @@ def read_script_file(file_path: Path) -> str:
     return full_path.read_text()
 
 
+def compute_script_usage_counts(
+    db: Session, script_ids: Optional[List[int]] = None
+) -> Dict[int, int]:
+    """Sum a script's references across repositories, backup plans, and scheduled jobs.
+
+    The stored ``Script.usage_count`` field only tracks ``RepositoryScript`` assignments
+    and is not updated when a script is wired into a ``BackupPlan`` or ``ScheduledJob``
+    pre/post hook. The Script Library UI shows a single "places used" number, so the
+    listing endpoints derive it on the fly from the source-of-truth tables.
+    """
+
+    def _ref_counts(column):
+        q = db.query(column, func.count()).filter(column.isnot(None))
+        if script_ids is not None:
+            q = q.filter(column.in_(script_ids))
+        return dict(q.group_by(column).all())
+
+    def _backup_plan_ref_counts() -> Dict[int, int]:
+        allowed_ids = set(script_ids) if script_ids is not None else None
+        refs: set[tuple[int, str, int]] = set()
+
+        def add_ref(plan_id: int, hook_type: str, script_id: Optional[int]) -> None:
+            if script_id is None:
+                return
+            if allowed_ids is not None and script_id not in allowed_ids:
+                return
+            refs.add((plan_id, hook_type, script_id))
+
+        for plan_id, hook_type, script_id in db.query(
+            BackupPlanScript.backup_plan_id,
+            BackupPlanScript.hook_type,
+            BackupPlanScript.script_id,
+        ).filter(BackupPlanScript.script_id.isnot(None)):
+            add_ref(plan_id, hook_type, script_id)
+
+        for plan_id, script_id in db.query(
+            BackupPlan.id, BackupPlan.pre_backup_script_id
+        ).filter(BackupPlan.pre_backup_script_id.isnot(None)):
+            add_ref(plan_id, "pre-backup", script_id)
+
+        for plan_id, script_id in db.query(
+            BackupPlan.id, BackupPlan.post_backup_script_id
+        ).filter(BackupPlan.post_backup_script_id.isnot(None)):
+            add_ref(plan_id, "post-backup", script_id)
+
+        return dict(Counter(script_id for _, _, script_id in refs))
+
+    sources = (
+        _ref_counts(RepositoryScript.script_id),
+        _backup_plan_ref_counts(),
+        _ref_counts(ScheduledJob.pre_backup_script_id),
+        _ref_counts(ScheduledJob.post_backup_script_id),
+    )
+
+    totals: Dict[int, int] = {}
+    for source in sources:
+        for sid, count in source.items():
+            totals[sid] = totals.get(sid, 0) + count
+    return totals
+
+
 # API Endpoints
 
 
@@ -190,6 +255,8 @@ async def list_scripts(
 
     scripts = query.order_by(Script.created_at.desc()).all()
 
+    usage_counts = compute_script_usage_counts(db, script_ids=[s.id for s in scripts])
+
     return [
         ScriptResponse(
             id=script.id,
@@ -199,7 +266,7 @@ async def list_scripts(
             category=script.category,
             timeout=script.timeout,
             run_on=script.run_on,
-            usage_count=script.usage_count,
+            usage_count=usage_counts.get(script.id, 0),
             is_template=script.is_template,
             created_at=script.created_at,
             updated_at=script.updated_at,
@@ -293,6 +360,8 @@ async def get_script(
         for ex in executions
     ]
 
+    usage_counts = compute_script_usage_counts(db, script_ids=[script.id])
+
     return ScriptDetailResponse(
         id=script.id,
         name=script.name,
@@ -301,7 +370,7 @@ async def get_script(
         category=script.category,
         timeout=script.timeout,
         run_on=script.run_on,
-        usage_count=script.usage_count,
+        usage_count=usage_counts.get(script.id, 0),
         is_template=script.is_template,
         created_at=script.created_at,
         updated_at=script.updated_at,
@@ -532,6 +601,8 @@ async def update_script(
         "Script updated", script_id=script.id, name=script.name, user_id=current_user.id
     )
 
+    usage_counts = compute_script_usage_counts(db, script_ids=[script.id])
+
     return ScriptResponse(
         id=script.id,
         name=script.name,
@@ -540,7 +611,7 @@ async def update_script(
         category=script.category,
         timeout=script.timeout,
         run_on=script.run_on,
-        usage_count=script.usage_count,
+        usage_count=usage_counts.get(script.id, 0),
         is_template=script.is_template,
         created_at=script.created_at,
         updated_at=script.updated_at,
@@ -650,6 +721,43 @@ async def delete_script(
             "Cleared script reference from schedules",
             script_id=script_id,
             count=len(schedules_using_script),
+        )
+
+    # Clear backup plan script references (BackupPlan pre/post script FKs have no DB cascade)
+    backup_plans_using_script = (
+        db.query(BackupPlan)
+        .filter(
+            (BackupPlan.pre_backup_script_id == script_id)
+            | (BackupPlan.post_backup_script_id == script_id)
+        )
+        .all()
+    )
+    for backup_plan in backup_plans_using_script:
+        if backup_plan.pre_backup_script_id == script_id:
+            backup_plan.pre_backup_script_id = None
+            backup_plan.pre_backup_script_parameters = None
+        if backup_plan.post_backup_script_id == script_id:
+            backup_plan.post_backup_script_id = None
+            backup_plan.post_backup_script_parameters = None
+    if backup_plans_using_script:
+        db.flush()
+        logger.info(
+            "Cleared script reference from backup plans",
+            script_id=script_id,
+            count=len(backup_plans_using_script),
+        )
+
+    backup_plan_script_count = (
+        db.query(BackupPlanScript)
+        .filter(BackupPlanScript.script_id == script_id)
+        .delete(synchronize_session=False)
+    )
+    if backup_plan_script_count:
+        db.flush()
+        logger.info(
+            "Cleared script hook assignments from backup plans",
+            script_id=script_id,
+            count=backup_plan_script_count,
         )
 
     # Delete script file

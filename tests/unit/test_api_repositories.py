@@ -19,16 +19,25 @@ import json
 import os
 from datetime import datetime
 from unittest.mock import AsyncMock, patch
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from sqlalchemy import text
+from app.core.agent_auth import AGENT_AUTH_HEADER
+from app.core.security import get_password_hash
 from app.database.models import (
+    AgentJob,
+    AgentMachine,
     CheckJob,
+    CompactJob,
     LicensingState,
+    PruneJob,
     Repository,
     RestoreCheckJob,
     ScheduledJob,
     SSHConnection,
     SystemSettings,
 )
+from app.api.repositories import _build_repository_path_from_connection
 
 
 def _discard_background_coro(coro):
@@ -41,15 +50,24 @@ def _enable_borg_v2(test_db):
         settings_row = SystemSettings()
         test_db.add(settings_row)
 
+    _set_plan(test_db, "pro")
+
+
+def _set_plan(test_db, plan: str) -> None:
     state = test_db.query(LicensingState).first()
     if state is None:
         state = LicensingState(instance_id="test-instance-v2-repository-api")
         test_db.add(state)
 
-    state.plan = "pro"
+    state.plan = plan
     state.status = "active"
     state.is_trial = False
     test_db.commit()
+
+
+@pytest.fixture(autouse=True)
+def _enable_paid_repository_features(test_db):
+    _set_plan(test_db, "pro")
 
 
 def _base_repository_payload(**overrides):
@@ -62,6 +80,44 @@ def _base_repository_payload(**overrides):
     }
     payload.update(overrides)
     return payload
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("ssh_path_prefix", "raw_path", "expected_path"),
+    [
+        ("/.", "/xxx/yyy", "ssh://backup@rsync.example.com:22/./xxx/yyy"),
+        ("/./xxx", "/xxx/yyy", "ssh://backup@rsync.example.com:22/./xxx/yyy"),
+    ],
+)
+def test_build_repository_path_from_connection_preserves_borg_slashdot_prefix(
+    test_db, ssh_path_prefix, raw_path, expected_path
+):
+    connection = SSHConnection(
+        host="rsync.example.com",
+        username="backup",
+        port=22,
+        ssh_path_prefix=ssh_path_prefix,
+    )
+    test_db.add(connection)
+    test_db.commit()
+    test_db.refresh(connection)
+
+    assert (
+        _build_repository_path_from_connection(raw_path, connection.id, test_db)
+        == expected_path
+    )
+
+
+def _agent_machine_with_capabilities(*capabilities: str) -> AgentMachine:
+    return AgentMachine(
+        name="Agent",
+        agent_id="agt_repo_ops",
+        token_hash=get_password_hash("borgui_agent_secret"),
+        token_prefix="borgui_agent_secret"[:20],
+        status="online",
+        capabilities=list(capabilities),
+    )
 
 
 @pytest.mark.unit
@@ -376,6 +432,642 @@ class TestRepositoriesCreate:
 
         assert response.status_code == 200
 
+    def test_create_agent_repository_queues_init_and_waits_before_success(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Laptop",
+            agent_id="agt_laptop",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+            capabilities=["repository.init"],
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+        dispatch_init = AsyncMock(return_value=True)
+        wait_for_init = AsyncMock(return_value={"status": "completed"})
+
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ) as initialize,
+            patch(
+                "app.api.repositories.wait_for_agent_repository_operation_job",
+                wait_for_init,
+            ),
+            patch(
+                "app.api.repositories.dispatch_agent_job_best_effort",
+                dispatch_init,
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Agent Repo",
+                    "path": "/agent/repo",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "source_directories": ["/home/user/docs"],
+                    "execution_target": "agent",
+                    "agent_machine_id": agent.id,
+                },
+                headers=admin_headers,
+            )
+
+        wait_for_init.assert_awaited_once()
+        assert response.status_code == 200
+        initialize.assert_not_awaited()
+        agent_job = test_db.query(AgentJob).one()
+        assert agent_job.job_type == "repository"
+        assert agent_job.payload["job_kind"] == "repository.init"
+        assert agent_job.payload["repository"]["path"] == "/agent/repo"
+        assert agent_job.payload["operation"]["encryption"] == "none"
+        repo = test_db.query(Repository).filter_by(name="Agent Repo").first()
+        dispatch_init.assert_awaited_once_with(
+            test_db, agent_job, repository_id=repo.id
+        )
+        wait_for_init.assert_awaited_once_with(
+            test_db, agent_job.id, timeout_seconds=300
+        )
+        assert repo.execution_target == "agent"
+        assert repo.executor_type == "agent"
+        assert repo.agent_machine_id == agent.id
+        assert repo.path == "/agent/repo"
+
+    def test_create_agent_repository_requires_pro_plan(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _set_plan(test_db, "community")
+        agent = AgentMachine(
+            name="Laptop",
+            agent_id="agt_laptop_community",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+            capabilities=["repository.init"],
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ) as initialize,
+            patch(
+                "app.api.repositories.wait_for_agent_repository_operation_job",
+                new=AsyncMock(return_value={"status": "completed"}),
+            ),
+            patch(
+                "app.api.repositories.dispatch_agent_job_best_effort",
+                new=AsyncMock(return_value=True),
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Agent Repo",
+                    "path": "/agent/repo",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "source_directories": ["/home/user/docs"],
+                    "execution_target": "agent",
+                    "agent_machine_id": agent.id,
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 403
+        assert response.json()["detail"]["feature"] == "managed_agents"
+        initialize.assert_not_awaited()
+        assert test_db.query(Repository).filter_by(name="Agent Repo").first() is None
+
+    def test_create_agent_repository_init_failure_deletes_record(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Laptop",
+            agent_id="agt_laptop_init_failure",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+            capabilities=["repository.init"],
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+        wait_for_init = AsyncMock(
+            side_effect=HTTPException(
+                status_code=502,
+                detail={
+                    "key": "backend.errors.agents.repositoryOperationFailed",
+                    "message": "agent init failed",
+                },
+            )
+        )
+
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ) as initialize,
+            patch(
+                "app.api.repositories.wait_for_agent_repository_operation_job",
+                wait_for_init,
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Agent Init Failure Repo",
+                    "path": "/agent/fails-init",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "source_directories": ["/home/user/docs"],
+                    "execution_target": "agent",
+                    "agent_machine_id": agent.id,
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 502
+        initialize.assert_not_awaited()
+        assert (
+            test_db.query(Repository).filter_by(name="Agent Init Failure Repo").first()
+            is None
+        )
+        agent_job = test_db.query(AgentJob).one()
+        assert agent_job.job_type == "repository"
+        assert agent_job.payload["job_kind"] == "repository.init"
+        assert agent_job.payload["repository"]["path"] == "/agent/fails-init"
+        assert agent_job.payload["operation"]["encryption"] == "none"
+
+    def test_create_agent_repository_unexpected_init_failure_deletes_record(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Laptop",
+            agent_id="agt_laptop_init_crash",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+            capabilities=["repository.init"],
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ) as initialize,
+            patch(
+                "app.api.repositories.wait_for_agent_repository_operation_job",
+                new=AsyncMock(side_effect=RuntimeError("agent init crashed")),
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Agent Init Crash Repo",
+                    "path": "/agent/init-crash",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "execution_target": "agent",
+                    "agent_machine_id": agent.id,
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 500
+        initialize.assert_not_awaited()
+        assert (
+            test_db.query(Repository).filter_by(name="Agent Init Crash Repo").first()
+            is None
+        )
+        agent_job = test_db.query(AgentJob).one()
+        assert agent_job.payload["job_kind"] == "repository.init"
+
+    def test_create_agent_repository_without_source_paths(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Laptop",
+            agent_id="agt_laptop_no_sources",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+            capabilities=["repository.init"],
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ) as initialize,
+            patch(
+                "app.api.repositories.wait_for_agent_repository_operation_job",
+                new=AsyncMock(return_value={"status": "completed"}),
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Agent Repo Without Sources",
+                    "path": "/agent/repo-no-sources",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "execution_target": "agent",
+                    "agent_machine_id": agent.id,
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        initialize.assert_not_awaited()
+        repo = (
+            test_db.query(Repository).filter_by(name="Agent Repo Without Sources").one()
+        )
+        assert repo.execution_target == "agent"
+        assert repo.executor_type == "agent"
+        assert repo.agent_machine_id == agent.id
+        assert repo.source_directories is None
+        assert repo.source_locations is None
+        assert repo.source_ssh_connection_id is None
+
+    def test_create_agent_repository_rejects_ssh_target_axis(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Pi Agent",
+            agent_id="agt_pi",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+        )
+        connection = SSHConnection(host="pi.local", username="borg", port=22)
+        test_db.add_all([agent, connection])
+        test_db.commit()
+        test_db.refresh(agent)
+        test_db.refresh(connection)
+
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ) as initialize,
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Pi Agent SSH Repo",
+                    "path": "/backups/pi",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "source_directories": ["/home/pi"],
+                    "executor_type": "agent",
+                    "execution_target": "local",
+                    "agent_machine_id": agent.id,
+                    "connection_id": connection.id,
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.repo.agentRepositorySshUnsupported"
+        )
+        initialize.assert_not_awaited()
+        assert (
+            test_db.query(Repository).filter_by(name="Pi Agent SSH Repo").first()
+            is None
+        )
+
+    def test_create_agent_repository_without_source_paths_remains_supported(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Path Owner",
+            agent_id="agt_path_owner",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+            capabilities=["repository.init"],
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ) as initialize,
+            patch(
+                "app.api.repositories.wait_for_agent_repository_operation_job",
+                new=AsyncMock(return_value={"status": "completed"}),
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Agent Empty Source Repo",
+                    "path": "/backups/agent-empty",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "executor_type": "agent",
+                    "agent_machine_id": agent.id,
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        initialize.assert_not_awaited()
+        repo = test_db.query(Repository).filter_by(name="Agent Empty Source Repo").one()
+        assert repo.executor_type == "agent"
+        assert repo.execution_target == "agent"
+        assert repo.connection_id is None
+        assert repo.repository_type == "local"
+
+    def test_update_agent_repository_rejects_ssh_target(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Update Agent",
+            agent_id="agt_update",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+        )
+        connection = SSHConnection(host="update.local", username="borg", port=22)
+        repo = Repository(
+            name="Update Agent Repo",
+            path="/agent/repo",
+            encryption="none",
+            compression="lz4",
+            executor_type="agent",
+            execution_target="agent",
+            agent_machine_id=1,
+            repository_type="local",
+        )
+        test_db.add_all([agent, connection, repo])
+        test_db.commit()
+        repo.agent_machine_id = agent.id
+        test_db.commit()
+        test_db.refresh(repo)
+        test_db.refresh(connection)
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}",
+            json={"connection_id": connection.id},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.repo.agentRepositorySshUnsupported"
+        )
+        test_db.refresh(repo)
+        assert repo.connection_id is None
+        assert repo.repository_type == "local"
+
+    @pytest.mark.parametrize(
+        "endpoint,request_body,job_model,job_kind,capability",
+        [
+            (
+                "check",
+                {"max_duration": 600},
+                CheckJob,
+                "repository.check",
+                "repository.check",
+            ),
+            ("compact", None, CompactJob, "repository.compact", "repository.compact"),
+            (
+                "prune",
+                {"keep_daily": 7, "dry_run": False},
+                PruneJob,
+                "repository.prune",
+                "repository.prune",
+            ),
+        ],
+    )
+    def test_agent_repository_maintenance_routes_queue_agent_job(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+        endpoint,
+        request_body,
+        job_model,
+        job_kind,
+        capability,
+    ):
+        agent = _agent_machine_with_capabilities(capability)
+        repo = Repository(
+            name=f"Agent {endpoint} Repo",
+            path=f"/agent/{endpoint}/repo",
+            encryption="none",
+            compression="lz4",
+            executor_type="agent",
+            execution_target="agent",
+            agent_machine_id=1,
+            repository_type="local",
+        )
+        test_db.add_all([agent, repo])
+        test_db.commit()
+        repo.agent_machine_id = agent.id
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with (
+            patch(
+                "app.api.repositories.BorgRouter.check", new_callable=AsyncMock
+            ) as check,
+            patch(
+                "app.api.repositories.BorgRouter.compact", new_callable=AsyncMock
+            ) as compact,
+            patch(
+                "app.api.repositories.BorgRouter.prune", new_callable=AsyncMock
+            ) as prune,
+        ):
+            response = test_client.post(
+                f"/api/repositories/{repo.id}/{endpoint}",
+                json=request_body,
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        maintenance_job = (
+            test_db.query(job_model).filter_by(repository_id=repo.id).one()
+        )
+        agent_job = test_db.query(AgentJob).one()
+        assert response.json()["job_id"] == maintenance_job.id
+        assert agent_job.agent_machine_id == agent.id
+        assert agent_job.payload["job_kind"] == job_kind
+        assert agent_job.payload["repository"]["path"] == repo.path
+        assert agent_job.payload["operation"]["maintenance_job"] == {
+            "kind": endpoint,
+            "id": maintenance_job.id,
+        }
+        check.assert_not_called()
+        compact.assert_not_called()
+        prune.assert_not_called()
+
+    def test_agent_repository_info_queues_agent_job_and_returns_existing_shape(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = _agent_machine_with_capabilities("repository.info")
+        repo = Repository(
+            name="Agent Info Repo",
+            path="/agent/info/repo",
+            encryption="none",
+            compression="lz4",
+            executor_type="agent",
+            execution_target="agent",
+            agent_machine_id=1,
+            repository_type="local",
+        )
+        test_db.add_all([agent, repo])
+        test_db.commit()
+        repo.agent_machine_id = agent.id
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with (
+            patch(
+                "app.api.repositories.wait_for_agent_repository_operation_job",
+                new=AsyncMock(
+                    return_value={
+                        "data": {
+                            "repository": {"id": "abc"},
+                            "cache": {},
+                            "encryption": {"mode": "none"},
+                        }
+                    }
+                ),
+            ) as wait_for_agent,
+            patch(
+                "app.api.repositories._run_repository_command",
+                new=AsyncMock(return_value=(0, b"{}", b"")),
+            ) as run_local,
+        ):
+            response = test_client.get(
+                f"/api/repositories/{repo.id}/info", headers=admin_headers
+            )
+
+        assert response.status_code == 200
+        assert response.json()["info"]["repository"] == {"id": "abc"}
+        agent_job = test_db.query(AgentJob).one()
+        assert agent_job.payload["job_kind"] == "repository.info"
+        wait_for_agent.assert_awaited_once_with(test_db, agent_job.id)
+        run_local.assert_not_called()
+
+    def test_agent_repository_list_archives_queues_agent_job(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = _agent_machine_with_capabilities("repository.list_archives")
+        repo = Repository(
+            name="Agent Archives Repo",
+            path="/agent/archives/repo",
+            encryption="none",
+            compression="lz4",
+            executor_type="agent",
+            execution_target="agent",
+            agent_machine_id=1,
+            repository_type="local",
+        )
+        test_db.add_all([agent, repo])
+        test_db.commit()
+        repo.agent_machine_id = agent.id
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch(
+            "app.api.repositories.wait_for_agent_repository_operation_job",
+            new=AsyncMock(return_value={"data": {"archives": [{"name": "archive-1"}]}}),
+        ) as wait_for_agent:
+            response = test_client.get(
+                f"/api/repositories/{repo.id}/archives", headers=admin_headers
+            )
+
+        assert response.status_code == 200
+        assert response.json()["archives"][0]["name"] == "archive-1"
+        agent_job = test_db.query(AgentJob).one()
+        assert agent_job.payload["job_kind"] == "repository.list_archives"
+        wait_for_agent.assert_awaited_once_with(test_db, agent_job.id)
+
+    def test_agent_job_completion_updates_repository_maintenance_job(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        raw_token = "borgui_agent_secret"
+        agent = AgentMachine(
+            name="Agent Complete",
+            agent_id="agt_complete",
+            token_hash=get_password_hash(raw_token),
+            token_prefix=raw_token[:20],
+            status="online",
+            capabilities=["repository.check"],
+        )
+        repo = Repository(
+            name="Agent Complete Repo",
+            path="/agent/complete/repo",
+            encryption="none",
+            compression="lz4",
+            executor_type="agent",
+            execution_target="agent",
+            agent_machine_id=1,
+            repository_type="local",
+        )
+        test_db.add_all([agent, repo])
+        test_db.commit()
+        repo.agent_machine_id = agent.id
+        check_job = CheckJob(repository_id=repo.id, repository_path=repo.path)
+        test_db.add(check_job)
+        test_db.commit()
+        test_db.refresh(check_job)
+        agent_job = AgentJob(
+            agent_machine_id=agent.id,
+            job_type="repository",
+            status="running",
+            payload={
+                "job_kind": "repository.check",
+                "operation": {"maintenance_job": {"kind": "check", "id": check_job.id}},
+            },
+        )
+        test_db.add(agent_job)
+        test_db.commit()
+        test_db.refresh(agent_job)
+
+        response = test_client.post(
+            f"/api/agents/jobs/{agent_job.id}/complete",
+            json={"result": {"return_code": 0}},
+            headers={AGENT_AUTH_HEADER: f"Bearer {raw_token}"},
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(check_job)
+        test_db.refresh(repo)
+        assert check_job.status == "completed"
+        assert check_job.progress == 100
+        assert repo.last_check is not None
+
     def test_create_repository_missing_name(
         self, test_client: TestClient, admin_headers
     ):
@@ -444,24 +1136,136 @@ class TestRepositoriesCreate:
 
         assert response.status_code == 200
 
+    def test_create_repository_with_multiple_source_locations(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Repositories can persist source groups from multiple machines."""
+        source_a = SSHConnection(host="server-a.example", username="backup-a", port=22)
+        source_b = SSHConnection(
+            host="server-b.example", username="backup-b", port=2222
+        )
+        test_db.add_all([source_a, source_b])
+        test_db.commit()
+        test_db.refresh(source_a)
+        test_db.refresh(source_b)
+        source_locations = [
+            {
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "agent_machine_id": None,
+                "paths": ["/srv/app"],
+            },
+            {
+                "source_type": "remote",
+                "source_ssh_connection_id": source_a.id,
+                "agent_machine_id": None,
+                "paths": ["/home/app/data"],
+            },
+            {
+                "source_type": "remote",
+                "source_ssh_connection_id": source_b.id,
+                "agent_machine_id": None,
+                "paths": ["/var/lib/service"],
+            },
+        ]
+
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Grouped Source Repo",
+                    "path": "/tmp/grouped-source",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "repository_type": "local",
+                    "source_directories": [
+                        "/srv/app",
+                        "/home/app/data",
+                        "/var/lib/service",
+                    ],
+                    "source_locations": source_locations,
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        repo = (
+            test_db.query(Repository)
+            .filter(Repository.name == "Grouped Source Repo")
+            .one()
+        )
+        assert json.loads(repo.source_directories) == [
+            "/srv/app",
+            "/home/app/data",
+            "/var/lib/service",
+        ]
+        assert repo.source_ssh_connection_id is None
+        assert json.loads(repo.source_locations) == source_locations
+
     def test_create_repository_with_exclude_patterns(
         self, test_client: TestClient, admin_headers
     ):
         """Test creating repository with exclude patterns"""
-        response = test_client.post(
-            "/api/repositories/",
-            json={
-                "name": "Exclude Patterns Repo",
-                "path": "/tmp/exclude-repo",
-                "encryption": "none",
-                "compression": "lz4",
-                "repository_type": "local",
-                "exclude_patterns": ["*.tmp", "*.cache", "node_modules/"],
-            },
-            headers=admin_headers,
-        )
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Exclude Patterns Repo",
+                    "path": "/tmp/exclude-repo",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "repository_type": "local",
+                    "exclude_patterns": ["*.tmp", "*.cache", "node_modules/"],
+                },
+                headers=admin_headers,
+            )
 
-        assert response.status_code == 400
+        assert response.status_code == 200
+
+    def test_create_repository_without_source_fields_stays_storage_only(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Test basic repository creation does not persist legacy backup source fields"""
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Storage Only Repo",
+                    "path": "/tmp/storage-only-repo",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "repository_type": "local",
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        repo = (
+            test_db.query(Repository)
+            .filter(Repository.name == "Storage Only Repo")
+            .one()
+        )
+        assert repo.source_directories is None
+        assert repo.exclude_patterns is None
+        assert repo.source_ssh_connection_id is None
 
     def test_create_repository_validation_error(
         self, test_client: TestClient, admin_headers
@@ -539,7 +1343,7 @@ class TestRepositoriesCreate:
         ) as mock_prune:
             response = test_client.post(
                 f"/api/repositories/{repo.id}/prune",
-                json={"keep_daily": 7},
+                json={"keep_daily": 7, "dry_run": True},
                 headers=admin_headers,
             )
 
@@ -703,6 +1507,40 @@ class TestRepositoriesUpdate:
         test_db.refresh(repo)
         assert repo.source_ssh_connection_id is None
         assert json.loads(repo.source_directories) == ["/local/data"]
+
+    def test_update_repository_empty_source_lists_clear_legacy_source_settings(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Test empty source and exclude lists remove legacy source settings"""
+        repo = Repository(
+            name="Legacy Source Repo",
+            path="/tmp/legacy-source-repo",
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+            source_ssh_connection_id=1,
+            source_directories=json.dumps(["/remote/data"]),
+            exclude_patterns=json.dumps(["*.tmp"]),
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}",
+            json={
+                "source_connection_id": None,
+                "source_directories": [],
+                "exclude_patterns": [],
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(repo)
+        assert repo.source_ssh_connection_id is None
+        assert repo.source_directories is None
+        assert repo.exclude_patterns is None
 
     def test_update_repository_type_local_to_ssh(
         self, test_client: TestClient, admin_headers, test_db
@@ -1064,6 +1902,49 @@ class TestRepositoriesDelete:
         )
 
         assert response.status_code == 200
+
+    def test_delete_observe_repository_with_restore_check_jobs(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Deleting observe-only repositories should clean up restore-check jobs."""
+        test_db.execute(text("PRAGMA foreign_keys=ON"))
+        test_db.commit()
+
+        repo = Repository(
+            name="Delete Observe Repo",
+            path="/tmp/delete-observe-repo",
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+            mode="observe",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        restore_check_job = RestoreCheckJob(
+            repository_id=repo.id,
+            repository_path=repo.path,
+            archive_name="archive-2026-05-31",
+            status="completed",
+            started_at=datetime.utcnow(),
+            completed_at=datetime.utcnow(),
+        )
+        test_db.add(restore_check_job)
+        test_db.commit()
+        repo_id = repo.id
+
+        response = test_client.delete(
+            f"/api/repositories/{repo_id}", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        assert (
+            test_db.query(RestoreCheckJob)
+            .filter(RestoreCheckJob.repository_id == repo_id)
+            .count()
+            == 0
+        )
 
     def test_delete_nonexistent_repository(
         self, test_client: TestClient, admin_headers
@@ -1750,6 +2631,84 @@ class TestRepositoriesJobStatus:
 
 
 @pytest.mark.unit
+class TestRepositoryCheck:
+    """Test repository check endpoints"""
+
+    def test_start_check_stores_extra_flags(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Manual repository checks should store advanced check flags on the job."""
+        repo = Repository(
+            name="Test Repo",
+            path="/tmp/test",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch(
+            "app.api.repositories.start_background_maintenance_job"
+        ) as mock_start:
+            mock_start.return_value = CheckJob(
+                id=42,
+                repository_id=repo.id,
+                status="pending",
+                max_duration=0,
+                extra_flags="--repair --archives-only",
+            )
+
+            response = test_client.post(
+                f"/api/repositories/{repo.id}/check",
+                headers=admin_headers,
+                json={
+                    "max_duration": 0,
+                    "check_extra_flags": "  --repair --archives-only  ",
+                },
+            )
+
+        assert response.status_code == 200
+        assert mock_start.call_args.kwargs["extra_fields"] == {
+            "max_duration": 0,
+            "extra_flags": "--repair --archives-only",
+        }
+
+    def test_start_check_rejects_full_check_flags_with_partial_duration(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Full-check flags should require unlimited/manual full check duration."""
+        repo = Repository(
+            name="Test Repo",
+            path="/tmp/test",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch(
+            "app.api.repositories.start_background_maintenance_job"
+        ) as mock_start:
+            response = test_client.post(
+                f"/api/repositories/{repo.id}/check",
+                headers=admin_headers,
+                json={
+                    "max_duration": 600,
+                    "check_extra_flags": " --verify-data ",
+                },
+            )
+
+        assert response.status_code == 422
+        assert response.json()["detail"]["key"] == (
+            "backend.errors.repo.checkFlagsRequireUnlimitedDuration"
+        )
+        assert response.json()["detail"]["params"]["flags"] == "--verify-data"
+        mock_start.assert_not_called()
+
+
+@pytest.mark.unit
 class TestRepositoryCheckSchedule:
     """Test repository check schedule endpoints"""
 
@@ -1762,6 +2721,7 @@ class TestRepositoryCheckSchedule:
             repository_type="local",
             check_cron_expression="0 2 * * 0",  # Weekly on Sunday at 2 AM
             check_max_duration=3600,
+            check_extra_flags="--verify-data",
             notify_on_check_success=False,
             notify_on_check_failure=True,
         )
@@ -1778,6 +2738,7 @@ class TestRepositoryCheckSchedule:
         assert data["repository_id"] == repo.id
         assert data["check_cron_expression"] == "0 2 * * 0"
         assert data["check_max_duration"] == 3600
+        assert data["check_extra_flags"] == "--verify-data"
         assert data["notify_on_check_success"] == False
         assert data["notify_on_check_failure"] == True
         assert data["enabled"] == True
@@ -1824,7 +2785,8 @@ class TestRepositoryCheckSchedule:
         # Update check schedule
         payload = {
             "cron_expression": "0 3 * * *",  # Daily at 3 AM
-            "max_duration": 7200,
+            "max_duration": 0,
+            "check_extra_flags": "  --repair --save-space  ",
             "notify_on_success": True,
             "notify_on_failure": False,
         }
@@ -1838,10 +2800,70 @@ class TestRepositoryCheckSchedule:
         data = response.json()
         assert data["success"] == True
         assert data["repository"]["check_cron_expression"] == "0 3 * * *"
-        assert data["repository"]["check_max_duration"] == 7200
+        assert data["repository"]["check_max_duration"] == 0
+        assert data["repository"]["check_extra_flags"] == "--repair --save-space"
         assert data["repository"]["notify_on_check_success"] == True
         assert data["repository"]["notify_on_check_failure"] == False
         assert data["repository"]["next_scheduled_check"] is not None
+
+    def test_update_check_schedule_rejects_full_check_flags_with_partial_duration(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Scheduled full-check flags must be paired with max_duration 0."""
+        repo = Repository(
+            name="Test Repo",
+            path="/tmp/test",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}/check-schedule",
+            headers=admin_headers,
+            json={
+                "cron_expression": "0 3 * * *",
+                "max_duration": 3600,
+                "check_extra_flags": " --verify-data ",
+            },
+        )
+
+        assert response.status_code == 422
+        assert response.json()["detail"]["key"] == (
+            "backend.errors.repo.checkFlagsRequireUnlimitedDuration"
+        )
+        assert response.json()["detail"]["params"]["flags"] == "--verify-data"
+
+    def test_update_check_schedule_allows_verify_data_with_unlimited_duration(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """`--verify-data` is valid when scheduled checks run without a max duration."""
+        repo = Repository(
+            name="Test Repo",
+            path="/tmp/test",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}/check-schedule",
+            headers=admin_headers,
+            json={
+                "cron_expression": "0 3 * * *",
+                "max_duration": 0,
+                "check_extra_flags": " --verify-data ",
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["repository"]["check_max_duration"] == 0
+        assert data["repository"]["check_extra_flags"] == "--verify-data"
 
     def test_update_check_schedule_disable(
         self, test_client: TestClient, admin_headers, test_db

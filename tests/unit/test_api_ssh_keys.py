@@ -8,7 +8,16 @@ from fastapi.testclient import TestClient
 from unittest.mock import AsyncMock, MagicMock, patch
 import asyncio
 
+from pydantic import ValidationError
+
+from app.core.security import encrypt_secret
 from app.api import ssh_keys as ssh_keys_api
+from app.api.ssh_keys import (
+    SSHConnectionCreate,
+    SSHConnectionTest,
+    SSHConnectionUpdate,
+    SSHQuickSetup,
+)
 from app.database.models import SSHConnection, SSHKey
 
 
@@ -136,6 +145,337 @@ class TestSSHKeysEndpoints:
         response = test_client.post("/api/ssh-keys/connections/1/test")
 
         assert response.status_code == 401
+
+    def test_connection_test_dns_failure_stores_diagnostic_details(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """DNS failures should be returned and stored with the original stderr details."""
+        from app.core.security import encrypt_secret
+
+        fake_private_key = "-----BEGIN OPENSSH PRIVATE KEY-----\ntest\n-----END OPENSSH PRIVATE KEY-----\n"
+        ssh_key = SSHKey(
+            name="DNS failure key",
+            public_key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAItest test@test",
+            private_key=encrypt_secret(fake_private_key),
+            is_active=True,
+        )
+        test_db.add(ssh_key)
+        test_db.commit()
+        test_db.refresh(ssh_key)
+
+        dns_stderr = (
+            b"ssh: Could not resolve hostname missing.example: "
+            b"Name or service not known\r\n"
+        )
+
+        async def mock_subprocess(*cmd, **kwargs):
+            mock_process = AsyncMock()
+            mock_process.communicate = AsyncMock(return_value=(b"", dns_stderr))
+            mock_process.returncode = 255
+            return mock_process
+
+        with patch(
+            "app.api.ssh_keys.asyncio.create_subprocess_exec",
+            side_effect=mock_subprocess,
+        ):
+            response = test_client.post(
+                f"/api/ssh-keys/{ssh_key.id}/test-connection",
+                json={"host": "missing.example", "username": "backup", "port": 22},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        error_message = data["connection"]["error_message"]
+
+        assert data["success"] is False
+        assert data["connection"]["status"] == "failed"
+        assert "Host did not resolve: missing.example" in error_message
+        assert "saved host value" in error_message
+        assert dns_stderr.decode().strip() in error_message
+
+        stored_connection = (
+            test_db.query(SSHConnection)
+            .filter(
+                SSHConnection.ssh_key_id == ssh_key.id,
+                SSHConnection.host == "missing.example",
+                SSHConnection.username == "backup",
+                SSHConnection.port == 22,
+            )
+            .one()
+        )
+        assert stored_connection.error_message == error_message
+
+        list_response = test_client.get(
+            "/api/ssh-keys/connections", headers=admin_headers
+        )
+        assert list_response.status_code == 200
+        listed_connection = next(
+            connection
+            for connection in list_response.json()["connections"]
+            if connection["id"] == stored_connection.id
+        )
+        assert listed_connection["error_message"] == error_message
+
+    def _create_diagnostics_connection(self, test_db):
+        fake_private_key = "-----BEGIN OPENSSH PRIVATE KEY-----\ntest\n-----END OPENSSH PRIVATE KEY-----\n"
+        ssh_key = SSHKey(
+            name="System SSH Key",
+            public_key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAItest test@test",
+            private_key=encrypt_secret(fake_private_key),
+            is_system_key=True,
+            is_active=True,
+        )
+        test_db.add(ssh_key)
+        test_db.commit()
+        test_db.refresh(ssh_key)
+
+        connection = SSHConnection(
+            ssh_key_id=ssh_key.id,
+            host="backup.example.com",
+            username="borg",
+            port=2222,
+            status="connected",
+            default_path="/srv",
+            mount_point="backup-box",
+        )
+        test_db.add(connection)
+        test_db.commit()
+        test_db.refresh(connection)
+        return ssh_key, connection
+
+    def _patch_monotonic(self, monkeypatch, values: list[float]):
+        sequence = iter(values)
+        last_value = 0.0
+
+        def fake_monotonic():
+            nonlocal last_value
+            try:
+                last_value = next(sequence)
+            except StopIteration:
+                last_value += 0.001
+            return last_value
+
+        monkeypatch.setattr(ssh_keys_api, "_monotonic", fake_monotonic, raising=False)
+
+    def test_connection_diagnostics_returns_latency_tcp_and_throughput(
+        self, test_client: TestClient, admin_headers, test_db, monkeypatch
+    ):
+        _, connection = self._create_diagnostics_connection(test_db)
+        commands: list[list[str]] = []
+
+        async def fake_run_ssh_process(cmd, timeout_seconds):
+            commands.append(cmd)
+            if "-W" in cmd:
+                return 0, b"", b""
+            if cmd[-1].startswith("dd if=/dev/zero"):
+                return 0, b"x" * 131072, b""
+            return 0, b"/srv\n", b""
+
+        monkeypatch.setattr(
+            ssh_keys_api, "_run_ssh_process", fake_run_ssh_process, raising=False
+        )
+        self._patch_monotonic(
+            monkeypatch,
+            [10.0, 10.0, 10.0, 10.025, 10.026, 10.026, 10.03, 10.031, 10.031, 10.281],
+        )
+
+        response = test_client.post(
+            f"/api/ssh-keys/connections/{connection.id}/diagnostics",
+            json={
+                "target": {
+                    "host": "postgres.internal",
+                    "port": 5432,
+                    "timeout_seconds": 3,
+                },
+                "timeout_seconds": 4,
+                "speed_probe_bytes": 131072,
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["connection"]["host"] == "backup.example.com"
+        assert data["session"] == {
+            "status": "success",
+            "elapsed_ms": 25,
+            "output": "/srv",
+        }
+        assert data["latency"] == {"status": "success", "elapsed_ms": 25}
+        assert data["tcp"] == {
+            "target": {
+                "host": "postgres.internal",
+                "port": 5432,
+                "timeout_seconds": 3.0,
+            },
+            "status": "success",
+            "elapsed_ms": 4,
+        }
+        assert data["throughput"] == {
+            "status": "success",
+            "direction": "download",
+            "probe_size_bytes": 131072,
+            "bytes_transferred": 131072,
+            "elapsed_ms": 250,
+            "mbps": 0.5,
+        }
+        assert any("-W" in cmd for cmd in commands)
+        assert any(cmd[-1].startswith("dd if=/dev/zero") for cmd in commands)
+
+    def test_connection_diagnostics_keeps_failed_tcp_as_partial_result(
+        self, test_client: TestClient, admin_headers, test_db, monkeypatch
+    ):
+        _, connection = self._create_diagnostics_connection(test_db)
+
+        async def fake_run_ssh_process(cmd, timeout_seconds):
+            if "-W" in cmd:
+                return (
+                    255,
+                    b"",
+                    b"channel 0: open failed: connect failed: Connection refused",
+                )
+            if cmd[-1].startswith("dd if=/dev/zero"):
+                return 0, b"x" * 65536, b""
+            return 0, b"/srv\n", b""
+
+        monkeypatch.setattr(
+            ssh_keys_api, "_run_ssh_process", fake_run_ssh_process, raising=False
+        )
+        self._patch_monotonic(
+            monkeypatch,
+            [10.0, 10.0, 10.0, 10.01, 10.011, 10.011, 10.017, 10.018, 10.018, 10.118],
+        )
+
+        response = test_client.post(
+            f"/api/ssh-keys/connections/{connection.id}/diagnostics",
+            json={
+                "target": {
+                    "host": "postgres.internal",
+                    "port": 5432,
+                    "timeout_seconds": 3,
+                }
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["session"]["status"] == "success"
+        assert data["tcp"]["status"] == "failed"
+        assert data["tcp"]["elapsed_ms"] == 6
+        assert data["tcp"]["error"] == "connection_refused"
+        assert "Connection refused" in data["tcp"]["message"]
+        assert data["throughput"]["status"] == "success"
+
+    def test_connection_diagnostics_reports_session_timeout(
+        self, test_client: TestClient, admin_headers, test_db, monkeypatch
+    ):
+        _, connection = self._create_diagnostics_connection(test_db)
+
+        async def fake_run_ssh_process(cmd, timeout_seconds):
+            raise asyncio.TimeoutError
+
+        monkeypatch.setattr(
+            ssh_keys_api, "_run_ssh_process", fake_run_ssh_process, raising=False
+        )
+        self._patch_monotonic(monkeypatch, [10.0, 10.0, 10.0, 15.0])
+
+        response = test_client.post(
+            f"/api/ssh-keys/connections/{connection.id}/diagnostics",
+            json={},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["session"] == {
+            "status": "timeout",
+            "elapsed_ms": 5000,
+            "error": "timeout",
+            "message": "SSH diagnostic command timed out",
+        }
+        assert data["latency"]["status"] == "timeout"
+        assert data["tcp"] is None
+        assert data["throughput"] is None
+
+    def test_connection_diagnostics_stops_when_timeout_budget_is_exhausted(
+        self, test_client: TestClient, admin_headers, test_db, monkeypatch
+    ):
+        _, connection = self._create_diagnostics_connection(test_db)
+        commands: list[list[str]] = []
+
+        async def fake_run_ssh_process(cmd, timeout_seconds):
+            commands.append(cmd)
+            return 0, b"/srv\n", b""
+
+        monkeypatch.setattr(
+            ssh_keys_api, "_run_ssh_process", fake_run_ssh_process, raising=False
+        )
+        self._patch_monotonic(monkeypatch, [10.0, 10.0, 10.0, 14.0, 14.0])
+
+        response = test_client.post(
+            f"/api/ssh-keys/connections/{connection.id}/diagnostics",
+            json={"timeout_seconds": 4, "speed_probe_bytes": 131072},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["session"]["status"] == "success"
+        assert data["session"]["elapsed_ms"] == 4000
+        assert data["throughput"] == {
+            "status": "timeout",
+            "direction": "download",
+            "probe_size_bytes": 131072,
+            "elapsed_ms": 4000,
+            "error": "timeout",
+            "message": "SSH diagnostics timeout budget exhausted before speed probe started",
+        }
+        assert len(commands) == 1
+        assert not any(cmd[-1].startswith("dd if=/dev/zero") for cmd in commands)
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {"target": {"host": "", "port": 5432, "timeout_seconds": 3}},
+            {"target": {"host": "bad host", "port": 5432, "timeout_seconds": 3}},
+            {"target": {"host": "postgres.internal", "port": 0, "timeout_seconds": 3}},
+            {
+                "target": {
+                    "host": "postgres.internal",
+                    "port": 5432,
+                    "timeout_seconds": 0,
+                }
+            },
+            {"timeout_seconds": 0},
+            {"speed_probe_bytes": 1024},
+            {"speed_probe_bytes": 10485760},
+        ],
+    )
+    def test_connection_diagnostics_rejects_invalid_inputs(
+        self, test_client: TestClient, admin_headers, test_db, payload
+    ):
+        _, connection = self._create_diagnostics_connection(test_db)
+
+        response = test_client.post(
+            f"/api/ssh-keys/connections/{connection.id}/diagnostics",
+            json=payload,
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 422
+
+    def test_connection_diagnostics_missing_connection(
+        self, test_client: TestClient, admin_headers
+    ):
+        response = test_client.post(
+            "/api/ssh-keys/connections/999999/diagnostics",
+            json={},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 404
 
 
 @pytest.mark.unit
@@ -419,6 +759,174 @@ class TestSSHKeyHelpers:
         assert ssh_keys_api.format_bytes(1024) == "1.00 KB"
         assert ssh_keys_api.format_bytes(1024 * 1024) == "1.00 MB"
         assert ssh_keys_api.format_bytes(5 * 1024 * 1024 * 1024) == "5.00 GB"
+
+
+@pytest.mark.unit
+class TestSSHConnectionHostValidation:
+    @pytest.mark.parametrize(
+        ("raw_host", "expected_host"),
+        [
+            ("  u123456.your-storagebox.de  ", "u123456.your-storagebox.de"),
+            ("\tbackup.example.com\n", "backup.example.com"),
+            ("192.0.2.10", "192.0.2.10"),
+            ("2001:db8::1", "2001:db8::1"),
+        ],
+    )
+    def test_connection_host_models_normalize_safe_hosts(self, raw_host, expected_host):
+        assert (
+            SSHConnectionCreate(host=raw_host, username="borg", password="secret").host
+            == expected_host
+        )
+        assert SSHConnectionUpdate(host=raw_host).host == expected_host
+        assert SSHConnectionTest(host=raw_host, username="borg").host == expected_host
+        assert (
+            SSHQuickSetup(
+                name="key",
+                host=raw_host,
+                username="borg",
+                password="secret",
+            ).host
+            == expected_host
+        )
+
+    @pytest.mark.parametrize(
+        "raw_host",
+        [
+            "http://host",
+            "ssh://user@host",
+            "host:23",
+            "example.com/path",
+            "user@example.com",
+            "[example.com]",
+            "[2001:db8::1]",
+            "[host](https://host)",
+            "host name",
+            "host\u200bname",
+            "",
+            "   ",
+        ],
+    )
+    def test_connection_host_models_reject_malformed_hosts(self, raw_host):
+        with pytest.raises(ValidationError):
+            SSHConnectionCreate(host=raw_host, username="borg", password="secret")
+        with pytest.raises(ValidationError):
+            SSHConnectionTest(host=raw_host, username="borg")
+        with pytest.raises(ValidationError):
+            SSHConnectionUpdate(host=raw_host)
+        with pytest.raises(ValidationError):
+            SSHQuickSetup(
+                name="key",
+                host=raw_host,
+                username="borg",
+                password="secret",
+            )
+
+    def test_audit_ssh_connection_hosts_reports_suspicious_saved_hosts(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        test_db.add_all(
+            [
+                SSHConnection(
+                    host="valid.example.com",
+                    username="borg",
+                    port=22,
+                    status="connected",
+                ),
+                SSHConnection(
+                    host=" u123456.your-storagebox.de ",
+                    username="borg",
+                    port=22,
+                    status="failed",
+                ),
+                SSHConnection(
+                    host="http://bad.example.com",
+                    username="borg",
+                    port=22,
+                    status="failed",
+                ),
+            ]
+        )
+        test_db.commit()
+
+        response = test_client.get(
+            "/api/ssh-keys/connections/host-audit",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["summary"] == {
+            "total": 3,
+            "valid": 1,
+            "normalizable": 1,
+            "suspicious": 1,
+        }
+        assert data["normalizable"][0]["host"] == " u123456.your-storagebox.de "
+        assert (
+            data["normalizable"][0]["normalized_host"] == "u123456.your-storagebox.de"
+        )
+        assert data["suspicious"][0]["host"] == "http://bad.example.com"
+
+    def test_cleanup_ssh_connection_hosts_dry_run_does_not_modify_saved_hosts(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        connection = SSHConnection(
+            host=" u123456.your-storagebox.de ",
+            username="borg",
+            port=22,
+            status="failed",
+        )
+        test_db.add(connection)
+        test_db.commit()
+        test_db.refresh(connection)
+
+        response = test_client.post(
+            "/api/ssh-keys/connections/host-cleanup",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["dry_run"] is True
+        assert data["summary"]["cleaned"] == 0
+        assert data["summary"]["normalizable"] == 1
+        test_db.refresh(connection)
+        assert connection.host == " u123456.your-storagebox.de "
+
+    def test_cleanup_ssh_connection_hosts_applies_only_safe_normalizations(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        normalizable = SSHConnection(
+            host=" u123456.your-storagebox.de ",
+            username="borg",
+            port=22,
+            status="failed",
+        )
+        suspicious = SSHConnection(
+            host="host:23",
+            username="borg",
+            port=22,
+            status="failed",
+        )
+        test_db.add_all([normalizable, suspicious])
+        test_db.commit()
+        test_db.refresh(normalizable)
+        test_db.refresh(suspicious)
+
+        response = test_client.post(
+            "/api/ssh-keys/connections/host-cleanup?dry_run=false",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["dry_run"] is False
+        assert data["summary"]["cleaned"] == 1
+        assert data["summary"]["suspicious"] == 1
+        test_db.refresh(normalizable)
+        test_db.refresh(suspicious)
+        assert normalizable.host == "u123456.your-storagebox.de"
+        assert suspicious.host == "host:23"
 
 
 @pytest.mark.unit

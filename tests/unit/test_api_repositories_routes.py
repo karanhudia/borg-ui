@@ -1,4 +1,6 @@
 import asyncio
+import re
+from collections import Counter
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
@@ -7,10 +9,14 @@ from fastapi.testclient import TestClient
 
 from app.api import repositories as repositories_api
 from app.database.models import (
+    BackupJob,
+    BackupPlan,
+    BackupPlanRun,
     CheckJob,
     CompactJob,
     PruneJob,
     Repository,
+    RepositoryWipeJob,
     SSHConnection,
     SystemSettings,
     UserRepositoryPermission,
@@ -29,6 +35,20 @@ def _create_repo(test_db, name: str, path: str, **kwargs) -> Repository:
 
 @pytest.mark.unit
 class TestRepositoryRouteContracts:
+    def test_repositories_register_single_canonical_break_lock_route(self):
+        break_lock_routes = [
+            route
+            for route in repositories_api.router.routes
+            if getattr(route, "path", "").endswith("/break-lock")
+            and "POST" in getattr(route, "methods", set())
+        ]
+        canonical_counts = Counter(
+            re.sub(r"\{[^}]+\}", "{param}", route.path) for route in break_lock_routes
+        )
+
+        assert canonical_counts["/{param}/break-lock"] == 1
+        assert [route.path for route in break_lock_routes] == ["/{repo_id}/break-lock"]
+
     def test_get_repositories_filters_to_explicit_permissions(
         self, test_client: TestClient, auth_headers, test_db, test_user
     ):
@@ -115,6 +135,38 @@ class TestRepositoryRouteContracts:
         assert body["check_job"]["progress"] == 35
         assert body["compact_job"]["progress"] == 60
         assert body["prune_job"]["id"] is not None
+
+    def test_get_running_jobs_reports_repository_wipe_job(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Repo", "/repos/main")
+        wipe_job = RepositoryWipeJob(
+            repository_id=repo.id,
+            repository_path=repo.path,
+            repository_name=repo.name,
+            borg_version=1,
+            status="running",
+            phase="delete",
+            archive_count=2,
+            archive_fingerprint="sha256:abc",
+            run_compact=True,
+            progress=35,
+            progress_message="Deleting repository archives",
+            started_at=datetime(2026, 1, 1, 12, 15, tzinfo=timezone.utc),
+        )
+        test_db.add(wipe_job)
+        test_db.commit()
+
+        response = test_client.get(
+            f"/api/repositories/{repo.id}/running-jobs", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["has_running_jobs"] is True
+        assert body["wipe_job"]["id"] == wipe_job.id
+        assert body["wipe_job"]["progress"] == 35
+        assert body["wipe_job"]["progress_message"] == "Deleting repository archives"
 
     def test_get_check_job_status_reads_log_file(
         self, test_client: TestClient, admin_headers, test_db, tmp_path
@@ -551,3 +603,86 @@ class TestRepositoryHelperContracts:
         assert state["max_active"] == 1
         assert archives_result["archives"] == []
         assert info_result["info"]["repository"] == {}
+
+    @pytest.mark.asyncio
+    async def test_list_repository_archives_marks_manual_backup_plan_archive(
+        self, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        plan = BackupPlan(
+            name="Monthly Plan",
+            enabled=True,
+            source_type="local",
+            source_directories='["/srv/project"]',
+            exclude_patterns="[]",
+            archive_name_template="{plan_name}-{repo_name}-{now}",
+            compression="lz4",
+            repository_run_mode="series",
+            max_parallel_repositories=1,
+            failure_behavior="continue",
+            schedule_enabled=False,
+            timezone="UTC",
+        )
+        test_db.add(plan)
+        test_db.flush()
+        run = BackupPlanRun(
+            backup_plan_id=plan.id,
+            trigger="manual",
+            status="completed",
+            started_at=datetime(2026, 5, 15, 10, 0, tzinfo=timezone.utc),
+            completed_at=datetime(2026, 5, 15, 10, 5, tzinfo=timezone.utc),
+        )
+        test_db.add(run)
+        test_db.flush()
+        test_db.add(
+            BackupJob(
+                repository=repo.path,
+                repository_id=repo.id,
+                backup_plan_id=plan.id,
+                backup_plan_run_id=run.id,
+                archive_name="Monthly-Plan-Primary",
+                status="completed",
+                started_at=datetime(2026, 5, 15, 10, 0, tzinfo=timezone.utc),
+                completed_at=datetime(2026, 5, 15, 10, 5, tzinfo=timezone.utc),
+            )
+        )
+        test_db.commit()
+
+        with (
+            patch.object(
+                repositories_api,
+                "_load_repository_with_access",
+                return_value=repo,
+            ),
+            patch.object(
+                repositories_api,
+                "_resolve_bypass_lock",
+                return_value=(False, "none"),
+            ),
+            patch.object(
+                repositories_api,
+                "get_operation_timeouts",
+                return_value={"list_timeout": 30},
+            ),
+            patch.object(
+                repositories_api.BorgRouter,
+                "build_repo_list_command",
+                return_value=["borg", "list"],
+            ),
+            patch.object(
+                repositories_api,
+                "_run_repository_command_with_retries",
+                new=AsyncMock(
+                    return_value=b'{"archives":[{"name":"Monthly-Plan-Primary","start":"2026-05-15T10:00:00Z"}]}'
+                ),
+            ),
+        ):
+            result = await repositories_api.list_repository_archives(
+                repo.id, current_user=object(), db=test_db
+            )
+
+        archive = result["archives"][0]
+        assert archive["name"] == "Monthly-Plan-Primary"
+        assert archive["triggered_by"] == "manual"
+        assert archive["backup_plan_id"] == plan.id
+        assert archive["backup_plan_run_id"] == run.id

@@ -1,18 +1,36 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { within } from '@testing-library/react'
+import { QueryClient } from '@tanstack/react-query'
 import { renderWithProviders, screen, userEvent, waitFor } from '../../test/test-utils'
 import Backup from '../Backup'
 
 const runBackupMock = vi.fn()
 
-const { trackBackup, toastSuccess, toastError } = vi.hoisted(() => ({
+const { trackBackup, toastSuccess, toastError, navigateMock } = vi.hoisted(() => ({
   trackBackup: vi.fn(),
   toastSuccess: vi.fn(),
   toastError: vi.fn(),
+  navigateMock: vi.fn(),
 }))
 
-const { getManualJobsMock, backupJobsTableMock } = vi.hoisted(() => ({
+const {
+  getManualJobsMock,
+  backupJobsTableMock,
+  backupRetryJobMock,
+  backupPlansListMock,
+  backupPlansListRunsMock,
+  backupPlansRunMock,
+  backupPlansCancelRunMock,
+  backupPlansRetryRunMock,
+} = vi.hoisted(() => ({
   getManualJobsMock: vi.fn(),
   backupJobsTableMock: vi.fn(),
+  backupRetryJobMock: vi.fn(),
+  backupPlansListMock: vi.fn(),
+  backupPlansListRunsMock: vi.fn(),
+  backupPlansRunMock: vi.fn(),
+  backupPlansCancelRunMock: vi.fn(),
+  backupPlansRetryRunMock: vi.fn(),
 }))
 
 let locationState: Record<string, unknown> | null = null
@@ -20,6 +38,38 @@ let canManageAll = false
 let canDoBackup = true
 let repositoriesPayload: Array<Record<string, unknown>> = []
 let manualJobsPayload: Array<Record<string, unknown>> = []
+let backupPlansPayload: Array<Record<string, unknown>> = []
+let backupPlanRunsPayload: Array<Record<string, unknown>> = []
+let backupQueryClients: QueryClient[] = []
+
+async function openLegacyBackupTab(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByRole('tab', { name: /legacy backup/i }))
+}
+
+async function selectBackupPlan(user: ReturnType<typeof userEvent.setup>, name: RegExp | string) {
+  await user.click(await screen.findByRole('combobox', { name: /backup plan/i }))
+  await user.click(await screen.findByRole('option', { name }))
+}
+
+function createBackupTestQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+        gcTime: Infinity,
+      },
+      mutations: {
+        retry: false,
+      },
+    },
+  })
+}
+
+function renderBackup() {
+  const queryClient = createBackupTestQueryClient()
+  backupQueryClients.push(queryClient)
+  return renderWithProviders(<Backup />, { queryClient })
+}
 
 vi.mock('../../hooks/useAnalytics', () => ({
   useAnalytics: () => ({
@@ -61,6 +111,7 @@ vi.mock('react-router-dom', async () => {
   return {
     ...actual,
     useLocation: () => ({ state: locationState }),
+    useNavigate: () => navigateMock,
   }
 })
 
@@ -106,6 +157,36 @@ vi.mock('../../services/api', () => ({
       })
     ),
     cancelJob: vi.fn(() => Promise.resolve({ data: {} })),
+    retryJob: backupRetryJobMock.mockImplementation(() => Promise.resolve({ data: {} })),
+  },
+  backupPlansAPI: {
+    list: backupPlansListMock.mockImplementation(() =>
+      Promise.resolve({
+        data: {
+          backup_plans: backupPlansPayload,
+        },
+      })
+    ),
+    run: backupPlansRunMock.mockImplementation(() =>
+      Promise.resolve({
+        data: {
+          id: 99,
+          backup_plan_id: 7,
+          trigger: 'manual',
+          status: 'pending',
+          repositories: [],
+        },
+      })
+    ),
+    listRuns: backupPlansListRunsMock.mockImplementation(() =>
+      Promise.resolve({
+        data: {
+          runs: backupPlanRunsPayload,
+        },
+      })
+    ),
+    cancelRun: backupPlansCancelRunMock.mockImplementation(() => Promise.resolve({ data: {} })),
+    retryRun: backupPlansRetryRunMock.mockImplementation(() => Promise.resolve({ data: {} })),
   },
   repositoriesAPI: {
     getRepositories: vi.fn(() =>
@@ -127,12 +208,30 @@ vi.mock('../../services/borgApi', () => ({
 }))
 
 describe('Backup page', () => {
+  afterEach(() => {
+    for (const queryClient of backupQueryClients) {
+      queryClient.clear()
+    }
+    backupQueryClients = []
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     locationState = null
     canManageAll = false
     canDoBackup = true
     runBackupMock.mockResolvedValue({ data: {} })
+    backupPlansRunMock.mockResolvedValue({
+      data: {
+        id: 99,
+        backup_plan_id: 7,
+        trigger: 'manual',
+        status: 'pending',
+        repositories: [],
+      },
+    })
+    backupPlansPayload = []
+    backupPlanRunsPayload = []
     repositoriesPayload = [
       {
         id: 1,
@@ -154,14 +253,64 @@ describe('Backup page', () => {
       },
     ]
     manualJobsPayload = []
+    getManualJobsMock.mockImplementation(() =>
+      Promise.resolve({
+        data: {
+          jobs: manualJobsPayload,
+        },
+      })
+    )
+    backupRetryJobMock.mockImplementation(() => Promise.resolve({ data: {} }))
+    backupPlansListMock.mockImplementation(() =>
+      Promise.resolve({
+        data: {
+          backup_plans: backupPlansPayload,
+        },
+      })
+    )
+    backupPlansListRunsMock.mockImplementation(() =>
+      Promise.resolve({
+        data: {
+          runs: backupPlanRunsPayload,
+        },
+      })
+    )
+    backupPlansCancelRunMock.mockImplementation(() => Promise.resolve({ data: {} }))
+    backupPlansRetryRunMock.mockImplementation(() => Promise.resolve({ data: {} }))
+  })
+
+  it('defaults to the backup plans tab and keeps legacy backup separate', async () => {
+    const user = userEvent.setup()
+
+    renderBackup()
+
+    expect(await screen.findByRole('tab', { name: /backup plans/i })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    )
+    expect(await screen.findByRole('button', { name: /create backup plan/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /choose primary repo/i })).not.toBeInTheDocument()
+
+    await openLegacyBackupTab(user)
+
+    expect(screen.getByRole('tab', { name: /legacy backup/i })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    )
+    expect(await screen.findByRole('button', { name: /choose primary repo/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /create backup plan/i })).not.toBeInTheDocument()
   })
 
   it('preselects the repository from navigation state and starts a backup with that payload', async () => {
     const user = userEvent.setup()
     locationState = { repositoryPath: '/repos/primary' }
 
-    renderWithProviders(<Backup />)
+    renderBackup()
 
+    expect(await screen.findByRole('tab', { name: /legacy backup/i })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    )
     expect(await screen.findByTestId('selected-repository')).toHaveTextContent('/repos/primary')
 
     await user.click(screen.getByRole('button', { name: /start backup/i }))
@@ -196,7 +345,7 @@ describe('Backup page', () => {
       },
     ]
 
-    renderWithProviders(<Backup />)
+    renderBackup()
 
     await user.click(await screen.findByRole('button', { name: /start backup/i }))
 
@@ -206,10 +355,250 @@ describe('Backup page', () => {
   })
 
   it('filters out observe-only repositories from manual backup selection', async () => {
-    renderWithProviders(<Backup />)
+    const user = userEvent.setup()
+
+    renderBackup()
+    await openLegacyBackupTab(user)
 
     expect(await screen.findByText('choose Primary Repo')).toBeInTheDocument()
     expect(screen.queryByText('choose Observe Repo')).not.toBeInTheDocument()
+  })
+
+  it('runs a backup plan from the primary manual backup control', async () => {
+    const user = userEvent.setup()
+    backupPlansPayload = [
+      {
+        id: 7,
+        name: 'Nightly Plan',
+        enabled: true,
+        repository_count: 1,
+        repository_run_mode: 'series',
+        source_directories: ['/data'],
+        exclude_patterns: [],
+        schedule_enabled: false,
+        compression: 'lz4',
+      },
+    ]
+
+    renderBackup()
+
+    const runButton = await screen.findByRole('button', { name: /run backup plan/i })
+    await selectBackupPlan(user, /nightly plan/i)
+    await waitFor(() => {
+      expect(runButton).toBeEnabled()
+    })
+    await user.click(runButton)
+
+    await waitFor(() => {
+      expect(backupPlansRunMock).toHaveBeenCalledWith(7)
+    })
+    expect(toastSuccess).toHaveBeenCalledWith('Backup plan started')
+    expect(navigateMock).not.toHaveBeenCalled()
+  })
+
+  it('does not select a backup plan by default', async () => {
+    backupPlansPayload = [
+      {
+        id: 7,
+        name: 'Nightly Plan',
+        enabled: true,
+        repository_count: 1,
+        repository_run_mode: 'series',
+        source_directories: ['/data'],
+        exclude_patterns: [],
+        schedule_enabled: false,
+        compression: 'lz4',
+      },
+    ]
+
+    renderBackup()
+
+    const runButton = await screen.findByRole('button', { name: /run backup plan/i })
+
+    expect(await screen.findByText('Select a backup plan')).toBeInTheDocument()
+    expect(screen.queryByText('Nightly Plan')).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(runButton).toBeDisabled()
+    })
+    expect(backupPlansRunMock).not.toHaveBeenCalled()
+  })
+
+  it('shows running backup plan runs from every plan regardless of selected plan', async () => {
+    const user = userEvent.setup()
+    backupPlansPayload = [
+      {
+        id: 7,
+        name: 'Nightly Plan',
+        enabled: true,
+        repository_count: 1,
+        repository_run_mode: 'series',
+        source_directories: ['/data'],
+        exclude_patterns: [],
+        schedule_enabled: false,
+        compression: 'lz4',
+      },
+      {
+        id: 8,
+        name: 'Weekly Plan',
+        enabled: true,
+        repository_count: 1,
+        repository_run_mode: 'series',
+        source_directories: ['/warehouse'],
+        exclude_patterns: [],
+        schedule_enabled: false,
+        compression: 'lz4',
+      },
+    ]
+    backupPlanRunsPayload = [
+      {
+        id: 99,
+        backup_plan_id: 7,
+        trigger: 'manual',
+        status: 'running',
+        started_at: '2026-01-01T10:00:00Z',
+        repositories: [
+          {
+            id: 100,
+            repository_id: 1,
+            status: 'running',
+            repository: {
+              id: 1,
+              name: 'Primary Repo',
+              path: '/repos/primary',
+            },
+            backup_job: {
+              id: 42,
+              repository: '/repos/primary',
+              repository_id: 1,
+              status: 'running',
+              progress: 50,
+              has_logs: true,
+              progress_details: {
+                nfiles: 12,
+                original_size: 1024,
+                backup_speed: 1.5,
+                current_file: '/data/file.txt',
+              },
+            },
+          },
+        ],
+      },
+      {
+        id: 100,
+        backup_plan_id: 8,
+        trigger: 'manual',
+        status: 'running',
+        started_at: '2026-01-01T11:00:00Z',
+        repositories: [
+          {
+            id: 101,
+            repository_id: 3,
+            status: 'running',
+            repository: {
+              id: 3,
+              name: 'Warehouse Repo',
+              path: '/repos/warehouse',
+            },
+            backup_job: {
+              id: 43,
+              repository: '/repos/warehouse',
+              repository_id: 3,
+              status: 'running',
+              progress: 25,
+              has_logs: true,
+              progress_details: {
+                nfiles: 3,
+                original_size: 2048,
+                backup_speed: 2.5,
+                current_file: '/warehouse/file.txt',
+              },
+            },
+          },
+        ],
+      },
+    ]
+
+    renderBackup()
+
+    await selectBackupPlan(user, /nightly plan/i)
+
+    const activeSection = await screen.findByRole('region', {
+      name: /running backup plan runs/i,
+    })
+    expect(within(activeSection).getByText('Nightly Plan')).toBeInTheDocument()
+    expect(within(activeSection).getByText('Weekly Plan')).toBeInTheDocument()
+    expect(within(activeSection).getByText('/data/file.txt')).toBeInTheDocument()
+    expect(within(activeSection).getByText('/warehouse/file.txt')).toBeInTheDocument()
+  })
+
+  it('shows active backup plan runs with per-repository status and cancellation', async () => {
+    const user = userEvent.setup()
+    backupPlansPayload = [
+      {
+        id: 7,
+        name: 'Nightly Plan',
+        enabled: true,
+        repository_count: 1,
+        repository_run_mode: 'series',
+        source_directories: ['/data'],
+        exclude_patterns: [],
+        schedule_enabled: false,
+        compression: 'lz4',
+      },
+    ]
+    backupPlanRunsPayload = [
+      {
+        id: 99,
+        backup_plan_id: 7,
+        trigger: 'manual',
+        status: 'running',
+        started_at: '2026-01-01T10:00:00Z',
+        repositories: [
+          {
+            id: 100,
+            repository_id: 1,
+            status: 'running',
+            repository: {
+              id: 1,
+              name: 'Primary Repo',
+              path: '/repos/primary',
+            },
+            backup_job: {
+              id: 42,
+              repository: '/repos/primary',
+              repository_id: 1,
+              status: 'running',
+              progress: 50,
+              has_logs: true,
+              progress_details: {
+                nfiles: 12,
+                original_size: 1024,
+                backup_speed: 1.5,
+                current_file: '/data/file.txt',
+              },
+            },
+          },
+        ],
+      },
+    ]
+
+    renderBackup()
+
+    const activeSection = await screen.findByRole(
+      'region',
+      { name: /running backup plan runs/i },
+      { timeout: 10000 }
+    )
+    expect(activeSection).toBeInTheDocument()
+    expect(within(activeSection).getByText('Nightly Plan')).toBeInTheDocument()
+    expect(within(activeSection).getByText('Primary Repo')).toBeInTheDocument()
+    expect(within(activeSection).getByText('/data/file.txt')).toBeInTheDocument()
+
+    await user.click(within(activeSection).getByRole('button', { name: /cancel run/i }))
+
+    await waitFor(() => {
+      expect(backupPlansCancelRunMock).toHaveBeenCalledWith(99)
+    })
   })
 
   it('only loads recent jobs for the selected repository', async () => {
@@ -222,12 +611,13 @@ describe('Backup page', () => {
       },
     ]
 
-    renderWithProviders(<Backup />)
+    renderBackup()
 
     await waitFor(() => {
       expect(getManualJobsMock).not.toHaveBeenCalled()
     })
 
+    await openLegacyBackupTab(user)
     await user.click(await screen.findByRole('button', { name: /choose primary repo/i }))
 
     await waitFor(() => {
@@ -241,8 +631,54 @@ describe('Backup page', () => {
     )
   })
 
+  it('wires manual backup job retry through the backup retry API', async () => {
+    const user = userEvent.setup()
+    manualJobsPayload = [
+      {
+        id: 42,
+        repository: '/repos/primary',
+        repository_id: 1,
+        status: 'failed',
+        type: 'backup',
+      },
+    ]
+
+    renderBackup()
+
+    await openLegacyBackupTab(user)
+    await user.click(await screen.findByRole('button', { name: /choose primary repo/i }))
+
+    await waitFor(() => {
+      expect(backupJobsTableMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actions: expect.objectContaining({ retry: true }),
+          onRetryJob: expect.any(Function),
+          canRetryJob: expect.any(Function),
+        })
+      )
+    })
+
+    const lastCall = backupJobsTableMock.mock.calls[backupJobsTableMock.mock.calls.length - 1]
+    const lastProps = lastCall?.[0] as {
+      onRetryJob: (job: { id: number }) => void
+      canRetryJob: (job: { repository_id?: number; repository?: string }) => boolean
+    }
+    expect(lastProps.canRetryJob({ repository_id: 1 })).toBe(true)
+    expect(lastProps.canRetryJob({ repository: '/repos/primary' })).toBe(true)
+    expect(lastProps.canRetryJob({ repository: 'Primary Repo' })).toBe(false)
+    lastProps.onRetryJob({ id: 42 })
+
+    await waitFor(() => {
+      expect(backupRetryJobMock).toHaveBeenCalledWith('42')
+    })
+    expect(toastSuccess).toHaveBeenCalledWith('Backup retry started')
+  })
+
   it('labels the history section as recent manual jobs', async () => {
-    renderWithProviders(<Backup />)
+    const user = userEvent.setup()
+
+    renderBackup()
+    await openLegacyBackupTab(user)
 
     expect(await screen.findByText('Recent Manual Jobs')).toBeInTheDocument()
     expect(
@@ -252,8 +688,9 @@ describe('Backup page', () => {
 
   it('tracks repository selection and hides manual backup choices when backup permission is missing', async () => {
     const user = userEvent.setup()
-    const { unmount } = renderWithProviders(<Backup />)
+    const { unmount } = renderBackup()
 
+    await openLegacyBackupTab(user)
     await user.click(await screen.findByRole('button', { name: /choose primary repo/i }))
 
     expect(trackBackup).toHaveBeenCalledWith(
@@ -267,7 +704,8 @@ describe('Backup page', () => {
 
     canDoBackup = false
     unmount()
-    renderWithProviders(<Backup />)
+    renderBackup()
+    await openLegacyBackupTab(user)
 
     expect(screen.queryByRole('button', { name: /choose primary repo/i })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /start backup/i })).toBeDisabled()
@@ -276,8 +714,9 @@ describe('Backup page', () => {
   it('shows the generated borg command preview for the selected repository', async () => {
     const user = userEvent.setup()
 
-    renderWithProviders(<Backup />)
+    renderBackup()
 
+    await openLegacyBackupTab(user)
     await user.click(await screen.findByRole('button', { name: /choose primary repo/i }))
 
     expect(await screen.findByText(/borg create/i)).toBeInTheDocument()

@@ -1,6 +1,9 @@
 import { Box, Card, CardContent, Typography, Alert } from '@mui/material'
-import { DataUsage, Inventory, Folder, Schedule } from '@mui/icons-material'
-import { Info } from '@mui/icons-material'
+import DataUsage from '@mui/icons-material/DataUsage'
+import Folder from '@mui/icons-material/Folder'
+import Info from '@mui/icons-material/Info'
+import Inventory from '@mui/icons-material/Inventory'
+import Schedule from '@mui/icons-material/Schedule'
 import { useTranslation } from 'react-i18next'
 import { formatBytes, formatDateShort } from '../utils/dateUtils'
 

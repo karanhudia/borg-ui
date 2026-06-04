@@ -8,6 +8,21 @@ from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
 
 
+def resolve_extracted_file_path(temp_dir: str, file_path: str) -> str:
+    temp_dir_realpath = os.path.realpath(temp_dir)
+    extracted_file_path = os.path.realpath(
+        os.path.join(temp_dir_realpath, file_path.lstrip("/"))
+    )
+    if extracted_file_path != temp_dir_realpath and not extracted_file_path.startswith(
+        temp_dir_realpath + os.sep
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"key": "backend.errors.archives.fileNotFoundAfterExtraction"},
+        )
+    return extracted_file_path
+
+
 async def extract_file_download(
     file_path: str,
     extract: Callable[[str], Awaitable[dict]],
@@ -28,7 +43,7 @@ async def extract_file_download(
                 },
             )
 
-        extracted_file_path = os.path.join(temp_dir, file_path.lstrip("/"))
+        extracted_file_path = resolve_extracted_file_path(temp_dir, file_path)
         if not path_exists(extracted_file_path):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

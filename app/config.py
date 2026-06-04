@@ -1,6 +1,6 @@
 import os
 import secrets
-from typing import List, Union, Optional
+from typing import Any, List, Union, Optional
 from pathlib import Path
 from pydantic_settings import BaseSettings
 
@@ -10,7 +10,7 @@ class Settings(BaseSettings):
 
     # Application settings
     app_name: str = "Borg Web UI"
-    app_version: str = "2.0.0"
+    app_version: str = "2.2.1"
     debug: bool = False
     environment: str = "production"  # Default to production for safety
 
@@ -161,6 +161,15 @@ class Settings(BaseSettings):
     source_size_timeout: int = (
         3600  # 1 hour - for du-based source size calculation (large datasets)
     )
+    scan_timeout_seconds: int = 15  # Source discovery database scan timeout
+
+    # Rclone-backed repository storage
+    rclone_config_root: str = ""
+    rclone_cache_root: str = ""
+    rclone_sync_timeout: int = 14400
+    rclone_hydrate_timeout: int = 14400
+    rclone_default_transfers: int = 4
+    rclone_default_checkers: int = 8
 
     # Health check settings
     health_check_interval: int = 30
@@ -182,12 +191,22 @@ class Settings(BaseSettings):
             "_oidc_allowed_return_origins_str": {"env": "OIDC_ALLOWED_RETURN_ORIGINS"},
         }
 
+    def model_post_init(self, __context: Any) -> None:
+        if not self.rclone_config_root:
+            self.rclone_config_root = f"{self.data_dir}/rclone"
+        if not self.rclone_cache_root:
+            self.rclone_cache_root = f"{self.data_dir}/rclone-cache"
+
 
 # Create settings instance
 settings = Settings()
 
 # Override data_dir from environment if provided
 settings.data_dir = os.getenv("DATA_DIR", settings.data_dir)
+if not os.getenv("RCLONE_CONFIG_ROOT"):
+    settings.rclone_config_root = f"{settings.data_dir}/rclone"
+if not os.getenv("RCLONE_CACHE_ROOT"):
+    settings.rclone_cache_root = f"{settings.data_dir}/rclone-cache"
 
 # AUTO-DERIVE all paths from data_dir
 # Users only need to configure data_dir (via volume mount), everything else is automatic

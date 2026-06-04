@@ -2,11 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from typing import Optional, Dict, Any
 from datetime import datetime
+import contextlib
+import math
 import structlog
 import os
 import subprocess
 import asyncio
 import tempfile
+import time
 
 from app.database.database import get_db
 from app.database.models import (
@@ -22,13 +25,38 @@ from app.core.authorization import authorize_request
 from app.core.security import get_current_user, encrypt_secret, decrypt_secret
 from app.config import settings
 from app.utils.datetime_utils import serialize_datetime
+from app.utils.ssh_host_validation import normalize_ssh_host
+from app.utils.ssh_utils import write_ssh_key_to_tempfile
 import hashlib
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["ssh-keys"], dependencies=[Depends(authorize_request)])
+SSH_DIAGNOSTICS_DEFAULT_TIMEOUT_SECONDS = 5.0
+SSH_DIAGNOSTICS_DEFAULT_TARGET_TIMEOUT_SECONDS = 3.0
+SSH_DIAGNOSTICS_DEFAULT_SPEED_PROBE_BYTES = 262_144
+SSH_DIAGNOSTICS_BLOCK_SIZE_BYTES = 65_536
 
 
 # Helper functions
+SSH_DNS_RESOLUTION_ERROR_MARKERS = (
+    "could not resolve hostname",
+    "name or service not known",
+    "nodename nor servname provided",
+    "temporary failure in name resolution",
+    "no address associated with hostname",
+    "name does not resolve",
+    "non-recoverable failure in name resolution",
+    "getaddrinfo",
+)
+
+
+def _is_ssh_dns_resolution_error(error_msg: str) -> bool:
+    normalized_error = error_msg.lower()
+    return any(
+        marker in normalized_error for marker in SSH_DNS_RESOLUTION_ERROR_MARKERS
+    )
+
+
 def format_bytes(bytes_size: int) -> str:
     """Format bytes to human readable string (e.g., '1.23 GB')"""
     for unit in ["B", "KB", "MB", "GB", "TB", "PB"]:
@@ -192,7 +220,7 @@ async def collect_storage_info(
 
 
 # Pydantic models
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class SSHKeyCreate(BaseModel):
@@ -241,6 +269,13 @@ class SSHQuickSetup(BaseModel):
         description="Use SFTP mode for ssh-copy-id (required by Hetzner, disable for Synology/older systems)",
     )
 
+    @field_validator("host")
+    @classmethod
+    def normalize_host(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        return normalize_ssh_host(value)
+
 
 class SSHConnectionCreate(BaseModel):
     host: str
@@ -258,11 +293,21 @@ class SSHConnectionCreate(BaseModel):
         description="Use SFTP mode for ssh-copy-id (required by Hetzner, disable for Synology/older systems)",
     )
 
+    @field_validator("host")
+    @classmethod
+    def normalize_host(cls, value: str) -> str:
+        return normalize_ssh_host(value)
+
 
 class SSHConnectionTest(BaseModel):
     host: str
     username: str
     port: int = 22
+
+    @field_validator("host")
+    @classmethod
+    def normalize_host(cls, value: str) -> str:
+        return normalize_ssh_host(value)
 
 
 class SSHConnectionUpdate(BaseModel):
@@ -274,6 +319,13 @@ class SSHConnectionUpdate(BaseModel):
     mount_point: Optional[str] = None  # Logical mount point
     use_sftp_mode: Optional[bool] = None
     use_sudo: Optional[bool] = None
+
+    @field_validator("host")
+    @classmethod
+    def normalize_host(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        return normalize_ssh_host(value)
 
 
 class SSHConnectionStorage(BaseModel):
@@ -301,6 +353,31 @@ class SSHConnectionInfo(BaseModel):
     error_message: Optional[str]
     storage: Optional[SSHConnectionStorage]  # Storage information
     created_at: str
+
+
+class SSHDiagnosticTarget(BaseModel):
+    host: str
+    port: int = Field(ge=1, le=65535)
+    timeout_seconds: float = Field(
+        default=SSH_DIAGNOSTICS_DEFAULT_TARGET_TIMEOUT_SECONDS, ge=0.5, le=15.0
+    )
+
+    @field_validator("host")
+    @classmethod
+    def normalize_host(cls, value: str) -> str:
+        return normalize_ssh_host(value)
+
+
+class SSHConnectionDiagnosticsRequest(BaseModel):
+    target: Optional[SSHDiagnosticTarget] = None
+    timeout_seconds: float = Field(
+        default=SSH_DIAGNOSTICS_DEFAULT_TIMEOUT_SECONDS, ge=1.0, le=30.0
+    )
+    speed_probe_bytes: int = Field(
+        default=SSH_DIAGNOSTICS_DEFAULT_SPEED_PROBE_BYTES,
+        ge=SSH_DIAGNOSTICS_BLOCK_SIZE_BYTES,
+        le=5 * 1024 * 1024,
+    )
 
 
 @router.get("/system-key")
@@ -1076,6 +1153,506 @@ async def get_ssh_connections(
         )
 
 
+def _monotonic() -> float:
+    return time.monotonic()
+
+
+def _elapsed_ms_between(started_at: float, ended_at: float) -> int:
+    return int(round(max(ended_at - started_at, 0.0) * 1000))
+
+
+def _elapsed_ms(started_at: float) -> int:
+    return _elapsed_ms_between(started_at, _monotonic())
+
+
+def _remaining_timeout(deadline: float) -> tuple[float, float]:
+    now = _monotonic()
+    return max(deadline - now, 0.0), now
+
+
+def _ssh_connect_timeout(timeout_seconds: float) -> str:
+    return str(max(1, math.ceil(timeout_seconds)))
+
+
+def _ssh_command_base(
+    connection: SSHConnection, key_file_path: str, timeout_seconds: float
+) -> list[str]:
+    return [
+        "ssh",
+        "-i",
+        key_file_path,
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "UserKnownHostsFile=/dev/null",
+        "-o",
+        "LogLevel=ERROR",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "IdentitiesOnly=yes",
+        "-o",
+        "PreferredAuthentications=publickey",
+        "-o",
+        "PasswordAuthentication=no",
+        "-o",
+        "NumberOfPasswordPrompts=0",
+        "-o",
+        f"ConnectTimeout={_ssh_connect_timeout(timeout_seconds)}",
+        "-p",
+        str(connection.port),
+    ]
+
+
+def _ssh_destination(connection: SSHConnection) -> str:
+    return f"{connection.username}@{connection.host}"
+
+
+def _diagnostic_connection_metadata(connection: SSHConnection) -> dict[str, Any]:
+    return {
+        "id": connection.id,
+        "host": connection.host,
+        "username": connection.username,
+        "port": connection.port,
+        "status": connection.status,
+        "last_test": serialize_datetime(connection.last_test),
+        "last_success": serialize_datetime(connection.last_success),
+        "error_message": connection.error_message,
+    }
+
+
+def _normalize_ssh_error(error_msg: str) -> tuple[str, str]:
+    stripped = error_msg.strip() or "SSH diagnostic command failed"
+    lower = stripped.lower()
+    if "connection refused" in lower or "connect failed" in lower:
+        return "connection_refused", stripped
+    if _is_ssh_dns_resolution_error(stripped):
+        return "dns_resolution_failed", stripped
+    if "permission denied" in lower or "authentication" in lower:
+        return "authentication_failed", stripped
+    if "timed out" in lower or "timeout" in lower:
+        return "timeout", stripped
+    if "no route to host" in lower or "network is unreachable" in lower:
+        return "network_unreachable", stripped
+    return "ssh_command_failed", stripped
+
+
+async def _run_ssh_process(
+    cmd: list[str],
+    timeout_seconds: float,
+) -> tuple[int, bytes, bytes]:
+    process = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdin=subprocess.DEVNULL,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        stdout, stderr = await asyncio.wait_for(
+            process.communicate(), timeout=timeout_seconds
+        )
+    except asyncio.TimeoutError:
+        process.kill()
+        with contextlib.suppress(Exception):
+            await process.wait()
+        raise
+    return process.returncode, stdout, stderr
+
+
+def _failed_probe_result(
+    *,
+    status: str,
+    elapsed_ms: int,
+    error: str,
+    message: str,
+) -> dict[str, Any]:
+    return {
+        "status": status,
+        "elapsed_ms": elapsed_ms,
+        "error": error,
+        "message": message,
+    }
+
+
+def _tcp_probe_base_result(target: SSHDiagnosticTarget) -> dict[str, Any]:
+    return {
+        "target": {
+            "host": target.host,
+            "port": target.port,
+            "timeout_seconds": float(target.timeout_seconds),
+        }
+    }
+
+
+def _throughput_probe_base_result(probe_size_bytes: int) -> dict[str, Any]:
+    return {
+        "direction": "download",
+        "probe_size_bytes": probe_size_bytes,
+    }
+
+
+async def _run_ssh_latency_probe(
+    connection: SSHConnection,
+    key_file_path: str,
+    timeout_seconds: float,
+) -> dict[str, Any]:
+    cmd = _ssh_command_base(connection, key_file_path, timeout_seconds) + [
+        _ssh_destination(connection),
+        "pwd",
+    ]
+    started_at = _monotonic()
+    try:
+        return_code, stdout, stderr = await _run_ssh_process(cmd, timeout_seconds)
+    except asyncio.TimeoutError:
+        return _failed_probe_result(
+            status="timeout",
+            elapsed_ms=_elapsed_ms(started_at),
+            error="timeout",
+            message="SSH diagnostic command timed out",
+        )
+
+    elapsed = _elapsed_ms(started_at)
+    if return_code == 0:
+        result: dict[str, Any] = {"status": "success", "elapsed_ms": elapsed}
+        output = stdout.decode(errors="replace").strip()
+        if output:
+            result["output"] = output
+        return result
+
+    stdout_str = stdout.decode(errors="replace") if stdout else ""
+    stderr_str = stderr.decode(errors="replace") if stderr else ""
+    error_code, message = _normalize_ssh_error(stderr_str or stdout_str)
+    return _failed_probe_result(
+        status="failed",
+        elapsed_ms=elapsed,
+        error=error_code,
+        message=message,
+    )
+
+
+async def _run_ssh_tcp_probe(
+    connection: SSHConnection,
+    key_file_path: str,
+    target: SSHDiagnosticTarget,
+    timeout_seconds: float,
+) -> dict[str, Any]:
+    effective_timeout = min(float(target.timeout_seconds), timeout_seconds)
+    cmd = _ssh_command_base(connection, key_file_path, effective_timeout) + [
+        "-W",
+        f"{target.host}:{target.port}",
+        _ssh_destination(connection),
+    ]
+    started_at = _monotonic()
+    target_result = _tcp_probe_base_result(target)
+    try:
+        return_code, stdout, stderr = await _run_ssh_process(cmd, effective_timeout)
+    except asyncio.TimeoutError:
+        target_result.update(
+            _failed_probe_result(
+                status="timeout",
+                elapsed_ms=_elapsed_ms(started_at),
+                error="timeout",
+                message="Remote TCP diagnostic timed out",
+            )
+        )
+        return target_result
+
+    elapsed = _elapsed_ms(started_at)
+    if return_code == 0:
+        target_result.update({"status": "success", "elapsed_ms": elapsed})
+        return target_result
+
+    stdout_str = stdout.decode(errors="replace") if stdout else ""
+    stderr_str = stderr.decode(errors="replace") if stderr else ""
+    error_code, message = _normalize_ssh_error(stderr_str or stdout_str)
+    target_result.update(
+        _failed_probe_result(
+            status="failed",
+            elapsed_ms=elapsed,
+            error=error_code,
+            message=message,
+        )
+    )
+    return target_result
+
+
+async def _run_ssh_throughput_probe(
+    connection: SSHConnection,
+    key_file_path: str,
+    *,
+    timeout_seconds: float,
+    probe_size_bytes: int,
+) -> dict[str, Any]:
+    block_count = math.ceil(probe_size_bytes / SSH_DIAGNOSTICS_BLOCK_SIZE_BYTES)
+    cmd = _ssh_command_base(connection, key_file_path, timeout_seconds) + [
+        _ssh_destination(connection),
+        f"dd if=/dev/zero bs={SSH_DIAGNOSTICS_BLOCK_SIZE_BYTES} count={block_count}",
+    ]
+    started_at = _monotonic()
+    base_result = _throughput_probe_base_result(probe_size_bytes)
+    try:
+        return_code, stdout, stderr = await _run_ssh_process(cmd, timeout_seconds)
+    except asyncio.TimeoutError:
+        base_result.update(
+            _failed_probe_result(
+                status="timeout",
+                elapsed_ms=_elapsed_ms(started_at),
+                error="timeout",
+                message="SSH speed probe timed out",
+            )
+        )
+        return base_result
+
+    elapsed = _elapsed_ms(started_at)
+    if return_code == 0 and stdout:
+        bytes_transferred = len(stdout)
+        elapsed_seconds = max(elapsed / 1000, 0.001)
+        mbps = round((bytes_transferred / 1024 / 1024) / elapsed_seconds, 2)
+        base_result.update(
+            {
+                "status": "success",
+                "bytes_transferred": bytes_transferred,
+                "elapsed_ms": elapsed,
+                "mbps": mbps,
+            }
+        )
+        return base_result
+
+    stdout_str = stdout.decode(errors="replace") if stdout else ""
+    stderr_str = stderr.decode(errors="replace") if stderr else ""
+    error_code, message = _normalize_ssh_error(stderr_str or stdout_str)
+    base_result.update(
+        _failed_probe_result(
+            status="failed",
+            elapsed_ms=elapsed,
+            error=error_code,
+            message=message,
+        )
+    )
+    return base_result
+
+
+def _diagnostics_result(
+    connection: SSHConnection, session_result: dict[str, Any]
+) -> dict[str, Any]:
+    latency_result = {
+        key: value
+        for key, value in session_result.items()
+        if key in {"status", "elapsed_ms", "error", "message"}
+    }
+    return {
+        "connection": _diagnostic_connection_metadata(connection),
+        "session": session_result,
+        "latency": latency_result,
+        "tcp": None,
+        "throughput": None,
+    }
+
+
+def _diagnostics_timeout_result(elapsed_ms: int, message: str) -> dict[str, Any]:
+    return _failed_probe_result(
+        status="timeout",
+        elapsed_ms=elapsed_ms,
+        error="timeout",
+        message=message,
+    )
+
+
+async def run_ssh_connection_diagnostics(
+    connection: SSHConnection,
+    ssh_key: SSHKey,
+    payload: SSHConnectionDiagnosticsRequest,
+) -> dict[str, Any]:
+    started_at = _monotonic()
+    deadline = started_at + float(payload.timeout_seconds)
+    key_file_path = write_ssh_key_to_tempfile(ssh_key)
+    try:
+        remaining, now = _remaining_timeout(deadline)
+        if remaining <= 0:
+            session_result = _diagnostics_timeout_result(
+                _elapsed_ms_between(started_at, now),
+                "SSH diagnostics timeout budget exhausted before session probe started",
+            )
+            return _diagnostics_result(connection, session_result)
+
+        session_result = await _run_ssh_latency_probe(
+            connection, key_file_path, remaining
+        )
+        result = _diagnostics_result(connection, session_result)
+
+        if session_result["status"] != "success":
+            return result
+
+        if payload.target is not None:
+            remaining, now = _remaining_timeout(deadline)
+            if remaining <= 0:
+                result["tcp"] = _tcp_probe_base_result(payload.target)
+                result["tcp"].update(
+                    _diagnostics_timeout_result(
+                        _elapsed_ms_between(started_at, now),
+                        "SSH diagnostics timeout budget exhausted before TCP probe started",
+                    )
+                )
+                return result
+
+            result["tcp"] = await _run_ssh_tcp_probe(
+                connection, key_file_path, payload.target, remaining
+            )
+
+        remaining, now = _remaining_timeout(deadline)
+        if remaining <= 0:
+            result["throughput"] = _throughput_probe_base_result(
+                payload.speed_probe_bytes
+            )
+            result["throughput"].update(
+                _diagnostics_timeout_result(
+                    _elapsed_ms_between(started_at, now),
+                    "SSH diagnostics timeout budget exhausted before speed probe started",
+                )
+            )
+            return result
+
+        result["throughput"] = await _run_ssh_throughput_probe(
+            connection,
+            key_file_path,
+            timeout_seconds=remaining,
+            probe_size_bytes=payload.speed_probe_bytes,
+        )
+        return result
+    finally:
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(key_file_path)
+
+
+def _resolve_connection_ssh_key(connection: SSHConnection, db: Session) -> SSHKey:
+    ssh_key = connection.ssh_key
+    if ssh_key:
+        return ssh_key
+
+    system_key = db.query(SSHKey).filter(SSHKey.is_system_key == True).first()
+    if not system_key:
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.ssh.noSystemKeyFound"}
+        )
+
+    connection.ssh_key_id = system_key.id
+    db.commit()
+    db.refresh(connection)
+    return system_key
+
+
+def _audit_connection_host(connection: SSHConnection) -> Dict[str, Any]:
+    host = connection.host or ""
+    try:
+        normalized_host = normalize_ssh_host(host)
+    except ValueError as exc:
+        return {
+            "id": connection.id,
+            "host": host,
+            "username": connection.username,
+            "port": connection.port,
+            "status": "suspicious",
+            "reason": str(exc),
+        }
+
+    if normalized_host != host:
+        return {
+            "id": connection.id,
+            "host": host,
+            "normalized_host": normalized_host,
+            "username": connection.username,
+            "port": connection.port,
+            "status": "normalizable",
+            "reason": "Host can be safely normalized.",
+        }
+
+    return {
+        "id": connection.id,
+        "host": host,
+        "normalized_host": normalized_host,
+        "username": connection.username,
+        "port": connection.port,
+        "status": "valid",
+    }
+
+
+def _host_audit_response(entries: list[Dict[str, Any]]) -> Dict[str, Any]:
+    normalizable = [entry for entry in entries if entry["status"] == "normalizable"]
+    suspicious = [entry for entry in entries if entry["status"] == "suspicious"]
+    valid = [entry for entry in entries if entry["status"] == "valid"]
+
+    return {
+        "summary": {
+            "total": len(entries),
+            "valid": len(valid),
+            "normalizable": len(normalizable),
+            "suspicious": len(suspicious),
+        },
+        "normalizable": normalizable,
+        "suspicious": suspicious,
+    }
+
+
+@router.get("/connections/host-audit")
+async def audit_ssh_connection_hosts(
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """Audit saved SSH connection hosts for safe normalization or manual cleanup."""
+    try:
+        connections = db.query(SSHConnection).all()
+        return _host_audit_response(
+            [_audit_connection_host(connection) for connection in connections]
+        )
+    except Exception as e:
+        logger.error("Failed to audit SSH connection hosts", error=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "key": "backend.errors.ssh.failedAuditSshConnectionHosts",
+                "params": {"error": str(e)},
+            },
+        )
+
+
+@router.post("/connections/host-cleanup")
+async def cleanup_ssh_connection_hosts(
+    dry_run: bool = True,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Safely normalize saved SSH hosts; suspicious hosts are reported only."""
+    try:
+        connections = db.query(SSHConnection).all()
+        entries = [_audit_connection_host(connection) for connection in connections]
+        normalizable = [entry for entry in entries if entry["status"] == "normalizable"]
+
+        cleaned = 0
+        if not dry_run:
+            normalizable_by_id = {entry["id"]: entry for entry in normalizable}
+            for connection in connections:
+                entry = normalizable_by_id.get(connection.id)
+                if entry:
+                    connection.host = entry["normalized_host"]
+                    connection.updated_at = datetime.utcnow()
+                    cleaned += 1
+            db.commit()
+
+        response = _host_audit_response(entries)
+        response["dry_run"] = dry_run
+        response["summary"]["cleaned"] = cleaned
+        return response
+    except Exception as e:
+        db.rollback()
+        logger.error("Failed to clean up SSH connection hosts", error=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "key": "backend.errors.ssh.failedCleanupSshConnectionHosts",
+                "params": {"error": str(e)},
+            },
+        )
+
+
 @router.post("/{key_id}/test-connection")
 async def test_ssh_connection(
     key_id: int,
@@ -1452,6 +2029,53 @@ async def test_existing_connection(
             status_code=500,
             detail={
                 "key": "backend.errors.ssh.failedTestConnection",
+                "params": {"error": str(e)},
+            },
+        )
+
+
+@router.post("/connections/{connection_id}/diagnostics")
+async def run_connection_diagnostics(
+    connection_id: int,
+    payload: SSHConnectionDiagnosticsRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Run ephemeral SSH diagnostics for an existing Remote Machine."""
+    try:
+        connection = (
+            db.query(SSHConnection).filter(SSHConnection.id == connection_id).first()
+        )
+        if not connection:
+            raise HTTPException(
+                status_code=404,
+                detail={"key": "backend.errors.ssh.sshConnectionNotFound"},
+            )
+
+        ssh_key = _resolve_connection_ssh_key(connection, db)
+
+        logger.info(
+            "Running SSH connection diagnostics",
+            connection_id=connection_id,
+            host=connection.host,
+            username=connection.username,
+            user=current_user.username,
+        )
+
+        return await run_ssh_connection_diagnostics(connection, ssh_key, payload)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "Failed to run SSH connection diagnostics",
+            error=str(e),
+            connection_id=connection_id,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "key": "backend.errors.ssh.failedRunConnectionDiagnostics",
                 "params": {"error": str(e)},
             },
         )
@@ -2025,6 +2649,9 @@ async def deploy_ssh_key_with_copy_id(
                 helpful_hint = (
                     "Check if SSH server is running and firewall allows connections"
                 )
+            elif _is_ssh_dns_resolution_error(error_msg):
+                error_summary = f"Host did not resolve: {host}"
+                helpful_hint = "Check the saved host value, DNS records/resolvers, provider sub-account existence, and container/runtime DNS."
             elif "Permission denied" in error_msg:
                 error_summary = (
                     f"Authentication failed for {username}@{host} - incorrect password"
@@ -2143,6 +2770,20 @@ async def test_ssh_key_connection(
             "-o",
             "StrictHostKeyChecking=no",
             "-o",
+            "UserKnownHostsFile=/dev/null",
+            "-o",
+            "LogLevel=ERROR",
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "IdentitiesOnly=yes",
+            "-o",
+            "PreferredAuthentications=publickey",
+            "-o",
+            "PasswordAuthentication=no",
+            "-o",
+            "NumberOfPasswordPrompts=0",
+            "-o",
             "ConnectTimeout=10",
             "-p",
             str(port),
@@ -2194,6 +2835,9 @@ async def test_ssh_key_connection(
                         f"SSH connection works but remote shell is restricted"
                     )
                     helpful_hint = "Server uses restricted shell (e.g., Hetzner Storage Box). Connection is valid for borg/rsync/sftp operations."
+                elif _is_ssh_dns_resolution_error(error_msg):
+                    error_summary = f"Host did not resolve: {host}"
+                    helpful_hint = "Check the saved host value, DNS records/resolvers, provider sub-account existence, and container/runtime DNS."
                 elif "Connection refused" in error_msg:
                     error_summary = (
                         f"Cannot connect to {host}:{port} - SSH service not accessible"

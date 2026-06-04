@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional, Dict, Any, NoReturn
 from datetime import datetime, timedelta, timezone
 import structlog
@@ -17,6 +17,8 @@ from app.database.models import (
     Script,
     RepositoryScript,
     SystemSettings,
+    BackupPlan,
+    BackupPlanRepository,
 )
 from app.core.authorization import authorize_request
 from app.core.borg_router import BorgRouter
@@ -26,6 +28,15 @@ from app.api.maintenance_jobs import create_started_maintenance_job
 from app.services.notification_service import notification_service
 from app.services.check_scheduler import run_due_scheduled_checks
 from app.services.restore_check_scheduler import run_due_scheduled_restore_checks
+from app.services.rclone_mirror_scheduler import dispatch_due_scheduled_rclone_mirrors
+from app.services.backup_route_planner import apply_repository_route_to_backup_job
+from app.services.job_admission import (
+    OPERATION_BACKUP,
+    count_active_scheduled_backup_jobs,
+    ensure_repository_admission,
+    get_scheduled_backup_limit,
+    lock_backup_capacity_scope,
+)
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.archive_names import build_archive_name
 from app.utils.schedule_time import (
@@ -140,17 +151,17 @@ def _raise_invalid_schedule_timezone(exc: InvalidScheduleTimezone) -> NoReturn:
     )
 
 
-def _count_active_scheduled_backup_runs() -> int:
-    return len(_active_scheduled_backup_runs)
+def _count_active_scheduled_backup_runs(db: Optional[Session] = None) -> int:
+    in_memory_count = len(_active_scheduled_backup_runs)
+    if db is None:
+        return in_memory_count
+    return max(count_active_scheduled_backup_jobs(db), in_memory_count)
 
 
 def _get_scheduler_concurrency_limits(db: Session) -> tuple[int, int]:
+    lock_backup_capacity_scope(db)
     settings = db.query(SystemSettings).first()
-    max_scheduled_backups = (
-        settings.max_concurrent_scheduled_backups
-        if settings and settings.max_concurrent_scheduled_backups is not None
-        else 2
-    )
+    max_scheduled_backups = get_scheduled_backup_limit(db)
     max_scheduled_checks = (
         settings.max_concurrent_scheduled_checks
         if settings and settings.max_concurrent_scheduled_checks is not None
@@ -310,6 +321,49 @@ def _require_schedule_access(
         check_repo_access(db, current_user, repo, required_role)
 
     return repositories
+
+
+def _get_backup_plan_repositories(plan: BackupPlan) -> List[Repository]:
+    repositories = []
+    for link in sorted(plan.repositories, key=lambda item: item.execution_order):
+        if link.enabled and link.repository:
+            repositories.append(link.repository)
+    return repositories
+
+
+def _require_backup_plan_schedule_access(
+    db: Session, current_user: User, plan: BackupPlan, required_role: str
+) -> List[Repository]:
+    repositories = _get_backup_plan_repositories(plan)
+
+    if not repositories and current_user.role != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail={"key": "backend.errors.auth.insufficientPermissions"},
+        )
+
+    for repo in repositories:
+        check_repo_access(db, current_user, repo, required_role)
+
+    return repositories
+
+
+def _resolve_backup_plan_next_run(
+    plan: BackupPlan, now: datetime
+) -> Optional[datetime]:
+    now_utc = to_utc_naive(now)
+    if plan.next_run and to_utc_naive(plan.next_run) > now_utc:
+        return to_utc_naive(plan.next_run)
+    if not plan.cron_expression:
+        return None
+    try:
+        return _calculate_next_schedule_run(
+            plan.cron_expression,
+            now_utc,
+            plan.timezone or DEFAULT_SCHEDULE_TIMEZONE,
+        )
+    except Exception:
+        return None
 
 
 @router.get("/")
@@ -864,17 +918,65 @@ async def get_upcoming_jobs(
                 )
 
                 if next_run <= end_time:
+                    repo_links = (
+                        db.query(ScheduledJobRepository)
+                        .filter_by(scheduled_job_id=job.id)
+                        .order_by(ScheduledJobRepository.execution_order)
+                        .all()
+                    )
+                    repository_ids = [link.repository_id for link in repo_links]
                     upcoming_jobs.append(
                         {
                             "id": job.id,
+                            "type": "schedule",
                             "name": job.name,
                             "repository": job.repository,
+                            "repository_id": job.repository_id,
+                            "repository_ids": repository_ids,
                             "next_run": serialize_datetime(next_run),
                             "cron_expression": job.cron_expression,
                             "timezone": job.timezone or DEFAULT_SCHEDULE_TIMEZONE,
                         }
                     )
             except:
+                continue
+
+        plans = (
+            db.query(BackupPlan)
+            .options(
+                joinedload(BackupPlan.repositories).joinedload(
+                    BackupPlanRepository.repository
+                )
+            )
+            .filter(
+                BackupPlan.enabled == True,
+                BackupPlan.schedule_enabled == True,
+            )
+            .all()
+        )
+        for plan in plans:
+            try:
+                repositories = _require_backup_plan_schedule_access(
+                    db, current_user, plan, "viewer"
+                )
+                next_run = _resolve_backup_plan_next_run(plan, now)
+                if not next_run or next_run > end_time:
+                    continue
+
+                upcoming_jobs.append(
+                    {
+                        "id": plan.id,
+                        "type": "backup_plan",
+                        "name": plan.name,
+                        "repository": None,
+                        "repository_id": None,
+                        "repository_ids": [repo.id for repo in repositories],
+                        "next_run": serialize_datetime(next_run),
+                        "cron_expression": plan.cron_expression,
+                        "timezone": plan.timezone or DEFAULT_SCHEDULE_TIMEZONE,
+                    }
+                )
+            except Exception:
                 continue
 
         # Sort by next run time
@@ -1499,15 +1601,19 @@ async def run_scheduled_job_now(
                     detail={"key": "backend.errors.schedule.repositoryNotFound"},
                 )
 
+            ensure_repository_admission(db, repo, OPERATION_BACKUP)
+
             # Create backup job record with scheduled_job_id
             backup_job = BackupJob(
                 repository=repo.path,
+                repository_id=repo.id,
                 status="pending",
                 scheduled_job_id=job.id,  # Link to scheduled job
                 created_at=datetime.now(
                     timezone.utc
                 ),  # Explicit timestamp to prevent NULL
             )
+            apply_repository_route_to_backup_job(backup_job, repo)
             db.add(backup_job)
             db.commit()
             db.refresh(backup_job)
@@ -1522,6 +1628,7 @@ async def run_scheduled_job_now(
                 date=_now.strftime("%Y-%m-%d"),
                 time_str=_now.strftime("%H:%M:%S"),
                 unix_timestamp=str(int(_now.timestamp())),
+                stable_series=getattr(repo, "borg_version", 1) == 2,
             )
 
             # Execute backup with optional prune/compact asynchronously (non-blocking)
@@ -1868,15 +1975,19 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                 repo_path=repo.path,
             )
 
+            ensure_repository_admission(db, repo, OPERATION_BACKUP)
+
             # Create backup job record
             backup_job = BackupJob(
                 repository=repo.path,
+                repository_id=repo.id,
                 status="pending",
                 scheduled_job_id=scheduled_job.id,
                 created_at=datetime.now(
                     timezone.utc
                 ),  # Explicit timestamp to prevent NULL
             )
+            apply_repository_route_to_backup_job(backup_job, repo)
             db.add(backup_job)
             db.commit()
             db.refresh(backup_job)
@@ -1891,6 +2002,7 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                 date=timestamp_date,
                 time_str=timestamp_time,
                 unix_timestamp=timestamp_unix,
+                stable_series=getattr(repo, "borg_version", 1) == 2,
             )
 
             # Run repository-level pre-scripts if enabled
@@ -2214,6 +2326,19 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                 status=backup_job.status,
             )
 
+        except HTTPException as e:
+            if e.status_code == 409:
+                logger.info(
+                    "Deferring multi-repo scheduled backup for active repository work",
+                    schedule_id=scheduled_job.id,
+                    repo_name=repo.name,
+                    repo_path=repo.path,
+                )
+                raise
+            logger.error(
+                "Backup failed for repository", repo_name=repo.name, error=str(e)
+            )
+            # Continue with next repository even if this one fails
         except Exception as e:
             logger.error(
                 "Backup failed for repository", repo_name=repo.name, error=str(e)
@@ -2497,6 +2622,39 @@ def _dispatch_due_scheduled_job(
             job_id=job.id,
             repo_count=len(repo_links),
         )
+        repositories: list[Repository] = []
+        for link in repo_links:
+            repo = db.query(Repository).filter_by(id=link.repository_id).first()
+            if repo:
+                repositories.append(repo)
+            else:
+                logger.warning(
+                    "Repository not found for multi-repo scheduled job",
+                    job_id=job.id,
+                    repository_id=link.repository_id,
+                )
+
+        if not repositories:
+            logger.error(
+                "Scheduled job has no valid repositories configured",
+                job_id=job.id,
+            )
+            return None
+
+        for repo in repositories:
+            try:
+                ensure_repository_admission(db, repo, OPERATION_BACKUP)
+            except HTTPException as exc:
+                if exc.status_code == 409:
+                    logger.info(
+                        "Deferring multi-repo scheduled backup for active repository work",
+                        job_id=job.id,
+                        repository_id=repo.id,
+                        repository=repo.path,
+                    )
+                    return None
+                raise
+
         run_key = f"schedule:{job.id}"
         task = asyncio.create_task(execute_multi_repo_schedule_by_id(job.id))
         _track_scheduled_backup_task(task, run_key)
@@ -2516,12 +2674,27 @@ def _dispatch_due_scheduled_job(
             )
             return None
 
+        try:
+            ensure_repository_admission(db, repo, OPERATION_BACKUP)
+        except HTTPException as exc:
+            if exc.status_code == 409:
+                logger.info(
+                    "Deferring scheduled backup for active repository work",
+                    job_id=job.id,
+                    repository_id=repo.id,
+                    repository=repo.path,
+                )
+                return None
+            raise
+
         backup_job = BackupJob(
             repository=repo.path,
+            repository_id=repo.id,
             status="pending",
             scheduled_job_id=job.id,
             created_at=datetime.now(timezone.utc),
         )
+        apply_repository_route_to_backup_job(backup_job, repo)
         db.add(backup_job)
         db.commit()
         db.refresh(backup_job)
@@ -2535,6 +2708,7 @@ def _dispatch_due_scheduled_job(
             date=_now.strftime("%Y-%m-%d"),
             time_str=_now.strftime("%H:%M:%S"),
             unix_timestamp=str(int(_now.timestamp())),
+            stable_series=getattr(repo, "borg_version", 1) == 2,
         )
 
         run_key = f"backup:{backup_job.id}"
@@ -2576,7 +2750,7 @@ async def dispatch_due_scheduled_backups(
         logger.info("Scheduled backup dispatch disabled", limit=max_scheduled_backups)
         return
 
-    active_runs = _count_active_scheduled_backup_runs()
+    active_runs = _count_active_scheduled_backup_runs(db)
     available_slots = max_scheduled_backups - active_runs
     if available_slots <= 0:
         logger.info(
@@ -2641,8 +2815,15 @@ async def check_scheduled_jobs():
         try:
             now = datetime.now(timezone.utc)
             await dispatch_due_scheduled_backups(db, now)
+            from app.services.backup_plan_execution_service import (
+                backup_plan_execution_service,
+            )
+
+            backup_plan_execution_service.dispatch_due_runs(db, now)
             await run_due_scheduled_checks(db, now)
             await run_due_scheduled_restore_checks(db, now)
+            dispatch_due_scheduled_rclone_mirrors(db, now)
+            await run_backup_monitoring_and_reports(db, now)
 
         except Exception as e:
             logger.error("Error in scheduled job checker", error=str(e))
@@ -2651,3 +2832,12 @@ async def check_scheduled_jobs():
 
         # Wait for 1 minute before next check
         await asyncio.sleep(60)
+
+
+async def run_backup_monitoring_and_reports(db: Session, now: datetime):
+    """Run configured backup monitoring and report dispatch from the shared scheduler."""
+    from app.services.backup_monitoring_service import (
+        run_backup_monitoring_and_reports as run_service,
+    )
+
+    return await run_service(db, now)

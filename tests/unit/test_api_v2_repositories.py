@@ -13,7 +13,14 @@ from sqlalchemy.orm import sessionmaker
 from app.api.v2 import repositories as repositories_v2_api
 from app.core.borg2 import BORG2_ENCRYPTION_MODES
 from app.config import settings
-from app.database.models import LicensingState, Repository, SystemSettings
+from app.database.models import (
+    BackupJob,
+    BackupPlan,
+    BackupPlanRun,
+    LicensingState,
+    Repository,
+    SystemSettings,
+)
 from app.database.models import SSHConnection, SSHKey
 
 
@@ -94,13 +101,51 @@ class TestV2RepositoryRoutes:
         self, test_client: TestClient, admin_headers, test_db
     ):
         _enable_borg_v2(test_db)
+        source_a = SSHConnection(
+            host="server-a.example", username="backup-a", port=22, status="connected"
+        )
+        source_b = SSHConnection(
+            host="server-b.example",
+            username="backup-b",
+            port=2222,
+            status="connected",
+        )
+        test_db.add_all([source_a, source_b])
+        test_db.commit()
+        test_db.refresh(source_a)
+        test_db.refresh(source_b)
+        source_locations = [
+            {
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "agent_machine_id": None,
+                "paths": ["/data/source-a"],
+            },
+            {
+                "source_type": "remote",
+                "source_ssh_connection_id": source_a.id,
+                "agent_machine_id": None,
+                "paths": ["/remote/source-b"],
+            },
+            {
+                "source_type": "remote",
+                "source_ssh_connection_id": source_b.id,
+                "agent_machine_id": None,
+                "paths": ["/remote/source-c"],
+            },
+        ]
         payload = {
             "name": "Borg 2 Repo",
             "path": "/tmp/v2-create-repo",
             "encryption": "repokey-aes-ocb",
             "compression": "lz4",
-            "source_directories": ["/data/source-a", "/data/source-b"],
-            "source_connection_id": 44,
+            "source_directories": [
+                "/data/source-a",
+                "/remote/source-b",
+                "/remote/source-c",
+            ],
+            "source_connection_id": None,
+            "source_locations": source_locations,
         }
 
         with patch(
@@ -132,7 +177,8 @@ class TestV2RepositoryRoutes:
         assert repo is not None
         assert repo.borg_version == 2
         assert json.loads(repo.source_directories) == payload["source_directories"]
-        assert repo.source_ssh_connection_id == 44
+        assert repo.source_ssh_connection_id is None
+        assert json.loads(repo.source_locations) == source_locations
         mock_rcreate.assert_awaited_once()
 
     def test_create_repository_rejects_invalid_encryption(
@@ -662,6 +708,68 @@ class TestV2RepositoryRoutes:
         assert response.json() == {"archives": [{"name": "one"}], "borg_version": 2}
         mock_list.assert_awaited_once()
         assert mock_list.call_args.kwargs["bypass_lock"] is True
+
+    def test_list_archives_marks_manual_backup_plan_archive(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db, path="/tmp/v2-plan-repo")
+        plan = BackupPlan(
+            name="Monthly Plan",
+            enabled=True,
+            source_type="local",
+            source_directories='["/srv/project"]',
+            exclude_patterns="[]",
+            archive_name_template="{plan_name}-{repo_name}-{now}",
+            compression="lz4",
+            repository_run_mode="series",
+            max_parallel_repositories=1,
+            failure_behavior="continue",
+            schedule_enabled=False,
+            timezone="UTC",
+        )
+        test_db.add(plan)
+        test_db.flush()
+        run = BackupPlanRun(
+            backup_plan_id=plan.id,
+            trigger="manual",
+            status="completed",
+        )
+        test_db.add(run)
+        test_db.flush()
+        test_db.add(
+            BackupJob(
+                repository=repo.path,
+                repository_id=repo.id,
+                backup_plan_id=plan.id,
+                backup_plan_run_id=run.id,
+                archive_name="Monthly-Plan-V2-Repo",
+                status="completed",
+            )
+        )
+        test_db.commit()
+
+        with patch(
+            "app.api.v2.repositories.borg2.list_archives",
+            new=AsyncMock(
+                return_value={
+                    "success": True,
+                    "stdout": json.dumps(
+                        {"archives": [{"name": "Monthly-Plan-V2-Repo"}]}
+                    ),
+                    "stderr": "",
+                }
+            ),
+        ):
+            response = test_client.get(
+                f"/api/v2/repositories/{repo.id}/archives", headers=admin_headers
+            )
+
+        assert response.status_code == 200
+        archive = response.json()["archives"][0]
+        assert archive["triggered_by"] == "manual"
+        assert archive["backup_plan_id"] == plan.id
+        assert archive["backup_plan_run_id"] == run.id
 
     def test_get_repository_info_respects_system_bypass_lock(
         self, test_client: TestClient, admin_headers, test_db

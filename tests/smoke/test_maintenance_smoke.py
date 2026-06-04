@@ -103,19 +103,17 @@ def main() -> int:
             },
         )
         prune_payload = prune_response.json()
-        if set(prune_payload.keys()) != {"job_id", "status", "dry_run", "prune_result"}:
+        if set(prune_payload.keys()) != {"job_id", "status", "message"}:
             raise SmokeFailure(f"Unexpected prune response shape: {prune_payload}")
-        if prune_payload.get("status") != "completed":
-            raise SmokeFailure(
-                f"Expected prune to complete successfully: {prune_payload}"
-            )
-        prune_result = prune_payload.get("prune_result", {})
-        if set(prune_result.keys()) != {"success", "stdout", "stderr"}:
-            raise SmokeFailure(f"Unexpected prune result shape: {prune_payload}")
-        if prune_result.get("success") is not True:
-            raise SmokeFailure(
-                f"Expected prune_result.success to be true: {prune_payload}"
-            )
+        if prune_payload.get("status") != "pending":
+            raise SmokeFailure(f"Expected prune to start pending: {prune_payload}")
+        prune_job_id = prune_payload["job_id"]
+        client.wait_for_job(
+            "/api/repositories/prune-jobs",
+            prune_job_id,
+            expected={"completed"},
+            timeout=120,
+        )
 
         archives_after = client.list_archives(repo_path)
         if len(archives_after) != 1:

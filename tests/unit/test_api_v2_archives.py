@@ -713,9 +713,13 @@ class TestV2ArchiveRoutes:
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(test_db)
         archive_id = "10614da295b13209b207fc2499d67e7f10c24f4a1745e482bd3fc2595e4ec7fd"
+        archive_path = tmp_path / "extract"
 
         with (
-            patch("app.api.v2.archives.tempfile.mkdtemp", return_value=str(tmp_path)),
+            patch(
+                "app.api.v2.archives.tempfile.mkdtemp",
+                return_value=str(archive_path),
+            ),
             patch(
                 "app.api.v2.archives.borg2.extract_archive",
                 new=AsyncMock(
@@ -733,7 +737,7 @@ class TestV2ArchiveRoutes:
             repo.path,
             f"aid:{archive_id}",
             ["/documents/report.txt"],
-            str(tmp_path),
+            str(archive_path),
             passphrase=None,
             remote_path=None,
             bypass_lock=False,
@@ -744,8 +748,11 @@ class TestV2ArchiveRoutes:
     ):
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(test_db)
+        archive_path = tmp_path / "extract"
 
-        with patch("app.api.v2.archives.tempfile.mkdtemp", return_value=str(tmp_path)):
+        with patch(
+            "app.api.v2.archives.tempfile.mkdtemp", return_value=str(archive_path)
+        ):
             with patch(
                 "app.api.v2.archives.borg2.extract_archive",
                 new=AsyncMock(
@@ -768,8 +775,11 @@ class TestV2ArchiveRoutes:
     ):
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(test_db)
+        archive_path = tmp_path / "extract"
 
-        with patch("app.api.v2.archives.tempfile.mkdtemp", return_value=str(tmp_path)):
+        with patch(
+            "app.api.v2.archives.tempfile.mkdtemp", return_value=str(archive_path)
+        ):
             with patch(
                 "app.api.v2.archives.borg2.extract_archive",
                 new=AsyncMock(return_value={"success": True, "stderr": ""}),

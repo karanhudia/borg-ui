@@ -9,7 +9,7 @@ import {
   Typography,
   Box,
 } from '@mui/material'
-import ResponsiveDialog from './ResponsiveDialog'
+import ResponsiveDialog from './shared/ResponsiveDialog'
 import StatusBadge from './StatusBadge'
 
 interface JobWithError {

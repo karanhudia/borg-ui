@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 import asyncio
 import os
 import json
 import re
 import tempfile
+import shutil
 from datetime import datetime
 from pathlib import Path
 import structlog
@@ -16,12 +19,21 @@ from app.services.notification_service import notification_service
 from app.services.script_executor import execute_script
 from app.services.script_library_executor import ScriptLibraryExecutor
 from app.services.mqtt_service import mqtt_service
+from app.services.rclone_repository_service import rclone_repository_service
 from app.services.restore_check_canary import (
     ensure_restore_canary,
     should_include_restore_canary,
     to_restore_canary_archive_source_path,
 )
+from app.services.filesystem_snapshot_service import (
+    PreparedFilesystemSnapshot,
+    build_filesystem_snapshot_plans,
+)
 from app.utils.ssh_paths import resolve_sshfs_source_path
+from app.utils.source_locations import (
+    decode_source_locations,
+    flatten_source_locations,
+)
 from app.utils.borg_env import (
     build_repository_borg_env,
     cleanup_temp_key_file,
@@ -29,9 +41,18 @@ from app.utils.borg_env import (
 )
 from app.utils.ssh_utils import (
     resolve_repo_ssh_key_file,  # noqa: F401
+    resolve_ssh_key_file_by_id,
 )  # Backward-compatible patch target for tests
 
 logger = structlog.get_logger()
+
+REMOTE_EXECUTION_MODES = {"remote_ssh", "remote_direct"}
+
+
+def _uses_remote_execution(job: BackupJob) -> bool:
+    return (job.execution_mode or "").strip().lower() in REMOTE_EXECUTION_MODES or (
+        job.route_strategy or ""
+    ).strip().lower() == "remote_direct"
 
 
 class BackupService:
@@ -44,6 +65,36 @@ class BackupService:
         self.error_msgids = {}  # Track error message IDs by job_id
         self.log_buffers = {}  # Track in-memory log buffers by job_id (for running jobs)
         self.ssh_mounts = {}  # Track SSH mount IDs by job_id: {job_id: [mount_id, ...]}
+        self.filesystem_snapshots = {}  # Track btrfs/zfs snapshots by job_id
+
+    def _resolve_grouped_source_paths(
+        self, db: Session, source_locations: list[dict]
+    ) -> list[str]:
+        from app.database.models import SSHConnection
+
+        source_paths: list[str] = []
+        for location in source_locations:
+            paths = location.get("paths") or []
+            if location.get("source_type") == "remote":
+                connection_id = location.get("source_ssh_connection_id")
+                connection = (
+                    db.query(SSHConnection)
+                    .filter(SSHConnection.id == connection_id)
+                    .first()
+                )
+                if not connection:
+                    raise ValueError(
+                        f"SSH connection {connection_id} not found for remote source"
+                    )
+                source_paths.extend(
+                    f"ssh://{connection.username}@{connection.host}:{connection.port}"
+                    f"{resolve_sshfs_source_path(path, connection.default_path)}"
+                    for path in paths
+                )
+            else:
+                source_paths.extend(paths)
+
+        return source_paths
 
     def _get_operation_timeouts(self, db: Session = None) -> dict:
         """
@@ -234,6 +285,71 @@ class BackupService:
                 "scripts_failed": 0 if result["success"] else 1,
                 "using_library": False,
             }
+
+    async def _sync_rclone_after_borg(
+        self,
+        db: Session,
+        repo_record: Repository | None,
+        job: BackupJob,
+    ) -> bool:
+        if (
+            not repo_record
+            or not repo_record.storage
+            or repo_record.storage.backend != "rclone"
+        ):
+            return True
+        if repo_record.storage.sync_policy != "after_success":
+            repo_record.storage.sync_status = "pending"
+            db.commit()
+            return True
+
+        status = await rclone_repository_service.sync_repository(db, repo_record)
+        if status.get("sync_status") == "current":
+            return True
+
+        sync_error = (
+            status.get("last_sync_error") or "rclone sync failed after Borg completed"
+        )
+        job.status = "completed_with_warnings"
+        job.error_message = self._merge_rclone_sync_warning(
+            job.error_message, sync_error
+        )
+        db.commit()
+        logger.warning(
+            "Rclone sync failed after successful Borg backup",
+            job_id=job.id,
+            repository_id=repo_record.id,
+            error=sync_error,
+        )
+        return False
+
+    def _merge_rclone_sync_warning(
+        self, existing_error_message: str | None, sync_error: str
+    ) -> str:
+        rclone_warning = {
+            "key": "backend.errors.rclone.syncFailedAfterBackup",
+            "params": {"error": sync_error},
+        }
+        if not existing_error_message:
+            return json.dumps(rclone_warning)
+
+        try:
+            existing_payload = json.loads(existing_error_message)
+        except (TypeError, json.JSONDecodeError):
+            rclone_warning["params"]["previous_error"] = existing_error_message
+            return json.dumps(rclone_warning)
+
+        if not isinstance(existing_payload, dict):
+            rclone_warning["params"]["previous_error"] = existing_payload
+            return json.dumps(rclone_warning)
+
+        params = existing_payload.get("params")
+        if not isinstance(params, dict):
+            params = {}
+        params["rclone_error"] = sync_error
+        params["rclone_key"] = "backend.errors.rclone.syncFailedAfterBackup"
+        existing_payload["params"] = params
+        return json.dumps(existing_payload)
 
     def rotate_logs(self, db: Session = None):
         """
@@ -529,7 +645,12 @@ class BackupService:
         return f"{bytes_value:.2f} PB"
 
     async def _calculate_source_size(
-        self, source_paths: list[str], exclude_patterns: list[str] = None
+        self,
+        source_paths: list[str],
+        exclude_patterns: list[str] = None,
+        key_file: str = None,
+        key_files_by_ssh_target: dict[tuple[str, str, str], str] = None,
+        login_relative_ssh_targets: set[tuple[str, str, str]] = None,
     ) -> int:
         """Calculate total size of source directories in bytes.
 
@@ -539,7 +660,94 @@ class BackupService:
         from app.utils.fs import calculate_path_size_bytes
 
         timeout = self._get_operation_timeouts()["source_size_timeout"]
-        return await calculate_path_size_bytes(source_paths, exclude_patterns, timeout)
+        return await calculate_path_size_bytes(
+            source_paths,
+            exclude_patterns,
+            timeout,
+            key_file=key_file,
+            key_files_by_ssh_target=key_files_by_ssh_target,
+            login_relative_ssh_targets=login_relative_ssh_targets,
+        )
+
+    def _resolve_source_size_ssh_key_files(
+        self, db: Session, source_paths: list[str]
+    ) -> dict[tuple[str, str, str], str]:
+        """Resolve SSH key files for remote source size calculations."""
+        from app.database.models import SSHConnection
+
+        key_files_by_target = {}
+        key_files_by_key_id = {}
+
+        for source_path in source_paths:
+            if not source_path.startswith("ssh://"):
+                continue
+
+            parsed = self._parse_ssh_url(source_path)
+            if not parsed:
+                continue
+
+            username = parsed["username"]
+            host = parsed["host"]
+            port = str(parsed["port"])
+            connection = (
+                db.query(SSHConnection)
+                .filter(
+                    SSHConnection.host == host,
+                    SSHConnection.username == username,
+                    SSHConnection.port == int(port),
+                )
+                .first()
+            )
+
+            ssh_key_id = getattr(connection, "ssh_key_id", None)
+            if not ssh_key_id:
+                continue
+
+            key_file = key_files_by_key_id.get(ssh_key_id)
+            if key_file is None:
+                key_file = resolve_ssh_key_file_by_id(ssh_key_id, db=db)
+                if key_file:
+                    key_files_by_key_id[ssh_key_id] = key_file
+
+            if key_file:
+                key_files_by_target[(username, host, port)] = key_file
+
+        return key_files_by_target
+
+    def _resolve_source_size_login_relative_targets(
+        self, db: Session, source_paths: list[str]
+    ) -> set[tuple[str, str, str]]:
+        """Resolve SSH targets where source paths may be login-relative."""
+        from app.database.models import SSHConnection
+
+        targets = set()
+        for source_path in source_paths:
+            if not source_path.startswith("ssh://"):
+                continue
+
+            parsed = self._parse_ssh_url(source_path)
+            if not parsed:
+                continue
+
+            username = parsed["username"]
+            host = parsed["host"]
+            port = str(parsed["port"])
+            remote_path = parsed["path"]
+            connection = (
+                db.query(SSHConnection)
+                .filter(
+                    SSHConnection.host == host,
+                    SSHConnection.username == username,
+                    SSHConnection.port == int(port),
+                )
+                .first()
+            )
+            default_path = getattr(connection, "default_path", None)
+            normalized_default_path = (default_path or "").strip()
+            if remote_path.startswith("/./") or normalized_default_path in {"", "/"}:
+                targets.add((username, host, port))
+
+        return targets
 
     async def _calculate_and_update_size_background(
         self, job_id: int, source_paths: list[str], exclude_patterns: list[str] = None
@@ -553,6 +761,7 @@ class BackupService:
             source_paths: List of source directory paths
             exclude_patterns: List of patterns to exclude (same format as Borg excludes)
         """
+        temp_source_key_files = set()
         try:
             if exclude_patterns is None:
                 exclude_patterns = []
@@ -564,8 +773,29 @@ class BackupService:
                 path_count=len(source_paths),
                 exclude_count=len(exclude_patterns),
             )
+
+            key_files_by_ssh_target = None
+            login_relative_ssh_targets = None
+            if any(path.startswith("ssh://") for path in source_paths):
+                db = SessionLocal()
+                try:
+                    key_files_by_ssh_target = self._resolve_source_size_ssh_key_files(
+                        db, source_paths
+                    )
+                    login_relative_ssh_targets = (
+                        self._resolve_source_size_login_relative_targets(
+                            db, source_paths
+                        )
+                    )
+                    temp_source_key_files.update(key_files_by_ssh_target.values())
+                finally:
+                    db.close()
+
             total_expected_size = await self._calculate_source_size(
-                source_paths, exclude_patterns
+                source_paths,
+                exclude_patterns,
+                key_files_by_ssh_target=key_files_by_ssh_target,
+                login_relative_ssh_targets=login_relative_ssh_targets,
             )
 
             if total_expected_size > 0:
@@ -605,6 +835,37 @@ class BackupService:
                 error_type=type(e).__name__,
                 source_paths=source_paths,
             )
+        finally:
+            for key_file in temp_source_key_files:
+                cleanup_temp_key_file(key_file)
+
+    def _validate_local_source_paths_exist(
+        self, source_paths: list[str], skip_paths: set[str] | None = None
+    ) -> None:
+        skip_paths = skip_paths or set()
+        missing_paths = [
+            source_path
+            for source_path in source_paths
+            if source_path not in skip_paths
+            and not source_path.startswith("ssh://")
+            and not os.path.lexists(source_path)
+        ]
+        if not missing_paths:
+            return
+
+        logger.error(
+            "Backup source path does not exist",
+            missing_paths=missing_paths,
+            missing_count=len(missing_paths),
+        )
+        raise ValueError(
+            json.dumps(
+                {
+                    "key": "backend.errors.filesystem.pathNotFound",
+                    "params": {"path": missing_paths[0]},
+                }
+            )
+        )
 
     def _parse_ssh_url(self, ssh_url: str) -> dict:
         """
@@ -1015,7 +1276,10 @@ class BackupService:
                     # Local path - use as-is
                     local_paths.append(path)
 
-            # Second pass: Mount SSH paths using shared temp root for same connection
+            # Second pass: Mount SSH paths. Reuse the first SSHFS temp root across
+            # source connections so Borg can run from one cwd and store relative
+            # remote paths instead of /tmp/sshfs_mount_* implementation paths.
+            shared_ssh_temp_root = None
             for connection_id, paths_data in ssh_paths_by_connection.items():
                 remote_paths = [parsed["path"] for _, parsed, _ in paths_data]
                 connection = paths_data[0][2]  # Get connection from first item
@@ -1031,14 +1295,20 @@ class BackupService:
 
                 try:
                     # Mount all paths from this connection under a single shared temp root
+                    mount_kwargs = {
+                        "connection_id": connection_id,
+                        "remote_paths": remote_paths,
+                        "job_id": job_id,
+                    }
+                    if shared_ssh_temp_root is not None:
+                        mount_kwargs["temp_root"] = shared_ssh_temp_root
+
                     (
                         temp_root,
                         mount_info_list,
-                    ) = await mount_service.mount_ssh_paths_shared(
-                        connection_id=connection_id,
-                        remote_paths=remote_paths,
-                        job_id=job_id,
-                    )
+                    ) = await mount_service.mount_ssh_paths_shared(**mount_kwargs)
+                    if shared_ssh_temp_root is None:
+                        shared_ssh_temp_root = temp_root
 
                     # Process mount results
                     for (mount_id, relative_path), (original_url, parsed, _) in zip(
@@ -1069,8 +1339,40 @@ class BackupService:
                     )
                     # Skip all paths from this connection
 
-            # Add local paths at the end
-            processed_paths.extend(local_paths)
+            # Add local paths at the end. Borg UI's managed restore canary is a
+            # local path, but when the backup cwd is an SSHFS root we stage that
+            # tiny generated payload under the same cwd so it still archives as
+            # .borg-ui/restore-canaries/... instead of an absolute data-dir path.
+            prepared_local_paths = []
+            for local_path in local_paths:
+                canary_archive_path = to_restore_canary_archive_source_path(
+                    local_path, settings.data_dir
+                )
+                if canary_archive_path and shared_ssh_temp_root:
+                    source = Path(local_path)
+                    target = Path(shared_ssh_temp_root) / canary_archive_path
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    if target.exists():
+                        if target.is_dir():
+                            shutil.rmtree(target)
+                        else:
+                            target.unlink()
+                    if source.is_dir():
+                        shutil.copytree(source, target)
+                    else:
+                        shutil.copy2(source, target)
+                    prepared_local_paths.append(canary_archive_path)
+                    logger.info(
+                        "Staged restore canary under SSH backup cwd",
+                        source=str(source),
+                        staged_path=str(target),
+                        archive_path=canary_archive_path,
+                        job_id=job_id,
+                    )
+                else:
+                    prepared_local_paths.append(local_path)
+
+            processed_paths.extend(prepared_local_paths)
 
             # Store mount_ids for cleanup
             if mount_ids:
@@ -1187,6 +1489,119 @@ class BackupService:
         # Remove from tracking
         del self.ssh_mounts[job_id]
 
+    async def _run_filesystem_snapshot_command(
+        self, command: list[str], *, job_id: int, action: str
+    ) -> None:
+        process = await asyncio.create_subprocess_exec(
+            *command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=300)
+        except asyncio.TimeoutError as exc:
+            process.terminate()
+            try:
+                await asyncio.wait_for(process.wait(), timeout=5)
+            except asyncio.TimeoutError:
+                process.kill()
+                await process.wait()
+            raise RuntimeError(
+                f"Filesystem snapshot {action} timed out after 300 seconds"
+            ) from exc
+        if process.returncode != 0:
+            stderr_text = stderr.decode("utf-8", errors="replace").strip()
+            stdout_text = stdout.decode("utf-8", errors="replace").strip()
+            message = stderr_text or stdout_text or f"exit {process.returncode}"
+            raise RuntimeError(f"Filesystem snapshot {action} failed: {message}")
+        logger.info(
+            "Filesystem snapshot command completed",
+            job_id=job_id,
+            action=action,
+            command=command,
+        )
+
+    async def _prepare_filesystem_snapshots(
+        self,
+        source_paths: list[str],
+        source_locations: list[dict],
+        job_id: int,
+    ) -> tuple[list[str], list[PreparedFilesystemSnapshot]]:
+        snapshot_plans = build_filesystem_snapshot_plans(
+            source_locations,
+            job_id=job_id,
+        )
+        if not snapshot_plans:
+            return source_paths, []
+
+        created: list[PreparedFilesystemSnapshot] = []
+        for plan in snapshot_plans:
+            if plan.provider == "btrfs":
+                Path(plan.backup_path).parent.mkdir(parents=True, exist_ok=True)
+            created.append(plan)
+            self.filesystem_snapshots[job_id] = list(created)
+            for command in plan.create_commands:
+                await self._run_filesystem_snapshot_command(
+                    command,
+                    job_id=job_id,
+                    action="create",
+                )
+
+        source_to_snapshot_path = {
+            plan.source_path: plan.backup_path for plan in snapshot_plans
+        }
+        prepared_source_paths = [
+            source_to_snapshot_path.get(source_path, source_path)
+            for source_path in source_paths
+        ]
+        logger.info(
+            "Prepared filesystem snapshot source paths",
+            job_id=job_id,
+            snapshot_count=len(created),
+            source_count=len(source_paths),
+        )
+        return prepared_source_paths, created
+
+    async def _cleanup_filesystem_snapshots(self, job_id: int) -> None:
+        snapshot_plans = self.filesystem_snapshots.pop(job_id, [])
+        if not snapshot_plans:
+            return
+
+        for plan in reversed(snapshot_plans):
+            for command in plan.cleanup_commands:
+                try:
+                    await self._run_filesystem_snapshot_command(
+                        command,
+                        job_id=job_id,
+                        action="cleanup",
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "Filesystem snapshot cleanup command failed",
+                        job_id=job_id,
+                        provider=plan.provider,
+                        source_path=plan.source_path,
+                        command=command,
+                        error=str(e),
+                    )
+
+        cleanup_paths = list(
+            dict.fromkeys(
+                path for plan in snapshot_plans for path in plan.cleanup_paths
+            )
+        )
+        cleanup_paths.sort(key=len, reverse=True)
+        for cleanup_path in cleanup_paths:
+            try:
+                shutil.rmtree(cleanup_path, ignore_errors=True)
+            except Exception as e:
+                logger.warning(
+                    "Filesystem snapshot staging cleanup failed",
+                    job_id=job_id,
+                    path=cleanup_path,
+                    error=str(e),
+                )
+
     def _resolve_backup_command_paths(
         self,
         processed_source_paths: list[str],
@@ -1196,11 +1611,17 @@ class BackupService:
         backup_cwd = None
         backup_paths = processed_source_paths
 
-        if ssh_mount_info and len(ssh_mount_info) == len(processed_source_paths):
-            temp_roots = list(set(temp_root for temp_root, _ in ssh_mount_info))
+        if ssh_mount_info:
+            ssh_path_count = len(ssh_mount_info)
+            temp_roots = list(
+                dict.fromkeys(temp_root for temp_root, _ in ssh_mount_info)
+            )
 
             if len(temp_roots) == 1:
                 backup_cwd = temp_roots[0]
+                backup_paths = [
+                    relative_path for _, relative_path in ssh_mount_info
+                ] + processed_source_paths[ssh_path_count:]
                 logger.info(
                     "Using cwd for SSH mount backup (preserves original path structure)",
                     cwd=backup_cwd,
@@ -1217,19 +1638,7 @@ class BackupService:
                     os.path.join(temp_root, relative_path)
                     for temp_root, relative_path in ssh_mount_info
                 ]
-        elif ssh_mount_info:
-            ssh_path_count = len(ssh_mount_info)
-            backup_paths = [
-                os.path.join(temp_root, relative_path)
-                for temp_root, relative_path in ssh_mount_info
-            ]
-            backup_paths.extend(processed_source_paths[ssh_path_count:])
-            logger.info(
-                "Using absolute SSH mount paths for mixed source backup",
-                ssh_path_count=ssh_path_count,
-                local_path_count=len(processed_source_paths) - ssh_path_count,
-                job_id=job_id,
-            )
+                backup_paths.extend(processed_source_paths[ssh_path_count:])
 
         rewritten_paths = []
         has_canary_path = False
@@ -1245,12 +1654,19 @@ class BackupService:
 
         if has_canary_path:
             backup_paths = rewritten_paths
-            backup_cwd = str(Path(settings.data_dir))
-            logger.info(
-                "Using hidden archive path for restore canary",
-                cwd=backup_cwd,
-                job_id=job_id,
-            )
+            if backup_cwd is None:
+                backup_cwd = str(Path(settings.data_dir))
+                logger.info(
+                    "Using hidden archive path for restore canary",
+                    cwd=backup_cwd,
+                    job_id=job_id,
+                )
+            else:
+                logger.info(
+                    "Using hidden archive path for restore canary with existing backup cwd",
+                    cwd=backup_cwd,
+                    job_id=job_id,
+                )
 
         return backup_paths, backup_cwd
 
@@ -1261,6 +1677,13 @@ class BackupService:
         db: Session = None,
         archive_name: str = None,
         skip_hooks: bool = False,
+        source_directories: list[str] = None,
+        source_ssh_connection_id: int = None,
+        source_locations: list[dict] = None,
+        exclude_patterns_override: list[str] = None,
+        compression_override: str = None,
+        custom_flags_override: str = None,
+        upload_ratelimit_kib: int = None,
     ):
         """Execute backup using borg directly for better control
 
@@ -1271,6 +1694,13 @@ class BackupService:
             archive_name: Optional custom archive name (if None, will use default manual-backup naming)
             skip_hooks: If True, skip pre/post-backup hook execution (used by multi-repo schedules that
                         manage hook execution explicitly to avoid running scripts twice)
+            source_directories: Optional source path override for backup plans.
+            source_ssh_connection_id: Optional SSH source connection for source_directories.
+            source_locations: Optional grouped source path override for backup plans.
+            exclude_patterns_override: Optional exclude pattern override for backup plans.
+            compression_override: Optional compression override for backup plans.
+            custom_flags_override: Optional custom flags override for backup plans.
+            upload_ratelimit_kib: Optional Borg upload rate limit in KiB/s.
         """
 
         # Use provided session or create a new one
@@ -1301,7 +1731,7 @@ class BackupService:
                     job_name = scheduled_job.name
 
             # Check if this is a remote backup
-            if job.execution_mode == "remote_ssh":
+            if _uses_remote_execution(job):
                 logger.info("Delegating to remote backup service", job_id=job_id)
                 from app.services.remote_backup_service import remote_backup_service
 
@@ -1312,15 +1742,40 @@ class BackupService:
                 if not repo_record:
                     raise Exception(f"Repository not found: {repository}")
 
+                remote_source_paths = (
+                    flatten_source_locations(source_locations)
+                    if source_locations is not None
+                    else source_directories
+                    if source_directories is not None
+                    else json.loads(repo_record.source_directories or "[]")
+                )
+                remote_exclude_patterns = (
+                    exclude_patterns_override
+                    if exclude_patterns_override is not None
+                    else json.loads(repo_record.exclude_patterns or "[]")
+                )
+                remote_compression = compression_override or repo_record.compression
+                remote_custom_flags = (
+                    custom_flags_override
+                    if custom_flags_override is not None
+                    else repo_record.custom_flags
+                )
+                remote_source_connection_id = (
+                    source_ssh_connection_id
+                    if source_directories is not None
+                    else job.source_ssh_connection_id
+                )
+
                 # Execute remote backup
                 await remote_backup_service.execute_remote_backup(
                     job_id=job_id,
-                    source_ssh_connection_id=job.source_ssh_connection_id,
+                    source_ssh_connection_id=remote_source_connection_id,
                     repository_id=repo_record.id,
-                    source_paths=json.loads(repo_record.source_directories or "[]"),
-                    exclude_patterns=json.loads(repo_record.exclude_patterns or "[]"),
-                    compression=repo_record.compression,
-                    custom_flags=repo_record.custom_flags,
+                    source_paths=remote_source_paths,
+                    exclude_patterns=remote_exclude_patterns,
+                    compression=remote_compression,
+                    custom_flags=remote_custom_flags,
+                    upload_ratelimit_kib=upload_ratelimit_kib,
                 )
                 return
 
@@ -1344,9 +1799,29 @@ class BackupService:
             # Format: borg create --progress --stats --list REPOSITORY::ARCHIVE PATH [PATH ...]
             # Use local time for archive names so they're meaningful to users
             if not archive_name:
-                archive_name = (
-                    f"manual-backup-{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
-                )
+                repo_for_archive_name = None
+                try:
+                    repo_for_archive_name = (
+                        db.query(Repository)
+                        .filter(Repository.path == repository)
+                        .first()
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "Could not look up repository for archive naming",
+                        repository=repository,
+                        error=str(e),
+                    )
+
+                if (
+                    repo_for_archive_name
+                    and getattr(repo_for_archive_name, "borg_version", 1) == 2
+                ):
+                    archive_name = "manual-backup"
+                else:
+                    archive_name = (
+                        f"manual-backup-{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
+                    )
 
             # Store archive name on the job for later reference
             try:
@@ -1367,11 +1842,16 @@ class BackupService:
             # Modern: 0 = success, 1-99 reserved, 3-99 = errors, 100-127 = warnings
             env["BORG_EXIT_CODES"] = "modern"
 
-            # Look up repository record to get passphrase, source directories, exclude patterns, and compression
+            # Look up repository record to get passphrase and repository-specific settings.
+            # Backup plans may override source/config while still targeting the repository.
             source_paths = None  # No default - must be configured
             exclude_patterns = []  # Default no exclusions
             compression = "lz4"  # Default compression
             router = None
+            normalized_locations = None
+            using_source_override = (
+                source_directories is not None or source_locations is not None
+            )
             try:
                 repo_record = (
                     db.query(Repository).filter(Repository.path == repository).first()
@@ -1385,8 +1865,15 @@ class BackupService:
                             error_msg, repository=repository, mode=repo_record.mode
                         )
                         raise ValueError(error_msg)
-                    # Get compression setting from repository
-                    if repo_record.compression:
+                    # Get compression setting from repository or caller override.
+                    if compression_override:
+                        compression = compression_override
+                        logger.info(
+                            "Using compression override",
+                            repository=repository,
+                            compression=compression,
+                        )
+                    elif repo_record.compression:
                         compression = repo_record.compression
                         logger.info(
                             "Using compression from repository",
@@ -1394,59 +1881,39 @@ class BackupService:
                             compression=compression,
                         )
 
-                    # Parse source directories from JSON if available
-                    if repo_record.source_directories:
+                    if source_locations is not None:
+                        normalized_locations = decode_source_locations(
+                            json.dumps(source_locations),
+                            source_type="mixed",
+                            source_directories=source_directories or [],
+                        )
+                        source_dirs = flatten_source_locations(normalized_locations)
+                        source_paths = self._resolve_grouped_source_paths(
+                            db, normalized_locations
+                        )
+                    elif using_source_override:
+                        source_dirs = source_directories or []
+                    elif repo_record.source_locations:
+                        stored_source_dirs = []
+                        if repo_record.source_directories:
+                            try:
+                                stored_source_dirs = json.loads(
+                                    repo_record.source_directories
+                                )
+                            except json.JSONDecodeError:
+                                stored_source_dirs = []
+                        normalized_locations = decode_source_locations(
+                            repo_record.source_locations,
+                            source_ssh_connection_id=repo_record.source_ssh_connection_id,
+                            source_directories=stored_source_dirs,
+                        )
+                        source_dirs = flatten_source_locations(normalized_locations)
+                        source_paths = self._resolve_grouped_source_paths(
+                            db, normalized_locations
+                        )
+                    elif repo_record.source_directories:
                         try:
                             source_dirs = json.loads(repo_record.source_directories)
-                            if (
-                                source_dirs
-                                and isinstance(source_dirs, list)
-                                and len(source_dirs) > 0
-                            ):
-                                # Check if this is a remote source (pull-based backup)
-                                if repo_record.source_ssh_connection_id:
-                                    # Construct SSH URLs for remote sources
-                                    from app.database.models import SSHConnection
-
-                                    connection = (
-                                        db.query(SSHConnection)
-                                        .filter(
-                                            SSHConnection.id
-                                            == repo_record.source_ssh_connection_id
-                                        )
-                                        .first()
-                                    )
-
-                                    if connection:
-                                        # Convert source paths from the SFTP/browsing view into
-                                        # executable SSH paths for SSHFS mounts.
-                                        source_paths = [
-                                            f"ssh://{connection.username}@{connection.host}:{connection.port}{resolve_sshfs_source_path(path, connection.default_path)}"
-                                            for path in source_dirs
-                                        ]
-                                        logger.info(
-                                            "Using remote source directories (pull-based backup)",
-                                            repository=repository,
-                                            connection_id=connection.id,
-                                            connection_host=connection.host,
-                                            source_directories=source_paths,
-                                        )
-                                    else:
-                                        error_msg = f"SSH connection {repo_record.source_ssh_connection_id} not found for remote source"
-                                        logger.error(error_msg, repository=repository)
-                                        raise ValueError(error_msg)
-                                else:
-                                    # Local source paths
-                                    source_paths = source_dirs
-                                    logger.info(
-                                        "Using local source directories",
-                                        repository=repository,
-                                        source_directories=source_paths,
-                                    )
-                            else:
-                                error_msg = "No source directories configured for this repository. Please add source directories in repository settings."
-                                logger.error(error_msg, repository=repository)
-                                raise ValueError(error_msg)
                         except json.JSONDecodeError as e:
                             error_msg = (
                                 f"Could not parse source_directories JSON: {str(e)}"
@@ -1458,8 +1925,81 @@ class BackupService:
                         logger.error(error_msg, repository=repository)
                         raise ValueError(error_msg)
 
-                    # Parse exclude patterns from JSON if available
-                    if repo_record.exclude_patterns:
+                    if not source_dirs or not isinstance(source_dirs, list):
+                        error_msg = "No source directories configured for this backup."
+                        logger.error(error_msg, repository=repository)
+                        raise ValueError(error_msg)
+
+                    effective_source_ssh_connection_id = (
+                        None
+                        if source_locations is not None
+                        else source_ssh_connection_id
+                        if source_directories is not None
+                        else repo_record.source_ssh_connection_id
+                    )
+
+                    # Check if this is a remote source (pull-based backup)
+                    if source_locations is not None:
+                        logger.info(
+                            "Using grouped source locations",
+                            repository=repository,
+                            source_locations=normalized_locations,
+                            source_directories=source_paths,
+                        )
+                    elif normalized_locations is not None:
+                        logger.info(
+                            "Using stored grouped source locations",
+                            repository=repository,
+                            source_locations=normalized_locations,
+                            source_directories=source_paths,
+                        )
+                    elif effective_source_ssh_connection_id:
+                        from app.database.models import SSHConnection
+
+                        connection = (
+                            db.query(SSHConnection)
+                            .filter(
+                                SSHConnection.id == effective_source_ssh_connection_id
+                            )
+                            .first()
+                        )
+
+                        if connection:
+                            # Convert source paths from the SFTP/browsing view into
+                            # executable SSH paths for SSHFS mounts.
+                            source_paths = [
+                                f"ssh://{connection.username}@{connection.host}:{connection.port}{resolve_sshfs_source_path(path, connection.default_path)}"
+                                for path in source_dirs
+                            ]
+                            logger.info(
+                                "Using remote source directories (pull-based backup)",
+                                repository=repository,
+                                connection_id=connection.id,
+                                connection_host=connection.host,
+                                source_directories=source_paths,
+                            )
+                        else:
+                            error_msg = f"SSH connection {effective_source_ssh_connection_id} not found for remote source"
+                            logger.error(error_msg, repository=repository)
+                            raise ValueError(error_msg)
+                    else:
+                        # Local source paths
+                        source_paths = source_dirs
+                        logger.info(
+                            "Using local source directories",
+                            repository=repository,
+                            source_directories=source_paths,
+                        )
+
+                    # Parse exclude patterns from JSON if available, or use caller override.
+                    if exclude_patterns_override is not None:
+                        exclude_patterns = exclude_patterns_override
+                        logger.info(
+                            "Using exclude pattern override",
+                            repository=repository,
+                            exclude_patterns=exclude_patterns,
+                        )
+                    elif repo_record.exclude_patterns:
                         try:
                             patterns = json.loads(repo_record.exclude_patterns)
                             if (
@@ -1503,6 +2043,24 @@ class BackupService:
                         repository_id=repo_record.id,
                         canary_path=str(canary_path),
                     )
+
+            snapshot_source_paths = {
+                path
+                for location in normalized_locations or []
+                if location.get("snapshot")
+                for path in location.get("paths") or []
+            }
+            source_paths_for_existence_check = list(source_paths)
+
+            if normalized_locations is not None:
+                (
+                    source_paths,
+                    _snapshot_plans,
+                ) = await self._prepare_filesystem_snapshots(
+                    source_paths,
+                    normalized_locations,
+                    job_id,
+                )
 
             # Use repository path as-is (already contains full SSH URL for SSH repos)
             actual_repository_path = repository
@@ -1639,6 +2197,10 @@ class BackupService:
                             continue_on_failure=True,
                         )
 
+            self._validate_local_source_paths_exist(
+                source_paths_for_existence_check, skip_paths=snapshot_source_paths
+            )
+
             # Calculate total expected size of source directories in background
             # This runs asynchronously without blocking backup start
             # Progress percentage will update when calculation completes
@@ -1658,17 +2220,13 @@ class BackupService:
             logger.info(
                 "Preparing source paths (mounting SSH URLs if needed)",
                 source_paths=source_paths,
-                source_connection_id=repo_record.source_ssh_connection_id
-                if repo_record
-                else None,
+                source_connection_id=effective_source_ssh_connection_id,
                 job_id=job_id,
             )
             processed_source_paths, ssh_mount_info = await self._prepare_source_paths(
                 source_paths,
                 job_id,
-                source_connection_id=repo_record.source_ssh_connection_id
-                if repo_record
-                else None,
+                source_connection_id=effective_source_ssh_connection_id,
             )
             if not processed_source_paths:
                 logger.error(
@@ -1694,8 +2252,15 @@ class BackupService:
             )
 
             custom_flag_list = []
-            if repo_record and repo_record.custom_flags:
-                custom_flags = repo_record.custom_flags.strip()
+            custom_flags_text = (
+                custom_flags_override
+                if custom_flags_override is not None
+                else repo_record.custom_flags
+                if repo_record
+                else None
+            )
+            if custom_flags_text:
+                custom_flags = custom_flags_text.strip()
                 if custom_flags:
                     import shlex
 
@@ -1720,6 +2285,7 @@ class BackupService:
                 compression=compression,
                 exclude_patterns=exclude_patterns,
                 custom_flags=custom_flag_list,
+                upload_ratelimit_kib=upload_ratelimit_kib,
             )
 
             backup_paths, backup_cwd = self._resolve_backup_command_paths(
@@ -2284,6 +2850,10 @@ class BackupService:
                 )
                 # Update repository statistics after successful backup
                 await self._update_repository_stats(db, repository, env)
+                rclone_sync_ok = await self._sync_rclone_after_borg(
+                    db, repo_record, job
+                )
+                backup_result_for_hooks = "success" if rclone_sync_ok else "warning"
 
                 # Run post-backup hooks (script library or inline)
                 post_hook_failed = False
@@ -2297,7 +2867,7 @@ class BackupService:
                         db=db,
                         repo_record=repo_record,
                         hook_type="post-backup",
-                        backup_result="success",
+                        backup_result=backup_result_for_hooks,
                         job_id=job_id,
                     )
 
@@ -2334,36 +2904,42 @@ class BackupService:
 
                 # Send notification after post-hook completes
                 if post_hook_failed:
-                    # Send failure notification if post-hook failed
-                    try:
-                        await notification_service.send_backup_failure(
-                            db, repository, job.error_message, job_id, job_name
-                        )
-                    except Exception as e:
-                        logger.warning(
-                            "Failed to send backup failure notification", error=str(e)
-                        )
+                    # The shared epilogue sends the failure notification once.
+                    pass
                 else:
-                    # Send success notification if everything succeeded
+                    # Send notification after successful Borg and optional rclone mirror.
                     try:
                         stats = {
                             "original_size": job.original_size,
                             "compressed_size": job.compressed_size,
                             "deduplicated_size": job.deduplicated_size,
                         }
-                        await notification_service.send_backup_success(
-                            db,
-                            repository,
-                            archive_name,
-                            stats,
-                            job.completed_at,
-                            job_name,
-                            started_at=job.started_at,
-                            nfiles=job.nfiles,
-                        )
+                        if backup_result_for_hooks == "warning":
+                            await notification_service.send_backup_warning(
+                                db,
+                                repository,
+                                archive_name,
+                                job.error_message,
+                                stats,
+                                job.completed_at,
+                                job_name,
+                                started_at=job.started_at,
+                                nfiles=job.nfiles,
+                            )
+                        else:
+                            await notification_service.send_backup_success(
+                                db,
+                                repository,
+                                archive_name,
+                                stats,
+                                job.completed_at,
+                                job_name,
+                                started_at=job.started_at,
+                                nfiles=job.nfiles,
+                            )
                     except Exception as e:
                         logger.warning(
-                            "Failed to send backup success notification", error=str(e)
+                            "Failed to send backup notification", error=str(e)
                         )
 
             elif actual_returncode == 1 or (100 <= actual_returncode <= 127):
@@ -2390,6 +2966,7 @@ class BackupService:
                 )
                 # Update repository statistics even with warnings
                 await self._update_repository_stats(db, repository, env)
+                await self._sync_rclone_after_borg(db, repo_record, job)
 
                 # Run post-backup hooks even with warnings (script library or inline)
                 post_hook_failed = False
@@ -2442,15 +3019,8 @@ class BackupService:
 
                 # Send notification after post-hook completes (for warning case)
                 if post_hook_failed:
-                    # Send failure notification if post-hook failed
-                    try:
-                        await notification_service.send_backup_failure(
-                            db, repository, job.error_message, job_id, job_name
-                        )
-                    except Exception as e:
-                        logger.warning(
-                            "Failed to send backup failure notification", error=str(e)
-                        )
+                    # The shared epilogue sends the failure notification once.
+                    pass
                 else:
                     # Send warning notification (backup completed with warnings but post-hook succeeded)
                     try:
@@ -2863,6 +3433,15 @@ class BackupService:
                 del self.error_msgids[job_id]
 
             # Clean up SSH mounts (unmount all SSHFS mounts for this job)
+            try:
+                await self._cleanup_filesystem_snapshots(job_id)
+            except Exception as e:
+                logger.error(
+                    "Failed to cleanup filesystem snapshots",
+                    job_id=job_id,
+                    error=str(e),
+                )
+
             try:
                 await self._cleanup_ssh_mounts(job_id)
             except Exception as e:

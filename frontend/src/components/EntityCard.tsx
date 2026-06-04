@@ -40,14 +40,15 @@ export interface EntityCardProps {
   stats: StatItem[]
   meta?: MetaItem[]
   tags?: ReactNode
+  // Rendered at the start of the footer (before action icons). A divider is
+  // drawn between it and the actions so the on/off toggle reads as a distinct
+  // group from the other row icons.
+  toggle?: ReactNode
   actions: ActionItem[]
   primaryAction?: PrimaryAction
   accentColor?: string
   isHighlighted?: boolean
 }
-
-const DEFAULT_ACCENT = '#059669'
-const HIGHLIGHT_ACCENT = '#f59e0b'
 
 export default function EntityCard({
   title,
@@ -56,14 +57,17 @@ export default function EntityCard({
   stats,
   meta,
   tags,
+  toggle,
   actions,
   primaryAction,
-  accentColor = DEFAULT_ACCENT,
+  accentColor,
   isHighlighted = false,
 }: EntityCardProps) {
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
-  const effectiveAccent = isHighlighted ? HIGHLIGHT_ACCENT : accentColor
+  const defaultAccent = theme.palette.success.main
+  const highlightAccent = theme.palette.warning.main
+  const effectiveAccent = isHighlighted ? highlightAccent : (accentColor ?? defaultAccent)
 
   const iconBtnSx = {
     width: 32,
@@ -264,6 +268,22 @@ export default function EntityCard({
             borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.07),
           }}
         >
+          {toggle && (
+            <>
+              <Box sx={{ display: 'flex', alignItems: 'center', pr: 0.75 }}>{toggle}</Box>
+              {actions.some((a) => !a.hidden) && (
+                <Box
+                  sx={{
+                    width: '1px',
+                    height: 18,
+                    bgcolor: isDark ? alpha('#fff', 0.1) : alpha('#000', 0.1),
+                    mx: 0.25,
+                    flexShrink: 0,
+                  }}
+                />
+              )}
+            </>
+          )}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
             {actions
               .filter((a) => !a.hidden)

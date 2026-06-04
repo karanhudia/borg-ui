@@ -9,17 +9,15 @@ import {
   DialogActions,
   TextField,
   Stack,
-  Skeleton,
   Alert,
   Button,
   InputAdornment,
   Tooltip,
-  alpha,
   Select,
   MenuItem,
   Autocomplete,
 } from '@mui/material'
-import ResponsiveDialog from './ResponsiveDialog'
+import ResponsiveDialog from './shared/ResponsiveDialog'
 import { Shield, Info } from 'lucide-react'
 import { repositoriesAPI } from '../services/api'
 import { BorgApiClient } from '../services/borgApi'
@@ -27,12 +25,14 @@ import RepoSelect from './RepoSelect'
 import { toast } from 'react-hot-toast'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { getBrowserTimeZone, getSupportedTimeZones } from '../utils/dateUtils'
-import CronBuilderDialog from './CronBuilderDialog'
+import CronBuilderDialog from './shared/CronBuilderDialog'
 import ScheduleCheckCard from './ScheduleCheckCard'
+import EntityCardSkeleton from './EntityCardSkeleton'
 import BackupJobsTable from './BackupJobsTable'
 import { usePermissions } from '../hooks/usePermissions'
 import type { Repository } from '../types'
 import type { Job } from '../types/jobs'
+import { formatCheckFlagList, getCheckFlagDurationConflict } from '../utils/checkFlagConflicts'
 
 interface ScheduledCheck {
   repository_id: number
@@ -44,9 +44,11 @@ interface ScheduledCheck {
   last_scheduled_check: string | null
   next_scheduled_check: string | null
   check_max_duration: number
+  check_extra_flags?: string | null
   notify_on_check_success: boolean
   notify_on_check_failure: boolean
   enabled: boolean
+  check_schedule_enabled?: boolean
 }
 
 interface CheckHistoryJob extends Job {
@@ -56,6 +58,7 @@ interface CheckHistoryJob extends Job {
 
 export interface ScheduledChecksSectionRef {
   openAddDialog: () => void
+  openEditForRepo: (repoId: number) => Promise<void>
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
@@ -69,6 +72,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
     cron_expression: '0 2 * * 0', // Default: Weekly on Sunday at 2 AM
     timezone: getBrowserTimeZone(),
     max_duration: 3600,
+    check_extra_flags: '',
   })
   const timezoneOptions = useMemo(
     () => getSupportedTimeZones(formData.timezone),
@@ -91,6 +95,11 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
     (repo: Repository) => repo.id === selectedRepositoryId
   ) as Repository | undefined
   const isSelectedRepoBorg2 = selectedRepository?.borg_version === 2
+  const conflictingCheckFlags = getCheckFlagDurationConflict(
+    formData.check_extra_flags,
+    formData.max_duration
+  )
+  const hasCheckFlagConflict = conflictingCheckFlags.length > 0
 
   // Fetch scheduled checks for all repositories
   const { data: scheduledChecks, isLoading } = useQuery({
@@ -101,7 +110,10 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
       for (const repo of repositories) {
         try {
           const response = await repositoriesAPI.getCheckSchedule(repo.id)
-          if (response.data.enabled) {
+          // Surface every repo that has a cron configured, even if currently
+          // toggled off, so the user can flip it back on without re-entering
+          // the schedule.
+          if (response.data.check_cron_expression && response.data.check_cron_expression !== '') {
             checks.push(response.data)
           }
         } catch {
@@ -184,11 +196,14 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
 
   // Run check now mutation
   const runCheckMutation = useMutation({
-    mutationFn: async (repoId: number) => {
+    mutationFn: async (check: ScheduledCheck) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const repo = repositories.find((r: any) => r.id === repoId)
+      const repo = repositories.find((r: any) => r.id === check.repository_id)
       if (!repo) throw new Error('Repository not found')
-      return new BorgApiClient(repo).checkRepository()
+      return new BorgApiClient(repo).checkRepository({
+        maxDuration: check.check_max_duration,
+        checkExtraFlags: check.check_extra_flags || '',
+      })
     },
     onSuccess: () => {
       toast.success(t('scheduledChecks.toasts.checkStarted'))
@@ -207,6 +222,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
       cron_expression: '0 2 * * 0', // Weekly on Sunday at 2 AM
       timezone: getBrowserTimeZone(),
       max_duration: 3600,
+      check_extra_flags: '',
     })
     setShowDialog(true)
   }
@@ -217,13 +233,53 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
       cron_expression: check.check_cron_expression || '0 2 * * 0',
       timezone: check.check_timezone || check.timezone || 'UTC',
       max_duration: check.check_max_duration,
+      check_extra_flags: check.check_extra_flags || '',
     })
     setShowDialog(true)
   }
 
-  // Expose openAddDialog to parent via ref
+  // Open the edit/add dialog for a specific repository (used by deep-links
+  // from the By Plan tab). If the repo already has a check schedule, prefill
+  // its current values; otherwise open the add dialog with the repo
+  // pre-selected so the user only needs to set the cron.
+  const openEditForRepo = async (repoId: number) => {
+    try {
+      const response = await repositoriesAPI.getCheckSchedule(repoId)
+      const data = response.data
+      const hasSchedule = data && data.check_cron_expression && data.check_cron_expression !== ''
+      setSelectedRepositoryId(repoId)
+      if (hasSchedule) {
+        setFormData({
+          cron_expression: data.check_cron_expression || '0 2 * * 0',
+          timezone: data.check_timezone || data.timezone || getBrowserTimeZone(),
+          max_duration: data.check_max_duration ?? 3600,
+          check_extra_flags: data.check_extra_flags || '',
+        })
+      } else {
+        setFormData({
+          cron_expression: '0 2 * * 0',
+          timezone: getBrowserTimeZone(),
+          max_duration: 3600,
+          check_extra_flags: '',
+        })
+      }
+      setShowDialog(true)
+    } catch {
+      // Fall back to opening the add dialog with the repo preselected
+      setSelectedRepositoryId(repoId)
+      setFormData({
+        cron_expression: '0 2 * * 0',
+        timezone: getBrowserTimeZone(),
+        max_duration: 3600,
+        check_extra_flags: '',
+      })
+      setShowDialog(true)
+    }
+  }
+
   useImperativeHandle(ref, () => ({
     openAddDialog,
+    openEditForRepo,
   }))
 
   const handleSubmit = () => {
@@ -245,6 +301,14 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
         data: { cron_expression: '' },
       })
     }
+  }
+
+  const handleToggle = (check: ScheduledCheck) => {
+    const current = check.check_schedule_enabled ?? check.enabled
+    updateMutation.mutate({
+      repoId: check.repository_id,
+      data: { schedule_enabled: !current },
+    })
   }
 
   return (
@@ -280,108 +344,11 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
       {isLoading || loadingRepositories ? (
         <Stack spacing={2}>
           {[0, 1, 2].map((i) => (
-            <Box
+            <EntityCardSkeleton
               key={i}
-              sx={{
-                borderRadius: 2,
-                bgcolor: 'background.paper',
-                overflow: 'hidden',
-                boxShadow: (theme) =>
-                  theme.palette.mode === 'dark'
-                    ? `0 0 0 1px ${alpha('#fff', 0.08)}, 0 4px 16px ${alpha('#000', 0.25)}`
-                    : `0 0 0 1px ${alpha('#000', 0.08)}, 0 2px 8px ${alpha('#000', 0.07)}`,
-                opacity: Math.max(0.4, 1 - i * 0.2),
-              }}
-            >
-              <Box
-                sx={{ px: { xs: 1.75, sm: 2 }, pt: { xs: 1.75, sm: 2 }, pb: { xs: 1.5, sm: 1.75 } }}
-              >
-                {/* Title row */}
-                <Box
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    justifyContent: 'space-between',
-                    gap: 1,
-                    mb: 1.5,
-                  }}
-                >
-                  <Box sx={{ flex: 1 }}>
-                    <Skeleton
-                      variant="text"
-                      width={[150, 190, 130][i]}
-                      height={28}
-                      sx={{ transform: 'none', borderRadius: 0.5 }}
-                    />
-                  </Box>
-                  <Skeleton
-                    variant="rounded"
-                    width={72}
-                    height={20}
-                    sx={{ borderRadius: 1, flexShrink: 0 }}
-                  />
-                </Box>
-
-                {/* Stats grid — 4 columns matching EntityCard */}
-                <Box
-                  sx={{
-                    display: 'grid',
-                    gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(4, 1fr)' },
-                    borderRadius: 1.5,
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    overflow: 'hidden',
-                    mb: 1.5,
-                  }}
-                >
-                  {[0, 1, 2, 3].map((j) => (
-                    <Box
-                      key={j}
-                      sx={{
-                        px: 1.5,
-                        py: 1.1,
-                        borderRight: j < 3 ? '1px solid' : 0,
-                        borderColor: 'divider',
-                      }}
-                    >
-                      <Skeleton
-                        variant="text"
-                        width={38}
-                        height={10}
-                        sx={{ transform: 'none', borderRadius: 0.5, mb: 0.5 }}
-                      />
-                      <Skeleton
-                        variant="text"
-                        width={[58, 48, 54, 44][j]}
-                        height={16}
-                        sx={{ transform: 'none', borderRadius: 0.5 }}
-                      />
-                    </Box>
-                  ))}
-                </Box>
-
-                {/* Actions row */}
-                <Box
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 0.5,
-                    pt: 1.25,
-                    borderTop: '1px solid',
-                    borderColor: 'divider',
-                  }}
-                >
-                  <Skeleton variant="rounded" width={32} height={32} sx={{ borderRadius: 1.5 }} />
-                  <Skeleton variant="rounded" width={32} height={32} sx={{ borderRadius: 1.5 }} />
-                  <Skeleton
-                    variant="rounded"
-                    width={88}
-                    height={30}
-                    sx={{ borderRadius: 1, ml: 'auto' }}
-                  />
-                </Box>
-              </Box>
-            </Box>
+              titleWidth={[170, 190, 140][i]}
+              opacity={Math.max(0.4, 1 - i * 0.2)}
+            />
           ))}
         </Stack>
       ) : !scheduledChecks || scheduledChecks.length === 0 ? (
@@ -411,7 +378,8 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
               canManage={canDo(check.repository_id, 'maintenance')}
               onEdit={() => openEditDialog(check)}
               onDelete={() => handleDelete(check)}
-              onRunNow={() => runCheckMutation.mutate(check.repository_id)}
+              onRunNow={() => runCheckMutation.mutate(check)}
+              onToggle={() => handleToggle(check)}
             />
           ))}
         </Stack>
@@ -528,7 +496,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
             <Button
               onClick={handleSubmit}
               variant="contained"
-              disabled={!selectedRepositoryId || updateMutation.isPending}
+              disabled={!selectedRepositoryId || updateMutation.isPending || hasCheckFlagConflict}
             >
               {selectedRepositoryId ? t('scheduledChecks.update') : t('scheduledChecks.create')}
             </Button>
@@ -640,8 +608,26 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
                   : t('scheduledChecks.maxDurationHint')
               }
               fullWidth
-              inputProps={{ min: 60 }}
+              inputProps={{ min: 0 }}
             />
+
+            <TextField
+              label={t('scheduledChecks.extraFlags')}
+              value={formData.check_extra_flags}
+              onChange={(e) => setFormData({ ...formData, check_extra_flags: e.target.value })}
+              helperText={t('scheduledChecks.extraFlagsHint')}
+              fullWidth
+              placeholder="--repair --verify-data"
+              inputProps={{ spellCheck: false }}
+            />
+
+            {hasCheckFlagConflict && (
+              <Alert severity="warning">
+                {t('checkFlagConflicts.durationConflict', {
+                  flags: formatCheckFlagList(conflictingCheckFlags),
+                })}
+              </Alert>
+            )}
           </Stack>
         </DialogContent>
       </ResponsiveDialog>

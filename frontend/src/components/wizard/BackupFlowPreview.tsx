@@ -11,7 +11,7 @@ interface SSHConnection {
 }
 
 interface BackupFlowPreviewProps {
-  repositoryLocation: 'local' | 'ssh'
+  repositoryLocation: 'local' | 'ssh' | 'rclone'
   dataSource: 'local' | 'remote'
   repositoryPath: string
   sourceDirs: string[]
@@ -170,8 +170,12 @@ export default function BackupFlowPreview({
       return t('wizard.backupFlowPreview.localToLocal')
     if (dataSource === 'local' && repositoryLocation === 'ssh')
       return t('wizard.backupFlowPreview.localToRemote')
+    if (dataSource === 'local' && repositoryLocation === 'rclone')
+      return t('wizard.backupFlowPreview.localToRclone')
     if (dataSource === 'remote' && repositoryLocation === 'local')
       return t('wizard.backupFlowPreview.remoteToLocal')
+    if (dataSource === 'remote' && repositoryLocation === 'rclone')
+      return t('wizard.backupFlowPreview.remoteToRclone')
     return t('wizard.backupFlowPreview.default')
   }
 
@@ -183,6 +187,7 @@ export default function BackupFlowPreview({
 
   const getRepoLabel = () => {
     if (repositoryLocation === 'local') return t('wizard.borgUiServer')
+    if (repositoryLocation === 'rclone') return t('wizard.backupFlowPreview.rcloneStorage')
     if (repoSshConnection) return `${repoSshConnection.username}@${repoSshConnection.host}`
     return t('wizard.backupFlowPreview.remoteStorage')
   }
@@ -193,7 +198,8 @@ export default function BackupFlowPreview({
   const getRepoIcon = () =>
     repositoryLocation === 'local' ? <Server size={16} /> : <Cloud size={16} />
 
-  const showSshfsIntermediate = dataSource === 'remote' && repositoryLocation === 'local'
+  const showSshfsIntermediate =
+    dataSource === 'remote' && (repositoryLocation === 'local' || repositoryLocation === 'rclone')
 
   const sourceSubtitle =
     sourceDirs.length > 0

@@ -19,6 +19,7 @@ class TestRepositoryHelperFunctions:
             "compact_job": None,
             "prune_job": None,
             "restore_check_job": None,
+            "wipe_job": None,
         }
 
     def test_borg_keyfile_name_for_local_path(self):

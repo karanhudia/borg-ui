@@ -1,5 +1,7 @@
 import { Box, Card, CardContent, Typography } from '@mui/material'
-import { DataUsage, Compress, Inventory } from '@mui/icons-material'
+import Compress from '@mui/icons-material/Compress'
+import DataUsage from '@mui/icons-material/DataUsage'
+import Inventory from '@mui/icons-material/Inventory'
 import { useTranslation } from 'react-i18next'
 import { formatBytes } from '../utils/dateUtils'
 

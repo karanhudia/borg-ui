@@ -15,6 +15,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from app.database.database import Base
+from app.utils.schedule_time import get_container_timezone
 
 
 # Helper function for timezone-aware UTC timestamps
@@ -75,6 +76,100 @@ class ApiToken(Base):
     last_used_at = Column(DateTime, nullable=True)
 
 
+class AgentMachine(Base):
+    __tablename__ = "agent_machines"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    agent_id = Column(String, unique=True, index=True, nullable=False)
+    token_hash = Column(String, nullable=False)
+    token_prefix = Column(String(20), index=True, nullable=False)
+    hostname = Column(String, nullable=True)
+    os = Column(String, nullable=True)
+    arch = Column(String, nullable=True)
+    agent_version = Column(String, nullable=True)
+    default_path = Column(String, nullable=True)
+    borg_versions = Column(JSON, nullable=True)
+    capabilities = Column(JSON, nullable=True)
+    labels = Column(JSON, nullable=True)
+    status = Column(String, default="pending", index=True, nullable=False)
+    last_seen_at = Column(DateTime, nullable=True)
+    last_error = Column(Text, nullable=True)
+    deleted_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+
+class AgentEnrollmentToken(Base):
+    __tablename__ = "agent_enrollment_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    token_hash = Column(String, nullable=False)
+    token_prefix = Column(String(20), index=True, nullable=False)
+    default_path = Column(String, nullable=True)
+    created_by_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    expires_at = Column(DateTime, nullable=True)
+    used_at = Column(DateTime, nullable=True)
+    used_by_agent_id = Column(
+        Integer, ForeignKey("agent_machines.id", ondelete="SET NULL"), nullable=True
+    )
+    revoked_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+
+
+class AgentJob(Base):
+    __tablename__ = "agent_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    agent_machine_id = Column(
+        Integer, ForeignKey("agent_machines.id", ondelete="CASCADE"), nullable=False
+    )
+    backup_job_id = Column(
+        Integer, ForeignKey("backup_jobs.id", ondelete="SET NULL"), nullable=True
+    )
+    job_type = Column(String, nullable=False)
+    status = Column(String, default="queued", index=True, nullable=False)
+    payload = Column(JSON, nullable=False)
+    result = Column(JSON, nullable=True)
+    claimed_at = Column(DateTime, nullable=True)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    error_message = Column(Text, nullable=True)
+
+    progress_percent = Column(Float, default=0.0)
+    current_file = Column(Text, nullable=True)
+    original_size = Column(BigInteger, default=0)
+    compressed_size = Column(BigInteger, default=0)
+    deduplicated_size = Column(BigInteger, default=0)
+    nfiles = Column(Integer, default=0)
+    backup_speed = Column(Float, default=0.0)
+    total_expected_size = Column(BigInteger, default=0)
+    estimated_time_remaining = Column(Integer, default=0)
+    progress = Column(JSON, nullable=True)
+
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+
+class AgentJobLog(Base):
+    __tablename__ = "agent_job_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    agent_job_id = Column(
+        Integer, ForeignKey("agent_jobs.id", ondelete="CASCADE"), nullable=False
+    )
+    sequence = Column(Integer, nullable=False)
+    stream = Column(String, default="stdout", nullable=False)
+    message = Column(Text, nullable=False)
+    created_at = Column(DateTime, nullable=False)
+    received_at = Column(DateTime, default=utc_now, nullable=False)
+
+    __table_args__ = (UniqueConstraint("agent_job_id", "sequence"),)
+
+
 class PasskeyCredential(Base):
     __tablename__ = "passkey_credentials"
 
@@ -128,6 +223,9 @@ class Repository(Base):
     source_directories = Column(
         Text, nullable=True
     )  # JSON array of directories to backup
+    source_locations = Column(
+        Text, nullable=True
+    )  # JSON array of grouped source locations to backup
     exclude_patterns = Column(
         Text, nullable=True
     )  # JSON array of exclude patterns (e.g., ["*.log", "*.tmp"])
@@ -153,6 +251,15 @@ class Repository(Base):
     remote_path = Column(
         String, nullable=True
     )  # Path to borg binary on remote server (e.g., /usr/local/bin/borg)
+    execution_target = Column(
+        String, default="local", nullable=False
+    )  # Where borg create executes: local, ssh, or agent
+    executor_type = Column(
+        String, default="server", nullable=False
+    )  # First-class executor: server or agent
+    agent_machine_id = Column(
+        Integer, ForeignKey("agent_machines.id"), nullable=True
+    )  # Agent machine that executes backups for this repository
 
     # New fields for authentication status
     auth_status = Column(
@@ -211,7 +318,10 @@ class Repository(Base):
     # Scheduled checks
     check_cron_expression = Column(
         String, nullable=True
-    )  # NULL = disabled, cron expression for schedule
+    )  # NULL = no schedule configured; cron expression when configured
+    check_schedule_enabled = Column(
+        Boolean, default=True, nullable=False
+    )  # User-facing on/off toggle; cron is preserved when toggled off
     check_timezone = Column(
         String, default="UTC", nullable=False
     )  # IANA timezone used to interpret check_cron_expression
@@ -222,6 +332,9 @@ class Repository(Base):
     check_max_duration = Column(
         Integer, default=3600
     )  # Max check duration in seconds (for partial checks)
+    check_extra_flags = Column(
+        Text, nullable=True
+    )  # Extra command-line flags for borg check (advanced users)
     notify_on_check_success = Column(
         Boolean, default=False, nullable=False
     )  # Per-repository override
@@ -230,7 +343,10 @@ class Repository(Base):
     )  # Per-repository override
     restore_check_cron_expression = Column(
         String, nullable=True
-    )  # NULL = disabled, cron expression for restore verification
+    )  # NULL = no schedule configured; cron expression when configured
+    restore_check_schedule_enabled = Column(
+        Boolean, default=True, nullable=False
+    )  # User-facing on/off toggle; cron is preserved when toggled off
     restore_check_timezone = Column(
         String, default="UTC", nullable=False
     )  # IANA timezone used to interpret restore_check_cron_expression
@@ -261,6 +377,12 @@ class Repository(Base):
 
     # Relationships
     ssh_key = relationship("SSHKey", back_populates="repositories")
+    storage = relationship(
+        "RepositoryStorage",
+        back_populates="repository",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
 
 
 class SSHKey(Base):
@@ -341,6 +463,85 @@ class SSHConnection(Base):
     ssh_key = relationship("SSHKey", back_populates="connections")
 
 
+class RcloneRemote(Base):
+    __tablename__ = "rclone_remotes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True, nullable=False)
+    provider = Column(String, nullable=False)
+    config_source = Column(String, default="managed", nullable=False)
+    config_path = Column(String, nullable=True)
+    redacted_config = Column(JSON, nullable=True)
+    last_tested_at = Column(DateTime, nullable=True)
+    last_test_status = Column(String, default="unknown", nullable=False)
+    last_error = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+    storages = relationship("RepositoryStorage", back_populates="rclone_remote")
+
+
+class RepositoryStorage(Base):
+    __tablename__ = "repository_storage"
+
+    id = Column(Integer, primary_key=True, index=True)
+    repository_id = Column(
+        Integer,
+        ForeignKey("repositories.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+    backend = Column(String, default="local", nullable=False)
+    rclone_remote_id = Column(
+        Integer, ForeignKey("rclone_remotes.id", ondelete="SET NULL"), nullable=True
+    )
+    rclone_remote_path = Column(String, nullable=True)
+    cache_path = Column(String, nullable=True)
+    sync_policy = Column(String, default="after_success", nullable=False)
+    sync_direction = Column(String, default="cache_to_remote", nullable=False)
+    sync_status = Column(String, default="pending", nullable=False)
+    sync_cron_expression = Column(String, nullable=True)
+    sync_timezone = Column(String, default="UTC", nullable=False)
+    last_scheduled_sync_at = Column(DateTime, nullable=True)
+    next_scheduled_sync_at = Column(DateTime, nullable=True)
+    last_synced_at = Column(DateTime, nullable=True)
+    last_hydrated_at = Column(DateTime, nullable=True)
+    last_remote_check_at = Column(DateTime, nullable=True)
+    last_sync_error = Column(Text, nullable=True)
+    extra_flags = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+    repository = relationship("Repository", back_populates="storage")
+    rclone_remote = relationship("RcloneRemote", back_populates="storages")
+
+
+class RcloneSyncJob(Base):
+    __tablename__ = "rclone_sync_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    repository_id = Column(
+        Integer,
+        ForeignKey("repositories.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    direction = Column(String, nullable=False)
+    operation = Column(String, default="sync", nullable=False)
+    status = Column(String, default="pending", nullable=False)
+    triggered_by = Column(String, default="manual", nullable=False)
+    scheduled_for = Column(DateTime, nullable=True)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    bytes_transferred = Column(BigInteger, nullable=True)
+    files_transferred = Column(Integer, nullable=True)
+    log_path = Column(String, nullable=True)
+    log_text = Column(Text, nullable=True)
+    error_text = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+
+
 class Configuration(Base):
     __tablename__ = "configurations"
 
@@ -361,6 +562,15 @@ class BackupJob(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     repository = Column(String)  # Repository path/name
+    repository_id = Column(
+        Integer, ForeignKey("repositories.id", ondelete="SET NULL"), nullable=True
+    )
+    backup_plan_id = Column(
+        Integer, ForeignKey("backup_plans.id", ondelete="SET NULL"), nullable=True
+    )
+    backup_plan_run_id = Column(
+        Integer, ForeignKey("backup_plan_runs.id", ondelete="SET NULL"), nullable=True
+    )
     status = Column(
         String, default="pending"
     )  # pending, running, completed, completed_with_warnings, failed
@@ -399,13 +609,52 @@ class BackupJob(Base):
 
     # Remote backup execution
     execution_mode = Column(String, default="local")  # "local" or "remote_ssh"
+    route_strategy = Column(String, nullable=True)
     source_ssh_connection_id = Column(
         Integer, ForeignKey("ssh_connections.id"), nullable=True
     )  # SSH connection for remote execution
     remote_process_pid = Column(Integer, nullable=True)  # PID on remote host
     remote_hostname = Column(String, nullable=True)  # Remote hostname for reference
 
+    # Retry lineage metadata. Original attempts default to attempt 1; retry
+    # attempts point at the original and immediate source rows.
+    retry_original_job_id = Column(
+        Integer, ForeignKey("backup_jobs.id", ondelete="SET NULL"), nullable=True
+    )
+    retry_source_job_id = Column(
+        Integer, ForeignKey("backup_jobs.id", ondelete="SET NULL"), nullable=True
+    )
+    retry_attempt = Column(Integer, default=1, nullable=False)
+    retry_requested_by_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    retry_requested_at = Column(DateTime, nullable=True)
+
     created_at = Column(DateTime, default=utc_now)
+
+
+class BackupJobRetryLineage(Base):
+    __tablename__ = "backup_job_retry_lineage"
+    __table_args__ = (
+        UniqueConstraint("created_job_id", name="uq_backup_job_retry_created_job"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    original_job_id = Column(
+        Integer, ForeignKey("backup_jobs.id", ondelete="SET NULL"), nullable=True
+    )
+    retry_source_job_id = Column(
+        Integer, ForeignKey("backup_jobs.id", ondelete="SET NULL"), nullable=True
+    )
+    attempt_number = Column(Integer, nullable=False)
+    requested_by_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    requested_at = Column(DateTime, default=utc_now, nullable=False)
+    created_job_id = Column(
+        Integer, ForeignKey("backup_jobs.id", ondelete="SET NULL"), nullable=True
+    )
+    request_snapshot = Column(JSON, nullable=False)
 
 
 class RestoreJob(Base):
@@ -556,6 +805,251 @@ class ScheduledJobRepository(Base):
         return f"<ScheduledJobRepository(schedule_id={self.scheduled_job_id}, repo_id={self.repository_id}, order={self.execution_order})>"
 
 
+class BackupPlan(Base):
+    __tablename__ = "backup_plans"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, nullable=False, index=True)
+    description = Column(Text, nullable=True)
+    enabled = Column(Boolean, default=True, nullable=False)
+
+    # Source ownership lives on the plan; repositories stay storage-focused.
+    source_type = Column(String, default="local", nullable=False)
+    source_ssh_connection_id = Column(
+        Integer, ForeignKey("ssh_connections.id"), nullable=True
+    )
+    source_directories = Column(Text, nullable=False)
+    source_locations = Column(Text, nullable=True)
+    exclude_patterns = Column(Text, nullable=True)
+    # Origin of the source selection: 'postgresql', 'mysql', 'mongodb',
+    # 'redis', 'sqlite' when the plan was created from a detected DB or
+    # picked from a DB template; NULL for plain file sources. The dialog
+    # uses this on edit to default back to the Database tab and rehydrate
+    # the template view rather than treating the plan as a plain file plan.
+    database_template_id = Column(String, nullable=True)
+
+    archive_name_template = Column(String, default="{plan_name}-{now}", nullable=False)
+    compression = Column(String, default="lz4", nullable=False)
+    custom_flags = Column(Text, nullable=True)
+    upload_ratelimit_kib = Column(Integer, nullable=True)
+
+    repository_run_mode = Column(String, default="series", nullable=False)
+    max_parallel_repositories = Column(Integer, default=1, nullable=False)
+    failure_behavior = Column(String, default="continue", nullable=False)
+
+    schedule_enabled = Column(Boolean, default=False, nullable=False)
+    cron_expression = Column(String, nullable=True)
+    timezone = Column(String, default="UTC", nullable=False)
+    last_run = Column(DateTime, nullable=True)
+    next_run = Column(DateTime, nullable=True)
+
+    pre_backup_script_id = Column(Integer, ForeignKey("scripts.id"), nullable=True)
+    post_backup_script_id = Column(Integer, ForeignKey("scripts.id"), nullable=True)
+    pre_backup_script_parameters = Column(JSON, nullable=True)
+    post_backup_script_parameters = Column(JSON, nullable=True)
+    run_repository_scripts = Column(Boolean, default=True, nullable=False)
+
+    run_prune_after = Column(Boolean, default=False, nullable=False)
+    run_compact_after = Column(Boolean, default=False, nullable=False)
+    run_check_after = Column(Boolean, default=False, nullable=False)
+    check_max_duration = Column(Integer, default=3600, nullable=False)
+    check_extra_flags = Column(Text, nullable=True)
+    prune_keep_hourly = Column(Integer, default=0, nullable=False)
+    prune_keep_daily = Column(Integer, default=7, nullable=False)
+    prune_keep_weekly = Column(Integer, default=4, nullable=False)
+    prune_keep_monthly = Column(Integer, default=6, nullable=False)
+    prune_keep_quarterly = Column(Integer, default=0, nullable=False)
+    prune_keep_yearly = Column(Integer, default=1, nullable=False)
+
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
+
+    repositories = relationship(
+        "BackupPlanRepository",
+        back_populates="backup_plan",
+        cascade="all, delete-orphan",
+        order_by="BackupPlanRepository.execution_order",
+    )
+    script_hooks = relationship(
+        "BackupPlanScript",
+        back_populates="backup_plan",
+        cascade="all, delete-orphan",
+        order_by="BackupPlanScript.execution_order",
+    )
+    pre_backup_script = relationship("Script", foreign_keys=[pre_backup_script_id])
+    post_backup_script = relationship("Script", foreign_keys=[post_backup_script_id])
+    script_executions = relationship("ScriptExecution", back_populates="backup_plan")
+
+
+class BackupPlanRepository(Base):
+    __tablename__ = "backup_plan_repositories"
+    __table_args__ = (
+        UniqueConstraint(
+            "backup_plan_id", "repository_id", name="uq_backup_plan_repository"
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    backup_plan_id = Column(
+        Integer,
+        ForeignKey("backup_plans.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    repository_id = Column(
+        Integer,
+        ForeignKey("repositories.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    enabled = Column(Boolean, default=True, nullable=False)
+    execution_order = Column(Integer, nullable=False)
+
+    compression_source = Column(String, default="plan", nullable=False)
+    compression_override = Column(String, nullable=True)
+    custom_flags_override = Column(Text, nullable=True)
+    upload_ratelimit_kib_override = Column(Integer, nullable=True)
+    failure_behavior_override = Column(String, nullable=True)
+
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+
+    backup_plan = relationship("BackupPlan", back_populates="repositories")
+    repository = relationship("Repository")
+
+
+class BackupPlanScript(Base):
+    """Link table between backup plans and reusable scripts."""
+
+    __tablename__ = "backup_plan_scripts"
+    __table_args__ = (
+        UniqueConstraint(
+            "backup_plan_id", "script_id", "hook_type", name="uq_backup_plan_script"
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    backup_plan_id = Column(
+        Integer,
+        ForeignKey("backup_plans.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    script_id = Column(
+        Integer,
+        ForeignKey("scripts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    hook_type = Column(String(50), nullable=False)
+    execution_order = Column(Float, default=1, nullable=False)
+    enabled = Column(Boolean, default=True, nullable=False)
+    custom_timeout = Column(Integer, nullable=True)
+    custom_run_on = Column(String(50), nullable=True)
+    continue_on_error = Column(Boolean, default=False)
+    skip_on_failure = Column(Boolean, default=False)
+    parameter_values = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+
+    backup_plan = relationship("BackupPlan", back_populates="script_hooks")
+    script = relationship("Script", back_populates="backup_plan_scripts")
+
+    def __repr__(self):
+        return f"<BackupPlanScript(plan_id={self.backup_plan_id}, script_id={self.script_id}, hook={self.hook_type})>"
+
+
+class BackupPlanRun(Base):
+    __tablename__ = "backup_plan_runs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    backup_plan_id = Column(
+        Integer,
+        ForeignKey("backup_plans.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    trigger = Column(String, nullable=False)
+    status = Column(String, default="pending", nullable=False)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+
+    retry_original_run_id = Column(
+        Integer, ForeignKey("backup_plan_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    retry_source_run_id = Column(
+        Integer, ForeignKey("backup_plan_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    retry_attempt = Column(Integer, default=1, nullable=False)
+    retry_requested_by_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    retry_requested_at = Column(DateTime, nullable=True)
+
+    repositories = relationship(
+        "BackupPlanRunRepository",
+        back_populates="backup_plan_run",
+        cascade="all, delete-orphan",
+    )
+    script_executions = relationship(
+        "ScriptExecution",
+        back_populates="backup_plan_run",
+    )
+
+
+class BackupPlanRunRetryLineage(Base):
+    __tablename__ = "backup_plan_run_retry_lineage"
+    __table_args__ = (
+        UniqueConstraint("created_run_id", name="uq_backup_plan_run_retry_created"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    original_run_id = Column(
+        Integer, ForeignKey("backup_plan_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    retry_source_run_id = Column(
+        Integer, ForeignKey("backup_plan_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    attempt_number = Column(Integer, nullable=False)
+    requested_by_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    requested_at = Column(DateTime, default=utc_now, nullable=False)
+    created_run_id = Column(
+        Integer, ForeignKey("backup_plan_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    request_snapshot = Column(JSON, nullable=False)
+
+
+class BackupPlanRunRepository(Base):
+    __tablename__ = "backup_plan_run_repositories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    backup_plan_run_id = Column(
+        Integer,
+        ForeignKey("backup_plan_runs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    repository_id = Column(
+        Integer,
+        ForeignKey("repositories.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    backup_job_id = Column(
+        Integer, ForeignKey("backup_jobs.id", ondelete="SET NULL"), nullable=True
+    )
+    status = Column(String, default="pending", nullable=False)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    error_message = Column(Text, nullable=True)
+
+    backup_plan_run = relationship("BackupPlanRun", back_populates="repositories")
+    repository = relationship("Repository")
+    backup_job = relationship("BackupJob")
+
+
 class CheckJob(Base):
     __tablename__ = "check_jobs"
 
@@ -582,6 +1076,7 @@ class CheckJob(Base):
     max_duration = Column(
         Integer, nullable=True
     )  # Maximum duration in seconds (for partial checks)
+    extra_flags = Column(Text, nullable=True)  # Extra command-line flags for borg check
     process_pid = Column(Integer, nullable=True)  # Container PID for orphan detection
     process_start_time = Column(
         BigInteger, nullable=True
@@ -723,6 +1218,45 @@ class DeleteArchiveJob(Base):
     created_at = Column(DateTime, default=utc_now)
 
 
+class RepositoryWipeJob(Base):
+    __tablename__ = "repository_wipe_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    repository_id = Column(
+        Integer, ForeignKey("repositories.id", ondelete="SET NULL"), nullable=True
+    )
+    repository_path = Column(String, nullable=True)
+    repository_name = Column(String, nullable=True)
+    borg_version = Column(Integer, nullable=True)
+    status = Column(
+        String, default="previewed"
+    )  # previewed, pending, running, completed, completed_compaction_failed, completed_with_warnings, failed, failed_partial, cancelled
+    phase = Column(String, nullable=True)
+    archive_count = Column(Integer, default=0)
+    archive_fingerprint = Column(String, nullable=True)
+    archive_manifest_json = Column(Text, nullable=True)
+    dry_run_output = Column(Text, nullable=True)
+    blocking_reason = Column(String, nullable=True)
+    protected_archives_json = Column(Text, nullable=True)
+    run_compact = Column(Boolean, default=True, nullable=False)
+    requested_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    confirmed_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    started_at = Column(DateTime, nullable=True)
+    confirmed_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    progress = Column(Integer, default=0)
+    progress_message = Column(String, nullable=True)
+    error_message = Column(Text, nullable=True)
+    logs = Column(Text, nullable=True)
+    log_file_path = Column(String, nullable=True)
+    has_logs = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=utc_now)
+
+    repository = relationship("Repository")
+    requested_by_user = relationship("User", foreign_keys=[requested_by_user_id])
+    confirmed_by_user = relationship("User", foreign_keys=[confirmed_by_user_id])
+
+
 class SystemSettings(Base):
     __tablename__ = "system_settings"
 
@@ -772,6 +1306,46 @@ class SystemSettings(Base):
     last_stats_refresh = Column(
         DateTime, nullable=True
     )  # Last time stats were refreshed
+    dashboard_backup_warning_days = Column(Integer, default=3, nullable=False)
+    dashboard_backup_critical_days = Column(Integer, default=7, nullable=False)
+    dashboard_check_warning_days = Column(Integer, default=7, nullable=False)
+    dashboard_check_critical_days = Column(Integer, default=30, nullable=False)
+    dashboard_compact_warning_days = Column(Integer, default=30, nullable=False)
+    dashboard_compact_critical_days = Column(Integer, default=60, nullable=False)
+    dashboard_restore_check_warning_days = Column(Integer, default=14, nullable=False)
+    dashboard_restore_check_critical_days = Column(Integer, default=30, nullable=False)
+    dashboard_observe_freshness_warning_days = Column(
+        Integer, default=2, nullable=False
+    )
+    dashboard_observe_freshness_critical_days = Column(
+        Integer, default=7, nullable=False
+    )
+    backup_monitoring_enabled = Column(Boolean, default=False, nullable=False)
+    backup_monitoring_stale_after_days = Column(Integer, default=3, nullable=False)
+    backup_monitoring_interval_hours = Column(Integer, default=24, nullable=False)
+    backup_monitoring_alert_cooldown_hours = Column(Integer, default=24, nullable=False)
+    backup_monitoring_include_observe_repos = Column(
+        Boolean, default=True, nullable=False
+    )
+    backup_monitoring_last_checked_at = Column(DateTime, nullable=True)
+    backup_monitoring_last_alert_sent_at = Column(DateTime, nullable=True)
+    backup_reports_enabled = Column(Boolean, default=False, nullable=False)
+    backup_reports_frequency = Column(String, default="weekly", nullable=False)
+    backup_reports_cron_expression = Column(String, default="0 8 * * 1", nullable=False)
+    backup_reports_timezone = Column(
+        String, default=get_container_timezone, nullable=False
+    )
+    backup_reports_hour_utc = Column(Integer, default=8, nullable=False)
+    backup_reports_weekday = Column(Integer, default=0, nullable=False)
+    backup_reports_monthday = Column(Integer, default=1, nullable=False)
+    backup_reports_include_summary = Column(Boolean, default=True, nullable=False)
+    backup_reports_include_stale_repositories = Column(
+        Boolean, default=True, nullable=False
+    )
+    backup_reports_include_recent_activity = Column(
+        Boolean, default=True, nullable=False
+    )
+    backup_reports_last_sent_at = Column(DateTime, nullable=True)
     email_notifications = Column(Boolean, default=False)
     webhook_url = Column(String, nullable=True)
     auto_cleanup = Column(Boolean, default=False)
@@ -791,6 +1365,9 @@ class SystemSettings(Base):
     bypass_lock_on_list = Column(
         Boolean, default=False, nullable=False
     )  # Use --bypass-lock for all borg list commands (beta fix for concurrent operation lock issues)
+    lock_breaking_enabled = Column(
+        Boolean, default=True, nullable=False
+    )  # Allow user-initiated repository lock breaking
     show_restore_tab = Column(
         Boolean, default=False, nullable=False
     )  # Show legacy Restore tab in navigation (beta feature)
@@ -827,6 +1404,12 @@ class SystemSettings(Base):
     metrics_enabled = Column(Boolean, default=False, nullable=False)
     metrics_require_auth = Column(Boolean, default=False, nullable=False)
     metrics_token = Column(String, nullable=True)
+
+    # Cloud Storage Borg UI-owned OAuth provider credentials
+    google_drive_oauth_client_id = Column(String, nullable=True)
+    google_drive_oauth_client_secret_encrypted = Column(String, nullable=True)
+    onedrive_oauth_client_id = Column(String, nullable=True)
+    onedrive_oauth_client_secret_encrypted = Column(String, nullable=True)
 
     # Built-in OIDC / SSO settings
     oidc_enabled = Column(Boolean, default=False, nullable=False)
@@ -872,7 +1455,9 @@ class OidcLoginState(Base):
     code_verifier = Column(Text, nullable=False)
     return_to = Column(Text, nullable=False)
     flow = Column(String, default="login", nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     used_at = Column(DateTime, nullable=True)
     expires_at = Column(DateTime, nullable=False, index=True)
     created_at = Column(DateTime, default=utc_now, nullable=False)
@@ -888,7 +1473,9 @@ class AuthEvent(Base):
     email = Column(String, nullable=True)
     success = Column(Boolean, default=True, nullable=False, index=True)
     detail = Column(Text, nullable=True)
-    actor_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    actor_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     created_at = Column(DateTime, default=utc_now, nullable=False, index=True)
 
 
@@ -1027,6 +1614,8 @@ class NotificationSettings(Base):
     notify_on_check_failure = Column(Boolean, default=True, nullable=False)
     notify_on_restore_check_success = Column(Boolean, default=False, nullable=False)
     notify_on_restore_check_failure = Column(Boolean, default=True, nullable=False)
+    notify_on_stale_backup = Column(Boolean, default=True, nullable=False)
+    notify_on_backup_report = Column(Boolean, default=True, nullable=False)
 
     # Repository filtering
     monitor_all_repositories = Column(
@@ -1156,6 +1745,9 @@ class Script(Base):
     repository_scripts = relationship(
         "RepositoryScript", back_populates="script", cascade="all, delete-orphan"
     )
+    backup_plan_scripts = relationship(
+        "BackupPlanScript", back_populates="script", cascade="all, delete-orphan"
+    )
     executions = relationship(
         "ScriptExecution", back_populates="script", cascade="all, delete-orphan"
     )
@@ -1242,6 +1834,18 @@ class ScriptExecution(Base):
         nullable=True,
         index=True,
     )  # NULL for standalone runs
+    backup_plan_id = Column(
+        Integer,
+        ForeignKey("backup_plans.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )  # NULL outside backup plans
+    backup_plan_run_id = Column(
+        Integer,
+        ForeignKey("backup_plan_runs.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )  # NULL outside backup plan runs
 
     # Execution details
     hook_type = Column(
@@ -1272,6 +1876,8 @@ class ScriptExecution(Base):
     script = relationship("Script", back_populates="executions")
     repository = relationship("Repository")
     backup_job = relationship("BackupJob")
+    backup_plan = relationship("BackupPlan", back_populates="script_executions")
+    backup_plan_run = relationship("BackupPlanRun", back_populates="script_executions")
 
     def __repr__(self):
         return f"<ScriptExecution(id={self.id}, script_id={self.script_id}, status='{self.status}')>"

@@ -11,8 +11,10 @@ import {
   ListItemText,
   CircularProgress,
 } from '@mui/material'
-import ResponsiveDialog from './ResponsiveDialog'
-import { Warning, Compress, Lock } from '@mui/icons-material'
+import ResponsiveDialog from './shared/ResponsiveDialog'
+import Compress from '@mui/icons-material/Compress'
+import Lock from '@mui/icons-material/Lock'
+import Warning from '@mui/icons-material/Warning'
 import { useTranslation } from 'react-i18next'
 
 interface CompactWarningDialogProps {

@@ -48,6 +48,8 @@ export interface MockBackupJob {
   triggered_by?: 'manual' | 'schedule'
   schedule_id?: number
   package_name?: string
+  execution_mode?: string
+  route_strategy?: string | null
 }
 
 export interface MockMaintenanceJob {

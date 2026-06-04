@@ -13,12 +13,14 @@ from app.api import (
     auth,
     dashboard,
     backup,
+    backup_plans,
     archives,
     restore,
     schedule,
     settings as settings_api,
     events,
     repositories,
+    rclone,
     ssh_keys,
     system,
     filesystem,
@@ -32,6 +34,10 @@ from app.api import (
     metrics,
     tokens,
     permissions,
+    agent_installer,
+    managed_machines,
+    agents,
+    source_discovery,
 )
 from app.api.v2 import router as v2_router
 from app.routers import config
@@ -162,7 +168,7 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="Borg Web UI",
     description="A lightweight web interface for Borg backup management",
-    version="2.0.0",
+    version="2.2.1",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     root_path=BASE_PATH if BASE_PATH else None,
@@ -190,6 +196,9 @@ app.include_router(
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
 app.include_router(backup.router, prefix="/api/backup", tags=["Backup"])
+app.include_router(
+    backup_plans.router, prefix="/api/backup-plans", tags=["Backup Plans"]
+)
 app.include_router(archives.router, prefix="/api/archives", tags=["Archives"])
 app.include_router(browse.router, prefix="/api/browse", tags=["Browse"])
 app.include_router(restore.router, prefix="/api/restore", tags=["Restore"])
@@ -199,6 +208,8 @@ app.include_router(events.router, prefix="/api/events", tags=["Events"])
 app.include_router(
     repositories.router, prefix="/api/repositories", tags=["Repositories"]
 )
+app.include_router(rclone.public_router, prefix="/api/rclone", tags=["Rclone"])
+app.include_router(rclone.router, prefix="/api/rclone", tags=["Rclone"])
 app.include_router(ssh_keys.router, prefix="/api/ssh-keys", tags=["SSH Keys"])
 app.include_router(system.router, prefix="/api/system", tags=["System"])
 app.include_router(filesystem.router, prefix="/api/filesystem", tags=["Filesystem"])
@@ -216,6 +227,14 @@ app.include_router(mounts.router)  # Mount management API
 
 app.include_router(tokens.router, prefix="/api")
 app.include_router(permissions.router, prefix="/api")
+app.include_router(agent_installer.router)
+app.include_router(managed_machines.router)
+app.include_router(agents.router)
+app.include_router(
+    source_discovery.router,
+    prefix="/api/source-discovery",
+    tags=["Source Discovery"],
+)
 
 app.include_router(v2_router, prefix="/api/v2")  # Borg 2 versioned API
 
@@ -348,6 +367,18 @@ async def startup_event():
         logger.info("Orphaned mount cleanup completed")
     except Exception as e:
         logger.error("Failed to cleanup orphaned mounts", error=str(e))
+
+    try:
+        resumed_cloud_syncs = (
+            repositories.resume_pending_initial_cloud_mirror_sync_jobs()
+        )
+        if resumed_cloud_syncs:
+            logger.info(
+                "Resumed pending initial cloud mirror sync jobs",
+                count=resumed_cloud_syncs,
+            )
+    except Exception as e:
+        logger.error("Failed to resume pending cloud mirror sync jobs", error=str(e))
 
     # Note: Package auto-installation now handled by entrypoint.sh startup script
     # This runs asynchronously via /app/app/scripts/startup_packages.py

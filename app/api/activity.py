@@ -16,7 +16,10 @@ import tempfile
 
 from app.database.database import get_db
 from app.database.models import (
+    AgentJob,
+    AgentJobLog,
     BackupJob,
+    BackupPlan,
     RestoreJob,
     CheckJob,
     CompactJob,
@@ -24,8 +27,10 @@ from app.database.models import (
     RestoreCheckJob,
     PackageInstallJob,
     Repository,
+    RcloneSyncJob,
     InstalledPackage,
     ScheduledJob,
+    ScriptExecution,
 )
 from app.api.auth import get_current_user, User
 from app.core.security import get_current_download_user
@@ -37,9 +42,28 @@ logger = structlog.get_logger()
 router = APIRouter(prefix="/api/activity", tags=["activity"])
 
 
+def _get_agent_job_for_backup(db: Session, backup_job_id: int) -> Optional[AgentJob]:
+    return (
+        db.query(AgentJob)
+        .filter(AgentJob.backup_job_id == backup_job_id)
+        .order_by(AgentJob.id.desc())
+        .first()
+    )
+
+
+def _get_agent_log_lines(db: Session, agent_job_id: int) -> list[str]:
+    logs = (
+        db.query(AgentJobLog)
+        .filter(AgentJobLog.agent_job_id == agent_job_id)
+        .order_by(AgentJobLog.sequence.asc(), AgentJobLog.id.asc())
+        .all()
+    )
+    return [log.message for log in logs]
+
+
 class ActivityItem(BaseModel):
     id: int
-    type: str  # 'backup', 'restore', 'check', 'restore_check', 'compact', 'package'
+    type: str  # backup, restore, check, restore_check, compact, package, rclone_*
     status: str  # 'pending', 'running', 'completed', 'needs_backup', 'failed', 'completed_with_warnings'
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
@@ -49,6 +73,9 @@ class ActivityItem(BaseModel):
     triggered_by: str = "manual"  # 'manual' or 'schedule'
     schedule_id: Optional[int] = None  # ScheduledJob ID if triggered_by schedule
     schedule_name: Optional[str] = None  # Schedule name if triggered_by schedule
+    backup_plan_id: Optional[int] = None  # BackupPlan ID if triggered by a plan
+    backup_plan_run_id: Optional[int] = None  # BackupPlanRun ID if triggered by a plan
+    backup_plan_name: Optional[str] = None  # BackupPlan name if triggered by a plan
 
     # Type-specific metadata
     archive_name: Optional[str] = None  # For backup/restore
@@ -61,6 +88,73 @@ class ActivityItem(BaseModel):
     class Config:
         from_attributes = True
         json_encoders = {datetime: lambda v: serialize_datetime(v)}
+
+
+def _paginate_log_text(log_text: str, offset: int, limit: int) -> dict:
+    lines = log_text.split("\n") if log_text else []
+    total_lines = len(lines)
+    end_offset = min(offset + limit, total_lines)
+    chunk = lines[offset:end_offset]
+    return {
+        "lines": [
+            {"line_number": offset + i + 1, "content": line}
+            for i, line in enumerate(chunk)
+        ],
+        "total_lines": total_lines,
+        "has_more": end_offset < total_lines,
+    }
+
+
+def _format_script_execution_logs(execution: ScriptExecution) -> str:
+    script_name = (
+        execution.script.name if execution.script else f"Script #{execution.script_id}"
+    )
+    lines = [
+        f"SCRIPT: {script_name}",
+        f"HOOK: {execution.hook_type or 'standalone'}",
+        f"STATUS: {execution.status}",
+    ]
+    if execution.exit_code is not None:
+        lines.append(f"EXIT CODE: {execution.exit_code}")
+    if execution.execution_time is not None:
+        lines.append(f"EXECUTION TIME: {execution.execution_time:.2f}s")
+    lines.extend(
+        [
+            "",
+            "STDOUT:",
+            execution.stdout or "(empty)",
+            "",
+            "STDERR:",
+            execution.stderr or "(empty)",
+        ]
+    )
+    if execution.error_message:
+        lines.extend(["", "ERROR:", execution.error_message])
+    return "\n".join(lines)
+
+
+RCLONE_ACTIVITY_OPERATIONS = {
+    "rclone_sync": "sync",
+    "rclone_hydrate": "hydrate",
+}
+
+
+def _format_rclone_job_logs(job: RcloneSyncJob) -> str:
+    parts = []
+    if job.log_text:
+        parts.append(job.log_text)
+    if job.error_text and job.error_text not in (job.log_text or ""):
+        parts.append(job.error_text)
+    return "\n".join(parts)
+
+
+def _get_rclone_job(db: Session, job_type: str, job_id: int) -> RcloneSyncJob | None:
+    operation = RCLONE_ACTIVITY_OPERATIONS[job_type]
+    return (
+        db.query(RcloneSyncJob)
+        .filter(RcloneSyncJob.id == job_id, RcloneSyncJob.operation == operation)
+        .first()
+    )
 
 
 @router.get("/recent", response_model=List[ActivityItem])
@@ -95,7 +189,13 @@ async def list_recent_activity(
             repo_name = repo.name if repo else job.repository
 
             # Determine trigger type
-            triggered_by = "schedule" if job.scheduled_job_id else "manual"
+            triggered_by = (
+                "backup_plan"
+                if job.backup_plan_id
+                else "schedule"
+                if job.scheduled_job_id
+                else "manual"
+            )
 
             # Get schedule name if this is a scheduled backup
             schedule_name = None
@@ -107,6 +207,15 @@ async def list_recent_activity(
                 )
                 if scheduled_job:
                     schedule_name = scheduled_job.name
+            backup_plan_name = None
+            if job.backup_plan_id:
+                backup_plan = (
+                    db.query(BackupPlan)
+                    .filter(BackupPlan.id == job.backup_plan_id)
+                    .first()
+                )
+                if backup_plan:
+                    backup_plan_name = backup_plan.name
 
             activities.append(
                 {
@@ -122,6 +231,9 @@ async def list_recent_activity(
                     "triggered_by": triggered_by,
                     "schedule_id": job.scheduled_job_id,
                     "schedule_name": schedule_name,
+                    "backup_plan_id": job.backup_plan_id,
+                    "backup_plan_run_id": job.backup_plan_run_id,
+                    "backup_plan_name": backup_plan_name,
                     "archive_name": getattr(job, "archive_name", None),
                     "package_name": None,
                     "has_logs": bool(job.log_file_path or job.logs),
@@ -366,6 +478,99 @@ async def list_recent_activity(
                 }
             )
 
+    # Fetch script executions
+    if not job_type or job_type == "script_execution":
+        script_executions = (
+            db.query(ScriptExecution)
+            .order_by(ScriptExecution.started_at.desc())
+            .limit(limit)
+            .all()
+        )
+        for execution in script_executions:
+            if status and execution.status != status:
+                continue
+            script_name = (
+                execution.script.name
+                if execution.script
+                else f"Script #{execution.script_id}"
+            )
+            backup_plan_name = None
+            if execution.backup_plan:
+                backup_plan_name = execution.backup_plan.name
+            repo_name = (
+                execution.repository.name if execution.repository else script_name
+            )
+            repo_path = execution.repository.path if execution.repository else None
+            activities.append(
+                {
+                    "id": execution.id,
+                    "type": "script_execution",
+                    "status": execution.status,
+                    "started_at": execution.started_at,
+                    "completed_at": execution.completed_at,
+                    "error_message": execution.error_message,
+                    "repository": repo_name,
+                    "repository_path": repo_path,
+                    "log_file_path": None,
+                    "triggered_by": execution.triggered_by or "manual",
+                    "schedule_id": None,
+                    "schedule_name": None,
+                    "backup_plan_id": execution.backup_plan_id,
+                    "backup_plan_run_id": execution.backup_plan_run_id,
+                    "backup_plan_name": backup_plan_name,
+                    "archive_name": execution.hook_type,
+                    "package_name": script_name,
+                    "has_logs": bool(
+                        execution.stdout or execution.stderr or execution.error_message
+                    ),
+                    "_sort_at": execution.started_at,
+                }
+            )
+
+    if not job_type or job_type in RCLONE_ACTIVITY_OPERATIONS:
+        operations = (
+            [RCLONE_ACTIVITY_OPERATIONS[job_type]]
+            if job_type in RCLONE_ACTIVITY_OPERATIONS
+            else list(RCLONE_ACTIVITY_OPERATIONS.values())
+        )
+        rclone_jobs = (
+            db.query(RcloneSyncJob)
+            .filter(RcloneSyncJob.operation.in_(operations))
+            .order_by(RcloneSyncJob.id.desc())
+            .limit(limit)
+            .all()
+        )
+        for job in rclone_jobs:
+            if status and job.status != status:
+                continue
+            repo = (
+                db.query(Repository).filter(Repository.id == job.repository_id).first()
+            )
+            repo_name = repo.name if repo else f"Repository #{job.repository_id}"
+            repo_path = repo.path if repo else None
+            activity_type = (
+                "rclone_hydrate" if job.operation == "hydrate" else "rclone_sync"
+            )
+            activities.append(
+                {
+                    "id": job.id,
+                    "type": activity_type,
+                    "status": job.status,
+                    "started_at": job.started_at,
+                    "completed_at": job.completed_at,
+                    "error_message": job.error_text,
+                    "repository": repo_name,
+                    "repository_path": repo_path,
+                    "log_file_path": job.log_path,
+                    "triggered_by": job.triggered_by,
+                    "schedule_id": None,
+                    "archive_name": None,
+                    "package_name": None,
+                    "has_logs": bool(job.log_path or job.log_text or job.error_text),
+                    "_sort_at": job.started_at or job.created_at,
+                }
+            )
+
     # Sort by start time, falling back to creation time for pending jobs.
     activities.sort(
         key=lambda x: x.get("_sort_at") or x["started_at"] or datetime.min,
@@ -405,7 +610,43 @@ async def get_job_logs(
         "compact": CompactJob,
         "prune": PruneJob,
         "package": PackageInstallJob,
+        "script_execution": ScriptExecution,
     }
+
+    if job_type == "script_execution":
+        execution = (
+            db.query(ScriptExecution).filter(ScriptExecution.id == job_id).first()
+        )
+        if not execution:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "key": "backend.errors.activity.jobNotFound",
+                    "params": {"jobType": job_type},
+                },
+            )
+        return _paginate_log_text(
+            _format_script_execution_logs(execution), offset, limit
+        )
+
+    if job_type in RCLONE_ACTIVITY_OPERATIONS:
+        job = _get_rclone_job(db, job_type, job_id)
+        if not job:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "key": "backend.errors.activity.jobNotFound",
+                    "params": {"jobType": job_type},
+                },
+            )
+        log_text = _format_rclone_job_logs(job)
+        if log_text:
+            return _paginate_log_text(log_text, offset, limit)
+        if job.status in {"pending", "running"}:
+            return _paginate_log_text(
+                f"Cloud storage job is {job.status}...", offset, limit
+            )
+        return {"lines": [], "total_lines": 0, "has_more": False}
 
     if job_type not in job_models:
         raise HTTPException(
@@ -427,6 +668,24 @@ async def get_job_logs(
                 "params": {"jobType": job_type},
             },
         )
+
+    if job_type == "backup" and getattr(job, "execution_mode", None) == "agent":
+        agent_job = _get_agent_job_for_backup(db, job.id)
+        if not agent_job:
+            return {"lines": [], "total_lines": 0, "has_more": False}
+
+        lines = _get_agent_log_lines(db, agent_job.id)
+        total_lines = len(lines)
+        end_offset = min(offset + limit, total_lines)
+        chunk = lines[offset:end_offset]
+        return {
+            "lines": [
+                {"line_number": offset + i + 1, "content": line}
+                for i, line in enumerate(chunk)
+            ],
+            "total_lines": total_lines,
+            "has_more": end_offset < total_lines,
+        }
 
     # For completed/failed jobs, prefer log_file_path (full borg output) over logs (hooks only)
     if job.status in ["completed", "failed", "completed_with_warnings"]:
@@ -655,7 +914,92 @@ async def download_job_logs(
         "compact": CompactJob,
         "prune": PruneJob,
         "package": PackageInstallJob,
+        "script_execution": ScriptExecution,
     }
+
+    if job_type == "script_execution":
+        execution = (
+            db.query(ScriptExecution).filter(ScriptExecution.id == job_id).first()
+        )
+        if not execution:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "key": "backend.errors.activity.jobNotFound",
+                    "params": {"jobType": job_type},
+                },
+            )
+        if execution.status == "running":
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "key": "backend.errors.activity.cannotDownloadLogsForRunningJob"
+                },
+            )
+        log_text = _format_script_execution_logs(execution)
+        if not log_text.strip():
+            raise HTTPException(
+                status_code=404,
+                detail={"key": "backend.errors.activity.noLogsAvailableForJob"},
+            )
+        temp_file = tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt")
+        try:
+            temp_file.write(log_text)
+            temp_file.flush()
+            temp_file.close()
+            return FileResponse(
+                path=temp_file.name,
+                filename=f"{job_type}_job_{job_id}_logs.txt",
+                media_type="text/plain",
+            )
+        except Exception as e:
+            if os.path.exists(temp_file.name):
+                os.unlink(temp_file.name)
+            raise e
+
+    if job_type in RCLONE_ACTIVITY_OPERATIONS:
+        job = _get_rclone_job(db, job_type, job_id)
+        if not job:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "key": "backend.errors.activity.jobNotFound",
+                    "params": {"jobType": job_type},
+                },
+            )
+        if job.status == "running":
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "key": "backend.errors.activity.cannotDownloadLogsForRunningJob"
+                },
+            )
+        if job.log_path and os.path.exists(job.log_path):
+            return FileResponse(
+                path=job.log_path,
+                filename=f"{job_type}_job_{job_id}_logs.txt",
+                media_type="text/plain",
+            )
+        log_text = _format_rclone_job_logs(job)
+        if not log_text.strip():
+            raise HTTPException(
+                status_code=404,
+                detail={"key": "backend.errors.activity.noLogsAvailableForJob"},
+            )
+        temp_file = tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt")
+        try:
+            temp_file.write(log_text)
+            temp_file.flush()
+            temp_file.close()
+            return FileResponse(
+                path=temp_file.name,
+                filename=f"{job_type}_job_{job_id}_logs.txt",
+                media_type="text/plain",
+            )
+        except Exception as e:
+            if os.path.exists(temp_file.name):
+                os.unlink(temp_file.name)
+            raise e
 
     if job_type not in job_models:
         raise HTTPException(
@@ -713,6 +1057,26 @@ async def download_job_logs(
                 os.unlink(temp_file.name)
             raise e
 
+    if job_type == "backup" and getattr(job, "execution_mode", None) == "agent":
+        agent_job = _get_agent_job_for_backup(db, job.id)
+        if agent_job:
+            temp_file = tempfile.NamedTemporaryFile(
+                mode="w", delete=False, suffix=".txt"
+            )
+            try:
+                temp_file.write("\n".join(_get_agent_log_lines(db, agent_job.id)))
+                temp_file.flush()
+                temp_file.close()
+                return FileResponse(
+                    path=temp_file.name,
+                    filename=f"{job_type}_job_{job_id}_logs.txt",
+                    media_type="text/plain",
+                )
+            except Exception as e:
+                if os.path.exists(temp_file.name):
+                    os.unlink(temp_file.name)
+                raise e
+
     # No logs available
     raise HTTPException(
         status_code=404, detail={"key": "backend.errors.activity.noLogsAvailableForJob"}
@@ -749,7 +1113,56 @@ async def delete_job(
         "compact": CompactJob,
         "prune": PruneJob,
         "package": PackageInstallJob,
+        "script_execution": ScriptExecution,
     }
+
+    if job_type in RCLONE_ACTIVITY_OPERATIONS:
+        job = _get_rclone_job(db, job_type, job_id)
+        if not job:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "key": "backend.errors.activity.jobNotFound",
+                    "params": {"jobType": job_type},
+                },
+            )
+        if job.status == "running":
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.activity.cannotDeleteRunningJob"},
+            )
+        if job.log_path and os.path.exists(job.log_path):
+            try:
+                os.remove(job.log_path)
+                logger.info(
+                    f"Deleted log file for {job_type} job {job_id}",
+                    path=job.log_path,
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to delete log file for {job_type} job {job_id}",
+                    path=job.log_path,
+                    error=str(e),
+                )
+        try:
+            db.delete(job)
+            db.commit()
+            logger.info(
+                f"Deleted {job_type} job {job_id} by admin user",
+                admin_user=current_user.username,
+            )
+            return {
+                "success": True,
+                "message": "backend.success.activity.jobDeleted",
+                "job_id": job_id,
+                "job_type": job_type,
+            }
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to delete {job_type} job {job_id}", error=str(e))
+            raise HTTPException(
+                status_code=500, detail=f"Failed to delete job: {str(e)}"
+            )
 
     if job_type not in job_models:
         raise HTTPException(

@@ -56,6 +56,10 @@ async def test_execute_prune_marks_job_complete_and_updates_repo(db_engine):
             "app.services.v2.prune_service.asyncio.create_subprocess_exec",
             new=AsyncMock(return_value=FakeProcess(0, stdout=b"pruned")),
         ),
+        patch(
+            "app.services.v2.prune_service.BorgRouter.update_stats",
+            new=AsyncMock(return_value=True),
+        ) as mock_update_stats,
     ):
         await service.execute_prune(job_id, repo_id, 0, 7, 4, 6, 0, 1, dry_run=False)
 
@@ -65,6 +69,7 @@ async def test_execute_prune_marks_job_complete_and_updates_repo(db_engine):
     assert refreshed_job.status == "completed"
     assert refreshed_job.completed_at is not None
     assert refreshed_job.has_logs is True
+    mock_update_stats.assert_awaited_once()
     verification.close()
 
 

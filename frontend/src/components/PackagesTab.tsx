@@ -35,7 +35,7 @@ import { toast } from 'react-hot-toast'
 import DataTable, { Column, ActionButton } from './DataTable'
 import { formatDateShort } from '../utils/dateUtils'
 import { useTranslation } from 'react-i18next'
-import { translateBackendKey } from '../utils/translateBackendKey'
+import { translateBackendKey, type BackendDetail } from '../utils/translateBackendKey'
 import { useAnalytics } from '../hooks/useAnalytics'
 
 interface PackageType {
@@ -53,7 +53,7 @@ interface PackageType {
 
 interface InstallJobResponse {
   job_id: number
-  message: string
+  message: BackendDetail
   status: string
 }
 
@@ -100,6 +100,19 @@ export default function PackagesTab() {
     () => (Array.isArray(packagesData) ? (packagesData as PackageType[]) : []),
     [packagesData]
   )
+  const translatePackageJobMessage = (message: BackendDetail, packageId: number) => {
+    const packageName = packages.find((pkg) => pkg.id === packageId)?.name
+
+    if (
+      packageName &&
+      typeof message === 'string' &&
+      message.startsWith('backend.success.packages.')
+    ) {
+      return translateBackendKey({ key: message, params: { name: packageName } })
+    }
+
+    return translateBackendKey(message)
+  }
 
   // Poll job status when activeJobId is set
   useEffect(() => {
@@ -195,8 +208,8 @@ export default function PackagesTab() {
       const response = await api.post(`/packages/${packageId}/install`)
       return response.data
     },
-    onSuccess: (data: InstallJobResponse) => {
-      toast.success(translateBackendKey(data.message))
+    onSuccess: (data: InstallJobResponse, packageId) => {
+      toast.success(translatePackageJobMessage(data.message, packageId))
       setActiveJobId(data.job_id)
       setActiveJobOperation('install')
       setJobStatus(null) // Reset job status
@@ -236,8 +249,8 @@ export default function PackagesTab() {
       const response = await api.post(`/packages/${packageId}/reinstall`)
       return response.data
     },
-    onSuccess: (data: InstallJobResponse) => {
-      toast.success(translateBackendKey(data.message))
+    onSuccess: (data: InstallJobResponse, packageId) => {
+      toast.success(translatePackageJobMessage(data.message, packageId))
       setActiveJobId(data.job_id)
       setActiveJobOperation('reinstall')
       setJobStatus(null) // Reset job status

@@ -1713,6 +1713,40 @@ class TestOidcAuthentication:
         assert data["oidc_unlink_supported"] is True
         assert data["oidc_account_linking_supported"] is True
 
+    def test_oidc_link_start_returns_authorization_url(
+        self, test_client: TestClient, test_db, admin_headers, monkeypatch
+    ):
+        test_db.add(
+            SystemSettings(
+                oidc_enabled=True,
+                oidc_discovery_url="https://id.example.com/.well-known/openid-configuration",
+                oidc_client_id="borg-ui",
+                oidc_client_secret_encrypted=encrypt_secret("secret-value"),
+            )
+        )
+        test_db.commit()
+
+        async def fake_discover(*args, **kwargs):
+            return self._oidc_provider()
+
+        monkeypatch.setattr("app.api.auth.discover_oidc_configuration", fake_discover)
+
+        response = test_client.post(
+            "/api/auth/oidc/link",
+            headers=admin_headers,
+            json={"return_to": "http://testserver/settings/account"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["authorization_url"].startswith("https://id.example.com/auth?")
+
+        login_state = test_db.query(OidcLoginState).one()
+        admin = test_db.query(User).filter(User.username == "admin").one()
+        assert login_state.flow == "link"
+        assert login_state.user_id == admin.id
+        assert login_state.return_to == "http://testserver/settings/account"
+
     def test_local_login_is_blocked_when_oidc_disables_local_auth(
         self, test_client: TestClient, test_db
     ):

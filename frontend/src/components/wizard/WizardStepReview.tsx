@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { Box, Typography, Chip, IconButton, Tooltip, useTheme, alpha } from '@mui/material'
+import { useState } from 'react'
+import { Box, Typography, Chip, IconButton, Tooltip, alpha } from '@mui/material'
 import {
   FolderOpen,
   Shield,
@@ -18,6 +18,13 @@ import {
 import { useTranslation } from 'react-i18next'
 import CommandPreview from '../CommandPreview'
 import BackupFlowPreview from './BackupFlowPreview'
+import {
+  ReviewAttrRow,
+  ReviewCodePill,
+  ReviewKicker,
+  ReviewSectionCard,
+  ReviewSectionGrid,
+} from './WizardReviewComponents'
 
 interface SSHConnection {
   id: number
@@ -29,11 +36,20 @@ interface SSHConnection {
   ssh_path_prefix?: string
 }
 
+interface AgentMachine {
+  id: number
+  name: string
+  hostname?: string | null
+  status: string
+}
+
 export interface WizardReviewData {
   name: string
   borgVersion?: 1 | 2
   repositoryMode: 'full' | 'observe'
-  repositoryLocation: 'local' | 'ssh'
+  repositoryLocation: 'local' | 'ssh' | 'rclone'
+  executionTarget?: 'local' | 'agent'
+  agentMachineId?: number | ''
   path: string
   repoSshConnectionId: number | ''
   dataSource: 'local' | 'remote'
@@ -45,12 +61,19 @@ export interface WizardReviewData {
   excludePatterns: string[]
   customFlags: string
   remotePath: string
+  cloudMirrorEnabled?: boolean
+  rcloneRemoteName?: string
+  rcloneRemotePath?: string
+  rcloneSyncPolicy?: 'after_success' | 'manual' | 'scheduled'
+  rcloneSyncCronExpression?: string
+  rcloneSyncTimezone?: string
 }
 
 interface WizardStepReviewProps {
   mode: 'create' | 'edit' | 'import'
   data: WizardReviewData
   sshConnections: SSHConnection[]
+  agentMachines?: AgentMachine[]
 }
 
 function getEncryptionLabelKey(encryption: string) {
@@ -60,144 +83,26 @@ function getEncryptionLabelKey(encryption: string) {
   return 'wizard.review.encryptionNone'
 }
 
-// Colored app-icon-style badge square
-function IconBadge({ icon, accentColor }: { icon: React.ReactNode; accentColor: string }) {
-  return (
-    <Box
-      sx={{
-        width: 28,
-        height: 28,
-        borderRadius: '8px',
-        bgcolor: alpha(accentColor, 0.15),
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: accentColor,
-        flexShrink: 0,
-      }}
-    >
-      {icon}
-    </Box>
-  )
-}
-
-// Inline monospace pill for paths / technical values
-function CodePill({ children }: { children: React.ReactNode }) {
-  const theme = useTheme()
-  return (
-    <Tooltip title={children} placement="top">
-      <Typography
-        component="span"
-        sx={{
-          fontFamily: 'monospace',
-          fontSize: '0.72rem',
-          px: 0.75,
-          py: 0.15,
-          borderRadius: '4px',
-          bgcolor: alpha(theme.palette.text.primary, theme.palette.mode === 'dark' ? 0.08 : 0.06),
-          color: 'text.primary',
-          maxWidth: '100%',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          display: 'inline-block',
-          verticalAlign: 'middle',
-          cursor: 'default',
-          lineHeight: 1.6,
-        }}
-      >
-        {children}
-      </Typography>
-    </Tooltip>
-  )
-}
-
-// Attribute row within a section card
-function AttrRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <Box
-      sx={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 1,
-        minWidth: 0,
-      }}
-    >
-      <Typography
-        variant="caption"
-        sx={{ color: 'text.disabled', fontSize: '0.7rem', flexShrink: 0 }}
-      >
-        {label}
-      </Typography>
-      <Box
-        sx={{
-          minWidth: 0,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 0.5,
-          flexWrap: 'wrap',
-          justifyContent: 'flex-end',
-        }}
-      >
-        {children}
-      </Box>
-    </Box>
-  )
-}
-
-// Section card: icon badge + label + rows
-function SectionCard({
-  icon,
-  label,
-  accentColor,
-  children,
-}: {
-  icon: React.ReactNode
-  label: string
-  accentColor: string
-  children: React.ReactNode
-}) {
-  const theme = useTheme()
-  return (
-    <Box
-      sx={{
-        borderRadius: 2,
-        bgcolor: alpha(accentColor, theme.palette.mode === 'dark' ? 0.07 : 0.05),
-        p: 1.5,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 1.25,
-        minWidth: 0,
-        overflow: 'hidden',
-      }}
-    >
-      {/* Header */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <IconBadge icon={icon} accentColor={accentColor} />
-        <Typography
-          variant="caption"
-          sx={{
-            color: 'text.secondary',
-            fontWeight: 700,
-            fontSize: '0.68rem',
-            letterSpacing: '0.06em',
-            textTransform: 'uppercase',
-          }}
-        >
-          {label}
-        </Typography>
-      </Box>
-
-      {/* Attribute rows */}
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.6 }}>{children}</Box>
-    </Box>
-  )
-}
-
-export default function WizardStepReview({ mode, data, sshConnections }: WizardStepReviewProps) {
+export default function WizardStepReview({
+  mode,
+  data,
+  sshConnections,
+  agentMachines = [],
+}: WizardStepReviewProps) {
   const { t } = useTranslation()
   const [showPassphrase, setShowPassphrase] = useState(false)
+  const executionTarget = data.executionTarget ?? 'local'
+  const getRcloneSyncPolicyLabel = () => {
+    switch (data.rcloneSyncPolicy || 'after_success') {
+      case 'manual':
+        return t('wizard.location.rcloneSyncManual')
+      case 'scheduled':
+        return t('wizard.location.rcloneSyncScheduled')
+      case 'after_success':
+      default:
+        return t('wizard.location.rcloneSyncAfterSuccess')
+    }
+  }
 
   const getSourceSshConnection = () => {
     if (data.dataSource !== 'remote' || !data.sourceSshConnectionId) return null
@@ -232,7 +137,21 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
   }
 
   const repoDetails = getRepoConnectionDetails()
+  const selectedAgent =
+    executionTarget === 'agent' && data.agentMachineId
+      ? agentMachines.find((agent) => agent.id === data.agentMachineId)
+      : null
   const isEncrypted = data.encryption !== 'none'
+  const hasBackupSource = data.repositoryMode === 'full' && data.sourceDirs.length > 0
+  const hasPlanOwnedAgentSources =
+    data.repositoryMode === 'full' && executionTarget === 'agent' && data.sourceDirs.length === 0
+  const isDirectRclone = data.repositoryLocation === 'rclone' && !data.cloudMirrorEnabled
+  const hasBackupConfiguration =
+    data.repositoryMode === 'full' &&
+    (hasBackupSource || data.excludePatterns.length > 0 || Boolean(data.customFlags))
+  const cloudMirrorTarget = data.rcloneRemoteName
+    ? `${data.rcloneRemoteName}:${data.rcloneRemotePath || ''}`
+    : data.rcloneRemotePath || t('wizard.review.notSet')
 
   const EMERALD = '#10b981'
   const BLUE = '#3b82f6'
@@ -243,7 +162,7 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {/* Backup Flow Preview */}
-      {data.repositoryMode === 'full' && (
+      {!isDirectRclone && hasBackupSource && (
         <BackupFlowPreview
           repositoryLocation={data.repositoryLocation}
           dataSource={data.dataSource}
@@ -255,8 +174,9 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
       )}
 
       {/* Command Preview */}
-      {(data.dataSource === 'local' || data.dataSource === 'remote') &&
-        data.repositoryMode === 'full' && (
+      {!isDirectRclone &&
+        (data.dataSource === 'local' || data.dataSource === 'remote') &&
+        hasBackupSource && (
           <CommandPreview
             mode={mode === 'create' ? 'create' : 'import'}
             borgVersion={data.borgVersion}
@@ -279,18 +199,7 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
 
       {/* Manifest header + status chip */}
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography
-          variant="caption"
-          sx={{
-            color: 'text.disabled',
-            fontWeight: 700,
-            fontSize: '0.6rem',
-            letterSpacing: '0.12em',
-            textTransform: 'uppercase',
-          }}
-        >
-          {t('wizard.review.configurationSummary')}
-        </Typography>
+        <ReviewKicker>{t('wizard.review.configurationSummary')}</ReviewKicker>
 
         {mode === 'create' && data.repositoryMode === 'full' && (
           <Tooltip title={t('wizard.review.repositoryInitialized')} placement="top" arrow>
@@ -323,29 +232,21 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
         </Box>
       )}
 
-      {/* 2×2 section card grid */}
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-          gap: 1.25,
-          minWidth: 0,
-          overflow: 'hidden',
-        }}
-      >
+      {/* 2x2 section card grid */}
+      <ReviewSectionGrid>
         {/* REPOSITORY */}
-        <SectionCard
+        <ReviewSectionCard
           icon={<FolderOpen size={14} />}
           label={t('wizard.review.repository')}
           accentColor={BLUE}
         >
-          <AttrRow label={t('wizard.review.name')}>
+          <ReviewAttrRow label={t('wizard.review.name')}>
             <Typography variant="body2" fontWeight={700} fontSize="0.8rem">
               {data.name}
             </Typography>
-          </AttrRow>
+          </ReviewAttrRow>
 
-          <AttrRow label={t('wizard.review.mode')}>
+          <ReviewAttrRow label={t('wizard.review.mode')}>
             <Chip
               label={
                 data.repositoryMode === 'full'
@@ -356,9 +257,9 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
               color={data.repositoryMode === 'full' ? 'primary' : 'default'}
               sx={{ height: 17, fontSize: '0.62rem', fontWeight: 600 }}
             />
-          </AttrRow>
+          </ReviewAttrRow>
 
-          <AttrRow label={t('wizard.review.location')}>
+          <ReviewAttrRow label={t('wizard.review.location')}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
               {data.repositoryLocation === 'local' ? (
                 <Server size={12} style={{ opacity: 0.6 }} />
@@ -366,26 +267,110 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
                 <Cloud size={12} style={{ opacity: 0.6 }} />
               )}
               <Typography variant="body2" fontSize="0.75rem">
-                {data.repositoryLocation === 'local'
-                  ? t('wizard.review.borgUiServer')
-                  : t('wizard.review.sshRemote')}
+                {executionTarget === 'agent'
+                  ? t('wizard.review.repositoryPathOnSelectedAgent')
+                  : data.repositoryLocation === 'local'
+                    ? t('wizard.review.borgUiServer')
+                    : isDirectRclone
+                      ? t('wizard.review.directRclone')
+                      : data.repositoryLocation === 'rclone'
+                        ? t('wizard.review.rcloneStorage')
+                        : t('wizard.review.sshRemote')}
               </Typography>
             </Box>
-          </AttrRow>
+          </ReviewAttrRow>
 
-          <AttrRow label={t('wizard.review.path')}>
-            <CodePill>{data.path || t('wizard.review.notSet')}</CodePill>
-          </AttrRow>
-        </SectionCard>
+          <ReviewAttrRow label={t('wizard.review.execution')}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              {executionTarget === 'agent' ? (
+                <Laptop size={12} style={{ opacity: 0.6 }} />
+              ) : (
+                <Server size={12} style={{ opacity: 0.6 }} />
+              )}
+              <Typography variant="body2" fontSize="0.75rem">
+                {executionTarget === 'agent'
+                  ? t('wizard.review.managedAgent')
+                  : t('wizard.review.borgUiServer')}
+              </Typography>
+            </Box>
+          </ReviewAttrRow>
+
+          {executionTarget === 'agent' && (
+            <ReviewAttrRow label={t('wizard.review.agent')}>
+              <Typography variant="body2" fontSize="0.75rem" fontWeight={500}>
+                {selectedAgent?.hostname || selectedAgent?.name || t('wizard.review.notSet')}
+              </Typography>
+            </ReviewAttrRow>
+          )}
+
+          <ReviewAttrRow label={t('wizard.review.path')}>
+            <ReviewCodePill>{data.path || t('wizard.review.notSet')}</ReviewCodePill>
+          </ReviewAttrRow>
+
+          {isDirectRclone && (
+            <>
+              <ReviewAttrRow label={t('wizard.review.rcloneRoute')}>
+                <Typography variant="body2" fontSize="0.75rem">
+                  {t('wizard.location.directRcloneRoutePreview')}
+                </Typography>
+              </ReviewAttrRow>
+              <ReviewAttrRow label={t('wizard.review.directRcloneTradeoffsLabel')}>
+                <Typography variant="body2" fontSize="0.75rem">
+                  {t('wizard.review.directRcloneTradeoffs')}
+                </Typography>
+              </ReviewAttrRow>
+              {data.rcloneSyncPolicy === 'scheduled' && (
+                <ReviewAttrRow label={t('wizard.review.rcloneSyncSchedule')}>
+                  <ReviewCodePill>
+                    {`${data.rcloneSyncCronExpression || t('wizard.review.notSet')} · ${
+                      data.rcloneSyncTimezone || 'UTC'
+                    }`}
+                  </ReviewCodePill>
+                </ReviewAttrRow>
+              )}
+            </>
+          )}
+        </ReviewSectionCard>
+
+        {data.cloudMirrorEnabled && (
+          <ReviewSectionCard
+            icon={<Cloud size={14} />}
+            label={t('wizard.review.cloudMirror')}
+            accentColor={VIOLET}
+          >
+            <ReviewAttrRow label={t('wizard.review.rcloneRoute')}>
+              <Typography variant="body2" fontSize="0.75rem">
+                {t('wizard.cloudMirror.routePreview')}
+              </Typography>
+            </ReviewAttrRow>
+            <ReviewAttrRow label={t('wizard.review.rcloneRemotePath')}>
+              <ReviewCodePill>{cloudMirrorTarget}</ReviewCodePill>
+            </ReviewAttrRow>
+            <ReviewAttrRow label={t('wizard.review.rcloneSyncPolicy')}>
+              <Typography variant="body2" fontSize="0.75rem">
+                {getRcloneSyncPolicyLabel()}
+              </Typography>
+            </ReviewAttrRow>
+            {data.rcloneSyncPolicy === 'scheduled' && (
+              <ReviewAttrRow label={t('wizard.review.rcloneSyncSchedule')}>
+                <ReviewCodePill>
+                  {`${data.rcloneSyncCronExpression || t('wizard.review.notSet')} · ${
+                    data.rcloneSyncTimezone || 'UTC'
+                  }`}
+                </ReviewCodePill>
+              </ReviewAttrRow>
+            )}
+          </ReviewSectionCard>
+        )}
 
         {/* SECURITY */}
-        <SectionCard
+        <ReviewSectionCard
           icon={<Shield size={14} />}
           label={t('wizard.review.security')}
           accentColor={isEncrypted ? EMERALD : ERROR}
         >
           {mode === 'create' && (
-            <AttrRow label={t('wizard.review.encryption')}>
+            <ReviewAttrRow label={t('wizard.review.encryption')}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.4 }}>
                 {isEncrypted ? (
                   <Lock size={11} color={EMERALD} />
@@ -399,10 +384,10 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
                   sx={{ height: 17, fontSize: '0.62rem', fontWeight: 600 }}
                 />
               </Box>
-            </AttrRow>
+            </ReviewAttrRow>
           )}
 
-          <AttrRow label={t('wizard.review.passphrase')}>
+          <ReviewAttrRow label={t('wizard.review.passphrase')}>
             {data.passphrase ? (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.4 }}>
                 <Typography
@@ -429,61 +414,80 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
                 {t('wizard.review.passphraseNotSet')}
               </Typography>
             )}
-          </AttrRow>
-        </SectionCard>
+          </ReviewAttrRow>
+        </ReviewSectionCard>
 
-        {/* DATA SOURCE — full mode only */}
-        {data.repositoryMode === 'full' && (
-          <SectionCard
+        {/* DATA SOURCE - full mode only */}
+        {hasPlanOwnedAgentSources && (
+          <ReviewSectionCard
+            icon={<Info size={14} />}
+            label={t('wizard.review.planOwnedSources')}
+            accentColor={AMBER}
+          >
+            <ReviewAttrRow label={t('wizard.review.source')}>
+              <Typography variant="body2" fontSize="0.75rem" fontWeight={500}>
+                {t('wizard.review.backupPlans')}
+              </Typography>
+            </ReviewAttrRow>
+            <Typography variant="body2" color="text.secondary" fontSize="0.75rem">
+              {t('wizard.review.planOwnedSourcesDetail')}
+            </Typography>
+          </ReviewSectionCard>
+        )}
+
+        {hasBackupSource && (
+          <ReviewSectionCard
             icon={data.dataSource === 'local' ? <HardDrive size={14} /> : <Laptop size={14} />}
             label={t('wizard.review.dataSource')}
             accentColor={AMBER}
           >
-            <AttrRow label={t('wizard.review.source')}>
+            <ReviewAttrRow label={t('wizard.review.source')}>
               <Typography variant="body2" fontSize="0.75rem" fontWeight={500}>
-                {data.dataSource === 'local'
-                  ? t('wizard.review.borgUiServer')
-                  : t('wizard.review.remoteClient')}
+                {executionTarget === 'agent'
+                  ? t('wizard.review.managedAgent')
+                  : data.dataSource === 'local'
+                    ? t('wizard.review.borgUiServer')
+                    : t('wizard.review.remoteClient')}
               </Typography>
-            </AttrRow>
+            </ReviewAttrRow>
 
             {data.dataSource === 'local' && (
               <>
-                <AttrRow label={t('wizard.review.directories')}>
+                <ReviewAttrRow label={t('wizard.review.directories')}>
                   <Typography variant="body2" fontSize="0.75rem">
                     {t('wizard.review.directoriesCount', { count: data.sourceDirs.length })}
                   </Typography>
-                </AttrRow>
+                </ReviewAttrRow>
 
-                <AttrRow label={t('wizard.review.excludePatterns')}>
+                <ReviewAttrRow label={t('wizard.review.excludePatterns')}>
                   <Typography variant="body2" fontSize="0.75rem">
                     {t('wizard.review.directoriesCount', { count: data.excludePatterns.length })}
                   </Typography>
-                </AttrRow>
+                </ReviewAttrRow>
               </>
             )}
-          </SectionCard>
+          </ReviewSectionCard>
         )}
 
-        {/* BACKUP CONFIG — full mode only */}
-        {data.repositoryMode === 'full' && (
-          <SectionCard
+        {/* BACKUP CONFIG - full mode only */}
+        {hasBackupConfiguration && (
+          <ReviewSectionCard
             icon={<Settings size={14} />}
             label={t('wizard.review.backupConfiguration')}
             accentColor={VIOLET}
           >
-            <AttrRow label={t('wizard.review.compression')}>
-              <CodePill>{data.compression}</CodePill>
-            </AttrRow>
+            <ReviewAttrRow label={t('wizard.review.compression')}>
+              <ReviewCodePill>{data.compression}</ReviewCodePill>
+            </ReviewAttrRow>
 
             {data.customFlags && (
-              <AttrRow label={t('wizard.review.customFlags')}>
-                <CodePill>{data.customFlags}</CodePill>
-              </AttrRow>
+              <ReviewAttrRow label={t('wizard.review.customFlags')}>
+                <ReviewCodePill>{data.customFlags}</ReviewCodePill>
+              </ReviewAttrRow>
             )}
-          </SectionCard>
+          </ReviewSectionCard>
         )}
-      </Box>
+      </ReviewSectionGrid>
 
       {/* Import / edit notes */}
       {mode === 'import' && (

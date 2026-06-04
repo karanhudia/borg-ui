@@ -130,6 +130,27 @@ describe('BorgApiClient', () => {
     })
   })
 
+  it('passes advanced check flags to Borg check routes', async () => {
+    const clientModule = await import('./client')
+    const postMock = vi.spyOn(clientModule.httpClient, 'post').mockResolvedValue({} as never)
+    const { BorgApiClient } = clientModule
+    const v1Client = new BorgApiClient({ id: 12, borg_version: 1 } as never)
+    const v2Client = new BorgApiClient({ id: 13, borg_version: 2 } as never)
+
+    v1Client.checkRepository({ maxDuration: 7200, checkExtraFlags: '--repair --save-space' })
+    v2Client.checkRepository({ maxDuration: 0, checkExtraFlags: '--verify-data' })
+
+    expect(postMock).toHaveBeenCalledWith('/repositories/12/check', {
+      max_duration: 7200,
+      check_extra_flags: '--repair --save-space',
+    })
+    expect(postMock).toHaveBeenCalledWith('/v2/backup/check', {
+      repository_id: 13,
+      max_duration: 0,
+      check_extra_flags: '--verify-data',
+    })
+  })
+
   it('routes static create and import calls by borg version', async () => {
     const clientModule = await import('./client')
     const postMock = vi.spyOn(clientModule.httpClient, 'post').mockResolvedValue({} as never)

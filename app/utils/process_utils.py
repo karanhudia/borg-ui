@@ -6,12 +6,16 @@ import json
 import os
 import subprocess
 from pathlib import Path
+from typing import Optional
 import structlog
 from datetime import datetime
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 from app.config import settings
 from app.core.borg_router import BorgRouter
 from app.database.models import (
+    BackupPlanRun,
+    BackupPlanRunRepository,
     CheckJob,
     CompactJob,
     BackupJob,
@@ -20,36 +24,165 @@ from app.database.models import (
     RestoreJob,
     Repository,
 )
+from app.utils.backup_maintenance import (
+    COMPLETED_BACKUP_STATUSES,
+    RUNNING_BACKUP_MAINTENANCE_FAILURES,
+)
 
 logger = structlog.get_logger()
 
+ACTIVE_JOB_STATUSES = {"pending", "running"}
+ACTIVE_PLAN_RUN_STATUSES = {"pending", "running"}
+SUCCESS_PLAN_REPOSITORY_STATUSES = {"completed", "completed_with_warnings"}
+WARNING_PLAN_REPOSITORY_STATUSES = {"completed_with_warnings", "skipped"}
+CONTAINER_RESTARTED_DURING_BACKUP = json.dumps(
+    {"key": "backend.errors.service.containerRestartedDuringBackup"}
+)
+CONTAINER_RESTARTED_DURING_OPERATION = json.dumps(
+    {"key": "backend.errors.service.containerRestartedDuringOperation"}
+)
 
-def _mark_stale_backup_maintenance_failed(db: Session) -> int:
+
+def _plan_repository_failed(status: Optional[str]) -> bool:
+    return (
+        status not in SUCCESS_PLAN_REPOSITORY_STATUSES
+        and status not in WARNING_PLAN_REPOSITORY_STATUSES
+    )
+
+
+def _fail_backup_plan_child_after_restart(
+    child: BackupPlanRunRepository, now: datetime, message: str
+) -> None:
+    child.status = "failed"
+    child.completed_at = child.completed_at or now
+    child.error_message = child.error_message or message
+
+
+def _finalize_interrupted_backup_plan_run(
+    run: BackupPlanRun, now: datetime, message: str
+) -> None:
+    statuses = [child.status for child in run.repositories]
+
+    if not statuses:
+        run.status = "failed"
+        run.error_message = run.error_message or message
+    else:
+        has_success = any(
+            status in SUCCESS_PLAN_REPOSITORY_STATUSES for status in statuses
+        )
+        has_cancelled = any(status == "cancelled" for status in statuses)
+        has_failure = any(_plan_repository_failed(status) for status in statuses)
+        has_warning = any(
+            status in WARNING_PLAN_REPOSITORY_STATUSES for status in statuses
+        )
+
+        if has_cancelled and not has_success:
+            run.status = "cancelled"
+        elif has_success and (has_failure or has_cancelled):
+            run.status = "partial"
+        elif has_failure:
+            run.status = "failed"
+        elif has_warning:
+            run.status = "completed_with_warnings"
+        else:
+            run.status = "completed"
+
+        if run.status in {"failed", "partial"}:
+            run.error_message = run.error_message or message
+
+    run.completed_at = run.completed_at or now
+
+
+def _normalize_interrupted_backup_plan_runs(
+    db: Session,
+    now: datetime,
+    interrupted_runs: Optional[list[BackupPlanRun]] = None,
+) -> int:
+    """Finish active backup plan run rows that cannot resume after a restart."""
+    if interrupted_runs is None:
+        interrupted_runs = (
+            db.query(BackupPlanRun)
+            .filter(BackupPlanRun.status.in_(ACTIVE_PLAN_RUN_STATUSES))
+            .all()
+        )
+
+    for run in interrupted_runs:
+        for child in run.repositories:
+            if child.status in ACTIVE_PLAN_RUN_STATUSES:
+                _fail_backup_plan_child_after_restart(
+                    child, now, CONTAINER_RESTARTED_DURING_BACKUP
+                )
+
+        _finalize_interrupted_backup_plan_run(
+            run, now, CONTAINER_RESTARTED_DURING_BACKUP
+        )
+
+        logger.info(
+            "Normalized interrupted backup plan run after restart",
+            backup_plan_run_id=run.id,
+            backup_plan_id=run.backup_plan_id,
+            status=run.status,
+        )
+
+    return len(interrupted_runs)
+
+
+def _mark_backup_job_failed_after_restart(
+    job: BackupJob, now: datetime, message: str
+) -> None:
+    job.status = "failed"
+    job.error_message = message
+    job.completed_at = now
+
+
+def _has_running_check_child(db: Session, backup_job: BackupJob) -> bool:
+    query = db.query(CheckJob.id).filter(CheckJob.status == "running")
+    if backup_job.repository_id is not None:
+        query = query.filter(CheckJob.repository_id == backup_job.repository_id)
+    else:
+        query = query.filter(CheckJob.repository_path == backup_job.repository)
+    return query.first() is not None
+
+
+def _mark_backup_maintenance_failed(
+    backup_job: BackupJob,
+    previous_state: str,
+    now: datetime,
+) -> None:
+    backup_job.completed_at = backup_job.completed_at or now
+    if backup_job.status not in COMPLETED_BACKUP_STATUSES:
+        backup_job.status = "failed"
+        backup_job.error_message = (
+            backup_job.error_message or CONTAINER_RESTARTED_DURING_OPERATION
+        )
+    backup_job.maintenance_status = RUNNING_BACKUP_MAINTENANCE_FAILURES[previous_state]
+
+
+def _mark_stale_backup_maintenance_failed(db: Session, now: datetime) -> int:
     """
     Normalize backup rows left in running maintenance states after a restart.
 
-    This handles stale backup rows even when the corresponding prune/compact
+    This handles stale backup rows even when the corresponding maintenance
     child job row is already gone or no longer marked as running.
     """
     stale_backup_jobs = (
         db.query(BackupJob)
         .filter(
-            BackupJob.maintenance_status.in_(["running_prune", "running_compact"]),
-            BackupJob.status != "completed",
+            BackupJob.maintenance_status.in_(list(RUNNING_BACKUP_MAINTENANCE_FAILURES)),
         )
         .all()
     )
 
+    normalized_count = 0
     for backup_job in stale_backup_jobs:
         previous_state = backup_job.maintenance_status
-        backup_job.status = "failed"
-        backup_job.completed_at = backup_job.completed_at or datetime.utcnow()
-        backup_job.error_message = backup_job.error_message or json.dumps(
-            {"key": "backend.errors.service.containerRestartedDuringOperation"}
-        )
-        backup_job.maintenance_status = (
-            "prune_failed" if previous_state == "running_prune" else "compact_failed"
-        )
+        if previous_state == "running_check" and _has_running_check_child(
+            db, backup_job
+        ):
+            continue
+
+        _mark_backup_maintenance_failed(backup_job, previous_state, now)
+        normalized_count += 1
         logger.info(
             "Normalized stale backup maintenance state after restart",
             backup_job_id=backup_job.id,
@@ -58,7 +191,7 @@ def _mark_stale_backup_maintenance_failed(db: Session) -> int:
             new_maintenance_status=backup_job.maintenance_status,
         )
 
-    return len(stale_backup_jobs)
+    return normalized_count
 
 
 def is_process_alive(pid: int, stored_start_time: int) -> bool:
@@ -182,11 +315,12 @@ def cleanup_orphaned_jobs(db: Session):
     """
     logger.info("Checking for orphaned jobs...")
 
-    stale_backup_jobs = _mark_stale_backup_maintenance_failed(db)
+    now = datetime.utcnow()
+    stale_backup_jobs = _mark_stale_backup_maintenance_failed(db, now)
 
-    # Find all running backup jobs
-    running_backup_jobs = (
-        db.query(BackupJob).filter(BackupJob.status == "running").all()
+    # Find backup jobs that were owned by in-memory tasks before restart.
+    active_backup_jobs = (
+        db.query(BackupJob).filter(BackupJob.status.in_(ACTIVE_JOB_STATUSES)).all()
     )
 
     # Find all running restore jobs
@@ -210,24 +344,32 @@ def cleanup_orphaned_jobs(db: Session):
         db.query(CompactJob).filter(CompactJob.status == "running").all()
     )
 
+    active_backup_plan_runs = (
+        db.query(BackupPlanRun)
+        .filter(BackupPlanRun.status.in_(ACTIVE_PLAN_RUN_STATUSES))
+        .all()
+    )
+
     total_jobs = (
-        len(running_backup_jobs)
+        len(active_backup_jobs)
         + len(running_restore_jobs)
         + len(running_check_jobs)
         + len(running_restore_check_jobs)
         + len(running_prune_jobs)
         + len(running_compact_jobs)
         + stale_backup_jobs
+        + len(active_backup_plan_runs)
     )
     logger.info(
         "Found running jobs",
-        backup_jobs=len(running_backup_jobs),
+        backup_jobs=len(active_backup_jobs),
         restore_jobs=len(running_restore_jobs),
         check_jobs=len(running_check_jobs),
         restore_check_jobs=len(running_restore_check_jobs),
         prune_jobs=len(running_prune_jobs),
         compact_jobs=len(running_compact_jobs),
         stale_backup_maintenance_jobs=stale_backup_jobs,
+        active_backup_plan_runs=len(active_backup_plan_runs),
     )
 
     if total_jobs == 0:
@@ -235,16 +377,18 @@ def cleanup_orphaned_jobs(db: Session):
         return
 
     # Process backup jobs
-    for job in running_backup_jobs:
-        # Backup jobs don't have process_pid tracking, so we mark them all as failed on restart
-        job.status = "failed"
-        job.error_message = json.dumps(
-            {"key": "backend.errors.service.containerRestartedDuringBackup"}
+    for job in active_backup_jobs:
+        # Backup jobs don't have process_pid tracking, so active rows cannot resume.
+        previous_status = job.status
+        _mark_backup_job_failed_after_restart(
+            job, now, CONTAINER_RESTARTED_DURING_BACKUP
         )
-        job.completed_at = datetime.utcnow()
 
         logger.info(
-            "Orphaned backup job detected", job_id=job.id, repository=job.repository
+            "Orphaned backup job detected",
+            job_id=job.id,
+            repository=job.repository,
+            previous_status=previous_status,
         )
 
     # Process restore jobs
@@ -265,10 +409,8 @@ def cleanup_orphaned_jobs(db: Session):
         if not is_process_alive(job.process_pid, job.process_start_time):
             # Process is dead! Mark job as failed
             job.status = "failed"
-            job.error_message = json.dumps(
-                {"key": "backend.errors.service.containerRestartedDuringOperation"}
-            )
-            job.completed_at = datetime.utcnow()
+            job.error_message = CONTAINER_RESTARTED_DURING_OPERATION
+            job.completed_at = now
 
             logger.info(
                 "Orphaned check job detected",
@@ -313,6 +455,34 @@ def cleanup_orphaned_jobs(db: Session):
                             "key": "backend.errors.service.warningRemoteProcessMayBeRunning"
                         }
                     )
+
+            backup_match_filter = BackupJob.repository_id == job.repository_id
+            if job.repository_path:
+                backup_match_filter = or_(
+                    backup_match_filter,
+                    and_(
+                        BackupJob.repository_id.is_(None),
+                        BackupJob.repository == job.repository_path,
+                    ),
+                )
+
+            affected_backup_jobs = (
+                db.query(BackupJob)
+                .filter(
+                    BackupJob.maintenance_status == "running_check",
+                    backup_match_filter,
+                )
+                .all()
+            )
+
+            for backup_job in affected_backup_jobs:
+                _mark_backup_maintenance_failed(backup_job, "running_check", now)
+                logger.info(
+                    "Marked backup maintenance state as failed after orphaned check",
+                    backup_job_id=backup_job.id,
+                    check_job_id=job.id,
+                    repository=backup_job.repository,
+                )
         else:
             # Process is still alive! This is unexpected
             logger.warning(
@@ -325,10 +495,8 @@ def cleanup_orphaned_jobs(db: Session):
     for job in running_restore_check_jobs:
         if not is_process_alive(job.process_pid, job.process_start_time):
             job.status = "failed"
-            job.error_message = json.dumps(
-                {"key": "backend.errors.service.containerRestartedDuringOperation"}
-            )
-            job.completed_at = datetime.utcnow()
+            job.error_message = CONTAINER_RESTARTED_DURING_OPERATION
+            job.completed_at = now
             logger.info(
                 "Orphaned restore check job detected",
                 job_id=job.id,
@@ -345,10 +513,8 @@ def cleanup_orphaned_jobs(db: Session):
     # Process prune jobs
     for job in running_prune_jobs:
         job.status = "failed"
-        job.error_message = json.dumps(
-            {"key": "backend.errors.service.containerRestartedDuringOperation"}
-        )
-        job.completed_at = datetime.utcnow()
+        job.error_message = CONTAINER_RESTARTED_DURING_OPERATION
+        job.completed_at = now
 
         logger.info(
             "Orphaned prune job detected",
@@ -379,10 +545,8 @@ def cleanup_orphaned_jobs(db: Session):
         if not is_process_alive(job.process_pid, job.process_start_time):
             # Process is dead! Mark job as failed
             job.status = "failed"
-            job.error_message = json.dumps(
-                {"key": "backend.errors.service.containerRestartedDuringOperation"}
-            )
-            job.completed_at = datetime.utcnow()
+            job.error_message = CONTAINER_RESTARTED_DURING_OPERATION
+            job.completed_at = now
 
             logger.info(
                 "Orphaned compact job detected",
@@ -452,6 +616,15 @@ def cleanup_orphaned_jobs(db: Session):
                 job_id=job.id,
                 pid=job.process_pid,
             )
+
+    normalized_plan_runs = _normalize_interrupted_backup_plan_runs(
+        db, now, active_backup_plan_runs
+    )
+    if normalized_plan_runs:
+        logger.info(
+            "Cleaned up interrupted backup plan runs",
+            count=normalized_plan_runs,
+        )
 
     # Commit all changes
     db.commit()

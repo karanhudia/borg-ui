@@ -50,6 +50,15 @@ def main() -> int:
         verify_payload = client.verify_ssh_connection_borg(connection["id"])
         if not verify_payload.get("installed"):
             raise SmokeFailure(f"Remote Borg verification failed: {verify_payload}")
+        backup_source_payload = client.request_ok(
+            "PATCH",
+            f"/api/ssh-keys/connections/{connection['id']}/backup-source",
+            params={"enable": "true"},
+        ).json()
+        if not backup_source_payload.get("is_backup_source"):
+            raise SmokeFailure(
+                f"Unable to enable SSH connection as backup source: {backup_source_payload}"
+            )
 
         run_id = client.temp_dir.name
         remote_source_path = Path(args.remote_root) / f"remote-source-{run_id}"
@@ -59,16 +68,27 @@ def main() -> int:
         )
 
         remote_repo_path = f"{args.remote_root}/remote-source-repo-{run_id}"
-        _repo_id, repo_path = client.create_repository(
-            name=f"Remote Source SSH Repo {run_id}",
-            repo_path=remote_repo_path,
-            source_dirs=[remote_source_path.as_posix()],
-            extra={
+        create_response = client.request_ok(
+            "POST",
+            "/api/repositories/",
+            headers=client._headers(json_body=True),
+            json={
+                "name": f"Remote Source SSH Repo {run_id}",
+                "path": remote_repo_path,
                 "connection_id": connection["id"],
+                "encryption": "none",
+                "compression": "lz4",
                 "repository_type": "ssh",
+                "source_directories": [remote_source_path.as_posix()],
                 "source_connection_id": connection["id"],
+                "exclude_patterns": [],
             },
+            expected=(200, 201),
         )
+        repo_payload = create_response.json().get("repository", create_response.json())
+        repo_path = repo_payload["path"]
+        if not str(repo_path).startswith("ssh://"):
+            raise SmokeFailure(f"Expected remote repository path, got {repo_payload}")
 
         backup_job_id = client.start_backup(repo_path)
         client.wait_for_job(
@@ -77,6 +97,17 @@ def main() -> int:
             expected={"completed", "completed_with_warnings"},
             timeout=180,
         )
+        status_payload = client.request_ok(
+            "GET", f"/api/backup/status/{backup_job_id}"
+        ).json()
+        if status_payload.get("route_strategy") != "remote_direct":
+            raise SmokeFailure(
+                f"Expected remote_direct route strategy, got {status_payload}"
+            )
+        if status_payload.get("execution_mode") != "remote_ssh":
+            raise SmokeFailure(
+                f"Expected remote_ssh execution mode, got {status_payload}"
+            )
 
         archives = client.list_archives(repo_path)
         if len(archives) != 1:

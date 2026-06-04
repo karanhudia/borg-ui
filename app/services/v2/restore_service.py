@@ -26,6 +26,8 @@ class RestoreV2Service:
             repository_path,
             "extract",
             "--log-json",
+            "--umask",
+            "0022",
         ]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])

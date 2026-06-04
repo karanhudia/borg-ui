@@ -14,7 +14,14 @@ from typing import Optional
 import structlog
 
 from app.database.database import get_db
-from app.database.models import User, Repository, CheckJob, CompactJob, BackupJob
+from app.database.models import (
+    User,
+    Repository,
+    CheckJob,
+    CompactJob,
+    BackupJob,
+    PruneJob,
+)
 from app.api.maintenance_jobs import (
     get_repository_with_access,
     start_background_maintenance_job,
@@ -23,12 +30,26 @@ from app.core.security import get_current_user
 from app.core.features import require_feature
 from app.core.borg_router import BorgRouter
 from app.services.backup_service import backup_service
+from app.services.check_flag_validation import (
+    CheckFlagConflictError,
+    validate_check_flags_for_max_duration,
+)
 from app.services.v2.check_service import check_v2_service
 from app.services.v2.compact_service import compact_v2_service
 from app.services.v2.prune_service import prune_v2_service
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["Backup v2"], dependencies=[require_feature("borg_v2")])
+
+
+def _raise_check_flag_conflict(exc: CheckFlagConflictError) -> None:
+    raise HTTPException(
+        status_code=422,
+        detail={
+            "key": "backend.errors.repo.checkFlagsRequireUnlimitedDuration",
+            "params": {"flags": ", ".join(exc.conflicting_flags)},
+        },
+    ) from exc
 
 
 # ── Schemas ────────────────────────────────────────────────────────────────────
@@ -57,6 +78,7 @@ class CompactV2Request(BaseModel):
 class CheckV2Request(BaseModel):
     repository_id: int
     max_duration: Optional[int] = None
+    check_extra_flags: Optional[str] = None
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -156,6 +178,40 @@ async def prune_archives(
         )
 
     repo = _get_v2_repo_by_id(data.repository_id, db, current_user)
+    if not data.dry_run:
+        prune_job = start_background_maintenance_job(
+            db,
+            repo,
+            PruneJob,
+            error_key="backend.errors.prune.alreadyRunning",
+            dispatcher=lambda job, repo_id=repo.id: prune_v2_service.execute_prune(
+                job.id,
+                repo_id,
+                data.keep_hourly,
+                data.keep_daily,
+                data.keep_weekly,
+                data.keep_monthly,
+                data.keep_quarterly,
+                data.keep_yearly,
+                False,
+            ),
+            status="running",
+            extra_fields={"scheduled_prune": False},
+        )
+
+        logger.info(
+            "Borg2 prune job created",
+            job_id=prune_job.id,
+            repository_id=repo.id,
+            user=current_user.username,
+        )
+
+        return {
+            "job_id": prune_job.id,
+            "status": "running",
+            "message": "backend.success.repo.pruneJobStarted",
+        }
+
     result = await prune_v2_service.run_prune(
         repo=repo,
         keep_hourly=data.keep_hourly,
@@ -254,6 +310,17 @@ async def check_repository(
         )
 
     repo = _get_v2_repo_by_id(data.repository_id, db, current_user)
+    check_extra_flags = (
+        data.check_extra_flags.strip() if data.check_extra_flags else None
+    )
+    try:
+        validate_check_flags_for_max_duration(check_extra_flags, data.max_duration)
+    except CheckFlagConflictError as exc:
+        _raise_check_flag_conflict(exc)
+
+    extra_fields = {"max_duration": data.max_duration}
+    if check_extra_flags:
+        extra_fields["extra_flags"] = check_extra_flags
 
     check_job = start_background_maintenance_job(
         db,
@@ -264,9 +331,7 @@ async def check_repository(
             job.id, repo_id
         ),
         status="running",
-        extra_fields={
-            "max_duration": data.max_duration,
-        },
+        extra_fields=extra_fields,
     )
 
     logger.info(

@@ -16,7 +16,7 @@ class BackupV2Service:
     """Version-specific Borg 2 backup helpers and execution."""
 
     def validate_local_repository_access(self, repo: Repository) -> None:
-        if not repo or repo.path.startswith("ssh://"):
+        if not repo or repo.path.startswith(("ssh://", "rclone:")):
             return
 
         if not os.path.isdir(repo.path):
@@ -36,6 +36,7 @@ class BackupV2Service:
         compression: str,
         exclude_patterns: List[str],
         custom_flags: List[str],
+        upload_ratelimit_kib: Optional[int] = None,
     ) -> List[str]:
         cmd = [
             borg2.borg_cmd,
@@ -49,6 +50,8 @@ class BackupV2Service:
             "--compression",
             compression,
         ]
+        if upload_ratelimit_kib:
+            cmd.extend(["--upload-ratelimit", str(upload_ratelimit_kib)])
         for pattern in exclude_patterns:
             cmd.extend(["--exclude", pattern])
         cmd.extend(custom_flags)

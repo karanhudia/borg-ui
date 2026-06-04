@@ -42,7 +42,7 @@ import { Repository } from '../types'
 import MultiRepositorySelector from './MultiRepositorySelector'
 import { useAnalytics } from '../hooks/useAnalytics'
 import NotificationCard from './NotificationCard'
-import ResponsiveDialog from './ResponsiveDialog'
+import ResponsiveDialog from './shared/ResponsiveDialog'
 
 interface NotificationSetting {
   id: number
@@ -62,6 +62,8 @@ interface NotificationSetting {
   notify_on_restore_check_success: boolean
   notify_on_restore_check_failure: boolean
   notify_on_schedule_failure: boolean
+  notify_on_stale_backup: boolean
+  notify_on_backup_report: boolean
   monitor_all_repositories: boolean
   repositories: Repository[]
   created_at: string
@@ -96,6 +98,8 @@ const NotificationsTab: React.FC = () => {
     notify_on_restore_check_success: false,
     notify_on_restore_check_failure: true,
     notify_on_schedule_failure: true,
+    notify_on_stale_backup: true,
+    notify_on_backup_report: true,
     monitor_all_repositories: true,
     repository_ids: [] as number[],
   })
@@ -218,6 +222,8 @@ const NotificationsTab: React.FC = () => {
       notify_on_restore_check_success: false,
       notify_on_restore_check_failure: true,
       notify_on_schedule_failure: true,
+      notify_on_stale_backup: true,
+      notify_on_backup_report: true,
       monitor_all_repositories: true,
       repository_ids: [],
     })
@@ -242,6 +248,8 @@ const NotificationsTab: React.FC = () => {
       notify_on_restore_check_success: notification.notify_on_restore_check_success,
       notify_on_restore_check_failure: notification.notify_on_restore_check_failure,
       notify_on_schedule_failure: notification.notify_on_schedule_failure,
+      notify_on_stale_backup: notification.notify_on_stale_backup,
+      notify_on_backup_report: notification.notify_on_backup_report,
       monitor_all_repositories: notification.monitor_all_repositories,
       repository_ids: Array.isArray(notification.repositories)
         ? notification.repositories.map((r) => r.id)
@@ -271,6 +279,8 @@ const NotificationsTab: React.FC = () => {
       notify_on_restore_check_success: notification.notify_on_restore_check_success,
       notify_on_restore_check_failure: notification.notify_on_restore_check_failure,
       notify_on_schedule_failure: notification.notify_on_schedule_failure,
+      notify_on_stale_backup: notification.notify_on_stale_backup,
+      notify_on_backup_report: notification.notify_on_backup_report,
       monitor_all_repositories: notification.monitor_all_repositories,
       repository_ids: Array.isArray(notification.repositories)
         ? notification.repositories.map((r) => r.id)
@@ -873,6 +883,40 @@ const NotificationsTab: React.FC = () => {
                   sx={{ display: 'block', pl: 4.5, mt: -0.5, mb: 1, color: 'text.secondary' }}
                 >
                   {t('notifications.form.schedulerErrorsHelper')}
+                </Typography>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.notify_on_stale_backup}
+                      onChange={(e) =>
+                        setFormData({ ...formData, notify_on_stale_backup: e.target.checked })
+                      }
+                    />
+                  }
+                  label={t('notifications.form.staleBackupAlerts')}
+                />
+                <Typography
+                  variant="caption"
+                  sx={{ display: 'block', pl: 4.5, mt: -0.5, mb: 1, color: 'text.secondary' }}
+                >
+                  {t('notifications.form.staleBackupAlertsHelper')}
+                </Typography>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.notify_on_backup_report}
+                      onChange={(e) =>
+                        setFormData({ ...formData, notify_on_backup_report: e.target.checked })
+                      }
+                    />
+                  }
+                  label={t('notifications.form.backupReports')}
+                />
+                <Typography
+                  variant="caption"
+                  sx={{ display: 'block', pl: 4.5, mt: -0.5, mb: 1, color: 'text.secondary' }}
+                >
+                  {t('notifications.form.backupReportsHelper')}
                 </Typography>
               </Box>
             </Box>

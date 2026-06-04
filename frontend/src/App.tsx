@@ -7,10 +7,13 @@ import ProtectedRoute from './components/ProtectedRoute'
 import Login from './pages/Login'
 import Dashboard from './pages/DashboardV3'
 import Backup from './pages/Backup'
+import BackupPlans from './pages/BackupPlans'
 import Archives from './pages/Archives'
 import Schedule from './pages/Schedule'
 import Repositories from './pages/Repositories'
+import CloudStorage from './pages/CloudStorage'
 import SSHConnectionsSingleKey from './pages/SSHConnectionsSingleKey'
+import ManagedAgents from './pages/ManagedAgents'
 import Activity from './pages/Activity'
 import Settings from './pages/Settings'
 import AuthLayout from './components/AuthLayout'
@@ -150,6 +153,14 @@ function App() {
         ) : null}
         <Route path="/dashboard" element={<Dashboard />} />
         <Route
+          path="/backup-plans"
+          element={
+            <ProtectedRoute requiredTab="backupPlans">
+              <BackupPlans />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/backup"
           element={
             <ProtectedRoute requiredTab="backups">
@@ -184,10 +195,26 @@ function App() {
           }
         />
         <Route
+          path="/cloud-storage"
+          element={
+            <ProtectedRoute requiredTab="repositories">
+              <CloudStorage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/ssh-connections"
           element={
             <ProtectedRoute requiredTab="connections">
               <SSHConnectionsSingleKey />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/managed-agents"
+          element={
+            <ProtectedRoute requiredTab="connections">
+              <ManagedAgents />
             </ProtectedRoute>
           }
         />

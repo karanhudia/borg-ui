@@ -1,14 +1,16 @@
 import React from 'react'
 import { Box, Typography, Stack, useTheme, alpha, Tooltip } from '@mui/material'
-import { Clock } from 'lucide-react'
+import { Clock, ListChecks, CalendarClock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatDate, formatRelativeTime } from '../utils/dateUtils'
 import { Repository } from '../types'
 
-const ACCENT = '#059669'
+const ACCENT_SCHEDULE = '#059669'
+const ACCENT_PLAN = '#3b82f6'
 
 interface UpcomingJob {
   id: number
+  type?: 'schedule' | 'backup_plan'
   name: string
   repository?: string
   repository_id?: number
@@ -23,12 +25,14 @@ interface UpcomingJobsTableProps {
   repositories: Repository[]
   isLoading: boolean
   onRunNow?: (jobId: number) => void
+  onPlanClick?: (planId: number) => void
   getRepositoryName: (path: string) => string
 }
 
 const UpcomingJobsTable: React.FC<UpcomingJobsTableProps> = ({
   upcomingJobs,
   repositories,
+  onPlanClick,
   getRepositoryName,
 }) => {
   const { t } = useTranslation()
@@ -58,8 +62,8 @@ const UpcomingJobsTable: React.FC<UpcomingJobsTableProps> = ({
             width: 6,
             height: 6,
             borderRadius: '50%',
-            bgcolor: ACCENT,
-            boxShadow: `0 0 6px ${alpha(ACCENT, 0.7)}`,
+            bgcolor: ACCENT_SCHEDULE,
+            boxShadow: `0 0 6px ${alpha(ACCENT_SCHEDULE, 0.7)}`,
             flexShrink: 0,
           }}
         />
@@ -79,14 +83,30 @@ const UpcomingJobsTable: React.FC<UpcomingJobsTableProps> = ({
 
       {/* Job rows */}
       <Stack spacing={1}>
-        {upcomingJobs.slice(0, 5).map((job) => (
-          <Tooltip
-            key={job.id}
-            title={`${formatDate(job.next_run)} - ${job.cron_expression} (${job.timezone || 'UTC'})`}
-            placement="top"
-            arrow
-          >
+        {upcomingJobs.slice(0, 5).map((job) => {
+          const isPlan = job.type === 'backup_plan'
+          const accent = isPlan ? ACCENT_PLAN : ACCENT_SCHEDULE
+          const isClickable = isPlan && Boolean(onPlanClick)
+          const typeLabel = isPlan
+            ? t('upcomingJobs.types.plan', { defaultValue: 'Plan' })
+            : t('upcomingJobs.types.schedule', { defaultValue: 'Schedule' })
+          const TypeIcon = isPlan ? ListChecks : CalendarClock
+
+          const rowContent = (
             <Box
+              role={isClickable ? 'button' : undefined}
+              tabIndex={isClickable ? 0 : undefined}
+              onClick={isClickable ? () => onPlanClick?.(job.id) : undefined}
+              onKeyDown={
+                isClickable
+                  ? (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        onPlanClick?.(job.id)
+                      }
+                    }
+                  : undefined
+              }
               sx={{
                 display: 'flex',
                 alignItems: 'center',
@@ -95,12 +115,19 @@ const UpcomingJobsTable: React.FC<UpcomingJobsTableProps> = ({
                 py: 1.5,
                 borderRadius: 2,
                 border: '1px solid',
-                borderColor: alpha(ACCENT, isDark ? 0.2 : 0.15),
-                bgcolor: alpha(ACCENT, isDark ? 0.06 : 0.03),
-                transition: 'border-color 0.15s, box-shadow 0.15s',
+                borderColor: alpha(accent, isDark ? 0.2 : 0.15),
+                bgcolor: alpha(accent, isDark ? 0.06 : 0.03),
+                transition: 'border-color 0.15s, box-shadow 0.15s, transform 0.15s',
+                cursor: isClickable ? 'pointer' : 'default',
                 '&:hover': {
-                  borderColor: alpha(ACCENT, isDark ? 0.38 : 0.28),
-                  boxShadow: `0 2px 14px ${alpha(ACCENT, 0.1)}`,
+                  borderColor: alpha(accent, isDark ? 0.38 : 0.28),
+                  boxShadow: `0 2px 14px ${alpha(accent, 0.1)}`,
+                  ...(isClickable && { transform: 'translateY(-1px)' }),
+                },
+                '&:focus-visible': {
+                  outline: '2px solid',
+                  outlineColor: accent,
+                  outlineOffset: 2,
                 },
               }}
             >
@@ -110,9 +137,9 @@ const UpcomingJobsTable: React.FC<UpcomingJobsTableProps> = ({
                   width: 3,
                   height: 32,
                   borderRadius: 4,
-                  bgcolor: ACCENT,
+                  bgcolor: accent,
                   flexShrink: 0,
-                  boxShadow: `0 0 8px ${alpha(ACCENT, 0.5)}`,
+                  boxShadow: `0 0 8px ${alpha(accent, 0.5)}`,
                 }}
               />
 
@@ -140,6 +167,36 @@ const UpcomingJobsTable: React.FC<UpcomingJobsTableProps> = ({
                 </Typography>
               </Box>
 
+              {/* Type pill */}
+              <Box
+                sx={{
+                  display: { xs: 'none', sm: 'flex' },
+                  alignItems: 'center',
+                  gap: 0.4,
+                  px: 0.9,
+                  py: 0.35,
+                  borderRadius: 1,
+                  bgcolor: alpha(accent, isDark ? 0.14 : 0.09),
+                  border: '1px solid',
+                  borderColor: alpha(accent, isDark ? 0.3 : 0.22),
+                  flexShrink: 0,
+                }}
+              >
+                <TypeIcon size={10} color={accent} />
+                <Typography
+                  sx={{
+                    fontSize: '0.62rem',
+                    fontWeight: 700,
+                    color: accent,
+                    lineHeight: 1,
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {typeLabel}
+                </Typography>
+              </Box>
+
               {/* Countdown */}
               <Box
                 sx={{
@@ -149,22 +206,33 @@ const UpcomingJobsTable: React.FC<UpcomingJobsTableProps> = ({
                   px: 1.25,
                   py: 0.5,
                   borderRadius: 1.5,
-                  bgcolor: alpha(ACCENT, isDark ? 0.15 : 0.1),
+                  bgcolor: alpha(accent, isDark ? 0.15 : 0.1),
                   flexShrink: 0,
                 }}
               >
                 <Box component="span" sx={{ display: 'flex', alignItems: 'center' }}>
-                  <Clock size={11} color={ACCENT} />
+                  <Clock size={11} color={accent} />
                 </Box>
                 <Typography
-                  sx={{ fontSize: '0.75rem', fontWeight: 700, color: ACCENT, lineHeight: 1 }}
+                  sx={{ fontSize: '0.75rem', fontWeight: 700, color: accent, lineHeight: 1 }}
                 >
                   {formatRelativeTime(job.next_run)}
                 </Typography>
               </Box>
             </Box>
-          </Tooltip>
-        ))}
+          )
+
+          return (
+            <Tooltip
+              key={`${job.type || 'schedule'}-${job.id}`}
+              title={`${formatDate(job.next_run)} - ${job.cron_expression} (${job.timezone || 'UTC'})`}
+              placement="top"
+              arrow
+            >
+              {rowContent}
+            </Tooltip>
+          )
+        })}
       </Stack>
     </Box>
   )

@@ -237,6 +237,103 @@ class TestRecentActivityEndpoint:
         assert activity[-1]["type"] == "package"
         assert activity[-1]["package_name"] == package.name
 
+    def test_recent_activity_includes_rclone_sync_and_hydrate_jobs(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.database.models import Repository, RcloneSyncJob
+
+        base = datetime(2024, 1, 1, 12, 0, 0)
+        repository = Repository(
+            name="Cloud Mirror Repo",
+            path="/tmp/cloud-mirror-repo",
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+        )
+        test_db.add(repository)
+        test_db.commit()
+        test_db.refresh(repository)
+        sync_job = RcloneSyncJob(
+            repository_id=repository.id,
+            direction="primary_to_remote",
+            operation="sync",
+            status="running",
+            triggered_by="initial",
+            started_at=base + timedelta(minutes=1),
+            log_text="syncing repository",
+        )
+        hydrate_job = RcloneSyncJob(
+            repository_id=repository.id,
+            direction="remote_to_cache",
+            operation="hydrate",
+            status="failed",
+            triggered_by="manual",
+            started_at=base,
+            completed_at=base + timedelta(seconds=30),
+            log_text="hydrate failed",
+            error_text="remote unavailable",
+        )
+        test_db.add_all([sync_job, hydrate_job])
+        test_db.commit()
+        test_db.refresh(sync_job)
+        test_db.refresh(hydrate_job)
+
+        response = test_client.get("/api/activity/recent", headers=admin_headers)
+
+        assert response.status_code == 200
+        activity = response.json()
+        sync_activity = next(item for item in activity if item["type"] == "rclone_sync")
+        hydrate_activity = next(
+            item for item in activity if item["type"] == "rclone_hydrate"
+        )
+        assert sync_activity["id"] == sync_job.id
+        assert sync_activity["status"] == "running"
+        assert sync_activity["triggered_by"] == "initial"
+        assert sync_activity["repository"] == repository.name
+        assert sync_activity["repository_path"] == repository.path
+        assert sync_activity["has_logs"] is True
+        assert hydrate_activity["id"] == hydrate_job.id
+        assert hydrate_activity["status"] == "failed"
+        assert hydrate_activity["error_message"] == "remote unavailable"
+        assert hydrate_activity["has_logs"] is True
+
+    def test_recent_activity_marks_file_backed_rclone_logs_available(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.database.models import Repository, RcloneSyncJob
+
+        repository = Repository(
+            name="Cloud File Logs Repo",
+            path="/tmp/cloud-file-logs-repo",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repository)
+        test_db.commit()
+        test_db.refresh(repository)
+        job = RcloneSyncJob(
+            repository_id=repository.id,
+            direction="primary_to_remote",
+            operation="sync",
+            status="completed",
+            triggered_by="initial",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            log_path="/tmp/rclone-sync.log",
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.get(
+            "/api/activity/recent?job_type=rclone_sync", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        activity = response.json()
+        assert activity[0]["id"] == job.id
+        assert activity[0]["has_logs"] is True
+
     def test_recent_activity_uses_check_creation_time_when_start_time_is_missing(
         self, test_client, admin_headers, test_db
     ):
@@ -485,6 +582,47 @@ class TestActivityLogContracts:
         assert payload["has_more"] is True
         assert payload["lines"][0]["content"] == "db line 2"
 
+    def test_get_script_execution_logs_uses_stdout_and_stderr(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.database.models import Script, ScriptExecution
+
+        script = Script(
+            name="Plan Prepare",
+            file_path="library/plan-prepare.sh",
+            category="custom",
+            timeout=300,
+        )
+        test_db.add(script)
+        test_db.flush()
+        execution = ScriptExecution(
+            script_id=script.id,
+            hook_type="pre-backup",
+            status="failed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            exit_code=2,
+            stdout="stdout line",
+            stderr="stderr line",
+            error_message="script failed",
+            triggered_by="backup_plan",
+        )
+        test_db.add(execution)
+        test_db.commit()
+        test_db.refresh(execution)
+
+        response = test_client.get(
+            f"/api/activity/script_execution/{execution.id}/logs",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        contents = [line["content"] for line in response.json()["lines"]]
+        assert "SCRIPT: Plan Prepare" in contents
+        assert "stdout line" in contents
+        assert "stderr line" in contents
+        assert "script failed" in contents
+
     def test_get_restore_check_job_logs_uses_activity_log_contract(
         self, test_client, admin_headers, test_db
     ):
@@ -522,6 +660,124 @@ class TestActivityLogContracts:
         assert payload["total_lines"] == 2
         assert payload["has_more"] is False
         assert payload["lines"][0]["content"] == "restore check line 2"
+
+    def test_get_rclone_sync_job_logs_uses_log_text_and_error_text(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.database.models import Repository, RcloneSyncJob
+
+        repository = Repository(
+            name="Cloud Logs Repo",
+            path="/tmp/cloud-logs-repo",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repository)
+        test_db.commit()
+        test_db.refresh(repository)
+        job = RcloneSyncJob(
+            repository_id=repository.id,
+            direction="primary_to_remote",
+            operation="sync",
+            status="failed",
+            triggered_by="initial",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            log_text="sync line 1\nsync line 2",
+            error_text="remote unavailable",
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.get(
+            f"/api/activity/rclone_sync/{job.id}/logs?offset=1&limit=1",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["total_lines"] == 3
+        assert payload["has_more"] is True
+        assert payload["lines"][0]["content"] == "sync line 2"
+
+    def test_download_rclone_hydrate_job_logs_uses_database_text(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.database.models import Repository, RcloneSyncJob
+
+        repository = Repository(
+            name="Cloud Hydrate Logs Repo",
+            path="/tmp/cloud-hydrate-logs-repo",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repository)
+        test_db.commit()
+        test_db.refresh(repository)
+        job = RcloneSyncJob(
+            repository_id=repository.id,
+            direction="remote_to_cache",
+            operation="hydrate",
+            status="completed",
+            triggered_by="manual",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            log_text="hydrated repository",
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.get(
+            f"/api/activity/rclone_hydrate/{job.id}/logs/download",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        assert "text/plain" in response.headers.get("content-type", "")
+        assert response.content.decode() == "hydrated repository"
+
+    def test_delete_rclone_sync_job_removes_log_path(
+        self, test_client, admin_headers, test_db, tmp_path
+    ):
+        from app.database.models import Repository, RcloneSyncJob
+
+        repository = Repository(
+            name="Cloud Delete Logs Repo",
+            path="/tmp/cloud-delete-logs-repo",
+            encryption="none",
+            repository_type="local",
+        )
+        log_path = tmp_path / "rclone-sync.log"
+        log_path.write_text("sync log", encoding="utf-8")
+        test_db.add(repository)
+        test_db.commit()
+        test_db.refresh(repository)
+        job = RcloneSyncJob(
+            repository_id=repository.id,
+            direction="primary_to_remote",
+            operation="sync",
+            status="completed",
+            triggered_by="initial",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            log_path=str(log_path),
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.delete(
+            f"/api/activity/rclone_sync/{job.id}", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        assert not log_path.exists()
+        assert (
+            test_db.query(RcloneSyncJob).filter(RcloneSyncJob.id == job.id).first()
+            is None
+        )
 
     def test_download_job_logs_uses_database_logs_when_no_file(
         self, test_client, admin_headers, test_db

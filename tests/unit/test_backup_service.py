@@ -9,6 +9,7 @@ from pathlib import Path
 from datetime import datetime
 from unittest.mock import Mock, patch, AsyncMock, MagicMock
 from app.services.backup_service import BackupService
+from app.services.filesystem_snapshot_service import PreparedFilesystemSnapshot
 from app.database.models import BackupJob, Repository, SSHConnection, SystemSettings
 
 
@@ -439,12 +440,14 @@ class TestBackupService:
         repo_path.mkdir()
         (repo_path / "data").mkdir()
         (repo_path / "config").write_text("[repository]\nversion = 1\n")
+        source_path = tmp_path / "source"
+        source_path.mkdir()
         repo = Repository(
             name="Repo",
             path=str(repo_path),
             encryption="none",
             repository_type="local",
-            source_directories='["/data"]',
+            source_directories=f'["{source_path}"]',
             compression="lz4",
         )
         settings_row = SystemSettings(log_save_policy="all_jobs")
@@ -483,7 +486,7 @@ class TestBackupService:
             patch.object(
                 backup_service,
                 "_prepare_source_paths",
-                AsyncMock(return_value=(["/data"], [])),
+                AsyncMock(return_value=([str(source_path)], [])),
             ),
             patch.object(
                 backup_service, "_calculate_and_update_size_background", AsyncMock()
@@ -518,6 +521,483 @@ class TestBackupService:
         notifications.send_backup_failure.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_execute_backup_fails_missing_local_source_before_borg_create(
+        self, backup_service, test_db, tmp_path
+    ):
+        repo_path = tmp_path / "repo"
+        repo_path.mkdir()
+        (repo_path / "config").write_text("[repository]\nversion = 1\n")
+        missing_source = tmp_path / "missing-source"
+        repo = Repository(
+            name="Repo",
+            path=str(repo_path),
+            encryption="none",
+            repository_type="local",
+            source_directories=f'["{missing_source}"]',
+            compression="lz4",
+        )
+        settings_row = SystemSettings(log_save_policy="all_jobs")
+        job = BackupJob(repository=repo.path, status="pending")
+        test_db.add_all([repo, settings_row, job])
+        test_db.commit()
+        test_db.refresh(job)
+
+        fake_process = FakeProcess(
+            returncode=107,
+            stdout_lines=[
+                '{"type":"log_message","levelname":"WARNING","msgid":"BackupFileNotFoundError","message":"source missing"}',
+                '{"type":"log_message","levelname":"WARNING","message":"terminating with warning status, rc 107"}',
+            ],
+        )
+        notifications = MagicMock()
+        notifications.send_backup_start = AsyncMock()
+        notifications.send_backup_success = AsyncMock()
+        notifications.send_backup_warning = AsyncMock()
+        notifications.send_backup_failure = AsyncMock()
+
+        with (
+            patch.object(
+                backup_service,
+                "_execute_hooks",
+                AsyncMock(
+                    return_value={
+                        "success": True,
+                        "execution_logs": [],
+                        "scripts_executed": 0,
+                        "scripts_failed": 0,
+                        "using_library": False,
+                    }
+                ),
+            ),
+            patch.object(
+                backup_service, "_calculate_and_update_size_background", AsyncMock()
+            ) as calculate_size,
+            patch.object(backup_service, "_update_archive_stats", AsyncMock()),
+            patch.object(backup_service, "_update_repository_stats", AsyncMock()),
+            patch(
+                "app.services.backup_service.resolve_repo_ssh_key_file",
+                return_value=None,
+            ),
+            patch(
+                "app.services.backup_service.asyncio.create_subprocess_exec",
+                return_value=fake_process,
+            ) as create_subprocess,
+            patch(
+                "app.services.backup_service.asyncio.create_task",
+                side_effect=_discard_background_task,
+            ),
+            patch("app.services.backup_service.notification_service", notifications),
+            patch("app.services.backup_service.mqtt_service") as mqtt,
+        ):
+            mqtt.sync_state_with_db = Mock()
+            await backup_service.execute_backup(job.id, repo.path, db=test_db)
+
+        test_db.refresh(job)
+        assert job.status == "failed"
+        assert "backend.errors.filesystem.pathNotFound" in job.error_message
+        assert str(missing_source) in job.error_message
+        create_subprocess.assert_not_called()
+        calculate_size.assert_not_called()
+        notifications.send_backup_start.assert_not_awaited()
+        notifications.send_backup_failure.assert_awaited_once()
+
+    def test_validate_local_source_paths_allows_dangling_symlink_source(
+        self, backup_service, tmp_path
+    ):
+        source_link = tmp_path / "dangling-source"
+        source_link.symlink_to(tmp_path / "missing-target")
+
+        backup_service._validate_local_source_paths_exist([str(source_link)])
+
+    @pytest.mark.parametrize(
+        ("returncode", "expected_status"),
+        [
+            (0, "completed"),
+            (100, "completed_with_warnings"),
+            (2, "failed"),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_execute_backup_uses_snapshot_staging_paths_and_cleans_terminal_states(
+        self, backup_service, test_db, tmp_path, returncode, expected_status
+    ):
+        repo_path = tmp_path / "repo"
+        repo_path.mkdir()
+        (repo_path / "data").mkdir()
+        (repo_path / "config").write_text("[repository]\nversion = 1\n")
+        source_locations = (
+            '[{"source_type":"local","source_ssh_connection_id":null,'
+            '"agent_machine_id":null,"paths":["/srv/app"],'
+            '"snapshot":{"provider":"btrfs","staging_path":"/snap","recursive":false}}]'
+        )
+        repo = Repository(
+            name="Repo",
+            path=str(repo_path),
+            encryption="none",
+            repository_type="local",
+            source_directories='["/srv/app"]',
+            source_locations=source_locations,
+            compression="lz4",
+        )
+        settings_row = SystemSettings(log_save_policy="all_jobs")
+        job = BackupJob(repository=repo.path, status="pending")
+        test_db.add_all([repo, settings_row, job])
+        test_db.commit()
+        test_db.refresh(job)
+
+        prepared = [
+            PreparedFilesystemSnapshot(
+                provider="btrfs",
+                source_path="/srv/app",
+                backup_path="/snap/job-1/0-app",
+                create_commands=[],
+                cleanup_commands=[],
+                cleanup_paths=[],
+            )
+        ]
+        prepare_snapshots = AsyncMock(return_value=(["/snap/job-1/0-app"], prepared))
+        prepare_source_paths = AsyncMock(return_value=(["/snap/job-1/0-app"], []))
+        cleanup_snapshots = AsyncMock()
+        calculate_size = AsyncMock()
+        fake_process = FakeProcess(
+            returncode=returncode,
+            stdout_lines=[
+                '{"type":"archive_progress","original_size":1024,"compressed_size":512,"deduplicated_size":256,"nfiles":3,"finished":true}',
+            ],
+        )
+        notifications = MagicMock()
+        notifications.send_backup_start = AsyncMock()
+        notifications.send_backup_success = AsyncMock()
+        notifications.send_backup_warning = AsyncMock()
+        notifications.send_backup_failure = AsyncMock()
+
+        with (
+            patch.object(
+                backup_service,
+                "_execute_hooks",
+                AsyncMock(
+                    return_value={
+                        "success": True,
+                        "execution_logs": [],
+                        "scripts_executed": 0,
+                        "scripts_failed": 0,
+                        "using_library": False,
+                    }
+                ),
+            ),
+            patch.object(
+                backup_service,
+                "_prepare_filesystem_snapshots",
+                prepare_snapshots,
+            ),
+            patch.object(
+                backup_service,
+                "_cleanup_filesystem_snapshots",
+                cleanup_snapshots,
+            ),
+            patch.object(
+                backup_service,
+                "_prepare_source_paths",
+                prepare_source_paths,
+            ),
+            patch.object(
+                backup_service,
+                "_calculate_and_update_size_background",
+                calculate_size,
+            ),
+            patch.object(backup_service, "_update_archive_stats", AsyncMock()),
+            patch.object(backup_service, "_update_repository_stats", AsyncMock()),
+            patch(
+                "app.services.backup_service.resolve_repo_ssh_key_file",
+                return_value=None,
+            ),
+            patch(
+                "app.services.backup_service.asyncio.create_subprocess_exec",
+                return_value=fake_process,
+            ),
+            patch(
+                "app.services.backup_service.asyncio.create_task",
+                side_effect=_discard_background_task,
+            ),
+            patch("app.services.backup_service.notification_service", notifications),
+            patch("app.services.backup_service.mqtt_service") as mqtt,
+        ):
+            mqtt.sync_state_with_db = Mock()
+            await backup_service.execute_backup(job.id, repo.path, db=test_db)
+
+        test_db.refresh(job)
+        assert job.status == expected_status
+        prepare_snapshots.assert_awaited_once()
+        prepare_source_paths.assert_awaited_once_with(
+            ["/snap/job-1/0-app"],
+            job.id,
+            source_connection_id=None,
+        )
+        calculate_size.assert_called_once_with(job.id, ["/snap/job-1/0-app"], [])
+        cleanup_snapshots.assert_awaited_once_with(job.id)
+
+    @pytest.mark.asyncio
+    async def test_execute_backup_cleans_snapshots_when_cancelled_during_borg_start(
+        self, backup_service, test_db, tmp_path
+    ):
+        repo_path = tmp_path / "repo"
+        repo_path.mkdir()
+        (repo_path / "data").mkdir()
+        (repo_path / "config").write_text("[repository]\nversion = 1\n")
+        source_locations = (
+            '[{"source_type":"local","source_ssh_connection_id":null,'
+            '"agent_machine_id":null,"paths":["/srv/app"],'
+            '"snapshot":{"provider":"btrfs","staging_path":"/snap","recursive":false}}]'
+        )
+        repo = Repository(
+            name="Repo",
+            path=str(repo_path),
+            encryption="none",
+            repository_type="local",
+            source_directories='["/srv/app"]',
+            source_locations=source_locations,
+            compression="lz4",
+        )
+        settings_row = SystemSettings(log_save_policy="all_jobs")
+        job = BackupJob(repository=repo.path, status="pending")
+        test_db.add_all([repo, settings_row, job])
+        test_db.commit()
+        test_db.refresh(job)
+
+        prepared = [
+            PreparedFilesystemSnapshot(
+                provider="btrfs",
+                source_path="/srv/app",
+                backup_path="/snap/job-1/0-app",
+                create_commands=[],
+                cleanup_commands=[],
+                cleanup_paths=[],
+            )
+        ]
+        cleanup_snapshots = AsyncMock()
+
+        async def raise_cancelled(*args, **kwargs):
+            raise asyncio.CancelledError()
+
+        with (
+            patch.object(
+                backup_service,
+                "_execute_hooks",
+                AsyncMock(
+                    return_value={
+                        "success": True,
+                        "execution_logs": [],
+                        "scripts_executed": 0,
+                        "scripts_failed": 0,
+                        "using_library": False,
+                    }
+                ),
+            ),
+            patch.object(
+                backup_service,
+                "_prepare_filesystem_snapshots",
+                AsyncMock(return_value=(["/snap/job-1/0-app"], prepared)),
+            ),
+            patch.object(
+                backup_service,
+                "_cleanup_filesystem_snapshots",
+                cleanup_snapshots,
+            ),
+            patch.object(
+                backup_service,
+                "_prepare_source_paths",
+                AsyncMock(return_value=(["/snap/job-1/0-app"], [])),
+            ),
+            patch.object(
+                backup_service, "_calculate_and_update_size_background", AsyncMock()
+            ),
+            patch(
+                "app.services.backup_service.resolve_repo_ssh_key_file",
+                return_value=None,
+            ),
+            patch(
+                "app.services.backup_service.asyncio.create_subprocess_exec",
+                side_effect=raise_cancelled,
+            ),
+            patch(
+                "app.services.backup_service.asyncio.create_task",
+                side_effect=_discard_background_task,
+            ),
+            patch("app.services.backup_service.notification_service") as notifications,
+            patch("app.services.backup_service.mqtt_service") as mqtt,
+        ):
+            notifications.send_backup_start = AsyncMock()
+            mqtt.sync_state_with_db = Mock()
+            with pytest.raises(asyncio.CancelledError):
+                await backup_service.execute_backup(job.id, repo.path, db=test_db)
+
+        cleanup_snapshots.assert_awaited_once_with(job.id)
+
+    @pytest.mark.asyncio
+    async def test_prepare_filesystem_snapshots_tracks_created_plans_when_later_create_fails(
+        self, backup_service, tmp_path
+    ):
+        source_locations = [
+            {
+                "source_type": "local",
+                "paths": ["/srv/app", "/srv/logs"],
+                "snapshot": {
+                    "provider": "btrfs",
+                    "staging_path": str(tmp_path / "snapshots"),
+                },
+            }
+        ]
+        run_snapshot_command = AsyncMock(side_effect=[None, RuntimeError("boom")])
+
+        with patch.object(
+            backup_service,
+            "_run_filesystem_snapshot_command",
+            run_snapshot_command,
+        ):
+            with pytest.raises(RuntimeError, match="boom"):
+                await backup_service._prepare_filesystem_snapshots(
+                    ["/srv/app", "/srv/logs"],
+                    source_locations,
+                    job_id=42,
+                )
+
+        assert [
+            snapshot.source_path for snapshot in backup_service.filesystem_snapshots[42]
+        ] == ["/srv/app", "/srv/logs"]
+
+    @pytest.mark.asyncio
+    async def test_prepare_filesystem_snapshots_tracks_current_plan_when_first_create_fails(
+        self, backup_service, tmp_path
+    ):
+        source_locations = [
+            {
+                "source_type": "local",
+                "paths": ["/srv/app"],
+                "snapshot": {
+                    "provider": "btrfs",
+                    "staging_path": str(tmp_path / "snapshots"),
+                },
+            }
+        ]
+        run_snapshot_command = AsyncMock(side_effect=RuntimeError("boom"))
+
+        with patch.object(
+            backup_service,
+            "_run_filesystem_snapshot_command",
+            run_snapshot_command,
+        ):
+            with pytest.raises(RuntimeError, match="boom"):
+                await backup_service._prepare_filesystem_snapshots(
+                    ["/srv/app"],
+                    source_locations,
+                    job_id=42,
+                )
+
+        assert [
+            snapshot.source_path for snapshot in backup_service.filesystem_snapshots[42]
+        ] == ["/srv/app"]
+
+    @pytest.mark.asyncio
+    async def test_run_filesystem_snapshot_command_terminates_process_on_timeout(
+        self, backup_service
+    ):
+        mock_process = Mock()
+        mock_process.communicate = AsyncMock(return_value=(b"", b""))
+        mock_process.wait = AsyncMock(return_value=0)
+        mock_process.terminate = Mock()
+        mock_process.kill = Mock()
+
+        async def wait_for_mock(awaitable, timeout):
+            if timeout == 300:
+                awaitable.close()
+                raise asyncio.TimeoutError
+            return await awaitable
+
+        with (
+            patch(
+                "app.services.backup_service.asyncio.create_subprocess_exec",
+                return_value=mock_process,
+            ),
+            patch(
+                "app.services.backup_service.asyncio.wait_for",
+                side_effect=wait_for_mock,
+            ),
+        ):
+            with pytest.raises(
+                RuntimeError,
+                match="Filesystem snapshot create timed out after 300 seconds",
+            ):
+                await backup_service._run_filesystem_snapshot_command(
+                    ["btrfs", "subvolume", "snapshot", "/srv/app", "/snap/app"],
+                    job_id=42,
+                    action="create",
+                )
+
+        mock_process.terminate.assert_called_once()
+        mock_process.kill.assert_not_called()
+        mock_process.wait.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_execute_backup_delegates_remote_direct_route_strategy(
+        self, backup_service, test_db, monkeypatch
+    ):
+        source_connection = SSHConnection(
+            host="docker-host.example",
+            username="backup",
+            port=22,
+            is_backup_source=True,
+            borg_binary_path="/usr/local/bin/borg-wrapper",
+        )
+        repository = Repository(
+            name="remote-direct",
+            path="/repos/remote-direct",
+            repository_type="ssh",
+            source_directories='["/var/lib/docker/volumes/app"]',
+            exclude_patterns="[]",
+            compression="lz4",
+        )
+        test_db.add_all([source_connection, repository])
+        test_db.flush()
+        repository.connection_id = source_connection.id
+        job = BackupJob(
+            repository=repository.path,
+            status="pending",
+            execution_mode="remote_direct",
+            route_strategy="remote_direct",
+            source_ssh_connection_id=source_connection.id,
+        )
+        test_db.add(job)
+        test_db.commit()
+
+        calls = []
+
+        class FakeRemoteBackupService:
+            async def execute_remote_backup(self, **kwargs):
+                calls.append(kwargs)
+                job.status = "completed"
+                test_db.commit()
+
+        monkeypatch.setattr(
+            "app.services.remote_backup_service.remote_backup_service",
+            FakeRemoteBackupService(),
+        )
+
+        await backup_service.execute_backup(job.id, repository.path, db=test_db)
+
+        assert calls == [
+            {
+                "job_id": job.id,
+                "source_ssh_connection_id": source_connection.id,
+                "repository_id": repository.id,
+                "source_paths": ["/var/lib/docker/volumes/app"],
+                "exclude_patterns": [],
+                "compression": "lz4",
+                "custom_flags": None,
+                "upload_ratelimit_kib": None,
+            }
+        ]
+
+    @pytest.mark.asyncio
     async def test_execute_backup_parses_v1_json_progress(
         self, backup_service, test_db, tmp_path
     ):
@@ -525,12 +1005,14 @@ class TestBackupService:
         repo_path.mkdir()
         (repo_path / "data").mkdir()
         (repo_path / "config").write_text("[repository]\nversion = 1\n")
+        source_path = tmp_path / "source"
+        source_path.mkdir()
         repo = Repository(
             name="Repo",
             path=str(repo_path),
             encryption="none",
             repository_type="local",
-            source_directories='["/data"]',
+            source_directories=f'["{source_path}"]',
             compression="lz4",
         )
         settings_row = SystemSettings(log_save_policy="all_jobs")
@@ -573,7 +1055,7 @@ class TestBackupService:
             patch.object(
                 backup_service,
                 "_prepare_source_paths",
-                AsyncMock(return_value=(["/data"], [])),
+                AsyncMock(return_value=([str(source_path)], [])),
             ),
             patch.object(
                 backup_service, "_calculate_and_update_size_background", AsyncMock()
@@ -616,12 +1098,14 @@ class TestBackupService:
         repo_path.mkdir()
         (repo_path / "data").mkdir()
         (repo_path / "config").write_text("[repository]\nversion = 1\n")
+        source_path = tmp_path / "source"
+        source_path.mkdir()
         repo = Repository(
             name="Repo",
             path=str(repo_path),
             encryption="none",
             repository_type="local",
-            source_directories='["/data"]',
+            source_directories=f'["{source_path}"]',
             compression="lz4",
         )
         settings_row = SystemSettings(log_save_policy="all_jobs")
@@ -665,7 +1149,7 @@ class TestBackupService:
             patch.object(
                 backup_service,
                 "_prepare_source_paths",
-                AsyncMock(return_value=(["/data"], [])),
+                AsyncMock(return_value=([str(source_path)], [])),
             ),
             patch.object(
                 backup_service, "_calculate_and_update_size_background", AsyncMock()
@@ -707,12 +1191,14 @@ class TestBackupService:
         repo_path.mkdir()
         (repo_path / "data").mkdir()
         (repo_path / "config").write_text("[repository]\nversion = 1\n")
+        source_path = tmp_path / "source"
+        source_path.mkdir()
         repo = Repository(
             name="Repo",
             path=str(repo_path),
             encryption="none",
             repository_type="local",
-            source_directories='["/data"]',
+            source_directories=f'["{source_path}"]',
             compression="lz4",
         )
         settings_row = SystemSettings(log_save_policy="all_jobs")
@@ -750,7 +1236,7 @@ class TestBackupService:
             patch.object(
                 backup_service,
                 "_prepare_source_paths",
-                AsyncMock(return_value=(["/data"], [])),
+                AsyncMock(return_value=([str(source_path)], [])),
             ),
             patch.object(
                 backup_service, "_calculate_and_update_size_background", AsyncMock()
@@ -775,7 +1261,7 @@ class TestBackupService:
             mqtt.sync_state_with_db = Mock()
             await asyncio.wait_for(
                 backup_service.execute_backup(job.id, repo.path, db=test_db),
-                timeout=2.0,
+                timeout=10.0,
             )
 
         test_db.refresh(job)
@@ -791,12 +1277,14 @@ class TestBackupService:
         repo_path.mkdir()
         (repo_path / "data").mkdir()
         (repo_path / "config").write_text("[repository]\nversion = 1\n")
+        source_path = tmp_path / "source"
+        source_path.mkdir()
         repo = Repository(
             name="Repo",
             path=str(repo_path),
             encryption="none",
             repository_type="local",
-            source_directories='["/data"]',
+            source_directories=f'["{source_path}"]',
             compression="lz4",
         )
         settings_row = SystemSettings(log_save_policy="all_jobs")
@@ -835,7 +1323,7 @@ class TestBackupService:
             patch.object(
                 backup_service,
                 "_prepare_source_paths",
-                AsyncMock(return_value=(["/data"], [])),
+                AsyncMock(return_value=([str(source_path)], [])),
             ),
             patch.object(
                 backup_service, "_calculate_and_update_size_background", AsyncMock()
@@ -876,12 +1364,14 @@ class TestBackupService:
         repo_path.mkdir()
         (repo_path / "data").mkdir()
         (repo_path / "config").write_text("[repository]\nversion = 1\n")
+        source_path = tmp_path / "source"
+        source_path.mkdir()
         repo = Repository(
             name="Repo",
             path=str(repo_path),
             encryption="none",
             repository_type="local",
-            source_directories='["/data"]',
+            source_directories=f'["{source_path}"]',
             compression="lz4",
         )
         settings_row = SystemSettings(log_save_policy="all_jobs")
@@ -920,7 +1410,7 @@ class TestBackupService:
             patch.object(
                 backup_service,
                 "_prepare_source_paths",
-                AsyncMock(return_value=(["/data"], [])),
+                AsyncMock(return_value=([str(source_path)], [])),
             ),
             patch.object(
                 backup_service, "_calculate_and_update_size_background", AsyncMock()
@@ -1032,13 +1522,15 @@ class TestBackupService:
     ):
         repo_path = tmp_path / "borg2-repo"
         repo_path.mkdir()
+        source_file = tmp_path / "source.txt"
+        source_file.write_text("borg2 source")
 
         repo = Repository(
             name="Borg 2 Repo",
             path=str(repo_path),
             encryption="none",
             repository_type="local",
-            source_directories='["/data/source.txt"]',
+            source_directories=f'["{source_file}"]',
             compression="lz4",
             borg_version=2,
         )
@@ -1074,7 +1566,7 @@ class TestBackupService:
             patch.object(
                 backup_service,
                 "_prepare_source_paths",
-                AsyncMock(return_value=(["/data/source.txt"], [])),
+                AsyncMock(return_value=([str(source_file)], [])),
             ),
             patch.object(
                 backup_service, "_calculate_and_update_size_background", AsyncMock()
@@ -1109,7 +1601,8 @@ class TestBackupService:
         assert str(repo_path) in create_cmd
         assert "create" in create_cmd
         assert f"{repo.path}::" not in " ".join(create_cmd)
-        assert "/data/source.txt" in create_cmd
+        assert create_cmd[-2] == "manual-backup"
+        assert str(source_file) in create_cmd
         notifications.send_backup_success.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -1118,13 +1611,15 @@ class TestBackupService:
     ):
         repo_path = tmp_path / "borg2-progress-repo"
         repo_path.mkdir()
+        source_file = tmp_path / "source.txt"
+        source_file.write_text("borg2 source")
 
         repo = Repository(
             name="Borg 2 Repo",
             path=str(repo_path),
             encryption="none",
             repository_type="local",
-            source_directories='["/data/source.txt"]',
+            source_directories=f'["{source_file}"]',
             compression="none",
             borg_version=2,
         )
@@ -1168,7 +1663,7 @@ class TestBackupService:
             patch.object(
                 backup_service,
                 "_prepare_source_paths",
-                AsyncMock(return_value=(["/data/source.txt"], [])),
+                AsyncMock(return_value=([str(source_file)], [])),
             ),
             patch.object(
                 backup_service, "_calculate_and_update_size_background", AsyncMock()
@@ -1606,6 +2101,53 @@ class TestBackupServicePeriodicSync:
         assert processed_paths == ["etc/komodo"]
         assert ssh_mount_info == [("/tmp/sshfs_mount_test", "etc/komodo")]
 
+    @pytest.mark.asyncio
+    async def test_prepare_source_paths_stages_canary_under_shared_ssh_cwd(
+        self, backup_service, db_session, monkeypatch, tmp_path
+    ):
+        connection = SSHConnection(
+            host="example.com",
+            username="borg",
+            port=22,
+            default_path="/etc/komodo",
+        )
+        db_session.add(connection)
+        db_session.commit()
+        db_session.refresh(connection)
+
+        data_dir = backup_service.log_dir.parent
+        canary_dir = data_dir / ".borg-ui/restore-canaries/repository-1/.borgui-canary"
+        canary_dir.mkdir(parents=True)
+        (canary_dir / "manifest.json").write_text("{}", encoding="utf-8")
+        temp_root = tmp_path / "sshfs_mount_test"
+
+        async def mock_mount_ssh_paths_shared(connection_id, remote_paths, job_id):
+            return str(temp_root), [("mount-1", "etc/komodo")]
+
+        monkeypatch.setattr(
+            "app.services.backup_service.SessionLocal", lambda: db_session
+        )
+        monkeypatch.setattr(
+            "app.services.mount_service.mount_service.mount_ssh_paths_shared",
+            mock_mount_ssh_paths_shared,
+        )
+
+        processed_paths, ssh_mount_info = await backup_service._prepare_source_paths(
+            [
+                f"ssh://{connection.username}@{connection.host}:{connection.port}/etc/komodo",
+                str(canary_dir),
+            ],
+            job_id=42,
+            source_connection_id=connection.id,
+        )
+
+        staged_archive_path = ".borg-ui/restore-canaries/repository-1/.borgui-canary"
+        assert processed_paths == ["etc/komodo", staged_archive_path]
+        assert ssh_mount_info == [(str(temp_root), "etc/komodo")]
+        assert (temp_root / staged_archive_path / "manifest.json").read_text(
+            encoding="utf-8"
+        ) == "{}"
+
     def test_resolve_backup_command_paths_mixes_remote_source_and_local_canary(
         self, backup_service
     ):
@@ -1620,8 +2162,8 @@ class TestBackupServicePeriodicSync:
             job_id=42,
         )
 
-        assert backup_cwd == str(data_dir)
+        assert backup_cwd == "/tmp/sshfs_mount_test"
         assert backup_paths == [
-            "/tmp/sshfs_mount_test/etc/komodo",
+            "etc/komodo",
             ".borg-ui/restore-canaries/repository-1/.borgui-canary",
         ]

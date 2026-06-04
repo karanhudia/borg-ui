@@ -35,6 +35,7 @@ RUN apt-get update && apt-get install -y \
     fuse3 \
     libfuse3-dev \
     rsync \
+    rclone \
     openssh-client \
     sshfs \
     python3-pip \
@@ -72,7 +73,7 @@ RUN groupadd -g 1001 borg && \
     echo "borg ALL=(ALL) NOPASSWD: /usr/bin/borg, /usr/bin/crontab, /usr/bin/apt-get" >> /etc/sudoers && \
     sed -i 's/^#user_allow_other/user_allow_other/' /etc/fuse.conf
 
-RUN mkdir -p /home/borg/.ssh /etc/cron.d && \
-    chown -R borg:borg /app /data /backups /var/log/borg /etc/borg /home/borg/.ssh /etc/cron.d && \
+RUN mkdir -p /home/borg/.ssh /home/borg/.cache/borg /etc/cron.d && \
+    chown -R borg:borg /app /data /backups /var/log/borg /etc/borg /home/borg/.ssh /home/borg/.cache /etc/cron.d && \
     chmod -R 755 /app /data /backups /var/log/borg /etc/borg && \
-    chmod 700 /home/borg/.ssh
+    chmod 700 /home/borg/.ssh /home/borg/.cache/borg

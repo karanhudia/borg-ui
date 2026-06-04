@@ -13,6 +13,7 @@ import shlex
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict
+from urllib.parse import urlparse
 import structlog
 from sqlalchemy.orm import Session
 
@@ -42,6 +43,7 @@ class RemoteBackupService:
         exclude_patterns: List[str] = None,
         compression: str = "lz4",
         custom_flags: str = None,
+        upload_ratelimit_kib: int = None,
     ) -> dict:
         """
         Main method to execute backup on remote host
@@ -107,11 +109,13 @@ class RemoteBackupService:
             archive_name = f"{{hostname}}-{{now}}"
             borg_command = await self._build_remote_command(
                 repository=repository,
+                source_ssh_connection=ssh_connection,
                 archive_name=archive_name,
                 source_paths=source_paths or [],
                 exclude_patterns=exclude_patterns or [],
                 compression=compression,
                 custom_flags=custom_flags,
+                upload_ratelimit_kib=upload_ratelimit_kib,
                 borg_binary_path=ssh_connection.borg_binary_path,
                 use_sudo=ssh_connection.use_sudo,
             )
@@ -147,12 +151,11 @@ class RemoteBackupService:
             job.completed_at = datetime.utcnow()
             db.commit()
 
-            # Send notification
-            await notification_service.send_backup_notification(
-                repository_name=repository.name,
-                job_id=job_id,
-                status=job.status,
-                error_message=job.error_message,
+            await self._send_completion_notification(
+                db=db,
+                job=job,
+                repository=repository,
+                archive_name=archive_name,
             )
 
             return result
@@ -177,6 +180,44 @@ class RemoteBackupService:
         finally:
             db.close()
 
+    async def _send_completion_notification(
+        self,
+        db: Session,
+        job: BackupJob,
+        repository: Repository,
+        archive_name: str,
+    ) -> None:
+        try:
+            if job.status == "completed":
+                await notification_service.send_backup_success(
+                    db,
+                    repository.name,
+                    archive_name,
+                    stats={
+                        "original_size": job.original_size,
+                        "compressed_size": job.compressed_size,
+                        "deduplicated_size": job.deduplicated_size,
+                    },
+                    completion_time=job.completed_at,
+                    started_at=job.started_at,
+                    nfiles=job.nfiles,
+                )
+            else:
+                await notification_service.send_backup_failure(
+                    db,
+                    repository.name,
+                    job.error_message,
+                    job_id=job.id,
+                )
+        except Exception as e:
+            logger.warning(
+                "Remote backup notification failed",
+                job_id=job.id,
+                status=job.status,
+                error=str(e),
+                exc_info=True,
+            )
+
     async def _build_remote_command(
         self,
         repository: Repository,
@@ -185,8 +226,10 @@ class RemoteBackupService:
         exclude_patterns: List[str],
         compression: str = "lz4",
         custom_flags: str = None,
+        upload_ratelimit_kib: int = None,
         borg_binary_path: str = "/usr/bin/borg",
         use_sudo: bool = False,
+        source_ssh_connection: SSHConnection | None = None,
     ) -> str:
         """
         Build the borg create command for remote execution
@@ -201,12 +244,17 @@ class RemoteBackupService:
         # Get DB session for connection lookup
         db = SessionLocal()
         try:
-            repo_url = self._get_repository_url(repository, db)
+            repo_url = self._get_repository_url(
+                repository, db, source_ssh_connection=source_ssh_connection
+            )
         finally:
             db.close()
 
         # Build borg command parts
-        cmd_parts = []
+        cmd_parts = [
+            "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes",
+            "BORG_RELOCATED_REPO_ACCESS_IS_OK=yes",
+        ]
 
         # Add passphrase environment variable if needed
         if (
@@ -232,6 +280,8 @@ class RemoteBackupService:
 
         # Flags
         cmd_parts.extend(["--progress", "--stats", "--json"])
+        if upload_ratelimit_kib:
+            cmd_parts.extend(["--upload-ratelimit", str(upload_ratelimit_kib)])
 
         # Compression
         if compression:
@@ -255,7 +305,24 @@ class RemoteBackupService:
 
         return " ".join(cmd_parts)
 
-    def _get_repository_url(self, repository: Repository, db: Session) -> str:
+    def _extract_remote_repository_path(self, repository_path: str) -> str:
+        """Return the path part of a repository location as seen from the SSH host."""
+        if repository_path.startswith("ssh://"):
+            parsed = urlparse(repository_path)
+            return parsed.path or "/"
+
+        scp_match = re.match(r"^[^@]+@[^:]+:(.+)$", repository_path)
+        if scp_match:
+            return scp_match.group(1)
+
+        return repository_path
+
+    def _get_repository_url(
+        self,
+        repository: Repository,
+        db: Session,
+        source_ssh_connection: SSHConnection | None = None,
+    ) -> str:
         """
         Get the repository URL that a remote host should use
 
@@ -263,6 +330,17 @@ class RemoteBackupService:
         - SSH repo: ssh://backup@repo-host:22/path
         """
         if repository.connection_id:
+            if (
+                source_ssh_connection is not None
+                and repository.connection_id == source_ssh_connection.id
+            ):
+                return self._extract_remote_repository_path(repository.path)
+
+            if repository.path.startswith("ssh://") or re.match(
+                r"^[^@]+@[^:]+:.+", repository.path
+            ):
+                return repository.path
+
             # Get SSH connection details
             connection = (
                 db.query(SSHConnection)

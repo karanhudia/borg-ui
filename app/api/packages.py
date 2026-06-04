@@ -245,8 +245,8 @@ async def reinstall_package(
     package.installed_at = None
     db.commit()
 
-    # Call install endpoint
-    return await install_package(package_id, current_user, db)
+    # Reuse the install flow with the resolved database session.
+    return await install_package(package_id, db=db)
 
 
 @router.get("/jobs/{job_id}")

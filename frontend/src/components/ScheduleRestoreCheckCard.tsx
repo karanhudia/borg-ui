@@ -1,6 +1,14 @@
-import { Chip } from '@mui/material'
+import { Box, IconButton, Switch, Tooltip, Typography, alpha, useTheme } from '@mui/material'
 import { useTranslation } from 'react-i18next'
-import { CalendarCheck, CalendarClock, History, Play, Pencil, Search, Trash2 } from 'lucide-react'
+import {
+  CalendarCheck,
+  CalendarClock,
+  History,
+  Play,
+  Search,
+  SquarePen,
+  Trash2,
+} from 'lucide-react'
 import EntityCard, { ActionItem, StatItem } from './EntityCard'
 import ScheduledInstantTooltip from './ScheduledInstantTooltip'
 import {
@@ -26,6 +34,7 @@ interface ScheduledRestoreCheck {
   notify_on_restore_check_success: boolean
   notify_on_restore_check_failure: boolean
   enabled: boolean
+  restore_check_schedule_enabled?: boolean
 }
 
 interface ScheduleRestoreCheckCardProps {
@@ -34,6 +43,7 @@ interface ScheduleRestoreCheckCardProps {
   onEdit: () => void
   onDelete: () => void
   onRunNow: () => void
+  onToggle: () => void
 }
 
 export default function ScheduleRestoreCheckCard({
@@ -42,8 +52,12 @@ export default function ScheduleRestoreCheckCard({
   onEdit,
   onDelete,
   onRunNow,
+  onToggle,
 }: ScheduleRestoreCheckCardProps) {
   const { t } = useTranslation()
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
+  const scheduleEnabled = check.restore_check_schedule_enabled ?? check.enabled
   const scheduleTimezone = check.restore_check_timezone || check.timezone || 'UTC'
   const scheduleDisplay = check.restore_check_cron_expression
     ? formatCronHuman(check.restore_check_cron_expression)
@@ -106,13 +120,6 @@ export default function ScheduleRestoreCheckCard({
 
   const actions: ActionItem[] = [
     {
-      icon: <Pencil size={16} />,
-      tooltip: t('scheduledRestoreChecks.actions.editSchedule'),
-      onClick: onEdit,
-      color: 'primary',
-      hidden: !canManage,
-    },
-    {
       icon: <Trash2 size={16} />,
       tooltip: t('scheduledRestoreChecks.actions.removeSchedule'),
       onClick: onDelete,
@@ -121,21 +128,80 @@ export default function ScheduleRestoreCheckCard({
     },
   ]
 
+  const editIcon = canManage ? (
+    <Tooltip title={t('scheduledRestoreChecks.actions.editSchedule')} arrow placement="left">
+      <IconButton
+        size="small"
+        onClick={onEdit}
+        aria-label={t('scheduledRestoreChecks.actions.editSchedule')}
+        sx={{
+          width: 28,
+          height: 28,
+          borderRadius: 1,
+          flexShrink: 0,
+          color: 'text.disabled',
+          '&:hover': {
+            color: 'text.primary',
+            bgcolor: isDark ? alpha('#fff', 0.07) : alpha('#000', 0.06),
+          },
+        }}
+      >
+        <SquarePen size={14} />
+      </IconButton>
+    </Tooltip>
+  ) : undefined
+
+  const toggle = (
+    <Tooltip
+      title={
+        canManage
+          ? scheduleEnabled
+            ? t('schedule.card.badge.clickToDisable')
+            : t('schedule.card.badge.clickToEnable')
+          : ''
+      }
+      arrow
+    >
+      <Box
+        component="label"
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 0.25,
+          cursor: canManage ? 'pointer' : 'default',
+          userSelect: 'none',
+        }}
+      >
+        <Switch
+          checked={scheduleEnabled}
+          size="small"
+          color="success"
+          disabled={!canManage}
+          onChange={canManage ? onToggle : undefined}
+        />
+        <Typography
+          variant="caption"
+          sx={{
+            fontWeight: 600,
+            fontSize: '0.7rem',
+            color: scheduleEnabled ? 'success.main' : 'text.disabled',
+            lineHeight: 1,
+          }}
+        >
+          {scheduleEnabled ? t('schedule.card.badge.enabled') : t('schedule.card.badge.disabled')}
+        </Typography>
+      </Box>
+    </Tooltip>
+  )
+
   return (
     <EntityCard
       title={check.repository_name}
       subtitle={check.repository_path}
-      badge={
-        <Chip
-          label={t('scheduledRestoreChecks.badge.restoreCheck')}
-          size="small"
-          variant="outlined"
-          color="success"
-          sx={{ fontSize: '0.65rem' }}
-        />
-      }
+      badge={editIcon}
       stats={stats}
       meta={meta}
+      toggle={toggle}
       actions={actions}
       primaryAction={
         canManage
@@ -143,6 +209,7 @@ export default function ScheduleRestoreCheckCard({
               label: t('scheduledRestoreChecks.actions.runRestoreCheck'),
               icon: <Play size={13} />,
               onClick: onRunNow,
+              disabled: !scheduleEnabled,
             }
           : undefined
       }

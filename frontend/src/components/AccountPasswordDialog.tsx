@@ -7,7 +7,7 @@ import {
   Stack,
   TextField,
 } from '@mui/material'
-import ResponsiveDialog from './ResponsiveDialog'
+import ResponsiveDialog from './shared/ResponsiveDialog'
 
 interface AccountPasswordDialogProps {
   open: boolean

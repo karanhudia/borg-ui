@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import Response
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any, Union
 from datetime import datetime, timezone
@@ -8,11 +9,17 @@ import structlog
 import os
 import asyncio
 import json
+import shutil
+import uuid
 
 from app.database.database import get_db, SessionLocal
 from app.database.models import (
     User,
     Repository,
+    RepositoryStorage,
+    RcloneRemote,
+    RcloneSyncJob,
+    AgentMachine,
     CheckJob,
     CompactJob,
     PruneJob,
@@ -21,6 +28,7 @@ from app.database.models import (
     ScheduledJobRepository,
     SystemSettings,
     UserRepositoryPermission,
+    RepositoryWipeJob,
 )
 from app.api.maintenance_jobs import (
     create_maintenance_job,
@@ -31,18 +39,55 @@ from app.api.maintenance_jobs import (
     read_job_logs,
     serialize_job_status,
     serialize_job_summary,
-    ensure_no_running_job,
 )
 from app.core.authorization import authorize_request
 from app.core.security import get_current_user, check_repo_access, decrypt_secret
 from app.core.borg import BorgInterface
 from app.core.borg_router import BorgRouter
 from app.core.borg_errors import is_lock_error
-from app.core.features import FEATURES, get_current_plan, plan_includes
+from app.core.features import (
+    FEATURES,
+    get_current_plan,
+    plan_includes,
+    require_feature_access,
+)
 from app.config import settings
 from app.services.mqtt_service import mqtt_service
 from app.services.restore_check_service import restore_check_service
+from app.services.repository_wipe_service import (
+    WipeArchiveSetChanged,
+    WipeValidationError,
+    repository_wipe_service,
+)
+from app.services.repository_executor import (
+    is_agent_executor,
+    legacy_execution_target,
+    normalize_executor_type,
+    queue_agent_repository_operation_job,
+    repository_executor_type,
+    wait_for_agent_repository_operation_job,
+)
+from app.services.check_flag_validation import (
+    CheckFlagConflictError,
+    validate_check_flags_for_max_duration,
+)
+from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
+from app.services.job_admission import (
+    OPERATION_CHECK,
+    OPERATION_COMPACT,
+    OPERATION_PRUNE,
+    ensure_repository_admission,
+)
 from app.services.repository_command_lock import run_serialized_repository_command
+from app.services.rclone_repository_service import (
+    SYNC_DIRECTION_AGENT_TO_REMOTE,
+    SYNC_DIRECTION_PRIMARY_TO_REMOTE,
+    SYNC_DIRECTION_SSHFS_TO_REMOTE,
+    VALID_SYNC_POLICIES,
+    normalize_extra_flags,
+    normalize_rclone_relative_path,
+    rclone_repository_service,
+)
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.schedule_time import (
     DEFAULT_SCHEDULE_TIMEZONE,
@@ -50,7 +95,13 @@ from app.utils.schedule_time import (
     calculate_next_cron_run,
     normalize_schedule_timezone,
 )
+from app.utils.archive_job_metadata import enrich_archives_with_backup_metadata
 from app.utils.ssh_paths import apply_ssh_command_prefix
+from app.utils.source_locations import (
+    decode_source_locations,
+    legacy_source_fields,
+    normalize_source_locations,
+)
 from app.utils.borg_env import (
     get_standard_ssh_opts as shared_get_standard_ssh_opts,
     setup_borg_env as shared_setup_borg_env,
@@ -70,8 +121,26 @@ V2_ONLY_ENCRYPTION_MODES = {
     "keyfile-chacha20-poly1305",
 }
 
+AGENT_RCLONE_SYNC_CAPABILITY = "repository.rclone_sync"
+AGENT_REPOSITORY_INIT_CAPABILITY = "repository.init"
+DIRECT_RCLONE_STORAGE_BACKEND = "rclone_direct"
+RCLONE_FEATURE = "rclone"
+MANAGED_AGENTS_FEATURE = "managed_agents"
+
 # Initialize Borg interface
 borg = BorgInterface()
+
+
+class RepositoryWipePreviewRequest(BaseModel):
+    run_compact: bool = True
+
+
+class RepositoryWipeExecuteRequest(BaseModel):
+    preview_id: int
+    preview_fingerprint: str
+    confirmation_phrase: str
+    understood: bool
+    run_compact: bool = True
 
 
 def _normalize_restore_check_paths(paths: Any) -> list[str]:
@@ -92,6 +161,23 @@ def _normalize_restore_check_paths(paths: Any) -> list[str]:
             )
         normalized_paths.append(path.strip())
     return normalized_paths
+
+
+def _normalize_optional_flags(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _raise_check_flag_conflict(exc: CheckFlagConflictError) -> None:
+    raise HTTPException(
+        status_code=422,
+        detail={
+            "key": "backend.errors.repo.checkFlagsRequireUnlimitedDuration",
+            "params": {"flags": ", ".join(exc.conflicting_flags)},
+        },
+    ) from exc
 
 
 def _resolve_restore_check_targets(
@@ -189,6 +275,7 @@ def _empty_running_jobs_response() -> Dict[str, Any]:
         "compact_job": None,
         "prune_job": None,
         "restore_check_job": None,
+        "wipe_job": None,
     }
 
 
@@ -210,6 +297,16 @@ def _borg_keyfile_name(repo_path: str) -> str:
     else:
         path = repo_path.lstrip("/")
     return re.sub(r"[^a-zA-Z0-9]", "_", path)
+
+
+def _write_borg_keyfile(repo_path: str, keyfile_content: str) -> str:
+    keyfile_dir = os.path.expanduser("~/.config/borg/keys")
+    os.makedirs(keyfile_dir, exist_ok=True)
+    keyfile_path = os.path.join(keyfile_dir, _borg_keyfile_name(repo_path))
+    with open(keyfile_path, "w") as f:
+        f.write(keyfile_content)
+    os.chmod(keyfile_path, 0o600)
+    return keyfile_path
 
 
 def get_standard_ssh_opts(include_key_path=None):
@@ -471,6 +568,32 @@ async def _run_repository_command_with_retries(
             raise HTTPException(status_code=500, detail={"key": failure_key})
 
 
+def _parse_agent_json_result(result: dict[str, Any]) -> dict[str, Any]:
+    data = result.get("data")
+    if isinstance(data, dict):
+        return data
+    stdout = result.get("stdout")
+    if isinstance(stdout, str) and stdout.strip():
+        try:
+            parsed = json.loads(stdout)
+            return parsed if isinstance(parsed, dict) else {}
+        except json.JSONDecodeError:
+            return {}
+    return {}
+
+
+def _agent_prune_operation_payload(request: dict) -> dict[str, Any]:
+    return {
+        "keep_hourly": request.get("keep_hourly", 0),
+        "keep_daily": request.get("keep_daily", 7),
+        "keep_weekly": request.get("keep_weekly", 4),
+        "keep_monthly": request.get("keep_monthly", 6),
+        "keep_quarterly": request.get("keep_quarterly", 0),
+        "keep_yearly": request.get("keep_yearly", 1),
+        "dry_run": request.get("dry_run", False),
+    }
+
+
 # Helper function to get operation timeouts from DB settings (with fallback to config)
 def get_operation_timeouts(db: Session = None) -> dict:
     """
@@ -523,6 +646,14 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
     Update the archive count and repository size stats by querying Borg.
     Returns True if successful, False otherwise.
     """
+    if is_agent_executor(repository):
+        logger.info(
+            "Skipping server-side stats refresh for agent-owned repository",
+            repository=repository.name,
+            repository_id=repository.id,
+        )
+        return True
+
     temp_key_file = None
     try:
         # Check system-wide bypass_lock_on_list setting
@@ -662,6 +793,44 @@ def _decode_json_list_field(value):
     return json.loads(value)
 
 
+def _repository_source_locations(repository: Repository) -> list[Dict[str, Any]]:
+    source_directories = _decode_json_list_field(repository.source_directories)
+    return decode_source_locations(
+        repository.source_locations,
+        source_type="remote" if repository.source_ssh_connection_id else "local",
+        source_ssh_connection_id=repository.source_ssh_connection_id,
+        source_directories=source_directories,
+    )
+
+
+def _normalize_repository_source_payload(
+    *,
+    source_locations: Optional[List[Dict[str, Any]]],
+    source_connection_id: Optional[int],
+    source_directories: Optional[List[str]],
+) -> tuple[list[Dict[str, Any]], Optional[int], list[str]]:
+    try:
+        normalized = normalize_source_locations(
+            source_locations,
+            source_type="remote" if source_connection_id else "local",
+            source_ssh_connection_id=source_connection_id,
+            source_directories=source_directories,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"key": "backend.errors.repo.sourceConnectionRequired"},
+        ) from exc
+
+    if not normalized:
+        return [], source_connection_id, source_directories or []
+
+    _source_type, legacy_connection_id, flattened_paths = legacy_source_fields(
+        normalized
+    )
+    return normalized, legacy_connection_id, flattened_paths
+
+
 # Helper function to format datetime with timezone
 def format_datetime(dt):
     """Format datetime to ISO8601 with UTC timezone indicator"""
@@ -680,6 +849,7 @@ class RepositoryCreate(BaseModel):
     compression: str = "lz4"  # lz4, zstd, zlib, none
     passphrase: Optional[str] = None
     source_directories: Optional[List[str]] = None  # List of directories to backup
+    source_locations: Optional[List[Dict[str, Any]]] = None
     exclude_patterns: Optional[List[str]] = (
         None  # List of exclude patterns (e.g., ["*.log", "*.tmp"])
     )
@@ -710,6 +880,19 @@ class RepositoryCreate(BaseModel):
     source_connection_id: Optional[int] = (
         None  # SSH connection ID for remote data source (pull-based backups)
     )
+    execution_target: str = "local"  # local, ssh, agent
+    executor_type: Optional[str] = None  # server, agent
+    agent_machine_id: Optional[int] = None  # Agent that executes backups
+    storage_backend: str = "local"  # local, ssh, agent_local, rclone
+    rclone_remote_id: Optional[int] = None
+    rclone_remote_path: Optional[str] = None
+    cloud_mirror_enabled: bool = False
+    rclone_remote_path_verified: bool = False
+    rclone_sync_policy: str = "after_success"
+    rclone_sync_cron_expression: Optional[str] = None
+    rclone_sync_timezone: Optional[str] = None
+    rclone_extra_flags: Optional[List[str]] = None
+    rclone_cache_path: Optional[str] = None
 
 
 class RepositoryImport(BaseModel):
@@ -720,6 +903,7 @@ class RepositoryImport(BaseModel):
     passphrase: Optional[str] = None  # Required if repository is encrypted
     compression: str = "lz4"  # Default compression for future backups
     source_directories: Optional[List[str]] = None  # List of directories to backup
+    source_locations: Optional[List[Dict[str, Any]]] = None
     exclude_patterns: Optional[List[str]] = None  # List of exclude patterns
     connection_id: Optional[int] = None  # SSH connection ID for repository location
     remote_path: Optional[str] = None  # Path to borg on remote server
@@ -749,6 +933,19 @@ class RepositoryImport(BaseModel):
     keyfile_content: Optional[str] = (
         None  # Content of borg keyfile for keyfile/keyfile-blake2 encryption
     )
+    execution_target: str = "local"  # local, ssh, agent
+    executor_type: Optional[str] = None  # server, agent
+    agent_machine_id: Optional[int] = None  # Agent that executes backups
+    storage_backend: str = "local"  # local, ssh, agent_local, rclone
+    rclone_remote_id: Optional[int] = None
+    rclone_remote_path: Optional[str] = None
+    cloud_mirror_enabled: bool = False
+    rclone_remote_path_verified: bool = False
+    rclone_sync_policy: str = "after_success"
+    rclone_sync_cron_expression: Optional[str] = None
+    rclone_sync_timezone: Optional[str] = None
+    rclone_extra_flags: Optional[List[str]] = None
+    rclone_cache_path: Optional[str] = None
 
 
 class RepositoryUpdate(BaseModel):
@@ -756,6 +953,7 @@ class RepositoryUpdate(BaseModel):
     path: Optional[str] = None
     compression: Optional[str] = None
     source_directories: Optional[List[str]] = None
+    source_locations: Optional[List[Dict[str, Any]]] = None
     exclude_patterns: Optional[List[str]] = None
     connection_id: Optional[int] = None  # SSH connection ID for repository location
     remote_path: Optional[str] = None
@@ -778,6 +976,19 @@ class RepositoryUpdate(BaseModel):
     source_connection_id: Optional[int] = (
         None  # SSH connection ID for remote data source
     )
+    execution_target: Optional[str] = None  # local, ssh, agent
+    executor_type: Optional[str] = None  # server, agent
+    agent_machine_id: Optional[int] = None  # Agent that executes backups
+    storage_backend: Optional[str] = None
+    rclone_remote_id: Optional[int] = None
+    rclone_remote_path: Optional[str] = None
+    cloud_mirror_enabled: Optional[bool] = None
+    rclone_remote_path_verified: Optional[bool] = None
+    rclone_sync_policy: Optional[str] = None
+    rclone_sync_cron_expression: Optional[str] = None
+    rclone_sync_timezone: Optional[str] = None
+    rclone_extra_flags: Optional[List[str]] = None
+    rclone_cache_path: Optional[str] = None
 
 
 class RepositoryInfo(BaseModel):
@@ -800,6 +1011,773 @@ def _uses_borg2_payload(data: Union[RepositoryCreate, RepositoryImport]) -> bool
     return requested_version == 2 or data.encryption in V2_ONLY_ENCRYPTION_MODES
 
 
+def _is_rclone_payload(data: Union[RepositoryCreate, RepositoryImport]) -> bool:
+    return (getattr(data, "storage_backend", "local") or "local") == "rclone"
+
+
+def _payload_uses_rclone(data: Union[RepositoryCreate, RepositoryImport]) -> bool:
+    return (
+        _is_rclone_payload(data)
+        or _is_direct_rclone_payload(data)
+        or getattr(data, "cloud_mirror_enabled", False) is True
+    )
+
+
+def _require_rclone_feature(db: Session) -> None:
+    require_feature_access(db, RCLONE_FEATURE)
+
+
+def _require_managed_agents_feature(db: Session) -> None:
+    require_feature_access(db, MANAGED_AGENTS_FEATURE)
+
+
+def _is_direct_rclone_payload(
+    data: Union[RepositoryCreate, RepositoryImport, RepositoryUpdate],
+) -> bool:
+    return (
+        getattr(data, "storage_backend", "local") or "local"
+    ).lower() == DIRECT_RCLONE_STORAGE_BACKEND
+
+
+def _is_direct_rclone_url(path: Optional[str]) -> bool:
+    return bool((path or "").strip().startswith("rclone:"))
+
+
+def _normalize_direct_rclone_url(path: Optional[str]) -> str:
+    repo_path = (path or "").strip()
+    if (
+        not repo_path
+        or not repo_path.startswith("rclone:")
+        or repo_path in {"rclone:", "rclone://"}
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.directInvalidUrl"},
+        )
+    return repo_path
+
+
+def _is_cloud_mirror_payload(
+    data: Union[RepositoryCreate, RepositoryImport, RepositoryUpdate],
+) -> bool:
+    return bool(getattr(data, "cloud_mirror_enabled", False))
+
+
+def _primary_storage_backend(repository: Repository) -> str:
+    if repository.repository_type == "rclone":
+        if (repository.borg_version or 1) == 2 and _is_direct_rclone_url(
+            repository.path
+        ):
+            return DIRECT_RCLONE_STORAGE_BACKEND
+        return "rclone"
+    if repository_executor_type(repository) == "agent":
+        return "agent_local"
+    if repository.connection_id or repository.repository_type == "ssh":
+        return "ssh"
+    return "local"
+
+
+def _mirror_source_backend_for_payload(
+    data: Union[RepositoryCreate, RepositoryImport],
+) -> str:
+    if _normalize_repository_executor(data) == "agent":
+        return "agent"
+    storage_backend = (getattr(data, "storage_backend", "local") or "local").lower()
+    if data.connection_id or storage_backend == "ssh":
+        return "ssh"
+    return "local"
+
+
+def _mirror_source_backend_for_repository(repository: Repository) -> str:
+    if repository_executor_type(repository) == "agent":
+        return "agent"
+    if (
+        repository.connection_id
+        or repository.repository_type == "ssh"
+        or (repository.path or "").startswith("ssh://")
+    ):
+        return "ssh"
+    return "local"
+
+
+def _require_agent_capability(agent: AgentMachine, capability: str) -> None:
+    capabilities = agent.capabilities or []
+    if capability not in capabilities:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "key": "backend.errors.agents.capabilityMissing",
+                "params": {"capability": capability},
+            },
+        )
+
+
+def _require_agent_rclone_sync_capability(
+    agent_machine_id: Optional[int], db: Session
+) -> AgentMachine:
+    agent = _require_queueable_agent(agent_machine_id, db)
+    _require_agent_capability(agent, AGENT_RCLONE_SYNC_CAPABILITY)
+    return agent
+
+
+def _repository_has_cloud_mirror(
+    repository: Repository, storage: RepositoryStorage | None
+) -> bool:
+    return bool(
+        storage
+        and storage.backend == "rclone"
+        and repository.repository_type != "rclone"
+    )
+
+
+def _is_direct_rclone_repository(
+    repository: Repository, storage: RepositoryStorage | None = None
+) -> bool:
+    return bool(
+        repository.repository_type == "rclone"
+        and (repository.borg_version or 1) == 2
+        and _is_direct_rclone_url(repository.path)
+        and storage is None
+    )
+
+
+def _apply_mirror_source_strategy(
+    storage: RepositoryStorage, repository: Repository
+) -> None:
+    source_backend = _mirror_source_backend_for_repository(repository)
+    if source_backend == "agent":
+        storage.cache_path = None
+        storage.sync_direction = SYNC_DIRECTION_AGENT_TO_REMOTE
+    elif source_backend == "ssh":
+        storage.cache_path = None
+        storage.sync_direction = SYNC_DIRECTION_SSHFS_TO_REMOTE
+    else:
+        storage.cache_path = repository.path
+        storage.sync_direction = SYNC_DIRECTION_PRIMARY_TO_REMOTE
+
+
+def _reject_unsupported_rclone_borg2(
+    data: Union[RepositoryCreate, RepositoryImport],
+) -> None:
+    if _is_rclone_payload(data) and _uses_borg2_payload(data):
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.borgV2Unsupported"},
+        )
+
+
+def _raise_direct_rclone_incompatible_payload() -> None:
+    raise HTTPException(
+        status_code=400,
+        detail={"key": "backend.errors.rclone.directIncompatiblePayload"},
+    )
+
+
+def _validate_direct_rclone_payload(
+    data: Union[RepositoryCreate, RepositoryImport],
+    db: Session,
+) -> str:
+    if (data.borg_version or 1) != 2:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.directBorg2Required"},
+        )
+
+    if (
+        getattr(data, "rclone_cache_path", None)
+        or data.connection_id
+        or _normalize_repository_executor(data) == "agent"
+        or _normalize_execution_target(data.execution_target) != "local"
+        or data.agent_machine_id is not None
+        or data.cloud_mirror_enabled
+        or data.rclone_remote_id is not None
+        or bool((data.rclone_remote_path or "").strip())
+        or bool(data.rclone_extra_flags)
+        or data.rclone_sync_policy != "after_success"
+        or bool((data.rclone_sync_cron_expression or "").strip())
+        or bool((data.rclone_sync_timezone or "").strip())
+    ):
+        _raise_direct_rclone_incompatible_payload()
+
+    repo_path = _normalize_direct_rclone_url(data.path)
+    _require_borg2_feature(db)
+    return repo_path
+
+
+def _validate_direct_rclone_update(
+    repo_data: RepositoryUpdate,
+    update_data: dict[str, Any],
+) -> None:
+    if (
+        repo_data.cloud_mirror_enabled is True
+        or repo_data.rclone_remote_path_verified is True
+        or bool((repo_data.rclone_cache_path or "").strip())
+        or repo_data.rclone_remote_id is not None
+        or bool((repo_data.rclone_remote_path or "").strip())
+        or bool(repo_data.rclone_extra_flags)
+        or bool((repo_data.rclone_sync_cron_expression or "").strip())
+        or bool((repo_data.rclone_sync_timezone or "").strip())
+        or (
+            "rclone_sync_policy" in update_data
+            and repo_data.rclone_sync_policy != "after_success"
+        )
+        or repo_data.connection_id is not None
+        or _normalize_repository_executor(repo_data) == "agent"
+        or (
+            repo_data.execution_target is not None
+            and _normalize_execution_target(repo_data.execution_target) != "local"
+        )
+        or repo_data.agent_machine_id is not None
+    ):
+        _raise_direct_rclone_incompatible_payload()
+
+    if (
+        "storage_backend" in update_data
+        and repo_data.storage_backend != DIRECT_RCLONE_STORAGE_BACKEND
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.updateUnsupported"},
+        )
+
+    if repo_data.path is not None:
+        _normalize_direct_rclone_url(repo_data.path)
+
+
+def _strip_direct_rclone_noop_update_fields(update_data: dict[str, Any]) -> None:
+    for key in (
+        "storage_backend",
+        "rclone_remote_id",
+        "rclone_remote_path",
+        "rclone_sync_policy",
+        "rclone_sync_cron_expression",
+        "rclone_sync_timezone",
+        "rclone_extra_flags",
+        "rclone_cache_path",
+        "cloud_mirror_enabled",
+        "rclone_remote_path_verified",
+        "connection_id",
+        "agent_machine_id",
+    ):
+        update_data.pop(key, None)
+
+
+def _strip_cached_rclone_noop_update_fields(
+    repo_data: RepositoryUpdate, update_data: dict[str, Any]
+) -> None:
+    if "storage_backend" in update_data and repo_data.storage_backend != "rclone":
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.updateUnsupported"},
+        )
+
+    if "connection_id" in update_data:
+        if repo_data.connection_id is not None:
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.rclone.updateUnsupported"},
+            )
+        update_data.pop("connection_id", None)
+
+    if "execution_target" in update_data:
+        if _normalize_execution_target(repo_data.execution_target) != "local":
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.rclone.updateUnsupported"},
+            )
+        update_data.pop("execution_target", None)
+
+    if "executor_type" in update_data:
+        if _normalize_repository_executor(repo_data) != "server":
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.rclone.updateUnsupported"},
+            )
+        update_data.pop("executor_type", None)
+
+    if "agent_machine_id" in update_data:
+        if repo_data.agent_machine_id is not None:
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.rclone.updateUnsupported"},
+            )
+        update_data.pop("agent_machine_id", None)
+
+
+def _strip_disabled_rclone_noop_update_fields(update_data: dict[str, Any]) -> None:
+    default_values = {
+        "cloud_mirror_enabled": {None, False},
+        "rclone_remote_id": {None},
+        "rclone_remote_path": {None, ""},
+        "rclone_remote_path_verified": {None, False},
+        "rclone_sync_policy": {None, "after_success"},
+        "rclone_sync_cron_expression": {None, ""},
+        "rclone_sync_timezone": {None, ""},
+    }
+    for key, allowed_values in default_values.items():
+        if key in update_data and update_data[key] in allowed_values:
+            update_data.pop(key, None)
+    if "rclone_extra_flags" in update_data and update_data["rclone_extra_flags"] in (
+        None,
+        [],
+    ):
+        update_data.pop("rclone_extra_flags", None)
+
+
+def _rclone_feature_gate_updates(
+    repo_data: RepositoryUpdate,
+    update_data: dict[str, Any],
+    requested_rclone_updates: set[str],
+) -> set[str]:
+    if repo_data.cloud_mirror_enabled is not False:
+        return requested_rclone_updates
+
+    exempt_updates = {"cloud_mirror_enabled"}
+    if update_data.get("storage_backend") in (None, "local", "ssh", "agent_local"):
+        exempt_updates.add("storage_backend")
+
+    default_values = {
+        "rclone_remote_id": {None},
+        "rclone_remote_path": {None, ""},
+        "rclone_remote_path_verified": {None, False},
+        "rclone_sync_policy": {None, "after_success"},
+        "rclone_sync_cron_expression": {None, ""},
+        "rclone_sync_timezone": {None, ""},
+        "rclone_cache_path": {None, ""},
+    }
+    for key, allowed_values in default_values.items():
+        if key in update_data and update_data[key] in allowed_values:
+            exempt_updates.add(key)
+
+    if update_data.get("rclone_extra_flags") in (None, []):
+        exempt_updates.add("rclone_extra_flags")
+
+    return requested_rclone_updates - exempt_updates
+
+
+def _raise_rclone_schedule_error(exc: Exception) -> None:
+    message = str(exc) or exc.__class__.__name__
+    if isinstance(exc, InvalidScheduleTimezone):
+        key = "backend.errors.rclone.invalidScheduleTimezone"
+    elif "cron expression is required" in message:
+        key = "backend.errors.rclone.scheduleCronRequired"
+    elif "invalid rclone sync policy" in message:
+        key = "backend.errors.rclone.invalidSyncPolicy"
+    else:
+        key = "backend.errors.rclone.invalidScheduleCron"
+    raise HTTPException(
+        status_code=400,
+        detail={"key": key, "message": message},
+    ) from exc
+
+
+def _validate_rclone_schedule_payload(
+    data: Union[RepositoryCreate, RepositoryImport, RepositoryUpdate],
+    *,
+    storage: RepositoryStorage | None = None,
+) -> None:
+    policy = (
+        data.rclone_sync_policy
+        if data.rclone_sync_policy is not None
+        else (storage.sync_policy if storage else "after_success")
+    )
+    if policy not in VALID_SYNC_POLICIES:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.invalidSyncPolicy"},
+        )
+    if policy != "scheduled":
+        timezone_value = data.rclone_sync_timezone
+        if timezone_value is not None:
+            try:
+                normalize_schedule_timezone(timezone_value)
+            except InvalidScheduleTimezone as exc:
+                _raise_rclone_schedule_error(exc)
+        return
+
+    cron_expression = (
+        data.rclone_sync_cron_expression
+        if data.rclone_sync_cron_expression is not None
+        else (storage.sync_cron_expression if storage else None)
+    )
+    cron_expression = (cron_expression or "").strip()
+    if not cron_expression:
+        _raise_rclone_schedule_error(
+            ValueError("rclone schedule cron expression is required")
+        )
+
+    timezone_value = (
+        data.rclone_sync_timezone
+        if data.rclone_sync_timezone is not None
+        else (storage.sync_timezone if storage else DEFAULT_SCHEDULE_TIMEZONE)
+    )
+    try:
+        timezone_name = normalize_schedule_timezone(timezone_value)
+        calculate_next_cron_run(
+            cron_expression,
+            datetime.now(timezone.utc),
+            timezone_name,
+        )
+    except Exception as exc:
+        _raise_rclone_schedule_error(exc)
+
+
+def _validate_rclone_payload(
+    data: Union[RepositoryCreate, RepositoryImport],
+    db: Session,
+) -> RcloneRemote:
+    if getattr(data, "rclone_cache_path", None):
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.cachePathServerOwned"},
+        )
+    if _normalize_repository_executor(data) == "agent":
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.agentUnsupported"},
+        )
+    if data.connection_id:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.sshConnectionUnsupported"},
+        )
+    if not data.rclone_remote_id:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.remoteRequired"},
+        )
+    if not data.rclone_remote_path:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.remotePathRequired"},
+        )
+    if data.rclone_sync_policy not in VALID_SYNC_POLICIES:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.invalidSyncPolicy"},
+        )
+    _validate_rclone_schedule_payload(data)
+    remote = (
+        db.query(RcloneRemote).filter(RcloneRemote.id == data.rclone_remote_id).first()
+    )
+    if not remote:
+        raise HTTPException(
+            status_code=404,
+            detail={"key": "backend.errors.rclone.remoteNotFound"},
+        )
+    try:
+        normalize_extra_flags(data.rclone_extra_flags)
+        rclone_repository_service.build_storage(
+            repository_id=1,
+            remote_id=remote.id,
+            remote_path=data.rclone_remote_path,
+            sync_policy=data.rclone_sync_policy,
+            extra_flags=data.rclone_extra_flags,
+            sync_cron_expression=data.rclone_sync_cron_expression,
+            sync_timezone=data.rclone_sync_timezone,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.invalidPayload", "message": str(exc)},
+        ) from exc
+    return remote
+
+
+def _validate_cloud_mirror_payload(
+    data: Union[RepositoryCreate, RepositoryImport],
+    db: Session,
+) -> RcloneRemote | None:
+    if getattr(data, "rclone_cache_path", None):
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.cachePathServerOwned"},
+        )
+    if not _is_cloud_mirror_payload(data):
+        return None
+    source_backend = _mirror_source_backend_for_payload(data)
+    if source_backend == "agent":
+        _require_agent_rclone_sync_capability(data.agent_machine_id, db)
+    if source_backend == "ssh" and not data.connection_id:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.mirrorUnsupportedPrimary"},
+        )
+    if not data.rclone_remote_id:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.remoteRequired"},
+        )
+    if not data.rclone_remote_path:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.remotePathRequired"},
+        )
+    if data.rclone_sync_policy not in VALID_SYNC_POLICIES:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.invalidSyncPolicy"},
+        )
+    _validate_rclone_schedule_payload(data)
+    remote = (
+        db.query(RcloneRemote).filter(RcloneRemote.id == data.rclone_remote_id).first()
+    )
+    if not remote:
+        raise HTTPException(
+            status_code=404,
+            detail={"key": "backend.errors.rclone.remoteNotFound"},
+        )
+    try:
+        normalize_extra_flags(data.rclone_extra_flags)
+        normalize_rclone_relative_path(data.rclone_remote_path)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.invalidPayload", "message": str(exc)},
+        ) from exc
+    return remote
+
+
+async def _preflight_cloud_mirror_path(
+    data: Union[RepositoryCreate, RepositoryImport],
+    remote: RcloneRemote | None,
+) -> None:
+    if not remote:
+        return
+    try:
+        await rclone_repository_service.preflight_remote_path(
+            remote,
+            data.rclone_remote_path or "",
+            verified_non_empty=bool(data.rclone_remote_path_verified),
+        )
+    except ValueError as exc:
+        message = str(exc)
+        key = (
+            "backend.errors.rclone.remotePathNotVerified"
+            if "not empty" in message
+            else "backend.errors.rclone.remotePathPreflightFailed"
+        )
+        raise HTTPException(
+            status_code=400,
+            detail={"key": key, "message": message},
+        ) from exc
+
+
+def _discard_rclone_repository_record(
+    db: Session,
+    repository: Repository,
+    storage: RepositoryStorage,
+) -> None:
+    repository_id = repository.id
+    cache_path = storage.cache_path
+    db.rollback()
+    if repository_id is not None:
+        db.query(RepositoryStorage).filter(
+            RepositoryStorage.repository_id == repository_id
+        ).delete(synchronize_session=False)
+        db.query(Repository).filter(Repository.id == repository_id).delete(
+            synchronize_session=False
+        )
+        db.commit()
+    if cache_path:
+        shutil.rmtree(cache_path, ignore_errors=True)
+
+
+def _serialize_rclone_storage(
+    repository: Repository, db: Session
+) -> Optional[Dict[str, Any]]:
+    storage = (
+        db.query(RepositoryStorage)
+        .filter(RepositoryStorage.repository_id == repository.id)
+        .first()
+    )
+    if not storage or storage.backend != "rclone":
+        return None
+    remote = (
+        db.query(RcloneRemote)
+        .filter(RcloneRemote.id == storage.rclone_remote_id)
+        .first()
+    )
+    status = rclone_repository_service.serialize_status(repository, storage, remote)
+    status.update(_agent_machine_summary(repository, db))
+    latest_job = (
+        db.query(RcloneSyncJob)
+        .filter(RcloneSyncJob.repository_id == repository.id)
+        .order_by(RcloneSyncJob.created_at.desc(), RcloneSyncJob.id.desc())
+        .first()
+    )
+    status["latest_sync_job"] = (
+        {
+            "id": latest_job.id,
+            "triggered_by": latest_job.triggered_by,
+            "status": latest_job.status,
+            "scheduled_for": format_datetime(latest_job.scheduled_for),
+            "started_at": format_datetime(latest_job.started_at),
+            "completed_at": format_datetime(latest_job.completed_at),
+            "error_text": latest_job.error_text,
+            "operation": latest_job.operation,
+            "has_log": bool(
+                latest_job.log_path or latest_job.log_text or latest_job.error_text
+            ),
+        }
+        if latest_job
+        else None
+    )
+    return status
+
+
+def _mark_background_rclone_sync_failed(job_id: int, message: str) -> None:
+    db = SessionLocal()
+    try:
+        job = db.query(RcloneSyncJob).filter(RcloneSyncJob.id == job_id).first()
+        if not job:
+            return
+        storage = (
+            db.query(RepositoryStorage)
+            .filter(RepositoryStorage.repository_id == job.repository_id)
+            .first()
+        )
+        if storage:
+            storage.sync_status = "failed"
+            storage.last_sync_error = message
+        job.status = "failed"
+        job.completed_at = datetime.now(timezone.utc)
+        job.error_text = message
+        job.log_text = (
+            f"{job.log_text.rstrip()}\n{message}" if job.log_text else message
+        )
+        db.commit()
+    finally:
+        db.close()
+
+
+async def _run_background_rclone_sync_job(job_id: int) -> None:
+    db = SessionLocal()
+    try:
+        job = db.query(RcloneSyncJob).filter(RcloneSyncJob.id == job_id).first()
+        if job is None:
+            logger.warning("Skipping missing background rclone sync job", job_id=job_id)
+            return
+        repository = (
+            db.query(Repository).filter(Repository.id == job.repository_id).first()
+        )
+        if repository is None:
+            raise ValueError(f"repository {job.repository_id} was not found")
+
+        async def run_sync():
+            return await rclone_repository_service.sync_repository(
+                db,
+                repository,
+                triggered_by=job.triggered_by,
+                scheduled_for=job.scheduled_for,
+                job_id=job.id,
+            )
+
+        await run_serialized_repository_command(repository.id, run_sync, scope="rclone")
+    except asyncio.CancelledError:
+        message = "Background rclone sync job was cancelled"
+        logger.info(message, job_id=job_id)
+        db.rollback()
+        _mark_background_rclone_sync_failed(job_id, message)
+        raise
+    except Exception as exc:
+        message = str(exc) or exc.__class__.__name__
+        logger.error(
+            "Background rclone sync job failed",
+            job_id=job_id,
+            error=message,
+        )
+        db.rollback()
+        _mark_background_rclone_sync_failed(job_id, message)
+    finally:
+        db.close()
+
+
+def _log_background_rclone_sync_task_result(task: asyncio.Task) -> None:
+    try:
+        task.result()
+    except asyncio.CancelledError:
+        logger.info("Background rclone sync job was cancelled")
+    except Exception as exc:
+        logger.error("Background rclone sync task raised", error=str(exc))
+
+
+def _queue_initial_cloud_mirror_sync(db: Session, repository: Repository) -> None:
+    storage = (
+        db.query(RepositoryStorage)
+        .filter(RepositoryStorage.repository_id == repository.id)
+        .first()
+    )
+    if not storage or storage.backend != "rclone":
+        return
+    sync_job = RcloneSyncJob(
+        repository_id=repository.id,
+        direction=storage.sync_direction,
+        operation="sync",
+        status="pending",
+        triggered_by="initial",
+    )
+    db.add(sync_job)
+    storage.sync_status = "pending"
+    storage.last_sync_error = None
+    db.commit()
+    db.refresh(sync_job)
+    task = asyncio.create_task(_run_background_rclone_sync_job(sync_job.id))
+    task.add_done_callback(_log_background_rclone_sync_task_result)
+
+
+def resume_pending_initial_cloud_mirror_sync_jobs() -> int:
+    db = SessionLocal()
+    try:
+        jobs = (
+            db.query(RcloneSyncJob)
+            .filter(
+                RcloneSyncJob.operation == "sync",
+                RcloneSyncJob.triggered_by == "initial",
+                RcloneSyncJob.status.in_(("pending", "running")),
+            )
+            .order_by(RcloneSyncJob.id.asc())
+            .all()
+        )
+        dispatched = 0
+        for job in jobs:
+            storage = (
+                db.query(RepositoryStorage)
+                .filter(RepositoryStorage.repository_id == job.repository_id)
+                .first()
+            )
+            if storage:
+                storage.sync_status = "pending"
+                storage.last_sync_error = None
+            job.status = "pending"
+            job.completed_at = None
+            job.error_text = None
+            db.commit()
+            task = asyncio.create_task(_run_background_rclone_sync_job(job.id))
+            task.add_done_callback(_log_background_rclone_sync_task_result)
+            dispatched += 1
+        return dispatched
+    finally:
+        db.close()
+
+
+def _agent_machine_summary(repository: Repository, db: Session) -> Dict[str, Any]:
+    if not repository.agent_machine_id:
+        return {
+            "agent_machine_name": None,
+            "agent_machine_status": None,
+        }
+    agent = (
+        db.query(AgentMachine)
+        .filter(AgentMachine.id == repository.agent_machine_id)
+        .first()
+    )
+    return {
+        "agent_machine_name": agent.name if agent else None,
+        "agent_machine_status": agent.status if agent else None,
+    }
+
+
 def _require_borg2_feature(db: Session) -> None:
     current_plan = get_current_plan(db)
     required = FEATURES["borg_v2"]
@@ -813,6 +1791,813 @@ def _require_borg2_feature(db: Session) -> None:
                 "current": current_plan.value,
             },
         )
+
+
+def _normalize_execution_target(value: Optional[str]) -> str:
+    execution_target = (value or "local").strip().lower()
+    if execution_target not in {"local", "ssh", "agent"}:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.invalidExecutionTarget"},
+        )
+    return execution_target
+
+
+def _normalize_repository_executor(
+    repo_data: Union[RepositoryCreate, RepositoryImport, RepositoryUpdate],
+) -> str:
+    return normalize_executor_type(
+        getattr(repo_data, "executor_type", None),
+        execution_target=getattr(repo_data, "execution_target", None),
+    )
+
+
+def _strip_ssh_url_path(path: str) -> str:
+    if not path.startswith("ssh://"):
+        return path
+
+    import re
+
+    match = re.match(r"ssh://[^/]+(/.*)", path)
+    if match:
+        return match.group(1)
+    return path.split("/", 3)[-1] if "/" in path else path
+
+
+def _build_repository_path_from_connection(
+    raw_path: str, connection_id: int, db: Session
+) -> str:
+    connection_details = get_connection_details(connection_id, db)
+    repo_path = _strip_ssh_url_path(raw_path)
+    ssh_path_prefix = connection_details.get("ssh_path_prefix")
+    if ssh_path_prefix:
+        repo_path = apply_ssh_command_prefix(repo_path, ssh_path_prefix)
+    return (
+        f"ssh://{connection_details['username']}@"
+        f"{connection_details['host']}:{connection_details['port']}/"
+        f"{repo_path.lstrip('/')}"
+    )
+
+
+def _require_queueable_agent(
+    agent_machine_id: Optional[int], db: Session
+) -> AgentMachine:
+    if agent_machine_id is None:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.agents.agentRequired"},
+        )
+
+    agent = db.query(AgentMachine).filter(AgentMachine.id == agent_machine_id).first()
+    if not agent:
+        raise HTTPException(
+            status_code=404,
+            detail={"key": "backend.errors.agents.agentNotFound"},
+        )
+    if agent.deleted_at is not None or agent.status in ("disabled", "revoked"):
+        raise HTTPException(
+            status_code=409,
+            detail={"key": "backend.errors.agents.agentNotQueueable"},
+        )
+    return agent
+
+
+def _reject_agent_repository_ssh_target(
+    *,
+    path: Optional[str],
+    connection_id: Optional[int],
+    execution_target: Optional[str],
+) -> None:
+    if (
+        connection_id
+        or (path or "").strip().startswith("ssh://")
+        or (execution_target or "").strip().lower() == "ssh"
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.agentRepositorySshUnsupported"},
+        )
+
+
+def _validate_agent_repository_payload(
+    repo_data: Union[RepositoryCreate, RepositoryImport], db: Session
+) -> AgentMachine:
+    _reject_agent_repository_ssh_target(
+        path=repo_data.path,
+        connection_id=repo_data.connection_id,
+        execution_target=repo_data.execution_target,
+    )
+
+    if repo_data.encryption in [
+        "repokey",
+        "keyfile",
+        "repokey-blake2",
+        "keyfile-blake2",
+        "repokey-aes-ocb",
+        "repokey-chacha20-poly1305",
+        "keyfile-aes-ocb",
+        "keyfile-chacha20-poly1305",
+    ]:
+        if not repo_data.passphrase or repo_data.passphrase.strip() == "":
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "key": "backend.errors.repo.encryptedPassphraseRequired",
+                    "params": {"mode": repo_data.encryption},
+                },
+            )
+
+    return _require_queueable_agent(repo_data.agent_machine_id, db)
+
+
+async def _create_agent_repository_record(
+    repo_data: Union[RepositoryCreate, RepositoryImport],
+    current_user: User,
+    db: Session,
+    *,
+    imported: bool,
+):
+    cloud_mirror_remote = _validate_cloud_mirror_payload(repo_data, db)
+    await _preflight_cloud_mirror_path(repo_data, cloud_mirror_remote)
+    agent = _validate_agent_repository_payload(repo_data, db)
+    if not imported:
+        _require_agent_capability(agent, AGENT_REPOSITORY_INIT_CAPABILITY)
+    if cloud_mirror_remote:
+        _require_agent_capability(agent, AGENT_RCLONE_SYNC_CAPABILITY)
+    repo_path = repo_data.path.strip()
+    if not repo_path:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.pathRequired"},
+        )
+
+    if db.query(Repository).filter(Repository.name == repo_data.name).first():
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.repositoryNameExists"},
+        )
+
+    if db.query(Repository).filter(Repository.path == repo_path).first():
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.repositoryPathExists"},
+        )
+
+    (
+        source_locations,
+        source_connection_id,
+        source_directories,
+    ) = _normalize_repository_source_payload(
+        source_locations=repo_data.source_locations,
+        source_connection_id=repo_data.source_connection_id,
+        source_directories=repo_data.source_directories,
+    )
+    source_directories_json = (
+        json.dumps(source_directories) if source_directories else None
+    )
+    source_locations_json = json.dumps(source_locations) if source_locations else None
+    exclude_patterns_json = (
+        json.dumps(repo_data.exclude_patterns) if repo_data.exclude_patterns else None
+    )
+
+    repository = Repository(
+        name=repo_data.name,
+        path=repo_path,
+        encryption=repo_data.encryption,
+        compression=repo_data.compression,
+        passphrase=repo_data.passphrase,
+        source_directories=source_directories_json,
+        exclude_patterns=exclude_patterns_json,
+        connection_id=None,
+        remote_path=repo_data.remote_path,
+        repository_type="local",
+        execution_target="agent",
+        executor_type="agent",
+        agent_machine_id=agent.id,
+        pre_backup_script=repo_data.pre_backup_script,
+        post_backup_script=repo_data.post_backup_script,
+        hook_timeout=repo_data.hook_timeout,
+        pre_hook_timeout=repo_data.pre_hook_timeout,
+        post_hook_timeout=repo_data.post_hook_timeout,
+        continue_on_hook_failure=repo_data.continue_on_hook_failure,
+        skip_on_hook_failure=repo_data.skip_on_hook_failure,
+        mode=repo_data.mode,
+        bypass_lock=repo_data.bypass_lock,
+        custom_flags=repo_data.custom_flags,
+        source_ssh_connection_id=source_connection_id,
+        source_locations=source_locations_json,
+        borg_version=repo_data.borg_version or 1,
+    )
+    db.add(repository)
+    db.commit()
+    db.refresh(repository)
+
+    if not imported:
+        repository_id = repository.id
+        try:
+            agent_job = queue_agent_repository_operation_job(
+                db,
+                repository,
+                job_kind=AGENT_REPOSITORY_INIT_CAPABILITY,
+                operation={"encryption": repository.encryption},
+            )
+            await dispatch_agent_job_best_effort(
+                db,
+                agent_job,
+                repository_id=repository.id,
+            )
+            await wait_for_agent_repository_operation_job(
+                db,
+                agent_job.id,
+                timeout_seconds=get_operation_timeouts(db)["init_timeout"],
+            )
+        except Exception:
+            db.rollback()
+            repository_to_delete = (
+                db.query(Repository).filter(Repository.id == repository_id).first()
+            )
+            if repository_to_delete:
+                db.delete(repository_to_delete)
+                db.commit()
+            raise
+
+    if cloud_mirror_remote:
+        storage = rclone_repository_service.build_mirror_storage(
+            repository_id=repository.id,
+            source_path=repository.path,
+            source_backend="agent",
+            remote_id=cloud_mirror_remote.id,
+            remote_path=repo_data.rclone_remote_path or "",
+            sync_policy=repo_data.rclone_sync_policy,
+            extra_flags=repo_data.rclone_extra_flags,
+            sync_cron_expression=repo_data.rclone_sync_cron_expression,
+            sync_timezone=repo_data.rclone_sync_timezone,
+        )
+        db.add(storage)
+        db.commit()
+        if repo_data.rclone_sync_policy == "after_success":
+            await rclone_repository_service.sync_repository(db, repository)
+
+    logger.info(
+        "Agent-managed repository recorded",
+        name=repository.name,
+        path=repository.path,
+        agent_id=agent.agent_id,
+        imported=imported,
+        user=current_user.username,
+    )
+
+    try:
+        mqtt_service.sync_state_with_db(db, reason="agent repository creation")
+    except Exception as e:
+        logger.warning(
+            "Failed to sync repositories with MQTT after agent repository creation",
+            repo_id=repository.id,
+            error=str(e),
+        )
+
+    repository_payload = {
+        "id": repository.id,
+        "name": repository.name,
+        "path": repository.path,
+        "encryption": repository.encryption,
+        "compression": repository.compression,
+        "execution_target": repository.execution_target,
+        "executor_type": repository.executor_type,
+        "agent_machine_id": repository.agent_machine_id,
+        **_agent_machine_summary(repository, db),
+    }
+    rclone_storage = _serialize_rclone_storage(repository, db)
+    if rclone_storage:
+        repository_payload["storage_backend"] = _primary_storage_backend(repository)
+        repository_payload["rclone_storage"] = rclone_storage
+
+    return {
+        "success": True,
+        "message": "backend.success.repo.repositoryImported"
+        if imported
+        else "backend.success.repo.repositoryCreated",
+        "repository": repository_payload,
+    }
+
+
+def _validate_repository_name_available(name: str, db: Session) -> None:
+    existing_repo = db.query(Repository).filter(Repository.name == name).first()
+    if existing_repo:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.repositoryNameExists"},
+        )
+
+
+def _repository_common_values(
+    repo_data: Union[RepositoryCreate, RepositoryImport],
+) -> dict[str, Any]:
+    return {
+        "name": repo_data.name,
+        "encryption": repo_data.encryption,
+        "compression": repo_data.compression,
+        "passphrase": repo_data.passphrase,
+        "connection_id": None,
+        "remote_path": repo_data.remote_path,
+        "pre_backup_script": repo_data.pre_backup_script,
+        "post_backup_script": repo_data.post_backup_script,
+        "hook_timeout": repo_data.hook_timeout,
+        "pre_hook_timeout": repo_data.pre_hook_timeout,
+        "post_hook_timeout": repo_data.post_hook_timeout,
+        "continue_on_hook_failure": repo_data.continue_on_hook_failure,
+        "skip_on_hook_failure": repo_data.skip_on_hook_failure,
+        "mode": repo_data.mode,
+        "bypass_lock": repo_data.bypass_lock,
+        "custom_flags": repo_data.custom_flags,
+        "execution_target": "local",
+        "executor_type": "server",
+        "agent_machine_id": None,
+        "repository_type": "rclone",
+        "borg_version": repo_data.borg_version or 1,
+    }
+
+
+async def _create_rclone_repository_record(
+    repo_data: RepositoryCreate,
+    current_user: User,
+    db: Session,
+):
+    _validate_rclone_payload(repo_data, db)
+    _validate_repository_name_available(repo_data.name, db)
+
+    valid_encryption_modes = {
+        "repokey",
+        "keyfile",
+        "repokey-blake2",
+        "keyfile-blake2",
+        "none",
+    }
+    if repo_data.encryption not in valid_encryption_modes:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.invalidEncryptionMode"},
+        )
+    if repo_data.encryption != "none" and not (repo_data.passphrase or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "key": "backend.errors.repo.encryptedPassphraseRequired",
+                "params": {"mode": repo_data.encryption},
+            },
+        )
+
+    (
+        source_locations,
+        source_connection_id,
+        source_directories,
+    ) = _normalize_repository_source_payload(
+        source_locations=repo_data.source_locations,
+        source_connection_id=repo_data.source_connection_id,
+        source_directories=repo_data.source_directories,
+    )
+    exclude_patterns_json = (
+        json.dumps(repo_data.exclude_patterns) if repo_data.exclude_patterns else None
+    )
+    repository = Repository(
+        path=f"__rclone_pending__/{uuid.uuid4()}",
+        source_directories=json.dumps(source_directories)
+        if source_directories
+        else None,
+        source_locations=json.dumps(source_locations) if source_locations else None,
+        exclude_patterns=exclude_patterns_json,
+        source_ssh_connection_id=source_connection_id,
+        **_repository_common_values(repo_data),
+    )
+    db.add(repository)
+    db.flush()
+    storage = rclone_repository_service.build_storage(
+        repository_id=repository.id,
+        remote_id=repo_data.rclone_remote_id,
+        remote_path=repo_data.rclone_remote_path,
+        sync_policy=repo_data.rclone_sync_policy,
+        extra_flags=repo_data.rclone_extra_flags,
+        sync_cron_expression=repo_data.rclone_sync_cron_expression,
+        sync_timezone=repo_data.rclone_sync_timezone,
+    )
+    repository.path = storage.cache_path
+    db.add(storage)
+
+    try:
+        os.makedirs(storage.cache_path, exist_ok=True)
+        init_result = await initialize_borg_repository(
+            storage.cache_path,
+            repo_data.encryption,
+            repo_data.passphrase,
+            None,
+            None,
+        )
+        if not init_result["success"]:
+            raise HTTPException(
+                status_code=500,
+                detail={"key": "backend.errors.repo.failedToInitializeRepository"},
+            )
+        db.commit()
+        db.refresh(repository)
+        if repo_data.rclone_sync_policy == "after_success":
+            await rclone_repository_service.sync_repository(db, repository)
+    except HTTPException:
+        _discard_rclone_repository_record(db, repository, storage)
+        raise
+    except Exception as exc:
+        _discard_rclone_repository_record(db, repository, storage)
+        logger.error(
+            "Unexpected rclone repository create failure",
+            name=repo_data.name,
+            error=str(exc),
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "key": "backend.errors.repo.failedToCreateRepository",
+                "message": str(exc) or exc.__class__.__name__,
+            },
+        ) from exc
+
+    logger.info(
+        "Rclone repository created",
+        name=repository.name,
+        path=repository.path,
+        user=current_user.username,
+    )
+    return {
+        "success": True,
+        "message": "backend.success.repo.repositoryCreated",
+        "repository": {
+            "id": repository.id,
+            "name": repository.name,
+            "path": repository.path,
+            "encryption": repository.encryption,
+            "compression": repository.compression,
+            "storage_backend": "rclone",
+            "rclone_storage": _serialize_rclone_storage(repository, db),
+        },
+    }
+
+
+async def _create_direct_rclone_repository_record(
+    repo_data: RepositoryCreate,
+    current_user: User,
+    db: Session,
+):
+    repo_path = _validate_direct_rclone_payload(repo_data, db)
+    _validate_repository_name_available(repo_data.name, db)
+
+    valid_encryption_modes = V2_ONLY_ENCRYPTION_MODES | {"none"}
+    if repo_data.encryption not in valid_encryption_modes:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.invalidEncryptionMode"},
+        )
+    if repo_data.encryption != "none" and not (repo_data.passphrase or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "key": "backend.errors.repo.encryptedPassphraseRequired",
+                "params": {"mode": repo_data.encryption},
+            },
+        )
+
+    existing_path = db.query(Repository).filter(Repository.path == repo_path).first()
+    if existing_path:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.repositoryPathExists"},
+        )
+
+    init_result = await initialize_borg_repository(
+        repo_path,
+        repo_data.encryption,
+        repo_data.passphrase,
+        None,
+        None,
+        borg_version=2,
+    )
+    if not init_result["success"]:
+        raise HTTPException(
+            status_code=500,
+            detail={"key": "backend.errors.repo.failedToInitializeRepository"},
+        )
+
+    (
+        source_locations,
+        source_connection_id,
+        source_directories,
+    ) = _normalize_repository_source_payload(
+        source_locations=repo_data.source_locations,
+        source_connection_id=repo_data.source_connection_id,
+        source_directories=repo_data.source_directories,
+    )
+    repository = Repository(
+        path=repo_path,
+        source_directories=json.dumps(source_directories)
+        if source_directories
+        else None,
+        source_locations=json.dumps(source_locations) if source_locations else None,
+        exclude_patterns=json.dumps(repo_data.exclude_patterns)
+        if repo_data.exclude_patterns
+        else None,
+        source_ssh_connection_id=source_connection_id,
+        **_repository_common_values(repo_data),
+    )
+    db.add(repository)
+    db.commit()
+    db.refresh(repository)
+
+    try:
+        mqtt_service.sync_state_with_db(db, reason="repository creation")
+        logger.info(
+            "Synced repositories with MQTT after direct rclone creation",
+            repo_id=repository.id,
+        )
+    except Exception as e:
+        logger.warning(
+            "Failed to sync repositories with MQTT after direct rclone creation",
+            repo_id=repository.id,
+            error=str(e),
+        )
+
+    logger.info(
+        "Direct Borg 2 rclone repository created",
+        name=repository.name,
+        path=repository.path,
+        user=current_user.username,
+    )
+    return {
+        "success": True,
+        "message": "backend.success.repo.repositoryCreated",
+        "repository": {
+            "id": repository.id,
+            "name": repository.name,
+            "path": repository.path,
+            "encryption": repository.encryption,
+            "compression": repository.compression,
+            "execution_target": repository.execution_target,
+            "executor_type": repository.executor_type,
+            "agent_machine_id": repository.agent_machine_id,
+            "repository_type": "rclone",
+            "borg_version": 2,
+            "storage_backend": DIRECT_RCLONE_STORAGE_BACKEND,
+        },
+    }
+
+
+async def _import_rclone_repository_record(
+    repo_data: RepositoryImport,
+    current_user: User,
+    db: Session,
+):
+    _validate_rclone_payload(repo_data, db)
+    _validate_repository_name_available(repo_data.name, db)
+
+    (
+        source_locations,
+        source_connection_id,
+        source_directories,
+    ) = _normalize_repository_source_payload(
+        source_locations=repo_data.source_locations,
+        source_connection_id=repo_data.source_connection_id,
+        source_directories=repo_data.source_directories,
+    )
+    repository = Repository(
+        path=f"__rclone_pending__/{uuid.uuid4()}",
+        source_directories=json.dumps(source_directories)
+        if source_directories
+        else None,
+        source_locations=json.dumps(source_locations) if source_locations else None,
+        exclude_patterns=json.dumps(repo_data.exclude_patterns)
+        if repo_data.exclude_patterns
+        else None,
+        source_ssh_connection_id=source_connection_id,
+        archive_count=0,
+        **_repository_common_values(repo_data),
+    )
+    db.add(repository)
+    db.flush()
+    storage = rclone_repository_service.build_storage(
+        repository_id=repository.id,
+        remote_id=repo_data.rclone_remote_id,
+        remote_path=repo_data.rclone_remote_path,
+        sync_policy=repo_data.rclone_sync_policy,
+        extra_flags=repo_data.rclone_extra_flags,
+        sync_cron_expression=repo_data.rclone_sync_cron_expression,
+        sync_timezone=repo_data.rclone_sync_timezone,
+    )
+    repository.path = storage.cache_path
+    db.add(storage)
+    db.flush()
+
+    try:
+        hydrate_status = await rclone_repository_service.hydrate_repository(
+            db, repository
+        )
+        if hydrate_status.get("sync_status") != "current":
+            storage.sync_status = "failed"
+            storage.last_sync_error = (
+                hydrate_status.get("last_sync_error") or "rclone hydrate failed"
+            )
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.repo.failedToImportRepository"},
+            )
+
+        verify_result = await verify_existing_repository(
+            repository.path,
+            repo_data.passphrase,
+            None,
+            None,
+            repo_data.bypass_lock,
+        )
+        if not verify_result["success"]:
+            storage.sync_status = "failed"
+            storage.last_sync_error = (
+                verify_result.get("error") or "Borg verification failed"
+            )
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.repo.failedToVerifyRepository"},
+            )
+
+        repo_info = verify_result.get("info", {})
+        repository.encryption = repo_info.get("encryption", {}).get(
+            "mode", repo_data.encryption
+        )
+        db.commit()
+        db.refresh(repository)
+    except HTTPException:
+        _discard_rclone_repository_record(db, repository, storage)
+        raise
+    except Exception as exc:
+        _discard_rclone_repository_record(db, repository, storage)
+        logger.error(
+            "Unexpected rclone repository import failure",
+            name=repo_data.name,
+            error=str(exc),
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "key": "backend.errors.repo.failedToImportRepository",
+                "message": str(exc) or exc.__class__.__name__,
+            },
+        ) from exc
+
+    logger.info(
+        "Rclone repository imported",
+        name=repository.name,
+        path=repository.path,
+        user=current_user.username,
+    )
+    return {
+        "success": True,
+        "message": "backend.success.repo.repositoryImported",
+        "repository": {
+            "id": repository.id,
+            "name": repository.name,
+            "path": repository.path,
+            "encryption": repository.encryption,
+            "compression": repository.compression,
+            "archive_count": repository.archive_count,
+            "storage_backend": "rclone",
+            "rclone_storage": _serialize_rclone_storage(repository, db),
+        },
+    }
+
+
+async def _import_direct_rclone_repository_record(
+    repo_data: RepositoryImport,
+    current_user: User,
+    db: Session,
+):
+    repo_path = _validate_direct_rclone_payload(repo_data, db)
+    _validate_repository_name_available(repo_data.name, db)
+
+    existing_path = db.query(Repository).filter(Repository.path == repo_path).first()
+    if existing_path:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.repositoryPathExists"},
+        )
+
+    keyfile_path = None
+    if repo_data.keyfile_content:
+        keyfile_path = _write_borg_keyfile(repo_path, repo_data.keyfile_content)
+        logger.info(
+            "Wrote keyfile before direct rclone verification",
+            keyfile_path=keyfile_path,
+        )
+
+    verify_result = await verify_existing_repository(
+        path=repo_path,
+        passphrase=repo_data.passphrase,
+        ssh_key_id=None,
+        remote_path=None,
+        bypass_lock=repo_data.bypass_lock,
+        borg_version=2,
+    )
+    if not verify_result["success"]:
+        if keyfile_path and os.path.exists(keyfile_path):
+            os.unlink(keyfile_path)
+            logger.info(
+                "Removed keyfile after failed direct rclone verification",
+                keyfile_path=keyfile_path,
+            )
+
+        error_msg = verify_result.get("error", "Unknown error")
+        if "passphrase" in error_msg.lower() or "encrypted" in error_msg.lower():
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.repo.encryptedPassphraseIncorrect"},
+            )
+        if "not a valid repository" in error_msg.lower():
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "key": "backend.errors.repo.notValidBorgRepository",
+                    "params": {"path": repo_path},
+                },
+            )
+        raise HTTPException(
+            status_code=500,
+            detail={"key": "backend.errors.repo.failedToVerifyRepository"},
+        )
+
+    (
+        source_locations,
+        source_connection_id,
+        source_directories,
+    ) = _normalize_repository_source_payload(
+        source_locations=repo_data.source_locations,
+        source_connection_id=repo_data.source_connection_id,
+        source_directories=repo_data.source_directories,
+    )
+    repo_info = verify_result.get("info", {})
+    encryption_mode = repo_info.get("encryption", {}).get("mode", repo_data.encryption)
+    repository = Repository(
+        path=repo_path,
+        source_directories=json.dumps(source_directories)
+        if source_directories
+        else None,
+        source_locations=json.dumps(source_locations) if source_locations else None,
+        exclude_patterns=json.dumps(repo_data.exclude_patterns)
+        if repo_data.exclude_patterns
+        else None,
+        source_ssh_connection_id=source_connection_id,
+        archive_count=0,
+        **_repository_common_values(repo_data),
+    )
+    repository.encryption = encryption_mode
+    db.add(repository)
+    db.commit()
+    db.refresh(repository)
+
+    if keyfile_path:
+        repository.has_keyfile = True
+        db.commit()
+        db.refresh(repository)
+
+    try:
+        mqtt_service.sync_state_with_db(db, reason="repository import")
+        logger.info(
+            "Synced repositories with MQTT after direct rclone import",
+            repo_id=repository.id,
+        )
+    except Exception as e:
+        logger.warning(
+            "Failed to sync repositories with MQTT after direct rclone import",
+            repo_id=repository.id,
+            error=str(e),
+        )
+
+    logger.info(
+        "Direct Borg 2 rclone repository imported",
+        name=repository.name,
+        path=repository.path,
+        user=current_user.username,
+    )
+    return {
+        "success": True,
+        "message": "backend.success.repo.repositoryImported",
+        "repository": {
+            "id": repository.id,
+            "name": repository.name,
+            "path": repository.path,
+            "encryption": repository.encryption,
+            "compression": repository.compression,
+            "archive_count": repository.archive_count,
+            "execution_target": repository.execution_target,
+            "executor_type": repository.executor_type,
+            "agent_machine_id": repository.agent_machine_id,
+            "repository_type": "rclone",
+            "borg_version": 2,
+            "storage_backend": DIRECT_RCLONE_STORAGE_BACKEND,
+        },
+    }
 
 
 @router.get("/")
@@ -862,55 +2647,72 @@ async def get_repositories(
                 is not None
             )
             schedule_summary = _get_repository_schedule_summary(repo.id, db)
+            source_directories = _decode_json_list_field(repo.source_directories)
 
-            repo_list.append(
-                {
-                    "id": repo.id,
-                    "name": repo.name,
-                    "path": repo.path,
-                    "encryption": repo.encryption,
-                    "compression": repo.compression,
-                    "source_directories": _decode_json_list_field(
-                        repo.source_directories
-                    ),
-                    "exclude_patterns": _decode_json_list_field(repo.exclude_patterns),
-                    "repository_type": repo.repository_type,
-                    "host": repo.host,
-                    "port": repo.port,
-                    "username": repo.username,
-                    "ssh_key_id": repo.ssh_key_id,
-                    "remote_path": repo.remote_path,
-                    "last_backup": format_datetime(repo.last_backup),
-                    "last_check": format_datetime(repo.last_check),
-                    "last_compact": format_datetime(repo.last_compact),
-                    "total_size": repo.total_size,
-                    "archive_count": repo.archive_count,
-                    "created_at": format_datetime(repo.created_at),
-                    "updated_at": format_datetime(repo.updated_at),
-                    "pre_backup_script": repo.pre_backup_script,
-                    "post_backup_script": repo.post_backup_script,
-                    "pre_backup_script_parameters": repo.pre_backup_script_parameters,
-                    "post_backup_script_parameters": repo.post_backup_script_parameters,
-                    "hook_timeout": repo.hook_timeout,
-                    "pre_hook_timeout": repo.pre_hook_timeout,
-                    "post_hook_timeout": repo.post_hook_timeout,
-                    "continue_on_hook_failure": repo.continue_on_hook_failure,
-                    "skip_on_hook_failure": repo.skip_on_hook_failure,
-                    "mode": repo.mode
-                    or "full",  # Default to "full" for backward compatibility
-                    "bypass_lock": repo.bypass_lock or False,
-                    "custom_flags": repo.custom_flags,
-                    "has_running_maintenance": has_check or has_compact or has_prune,
-                    "has_schedule": schedule_summary["has_schedule"],
-                    "schedule_enabled": schedule_summary["schedule_enabled"],
-                    "schedule_name": schedule_summary["schedule_name"],
-                    "schedule_timezone": schedule_summary["schedule_timezone"],
-                    "next_run": schedule_summary["next_run"],
-                    "has_keyfile": repo.has_keyfile or False,
-                    "source_ssh_connection_id": repo.source_ssh_connection_id,
-                    "borg_version": repo.borg_version or 1,
-                }
-            )
+            repo_payload = {
+                "id": repo.id,
+                "name": repo.name,
+                "path": repo.path,
+                "encryption": repo.encryption,
+                "compression": repo.compression,
+                "source_directories": source_directories,
+                "source_locations": decode_source_locations(
+                    repo.source_locations,
+                    source_type="remote" if repo.source_ssh_connection_id else "local",
+                    source_ssh_connection_id=repo.source_ssh_connection_id,
+                    source_directories=source_directories,
+                ),
+                "exclude_patterns": _decode_json_list_field(repo.exclude_patterns),
+                "repository_type": repo.repository_type,
+                "execution_target": repo.execution_target or "local",
+                "executor_type": repository_executor_type(repo),
+                "agent_machine_id": repo.agent_machine_id,
+                **_agent_machine_summary(repo, db),
+                "host": repo.host,
+                "port": repo.port,
+                "username": repo.username,
+                "ssh_key_id": repo.ssh_key_id,
+                "remote_path": repo.remote_path,
+                "last_backup": format_datetime(repo.last_backup),
+                "last_check": format_datetime(repo.last_check),
+                "last_compact": format_datetime(repo.last_compact),
+                "total_size": repo.total_size,
+                "archive_count": repo.archive_count,
+                "created_at": format_datetime(repo.created_at),
+                "updated_at": format_datetime(repo.updated_at),
+                "pre_backup_script": repo.pre_backup_script,
+                "post_backup_script": repo.post_backup_script,
+                "pre_backup_script_parameters": repo.pre_backup_script_parameters,
+                "post_backup_script_parameters": repo.post_backup_script_parameters,
+                "hook_timeout": repo.hook_timeout,
+                "pre_hook_timeout": repo.pre_hook_timeout,
+                "post_hook_timeout": repo.post_hook_timeout,
+                "continue_on_hook_failure": repo.continue_on_hook_failure,
+                "skip_on_hook_failure": repo.skip_on_hook_failure,
+                "mode": repo.mode
+                or "full",  # Default to "full" for backward compatibility
+                "bypass_lock": repo.bypass_lock or False,
+                "custom_flags": repo.custom_flags,
+                "has_running_maintenance": has_check or has_compact or has_prune,
+                "has_schedule": schedule_summary["has_schedule"],
+                "schedule_enabled": schedule_summary["schedule_enabled"],
+                "schedule_name": schedule_summary["schedule_name"],
+                "schedule_timezone": schedule_summary["schedule_timezone"],
+                "next_run": schedule_summary["next_run"],
+                "has_keyfile": repo.has_keyfile or False,
+                "source_ssh_connection_id": repo.source_ssh_connection_id,
+                "borg_version": repo.borg_version or 1,
+            }
+            rclone_storage = _serialize_rclone_storage(repo, db)
+            if rclone_storage:
+                repo_payload["storage_backend"] = _primary_storage_backend(repo)
+                repo_payload["rclone_storage"] = rclone_storage
+                if repo.repository_type == "rclone":
+                    repo_payload["repository_type"] = "rclone"
+            elif _is_direct_rclone_repository(repo):
+                repo_payload["storage_backend"] = DIRECT_RCLONE_STORAGE_BACKEND
+                repo_payload["repository_type"] = "rclone"
+            repo_list.append(repo_payload)
 
         return {"success": True, "repositories": repo_list}
     except Exception as e:
@@ -929,8 +2731,24 @@ async def create_repository(
 ):
     """Create a new repository"""
     try:
+        executor_type = _normalize_repository_executor(repo_data)
+        if _payload_uses_rclone(repo_data):
+            _require_rclone_feature(db)
+        if executor_type == "agent":
+            _require_managed_agents_feature(db)
+        if _is_direct_rclone_payload(repo_data):
+            return await _create_direct_rclone_repository_record(
+                repo_data, current_user, db
+            )
+        _reject_unsupported_rclone_borg2(repo_data)
+        if _is_rclone_payload(repo_data):
+            return await _create_rclone_repository_record(repo_data, current_user, db)
         if _uses_borg2_payload(repo_data):
             _require_borg2_feature(db)
+            if executor_type == "agent":
+                return await _create_agent_repository_record(
+                    repo_data, current_user, db, imported=False
+                )
             from app.api.v2.repositories import (
                 RepositoryV2Create,
                 create_repository as create_repository_v2,
@@ -939,16 +2757,23 @@ async def create_repository(
             v2_payload = RepositoryV2Create(**repo_data.model_dump(exclude_none=True))
             return await create_repository_v2(v2_payload, current_user, db)
 
-        # Validate source directories are provided (only for full mode repositories)
-        if repo_data.mode == "full":
-            if (
-                not repo_data.source_directories
-                or len(repo_data.source_directories) == 0
-            ):
-                raise HTTPException(
-                    status_code=400,
-                    detail={"key": "backend.errors.repo.atLeastOneSourceDirRequired"},
-                )
+        if executor_type == "agent":
+            return await _create_agent_repository_record(
+                repo_data, current_user, db, imported=False
+            )
+
+        valid_encryption_modes = {
+            "repokey",
+            "keyfile",
+            "repokey-blake2",
+            "keyfile-blake2",
+            "none",
+        }
+        if repo_data.encryption not in valid_encryption_modes:
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.repo.invalidEncryptionMode"},
+            )
 
         # Validate passphrase for encrypted repositories
         if repo_data.encryption in [
@@ -1061,6 +2886,9 @@ async def create_repository(
                 detail={"key": "backend.errors.repo.repositoryPathExists"},
             )
 
+        cloud_mirror_remote = _validate_cloud_mirror_payload(repo_data, db)
+        await _preflight_cloud_mirror_path(repo_data, cloud_mirror_remote)
+
         # Create repository directory if local (but not if using /local mount)
         if not repo_data.connection_id:
             # Skip directory creation if path is within /local mount (host filesystem)
@@ -1152,10 +2980,21 @@ async def create_repository(
                 detail={"key": "backend.errors.repo.failedToInitializeRepository"},
             )
 
-        # Serialize source directories as JSON
-        source_directories_json = None
-        if repo_data.source_directories:
-            source_directories_json = json.dumps(repo_data.source_directories)
+        (
+            source_locations,
+            source_connection_id,
+            source_directories,
+        ) = _normalize_repository_source_payload(
+            source_locations=repo_data.source_locations,
+            source_connection_id=repo_data.source_connection_id,
+            source_directories=repo_data.source_directories,
+        )
+        source_directories_json = (
+            json.dumps(source_directories) if source_directories else None
+        )
+        source_locations_json = (
+            json.dumps(source_locations) if source_locations else None
+        )
 
         # Serialize exclude patterns as JSON
         exclude_patterns_json = None
@@ -1183,7 +3022,14 @@ async def create_repository(
             mode=repo_data.mode,
             bypass_lock=repo_data.bypass_lock,
             custom_flags=repo_data.custom_flags,
-            source_ssh_connection_id=repo_data.source_connection_id,
+            source_ssh_connection_id=source_connection_id,
+            source_locations=source_locations_json,
+            execution_target=legacy_execution_target(
+                executor_type="server",
+                repository_location="ssh" if repo_data.connection_id else "local",
+            ),
+            executor_type="server",
+            agent_machine_id=None,
         )
 
         db.add(repository)
@@ -1193,6 +3039,23 @@ async def create_repository(
         if repo_data.encryption in ["keyfile", "keyfile-blake2"]:
             repository.has_keyfile = True
             db.commit()
+
+        if cloud_mirror_remote:
+            storage = rclone_repository_service.build_mirror_storage(
+                repository_id=repository.id,
+                source_path=repository.path,
+                source_backend=_mirror_source_backend_for_repository(repository),
+                remote_id=cloud_mirror_remote.id,
+                remote_path=repo_data.rclone_remote_path or "",
+                sync_policy=repo_data.rclone_sync_policy,
+                extra_flags=repo_data.rclone_extra_flags,
+                sync_cron_expression=repo_data.rclone_sync_cron_expression,
+                sync_timezone=repo_data.rclone_sync_timezone,
+            )
+            db.add(storage)
+            db.commit()
+            if repo_data.rclone_sync_policy == "after_success":
+                await rclone_repository_service.sync_repository(db, repository)
 
         # Determine response message
         already_existed = init_result.get("already_existed", False)
@@ -1226,17 +3089,32 @@ async def create_repository(
                 error=str(e),
             )
 
+        repository_payload = {
+            "id": repository.id,
+            "name": repository.name,
+            "path": repository.path,
+            "encryption": repository.encryption,
+            "compression": repository.compression,
+            "execution_target": repository.execution_target,
+            "executor_type": repository.executor_type,
+            "agent_machine_id": repository.agent_machine_id,
+            **_agent_machine_summary(repository, db),
+        }
+        rclone_storage = _serialize_rclone_storage(repository, db)
+        if rclone_storage:
+            repository_payload["storage_backend"] = _primary_storage_backend(repository)
+            repository_payload["rclone_storage"] = rclone_storage
+            if repository.repository_type == "rclone":
+                repository_payload["repository_type"] = "rclone"
+        elif _is_direct_rclone_repository(repository):
+            repository_payload["storage_backend"] = DIRECT_RCLONE_STORAGE_BACKEND
+            repository_payload["repository_type"] = "rclone"
+
         return {
             "success": True,
             "message": message,
             "already_existed": already_existed,
-            "repository": {
-                "id": repository.id,
-                "name": repository.name,
-                "path": repository.path,
-                "encryption": repository.encryption,
-                "compression": repository.compression,
-            },
+            "repository": repository_payload,
         }
     except HTTPException:
         raise
@@ -1256,8 +3134,24 @@ async def import_repository(
 ):
     """Import an existing Borg repository"""
     try:
+        executor_type = _normalize_repository_executor(repo_data)
+        if _payload_uses_rclone(repo_data):
+            _require_rclone_feature(db)
+        if executor_type == "agent":
+            _require_managed_agents_feature(db)
+        if _is_direct_rclone_payload(repo_data):
+            return await _import_direct_rclone_repository_record(
+                repo_data, current_user, db
+            )
+        _reject_unsupported_rclone_borg2(repo_data)
+        if _is_rclone_payload(repo_data):
+            return await _import_rclone_repository_record(repo_data, current_user, db)
         if _uses_borg2_payload(repo_data):
             _require_borg2_feature(db)
+            if executor_type == "agent":
+                return await _create_agent_repository_record(
+                    repo_data, current_user, db, imported=True
+                )
             from app.api.v2.repositories import (
                 RepositoryV2Import,
                 import_repository as import_repository_v2,
@@ -1266,16 +3160,10 @@ async def import_repository(
             v2_payload = RepositoryV2Import(**repo_data.model_dump(exclude_none=True))
             return await import_repository_v2(v2_payload, current_user, db)
 
-        # Validate source directories are provided (only for full mode repositories)
-        if repo_data.mode == "full":
-            if (
-                not repo_data.source_directories
-                or len(repo_data.source_directories) == 0
-            ):
-                raise HTTPException(
-                    status_code=400,
-                    detail={"key": "backend.errors.repo.atLeastOneSourceDirRequired"},
-                )
+        if executor_type == "agent":
+            return await _create_agent_repository_record(
+                repo_data, current_user, db, imported=True
+            )
 
         # Validate connection_id and path
         repo_path = repo_data.path.strip()
@@ -1393,6 +3281,9 @@ async def import_repository(
                 detail={"key": "backend.errors.repo.repositoryPathExists"},
             )
 
+        cloud_mirror_remote = _validate_cloud_mirror_payload(repo_data, db)
+        await _preflight_cloud_mirror_path(repo_data, cloud_mirror_remote)
+
         # Write keyfile to disk before verification so borg can find it
         keyfile_path = None
         if repo_data.keyfile_content:
@@ -1450,10 +3341,21 @@ async def import_repository(
         repo_info = verify_result.get("info", {})
         encryption_mode = repo_info.get("encryption", {}).get("mode", "unknown")
 
-        # Serialize source directories as JSON
-        source_directories_json = None
-        if repo_data.source_directories:
-            source_directories_json = json.dumps(repo_data.source_directories)
+        (
+            source_locations,
+            source_connection_id,
+            source_directories,
+        ) = _normalize_repository_source_payload(
+            source_locations=repo_data.source_locations,
+            source_connection_id=repo_data.source_connection_id,
+            source_directories=repo_data.source_directories,
+        )
+        source_directories_json = (
+            json.dumps(source_directories) if source_directories else None
+        )
+        source_locations_json = (
+            json.dumps(source_locations) if source_locations else None
+        )
 
         # Serialize exclude patterns as JSON
         exclude_patterns_json = None
@@ -1483,7 +3385,14 @@ async def import_repository(
             mode=repo_data.mode,
             bypass_lock=repo_data.bypass_lock,
             custom_flags=repo_data.custom_flags,
-            source_ssh_connection_id=repo_data.source_connection_id,
+            source_ssh_connection_id=source_connection_id,
+            source_locations=source_locations_json,
+            execution_target=legacy_execution_target(
+                executor_type="server",
+                repository_location="ssh" if repo_data.connection_id else "local",
+            ),
+            executor_type="server",
+            agent_machine_id=None,
         )
 
         db.add(repository)
@@ -1507,6 +3416,23 @@ async def import_repository(
                 error=str(e),
             )
 
+        if cloud_mirror_remote:
+            storage = rclone_repository_service.build_mirror_storage(
+                repository_id=repository.id,
+                source_path=repository.path,
+                source_backend=_mirror_source_backend_for_repository(repository),
+                remote_id=cloud_mirror_remote.id,
+                remote_path=repo_data.rclone_remote_path or "",
+                sync_policy=repo_data.rclone_sync_policy,
+                extra_flags=repo_data.rclone_extra_flags,
+                sync_cron_expression=repo_data.rclone_sync_cron_expression,
+                sync_timezone=repo_data.rclone_sync_timezone,
+            )
+            db.add(storage)
+            db.commit()
+            if repo_data.rclone_sync_policy == "after_success":
+                await rclone_repository_service.sync_repository(db, repository)
+
         logger.info(
             "Repository imported successfully",
             name=repo_data.name,
@@ -1527,17 +3453,32 @@ async def import_repository(
                 error=str(e),
             )
 
+        repository_payload = {
+            "id": repository.id,
+            "name": repository.name,
+            "path": repository.path,
+            "encryption": repository.encryption,
+            "compression": repository.compression,
+            "archive_count": repository.archive_count,
+            "execution_target": repository.execution_target,
+            "executor_type": repository.executor_type,
+            "agent_machine_id": repository.agent_machine_id,
+            **_agent_machine_summary(repository, db),
+        }
+        rclone_storage = _serialize_rclone_storage(repository, db)
+        if rclone_storage:
+            repository_payload["storage_backend"] = _primary_storage_backend(repository)
+            repository_payload["rclone_storage"] = rclone_storage
+            if repository.repository_type == "rclone":
+                repository_payload["repository_type"] = "rclone"
+        elif _is_direct_rclone_repository(repository):
+            repository_payload["storage_backend"] = DIRECT_RCLONE_STORAGE_BACKEND
+            repository_payload["repository_type"] = "rclone"
+
         return {
             "success": True,
             "message": "backend.success.repo.repositoryImported",
-            "repository": {
-                "id": repository.id,
-                "name": repository.name,
-                "path": repository.path,
-                "encryption": repository.encryption,
-                "compression": repository.compression,
-                "archive_count": repository.archive_count,
-            },
+            "repository": repository_payload,
         }
     except HTTPException:
         raise
@@ -1547,6 +3488,71 @@ async def import_repository(
             status_code=500,
             detail={"key": "backend.errors.repo.failedToImportRepository"},
         )
+
+
+@router.get("/{repo_id}/rclone/status")
+async def get_repository_rclone_status(
+    repo_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_rclone_feature(db)
+    repository = _load_repository_with_access(repo_id, current_user, db, "viewer")
+    try:
+        return _serialize_rclone_storage(repository, db) or {}
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.invalidStorage", "message": str(exc)},
+        ) from exc
+
+
+@router.post("/{repo_id}/rclone/sync")
+async def sync_repository_rclone(
+    repo_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_rclone_feature(db)
+    repository = _load_repository_with_access(repo_id, current_user, db, "operator")
+
+    async def _operation():
+        try:
+            return await rclone_repository_service.sync_repository(db, repository)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "key": "backend.errors.rclone.invalidStorage",
+                    "message": str(exc),
+                },
+            ) from exc
+
+    return await run_serialized_repository_command(repo_id, _operation, scope="rclone")
+
+
+@router.post("/{repo_id}/rclone/hydrate")
+async def hydrate_repository_rclone(
+    repo_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_rclone_feature(db)
+    repository = _load_repository_with_access(repo_id, current_user, db, "operator")
+
+    async def _operation():
+        try:
+            return await rclone_repository_service.hydrate_repository(db, repository)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "key": "backend.errors.rclone.invalidStorage",
+                    "message": str(exc),
+                },
+            ) from exc
+
+    return await run_serialized_repository_command(repo_id, _operation, scope="rclone")
 
 
 @router.post("/{repo_id}/keyfile")
@@ -1710,23 +3716,42 @@ async def get_repository(
         # Get repository statistics
         stats = await get_repository_stats(repository, db, bypass_lock=use_bypass_lock)
 
+        repository_payload = {
+            "id": repository.id,
+            "name": repository.name,
+            "path": repository.path,
+            "encryption": repository.encryption,
+            "compression": repository.compression,
+            "execution_target": repository.execution_target or "local",
+            "executor_type": repository_executor_type(repository),
+            "agent_machine_id": repository.agent_machine_id,
+            **_agent_machine_summary(repository, db),
+            "last_backup": format_datetime(repository.last_backup),
+            "total_size": repository.total_size,
+            "archive_count": repository.archive_count,
+            "created_at": format_datetime(repository.created_at),
+            "updated_at": format_datetime(repository.updated_at),
+            "has_keyfile": repository.has_keyfile or False,
+            "source_ssh_connection_id": repository.source_ssh_connection_id,
+            "source_directories": _decode_json_list_field(
+                repository.source_directories
+            ),
+            "source_locations": _repository_source_locations(repository),
+            "stats": stats,
+        }
+        rclone_storage = _serialize_rclone_storage(repository, db)
+        if rclone_storage:
+            repository_payload["storage_backend"] = _primary_storage_backend(repository)
+            repository_payload["rclone_storage"] = rclone_storage
+            if repository.repository_type == "rclone":
+                repository_payload["repository_type"] = "rclone"
+        elif _is_direct_rclone_repository(repository):
+            repository_payload["storage_backend"] = DIRECT_RCLONE_STORAGE_BACKEND
+            repository_payload["repository_type"] = "rclone"
+
         return {
             "success": True,
-            "repository": {
-                "id": repository.id,
-                "name": repository.name,
-                "path": repository.path,
-                "encryption": repository.encryption,
-                "compression": repository.compression,
-                "last_backup": format_datetime(repository.last_backup),
-                "total_size": repository.total_size,
-                "archive_count": repository.archive_count,
-                "created_at": format_datetime(repository.created_at),
-                "updated_at": format_datetime(repository.updated_at),
-                "has_keyfile": repository.has_keyfile or False,
-                "source_ssh_connection_id": repository.source_ssh_connection_id,
-                "stats": stats,
-            },
+            "repository": repository_payload,
         }
     except HTTPException:
         raise
@@ -1755,6 +3780,8 @@ async def update_repository(
             )
         _require_repository_access(db, current_user, repository, "operator")
 
+        update_data = repo_data.model_dump(exclude_unset=True)
+
         # Update fields
         if repo_data.name is not None:
             # Check if name already exists
@@ -1772,11 +3799,436 @@ async def update_repository(
 
         # Store raw path first (will be reconstructed for SSH below)
         raw_path = None
-        if repo_data.path is not None:
+        target_executor_type = (
+            normalize_executor_type(
+                repo_data.executor_type if "executor_type" in update_data else None,
+                execution_target=repo_data.execution_target
+                if repo_data.execution_target is not None
+                else repository.execution_target,
+            )
+            if (
+                "executor_type" in update_data or repo_data.execution_target is not None
+            )
+            else repository_executor_type(repository)
+        )
+
+        target_connection_id = (
+            repo_data.connection_id
+            if "connection_id" in update_data
+            else repository.connection_id
+        )
+        existing_rclone_storage = (
+            db.query(RepositoryStorage)
+            .filter(RepositoryStorage.repository_id == repository.id)
+            .first()
+        )
+        existing_direct_rclone_repository = _is_direct_rclone_repository(
+            repository, existing_rclone_storage
+        )
+        existing_cached_rclone_repository = bool(
+            existing_rclone_storage
+            and existing_rclone_storage.backend == "rclone"
+            and repository.repository_type == "rclone"
+            and not existing_direct_rclone_repository
+        )
+        rclone_update_fields = {
+            "storage_backend",
+            "rclone_remote_id",
+            "rclone_remote_path",
+            "rclone_sync_policy",
+            "rclone_sync_cron_expression",
+            "rclone_sync_timezone",
+            "rclone_extra_flags",
+            "rclone_cache_path",
+            "cloud_mirror_enabled",
+            "rclone_remote_path_verified",
+        }
+        if existing_cached_rclone_repository:
+            _strip_cached_rclone_noop_update_fields(repo_data, update_data)
+        elif (
+            not existing_rclone_storage
+            and not existing_direct_rclone_repository
+            and repo_data.cloud_mirror_enabled is not True
+        ):
+            _strip_disabled_rclone_noop_update_fields(update_data)
+        requested_rclone_updates = rclone_update_fields.intersection(update_data)
+        if (
+            _is_direct_rclone_payload(repo_data)
+            and not existing_direct_rclone_repository
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.rclone.updateUnsupported"},
+            )
+        if existing_direct_rclone_repository:
+            _validate_direct_rclone_update(repo_data, update_data)
+            _strip_direct_rclone_noop_update_fields(update_data)
+            requested_rclone_updates = set()
+        rclone_gate_updates = _rclone_feature_gate_updates(
+            repo_data, update_data, requested_rclone_updates
+        )
+        if rclone_gate_updates or (
+            existing_direct_rclone_repository and bool(update_data)
+        ):
+            _require_rclone_feature(db)
+        if target_executor_type == "agent":
+            _require_managed_agents_feature(db)
+        sync_cloud_mirror_after_update = False
+        if requested_rclone_updates:
+            storage = existing_rclone_storage
+            is_direct_rclone_repository = repository.repository_type == "rclone"
+            if "rclone_cache_path" in update_data:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"key": "backend.errors.rclone.cachePathServerOwned"},
+                )
+
+            if (
+                "storage_backend" in update_data
+                and repo_data.storage_backend == "rclone"
+                and not is_direct_rclone_repository
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail={"key": "backend.errors.rclone.updateUnsupported"},
+                )
+
+            if (
+                repo_data.cloud_mirror_enabled is False
+                and storage
+                and storage.backend == "rclone"
+                and not is_direct_rclone_repository
+            ):
+                db.delete(storage)
+                existing_rclone_storage = None
+                storage = None
+                _strip_disabled_rclone_noop_update_fields(update_data)
+
+            should_enable_or_update_mirror = not is_direct_rclone_repository and (
+                repo_data.cloud_mirror_enabled is True
+                or (
+                    bool(storage)
+                    and storage.backend == "rclone"
+                    and repo_data.cloud_mirror_enabled is not False
+                )
+            )
+
+            should_update_direct_rclone = (
+                bool(storage)
+                and storage.backend == "rclone"
+                and is_direct_rclone_repository
+            )
+
+            if not should_enable_or_update_mirror and not should_update_direct_rclone:
+                has_meaningful_rclone_values = any(
+                    update_data.get(key)
+                    for key in (
+                        "rclone_remote_id",
+                        "rclone_remote_path",
+                        "rclone_sync_policy",
+                        "rclone_sync_cron_expression",
+                        "rclone_sync_timezone",
+                        "rclone_extra_flags",
+                    )
+                )
+                if (
+                    has_meaningful_rclone_values
+                    or repo_data.storage_backend == "rclone"
+                ):
+                    raise HTTPException(
+                        status_code=400,
+                        detail={"key": "backend.errors.rclone.updateUnsupported"},
+                    )
+
+            if should_enable_or_update_mirror:
+                if target_executor_type == "agent":
+                    target_agent_id = (
+                        repo_data.agent_machine_id
+                        if "agent_machine_id" in update_data
+                        else repository.agent_machine_id
+                    )
+                    _require_agent_rclone_sync_capability(target_agent_id, db)
+                elif (
+                    _mirror_source_backend_for_repository(repository) == "ssh"
+                    and not target_connection_id
+                ):
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "key": "backend.errors.rclone.mirrorUnsupportedPrimary"
+                        },
+                    )
+
+            if should_enable_or_update_mirror and storage is None:
+                if not repo_data.rclone_remote_id:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={"key": "backend.errors.rclone.remoteRequired"},
+                    )
+                if not repo_data.rclone_remote_path:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={"key": "backend.errors.rclone.remotePathRequired"},
+                    )
+                effective_sync_policy = repo_data.rclone_sync_policy or "after_success"
+                if effective_sync_policy not in VALID_SYNC_POLICIES:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={"key": "backend.errors.rclone.invalidSyncPolicy"},
+                    )
+                _validate_rclone_schedule_payload(repo_data)
+                remote = (
+                    db.query(RcloneRemote)
+                    .filter(RcloneRemote.id == repo_data.rclone_remote_id)
+                    .first()
+                )
+                if not remote:
+                    raise HTTPException(
+                        status_code=404,
+                        detail={"key": "backend.errors.rclone.remoteNotFound"},
+                    )
+                try:
+                    await rclone_repository_service.preflight_remote_path(
+                        remote,
+                        repo_data.rclone_remote_path,
+                        verified_non_empty=bool(repo_data.rclone_remote_path_verified),
+                    )
+                    storage = rclone_repository_service.build_mirror_storage(
+                        repository_id=repository.id,
+                        source_path=repository.path,
+                        source_backend=_mirror_source_backend_for_repository(
+                            repository
+                        ),
+                        remote_id=remote.id,
+                        remote_path=repo_data.rclone_remote_path,
+                        sync_policy=effective_sync_policy,
+                        extra_flags=repo_data.rclone_extra_flags,
+                        sync_cron_expression=repo_data.rclone_sync_cron_expression,
+                        sync_timezone=repo_data.rclone_sync_timezone,
+                    )
+                except ValueError as exc:
+                    message = str(exc)
+                    key = (
+                        "backend.errors.rclone.remotePathNotVerified"
+                        if "not empty" in message
+                        else "backend.errors.rclone.remotePathPreflightFailed"
+                    )
+                    raise HTTPException(
+                        status_code=400,
+                        detail={"key": key, "message": message},
+                    ) from exc
+                db.add(storage)
+                existing_rclone_storage = storage
+                sync_cloud_mirror_after_update = storage.sync_policy == "after_success"
+
+            if should_enable_or_update_mirror and storage is not None:
+                rclone_remote_changed = "rclone_remote_id" in update_data
+                rclone_remote_path_changed = "rclone_remote_path" in update_data
+                if "rclone_remote_id" in update_data:
+                    if not repo_data.rclone_remote_id:
+                        raise HTTPException(
+                            status_code=400,
+                            detail={"key": "backend.errors.rclone.remoteRequired"},
+                        )
+                    remote = (
+                        db.query(RcloneRemote)
+                        .filter(RcloneRemote.id == repo_data.rclone_remote_id)
+                        .first()
+                    )
+                    if not remote:
+                        raise HTTPException(
+                            status_code=404,
+                            detail={"key": "backend.errors.rclone.remoteNotFound"},
+                        )
+                else:
+                    remote = (
+                        db.query(RcloneRemote)
+                        .filter(RcloneRemote.id == storage.rclone_remote_id)
+                        .first()
+                    )
+                    if not remote:
+                        raise HTTPException(
+                            status_code=404,
+                            detail={"key": "backend.errors.rclone.remoteNotFound"},
+                        )
+                if rclone_remote_changed or rclone_remote_path_changed:
+                    candidate_remote_path = (
+                        repo_data.rclone_remote_path
+                        if rclone_remote_path_changed
+                        else storage.rclone_remote_path
+                    )
+                    if not candidate_remote_path:
+                        raise HTTPException(
+                            status_code=400,
+                            detail={"key": "backend.errors.rclone.remotePathRequired"},
+                        )
+                    try:
+                        await rclone_repository_service.preflight_remote_path(
+                            remote,
+                            candidate_remote_path,
+                            verified_non_empty=bool(
+                                repo_data.rclone_remote_path_verified
+                            ),
+                        )
+                        if rclone_remote_changed:
+                            storage.rclone_remote_id = remote.id
+                        if rclone_remote_path_changed:
+                            storage.rclone_remote_path = normalize_rclone_relative_path(
+                                candidate_remote_path
+                            )
+                    except ValueError as exc:
+                        message = str(exc)
+                        key = (
+                            "backend.errors.rclone.remotePathNotVerified"
+                            if "not empty" in message
+                            else "backend.errors.rclone.remotePathPreflightFailed"
+                        )
+                        raise HTTPException(
+                            status_code=400,
+                            detail={"key": key, "message": message},
+                        ) from exc
+                schedule_fields_changed = {
+                    "rclone_sync_policy",
+                    "rclone_sync_cron_expression",
+                    "rclone_sync_timezone",
+                }.intersection(update_data)
+                if schedule_fields_changed:
+                    try:
+                        rclone_repository_service.configure_schedule(
+                            storage,
+                            sync_policy=repo_data.rclone_sync_policy
+                            if "rclone_sync_policy" in update_data
+                            else storage.sync_policy,
+                            sync_cron_expression=repo_data.rclone_sync_cron_expression
+                            if "rclone_sync_cron_expression" in update_data
+                            else None,
+                            sync_timezone=repo_data.rclone_sync_timezone
+                            if "rclone_sync_timezone" in update_data
+                            else None,
+                        )
+                    except Exception as exc:
+                        _raise_rclone_schedule_error(exc)
+                if "rclone_extra_flags" in update_data:
+                    try:
+                        storage.extra_flags = normalize_extra_flags(
+                            repo_data.rclone_extra_flags
+                        )
+                    except ValueError as exc:
+                        raise HTTPException(
+                            status_code=400,
+                            detail={
+                                "key": "backend.errors.rclone.invalidPayload",
+                                "message": str(exc),
+                            },
+                        ) from exc
+                _apply_mirror_source_strategy(storage, repository)
+
+            if should_update_direct_rclone:
+                storage = existing_rclone_storage
+                if not storage or storage.backend != "rclone":
+                    raise HTTPException(
+                        status_code=400,
+                        detail={"key": "backend.errors.rclone.updateUnsupported"},
+                    )
+            if (
+                "storage_backend" in update_data
+                and repo_data.storage_backend != "rclone"
+                and is_direct_rclone_repository
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail={"key": "backend.errors.rclone.updateUnsupported"},
+                )
+            if should_update_direct_rclone and "rclone_remote_id" in update_data:
+                if not repo_data.rclone_remote_id:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={"key": "backend.errors.rclone.remoteRequired"},
+                    )
+                remote = (
+                    db.query(RcloneRemote)
+                    .filter(RcloneRemote.id == repo_data.rclone_remote_id)
+                    .first()
+                )
+                if not remote:
+                    raise HTTPException(
+                        status_code=404,
+                        detail={"key": "backend.errors.rclone.remoteNotFound"},
+                    )
+                storage.rclone_remote_id = remote.id
+            if should_update_direct_rclone and "rclone_remote_path" in update_data:
+                if not repo_data.rclone_remote_path:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={"key": "backend.errors.rclone.remotePathRequired"},
+                    )
+                try:
+                    storage.rclone_remote_path = normalize_rclone_relative_path(
+                        repo_data.rclone_remote_path
+                    )
+                except ValueError as exc:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "key": "backend.errors.rclone.invalidPayload",
+                            "message": str(exc),
+                        },
+                    ) from exc
+            if should_update_direct_rclone and {
+                "rclone_sync_policy",
+                "rclone_sync_cron_expression",
+                "rclone_sync_timezone",
+            }.intersection(update_data):
+                try:
+                    rclone_repository_service.configure_schedule(
+                        storage,
+                        sync_policy=repo_data.rclone_sync_policy
+                        if "rclone_sync_policy" in update_data
+                        else storage.sync_policy,
+                        sync_cron_expression=repo_data.rclone_sync_cron_expression
+                        if "rclone_sync_cron_expression" in update_data
+                        else None,
+                        sync_timezone=repo_data.rclone_sync_timezone
+                        if "rclone_sync_timezone" in update_data
+                        else None,
+                    )
+                except Exception as exc:
+                    _raise_rclone_schedule_error(exc)
+            if should_update_direct_rclone and "rclone_extra_flags" in update_data:
+                try:
+                    storage.extra_flags = normalize_extra_flags(
+                        repo_data.rclone_extra_flags
+                    )
+                except ValueError as exc:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "key": "backend.errors.rclone.invalidPayload",
+                            "message": str(exc),
+                        },
+                    ) from exc
+
+        if (
+            existing_rclone_storage
+            and existing_rclone_storage.backend == "rclone"
+            and repository.repository_type == "rclone"
+            and "path" in update_data
+        ):
+            update_data.pop("path")
+
+        if "path" in update_data and repo_data.path is not None:
             raw_path = repo_data.path.strip()
 
+        target_path = raw_path if raw_path is not None else repository.path
+        if target_executor_type == "agent":
+            _reject_agent_repository_ssh_target(
+                path=target_path,
+                connection_id=target_connection_id,
+                execution_target=repo_data.execution_target,
+            )
+
         # Handle connection_id - allow null to clear (switch to local)
-        if "connection_id" in repo_data.model_dump(exclude_unset=True):
+        if "connection_id" in update_data:
             repository.connection_id = repo_data.connection_id
             # Clear legacy fields when switching repository type
             if repo_data.connection_id is None:
@@ -1793,13 +4245,11 @@ async def update_repository(
         # Reconstruct path if connection_id or path changed (similar to create endpoint logic)
         path_changed = False
         old_path = repository.path
-        if raw_path is not None or "connection_id" in repo_data.model_dump(
-            exclude_unset=True
-        ):
+        if raw_path is not None or "connection_id" in update_data:
             # Determine the final connection_id (use updated value or existing)
             final_connection_id = (
                 repo_data.connection_id
-                if "connection_id" in repo_data.model_dump(exclude_unset=True)
+                if "connection_id" in update_data
                 else repository.connection_id
             )
 
@@ -1954,11 +4404,55 @@ async def update_repository(
         if repo_data.compression is not None:
             repository.compression = repo_data.compression
 
-        if repo_data.source_directories is not None:
-            repository.source_directories = json.dumps(repo_data.source_directories)
+        source_settings_changed = any(
+            key in update_data
+            for key in (
+                "source_locations",
+                "source_directories",
+                "source_connection_id",
+            )
+        )
+        if source_settings_changed:
+            if "source_locations" in update_data:
+                source_locations_input = repo_data.source_locations or []
+                source_directories_input = None
+                source_connection_id_input = None
+            else:
+                source_locations_input = None
+                source_directories_input = (
+                    repo_data.source_directories
+                    if "source_directories" in update_data
+                    else _decode_json_list_field(repository.source_directories)
+                )
+                source_connection_id_input = (
+                    repo_data.source_connection_id
+                    if "source_connection_id" in update_data
+                    else repository.source_ssh_connection_id
+                )
+
+            (
+                source_locations,
+                source_connection_id,
+                source_directories,
+            ) = _normalize_repository_source_payload(
+                source_locations=source_locations_input,
+                source_connection_id=source_connection_id_input,
+                source_directories=source_directories_input,
+            )
+            repository.source_directories = (
+                json.dumps(source_directories) if source_directories else None
+            )
+            repository.source_ssh_connection_id = source_connection_id
+            repository.source_locations = (
+                json.dumps(source_locations) if source_locations else None
+            )
 
         if repo_data.exclude_patterns is not None:
-            repository.exclude_patterns = json.dumps(repo_data.exclude_patterns)
+            repository.exclude_patterns = (
+                json.dumps(repo_data.exclude_patterns)
+                if repo_data.exclude_patterns
+                else None
+            )
 
         if repo_data.remote_path is not None:
             repository.remote_path = repo_data.remote_path
@@ -1995,17 +4489,6 @@ async def update_repository(
             repository.skip_on_hook_failure = repo_data.skip_on_hook_failure
 
         if repo_data.mode is not None:
-            # Validate source directories when switching to full mode
-            if repo_data.mode == "full" and (
-                not repository.source_directories
-                or repository.source_directories == "[]"
-            ):
-                raise HTTPException(
-                    status_code=400,
-                    detail={
-                        "key": "backend.errors.repo.cannotSwitchToFullModeNoSourceDirs"
-                    },
-                )
             repository.mode = repo_data.mode
             # If switching to observe mode, log it
             if repo_data.mode == "observe":
@@ -2019,16 +4502,77 @@ async def update_repository(
         if repo_data.custom_flags is not None:
             repository.custom_flags = repo_data.custom_flags
 
-        # Update source_connection_id - allow null to clear the field
-        # The frontend always sends this field explicitly (either with value or null)
-        # If not provided in the request body at all, Pydantic sets it to None (default)
-        # Since we can't distinguish "not provided" from "provided as null" with current setup,
-        # and the frontend wizard always sends this field, we check if it's in the request
-        if "source_connection_id" in repo_data.model_dump(exclude_unset=True):
-            repository.source_ssh_connection_id = repo_data.source_connection_id
+        executor_changed = (
+            "executor_type" in update_data or repo_data.execution_target is not None
+        )
+        if executor_changed:
+            if target_executor_type == "agent":
+                requested_agent_id = (
+                    repo_data.agent_machine_id
+                    if "agent_machine_id" in update_data
+                    else repository.agent_machine_id
+                )
+                if _repository_has_cloud_mirror(repository, existing_rclone_storage):
+                    agent = _require_agent_rclone_sync_capability(
+                        requested_agent_id, db
+                    )
+                else:
+                    agent = _require_queueable_agent(requested_agent_id, db)
+                repository.executor_type = "agent"
+                repository.execution_target = "agent"
+                repository.agent_machine_id = agent.id
+            else:
+                repository.executor_type = "server"
+                repository.execution_target = legacy_execution_target(
+                    executor_type="server",
+                    repository_location="ssh" if repository.connection_id else "local",
+                )
+                repository.agent_machine_id = None
+
+        elif (
+            "connection_id" in update_data
+            and repository_executor_type(repository) == "server"
+        ):
+            repository.execution_target = legacy_execution_target(
+                executor_type="server",
+                repository_location="ssh" if repository.connection_id else "local",
+            )
+
+        elif "agent_machine_id" in update_data:
+            if repository_executor_type(repository) != "agent":
+                raise HTTPException(
+                    status_code=400,
+                    detail={"key": "backend.errors.repo.invalidExecutionTarget"},
+                )
+            if _repository_has_cloud_mirror(repository, existing_rclone_storage):
+                agent = _require_agent_rclone_sync_capability(
+                    repo_data.agent_machine_id, db
+                )
+            else:
+                agent = _require_queueable_agent(repo_data.agent_machine_id, db)
+            repository.agent_machine_id = agent.id
+
+        if (
+            existing_rclone_storage
+            and existing_rclone_storage.backend == "rclone"
+            and repository.repository_type != "rclone"
+        ):
+            _apply_mirror_source_strategy(existing_rclone_storage, repository)
 
         repository.updated_at = datetime.utcnow()
         db.commit()
+
+        if sync_cloud_mirror_after_update:
+            try:
+                _queue_initial_cloud_mirror_sync(db, repository)
+            except Exception as e:
+                db.rollback()
+                logger.error(
+                    "Failed to queue initial cloud mirror sync after repository update",
+                    repo_id=repository.id,
+                    repo_name=repository.name,
+                    error=str(e),
+                )
 
         logger.info("Repository updated", repo_id=repo_id, user=current_user.username)
 
@@ -2045,6 +4589,7 @@ async def update_repository(
 
         return {"success": True, "message": "backend.success.repo.repositoryUpdated"}
     except HTTPException:
+        db.rollback()
         raise
     except Exception as e:
         logger.error("Failed to update repository", error=str(e))
@@ -2077,6 +4622,7 @@ async def delete_repository(
             RepositoryScript,
             RestoreJob,
             CheckJob,
+            RestoreCheckJob,
             PruneJob,
             CompactJob,
             ScheduledJob,
@@ -2102,6 +4648,20 @@ async def delete_repository(
             db.delete(job)
         if check_jobs:
             logger.info("Deleted check jobs", repo_id=repo_id, count=len(check_jobs))
+
+        restore_check_jobs = (
+            db.query(RestoreCheckJob)
+            .filter(RestoreCheckJob.repository_id == repo_id)
+            .all()
+        )
+        for job in restore_check_jobs:
+            db.delete(job)
+        if restore_check_jobs:
+            logger.info(
+                "Deleted restore check jobs",
+                repo_id=repo_id,
+                count=len(restore_check_jobs),
+            )
 
         prune_jobs = db.query(PruneJob).filter(PruneJob.repository_id == repo_id).all()
         for job in prune_jobs:
@@ -2226,6 +4786,56 @@ async def check_repository(
 
         # Extract max_duration from request body (default to 3600)
         max_duration = request.get("max_duration", 3600) if request else 3600
+        check_extra_flags = (
+            _normalize_optional_flags(request.get("check_extra_flags"))
+            if request
+            else None
+        )
+        try:
+            validate_check_flags_for_max_duration(check_extra_flags, max_duration)
+        except CheckFlagConflictError as exc:
+            _raise_check_flag_conflict(exc)
+
+        if is_agent_executor(repository):
+            ensure_repository_admission(
+                db,
+                repository,
+                OPERATION_CHECK,
+                duplicate_error_key="backend.errors.repo.checkAlreadyRunning",
+            )
+            check_job = create_maintenance_job(
+                db,
+                CheckJob,
+                repository,
+                extra_fields={
+                    "max_duration": max_duration,
+                    "extra_flags": check_extra_flags,
+                },
+            )
+            agent_job = queue_agent_repository_operation_job(
+                db,
+                repository,
+                job_kind="repository.check",
+                operation={
+                    "max_duration": max_duration,
+                    "check_extra_flags": check_extra_flags,
+                },
+                maintenance_job_kind="check",
+                maintenance_job_id=check_job.id,
+            )
+            await dispatch_agent_job_best_effort(db, agent_job, repository_id=repo_id)
+            logger.info(
+                "Agent repository check job queued",
+                job_id=check_job.id,
+                agent_job_id=agent_job.id,
+                repository_id=repo_id,
+                user=current_user.username,
+            )
+            return {
+                "job_id": check_job.id,
+                "status": "pending",
+                "message": "backend.success.repo.checkJobStarted",
+            }
 
         check_job = start_background_maintenance_job(
             db,
@@ -2237,7 +4847,10 @@ async def check_repository(
                 id=repository.id,
                 borg_version=repository.borg_version,
             ): BorgRouter(router_repo).check(job.id),
-            extra_fields={"max_duration": max_duration},
+            extra_fields={
+                "max_duration": max_duration,
+                "extra_flags": check_extra_flags,
+            },
         )
 
         logger.info(
@@ -2343,6 +4956,40 @@ async def compact_repository(
         repository = get_repository_with_access(
             db, current_user, repo_id, required_role="operator"
         )
+        if is_agent_executor(repository):
+            ensure_repository_admission(
+                db,
+                repository,
+                OPERATION_COMPACT,
+                duplicate_error_key="backend.errors.repo.compactAlreadyRunning",
+            )
+            compact_job = create_maintenance_job(
+                db,
+                CompactJob,
+                repository,
+                extra_fields={"scheduled_compact": False},
+            )
+            agent_job = queue_agent_repository_operation_job(
+                db,
+                repository,
+                job_kind="repository.compact",
+                maintenance_job_kind="compact",
+                maintenance_job_id=compact_job.id,
+            )
+            await dispatch_agent_job_best_effort(db, agent_job, repository_id=repo_id)
+            logger.info(
+                "Agent repository compact job queued",
+                job_id=compact_job.id,
+                agent_job_id=agent_job.id,
+                repository_id=repo_id,
+                user=current_user.username,
+            )
+            return {
+                "job_id": compact_job.id,
+                "status": "pending",
+                "message": "backend.success.repo.compactJobStarted",
+            }
+
         compact_job = start_background_maintenance_job(
             db,
             repository,
@@ -2389,11 +5036,11 @@ async def prune_repository(
         repository = get_repository_with_access(
             db, current_user, repo_id, required_role="operator"
         )
-        ensure_no_running_job(
+        ensure_repository_admission(
             db,
-            PruneJob,
-            repo_id,
-            error_key="backend.errors.repo.pruneAlreadyRunning",
+            repository,
+            OPERATION_PRUNE,
+            duplicate_error_key="backend.errors.repo.pruneAlreadyRunning",
         )
 
         # Extract retention policy from request
@@ -2404,6 +5051,97 @@ async def prune_repository(
         keep_quarterly = request.get("keep_quarterly", 0)
         keep_yearly = request.get("keep_yearly", 1)
         dry_run = request.get("dry_run", False)
+
+        if is_agent_executor(repository):
+            prune_job = create_maintenance_job(
+                db,
+                PruneJob,
+                repository,
+                extra_fields={
+                    "scheduled_prune": False,
+                },
+            )
+            agent_job = queue_agent_repository_operation_job(
+                db,
+                repository,
+                job_kind="repository.prune",
+                operation=_agent_prune_operation_payload(request),
+                maintenance_job_kind="prune",
+                maintenance_job_id=prune_job.id,
+            )
+            await dispatch_agent_job_best_effort(db, agent_job, repository_id=repo_id)
+            logger.info(
+                "Agent repository prune job queued",
+                job_id=prune_job.id,
+                agent_job_id=agent_job.id,
+                repository_id=repo_id,
+                dry_run=dry_run,
+                user=current_user.username,
+            )
+            if not dry_run:
+                return {
+                    "job_id": prune_job.id,
+                    "status": "pending",
+                    "message": "backend.success.repo.pruneJobStarted",
+                }
+
+            result = await wait_for_agent_repository_operation_job(db, agent_job.id)
+            db.refresh(prune_job)
+            if prune_job.status == "pending":
+                prune_job.status = "completed"
+                prune_job.completed_at = datetime.utcnow()
+                db.commit()
+                db.refresh(prune_job)
+            stdout_output = read_job_logs(prune_job, fallback_to_logs=True)
+            if not stdout_output:
+                stdout_output = str(result.get("stdout") or "")
+            return {
+                "job_id": prune_job.id,
+                "status": prune_job.status,
+                "dry_run": dry_run,
+                "prune_result": {
+                    "success": prune_job.status == "completed",
+                    "stdout": stdout_output,
+                    "stderr": prune_job.error_message
+                    or str(result.get("stderr") or ""),
+                },
+            }
+
+        if not dry_run:
+            prune_job = start_background_maintenance_job(
+                db,
+                repository,
+                PruneJob,
+                error_key="backend.errors.repo.pruneAlreadyRunning",
+                dispatcher=lambda job,
+                router_repo=SimpleNamespace(
+                    id=repository.id,
+                    borg_version=repository.borg_version,
+                ): BorgRouter(router_repo).prune(
+                    job.id,
+                    keep_hourly,
+                    keep_daily,
+                    keep_weekly,
+                    keep_monthly,
+                    keep_quarterly,
+                    keep_yearly,
+                    False,
+                ),
+                extra_fields={"scheduled_prune": False},
+            )
+
+            logger.info(
+                "Prune job created",
+                job_id=prune_job.id,
+                repository_id=repo_id,
+                user=current_user.username,
+            )
+
+            return {
+                "job_id": prune_job.id,
+                "status": "pending",
+                "message": "backend.success.repo.pruneJobStarted",
+            }
 
         prune_job = create_maintenance_job(
             db,
@@ -2460,6 +5198,143 @@ async def prune_repository(
         logger.error("Failed to start prune job", error=str(e))
         raise HTTPException(
             status_code=500, detail={"key": "backend.errors.repo.failedToStartPrune"}
+        )
+
+
+@router.post("/{repo_id}/wipe-preview")
+async def preview_repository_wipe(
+    repo_id: int,
+    request: RepositoryWipePreviewRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Generate a guarded dry-run preview for wiping repository archives."""
+    try:
+        repository = get_repository_with_access(
+            db, current_user, repo_id, required_role="operator"
+        )
+        return await repository_wipe_service.create_preview(
+            db,
+            repository,
+            current_user,
+            run_compact=request.run_compact,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to generate repository wipe preview", error=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail={"key": "backend.errors.repo.failedToPreviewWipe"},
+        )
+
+
+@router.post("/{repo_id}/wipe")
+async def execute_repository_wipe(
+    repo_id: int,
+    request: RepositoryWipeExecuteRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Validate the preview and start repository contents wipe execution."""
+    try:
+        repository = get_repository_with_access(
+            db, current_user, repo_id, required_role="operator"
+        )
+        job = await repository_wipe_service.start_execution(
+            db,
+            repository,
+            current_user,
+            preview_id=request.preview_id,
+            preview_fingerprint=request.preview_fingerprint,
+            confirmation_phrase=request.confirmation_phrase,
+            understood=request.understood,
+            run_compact=request.run_compact,
+        )
+        asyncio.create_task(repository_wipe_service.execute_wipe(job.id, repo_id))
+        return repository_wipe_service.serialize_job(job)
+    except WipeArchiveSetChanged:
+        raise HTTPException(
+            status_code=409,
+            detail={"key": "backend.errors.repo.wipePreviewStale"},
+        )
+    except WipeValidationError as e:
+        raise HTTPException(status_code=e.status_code, detail={"key": e.detail_key})
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to start repository wipe", error=str(e))
+        raise HTTPException(
+            status_code=500, detail={"key": "backend.errors.repo.failedToStartWipe"}
+        )
+
+
+@router.get("/{repo_id}/wipe-jobs/{job_id}")
+async def get_repository_wipe_job(
+    repo_id: int,
+    job_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get repository wipe job status and logs."""
+    try:
+        repository = get_repository_with_access(
+            db, current_user, repo_id, required_role="operator"
+        )
+        job = (
+            db.query(RepositoryWipeJob)
+            .filter(
+                RepositoryWipeJob.id == job_id,
+                RepositoryWipeJob.repository_id == repository.id,
+            )
+            .first()
+        )
+        if not job:
+            raise HTTPException(
+                status_code=404,
+                detail={"key": "backend.errors.repo.wipeJobNotFound"},
+            )
+        return repository_wipe_service.serialize_job(
+            job,
+            include_preview=True,
+            include_logs=True,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to get repository wipe job", error=str(e), job_id=job_id)
+        raise HTTPException(
+            status_code=500, detail={"key": "backend.errors.repo.failedToGetWipeJob"}
+        )
+
+
+@router.post("/{repo_id}/wipe-jobs/{job_id}/cancel")
+async def cancel_repository_wipe_preview(
+    repo_id: int,
+    job_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Record cancellation for a previewed or queued wipe job."""
+    try:
+        repository = get_repository_with_access(
+            db, current_user, repo_id, required_role="operator"
+        )
+        return repository_wipe_service.cancel_preview(
+            db,
+            repository,
+            current_user,
+            job_id=job_id,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "Failed to cancel repository wipe preview", error=str(e), job_id=job_id
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={"key": "backend.errors.repo.failedToCancelWipe"},
         )
 
 
@@ -2623,6 +5498,7 @@ async def initialize_borg_repository(
     passphrase: str = None,
     ssh_key_id: int = None,
     remote_path: str = None,
+    borg_version: int = 1,
 ) -> Dict[str, Any]:
     """Initialize a new Borg repository"""
     logger.info(
@@ -2632,13 +5508,14 @@ async def initialize_borg_repository(
         has_passphrase=bool(passphrase),
         ssh_key_id=ssh_key_id,
         remote_path=remote_path,
+        borg_version=borg_version,
     )
     repo_for_routing = SimpleNamespace(
         path=path,
         encryption=encryption,
         passphrase=passphrase,
         remote_path=remote_path,
-        borg_version=1,
+        borg_version=borg_version,
     )
     result = await BorgRouter(repo_for_routing).initialize_repository(
         ssh_key_id=ssh_key_id,
@@ -2669,6 +5546,33 @@ async def list_repository_archives(
 
     async def _operation():
         repository = _load_repository_with_access(repo_id, current_user, db, "viewer")
+        if is_agent_executor(repository):
+            agent_job = queue_agent_repository_operation_job(
+                db,
+                repository,
+                job_kind="repository.list_archives",
+            )
+            await dispatch_agent_job_best_effort(db, agent_job, repository_id=repo_id)
+            result = await wait_for_agent_repository_operation_job(db, agent_job.id)
+            archives_data = _parse_agent_json_result(result)
+            archives = archives_data.get("archives", [])
+            archives = enrich_archives_with_backup_metadata(archives, repository, db)
+            logger.info(
+                "Agent repository archives listed successfully",
+                repo_id=repo_id,
+                agent_job_id=agent_job.id,
+                count=len(archives),
+            )
+            return {
+                "success": True,
+                "archives": archives,
+                "repository": {
+                    "id": repository.id,
+                    "name": repository.name,
+                    "path": repository.path,
+                },
+            }
+
         use_bypass_lock, source = _resolve_bypass_lock(
             repository, db, "bypass_lock_on_list"
         )
@@ -2695,6 +5599,7 @@ async def list_repository_archives(
         try:
             archives_data = json.loads(stdout.decode())
             archives = archives_data.get("archives", [])
+            archives = enrich_archives_with_backup_metadata(archives, repository, db)
 
             logger.info(
                 "Archives listed successfully", repo_id=repo_id, count=len(archives)
@@ -2729,6 +5634,30 @@ async def get_repository_info(
 
     async def _operation():
         repository = _load_repository_with_access(repo_id, current_user, db, "viewer")
+        if is_agent_executor(repository):
+            agent_job = queue_agent_repository_operation_job(
+                db,
+                repository,
+                job_kind="repository.info",
+            )
+            await dispatch_agent_job_best_effort(db, agent_job, repository_id=repo_id)
+            result = await wait_for_agent_repository_operation_job(db, agent_job.id)
+            info_data = _parse_agent_json_result(result)
+            logger.info(
+                "Agent repository info retrieved successfully",
+                repo_id=repo_id,
+                agent_job_id=agent_job.id,
+            )
+            return {
+                "success": True,
+                "info": {
+                    "repository": info_data.get("repository", {}),
+                    "cache": info_data.get("cache", {}),
+                    "encryption": info_data.get("encryption", {}),
+                },
+                "raw_output": info_data,
+            }
+
         use_bypass_lock, source = _resolve_bypass_lock(
             repository, db, "bypass_lock_on_info"
         )
@@ -2797,11 +5726,12 @@ async def break_repository_lock(
 ):
     """Break a stale lock on a repository (user-initiated)"""
     try:
-        repository = db.query(Repository).filter(Repository.id == repo_id).first()
-        if not repository:
+        repository = _load_repository_with_access(repo_id, current_user, db, "operator")
+        settings = db.query(SystemSettings).first()
+        if settings and not settings.lock_breaking_enabled:
             raise HTTPException(
-                status_code=404,
-                detail={"key": "backend.errors.repo.repositoryNotFound"},
+                status_code=403,
+                detail={"key": "backend.errors.repo.lockBreakingDisabled"},
             )
 
         logger.warning(
@@ -2842,6 +5772,17 @@ async def get_repository_stats(
     repository: Repository, db: Session, bypass_lock: bool = False
 ) -> Dict[str, Any]:
     """Get repository statistics"""
+    if is_agent_executor(repository):
+        return {
+            "total_size": repository.total_size or "Unknown",
+            "compressed_size": "Unknown",
+            "deduplicated_size": "Unknown",
+            "archive_count": repository.archive_count or 0,
+            "last_modified": format_datetime(repository.updated_at),
+            "encryption": repository.encryption or "Unknown",
+            "executor": "agent",
+        }
+
     temp_key_file = None
     try:
         env, temp_key_file = _prepare_repository_borg_env(repository, db)
@@ -2890,93 +5831,6 @@ async def get_repository_stats(
                 os.unlink(temp_key_file)
             except Exception:
                 pass
-
-
-@router.post("/{repository_id}/break-lock")
-async def break_repository_lock(
-    repository_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """
-    Break a stale lock on a repository
-
-    Use this when a backup has crashed or been killed, leaving behind a lock file
-    that prevents new backups from starting.
-
-    WARNING: Only use this if you're CERTAIN no backup is currently running!
-    """
-    try:
-        # Get repository from database
-        repository = db.query(Repository).filter(Repository.id == repository_id).first()
-        if not repository:
-            raise HTTPException(
-                status_code=404,
-                detail={"key": "backend.errors.repo.repositoryNotFound"},
-            )
-        _require_repository_access(db, current_user, repository, "operator")
-
-        logger.info(
-            "Breaking repository lock",
-            repository=repository.path,
-            user=current_user.username,
-            repository_id=repository_id,
-        )
-
-        cmd = BorgRouter(repository).build_break_lock_command(
-            repository_path=repository.path,
-            remote_path=repository.remote_path,
-        )
-
-        returncode, stdout, stderr = await _run_repository_command(
-            repository,
-            db,
-            cmd,
-            30,
-            log_message="Using SSH key for break-lock",
-            log_fields={"repository_id": repository_id},
-        )
-
-        stdout_str = stdout.decode("utf-8", errors="replace") if stdout else ""
-        stderr_str = stderr.decode("utf-8", errors="replace") if stderr else ""
-
-        if returncode == 0:
-            logger.info(
-                "Successfully broke repository lock",
-                repository=repository.path,
-                user=current_user.username,
-            )
-            return {
-                "success": True,
-                "message": "backend.success.repo.lockRemoved",
-                "repository": repository.path,
-                "output": stdout_str,
-            }
-        else:
-            logger.error(
-                "Failed to break repository lock",
-                repository=repository.path,
-                returncode=returncode,
-                stderr=stderr_str,
-            )
-            raise HTTPException(
-                status_code=500, detail={"key": "backend.errors.repo.failedToBreakLock"}
-            )
-
-    except asyncio.TimeoutError:
-        logger.error("Timeout breaking repository lock", repository_id=repository_id)
-        raise HTTPException(
-            status_code=500, detail={"key": "backend.errors.repo.breakLockTimeout"}
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(
-            "Error breaking repository lock", repository_id=repository_id, error=str(e)
-        )
-        raise HTTPException(
-            status_code=500, detail={"key": "backend.errors.repo.failedToBreakLock"}
-        )
 
 
 # Check job endpoints
@@ -3258,9 +6112,18 @@ async def get_running_jobs(
             .first()
         )
 
+        wipe_job = (
+            db.query(RepositoryWipeJob)
+            .filter(
+                RepositoryWipeJob.repository_id == repo_id,
+                RepositoryWipeJob.status.in_(("pending", "running")),
+            )
+            .first()
+        )
+
         result = {
             "has_running_jobs": bool(
-                check_job or compact_job or prune_job or restore_check_job
+                check_job or compact_job or prune_job or restore_check_job or wipe_job
             ),
             "check_job": {
                 "id": check_job.id,
@@ -3291,6 +6154,16 @@ async def get_running_jobs(
                 "started_at": serialize_datetime(restore_check_job.started_at),
             }
             if restore_check_job
+            else None,
+            "wipe_job": {
+                "id": wipe_job.id,
+                "status": wipe_job.status,
+                "phase": wipe_job.phase,
+                "progress": wipe_job.progress,
+                "progress_message": wipe_job.progress_message,
+                "started_at": serialize_datetime(wipe_job.started_at),
+            }
+            if wipe_job
             else None,
         }
 
@@ -3344,6 +6217,9 @@ async def update_check_schedule(
             # Set to None if empty string or "disabled"
             if not cron_expression or cron_expression.strip() == "":
                 repo.check_cron_expression = None
+                # Clearing the cron is "remove schedule" — also force toggle off
+                # so the row reflects a clean removed state.
+                repo.check_schedule_enabled = False
             else:
                 # Validate cron expression
                 try:
@@ -3366,10 +6242,33 @@ async def update_check_schedule(
                         status_code=400,
                         detail={"key": "backend.errors.repo.invalidCronExpression"},
                     )
+                # Setting a cron implies the user wants it active. The toggle
+                # request body can still override this by sending schedule_enabled
+                # below.
+                repo.check_schedule_enabled = True
+
+        # Explicit toggle (independent of cron). Allows pause/resume without
+        # losing the cron expression.
+        schedule_enabled = request.get("schedule_enabled")
+        if schedule_enabled is not None:
+            repo.check_schedule_enabled = bool(schedule_enabled)
 
         max_duration = request.get("max_duration")
         if max_duration is not None:
             repo.check_max_duration = max_duration
+
+        if "check_extra_flags" in request:
+            repo.check_extra_flags = _normalize_optional_flags(
+                request.get("check_extra_flags")
+            )
+
+        if repo.check_cron_expression and repo.check_schedule_enabled:
+            try:
+                validate_check_flags_for_max_duration(
+                    repo.check_extra_flags, repo.check_max_duration
+                )
+            except CheckFlagConflictError as exc:
+                _raise_check_flag_conflict(exc)
 
         notify_on_success = request.get("notify_on_success")
         if notify_on_success is not None:
@@ -3380,7 +6279,7 @@ async def update_check_schedule(
             repo.notify_on_check_failure = notify_on_failure
 
         # Calculate next check time from cron expression
-        if repo.check_cron_expression:
+        if repo.check_cron_expression and repo.check_schedule_enabled:
             try:
                 repo.next_scheduled_check = calculate_next_cron_run(
                     repo.check_cron_expression,
@@ -3412,11 +6311,13 @@ async def update_check_schedule(
                 "id": repo.id,
                 "name": repo.name,
                 "check_cron_expression": repo.check_cron_expression,
+                "check_schedule_enabled": bool(repo.check_schedule_enabled),
                 "check_timezone": repo.check_timezone or DEFAULT_SCHEDULE_TIMEZONE,
                 "timezone": repo.check_timezone or DEFAULT_SCHEDULE_TIMEZONE,
                 "last_scheduled_check": serialize_datetime(repo.last_scheduled_check),
                 "next_scheduled_check": serialize_datetime(repo.next_scheduled_check),
                 "check_max_duration": repo.check_max_duration,
+                "check_extra_flags": repo.check_extra_flags,
                 "notify_on_check_success": repo.notify_on_check_success,
                 "notify_on_check_failure": repo.notify_on_check_failure,
             },
@@ -3490,6 +6391,7 @@ async def update_restore_check_schedule(
         if cron_expression is not None:
             if not cron_expression or cron_expression.strip() == "":
                 repo.restore_check_cron_expression = None
+                repo.restore_check_schedule_enabled = False
             else:
                 try:
                     calculate_next_cron_run(
@@ -3511,6 +6413,12 @@ async def update_restore_check_schedule(
                         status_code=400,
                         detail={"key": "backend.errors.repo.invalidCronExpression"},
                     )
+                repo.restore_check_schedule_enabled = True
+
+        # Explicit toggle (independent of cron).
+        schedule_enabled = request.get("schedule_enabled")
+        if schedule_enabled is not None:
+            repo.restore_check_schedule_enabled = bool(schedule_enabled)
 
         if "paths" in request:
             repo.restore_check_paths = json.dumps(
@@ -3555,7 +6463,7 @@ async def update_restore_check_schedule(
         if notify_on_failure is not None:
             repo.notify_on_restore_check_failure = notify_on_failure
 
-        if repo.restore_check_cron_expression:
+        if repo.restore_check_cron_expression and repo.restore_check_schedule_enabled:
             try:
                 repo.next_scheduled_restore_check = calculate_next_cron_run(
                     repo.restore_check_cron_expression,
@@ -3585,6 +6493,9 @@ async def update_restore_check_schedule(
                 "id": repo.id,
                 "name": repo.name,
                 "restore_check_cron_expression": repo.restore_check_cron_expression,
+                "restore_check_schedule_enabled": bool(
+                    repo.restore_check_schedule_enabled
+                ),
                 "restore_check_timezone": repo.restore_check_timezone
                 or DEFAULT_SCHEDULE_TIMEZONE,
                 "timezone": repo.restore_check_timezone or DEFAULT_SCHEDULE_TIMEZONE,
@@ -3634,20 +6545,25 @@ async def get_check_schedule(
             )
         _require_repository_access(db, current_user, repo, "viewer")
 
+        cron_set = (
+            repo.check_cron_expression is not None and repo.check_cron_expression != ""
+        )
         return {
             "repository_id": repo.id,
             "repository_name": repo.name,
             "repository_path": repo.path,
             "check_cron_expression": repo.check_cron_expression,
+            "check_schedule_enabled": bool(repo.check_schedule_enabled),
             "check_timezone": repo.check_timezone or DEFAULT_SCHEDULE_TIMEZONE,
             "timezone": repo.check_timezone or DEFAULT_SCHEDULE_TIMEZONE,
             "last_scheduled_check": serialize_datetime(repo.last_scheduled_check),
             "next_scheduled_check": serialize_datetime(repo.next_scheduled_check),
             "check_max_duration": repo.check_max_duration,
+            "check_extra_flags": repo.check_extra_flags,
             "notify_on_check_success": repo.notify_on_check_success,
             "notify_on_check_failure": repo.notify_on_check_failure,
-            "enabled": repo.check_cron_expression is not None
-            and repo.check_cron_expression != "",
+            # "enabled" means "will actually run": cron is set AND toggle is on.
+            "enabled": cron_set and bool(repo.check_schedule_enabled),
         }
     except HTTPException:
         raise
@@ -3679,11 +6595,16 @@ async def get_restore_check_schedule(
             json.loads(repo.restore_check_paths) if repo.restore_check_paths else []
         )
 
+        cron_set = (
+            repo.restore_check_cron_expression is not None
+            and repo.restore_check_cron_expression != ""
+        )
         return {
             "repository_id": repo.id,
             "repository_name": repo.name,
             "repository_path": repo.path,
             "restore_check_cron_expression": repo.restore_check_cron_expression,
+            "restore_check_schedule_enabled": bool(repo.restore_check_schedule_enabled),
             "restore_check_timezone": repo.restore_check_timezone
             or DEFAULT_SCHEDULE_TIMEZONE,
             "timezone": repo.restore_check_timezone or DEFAULT_SCHEDULE_TIMEZONE,
@@ -3703,8 +6624,7 @@ async def get_restore_check_schedule(
             ),
             "notify_on_restore_check_success": repo.notify_on_restore_check_success,
             "notify_on_restore_check_failure": repo.notify_on_restore_check_failure,
-            "enabled": repo.restore_check_cron_expression is not None
-            and repo.restore_check_cron_expression != "",
+            "enabled": cron_set and bool(repo.restore_check_schedule_enabled),
         }
     except HTTPException:
         raise

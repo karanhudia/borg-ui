@@ -5,9 +5,35 @@ Comprehensive unit tests for backup API endpoints
 import pytest
 from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
-from app.database.models import Repository, BackupJob, PruneJob, CompactJob
+from sqlalchemy import text
+from app.core.agent_auth import AGENT_AUTH_HEADER
+from app.core.security import get_password_hash
+from app.database.models import (
+    AgentJob,
+    AgentMachine,
+    Repository,
+    BackupJob,
+    CheckJob,
+    PruneJob,
+    CompactJob,
+    SSHConnection,
+    SystemSettings,
+    UserRepositoryPermission,
+)
 from datetime import datetime
+import json
 from tests.unit.helpers import assert_auth_required
+
+
+def _json_snapshot(value):
+    if isinstance(value, dict):
+        return value
+    return json.loads(value)
+
+
+def _close_background_task(coro):
+    coro.close()
+    return None
 
 
 @pytest.mark.unit
@@ -28,8 +54,11 @@ class TestBackupStart:
         test_db.commit()
         test_db.refresh(repo)
 
-        with patch(
-            "app.api.backup.backup_service.execute_backup", new_callable=AsyncMock
+        with (
+            patch(
+                "app.api.backup.backup_service.execute_backup", return_value=object()
+            ),
+            patch("app.api.backup.asyncio.create_task"),
         ):
             response = test_client.post(
                 "/api/backup/start",
@@ -207,6 +236,52 @@ class TestBackupStart:
             assert response.status_code == 200
             assert response.json()["status"] == "pending"
 
+    def test_start_backup_rejects_when_manual_backup_limit_reached(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Limited Repo",
+            path="/limited/repo",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add_all(
+            [
+                repo,
+                SystemSettings(max_concurrent_backups=1),
+            ]
+        )
+        test_db.flush()
+        test_db.add(
+            BackupJob(
+                repository=repo.path,
+                repository_id=repo.id,
+                status="pending",
+            )
+        )
+        test_db.commit()
+
+        with (
+            patch(
+                "app.api.backup.backup_service.execute_backup", new_callable=AsyncMock
+            ) as execute_backup,
+            patch("app.api.backup.asyncio.create_task") as create_task,
+        ):
+            response = test_client.post(
+                "/api/backup/start",
+                json={"repository": repo.path},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 409
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.backup.concurrentLimitReached"
+        )
+        execute_backup.assert_not_called()
+        create_task.assert_not_called()
+        assert test_db.query(BackupJob).filter_by(repository=repo.path).count() == 1
+
     def test_start_backup_multiple_sources(
         self, test_client: TestClient, admin_headers, test_db
     ):
@@ -240,6 +315,712 @@ class TestBackupStart:
 
             assert response.status_code == 200
             assert response.json()["status"] == "pending"
+
+    def test_start_backup_for_agent_repository_queues_agent_job(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Laptop",
+            agent_id="agt_laptop",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+        repo = Repository(
+            name="Agent Repo",
+            path="/agent/repo",
+            encryption="repokey",
+            passphrase="repo-secret",
+            compression="zstd",
+            source_directories=json.dumps(["/home/user/docs"]),
+            exclude_patterns=json.dumps(["*.tmp"]),
+            repository_type="local",
+            execution_target="agent",
+            executor_type="agent",
+            agent_machine_id=agent.id,
+            custom_flags="--one-file-system",
+        )
+        test_db.add(repo)
+        test_db.commit()
+
+        with (
+            patch(
+                "app.api.backup.backup_service.execute_backup", new_callable=AsyncMock
+            ) as execute_backup,
+            patch(
+                "app.api.backup.dispatch_agent_job_best_effort", new_callable=AsyncMock
+            ) as dispatch_agent_job,
+        ):
+            response = test_client.post(
+                "/api/backup/start",
+                json={"repository": repo.path},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        execute_backup.assert_not_called()
+        dispatch_agent_job.assert_awaited_once()
+
+        backup_job = test_db.query(BackupJob).filter_by(repository=repo.path).first()
+        assert backup_job is not None
+        assert backup_job.execution_mode == "agent"
+        assert backup_job.archive_name.startswith("manual-backup-")
+
+        agent_job = (
+            test_db.query(AgentJob)
+            .filter(AgentJob.backup_job_id == backup_job.id)
+            .first()
+        )
+        assert agent_job is not None
+        assert agent_job.agent_machine_id == agent.id
+        assert agent_job.status == "queued"
+        assert agent_job.payload["repository"] == {
+            "id": repo.id,
+            "path": repo.path,
+            "borg_version": 1,
+        }
+        assert agent_job.payload["backup"]["source_paths"] == ["/home/user/docs"]
+        assert agent_job.payload["backup"]["exclude_patterns"] == ["*.tmp"]
+        assert agent_job.payload["backup"]["custom_flags"] == "--one-file-system"
+        assert agent_job.payload["secrets"] == {
+            "BORG_PASSPHRASE": {"value": "repo-secret"}
+        }
+
+    def test_start_backup_for_agent_repository_rejects_conflict_before_agent_job(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Laptop",
+            agent_id="agt_conflict",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+        )
+        test_db.add(agent)
+        test_db.flush()
+        repo = Repository(
+            name="Agent Conflict Repo",
+            path="/agent/conflict-repo",
+            encryption="none",
+            compression="lz4",
+            source_directories=json.dumps(["/home/user/docs"]),
+            repository_type="local",
+            execution_target="agent",
+            executor_type="agent",
+            agent_machine_id=agent.id,
+        )
+        test_db.add_all(
+            [
+                repo,
+                SystemSettings(max_concurrent_backups=5),
+            ]
+        )
+        test_db.flush()
+        test_db.add(
+            BackupJob(
+                repository=repo.path,
+                repository_id=repo.id,
+                status="running",
+            )
+        )
+        test_db.commit()
+
+        with patch(
+            "app.api.backup.dispatch_agent_job_best_effort", new_callable=AsyncMock
+        ) as dispatch_agent_job:
+            response = test_client.post(
+                "/api/backup/start",
+                json={"repository": repo.path},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 409
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.jobs.repositoryOperationActive"
+        )
+        dispatch_agent_job.assert_not_called()
+        assert test_db.query(AgentJob).count() == 0
+        assert test_db.query(BackupJob).filter_by(repository=repo.path).count() == 1
+
+    def test_start_backup_uses_remote_direct_for_same_ssh_source_and_repo(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        connection = SSHConnection(
+            host="docker-host.example",
+            username="backup",
+            port=22,
+            is_backup_source=True,
+            borg_binary_path="/usr/local/bin/borg-wrapper",
+        )
+        test_db.add(connection)
+        test_db.flush()
+        repo = Repository(
+            name="Remote Direct Repo",
+            path="/repos/remote-direct",
+            encryption="none",
+            repository_type="ssh",
+            connection_id=connection.id,
+            source_ssh_connection_id=connection.id,
+            source_directories=json.dumps(["/var/lib/docker/volumes/app"]),
+        )
+        test_db.add(repo)
+        test_db.commit()
+
+        with patch(
+            "app.api.backup.backup_service.execute_backup", new_callable=AsyncMock
+        ):
+            response = test_client.post(
+                "/api/backup/start",
+                json={"repository": repo.path},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        backup_job = test_db.query(BackupJob).filter_by(repository=repo.path).one()
+        assert backup_job.route_strategy == "remote_direct"
+        assert backup_job.execution_mode == "remote_ssh"
+        assert backup_job.source_ssh_connection_id == connection.id
+
+    def test_start_backup_routes_agent_repository_by_executor_type(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Workstation",
+            agent_id="agt_workstation",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+        repo = Repository(
+            name="Executor Agent Repo",
+            path="/executor-agent/repo",
+            encryption="none",
+            compression="lz4",
+            source_directories=json.dumps(["/home/user/data"]),
+            repository_type="local",
+            execution_target="local",
+            executor_type="agent",
+            agent_machine_id=agent.id,
+        )
+        test_db.add(repo)
+        test_db.commit()
+
+        with patch(
+            "app.api.backup.backup_service.execute_backup", new_callable=AsyncMock
+        ) as execute_backup:
+            response = test_client.post(
+                "/api/backup/start",
+                json={"repository": repo.path},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        execute_backup.assert_not_called()
+        backup_job = test_db.query(BackupJob).filter_by(repository=repo.path).first()
+        assert backup_job.execution_mode == "agent"
+        agent_job = (
+            test_db.query(AgentJob)
+            .filter(AgentJob.backup_job_id == backup_job.id)
+            .one()
+        )
+        assert agent_job.agent_machine_id == agent.id
+
+    def test_start_backup_for_agent_repository_without_sources_explains_plan_sources(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Laptop",
+            agent_id="agt_laptop_no_sources",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+        repo = Repository(
+            name="Agent Repo Without Sources",
+            path="/agent/repo-no-sources",
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+            execution_target="agent",
+            executor_type="agent",
+            agent_machine_id=agent.id,
+        )
+        test_db.add(repo)
+        test_db.commit()
+
+        response = test_client.post(
+            "/api/backup/start",
+            json={"repository": repo.path},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == {
+            "key": "backend.errors.repo.agentManualBackupRequiresPlanSources"
+        }
+
+    def test_agent_completion_updates_linked_backup_job(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        raw_token = "borgui_agent_secret"
+        agent = AgentMachine(
+            name="Laptop",
+            agent_id="agt_laptop",
+            token_hash=get_password_hash(raw_token),
+            token_prefix=raw_token[:20],
+            status="online",
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+        repo = Repository(
+            name="Agent Repo",
+            path="/agent/repo",
+            encryption="none",
+            compression="lz4",
+            source_directories=json.dumps(["/home/user/docs"]),
+            repository_type="local",
+            execution_target="agent",
+            executor_type="agent",
+            agent_machine_id=agent.id,
+        )
+        test_db.add(repo)
+        test_db.commit()
+
+        response = test_client.post(
+            "/api/backup/start",
+            json={"repository": repo.path},
+            headers=admin_headers,
+        )
+        assert response.status_code == 200
+        backup_job_id = response.json()["job_id"]
+        agent_job = (
+            test_db.query(AgentJob)
+            .filter(AgentJob.backup_job_id == backup_job_id)
+            .first()
+        )
+        headers = {AGENT_AUTH_HEADER: f"Bearer {raw_token}"}
+
+        poll_response = test_client.get("/api/agents/jobs/poll", headers=headers)
+        assert poll_response.status_code == 200
+        polled_job = poll_response.json()["jobs"][0]
+        assert polled_job["id"] == agent_job.id
+        assert polled_job["payload"]["job_kind"] == "backup.create"
+        assert polled_job["payload"]["backup"]["source_paths"] == ["/home/user/docs"]
+
+        assert (
+            test_client.post(
+                f"/api/agents/jobs/{agent_job.id}/claim", headers=headers
+            ).status_code
+            == 200
+        )
+        assert (
+            test_client.post(
+                f"/api/agents/jobs/{agent_job.id}/start", json={}, headers=headers
+            ).status_code
+            == 200
+        )
+        assert (
+            test_client.post(
+                f"/api/agents/jobs/{agent_job.id}/progress",
+                json={"progress_percent": 42.5, "current_file": "/home/user/file"},
+                headers=headers,
+            ).status_code
+            == 200
+        )
+        assert (
+            test_client.post(
+                f"/api/agents/jobs/{agent_job.id}/logs",
+                json={"sequence": 1, "message": "Creating archive"},
+                headers=headers,
+            ).status_code
+            == 200
+        )
+        assert (
+            test_client.post(
+                f"/api/agents/jobs/{agent_job.id}/complete",
+                json={
+                    "result": {
+                        "archive_name": "agent-archive",
+                        "return_code": 0,
+                    }
+                },
+                headers=headers,
+            ).status_code
+            == 200
+        )
+
+        backup_job = test_db.query(BackupJob).filter_by(id=backup_job_id).first()
+        test_db.refresh(repo)
+        assert backup_job.status == "completed"
+        assert backup_job.progress == 100
+        assert backup_job.progress_percent == 100.0
+        assert backup_job.current_file == "/home/user/file"
+        assert backup_job.archive_name == "agent-archive"
+        assert backup_job.logs == "Creating archive"
+        assert repo.last_backup is not None
+
+        logs_response = test_client.get(
+            f"/api/activity/backup/{backup_job_id}/logs", headers=admin_headers
+        )
+        assert logs_response.status_code == 200
+        assert logs_response.json()["lines"] == [
+            {"line_number": 1, "content": "Creating archive"}
+        ]
+
+        jobs_response = test_client.get(
+            "/api/backup/jobs", params={"manual_only": True}, headers=admin_headers
+        )
+        assert jobs_response.status_code == 200
+        history_job = next(
+            item for item in jobs_response.json()["jobs"] if item["id"] == backup_job_id
+        )
+        assert history_job["triggered_by"] == "manual"
+        assert history_job["execution_mode"] == "agent"
+        assert history_job["archive_name"] == "agent-archive"
+        assert history_job["has_logs"] is True
+
+
+@pytest.mark.unit
+class TestBackupRetry:
+    def test_retry_failed_local_backup_creates_new_job_with_lineage(
+        self, test_client: TestClient, admin_headers, test_db, admin_user
+    ):
+        repo = Repository(
+            name="Retry Local Repo",
+            path="/retry/local-repo",
+            encryption="none",
+            repository_type="local",
+            compression="zstd,3",
+            source_directories=json.dumps(["/srv/source"]),
+            exclude_patterns=json.dumps(["*.tmp"]),
+            custom_flags="--one-file-system",
+        )
+        test_db.add(repo)
+        test_db.flush()
+        source_job = BackupJob(
+            repository=repo.path,
+            repository_id=repo.id,
+            status="failed",
+            started_at=datetime.utcnow(),
+            completed_at=datetime.utcnow(),
+            error_message="source failed",
+            execution_mode="local",
+            created_at=datetime.utcnow(),
+        )
+        test_db.add(source_job)
+        test_db.commit()
+
+        with (
+            patch(
+                "app.api.backup.backup_service.execute_backup",
+                new_callable=AsyncMock,
+            ) as execute_backup,
+            patch(
+                "app.api.backup.asyncio.create_task",
+                side_effect=_close_background_task,
+            ) as create_task,
+        ):
+            response = test_client.post(
+                f"/api/backup/jobs/{source_job.id}/retry", headers=admin_headers
+            )
+
+        assert response.status_code == 202
+        body = response.json()
+        assert body["status"] == "pending"
+        assert body["retry_attempt"] == 2
+        assert body["retry_original_job_id"] == source_job.id
+        assert body["retry_source_job_id"] == source_job.id
+        assert body["retry_requested_by_user_id"] == admin_user.id
+        assert body["retry_requested_at"] is not None
+
+        test_db.refresh(source_job)
+        assert source_job.status == "failed"
+        retry_job = (
+            test_db.query(BackupJob).filter(BackupJob.id == body["job_id"]).one()
+        )
+        assert retry_job.id != source_job.id
+        assert retry_job.status == "pending"
+        assert retry_job.repository == repo.path
+        assert retry_job.repository_id == repo.id
+        assert retry_job.scheduled_job_id is None
+        assert retry_job.backup_plan_id is None
+        assert retry_job.backup_plan_run_id is None
+        assert retry_job.retry_attempt == 2
+        assert retry_job.retry_original_job_id == source_job.id
+        assert retry_job.retry_source_job_id == source_job.id
+        assert retry_job.retry_requested_by_user_id == admin_user.id
+        assert retry_job.retry_requested_at is not None
+
+        lineage = (
+            test_db.execute(text("SELECT * FROM backup_job_retry_lineage"))
+            .mappings()
+            .one()
+        )
+        assert lineage["original_job_id"] == source_job.id
+        assert lineage["retry_source_job_id"] == source_job.id
+        assert lineage["attempt_number"] == 2
+        assert lineage["requested_by_user_id"] == admin_user.id
+        assert lineage["requested_at"] is not None
+        assert lineage["created_job_id"] == retry_job.id
+        snapshot = _json_snapshot(lineage["request_snapshot"])
+        assert snapshot["kind"] == "backup_job_retry"
+        assert snapshot["repository"]["id"] == repo.id
+        assert snapshot["repository"]["path"] == repo.path
+        assert snapshot["backup"]["source_directories"] == ["/srv/source"]
+        assert snapshot["backup"]["exclude_patterns"] == ["*.tmp"]
+        assert snapshot["backup"]["compression"] == "zstd,3"
+        assert snapshot["backup"]["custom_flags"] == "--one-file-system"
+
+        execute_backup.assert_called_once()
+        create_task.assert_called_once()
+
+    def test_retry_failed_agent_backup_creates_agent_job_with_lineage(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Retry Agent",
+            agent_id="agt_retry",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+        )
+        test_db.add(agent)
+        test_db.flush()
+        repo = Repository(
+            name="Retry Agent Repo",
+            path="/retry/agent-repo",
+            encryption="repokey",
+            passphrase="agent-secret",
+            compression="zstd",
+            source_directories=json.dumps(["/home/user/docs"]),
+            exclude_patterns=json.dumps(["*.tmp"]),
+            repository_type="local",
+            execution_target="agent",
+            executor_type="agent",
+            agent_machine_id=agent.id,
+            custom_flags="--stats",
+        )
+        test_db.add(repo)
+        test_db.flush()
+        source_job = BackupJob(
+            repository=repo.path,
+            repository_id=repo.id,
+            status="failed",
+            started_at=datetime.utcnow(),
+            completed_at=datetime.utcnow(),
+            execution_mode="agent",
+            archive_name="manual-backup-source",
+            created_at=datetime.utcnow(),
+        )
+        test_db.add(source_job)
+        test_db.flush()
+        test_db.add(
+            AgentJob(
+                agent_machine_id=agent.id,
+                backup_job_id=source_job.id,
+                job_type="backup",
+                status="failed",
+                payload={
+                    "schema_version": 1,
+                    "job_kind": "backup.create",
+                    "repository": {
+                        "id": repo.id,
+                        "path": repo.path,
+                        "borg_version": 1,
+                    },
+                    "backup": {
+                        "archive_name": "manual-backup-source",
+                        "source_paths": ["/home/user/docs"],
+                        "compression": "zstd",
+                        "exclude_patterns": ["*.tmp"],
+                        "custom_flags": "--stats",
+                    },
+                    "secrets": {"BORG_PASSPHRASE": {"value": "agent-secret"}},
+                },
+                error_message="agent failed",
+            )
+        )
+        test_db.commit()
+
+        with (
+            patch(
+                "app.api.backup.backup_service.execute_backup",
+                new_callable=AsyncMock,
+            ) as execute_backup,
+            patch(
+                "app.api.backup.dispatch_agent_job_best_effort",
+                new_callable=AsyncMock,
+            ) as dispatch_agent_job,
+        ):
+            response = test_client.post(
+                f"/api/backup/jobs/{source_job.id}/retry", headers=admin_headers
+            )
+
+        assert response.status_code == 202
+        retry_job = (
+            test_db.query(BackupJob)
+            .filter(BackupJob.id == response.json()["job_id"])
+            .one()
+        )
+        assert retry_job.id != source_job.id
+        assert retry_job.status == "pending"
+        assert retry_job.execution_mode == "agent"
+        assert retry_job.retry_attempt == 2
+        assert retry_job.retry_original_job_id == source_job.id
+        assert retry_job.retry_source_job_id == source_job.id
+
+        agent_job = (
+            test_db.query(AgentJob).filter(AgentJob.backup_job_id == retry_job.id).one()
+        )
+        assert agent_job.status == "queued"
+        assert agent_job.agent_machine_id == agent.id
+        assert agent_job.payload["backup"]["source_paths"] == ["/home/user/docs"]
+        assert agent_job.payload["backup"]["exclude_patterns"] == ["*.tmp"]
+        assert agent_job.payload["backup"]["custom_flags"] == "--stats"
+        assert agent_job.payload["secrets"] == {
+            "BORG_PASSPHRASE": {"value": "agent-secret"}
+        }
+
+        lineage = (
+            test_db.execute(text("SELECT * FROM backup_job_retry_lineage"))
+            .mappings()
+            .one()
+        )
+        assert lineage["created_job_id"] == retry_job.id
+        snapshot = _json_snapshot(lineage["request_snapshot"])
+        assert snapshot["kind"] == "backup_job_retry"
+        assert snapshot["backup"]["execution_mode"] == "agent"
+        assert snapshot["agent_payload"]["backup"]["source_paths"] == [
+            "/home/user/docs"
+        ]
+        execute_backup.assert_not_called()
+        dispatch_agent_job.assert_awaited_once()
+
+    def test_retry_active_backup_job_rejected(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Retry Active Repo",
+            path="/retry/active-repo",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.flush()
+        source_job = BackupJob(
+            repository=repo.path,
+            repository_id=repo.id,
+            status="running",
+            started_at=datetime.utcnow(),
+            execution_mode="local",
+            created_at=datetime.utcnow(),
+        )
+        test_db.add(source_job)
+        test_db.commit()
+
+        response = test_client.post(
+            f"/api/backup/jobs/{source_job.id}/retry", headers=admin_headers
+        )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.backup.retryOnlyTerminalFailedCancelled"
+        )
+        test_db.refresh(source_job)
+        assert source_job.status == "running"
+        assert test_db.query(BackupJob).count() == 1
+
+    def test_retry_backup_job_requires_operator_access(
+        self, test_client: TestClient, auth_headers, test_db
+    ):
+        repo = Repository(
+            name="Retry Permission Repo",
+            path="/retry/permission-repo",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.flush()
+        source_job = BackupJob(
+            repository=repo.path,
+            repository_id=repo.id,
+            status="failed",
+            completed_at=datetime.utcnow(),
+            execution_mode="local",
+            created_at=datetime.utcnow(),
+        )
+        test_db.add(source_job)
+        test_db.commit()
+
+        response = test_client.post(
+            f"/api/backup/jobs/{source_job.id}/retry", headers=auth_headers
+        )
+
+        assert response.status_code == 403
+        assert test_db.query(BackupJob).count() == 1
+
+    def test_retry_backup_job_allows_repository_operator(
+        self, test_client: TestClient, auth_headers, test_db, test_user
+    ):
+        repo = Repository(
+            name="Retry Operator Repo",
+            path="/retry/operator-repo",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.flush()
+        test_db.add(
+            UserRepositoryPermission(
+                user_id=test_user.id,
+                repository_id=repo.id,
+                role="operator",
+            )
+        )
+        source_job = BackupJob(
+            repository=repo.path,
+            repository_id=repo.id,
+            status="cancelled",
+            completed_at=datetime.utcnow(),
+            execution_mode="local",
+            created_at=datetime.utcnow(),
+        )
+        test_db.add(source_job)
+        test_db.commit()
+
+        with (
+            patch(
+                "app.api.backup.backup_service.execute_backup",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "app.api.backup.asyncio.create_task",
+                side_effect=_close_background_task,
+            ),
+        ):
+            response = test_client.post(
+                f"/api/backup/jobs/{source_job.id}/retry", headers=auth_headers
+            )
+
+        assert response.status_code == 202
+        retry_job = (
+            test_db.query(BackupJob)
+            .filter(BackupJob.id == response.json()["job_id"])
+            .one()
+        )
+        assert retry_job.retry_requested_by_user_id == test_user.id
 
 
 @pytest.mark.unit
@@ -372,7 +1153,11 @@ class TestBackupStatus:
     ):
         """Test getting backup status returns 200"""
         job = BackupJob(
-            repository="/test/repo", status="running", started_at=datetime.now()
+            repository="/test/repo",
+            status="running",
+            started_at=datetime.now(),
+            execution_mode="remote_ssh",
+            route_strategy="remote_direct",
         )
         test_db.add(job)
         test_db.commit()
@@ -385,6 +1170,8 @@ class TestBackupStatus:
         assert response.status_code == 200
         data = response.json()
         assert "status" in data or "job" in data
+        assert data["execution_mode"] == "remote_ssh"
+        assert data["route_strategy"] == "remote_direct"
 
     def test_get_backup_status_omits_unsupported_borg2_progress_fields(
         self, test_client: TestClient, admin_headers, test_db
@@ -400,6 +1187,8 @@ class TestBackupStatus:
             repository=repo.path,
             status="running",
             started_at=datetime.now(),
+            execution_mode="remote_ssh",
+            route_strategy="remote_direct",
             original_size=1024,
             compressed_size=512,
             deduplicated_size=256,
@@ -434,6 +1223,8 @@ class TestBackupStatus:
             repository=repo.path,
             status="running",
             started_at=datetime.now(),
+            execution_mode="remote_ssh",
+            route_strategy="remote_direct",
             original_size=1024,
             compressed_size=512,
             deduplicated_size=256,
@@ -448,6 +1239,8 @@ class TestBackupStatus:
         payload_job = next(
             item for item in response.json()["jobs"] if item["id"] == job.id
         )
+        assert payload_job["execution_mode"] == "remote_ssh"
+        assert payload_job["route_strategy"] == "remote_direct"
         progress = payload_job["progress_details"]
         assert progress["compressed_size"] == 512
         assert progress["deduplicated_size"] == 256
@@ -507,6 +1300,55 @@ class TestBackupCancel:
                 response.json()["message"] == "backend.success.backup.backupCancelled"
             )
             mock_cancel.assert_awaited_once_with(job.id)
+
+    def test_cancel_queued_agent_backup_cancels_agent_job(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Laptop",
+            agent_id="agt_laptop",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+        )
+        repo = Repository(
+            name="Agent Repo",
+            path="/agent/repo",
+            encryption="none",
+            compression="lz4",
+            source_directories=json.dumps(["/home/user/docs"]),
+            repository_type="local",
+            execution_target="agent",
+            executor_type="agent",
+        )
+        test_db.add_all([agent, repo])
+        test_db.commit()
+        repo.agent_machine_id = agent.id
+        test_db.commit()
+
+        start = test_client.post(
+            "/api/backup/start",
+            json={"repository": repo.path},
+            headers=admin_headers,
+        )
+        assert start.status_code == 200
+        backup_job_id = start.json()["job_id"]
+        agent_job = (
+            test_db.query(AgentJob)
+            .filter(AgentJob.backup_job_id == backup_job_id)
+            .first()
+        )
+
+        response = test_client.post(
+            f"/api/backup/cancel/{backup_job_id}", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(agent_job)
+        backup_job = test_db.query(BackupJob).filter_by(id=backup_job_id).first()
+        assert agent_job.status == "canceled"
+        assert backup_job.status == "cancelled"
+        assert backup_job.completed_at is not None
 
     def test_cancel_backup_nonexistent(self, test_client: TestClient, admin_headers):
         """Test canceling non-existent backup job"""
@@ -638,6 +1480,79 @@ class TestBackupCancel:
         assert job.maintenance_status == "compact_failed"
         assert compact_job.status == "cancelled"
         mock_cancel.assert_awaited_once_with(compact_job.id)
+
+    def test_cancel_backup_running_check_success(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Test Repo",
+            path="/test/repo",
+            encryption="none",
+            repository_type="local",
+            borg_version=1,
+        )
+        job = BackupJob(
+            repository=repo.path,
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            maintenance_status="running_check",
+        )
+        test_db.add_all([repo, job])
+        test_db.commit()
+        test_db.refresh(repo)
+        test_db.refresh(job)
+
+        check_job = CheckJob(
+            repository_id=repo.id,
+            repository_path=repo.path,
+            status="running",
+        )
+        test_db.add(check_job)
+        test_db.commit()
+        test_db.refresh(check_job)
+
+        response = test_client.post(
+            f"/api/backup/cancel/{job.id}", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(job)
+        test_db.refresh(check_job)
+        assert job.status == "completed"
+        assert job.maintenance_status == "check_failed"
+        assert check_job.status == "cancelled"
+        assert check_job.completed_at is not None
+
+    def test_cancel_backup_stale_running_check_without_child_reconciles_parent(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Test Repo",
+            path="/test/repo",
+            encryption="none",
+            repository_type="local",
+            borg_version=1,
+        )
+        job = BackupJob(
+            repository=repo.path,
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            maintenance_status="running_check",
+        )
+        test_db.add_all([repo, job])
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.post(
+            f"/api/backup/cancel/{job.id}", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(job)
+        assert job.status == "completed"
+        assert job.maintenance_status == "check_failed"
 
     def test_cancel_backup_unauthorized(self, test_client: TestClient):
         """Test cancelling backup without auth returns 403"""

@@ -1,55 +1,93 @@
 ---
-layout: default
 title: Testing
 nav_order: 11
-description: "What Borg Web UI tests before you trust it with production backups"
+description: "Local and CI checks for Borg UI"
 permalink: /testing
 ---
 
 # Testing
 
-Borg Web UI prioritizes API-driven tests for the Borg 1 workflows that can affect production backups and restores.
+Run checks that match the area you changed.
 
-## API Integration Coverage
+## Docs
 
-- Repository create, import, info, stats, keyfile upload, and keyfile download
-- Manual backup start, job status polling, archive creation, and encrypted repository backups
-- Archive list, info, contents browsing, file download, and delete-job completion
-- Restore preview, archive tree browsing, selected-path restore, restore start, job status polling, and restored file verification
-- Repository maintenance: check, compact, prune, break-lock, and job-history/status endpoints
-- Scheduled backup creation, duplication, and `run-now` execution across one or many repositories
+```bash
+cd docs
+npm ci
+npm run build
+```
 
-## Smoke Coverage
+## Frontend
 
-Core smoke runs against a built app and a live FastAPI server:
+```bash
+cd frontend
+npm install
+npm run typecheck
+npm run lint
+npm run format:check
+npm test
+npm run build
+```
 
-- App boot, routing, auth, and protected endpoint reachability
-- Repository create plus repository list through the public API
-- Manual backup, backup cancel, failed-backup log download, archive list, archive info, file download, selected-path restore, and archive delete
-- Schedule `run-now`, permissions enforcement, and key failure-path contracts
+### Storybook Visual Regression
 
-Extended smoke covers slower Borg-heavy black-box checks:
+Storybook visual snapshots are handled by the `GitHub Pages Visual Regression`
+workflow. Same-repository pull request runs happen automatically for frontend
+changes. The workflow also runs on `main` pushes that touch frontend source,
+stories, Storybook config, frontend scripts, or frontend package metadata.
 
-- Encrypted repositories, keyfile upload/download, and restore
-- Maintenance APIs: check, compact, prune, break-lock, restore cancel, and archive delete cancel
-- Localhost SSH repository smoke when the environment provides an SSH server and Borg remotely
-- Multi-source backup correctness
-- Archive contents parity between Borg CLI and the API
-- Deep archive directory browsing behavior
+The workflow builds Storybook, captures screenshots with Playwright, compares
+them against the baseline stored on the `visual-regression-state` branch, and
+publishes a static report under `/visual/reports/pr-<number>/` on GitHub Pages.
+For PR reports, tiny pixel drift below 0.1% is treated as unchanged unless the
+workflow can map that screenshot to a Storybook file touched by the PR; touched
+stories still appear even when their visual diff is small.
+The PR description is updated with the report link plus changed, added, and
+removed screenshot lists. Merging to `main` refreshes the baseline under
+`/visual/baseline/` for future PRs. When a pull request is closed or merged, its
+`/visual/reports/pr-<number>/` report directory is removed from GitHub Pages.
 
-## Mount Coverage
+For local proof runs:
 
-- Archive mount and unmount are tested through the FastAPI API when the environment supports `borg mount` and FUSE
-- In environments without FUSE support, mount API tests are skipped instead of producing false negatives
+```bash
+cd frontend
+npm run snapshots
+```
 
-## Test Philosophy
+Do not commit generated PNGs from `frontend/visual-screenshots/` or
+`frontend/storybook-snapshots/`.
 
-- Exercise the same FastAPI endpoints the frontend uses
-- Run real Borg commands against temporary repositories whenever the feature ends in a real Borg operation
-- Verify both the API response and the resulting repository or filesystem state
+## Backend
 
-## Backend Linting
+```bash
+ruff check app tests
+ruff format --check app tests
+pytest
+```
 
-- Backend CI runs `ruff check app tests` for linting and `ruff format --check app tests` for formatting
-- The current lint ruleset is scoped to unused imports (`F401`)
-- `tests/fixtures/database.py` is intentionally exempt because the import registers SQLAlchemy models with metadata as a side effect
+## Smoke Tests
+
+Smoke tests need a running Borg UI instance.
+
+```bash
+docker compose up -d --build
+python3 tests/smoke/run_core_smoke.py --url http://localhost:8081
+```
+
+Run broader suites when touching backup, restore, repository, archive, SSH, or scheduling behavior.
+
+Some smoke tests require host capabilities or external setup:
+
+- FUSE archive mounting tests require FUSE support.
+- Remote SSH tests require SSH test configuration.
+- OIDC tests require an OIDC test setup.
+
+## What To Run
+
+| Change              | Minimum check                        |
+| ------------------- | ------------------------------------ |
+| Docs only           | `cd docs && npm run build`           |
+| Frontend UI         | frontend typecheck, lint, tests      |
+| Backend API         | backend lint and relevant pytest     |
+| Backup/restore core | relevant unit tests plus smoke tests |
+| Docker/runtime      | build image and run smoke tests      |

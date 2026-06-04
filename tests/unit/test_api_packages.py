@@ -274,7 +274,7 @@ class TestPackagesAPI:
         assert package.status == "pending"
         assert package.install_log is None
         assert package.installed_at is None
-        mocked_install.assert_awaited_once()
+        mocked_install.assert_awaited_once_with(package.id, db=test_db)
 
     def test_get_job_status_success(
         self, test_client: TestClient, admin_headers, test_db

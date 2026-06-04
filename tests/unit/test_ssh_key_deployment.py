@@ -4,7 +4,10 @@ Unit tests for SSH key deployment functionality
 
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
-from app.api.ssh_keys import deploy_ssh_key_with_copy_id
+from app.api.ssh_keys import (
+    deploy_ssh_key_with_copy_id,
+    test_ssh_key_connection as run_ssh_key_connection_test,
+)
 from app.database.models import SSHKey
 from cryptography.fernet import Fernet
 import base64
@@ -287,3 +290,151 @@ class TestSSHKeyDeployment:
         assert captured_cmd[4] == "-s", (
             "Position 4 should be -s flag when defaulting to True"
         )
+
+    @pytest.mark.asyncio
+    async def test_deploy_ssh_key_classifies_dns_resolution_failures(self):
+        """Deployment DNS failures should direct users to host/DNS/runtime checks."""
+        mock_key = MagicMock(spec=SSHKey)
+        mock_key.id = 1
+        mock_key.public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAItest test@test"
+
+        from app.config import settings
+
+        encryption_key = settings.secret_key.encode()[:32]
+        cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
+        fake_private_key = "-----BEGIN OPENSSH PRIVATE KEY-----\ntest\n-----END OPENSSH PRIVATE KEY-----\n"
+        mock_key.private_key = cipher.encrypt(fake_private_key.encode()).decode()
+
+        dns_failure = (
+            b"ssh: Could not resolve hostname u331525-sub1.your-storagebox.de: "
+            b"Name or service not known\n"
+        )
+
+        async def mock_subprocess(*cmd, **kwargs):
+            mock_process = AsyncMock()
+            mock_process.communicate = AsyncMock(return_value=(b"", dns_failure))
+            mock_process.returncode = 255
+            return mock_process
+
+        with patch(
+            "app.api.ssh_keys.asyncio.create_subprocess_exec",
+            side_effect=mock_subprocess,
+        ):
+            result = await deploy_ssh_key_with_copy_id(
+                mock_key,
+                "u331525-sub1.your-storagebox.de",
+                "u331525-sub1",
+                "test_password",
+                23,
+            )
+
+        assert result["success"] is False
+        assert (
+            "Host did not resolve: u331525-sub1.your-storagebox.de" in result["error"]
+        )
+        assert "saved host value" in result["error"]
+        assert "DNS" in result["error"]
+        assert "provider sub-account" in result["error"]
+        assert "container/runtime DNS" in result["error"]
+        assert dns_failure.decode().strip() in result["error"]
+        assert "Check SSH server logs" not in result["error"]
+
+
+@pytest.mark.unit
+class TestSSHKeyConnectionTest:
+    """Test SSH key-based connection checks."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "stderr",
+        [
+            b"ssh: Could not resolve hostname missing.example: Name or service not known\r\n",
+            b"ssh: Could not resolve hostname missing.example: nodename nor servname provided, or not known\r\n",
+            b"ssh: Could not resolve hostname missing.example: Temporary failure in name resolution\r\n",
+            b"ssh: Could not resolve hostname missing.example: No address associated with hostname\r\n",
+            b"ssh: Could not resolve hostname missing.example: getaddrinfo: Name does not resolve\r\n",
+        ],
+    )
+    async def test_connection_test_classifies_dns_resolution_failures(self, stderr):
+        """DNS failures should direct users to host/DNS/runtime checks, not SSH server logs."""
+        mock_key = MagicMock(spec=SSHKey)
+        mock_key.id = 1
+        mock_key.public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAItest test@test"
+
+        from app.config import settings
+
+        encryption_key = settings.secret_key.encode()[:32]
+        cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
+        fake_private_key = "-----BEGIN OPENSSH PRIVATE KEY-----\ntest\n-----END OPENSSH PRIVATE KEY-----\n"
+        mock_key.private_key = cipher.encrypt(fake_private_key.encode()).decode()
+
+        async def mock_subprocess(*cmd, **kwargs):
+            mock_process = AsyncMock()
+            mock_process.communicate = AsyncMock(return_value=(b"", stderr))
+            mock_process.returncode = 255
+            return mock_process
+
+        with patch(
+            "app.api.ssh_keys.asyncio.create_subprocess_exec",
+            side_effect=mock_subprocess,
+        ):
+            result = await run_ssh_key_connection_test(
+                mock_key,
+                "missing.example",
+                "backup",
+                22,
+            )
+
+        assert result["success"] is False
+        assert "Host did not resolve" in result["error"]
+        assert "saved host value" in result["error"]
+        assert "DNS" in result["error"]
+        assert "provider sub-account" in result["error"]
+        assert "container/runtime DNS" in result["error"]
+        assert stderr.decode().strip() in result["error"]
+        assert "Check SSH server configuration and logs" not in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_connection_test_forces_single_noninteractive_public_key(self):
+        """Connection tests should not fall back to other identities or password prompts."""
+        mock_key = MagicMock(spec=SSHKey)
+        mock_key.id = 1
+        mock_key.public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAItest test@test"
+
+        from app.config import settings
+
+        encryption_key = settings.secret_key.encode()[:32]
+        cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
+        fake_private_key = "-----BEGIN OPENSSH PRIVATE KEY-----\ntest\n-----END OPENSSH PRIVATE KEY-----\n"
+        mock_key.private_key = cipher.encrypt(fake_private_key.encode()).decode()
+
+        captured_cmd = []
+        permission_denied = b"Permission denied (publickey,password).\n"
+
+        async def mock_subprocess(*cmd, **kwargs):
+            captured_cmd.clear()
+            captured_cmd.extend(cmd)
+            mock_process = AsyncMock()
+            mock_process.communicate = AsyncMock(return_value=(b"", permission_denied))
+            mock_process.returncode = 255
+            return mock_process
+
+        with patch(
+            "app.api.ssh_keys.asyncio.create_subprocess_exec",
+            side_effect=mock_subprocess,
+        ):
+            result = await run_ssh_key_connection_test(
+                mock_key,
+                "synology.local",
+                "backup",
+                22,
+            )
+
+        assert result["success"] is False
+        assert "SSH key not authorized" in result["error"]
+        assert "Host did not resolve" not in result["error"]
+        assert "BatchMode=yes" in captured_cmd
+        assert "IdentitiesOnly=yes" in captured_cmd
+        assert "PreferredAuthentications=publickey" in captured_cmd
+        assert "PasswordAuthentication=no" in captured_cmd
+        assert "NumberOfPasswordPrompts=0" in captured_cmd

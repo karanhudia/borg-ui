@@ -8,7 +8,7 @@ import { getApiErrorDetail } from '../utils/apiErrors'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { useAuth } from '../hooks/useAuth'
 import { useAnalytics } from '../hooks/useAnalytics'
-import ResponsiveDialog from './ResponsiveDialog'
+import ResponsiveDialog from './shared/ResponsiveDialog'
 
 interface PasskeyEnrollmentPromptProps {
   open: boolean

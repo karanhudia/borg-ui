@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { screen, renderWithProviders, userEvent } from '../../test/test-utils'
+import { fireEvent, screen, renderWithProviders } from '../../test/test-utils'
 import NotificationsTab from '../NotificationsTab'
 import { notificationsAPI, repositoriesAPI } from '../../services/api'
 
@@ -30,7 +30,7 @@ vi.mock('../../hooks/useAnalytics', () => ({
   }),
 }))
 
-vi.mock('../ResponsiveDialog', () => ({
+vi.mock('../shared/ResponsiveDialog', () => ({
   default: ({
     open,
     children,
@@ -73,11 +73,34 @@ describe('NotificationsTab', () => {
   })
 
   it('renders a backup warning toggle in the notification form', async () => {
-    const user = userEvent.setup()
     renderWithProviders(<NotificationsTab />)
 
-    await user.click(await screen.findByRole('button', { name: /add service/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /add service/i }))
 
     expect(await screen.findByLabelText('Warning')).toBeInTheDocument()
+    expect(screen.getByLabelText(/stale backup alerts/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/backup reports/i)).toBeInTheDocument()
+  })
+
+  it('submits monitoring and report notification toggles', async () => {
+    renderWithProviders(<NotificationsTab />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /add service/i }))
+    fireEvent.change(screen.getByLabelText(/service name/i), { target: { value: 'Ops Alerts' } })
+    fireEvent.change(screen.getByLabelText(/service url/i, { selector: 'input' }), {
+      target: { value: 'json://example' },
+    })
+    fireEvent.click(screen.getByLabelText(/stale backup alerts/i))
+    fireEvent.click(screen.getByRole('button', { name: /^add$/i }))
+
+    await vi.waitFor(() => {
+      expect(notificationsAPI.create).toHaveBeenCalled()
+    })
+    expect(vi.mocked(notificationsAPI.create).mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        notify_on_stale_backup: false,
+        notify_on_backup_report: true,
+      })
+    )
   })
 })

@@ -23,7 +23,7 @@ describe('StatusBadge', () => {
 
     it('renders correct label for "needs_backup"', () => {
       render(<StatusBadge status="needs_backup" />)
-      expect(screen.getByText('Needs backup')).toBeInTheDocument()
+      expect(screen.getByText('Behind')).toBeInTheDocument()
     })
 
     it('renders correct label for "failed"', () => {

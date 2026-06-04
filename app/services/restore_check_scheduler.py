@@ -38,6 +38,7 @@ async def run_due_scheduled_restore_checks(
         .filter(
             Repository.restore_check_cron_expression.isnot(None),
             Repository.restore_check_cron_expression != "",
+            Repository.restore_check_schedule_enabled.is_(True),
             or_(
                 Repository.next_scheduled_restore_check.is_(None),
                 Repository.next_scheduled_restore_check <= now,

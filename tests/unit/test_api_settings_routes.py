@@ -28,8 +28,9 @@ class TestSystemSettingsContracts:
         assert source is None
 
     def test_get_system_settings_creates_defaults_and_reports_timeout_sources(
-        self, test_client: TestClient, admin_headers, test_db
+        self, test_client: TestClient, admin_headers, test_db, monkeypatch
     ):
+        monkeypatch.setenv("TZ", "America/Chicago")
         response = test_client.get("/api/settings/system", headers=admin_headers)
 
         assert response.status_code == 200
@@ -41,7 +42,26 @@ class TestSystemSettingsContracts:
         assert settings["max_concurrent_scheduled_checks"] == 4
         assert settings["log_retention_days"] == 30
         assert settings["timeout_sources"]["backup_timeout"] in (None, "env")
-        assert settings["app_version"] == "2.0.0"
+        assert settings["app_version"] == settings_api.app_settings.app_version
+        assert settings["backup_monitoring_enabled"] is False
+        assert settings["backup_monitoring_stale_after_days"] == 3
+        assert settings["backup_monitoring_interval_hours"] == 24
+        assert settings["backup_monitoring_alert_cooldown_hours"] == 24
+        assert settings["backup_monitoring_include_observe_repos"] is True
+        assert settings["backup_monitoring_last_checked_at"] is None
+        assert settings["backup_monitoring_last_alert_sent_at"] is None
+        assert settings["backup_reports_enabled"] is False
+        assert settings["backup_reports_frequency"] == "weekly"
+        assert settings["backup_reports_cron_expression"] == "0 8 * * 1"
+        assert settings["backup_reports_timezone"] == "America/Chicago"
+        assert settings["backup_reports_hour_utc"] == 8
+        assert settings["backup_reports_weekday"] == 0
+        assert settings["backup_reports_monthday"] == 1
+        assert settings["backup_reports_include_summary"] is True
+        assert settings["backup_reports_include_stale_repositories"] is True
+        assert settings["backup_reports_include_recent_activity"] is True
+        assert settings["backup_reports_last_sent_at"] is None
+        assert settings["lock_breaking_enabled"] is True
         assert test_db.query(SystemSettings).count() == 1
 
     def test_get_system_settings_falls_back_when_log_storage_lookup_fails(
@@ -74,6 +94,23 @@ class TestSystemSettingsContracts:
             == "backend.errors.settings.invalidLogSavePolicy"
         )
 
+    def test_update_system_settings_persists_lock_breaking_enabled(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        response = test_client.put(
+            "/api/settings/system",
+            json={"lock_breaking_enabled": False},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        settings = test_db.query(SystemSettings).first()
+        assert settings.lock_breaking_enabled is False
+
+        readback = test_client.get("/api/settings/system", headers=admin_headers)
+        assert readback.status_code == 200
+        assert readback.json()["settings"]["lock_breaking_enabled"] is False
+
     def test_update_system_settings_rejects_too_small_log_limit(
         self, test_client: TestClient, admin_headers
     ):
@@ -103,6 +140,154 @@ class TestSystemSettingsContracts:
             response.json()["detail"]["key"]
             == "backend.errors.settings.invalidConcurrencyLimit"
         )
+
+    def test_update_system_settings_persists_backup_monitoring_and_reports(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        with (
+            patch("app.services.mqtt_service.mqtt_service.configure"),
+            patch(
+                "app.services.mqtt_service.build_mqtt_runtime_config",
+                return_value={"enabled": False},
+            ),
+        ):
+            response = test_client.put(
+                "/api/settings/system",
+                json={
+                    "backup_monitoring_enabled": True,
+                    "backup_monitoring_stale_after_days": 5,
+                    "backup_monitoring_interval_hours": 6,
+                    "backup_monitoring_alert_cooldown_hours": 12,
+                    "backup_monitoring_include_observe_repos": False,
+                    "backup_reports_enabled": True,
+                    "backup_reports_frequency": "daily",
+                    "backup_reports_cron_expression": "30 18 * * *",
+                    "backup_reports_timezone": "Asia/Kolkata",
+                    "backup_reports_hour_utc": 7,
+                    "backup_reports_weekday": 2,
+                    "backup_reports_monthday": 15,
+                    "backup_reports_include_summary": False,
+                    "backup_reports_include_stale_repositories": True,
+                    "backup_reports_include_recent_activity": False,
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        settings = test_db.query(SystemSettings).first()
+        assert settings.backup_monitoring_enabled is True
+        assert settings.backup_monitoring_stale_after_days == 5
+        assert settings.backup_monitoring_interval_hours == 6
+        assert settings.backup_monitoring_alert_cooldown_hours == 12
+        assert settings.backup_monitoring_include_observe_repos is False
+        assert settings.backup_reports_enabled is True
+        assert settings.backup_reports_frequency == "daily"
+        assert settings.backup_reports_cron_expression == "30 18 * * *"
+        assert settings.backup_reports_timezone == "Asia/Kolkata"
+        assert settings.backup_reports_hour_utc == 7
+        assert settings.backup_reports_weekday == 2
+        assert settings.backup_reports_monthday == 15
+        assert settings.backup_reports_include_summary is False
+        assert settings.backup_reports_include_stale_repositories is True
+        assert settings.backup_reports_include_recent_activity is False
+
+        readback = test_client.get("/api/settings/system", headers=admin_headers)
+        payload = readback.json()["settings"]
+        assert payload["backup_monitoring_enabled"] is True
+        assert payload["backup_reports_frequency"] == "daily"
+        assert payload["backup_reports_cron_expression"] == "30 18 * * *"
+        assert payload["backup_reports_timezone"] == "Asia/Kolkata"
+        assert payload["backup_reports_include_recent_activity"] is False
+
+    def test_update_system_settings_rejects_invalid_backup_monitoring_values(
+        self, test_client: TestClient, admin_headers
+    ):
+        response = test_client.put(
+            "/api/settings/system",
+            json={"backup_monitoring_stale_after_days": 0},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.settings.invalidBackupMonitoringSetting"
+        )
+
+    def test_update_system_settings_rejects_invalid_report_frequency(
+        self, test_client: TestClient, admin_headers
+    ):
+        response = test_client.put(
+            "/api/settings/system",
+            json={"backup_reports_frequency": "hourly"},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.settings.invalidBackupReportFrequency"
+        )
+
+    def test_update_system_settings_rejects_invalid_report_cron(
+        self, test_client: TestClient, admin_headers
+    ):
+        response = test_client.put(
+            "/api/settings/system",
+            json={"backup_reports_cron_expression": "not a cron"},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.settings.invalidBackupReportSchedule"
+        )
+
+    def test_update_system_settings_rejects_invalid_report_timezone(
+        self, test_client: TestClient, admin_headers
+    ):
+        response = test_client.put(
+            "/api/settings/system",
+            json={"backup_reports_timezone": "Mars/Olympus"},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.schedule.invalidTimezone"
+        )
+
+    def test_run_backup_monitoring_endpoint_returns_service_result(
+        self, test_client: TestClient, admin_headers
+    ):
+        with patch(
+            "app.api.settings.backup_monitoring_service.run_backup_monitoring",
+            new=AsyncMock(return_value={"stale_count": 2, "alert_sent": True}),
+        ) as mock_run:
+            response = test_client.post(
+                "/api/settings/backup-monitoring/run", headers=admin_headers
+            )
+
+        assert response.status_code == 200
+        assert response.json() == {"stale_count": 2, "alert_sent": True}
+        mock_run.assert_awaited_once()
+
+    def test_send_backup_report_endpoint_returns_service_result(
+        self, test_client: TestClient, admin_headers
+    ):
+        with patch(
+            "app.api.settings.backup_monitoring_service.send_backup_report_now",
+            new=AsyncMock(return_value={"sent": True, "repository_count": 3}),
+        ) as mock_send:
+            response = test_client.post(
+                "/api/settings/backup-reports/send", headers=admin_headers
+            )
+
+        assert response.status_code == 200
+        assert response.json() == {"sent": True, "repository_count": 3}
+        mock_send.assert_awaited_once()
 
     def test_update_system_settings_returns_warning_when_new_log_limit_is_below_current_usage(
         self, test_client: TestClient, admin_headers

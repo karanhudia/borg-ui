@@ -6,7 +6,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest'
 import MockAdapter from 'axios-mock-adapter'
-import api from './api'
+import api, { backupAPI, backupPlansAPI, repositoriesAPI } from './api'
 
 describe('API Request Interceptor', () => {
   let localStorageMock: { [key: string]: string }
@@ -358,5 +358,96 @@ describe('API Configuration', () => {
 
   it('has correct default Content-Type header', () => {
     expect(api.defaults.headers['Content-Type']).toBe('application/json')
+  })
+})
+
+describe('Repositories API - Repository wipe', () => {
+  it('posts wipe preview requests to the repository preview endpoint', async () => {
+    const mock = new MockAdapter(api)
+    mock.onPost('/repositories/7/wipe-preview').reply((config) => {
+      expect(JSON.parse(config.data)).toEqual({ run_compact: false })
+      return [200, { id: 11, status: 'previewed' }]
+    })
+
+    const response = await repositoriesAPI.previewRepositoryWipe(7, { run_compact: false })
+
+    expect(response.data).toEqual({ id: 11, status: 'previewed' })
+    mock.restore()
+  })
+
+  it('posts wipe execution confirmations to the repository wipe endpoint', async () => {
+    const mock = new MockAdapter(api)
+    const payload = {
+      preview_id: 11,
+      preview_fingerprint: 'sha256:abc',
+      confirmation_phrase: 'WIPE Primary',
+      understood: true,
+      run_compact: true,
+    }
+    mock.onPost('/repositories/7/wipe').reply((config) => {
+      expect(JSON.parse(config.data)).toEqual(payload)
+      return [200, { id: 11, status: 'pending' }]
+    })
+
+    const response = await repositoriesAPI.executeRepositoryWipe(7, payload)
+
+    expect(response.data).toEqual({ id: 11, status: 'pending' })
+    mock.restore()
+  })
+
+  it('gets and cancels repository wipe jobs by repository and job id', async () => {
+    const mock = new MockAdapter(api)
+    mock.onGet('/repositories/7/wipe-jobs/11').reply(200, { id: 11, status: 'running' })
+    mock.onPost('/repositories/7/wipe-jobs/11/cancel').reply(200, {
+      id: 11,
+      status: 'cancelled',
+    })
+
+    const status = await repositoriesAPI.getRepositoryWipeJob(7, 11)
+    const cancelled = await repositoriesAPI.cancelRepositoryWipeJob(7, 11)
+
+    expect(status.data).toEqual({ id: 11, status: 'running' })
+    expect(cancelled.data).toEqual({ id: 11, status: 'cancelled' })
+    mock.restore()
+  })
+})
+
+describe('Retry API helpers', () => {
+  it('retries backup jobs through the backend retry endpoint', async () => {
+    const mock = new MockAdapter(api)
+    mock.onPost('/backup/jobs/42/retry').reply(202, {
+      job_id: 108,
+      status: 'pending',
+      retry_source_job_id: 42,
+    })
+
+    const response = await backupAPI.retryJob(42)
+
+    expect(response.data).toEqual({
+      job_id: 108,
+      status: 'pending',
+      retry_source_job_id: 42,
+    })
+    mock.restore()
+  })
+
+  it('retries backup plan runs through the backend retry endpoint', async () => {
+    const mock = new MockAdapter(api)
+    mock.onPost('/backup-plans/runs/77/retry').reply(202, {
+      id: 93,
+      status: 'pending',
+      trigger: 'retry',
+      retry_source_run_id: 77,
+    })
+
+    const response = await backupPlansAPI.retryRun(77)
+
+    expect(response.data).toEqual({
+      id: 93,
+      status: 'pending',
+      trigger: 'retry',
+      retry_source_run_id: 77,
+    })
+    mock.restore()
   })
 })

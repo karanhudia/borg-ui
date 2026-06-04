@@ -1,12 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import secrets
 import structlog
+from croniter import croniter
 
 from app.database.database import get_db
 from app.database.models import User, Repository, SystemSettings
+from app.services import backup_monitoring_service
 from app.core.authorization import authorize_request
 from app.core.security import (
     encrypt_secret,
@@ -14,6 +16,7 @@ from app.core.security import (
     get_password_hash,
     verify_password,
 )
+from app.core.user_deletion import detach_user_delete_references
 from app.core.features import get_current_plan, USER_LIMITS
 from app.core.permissions import (
     GLOBAL_ROLE_RANK,
@@ -25,6 +28,12 @@ from app.core.borg import BorgInterface
 from app.config import get_runtime_app_version, settings as app_settings
 from app.services.cache_service import archive_cache
 from app.utils.datetime_utils import serialize_datetime
+from app.utils.schedule_time import (
+    DEFAULT_SCHEDULE_TIMEZONE,
+    InvalidScheduleTimezone,
+    get_container_timezone,
+    normalize_schedule_timezone,
+)
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["settings"], dependencies=[Depends(authorize_request)])
@@ -41,6 +50,35 @@ DEFAULT_TIMEOUTS = {
     "backup_timeout": 3600,
     "source_size_timeout": 3600,
 }
+DEFAULT_DASHBOARD_HEALTH_THRESHOLDS = {
+    "dashboard_backup_warning_days": 3,
+    "dashboard_backup_critical_days": 7,
+    "dashboard_check_warning_days": 7,
+    "dashboard_check_critical_days": 30,
+    "dashboard_compact_warning_days": 30,
+    "dashboard_compact_critical_days": 60,
+    "dashboard_restore_check_warning_days": 14,
+    "dashboard_restore_check_critical_days": 30,
+    "dashboard_observe_freshness_warning_days": 2,
+    "dashboard_observe_freshness_critical_days": 7,
+}
+MAX_DASHBOARD_HEALTH_THRESHOLD_DAYS = 3650
+MAX_BACKUP_MONITORING_DAYS = 3650
+MAX_BACKUP_MONITORING_INTERVAL_HOURS = 24 * 30
+MAX_BACKUP_REPORT_HOUR_UTC = 23
+MAX_BACKUP_REPORT_MONTHDAY = 28
+VALID_BACKUP_REPORT_FREQUENCIES = {"daily", "weekly", "monthly"}
+DEFAULT_BACKUP_REPORT_CRON_EXPRESSION = "0 8 * * 1"
+DASHBOARD_HEALTH_THRESHOLD_PAIRS = (
+    ("dashboard_backup_warning_days", "dashboard_backup_critical_days"),
+    ("dashboard_check_warning_days", "dashboard_check_critical_days"),
+    ("dashboard_compact_warning_days", "dashboard_compact_critical_days"),
+    ("dashboard_restore_check_warning_days", "dashboard_restore_check_critical_days"),
+    (
+        "dashboard_observe_freshness_warning_days",
+        "dashboard_observe_freshness_critical_days",
+    ),
+)
 
 
 def _active_oidc_admin_count(db: Session) -> int:
@@ -80,6 +118,28 @@ def get_effective_timeout(db_value, env_value, default_value):
     else:
         # Use default
         return (default_value, None)
+
+
+def get_effective_dashboard_health_threshold(
+    settings: SystemSettings, field_name: str
+) -> int:
+    value = getattr(settings, field_name, None)
+    if value is not None:
+        return value
+    return DEFAULT_DASHBOARD_HEALTH_THRESHOLDS[field_name]
+
+
+def _validate_report_cron_expression(cron_expression: str) -> None:
+    try:
+        croniter(cron_expression, datetime.now(timezone.utc))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "key": "backend.errors.settings.invalidBackupReportSchedule",
+                "params": {"field": "backup_reports_cron_expression"},
+            },
+        ) from exc
 
 
 # Pydantic models for request/response
@@ -145,6 +205,7 @@ class SystemSettingsUpdate(BaseModel):
     bypass_lock_on_list: Optional[bool] = (
         None  # Use --bypass-lock for all borg list commands (beta)
     )
+    lock_breaking_enabled: Optional[bool] = None
     show_restore_tab: Optional[bool] = (
         None  # Show legacy Restore tab in navigation (beta)
     )
@@ -152,6 +213,31 @@ class SystemSettingsUpdate(BaseModel):
     stats_refresh_interval_minutes: Optional[int] = (
         None  # How often to refresh repository stats (0 = disabled)
     )
+    dashboard_backup_warning_days: Optional[int] = None
+    dashboard_backup_critical_days: Optional[int] = None
+    dashboard_check_warning_days: Optional[int] = None
+    dashboard_check_critical_days: Optional[int] = None
+    dashboard_compact_warning_days: Optional[int] = None
+    dashboard_compact_critical_days: Optional[int] = None
+    dashboard_restore_check_warning_days: Optional[int] = None
+    dashboard_restore_check_critical_days: Optional[int] = None
+    dashboard_observe_freshness_warning_days: Optional[int] = None
+    dashboard_observe_freshness_critical_days: Optional[int] = None
+    backup_monitoring_enabled: Optional[bool] = None
+    backup_monitoring_stale_after_days: Optional[int] = None
+    backup_monitoring_interval_hours: Optional[int] = None
+    backup_monitoring_alert_cooldown_hours: Optional[int] = None
+    backup_monitoring_include_observe_repos: Optional[bool] = None
+    backup_reports_enabled: Optional[bool] = None
+    backup_reports_frequency: Optional[str] = None
+    backup_reports_cron_expression: Optional[str] = None
+    backup_reports_timezone: Optional[str] = None
+    backup_reports_hour_utc: Optional[int] = None
+    backup_reports_weekday: Optional[int] = None
+    backup_reports_monthday: Optional[int] = None
+    backup_reports_include_summary: Optional[bool] = None
+    backup_reports_include_stale_repositories: Optional[bool] = None
+    backup_reports_include_recent_activity: Optional[bool] = None
 
     # MQTT settings
     mqtt_enabled: Optional[bool] = None
@@ -225,6 +311,7 @@ async def get_system_settings(
                 cleanup_retention_days=90,
                 use_new_wizard=False,  # Beta features disabled by default
                 show_restore_tab=False,  # Legacy Restore tab hidden by default
+                **DEFAULT_DASHBOARD_HEALTH_THRESHOLDS,
             )
             db.add(settings)
             db.commit()
@@ -334,12 +421,58 @@ async def get_system_settings(
                 "use_new_wizard": settings.use_new_wizard,
                 "bypass_lock_on_info": settings.bypass_lock_on_info,
                 "bypass_lock_on_list": settings.bypass_lock_on_list,
+                "lock_breaking_enabled": settings.lock_breaking_enabled,
                 "show_restore_tab": settings.show_restore_tab,
                 "borg2_fast_browse_beta_enabled": settings.borg2_fast_browse_beta_enabled,
                 "stats_refresh_interval_minutes": settings.stats_refresh_interval_minutes
                 if settings.stats_refresh_interval_minutes is not None
                 else 60,
                 "last_stats_refresh": serialize_datetime(settings.last_stats_refresh),
+                **{
+                    field_name: get_effective_dashboard_health_threshold(
+                        settings, field_name
+                    )
+                    for field_name in DEFAULT_DASHBOARD_HEALTH_THRESHOLDS
+                },
+                "backup_monitoring_enabled": settings.backup_monitoring_enabled,
+                "backup_monitoring_stale_after_days": settings.backup_monitoring_stale_after_days
+                if settings.backup_monitoring_stale_after_days is not None
+                else 3,
+                "backup_monitoring_interval_hours": settings.backup_monitoring_interval_hours
+                if settings.backup_monitoring_interval_hours is not None
+                else 24,
+                "backup_monitoring_alert_cooldown_hours": settings.backup_monitoring_alert_cooldown_hours
+                if settings.backup_monitoring_alert_cooldown_hours is not None
+                else 24,
+                "backup_monitoring_include_observe_repos": settings.backup_monitoring_include_observe_repos,
+                "backup_monitoring_last_checked_at": serialize_datetime(
+                    settings.backup_monitoring_last_checked_at
+                ),
+                "backup_monitoring_last_alert_sent_at": serialize_datetime(
+                    settings.backup_monitoring_last_alert_sent_at
+                ),
+                "backup_reports_enabled": settings.backup_reports_enabled,
+                "backup_reports_frequency": settings.backup_reports_frequency
+                or "weekly",
+                "backup_reports_cron_expression": settings.backup_reports_cron_expression
+                or DEFAULT_BACKUP_REPORT_CRON_EXPRESSION,
+                "backup_reports_timezone": settings.backup_reports_timezone
+                or get_container_timezone(DEFAULT_SCHEDULE_TIMEZONE),
+                "backup_reports_hour_utc": settings.backup_reports_hour_utc
+                if settings.backup_reports_hour_utc is not None
+                else 8,
+                "backup_reports_weekday": settings.backup_reports_weekday
+                if settings.backup_reports_weekday is not None
+                else 0,
+                "backup_reports_monthday": settings.backup_reports_monthday
+                if settings.backup_reports_monthday is not None
+                else 1,
+                "backup_reports_include_summary": settings.backup_reports_include_summary,
+                "backup_reports_include_stale_repositories": settings.backup_reports_include_stale_repositories,
+                "backup_reports_include_recent_activity": settings.backup_reports_include_recent_activity,
+                "backup_reports_last_sent_at": serialize_datetime(
+                    settings.backup_reports_last_sent_at
+                ),
                 "borg_version": borg.get_version(),
                 "app_version": get_runtime_app_version(),
                 # MQTT settings
@@ -463,10 +596,144 @@ async def update_system_settings(
                     },
                 )
 
+        dashboard_threshold_updates = {
+            field_name: getattr(settings_update, field_name)
+            for field_name in DEFAULT_DASHBOARD_HEALTH_THRESHOLDS
+        }
+        for field_name, value in dashboard_threshold_updates.items():
+            if value is not None and (
+                value < 1 or value > MAX_DASHBOARD_HEALTH_THRESHOLD_DAYS
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "key": "backend.errors.settings.invalidDashboardHealthThreshold",
+                        "params": {
+                            "field": field_name,
+                            "max": MAX_DASHBOARD_HEALTH_THRESHOLD_DAYS,
+                        },
+                    },
+                )
+
+        monitoring_numeric_updates = {
+            "backup_monitoring_stale_after_days": settings_update.backup_monitoring_stale_after_days,
+            "backup_monitoring_interval_hours": settings_update.backup_monitoring_interval_hours,
+            "backup_monitoring_alert_cooldown_hours": settings_update.backup_monitoring_alert_cooldown_hours,
+        }
+        for field_name, value in monitoring_numeric_updates.items():
+            if value is not None:
+                max_value = (
+                    MAX_BACKUP_MONITORING_INTERVAL_HOURS
+                    if field_name != "backup_monitoring_stale_after_days"
+                    else MAX_BACKUP_MONITORING_DAYS
+                )
+                min_value = (
+                    0 if field_name == "backup_monitoring_alert_cooldown_hours" else 1
+                )
+                if value < min_value or value > max_value:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "key": "backend.errors.settings.invalidBackupMonitoringSetting",
+                            "params": {"field": field_name, "max": max_value},
+                        },
+                    )
+
+        if settings_update.backup_reports_frequency is not None:
+            if (
+                settings_update.backup_reports_frequency
+                not in VALID_BACKUP_REPORT_FREQUENCIES
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "key": "backend.errors.settings.invalidBackupReportFrequency",
+                        "params": {
+                            "frequencies": ", ".join(
+                                sorted(VALID_BACKUP_REPORT_FREQUENCIES)
+                            )
+                        },
+                    },
+                )
+        if settings_update.backup_reports_cron_expression is not None:
+            _validate_report_cron_expression(
+                settings_update.backup_reports_cron_expression
+            )
+        if settings_update.backup_reports_timezone is not None:
+            try:
+                settings_update.backup_reports_timezone = normalize_schedule_timezone(
+                    settings_update.backup_reports_timezone
+                )
+            except InvalidScheduleTimezone as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "key": "backend.errors.schedule.invalidTimezone",
+                        "params": {"error": str(exc)},
+                    },
+                ) from exc
+        if settings_update.backup_reports_hour_utc is not None and (
+            settings_update.backup_reports_hour_utc < 0
+            or settings_update.backup_reports_hour_utc > MAX_BACKUP_REPORT_HOUR_UTC
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "key": "backend.errors.settings.invalidBackupReportSchedule",
+                    "params": {"field": "backup_reports_hour_utc"},
+                },
+            )
+        if settings_update.backup_reports_weekday is not None and (
+            settings_update.backup_reports_weekday < 0
+            or settings_update.backup_reports_weekday > 6
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "key": "backend.errors.settings.invalidBackupReportSchedule",
+                    "params": {"field": "backup_reports_weekday"},
+                },
+            )
+        if settings_update.backup_reports_monthday is not None and (
+            settings_update.backup_reports_monthday < 1
+            or settings_update.backup_reports_monthday > MAX_BACKUP_REPORT_MONTHDAY
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "key": "backend.errors.settings.invalidBackupReportSchedule",
+                    "params": {"field": "backup_reports_monthday"},
+                },
+            )
+
         settings = db.query(SystemSettings).first()
         if not settings:
             settings = SystemSettings()
             db.add(settings)
+
+        def resolve_dashboard_threshold(field_name: str) -> int:
+            updated_value = dashboard_threshold_updates[field_name]
+            if updated_value is not None:
+                return updated_value
+            current_value = getattr(settings, field_name, None)
+            if current_value is not None:
+                return current_value
+            return DEFAULT_DASHBOARD_HEALTH_THRESHOLDS[field_name]
+
+        for warning_field, critical_field in DASHBOARD_HEALTH_THRESHOLD_PAIRS:
+            if resolve_dashboard_threshold(warning_field) > resolve_dashboard_threshold(
+                critical_field
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "key": "backend.errors.settings.invalidDashboardHealthThresholdOrder",
+                        "params": {
+                            "warning_field": warning_field,
+                            "critical_field": critical_field,
+                        },
+                    },
+                )
 
         # Update settings
         # Operation timeouts - save NULL if value equals default OR env value (so env/default can be used)
@@ -552,6 +819,8 @@ async def update_system_settings(
             settings.bypass_lock_on_info = settings_update.bypass_lock_on_info
         if settings_update.bypass_lock_on_list is not None:
             settings.bypass_lock_on_list = settings_update.bypass_lock_on_list
+        if settings_update.lock_breaking_enabled is not None:
+            settings.lock_breaking_enabled = settings_update.lock_breaking_enabled
         if settings_update.show_restore_tab is not None:
             settings.show_restore_tab = settings_update.show_restore_tab
         if settings_update.borg2_fast_browse_beta_enabled is not None:
@@ -561,6 +830,57 @@ async def update_system_settings(
         if settings_update.stats_refresh_interval_minutes is not None:
             settings.stats_refresh_interval_minutes = (
                 settings_update.stats_refresh_interval_minutes
+            )
+        for field_name, value in dashboard_threshold_updates.items():
+            if value is not None:
+                setattr(settings, field_name, value)
+        if settings_update.backup_monitoring_enabled is not None:
+            settings.backup_monitoring_enabled = (
+                settings_update.backup_monitoring_enabled
+            )
+        if settings_update.backup_monitoring_stale_after_days is not None:
+            settings.backup_monitoring_stale_after_days = (
+                settings_update.backup_monitoring_stale_after_days
+            )
+        if settings_update.backup_monitoring_interval_hours is not None:
+            settings.backup_monitoring_interval_hours = (
+                settings_update.backup_monitoring_interval_hours
+            )
+        if settings_update.backup_monitoring_alert_cooldown_hours is not None:
+            settings.backup_monitoring_alert_cooldown_hours = (
+                settings_update.backup_monitoring_alert_cooldown_hours
+            )
+        if settings_update.backup_monitoring_include_observe_repos is not None:
+            settings.backup_monitoring_include_observe_repos = (
+                settings_update.backup_monitoring_include_observe_repos
+            )
+        if settings_update.backup_reports_enabled is not None:
+            settings.backup_reports_enabled = settings_update.backup_reports_enabled
+        if settings_update.backup_reports_frequency is not None:
+            settings.backup_reports_frequency = settings_update.backup_reports_frequency
+        if settings_update.backup_reports_cron_expression is not None:
+            settings.backup_reports_cron_expression = (
+                settings_update.backup_reports_cron_expression
+            )
+        if settings_update.backup_reports_timezone is not None:
+            settings.backup_reports_timezone = settings_update.backup_reports_timezone
+        if settings_update.backup_reports_hour_utc is not None:
+            settings.backup_reports_hour_utc = settings_update.backup_reports_hour_utc
+        if settings_update.backup_reports_weekday is not None:
+            settings.backup_reports_weekday = settings_update.backup_reports_weekday
+        if settings_update.backup_reports_monthday is not None:
+            settings.backup_reports_monthday = settings_update.backup_reports_monthday
+        if settings_update.backup_reports_include_summary is not None:
+            settings.backup_reports_include_summary = (
+                settings_update.backup_reports_include_summary
+            )
+        if settings_update.backup_reports_include_stale_repositories is not None:
+            settings.backup_reports_include_stale_repositories = (
+                settings_update.backup_reports_include_stale_repositories
+            )
+        if settings_update.backup_reports_include_recent_activity is not None:
+            settings.backup_reports_include_recent_activity = (
+                settings_update.backup_reports_include_recent_activity
             )
 
         # MQTT settings
@@ -816,6 +1136,12 @@ async def update_system_settings(
         response = {
             "success": True,
             "message": "backend.success.settings.systemSettingsUpdated",
+            "settings": {
+                field_name: get_effective_dashboard_health_threshold(
+                    settings, field_name
+                )
+                for field_name in DEFAULT_DASHBOARD_HEALTH_THRESHOLDS
+            },
         }
         if generated_metrics_token:
             response["generated_metrics_token"] = generated_metrics_token
@@ -928,6 +1254,46 @@ async def refresh_all_stats(
             status_code=500,
             detail={
                 "key": "backend.errors.settings.failedStartStatsRefresh",
+                "params": {"error": str(e)},
+            },
+        )
+
+
+@router.post("/backup-monitoring/run")
+async def run_backup_monitoring_now(
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """Manually run backup freshness monitoring."""
+    try:
+        return await backup_monitoring_service.run_backup_monitoring(
+            db, datetime.now(timezone.utc), force=True
+        )
+    except Exception as e:
+        logger.error("Failed to run backup monitoring", error=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "key": "backend.errors.settings.failedRunBackupMonitoring",
+                "params": {"error": str(e)},
+            },
+        )
+
+
+@router.post("/backup-reports/send")
+async def send_backup_report_now(
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """Manually send a backup health report."""
+    try:
+        return await backup_monitoring_service.send_backup_report_now(
+            db, datetime.now(timezone.utc)
+        )
+    except Exception as e:
+        logger.error("Failed to send backup report", error=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "key": "backend.errors.settings.failedSendBackupReport",
                 "params": {"error": str(e)},
             },
         )
@@ -1201,6 +1567,7 @@ async def delete_user(
                 detail={"key": "backend.errors.settings.cannotDeleteOwnAccount"},
             )
 
+        detach_user_delete_references(db, user.id)
         db.delete(user)
         db.commit()
 

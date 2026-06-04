@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=docker.io/ainullcode/borg-ui-runtime-base:runtime-borg1-1.4.4-borg2-2.0.0b21-r1
+ARG BASE_IMAGE=docker.io/ainullcode/borg-ui-runtime-base:runtime-borg1-1.4.4-borg2-2.0.0b21-r2
 
 # Build stage for backend
 FROM python:3.10-slim AS backend-builder
@@ -48,6 +48,7 @@ ENV PYTHONPATH=/app
 ENV DATA_DIR=/data
 ENV DATABASE_URL=sqlite:////data/borg.db
 ENV BORG_BACKUP_PATH=/backups
+ENV BORG_CACHE_DIR=/home/borg/.cache/borg
 ENV ENABLE_CRON_BACKUPS=false
 ENV PORT=8081
 ENV ACTIVATION_SERVICE_URL=https://license.borgui.com
@@ -110,6 +111,7 @@ ENV PYTHONPATH=/app
 ENV DATA_DIR=/data
 ENV DATABASE_URL=sqlite:////data/borg.db
 ENV BORG_BACKUP_PATH=/backups
+ENV BORG_CACHE_DIR=/home/borg/.cache/borg
 ENV ENABLE_CRON_BACKUPS=false
 ENV PORT=8081
 ENV ACTIVATION_SERVICE_URL=https://license.borgui.com

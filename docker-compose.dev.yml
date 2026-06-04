@@ -32,6 +32,7 @@ services:
       - ENVIRONMENT=development
       - ENABLE_RELOAD=true
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-}
       - LOCAL_MOUNT_POINTS=${LOCAL_MOUNT_POINTS:-/local}
       - CACHE_TTL_SECONDS=7200
       - CACHE_MAX_SIZE_MB=2048

@@ -14,13 +14,24 @@ from datetime import datetime, timezone
 from app.core.security import get_current_user, decrypt_secret
 from app.database.database import get_db
 from sqlalchemy.orm import Session
-from app.database.models import SSHKey
+from app.database.models import SSHConnection, SSHKey
 from app.config import settings
 from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
 
 router = APIRouter()
+
+
+SSH_REMOTE_PATH_FAILURE_MARKERS = (
+    "remote readdir",
+    "permission denied",
+    "no such file",
+    "not found",
+    "couldn't",
+    "cannot",
+    "failure",
+)
 
 
 class FileSystemItem(BaseModel):
@@ -132,6 +143,60 @@ def is_borg_repository_ssh(
         return False
 
 
+def _get_matching_ssh_connection(
+    db: Session, ssh_key_id: int, host: str, username: str, port: int
+):
+    try:
+        return (
+            db.query(SSHConnection)
+            .filter(
+                SSHConnection.ssh_key_id == ssh_key_id,
+                SSHConnection.host == host,
+                SSHConnection.username == username,
+                SSHConnection.port == port,
+            )
+            .first()
+        )
+    except Exception:
+        return None
+
+
+def _login_relative_remote_path_candidate(
+    remote_path: str, default_path: Optional[str] = None
+) -> Optional[str]:
+    normalized = (remote_path or "").strip()
+    if not normalized.startswith("/") or normalized == "/":
+        return None
+    if normalized.startswith("/./"):
+        relative_path = normalized.lstrip("/")
+        return relative_path or None
+
+    normalized_default_path = (default_path or "").strip()
+    if normalized_default_path not in {"", "/"}:
+        return None
+
+    relative_path = normalized.lstrip("/")
+    return relative_path or None
+
+
+def _join_remote_path(base_path: str, name: str) -> str:
+    if not base_path:
+        return name
+    return os.path.join(base_path, name)
+
+
+def _remote_path_command_failed(result) -> bool:
+    output = f"{result.stderr or ''}\n{result.stdout or ''}".lower()
+    return result.returncode != 0 or any(
+        marker in output for marker in SSH_REMOTE_PATH_FAILURE_MARKERS
+    )
+
+
+def _remote_file_exists_error(result) -> bool:
+    output = f"{result.stderr or ''}\n{result.stdout or ''}".lower()
+    return "file exists" in output
+
+
 @router.get("/browse", response_model=BrowseResponse)
 async def browse_filesystem(
     path: str = Query("/local", description="Path to browse"),
@@ -162,8 +227,6 @@ async def browse_filesystem(
                 )
 
             # Check if SSH connection has a default_path and use it when path is "/" or "/local"
-            from app.database.models import SSHConnection
-
             ssh_connection = (
                 db.query(SSHConnection)
                 .filter(
@@ -334,49 +397,97 @@ async def browse_ssh_filesystem(
 
         os.chmod(temp_key_file, 0o600)
 
+        def run_sftp_listing(cd_path: Optional[str]):
+            sftp_batch_file = None
+            try:
+                # Create SFTP batch file with commands
+                with tempfile.NamedTemporaryFile(
+                    mode="w", delete=False, suffix=".sftp"
+                ) as batch_f:
+                    if cd_path:
+                        batch_f.write(f'cd "{cd_path}"\n')
+                    batch_f.write("ls -la\n")
+                    sftp_batch_file = batch_f.name
+
+                logger.info("Browsing SSH path via SFTP", host=host, path=path)
+
+                sftp_cmd = [
+                    "sftp",
+                    "-b",
+                    sftp_batch_file,
+                    "-i",
+                    temp_key_file,
+                    "-P",
+                    str(port),
+                    "-o",
+                    "StrictHostKeyChecking=no",
+                    "-o",
+                    "UserKnownHostsFile=/dev/null",
+                    "-o",
+                    "ConnectTimeout=10",
+                    f"{username}@{host}",
+                ]
+
+                return subprocess.run(
+                    sftp_cmd, capture_output=True, text=True, timeout=30
+                )
+            finally:
+                # Clean up SFTP batch file
+                if sftp_batch_file and os.path.exists(sftp_batch_file):
+                    try:
+                        os.unlink(sftp_batch_file)
+                    except Exception:
+                        pass
+
+        def has_sftp_listing_entries(stdout: str) -> bool:
+            for line in stdout.strip().split("\n"):
+                if (
+                    not line
+                    or line.startswith("sftp>")
+                    or line.startswith("total")
+                    or "Connecting to" in line
+                ):
+                    continue
+                return True
+            return False
+
+        def sftp_listing_failed(result) -> bool:
+            if result.returncode != 0:
+                return True
+
+            stderr = (result.stderr or "").lower()
+            return any(
+                marker in stderr for marker in SSH_REMOTE_PATH_FAILURE_MARKERS
+            ) and not (result.stdout and has_sftp_listing_entries(result.stdout))
+
+        ssh_connection = _get_matching_ssh_connection(
+            db, ssh_key_id, host, username, port
+        )
+        connection_default_path = getattr(ssh_connection, "default_path", None)
+
         # Use SFTP for browsing (compatible with restricted shells like Hetzner Storage Box)
         # SFTP batch commands: ls -la shows detailed listing
-        sftp_batch_file = None
-        try:
-            # Create SFTP batch file with commands
-            with tempfile.NamedTemporaryFile(
-                mode="w", delete=False, suffix=".sftp"
-            ) as batch_f:
-                batch_f.write(f'cd "{path}"\n')
-                batch_f.write("ls -la\n")
-                sftp_batch_file = batch_f.name
+        result = run_sftp_listing(None if path == "/" else path)
+        effective_command_path = "" if path == "/" else path
 
-            logger.info("Browsing SSH path via SFTP", host=host, path=path)
-
-            sftp_cmd = [
-                "sftp",
-                "-b",
-                sftp_batch_file,
-                "-i",
-                temp_key_file,
-                "-P",
-                str(port),
-                "-o",
-                "StrictHostKeyChecking=no",
-                "-o",
-                "UserKnownHostsFile=/dev/null",
-                "-o",
-                "ConnectTimeout=10",
-                f"{username}@{host}",
-            ]
-
-            result = subprocess.run(
-                sftp_cmd, capture_output=True, text=True, timeout=30
+        if path.startswith("/") and path != "/" and sftp_listing_failed(result):
+            relative_path = _login_relative_remote_path_candidate(
+                path, connection_default_path
             )
-        finally:
-            # Clean up SFTP batch file
-            if sftp_batch_file and os.path.exists(sftp_batch_file):
-                try:
-                    os.unlink(sftp_batch_file)
-                except Exception:
-                    pass
+            if relative_path:
+                logger.info(
+                    "Retrying SFTP path relative to login directory",
+                    host=host,
+                    path=path,
+                    relative_path=relative_path,
+                    stderr=result.stderr[:500] if result.stderr else None,
+                )
+                retry_result = run_sftp_listing(relative_path)
+                if not sftp_listing_failed(retry_result):
+                    effective_command_path = relative_path
+                result = retry_result
 
-        if result.returncode != 0:
+        if sftp_listing_failed(result):
             error_msg = (
                 result.stderr.strip()
                 if result.stderr
@@ -465,12 +576,13 @@ async def browse_ssh_filesystem(
 
                 is_dir = permissions.startswith("d")
                 full_path = os.path.join(path, name)
+                command_path = _join_remote_path(effective_command_path, name)
 
                 # Check if directory is a Borg repository
                 is_borg = False
                 if is_dir:
                     is_borg = is_borg_repository_ssh(
-                        host, username, temp_key_file, full_path, port
+                        host, username, temp_key_file, command_path, port
                     )
 
                 item = FileSystemItem(
@@ -601,29 +713,45 @@ async def validate_path(
 
                 os.chmod(temp_key_file, 0o600)
 
-                # Check if path exists via SSH using 'stat' (compatible with restricted shells like Hetzner Storage Box)
-                # stat returns exit code 0 if path exists, non-zero if not
-                check_cmd = f'stat "{path}"'
+                def run_ssh_stat(command_path: str):
+                    # Check if path exists via SSH using 'stat' (compatible with restricted shells like Hetzner Storage Box)
+                    # stat returns exit code 0 if path exists, non-zero if not
+                    check_cmd = f'stat "{command_path}"'
 
-                ssh_cmd = [
-                    "ssh",
-                    "-i",
-                    temp_key_file,
-                    "-p",
-                    str(port),
-                    "-o",
-                    "StrictHostKeyChecking=no",
-                    "-o",
-                    "UserKnownHostsFile=/dev/null",
-                    "-o",
-                    "ConnectTimeout=5",
-                    f"{username}@{host}",
-                    check_cmd,
-                ]
+                    ssh_cmd = [
+                        "ssh",
+                        "-i",
+                        temp_key_file,
+                        "-p",
+                        str(port),
+                        "-o",
+                        "StrictHostKeyChecking=no",
+                        "-o",
+                        "UserKnownHostsFile=/dev/null",
+                        "-o",
+                        "ConnectTimeout=5",
+                        f"{username}@{host}",
+                        check_cmd,
+                    ]
 
-                result = subprocess.run(
-                    ssh_cmd, capture_output=True, text=True, timeout=10
+                    return subprocess.run(
+                        ssh_cmd, capture_output=True, text=True, timeout=10
+                    )
+
+                ssh_connection = _get_matching_ssh_connection(
+                    db, ssh_key_id, host, username, port
                 )
+                connection_default_path = getattr(ssh_connection, "default_path", None)
+                command_path = path
+                result = run_ssh_stat(command_path)
+                retry_path = _login_relative_remote_path_candidate(
+                    path, connection_default_path
+                )
+                if retry_path and result.returncode != 0:
+                    retry_result = run_ssh_stat(retry_path)
+                    if retry_result.returncode == 0:
+                        command_path = retry_path
+                    result = retry_result
 
                 # Parse stat output to determine if path exists and is a directory
                 exists = result.returncode == 0
@@ -634,7 +762,9 @@ async def validate_path(
                     output_lower = result.stdout.lower()
                     is_dir = "directory" in output_lower or "dir" in output_lower
                 is_borg = (
-                    is_borg_repository_ssh(host, username, temp_key_file, path, port)
+                    is_borg_repository_ssh(
+                        host, username, temp_key_file, command_path, port
+                    )
                     if is_dir
                     else False
                 )
@@ -762,51 +892,77 @@ async def create_folder(
 
             # Create temporary key file
             temp_key_file = None
-            sftp_batch_file = None
             try:
                 with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
                     f.write(private_key)
                     temp_key_file = f.name
                 os.chmod(temp_key_file, 0o600)
 
-                # Create SFTP batch file to create directory
-                with tempfile.NamedTemporaryFile(
-                    mode="w", delete=False, suffix=".sftp"
-                ) as batch_f:
-                    batch_f.write(f'mkdir "{full_path}"\n')
-                    sftp_batch_file = batch_f.name
+                def run_sftp_mkdir(command_path: str):
+                    sftp_batch_file = None
+                    try:
+                        # Create SFTP batch file to create directory
+                        with tempfile.NamedTemporaryFile(
+                            mode="w", delete=False, suffix=".sftp"
+                        ) as batch_f:
+                            batch_f.write(f'mkdir "{command_path}"\n')
+                            sftp_batch_file = batch_f.name
 
-                logger.info("Creating folder via SFTP", host=host, path=full_path)
+                        logger.info(
+                            "Creating folder via SFTP", host=host, path=command_path
+                        )
 
-                sftp_cmd = [
-                    "sftp",
-                    "-b",
-                    sftp_batch_file,
-                    "-i",
-                    temp_key_file,
-                    "-P",
-                    str(port),
-                    "-o",
-                    "StrictHostKeyChecking=no",
-                    "-o",
-                    "UserKnownHostsFile=/dev/null",
-                    "-o",
-                    "ConnectTimeout=10",
-                    f"{username}@{host}",
-                ]
+                        sftp_cmd = [
+                            "sftp",
+                            "-b",
+                            sftp_batch_file,
+                            "-i",
+                            temp_key_file,
+                            "-P",
+                            str(port),
+                            "-o",
+                            "StrictHostKeyChecking=no",
+                            "-o",
+                            "UserKnownHostsFile=/dev/null",
+                            "-o",
+                            "ConnectTimeout=10",
+                            f"{username}@{host}",
+                        ]
 
-                result = subprocess.run(
-                    sftp_cmd, capture_output=True, text=True, timeout=30
+                        return subprocess.run(
+                            sftp_cmd, capture_output=True, text=True, timeout=30
+                        )
+                    finally:
+                        if sftp_batch_file and os.path.exists(sftp_batch_file):
+                            try:
+                                os.unlink(sftp_batch_file)
+                            except Exception:
+                                pass
+
+                ssh_connection = _get_matching_ssh_connection(
+                    db, ssh_key_id, host, username, port
                 )
+                connection_default_path = getattr(ssh_connection, "default_path", None)
+                result = run_sftp_mkdir(full_path)
 
-                if result.returncode == 0 or "File exists" not in result.stderr:
+                if _remote_path_command_failed(
+                    result
+                ) and not _remote_file_exists_error(result):
+                    retry_path = _login_relative_remote_path_candidate(
+                        full_path, connection_default_path
+                    )
+                    if retry_path:
+                        retry_result = run_sftp_mkdir(retry_path)
+                        result = retry_result
+
+                if not _remote_path_command_failed(result):
                     logger.info("Created remote folder", host=host, path=full_path)
                     return {
                         "success": True,
                         "path": full_path,
                         "message": "backend.success.filesystem.folderCreated",
                     }
-                elif "File exists" in result.stderr:
+                elif _remote_file_exists_error(result):
                     raise HTTPException(
                         status_code=400,
                         detail={
@@ -833,11 +989,6 @@ async def create_folder(
                 if temp_key_file and os.path.exists(temp_key_file):
                     try:
                         os.unlink(temp_key_file)
-                    except Exception:
-                        pass
-                if sftp_batch_file and os.path.exists(sftp_batch_file):
-                    try:
-                        os.unlink(sftp_batch_file)
                     except Exception:
                         pass
         else:

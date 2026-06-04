@@ -24,6 +24,8 @@ def test_build_extract_command_uses_borg2_archive_identifier():
         "/repos/v2",
         "extract",
         "--log-json",
+        "--umask",
+        "0022",
         "--remote-path",
         "/usr/local/bin/borg2",
         "--bypass-lock",

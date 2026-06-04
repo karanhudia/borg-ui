@@ -184,7 +184,8 @@ jobs:
 
       - name: Smoke test amd64 app image
         run: |
-          docker run -d --rm --name borg-ui-smoke -p 18081:8081 \
+          docker run -d --rm --name borg-ui-smoke -p 18088:8088 \
+            -e PORT=8088 \
             -e SECRET_KEY=test-secret-key-for-ci \
             -e ACTIVATION_SERVICE_URL= \
             borg-ui-app:smoke-test
@@ -192,7 +193,7 @@ jobs:
             docker rm -f borg-ui-smoke >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
-          timeout 60 bash -c 'until curl -fsS http://127.0.0.1:18081/ >/dev/null; do sleep 2; done'
+          timeout 60 bash -c 'until curl -fsS http://127.0.0.1:18088/ >/dev/null; do sleep 2; done'
           docker exec borg-ui-smoke borg --version
           docker exec borg-ui-smoke borg2 --version
 

@@ -2,13 +2,14 @@
  * Type definitions for jobs and repositories used across the application
  *
  * Note: Job interface is intentionally flexible to accommodate various job types
- * (backup, restore, restore_check, check, compact, prune, package) across different pages.
+ * (backup, restore, restore_check, check, compact, prune, package, rclone_sync,
+ * rclone_hydrate) across different pages.
  * Most fields are optional as different contexts provide different subsets of data.
  */
 
 export interface Job {
   id: string | number
-  repository_id?: number
+  repository_id?: number | null
   repository?: string | null
   repository_path?: string | null
   type?: string
@@ -23,6 +24,9 @@ export interface Job {
   has_logs?: boolean
   triggered_by?: string
   schedule_id?: number | null
+  backup_plan_id?: number | null
+  backup_plan_run_id?: number | null
+  backup_plan_name?: string | null
   log_file_path?: string | null
   total_files?: number
   processed_files?: number
@@ -30,6 +34,13 @@ export interface Job {
   processed_size?: string
   maintenance_status?: string | null
   scheduled_job_id?: number | null
+  execution_mode?: string | null
+  route_strategy?: string | null
+  retry_attempt?: number | null
+  retry_original_job_id?: number | null
+  retry_source_job_id?: number | null
+  retry_requested_by_user_id?: number | null
+  retry_requested_at?: string | null
   progress_details?: unknown
 }
 
@@ -37,6 +48,8 @@ export interface Repository {
   id: number
   name: string
   path: string
+  executor_type?: 'server' | 'agent'
+  execution_target?: 'local' | 'ssh' | 'agent'
   mode?: 'full' | 'observe'
   encryption?: string
   compression?: string
