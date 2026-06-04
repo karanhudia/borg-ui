@@ -640,6 +640,12 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.containerMountsNotIncludedHelp':
     'Add these mount paths as Files sources if they contain data you need.',
   'backupPlans.sourceChooser.containerMountNotIncluded': 'Not included in docker export',
+  'backupPlans.sourceChooser.containerMountsOptional': 'Optional mounted data',
+  'backupPlans.sourceChooser.containerMountsOptionalHelp':
+    'Select mounts to add them as Files sources in this plan.',
+  'backupPlans.sourceChooser.includeContainerMountAria':
+    'Include mounted data {{path}} as a Files source',
+  'backupPlans.sourceChooser.containerMountDestination': 'Mounted at {{path}}',
   'backupPlans.sourceChooser.containerImageMetadata':
     'Image {{image}} identifies this container; Borg UI does not back up the image.',
   'backupPlans.sourceChooser.addDetectedContainer': 'Add detected container',
@@ -915,7 +921,7 @@ export const ContainerPickerDetected: Story = {
     docs: {
       description: {
         story:
-          'Docker container source picker after a scan returns a detected container, including the exact export path and the mounted data that docker export will not include.',
+          'Docker container source picker after a scan returns a detected container, including the exact export path and optional mounted data selection for Files backup.',
       },
     },
   },

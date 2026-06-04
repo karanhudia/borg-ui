@@ -302,6 +302,12 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.containerMountsNotIncludedHelp':
     'Add these mount paths as Files sources if they contain data you need.',
   'backupPlans.sourceChooser.containerMountNotIncluded': 'Not included in docker export',
+  'backupPlans.sourceChooser.containerMountsOptional': 'Optional mounted data',
+  'backupPlans.sourceChooser.containerMountsOptionalHelp':
+    'Select mounts to add them as Files sources in this plan.',
+  'backupPlans.sourceChooser.includeContainerMountAria':
+    'Include mounted data {{path}} as a Files source',
+  'backupPlans.sourceChooser.containerMountDestination': 'Mounted at {{path}}',
   'backupPlans.sourceChooser.containerImageMetadata':
     'Image {{image}} identifies this container; Borg UI does not back up the image.',
   'backupPlans.sourceChooser.addDetectedContainer': 'Add detected container',
@@ -731,7 +737,7 @@ describe('SourceStep', () => {
     )
   }, 45000)
 
-  it('scans Docker containers and explains mount coverage before queueing', async () => {
+  it('scans Docker containers and lets mounted data be added as Files sources', async () => {
     apiMocks.databases.mockResolvedValue({ data: discoveryResponseWithEnabledContainer })
     apiMocks.scanContainers.mockResolvedValue({
       data: {
@@ -807,8 +813,18 @@ describe('SourceStep', () => {
     expect(
       screen.getByText('Add these mount paths as Files sources if they contain data you need.')
     ).toBeInTheDocument()
-    expect(screen.getByText('/data')).toBeInTheDocument()
+    expect(screen.getByText('Mounted at /data')).toBeInTheDocument()
     expect(screen.getByText('/var/lib/docker/volumes/portainer_data/_data')).toBeInTheDocument()
+    expect(screen.getByText('Optional mounted data')).toBeInTheDocument()
+    expect(
+      screen.getByText('Select mounts to add them as Files sources in this plan.')
+    ).toBeInTheDocument()
+
+    fireEvent.click(
+      screen.getByRole('checkbox', {
+        name: /include mounted data \/var\/lib\/docker\/volumes\/portainer_data\/_data as a files source/i,
+      })
+    )
 
     fireEvent.click(screen.getByRole('button', { name: /add detected container/i }))
     expect(screen.getByText('Selected containers')).toBeInTheDocument()
@@ -820,25 +836,43 @@ describe('SourceStep', () => {
       expect(onCreateScript).toHaveBeenCalledTimes(2)
       expect(updateState).toHaveBeenCalledTimes(1)
     })
-    expect(updateState).toHaveBeenCalledWith(
+    const updatePayload = updateState.mock.calls[0][0]
+    expect(updatePayload.sourceDirectories).toEqual([
+      '/var/tmp/borg-ui/container-exports/portainer',
+      '/var/lib/docker/volumes/portainer_data/_data',
+    ])
+    const containerLocation = updatePayload.sourceLocations.find(
+      (location: { container?: { container_name?: string } }) =>
+        location.container?.container_name === 'portainer'
+    )
+    expect(containerLocation).toEqual(
       expect.objectContaining({
-        sourceDirectories: ['/var/tmp/borg-ui/container-exports/portainer'],
-        sourceLocations: [
-          expect.objectContaining({
-            source_type: 'local',
-            paths: ['/var/tmp/borg-ui/container-exports/portainer'],
-            container: expect.objectContaining({
-              container_name: 'portainer',
-              display_name: 'portainer',
-              image: 'portainer/portainer-ce:latest',
-              export_path: '/var/tmp/borg-ui/container-exports/portainer',
-              pre_backup_script_id: 401,
-              post_backup_script_id: 402,
-            }),
-          }),
-        ],
+        source_type: 'local',
+        paths: ['/var/tmp/borg-ui/container-exports/portainer'],
+        container: expect.objectContaining({
+          container_name: 'portainer',
+          display_name: 'portainer',
+          image: 'portainer/portainer-ce:latest',
+          export_path: '/var/tmp/borg-ui/container-exports/portainer',
+          pre_backup_script_id: 401,
+          post_backup_script_id: 402,
+        }),
       })
     )
+    const mountLocation = updatePayload.sourceLocations.find(
+      (location: { paths: string[]; container?: unknown; database?: unknown }) =>
+        location.paths.includes('/var/lib/docker/volumes/portainer_data/_data')
+    )
+    expect(mountLocation).toEqual(
+      expect.objectContaining({
+        source_type: 'local',
+        source_ssh_connection_id: null,
+        agent_machine_id: null,
+        paths: ['/var/lib/docker/volumes/portainer_data/_data'],
+      })
+    )
+    expect(mountLocation?.container).toBeUndefined()
+    expect(mountLocation?.database).toBeUndefined()
   }, 45000)
 
   it('keeps Docker sources out of the files summary and disambiguates duplicate export paths', async () => {

@@ -68,12 +68,12 @@
 - Modify: `frontend/src/pages/backup-plans/__tests__/ReviewStep.test.tsx`
 
 - [ ] Replace the old disabled-container test with a failing test that opens Container, enters a container name, applies, and expects `updateState.sourceLocations[0].container`.
-- [ ] Add a failing SourceStep test that scans Docker containers, displays the exported filesystem path and excluded mounts, then queues the detected container.
+- [ ] Add a failing SourceStep test that scans Docker containers, displays the exported filesystem path and excluded mounts, selects a mount path, then queues the detected container plus mount Files source.
 - [ ] Add `container` and `container-detail` view state as needed, or render the container form directly from the Container tab if one screen is sufficient.
 - [ ] Enable the Container pivot segment and add count chip support.
 - [ ] Add Docker source form controls: source target, SSH/agent picker reuse, container name or ID, optional image label, export staging path, generated script mode.
 - [ ] Add scan controls in the Container tab for Borg UI server and SSH sources; keep managed-agent container entry manual.
-- [ ] Render detected containers with image/status, exact export path, and bind/named mount rows marked not included by `docker export`.
+- [ ] Render detected containers with image/status, exact export path, and bind/named mount rows marked not included by `docker export`, with opt-in checkboxes that add mount source paths as Files sources.
 - [ ] Generate pre/post Docker scripts through existing `onCreateScript` and store resulting IDs/parameters in the container metadata.
 - [ ] Show queued Docker sources alongside selected files/databases with a Container icon and remove actions.
 - [ ] Update SourceStep summary to show Docker container source kind when all source locations are container sources, and mixed source label when combined.
@@ -108,7 +108,7 @@
   - `pytest tests/unit/test_api_backup_plans.py -k "container_source" -q`
 - [ ] Run targeted frontend tests:
   - `cd frontend && npm test -- src/pages/backup-plans/__tests__/SourceStep.test.tsx -t "configures a Docker container source" --run`
-  - `cd frontend && npm test -- src/pages/backup-plans/__tests__/SourceStep.test.tsx -t "scans Docker containers" --run`
+  - `cd frontend && npm test -- src/pages/backup-plans/__tests__/SourceStep.test.tsx -t "Docker|container|mount" --run`
   - `cd frontend && npm test -- src/pages/__tests__/BackupPlans.test.tsx -t "preserves Docker container source metadata" --run`
 - [ ] Run required frontend gates:
   - `cd frontend && npm run check:locales`

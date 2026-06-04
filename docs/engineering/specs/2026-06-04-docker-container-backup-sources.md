@@ -16,7 +16,7 @@ The source chooser lets operators select a Docker container source with the same
   - container name or ID;
   - export staging path;
   - optional image/name note for reviewer context.
-- Add Docker container scanning for Borg UI server and SSH sources, returning detected containers, export staging paths, and mount coverage details.
+- Add Docker container scanning for Borg UI server and SSH sources, returning detected containers, export staging paths, and mount coverage details with opt-in mount selection.
 - Generate source-level pre/post script assignments for Docker container exports, using the existing source script execution phase (`source-pre-backup` and `source-post-backup`).
 - Preserve normalized container metadata through frontend payload building and backend `source_locations` normalization.
 - Update source summaries, review labels, Storybook, tests, and locale strings for the new source state.
@@ -67,7 +67,7 @@ The generated pre-backup script should create the export directory, write `docke
 
 - The Container tab should look like the Files and Database tabs: same segmented pivot, full outline treatment, MUI controls, lucide icon, no heavy side borders.
 - Copy must be operational and precise: "Docker container export", "Container name or ID", "Export staging path".
-- The scan result should show that `docker export` captures the container filesystem and should list bind mounts or named volumes as not included. Operators can still add volume paths through Files if they need them.
+- The scan result should show that `docker export` captures the container filesystem and should list bind mounts or named volumes as not included by the export. Operators can select detected mount source paths from the Container tab, and Borg UI adds those paths as normal Files source locations in the same plan.
 - Apply remains one commit action for queued source groups. The Container tab should queue the container source and return to the tab list, like Database queues sources before applying.
 
 ## Acceptance Criteria
@@ -75,7 +75,7 @@ The generated pre-backup script should create the export directory, write `docke
 - Container is selectable in the source-kind pivot and is no longer marked disabled/soon.
 - Selecting Container, entering a name/ID, and applying creates a source location with a populated `container` metadata block.
 - The Container tab can scan Docker containers on the Borg UI server and SSH sources and queue a detected container into the same source-location/script path as manual entry.
-- Detected containers show the exact export staging path and visibly disclose that bind mounts and named volumes are not included by `docker export`.
+- Detected containers show the exact export staging path, visibly disclose that bind mounts and named volumes are not included by `docker export`, and let users select mount source paths to include as Files sources.
 - Backend normalization preserves the `container` metadata and rejects invalid empty container/export path input.
 - Source-level Docker scripts execute in backup-plan runs with container-specific environment variables.
 - Source summaries and review surfaces identify Docker container sources distinctly from plain files.
@@ -86,7 +86,7 @@ The generated pre-backup script should create the export directory, write `docke
 
 - Red/green frontend tests:
   - `cd frontend && npm test -- src/pages/backup-plans/__tests__/SourceStep.test.tsx -t "configures a Docker container source" --run`
-  - `cd frontend && npm test -- src/pages/backup-plans/__tests__/SourceStep.test.tsx -t "scans Docker containers" --run`
+  - `cd frontend && npm test -- src/pages/backup-plans/__tests__/SourceStep.test.tsx -t "Docker|container|mount" --run`
   - `cd frontend && npm test -- src/pages/__tests__/BackupPlans.test.tsx -t "preserves Docker container source metadata" --run`
 - Red/green backend tests:
   - `pytest tests/unit/test_source_discovery.py::TestSourceDiscovery::test_database_discovery_returns_extensible_source_types -q`
@@ -100,7 +100,7 @@ The generated pre-backup script should create the export directory, write `docke
   - `ruff check app tests`
   - `ruff format --check app tests`
 - Runtime walkthrough:
-  - Launch Borg UI locally, open backup plan creation, choose Sources, select Container, scan mocked Docker containers, verify included filesystem/excluded mount disclosure, queue the detected container, apply, and verify the source summary/review shows the Docker source.
+  - Launch Borg UI locally, open backup plan creation, choose Sources, select Container, scan mocked Docker containers, verify included filesystem/excluded mount disclosure, select a detected mount path, queue the detected container, apply, and verify the source summary/review shows both the Docker source and selected Files mount path.
 
 ## Original Request
 

@@ -60,6 +60,7 @@ import {
   type FilesystemSnapshotCapabilitiesResponse,
   sourceDiscoveryAPI,
   type SourceDiscoveryContainer,
+  type SourceDiscoveryContainerMount,
   type SourceDiscoveryDatabase,
   type SourceDiscoveryResponse,
   type SourceDiscoveryScriptDraft,
@@ -392,6 +393,20 @@ function uniqueContainerExportPath(requestedPath: string, locations: SourceLocat
     candidate = `${requestedPath}-${suffix}`
   }
   return candidate
+}
+
+function containerMountKey(containerId: string, mount: SourceDiscoveryContainerMount): string {
+  return [
+    containerId,
+    mount.type || '',
+    mount.name || '',
+    mount.source || '',
+    mount.destination || '',
+  ].join(':')
+}
+
+function containerMountSourcePath(mount: SourceDiscoveryContainerMount): string {
+  return mount.source?.trim() || ''
 }
 
 function containerScriptDrafts(
@@ -788,6 +803,9 @@ export function SourceSelectionDialog({
   const [containerScanResults, setContainerScanResults] = useState<SourceDiscoveryContainer[]>([])
   const [containerScanWarnings, setContainerScanWarnings] = useState<DatabaseScanWarning[]>([])
   const [containerScanTargetLabel, setContainerScanTargetLabel] = useState<string | null>(null)
+  const [selectedContainerMountKeys, setSelectedContainerMountKeys] = useState<
+    Record<string, boolean>
+  >({})
   const [applying, setApplying] = useState(false)
   const [selectedSourceKey, setSelectedSourceKey] = useState<SourceKey>('local')
   const [sourcePath, setSourcePath] = useState('')
@@ -1147,7 +1165,10 @@ export function SourceSelectionDialog({
   }
 
   const queueContainerSource = (
-    detectedContainer?: Pick<SourceDiscoveryContainer, 'name' | 'image' | 'export_path'>
+    detectedContainer?: Pick<
+      SourceDiscoveryContainer,
+      'id' | 'name' | 'image' | 'export_path' | 'mounts'
+    >
   ) => {
     const nextContainerName = (detectedContainer?.name ?? containerName).trim()
     const requestedExportPath =
@@ -1156,6 +1177,15 @@ export function SourceSelectionDialog({
       defaultContainerExportPath(nextContainerName)
     const nextExportPath = uniqueContainerExportPath(requestedExportPath, draftSourceLocations)
     if (!nextContainerName || !nextExportPath) return
+    const selectedMountPaths = detectedContainer
+      ? detectedContainer.mounts
+          .filter((mount) => !mount.backed_up)
+          .filter(
+            (mount) => selectedContainerMountKeys[containerMountKey(detectedContainer.id, mount)]
+          )
+          .map(containerMountSourcePath)
+          .filter(Boolean)
+      : []
 
     const locationBase = locationForKey(selectedSourceKey)
     const container: SourceContainerSelection = {
@@ -1188,10 +1218,22 @@ export function SourceSelectionDialog({
         postScriptName: scriptDrafts.postBackup.name,
       },
     }))
+    if (selectedMountPaths.length > 0) {
+      addPathsToSourceKey(selectedSourceKey, selectedMountPaths)
+    }
     setContainerName('')
     setContainerImage('')
     setContainerExportPath(DEFAULT_CONTAINER_EXPORT_ROOT)
     setContainerExportPathTouched(false)
+    if (detectedContainer) {
+      setSelectedContainerMountKeys((current) => {
+        const next = { ...current }
+        detectedContainer.mounts.forEach((mount) => {
+          delete next[containerMountKey(detectedContainer.id, mount)]
+        })
+        return next
+      })
+    }
   }
 
   const removeSourcePath = (sourceKey: string, path: string) => {
@@ -2782,6 +2824,7 @@ export function SourceSelectionDialog({
     const scanContainers = async () => {
       if (sourceKind === 'agent') {
         setContainerScanResults([])
+        setSelectedContainerMountKeys({})
         setContainerScanWarnings([
           {
             code: 'UNSUPPORTED_SOURCE_TARGET',
@@ -2794,6 +2837,7 @@ export function SourceSelectionDialog({
       }
       setContainerScanLoading(true)
       setContainerScanWarnings([])
+      setSelectedContainerMountKeys({})
       try {
         const scanSourceType = sourceKind === 'remote' ? 'remote' : 'local'
         const response = await sourceDiscoveryAPI.scanContainers({
@@ -2807,6 +2851,7 @@ export function SourceSelectionDialog({
       } catch (error) {
         void error
         setContainerScanResults([])
+        setSelectedContainerMountKeys({})
         setContainerScanTargetLabel(null)
         setContainerScanWarnings([
           {
@@ -2824,6 +2869,14 @@ export function SourceSelectionDialog({
     const scanButtonLabel = containerScanResults.length
       ? t('backupPlans.sourceChooser.rescanContainers')
       : t('backupPlans.sourceChooser.scanContainers')
+    const toggleContainerMount = (mountKey: string, checked: boolean) => {
+      setSelectedContainerMountKeys((current) => {
+        if (checked) return { ...current, [mountKey]: true }
+        const next = { ...current }
+        delete next[mountKey]
+        return next
+      })
+    }
 
     return (
       <Stack spacing={2.5}>
@@ -3088,37 +3141,78 @@ export function SourceSelectionDialog({
                                 <Typography variant="caption" color="text.secondary">
                                   {t('backupPlans.sourceChooser.containerMountsNotIncludedHelp')}
                                 </Typography>
-                                <Stack spacing={0.35}>
+                                <Stack spacing={0.5}>
+                                  <Typography variant="caption" fontWeight={600}>
+                                    {t('backupPlans.sourceChooser.containerMountsOptional')}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {t('backupPlans.sourceChooser.containerMountsOptionalHelp')}
+                                  </Typography>
                                   {excludedMounts.map((mount) => {
-                                    const mountKey = `${container.id}:${mount.destination || ''}:${mount.source || ''}`
+                                    const mountKey = containerMountKey(container.id, mount)
+                                    const mountSourcePath = containerMountSourcePath(mount)
+                                    const checked = Boolean(selectedContainerMountKeys[mountKey])
                                     const displayPath =
-                                      mount.destination || mount.source || mount.name || mount.type
+                                      mountSourcePath ||
+                                      mount.destination ||
+                                      mount.name ||
+                                      mount.type ||
+                                      ''
                                     return (
-                                      <Stack key={mountKey} spacing={0.1}>
-                                        <Typography
-                                          variant="caption"
-                                          sx={{
-                                            fontFamily:
-                                              'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
-                                            overflowWrap: 'anywhere',
-                                          }}
-                                        >
-                                          {displayPath}
-                                        </Typography>
-                                        {mount.source && mount.source !== displayPath && (
-                                          <Typography
-                                            variant="caption"
-                                            color="text.secondary"
-                                            sx={{
-                                              fontFamily:
-                                                'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
-                                              overflowWrap: 'anywhere',
+                                      <FormControlLabel
+                                        key={mountKey}
+                                        sx={{
+                                          alignItems: 'flex-start',
+                                          border: 1,
+                                          borderColor: checked ? 'primary.main' : 'divider',
+                                          borderRadius: 1,
+                                          bgcolor: checked ? 'action.selected' : 'transparent',
+                                          m: 0,
+                                          px: 0.75,
+                                          py: 0.4,
+                                          transition:
+                                            'border-color 150ms ease, background-color 150ms ease',
+                                        }}
+                                        control={
+                                          <Checkbox
+                                            size="small"
+                                            checked={checked}
+                                            disabled={!mountSourcePath}
+                                            onChange={(event) =>
+                                              toggleContainerMount(mountKey, event.target.checked)
+                                            }
+                                            inputProps={{
+                                              'aria-label': t(
+                                                'backupPlans.sourceChooser.includeContainerMountAria',
+                                                { path: mountSourcePath || displayPath }
+                                              ),
                                             }}
-                                          >
-                                            {mount.source}
-                                          </Typography>
-                                        )}
-                                      </Stack>
+                                            sx={{ mt: -0.25 }}
+                                          />
+                                        }
+                                        label={
+                                          <Stack spacing={0.1} sx={{ minWidth: 0, py: 0.25 }}>
+                                            <Typography
+                                              variant="caption"
+                                              sx={{
+                                                fontFamily:
+                                                  'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+                                                overflowWrap: 'anywhere',
+                                              }}
+                                            >
+                                              {displayPath}
+                                            </Typography>
+                                            {mount.destination && (
+                                              <Typography variant="caption" color="text.secondary">
+                                                {t(
+                                                  'backupPlans.sourceChooser.containerMountDestination',
+                                                  { path: mount.destination }
+                                                )}
+                                              </Typography>
+                                            )}
+                                          </Stack>
+                                        }
+                                      />
                                     )
                                   })}
                                 </Stack>
