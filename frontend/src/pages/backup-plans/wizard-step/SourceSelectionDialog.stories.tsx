@@ -644,6 +644,7 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.removePath': 'Remove path',
   'backupPlans.sourceChooser.removeSourceGroup': 'Remove source group',
   'backupPlans.sourceChooser.applyPaths': 'Use these paths',
+  'backupPlans.sourceChooser.applyContainers': 'Use these containers',
   'backupPlans.sourceChooser.selectPaths': 'Select paths',
   'backupPlans.sourceChooser.currentPath': 'Current path',
   'backupPlans.sourceChooser.agentBrowseTitle': 'Browse {{agent}}',

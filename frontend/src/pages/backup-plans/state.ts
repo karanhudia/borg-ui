@@ -75,8 +75,14 @@ function normalizePlanSourceLocations(plan: BackupPlan): SourceLocation[] {
     return Object.fromEntries(
       Object.entries(parameters || {})
         .map(([key, value]) => [key.trim(), String(value).trim()] as const)
-        .filter(([key, value]) => key.length > 0 && value.length > 0)
+        .filter(([key]) => key.length > 0)
     )
+  }
+
+  const normalizeScriptExecutionTarget = (
+    value?: SourceDatabaseSelection['script_execution_target'] | string | null
+  ): SourceDatabaseSelection['script_execution_target'] => {
+    return value === 'server' ? 'server' : 'source'
   }
 
   const normalizeDatabase = (
@@ -101,7 +107,9 @@ function normalizePlanSourceLocations(plan: BackupPlan): SourceLocation[] {
       dump_path:
         captureMode === 'dump' ? location.database.dump_path?.trim() || backupPaths[0] : null,
       backup_paths: backupPaths,
-      script_execution_target: location.database.script_execution_target || 'source',
+      script_execution_target: normalizeScriptExecutionTarget(
+        location.database.script_execution_target
+      ),
     }
     const preScriptId = normalizeScriptId(location.database.pre_backup_script_id)
     const postScriptId = normalizeScriptId(location.database.post_backup_script_id)
@@ -136,7 +144,9 @@ function normalizePlanSourceLocations(plan: BackupPlan): SourceLocation[] {
       image: location.container.image?.trim() || null,
       backup_mode: 'export',
       export_path: exportPath,
-      script_execution_target: location.container.script_execution_target || 'source',
+      script_execution_target: normalizeScriptExecutionTarget(
+        location.container.script_execution_target
+      ),
     }
     const preScriptId = normalizeScriptId(location.container.pre_backup_script_id)
     const postScriptId = normalizeScriptId(location.container.post_backup_script_id)

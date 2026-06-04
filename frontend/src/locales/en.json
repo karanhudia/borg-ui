@@ -818,6 +818,7 @@
       "removeSourceGroup": "Remove source group",
       "backToTypes": "Back to source types",
       "applyPaths": "Use these paths",
+      "applyContainers": "Use these containers",
       "selectPaths": "Select paths",
       "currentPath": "Current path",
       "agentBrowseTitle": "Browse {{agent}}",

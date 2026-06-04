@@ -10,9 +10,10 @@
 
 ---
 
-### Task 1: Backend Contract
+## Task 1: Backend Contract
 
 **Files:**
+
 - Modify: `app/utils/source_locations.py`
 - Modify: `app/api/source_discovery.py`
 - Modify: `tests/unit/test_source_discovery.py`
@@ -25,9 +26,10 @@
 - [ ] Update `_source_types()` so the container option is enabled with precise copy.
 - [ ] Run the targeted backend tests and verify they fail before implementation, then pass after implementation.
 
-### Task 2: Source-Level Container Script Execution
+## Task 2: Source-Level Container Script Execution
 
 **Files:**
+
 - Modify: `app/services/backup_plan_execution_service.py`
 - Modify: `tests/unit/test_api_backup_plans.py`
 
@@ -38,9 +40,10 @@
 - [ ] Extend source script remote routing so remote Docker container scripts with `script_execution_target="source"` run on the remote source connection.
 - [ ] Run the targeted execution test red/green.
 
-### Task 3: Frontend Types And Payload
+## Task 3: Frontend Types And Payload
 
 **Files:**
+
 - Modify: `frontend/src/types/index.ts`
 - Modify: `frontend/src/utils/backupPlanPayload.ts`
 - Modify: `frontend/src/pages/backup-plans/state.ts`
@@ -52,9 +55,10 @@
 - [ ] Normalize container metadata in `state.ts` for edit hydration.
 - [ ] Run the payload test red/green.
 
-### Task 4: Source Dialog UI
+## Task 4: Source Dialog UI
 
 **Files:**
+
 - Modify: `frontend/src/pages/backup-plans/wizard-step/SourceSelectionDialog.tsx`
 - Modify: `frontend/src/pages/backup-plans/wizard-step/SourceStep.tsx`
 - Modify: `frontend/src/pages/backup-plans/wizard-step/ReviewStep.tsx`
@@ -71,9 +75,10 @@
 - [ ] Update ReviewStep to surface container name and export path.
 - [ ] Run the SourceStep and ReviewStep targeted tests red/green.
 
-### Task 5: Storybook And Locales
+## Task 5: Storybook And Locales
 
 **Files:**
+
 - Modify: `frontend/src/pages/backup-plans/wizard-step/SourceSelectionDialog.stories.tsx`
 - Modify: `frontend/src/pages/backup-plans/wizard-step/SourceStep.stories.tsx`
 - Modify: `frontend/src/locales/en.json`
@@ -86,9 +91,10 @@
 - [ ] Add matching locale keys in de/es/it, using clear fallback translations.
 - [ ] Run `cd frontend && npm run check:locales`.
 
-### Task 6: Validation And Handoff
+## Task 6: Validation And Handoff
 
 **Files:**
+
 - Modify: Linear workpad only after validation results are known.
 
 - [ ] Run targeted backend tests:

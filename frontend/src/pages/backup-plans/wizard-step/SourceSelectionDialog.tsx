@@ -231,8 +231,14 @@ function cleanScriptParameters(parameters?: Record<string, string> | null): Reco
   return Object.fromEntries(
     Object.entries(parameters || {})
       .map(([key, value]) => [key.trim(), String(value).trim()] as const)
-      .filter(([key, value]) => key.length > 0 && value.length > 0)
+      .filter(([key]) => key.length > 0)
   )
+}
+
+function cleanScriptExecutionTarget(
+  value?: SourceDatabaseSelection['script_execution_target'] | string | null
+): SourceDatabaseSelection['script_execution_target'] {
+  return value === 'server' ? 'server' : 'source'
 }
 
 function databaseDefaultDumpRoot(database: SourceDiscoveryDatabase): string {
@@ -369,6 +375,21 @@ function defaultContainerExportPath(containerName: string): string {
   return `${DEFAULT_CONTAINER_EXPORT_ROOT}/${containerExportSlug(containerName)}`
 }
 
+function uniqueContainerExportPath(requestedPath: string, locations: SourceLocation[]): string {
+  const usedPaths = new Set(
+    locations.flatMap((location) => location.paths.map((path) => path.trim()).filter(Boolean))
+  )
+  if (!usedPaths.has(requestedPath)) return requestedPath
+
+  let suffix = 1
+  let candidate = `${requestedPath}-${suffix}`
+  while (usedPaths.has(candidate)) {
+    suffix += 1
+    candidate = `${requestedPath}-${suffix}`
+  }
+  return candidate
+}
+
 function containerScriptDrafts(
   containerName: string,
   exportPath: string
@@ -406,19 +427,6 @@ function containerScriptDrafts(
   }
 }
 
-function defaultContainerScriptParameters(
-  container: SourceContainerSelection,
-  hook: 'pre' | 'post'
-): Record<string, string> {
-  if (hook === 'post') {
-    return { BORG_UI_CONTAINER_EXPORT_DIR: container.export_path }
-  }
-  return {
-    BORG_UI_CONTAINER_NAME: container.container_name,
-    BORG_UI_CONTAINER_EXPORT_DIR: container.export_path,
-  }
-}
-
 function containerWithScriptAssignment(
   container: SourceContainerSelection,
   assignment: ContainerScriptAssignment,
@@ -430,14 +438,8 @@ function containerWithScriptAssignment(
     ...container,
     ...(preScriptId ? { pre_backup_script_id: preScriptId } : {}),
     ...(postScriptId ? { post_backup_script_id: postScriptId } : {}),
-    pre_backup_script_parameters: cleanScriptParameters({
-      ...defaultContainerScriptParameters(container, 'pre'),
-      ...(assignment.preBackupScriptParameters || {}),
-    }),
-    post_backup_script_parameters: cleanScriptParameters({
-      ...defaultContainerScriptParameters(container, 'post'),
-      ...(assignment.postBackupScriptParameters || {}),
-    }),
+    pre_backup_script_parameters: cleanScriptParameters(assignment.preBackupScriptParameters),
+    post_backup_script_parameters: cleanScriptParameters(assignment.postBackupScriptParameters),
     script_execution_order: scriptExecutionOrder,
   }
 }
@@ -461,7 +463,7 @@ function cleanDatabaseSelection(
     capture_mode: captureMode,
     dump_path: captureMode === 'dump' ? database.dump_path?.trim() || backupPaths[0] : null,
     backup_paths: backupPaths,
-    script_execution_target: database.script_execution_target || 'source',
+    script_execution_target: cleanScriptExecutionTarget(database.script_execution_target),
   }
   const preScriptId = cleanOptionalScriptId(database.pre_backup_script_id)
   const postScriptId = cleanOptionalScriptId(database.post_backup_script_id)
@@ -496,7 +498,7 @@ function cleanContainerSelection(
     image: container.image?.trim() || null,
     backup_mode: 'export',
     export_path: exportPath,
-    script_execution_target: container.script_execution_target || 'source',
+    script_execution_target: cleanScriptExecutionTarget(container.script_execution_target),
   }
   const preScriptId = cleanOptionalScriptId(container.pre_backup_script_id)
   const postScriptId = cleanOptionalScriptId(container.post_backup_script_id)
@@ -1134,8 +1136,9 @@ export function SourceSelectionDialog({
 
   const queueContainerSource = () => {
     const nextContainerName = containerName.trim()
-    const nextExportPath =
+    const requestedExportPath =
       containerExportPath.trim() || defaultContainerExportPath(nextContainerName)
+    const nextExportPath = uniqueContainerExportPath(requestedExportPath, draftSourceLocations)
     if (!nextContainerName || !nextExportPath) return
 
     const locationBase = locationForKey(selectedSourceKey)
@@ -1414,7 +1417,9 @@ export function SourceSelectionDialog({
       sourceKind === 'local' && snapshotDraft.provider === 'zfs' && !snapshotDraft.dataset.trim()
     const zfsMountpointMissing =
       sourceKind === 'local' && snapshotDraft.provider === 'zfs' && !snapshotDraft.mountpoint.trim()
-    const fileDraftSourceLocations = draftSourceLocations.filter((location) => !location.database)
+    const fileDraftSourceLocations = draftSourceLocations.filter(
+      (location) => !location.database && !location.container
+    )
 
     const lockedByAgentRepo = !!agentRepoConstraint
     const localCardDisabled = lockedByAgentRepo
@@ -2881,13 +2886,27 @@ export function SourceSelectionDialog({
             fullWidth
             disabled={remoteDisabled || agentDisabled}
           />
-          <TextField
+          <PathSelectorField
             label={t('backupPlans.sourceChooser.containerExportPath')}
             value={containerExportPath}
-            onChange={(event) => handleContainerExportPathChange(event.target.value)}
+            onChange={handleContainerExportPathChange}
             size="small"
             fullWidth
             disabled={remoteDisabled || agentDisabled}
+            initialPath={
+              selectedSourceConnection
+                ? selectedSourceConnection.default_path || '/'
+                : selectedAgent?.default_path || '/'
+            }
+            selectMode="directories"
+            connectionType={
+              sourceKind === 'agent' ? 'agent' : selectedSourceConnection ? 'ssh' : 'local'
+            }
+            agentId={selectedAgent?.id}
+            agentName={selectedAgent?.name}
+            agentDefaultPath={selectedAgent?.default_path}
+            sshConfig={selectedSourceSshConfig}
+            showSshMountPoints={false}
           />
           <Button
             variant="contained"
@@ -3057,7 +3076,11 @@ export function SourceSelectionDialog({
                 )
               }
             >
-              {t('backupPlans.sourceChooser.applyPaths')}
+              {t(
+                view === 'container'
+                  ? 'backupPlans.sourceChooser.applyContainers'
+                  : 'backupPlans.sourceChooser.applyPaths'
+              )}
             </Button>
           )}
           {view === 'database-detail' && (

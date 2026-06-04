@@ -249,6 +249,7 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.backToTypes': 'Back to source types',
   'backupPlans.sourceChooser.back': 'Back',
   'backupPlans.sourceChooser.applyPaths': 'Use these paths',
+  'backupPlans.sourceChooser.applyContainers': 'Use these containers',
   'backupPlans.sourceChooser.loading': 'Scanning sources...',
   'backupPlans.sourceChooser.noDatabaseTemplates': 'No database templates available',
   'backupPlans.sourceChooser.databaseTemplates': 'Templates',
@@ -503,6 +504,20 @@ function StatefulSourceStep({
   )
 }
 
+const discoveryResponseWithEnabledContainer = {
+  ...discoveryResponse,
+  source_types: discoveryResponse.source_types.map((sourceType) =>
+    sourceType.id === 'container'
+      ? {
+          ...sourceType,
+          description: 'Back up a Docker container filesystem.',
+          status: 'enabled',
+          disabled: false,
+        }
+      : sourceType
+  ),
+}
+
 const emptyScanResponse = {
   scan_target: {
     source_type: 'local' as const,
@@ -602,7 +617,7 @@ describe('SourceStep', () => {
   })
 
   it('opens straight into the path picker with the source-kind pivot', async () => {
-    apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
+    apiMocks.databases.mockResolvedValue({ data: discoveryResponseWithEnabledContainer })
     renderSourceStep()
 
     fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
@@ -624,7 +639,7 @@ describe('SourceStep', () => {
   }, 45000)
 
   it('configures a Docker container source', async () => {
-    apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
+    apiMocks.databases.mockResolvedValue({ data: discoveryResponseWithEnabledContainer })
     const updateState = vi.fn()
     const onCreateScript = vi
       .fn()
@@ -644,6 +659,12 @@ describe('SourceStep', () => {
     fireEvent.change(screen.getByLabelText(/image/i), {
       target: { value: 'postgres:17' },
     })
+    fireEvent.click(screen.getByTitle('Browse filesystem'))
+    const exportPathExplorer = await screen.findByTestId('file-explorer-dialog')
+    expect(exportPathExplorer).toHaveAttribute('data-connection-type', 'local')
+    expect(exportPathExplorer).toHaveAttribute('data-initial-path', '/')
+    clickExistingTextButton(/select browsed path/i)
+    expect(screen.getByDisplayValue('/selected/from-browser')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText(/export staging path/i), {
       target: { value: '/var/tmp/borg-ui/container-exports/postgres' },
     })
@@ -652,7 +673,7 @@ describe('SourceStep', () => {
     expect(screen.getByText('postgres')).toBeInTheDocument()
     expect(screen.getByText('/var/tmp/borg-ui/container-exports/postgres')).toBeInTheDocument()
 
-    clickExistingTextButton(/use these paths/i)
+    clickExistingTextButton(/use these containers/i)
 
     await waitFor(() => {
       expect(onCreateScript).toHaveBeenCalledTimes(2)
@@ -687,6 +708,79 @@ describe('SourceStep', () => {
         ],
       })
     )
+  }, 45000)
+
+  it('keeps Docker sources out of the files summary and disambiguates duplicate export paths', async () => {
+    apiMocks.databases.mockResolvedValue({ data: discoveryResponseWithEnabledContainer })
+    const updateState = vi.fn()
+    const onCreateScript = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 301 })
+      .mockResolvedValueOnce({ id: 302 })
+      .mockResolvedValueOnce({ id: 303 })
+      .mockResolvedValueOnce({ id: 304 })
+    renderSourceStep({ updateState, onCreateScript })
+
+    fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
+    const containerTab = await screen.findByRole('tab', { name: /container/i })
+    fireEvent.click(containerTab)
+
+    fireEvent.change(screen.getByLabelText(/container name or id/i), {
+      target: { value: 'postgres' },
+    })
+    fireEvent.change(screen.getByLabelText(/export staging path/i), {
+      target: { value: '/var/tmp/borg-ui/container-exports/postgres' },
+    })
+    clickExistingTextButton(/add container/i)
+
+    fireEvent.change(screen.getByLabelText(/container name or id/i), {
+      target: { value: 'postgres-copy' },
+    })
+    fireEvent.change(screen.getByLabelText(/export staging path/i), {
+      target: { value: '/var/tmp/borg-ui/container-exports/postgres' },
+    })
+    clickExistingTextButton(/add container/i)
+
+    expect(screen.getByText('/var/tmp/borg-ui/container-exports/postgres')).toBeInTheDocument()
+    expect(screen.getByText('/var/tmp/borg-ui/container-exports/postgres-1')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('tab', { name: /^files$/i }))
+    expect(screen.getAllByText('No source selected yet').length).toBeGreaterThan(0)
+    expect(
+      screen.queryByText('/var/tmp/borg-ui/container-exports/postgres')
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('/var/tmp/borg-ui/container-exports/postgres-1')
+    ).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('tab', { name: /container/i }))
+    clickExistingTextButton(/use these containers/i)
+
+    await waitFor(() => {
+      expect(updateState).toHaveBeenCalledTimes(1)
+    })
+    const updatePayload = updateState.mock.calls[0][0]
+    expect(updatePayload.sourceDirectories).toEqual([
+      '/var/tmp/borg-ui/container-exports/postgres',
+      '/var/tmp/borg-ui/container-exports/postgres-1',
+    ])
+    expect(
+      updatePayload.sourceLocations.map(
+        (location: { container: { container_name: string; export_path: string } }) => ({
+          name: location.container.container_name,
+          exportPath: location.container.export_path,
+        })
+      )
+    ).toEqual([
+      {
+        name: 'postgres',
+        exportPath: '/var/tmp/borg-ui/container-exports/postgres',
+      },
+      {
+        name: 'postgres-copy',
+        exportPath: '/var/tmp/borg-ui/container-exports/postgres-1',
+      },
+    ])
   }, 45000)
 
   it('keeps a files and folders summary after selecting paths on a scripted plan', async () => {

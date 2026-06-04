@@ -48,16 +48,17 @@ Example normalized source location:
     "pre_backup_script_id": 17,
     "post_backup_script_id": 18,
     "pre_backup_script_parameters": {
-      "BORG_UI_CONTAINER_NAME": "postgres",
-      "BORG_UI_CONTAINER_EXPORT_DIR": "/var/tmp/borg-ui/container-exports/postgres"
+      "CONTAINER_EXPORT_FORMAT": "tar"
     },
     "post_backup_script_parameters": {
-      "BORG_UI_CONTAINER_EXPORT_DIR": "/var/tmp/borg-ui/container-exports/postgres"
+      "CLEAN_EXPORT": "yes"
     },
     "script_execution_order": 1
   }
 }
 ```
+
+`BORG_UI_CONTAINER_*` values are injected by the backend at script execution time and should not be modeled as user-provided script parameters. Container script parameters are only for user-configurable values such as export format, cleanup policy, or other script-specific knobs.
 
 The generated pre-backup script should create the export directory, write `docker inspect` output, and export the container filesystem into `filesystem.tar`. The post-backup script should remove the staged export directory. Remote Docker sources run their scripts on the remote source when `script_execution_target` is `source`, matching remote database behavior.
 
