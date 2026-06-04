@@ -707,8 +707,12 @@ describe('SourceStep', () => {
     fireEvent.change(screen.getByLabelText(/source path/i), {
       target: { value: '/srv/app-data' },
     })
-    clickExistingTextButton(/add path/i)
-    clickExistingTextButton(/use these paths/i)
+    const addPathButton = screen.getByRole('button', { name: /add path/i })
+    await waitFor(() => expect(addPathButton).toBeEnabled())
+    fireEvent.click(addPathButton)
+    const usePathsButton = screen.getByRole('button', { name: /use these paths/i })
+    await waitFor(() => expect(usePathsButton).toBeEnabled())
+    fireEvent.click(usePathsButton)
 
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()

@@ -57,18 +57,17 @@ export function SourceStep({
   const hasSources = sourcePaths.length > 0
   const hasDatabaseSource = sourceLocations.some((location) => Boolean(location.database))
   const hasContainerSource = sourceLocations.some((location) => Boolean(location.container))
-  const hasFileSource = sourceLocations.some(
-    (location) => !location.database && !location.container
-  )
   const isLegacyDatabaseSource =
     !hasDatabaseSource &&
     !hasContainerSource &&
     sourcePaths.length > 0 &&
-    sourcePaths.every(
-      (sourceDirectory) =>
-        sourceDirectory === DATABASE_DUMP_ROOT ||
-        sourceDirectory.startsWith(`${DATABASE_DUMP_ROOT}/`)
-    )
+    sourcePaths.every(isDatabaseDumpPath)
+  const hasFileSource = sourceLocations.some(
+    (location) =>
+      !location.database &&
+      !location.container &&
+      !(isLegacyDatabaseSource && location.paths.every(isDatabaseDumpPath))
+  )
   const isDatabaseSource =
     (hasDatabaseSource && !hasFileSource && !hasContainerSource) || isLegacyDatabaseSource
   const isContainerSource = hasContainerSource && !hasDatabaseSource && !hasFileSource
@@ -428,6 +427,13 @@ function commonDirectoryPrefix(paths: string[]): string {
   if (common === minLength) common = minLength - 1
   if (common < 2) return ''
   return segments[0].slice(0, common).join('/') + '/'
+}
+
+function isDatabaseDumpPath(sourceDirectory: string): boolean {
+  return (
+    sourceDirectory === DATABASE_DUMP_ROOT ||
+    sourceDirectory.startsWith(`${DATABASE_DUMP_ROOT}/`)
+  )
 }
 
 function getWizardSourceLocations(wizardState: WizardState): SourceLocation[] {
