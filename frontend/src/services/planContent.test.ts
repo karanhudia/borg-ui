@@ -52,4 +52,14 @@ describe('planContent', () => {
     expect(rcloneFeatures).toHaveLength(1)
     expect(rcloneFeatures[0].label).toBe('Hosted rclone label')
   })
+
+  it('marks shipped monitoring and database features as included', () => {
+    const includedFeatureIds = DEFAULT_PLAN_CONTENT_MANIFEST.features
+      .filter((feature) => feature.availability === 'included')
+      .map((feature) => feature.id)
+
+    expect(includedFeatureIds).toEqual(
+      expect.arrayContaining(['backup_reports', 'alerting_monitoring', 'database_discovery'])
+    )
+  })
 })
