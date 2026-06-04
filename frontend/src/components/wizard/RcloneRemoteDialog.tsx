@@ -34,6 +34,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import CodeEditor from '../shared/CodeEditor'
 import ResponsiveDialog from '../shared/ResponsiveDialog'
+import RcloneProviderIcon from '../shared/RcloneProviderIcon'
 import type {
   RcloneOAuthCredentialUpdate,
   RcloneOAuthSession,
@@ -119,6 +120,8 @@ const browserAuthorizationUrl = (url: string | null | undefined) => {
   if (!url) return null
   return url.startsWith('/rclone/') ? buildDownloadUrl(url) : url
 }
+
+const OAUTH_AUTO_POLL_INTERVAL_MS = 750
 
 const formatTokenExpiry = (expiresAt?: string | null) => {
   if (!expiresAt) return null
@@ -282,62 +285,61 @@ export default function RcloneRemoteDialog({
     window.open(browserUrl, '_blank', 'noopener,noreferrer')
   }
 
-  const applyOAuthConfig = (
-    session: RcloneOAuthSession,
-    requestProvider: string,
-    requestId: number
-  ) => {
-    const sessionConfig = session.config
-    if (
-      session.status !== 'authorized' ||
-      !sessionConfig ||
-      session.provider !== requestProvider ||
-      !isCurrentOAuthRequest(requestId, requestProvider)
-    ) {
-      return
-    }
-    const marker =
-      typeof sessionConfig._borg_ui_oauth_provider === 'string'
-        ? sessionConfig._borg_ui_oauth_provider
-        : null
-    const sessionMarker =
-      typeof sessionConfig._borg_ui_oauth_session_id === 'string'
-        ? sessionConfig._borg_ui_oauth_session_id
-        : null
-    const isBorgUiSessionMarker = marker === requestProvider && !!sessionMarker
-    const visibleSessionConfig = Object.fromEntries(
-      Object.entries(sessionConfig).filter(([key]) => !key.startsWith('_borg_ui_oauth'))
-    )
-    if (isBorgUiSessionMarker) {
-      setBorgUiOAuthProvider(marker)
-      setBorgUiOAuthSessionId(sessionMarker)
-      setOauthTokenStatus(session.token_status ?? null)
-    } else {
-      setBorgUiOAuthProvider(null)
-      setBorgUiOAuthSessionId(null)
-      setOauthTokenStatus(session.token_status ?? null)
-    }
-    setConfigJson((currentJson) => {
-      let currentConfig: Record<string, unknown>
-      try {
-        currentConfig = parseConfig(currentJson, requestProvider)
-      } catch {
-        currentConfig = { type: requestProvider }
+  const applyOAuthConfig = useCallback(
+    (session: RcloneOAuthSession, requestProvider: string, requestId: number) => {
+      const sessionConfig = session.config
+      if (
+        session.status !== 'authorized' ||
+        !sessionConfig ||
+        session.provider !== requestProvider ||
+        !isCurrentOAuthRequest(requestId, requestProvider)
+      ) {
+        return
       }
+      const marker =
+        typeof sessionConfig._borg_ui_oauth_provider === 'string'
+          ? sessionConfig._borg_ui_oauth_provider
+          : null
+      const sessionMarker =
+        typeof sessionConfig._borg_ui_oauth_session_id === 'string'
+          ? sessionConfig._borg_ui_oauth_session_id
+          : null
+      const isBorgUiSessionMarker = marker === requestProvider && !!sessionMarker
+      const visibleSessionConfig = Object.fromEntries(
+        Object.entries(sessionConfig).filter(([key]) => !key.startsWith('_borg_ui_oauth'))
+      )
       if (isBorgUiSessionMarker) {
-        delete currentConfig.token
+        setBorgUiOAuthProvider(marker)
+        setBorgUiOAuthSessionId(sessionMarker)
+        setOauthTokenStatus(session.token_status ?? null)
+      } else {
+        setBorgUiOAuthProvider(null)
+        setBorgUiOAuthSessionId(null)
+        setOauthTokenStatus(session.token_status ?? null)
       }
-      const nextConfig: Record<string, unknown> = {
-        ...currentConfig,
-        ...visibleSessionConfig,
-        type: visibleSessionConfig.type || requestProvider,
-      }
-      if (isBorgUiSessionMarker) {
-        delete nextConfig.token
-      }
-      return formatConfigJson(nextConfig, requestProvider)
-    })
-  }
+      setConfigJson((currentJson) => {
+        let currentConfig: Record<string, unknown>
+        try {
+          currentConfig = parseConfig(currentJson, requestProvider)
+        } catch {
+          currentConfig = { type: requestProvider }
+        }
+        if (isBorgUiSessionMarker) {
+          delete currentConfig.token
+        }
+        const nextConfig: Record<string, unknown> = {
+          ...currentConfig,
+          ...visibleSessionConfig,
+          type: visibleSessionConfig.type || requestProvider,
+        }
+        if (isBorgUiSessionMarker) {
+          delete nextConfig.token
+        }
+        return formatConfigJson(nextConfig, requestProvider)
+      })
+    },
+    [isCurrentOAuthRequest]
+  )
 
   const handleStartOAuth = async (modeOverride?: 'borg_ui' | 'rclone_loopback') => {
     if (!onStartOAuth || !resolvedProvider) return
@@ -380,7 +382,7 @@ export default function RcloneRemoteDialog({
     }
   }
 
-  const handleCheckOAuth = async () => {
+  const handleCheckOAuth = useCallback(async () => {
     if (!onGetOAuthSession || !oauthSession) return
     const requestProvider = oauthSession.provider
     const requestId = oauthRequestIdRef.current
@@ -403,7 +405,22 @@ export default function RcloneRemoteDialog({
         setIsCheckingOAuth(false)
       }
     }
-  }
+  }, [applyOAuthConfig, isCurrentOAuthRequest, oauthSession, onGetOAuthSession, t])
+
+  useEffect(() => {
+    if (
+      !open ||
+      !oauthSession ||
+      oauthSession.oauth_mode !== 'borg_ui' ||
+      oauthSession.status !== 'awaiting_callback'
+    ) {
+      return
+    }
+    const timer = window.setTimeout(() => {
+      void handleCheckOAuth()
+    }, OAUTH_AUTO_POLL_INTERVAL_MS)
+    return () => window.clearTimeout(timer)
+  }, [handleCheckOAuth, oauthSession, open])
 
   const handleSaveOAuthCredentials = async () => {
     if (!onSaveOAuthCredentials || !resolvedProvider) return
@@ -453,6 +470,7 @@ export default function RcloneRemoteDialog({
   const oauthStatusMessage = (() => {
     if (oauthError) return oauthError
     if (!oauthSession) return null
+    if (isCheckingOAuth) return t('wizard.location.rcloneOAuthChecking')
     if (oauthSession.status === 'authorized') {
       return borgUiOAuthProvider === oauthSession.provider && borgUiOAuthSessionId
         ? t('wizard.location.rcloneOAuthTokenReady')
@@ -636,7 +654,12 @@ export default function RcloneRemoteDialog({
               >
                 {providerOptions.map((provider) => (
                   <MenuItem key={provider.type} value={provider.type}>
-                    {provider.label}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                      <RcloneProviderIcon provider={provider.type} size={28} iconSize={15} />
+                      <Typography component="span" noWrap>
+                        {provider.label}
+                      </Typography>
+                    </Box>
                   </MenuItem>
                 ))}
               </TextField>
@@ -664,21 +687,7 @@ export default function RcloneRemoteDialog({
               }}
             >
               <Stack direction="row" spacing={1.5} alignItems="flex-start">
-                <Box
-                  sx={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 1.5,
-                    bgcolor: 'primary.main',
-                    color: 'primary.contrastText',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                  }}
-                >
-                  <Cloud size={18} />
-                </Box>
+                <RcloneProviderIcon provider={resolvedProvider || selectedProvider.type} />
                 <Box sx={{ minWidth: 0, flex: 1 }}>
                   <Typography variant="subtitle1" fontWeight={600} sx={{ lineHeight: 1.25 }}>
                     {providerTypeLabel}
@@ -945,16 +954,28 @@ export default function RcloneRemoteDialog({
                     </Link>
                   ) : null}
                   {oauthSession?.authorization_url ? (
-                    <Button
-                      size="small"
-                      variant="outlined"
+                    <Link
+                      component="button"
+                      type="button"
+                      variant="body2"
                       onClick={() => openAuthorizationUrl(oauthSession.authorization_url)}
-                      startIcon={<ExternalLink size={14} />}
+                      sx={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 0.5,
+                        background: 'none',
+                        border: 'none',
+                        p: 0,
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                      }}
                     >
+                      <ExternalLink size={13} />
                       {t('wizard.location.rcloneOAuthOpen')}
-                    </Button>
+                    </Link>
                   ) : null}
                   {oauthSession &&
+                  oauthSession.oauth_mode !== 'borg_ui' &&
                   oauthSession.status !== 'authorized' &&
                   oauthSession.status !== 'failed' ? (
                     <Button
@@ -1022,7 +1043,15 @@ export default function RcloneRemoteDialog({
                 borderRadius: 2,
                 overflow: 'hidden',
                 '&:before': { display: 'none' },
-                '&.Mui-expanded': { margin: 0 },
+                '&.MuiAccordion-root': { borderRadius: 2 },
+                '&.Mui-expanded': { margin: 0, borderRadius: 2 },
+                '& .MuiAccordionSummary-root': {
+                  borderRadius: 2,
+                },
+                '&.Mui-expanded .MuiAccordionSummary-root': {
+                  borderBottomLeftRadius: 0,
+                  borderBottomRightRadius: 0,
+                },
                 mb: 1,
               }}
             >

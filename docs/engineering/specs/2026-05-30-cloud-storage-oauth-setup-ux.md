@@ -2,12 +2,12 @@
 
 ## Problem
 
-BOR-86 added Borg UI-owned OAuth callbacks for Google Drive and Microsoft OneDrive, but the admin/user flow still exposes too much implementation detail. Provider OAuth app credentials can only be configured through environment variables, token expiry/refresh status is not visible, Borg UI-owned callback completion returns raw token/config details to the setup dialog, and unsupported providers need clearer fallback guidance.
+BOR-86 added Borg UI-owned OAuth callbacks for Google Drive and Microsoft OneDrive, but the admin/user flow still exposes too much implementation detail. Provider OAuth app credentials should be configured from the Cloud Storage UI, token expiry/refresh status is not visible, Borg UI-owned callback completion returns raw token/config details to the setup dialog, and unsupported providers need clearer fallback guidance.
 
 ## Goals
 
 - Let admins configure supported provider OAuth app credentials from a backend-managed Cloud Storage UI surface.
-- Prefer persisted credentials over environment variables, while preserving environment variable fallback for local and Docker deployments.
+- Use persisted Borg UI credentials as the only provider app credential source.
 - Keep client secrets and provider tokens out of ordinary frontend responses, remote metadata, and logs.
 - Show OAuth token status, expiry, and refresh availability for managed OAuth remotes.
 - Improve Borg UI-owned callback completion so the browser sees a clear completion page and the setup dialog can save a server-side token result without displaying raw token JSON.
@@ -27,10 +27,7 @@ BOR-86 added Borg UI-owned OAuth callbacks for Google Drive and Microsoft OneDri
 - Add admin-only rclone OAuth credential endpoints:
   - `GET /api/rclone/oauth/credentials`
   - `PUT /api/rclone/oauth/credentials/{provider}`
-- Use a single credential resolver for provider authorization URLs, token exchange, and provider metadata. Resolver precedence is:
-  1. complete persisted Borg UI credentials,
-  2. complete environment variables,
-  3. configured=false with source/status explaining what is missing.
+- Use a single credential resolver for provider authorization URLs, token exchange, and provider metadata. Missing persisted Borg UI credentials return configured=false with source/status explaining what is missing.
 - Extend provider metadata with credential source/status and callback setup details, without returning client secrets.
 - For Borg UI-owned sessions, return a server-side session marker plus token status instead of raw token JSON. Remote creation/update resolves that marker to the in-memory authorized session before writing `rclone.conf`.
 - Preserve raw token JSON only for the existing rclone loopback/manual path, because rclone itself returns that token to the browser for manual copy/paste.
@@ -46,12 +43,12 @@ BOR-86 added Borg UI-owned OAuth callbacks for Google Drive and Microsoft OneDri
 
 ### Documentation
 
-- Update Cloud Storage OAuth docs with local and production redirect URLs, UI-managed vs environment credential sources, fallback behavior, and supported provider scope.
+- Update Cloud Storage OAuth docs with local and production redirect URLs, UI-managed credential setup, fallback behavior, and supported provider scope.
 - Update navigation/user docs if the Cloud Storage guided flow copy changes enough to affect navigation guidance.
 
 ## Acceptance Mapping
 
-- Documentation covers setup, credential sources, redirect URLs, fallback, supported providers, and provider scope.
+- Documentation covers setup, credential storage, redirect URLs, fallback, supported providers, and provider scope.
 - UI and remote metadata show token expiry/status and refresh behavior; no configurable expiry is added because provider/rclone semantics own it.
 - Admins can configure supported provider app credentials through backend-managed API/UI; secrets are encrypted at rest and redacted from responses.
 - Borg UI-owned callbacks provide clear completion and session progress without default raw token JSON exposure.
@@ -61,7 +58,7 @@ BOR-86 added Borg UI-owned OAuth callbacks for Google Drive and Microsoft OneDri
 
 ## Validation
 
-- Backend unit tests for credential persistence, redaction, non-admin access, credential precedence, token status serialization, and Borg UI session marker handling.
+- Backend unit tests for credential persistence, redaction, non-admin access, missing credential handling, token status serialization, and Borg UI session marker handling.
 - Frontend tests for credential setup, callback progress, expiry/status display, error state, and loopback fallback.
 - Storybook stories and snapshots for configured, setup-missing, callback-ready, expiry/status, and error states.
 - Backend and frontend quality gates required by repo policy.

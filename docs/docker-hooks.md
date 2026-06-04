@@ -68,9 +68,13 @@ You can also use a custom image that includes the Docker CLI.
 ## Typical Flow
 
 1. Create a script in the script library.
-2. Attach it to a repository as a pre-backup or post-backup hook.
+2. Attach it to a repository or Backup Plan as a pre-backup or post-backup hook.
 3. Set execution order if multiple scripts run.
 4. Test the script before relying on a scheduled backup.
+
+Backup Plan hooks use saved scripts from the script library. Add one or more
+scripts to the pre-backup or post-backup chain, then choose the pre-backup
+failure behavior or the post-backup run condition for each script.
 
 Common use:
 

@@ -41,6 +41,33 @@ echo "Updated VERSION file to $VERSION_NUMBER"
 npm --prefix frontend version "$VERSION_NUMBER" --no-git-tag-version
 echo "Updated frontend/package.json to $VERSION_NUMBER"
 
+# Update backend fallback/OpenAPI metadata
+python3 - "$VERSION_NUMBER" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+version = sys.argv[1]
+updates = {
+    Path("app/config.py"): (
+        r'app_version: str = "[^"]+"',
+        f'app_version: str = "{version}"',
+    ),
+    Path("app/main.py"): (
+        r'version="[0-9]+\.[0-9]+\.[0-9]+(?:-[^"]+)?"',
+        f'version="{version}"',
+    ),
+}
+
+for path, (pattern, replacement) in updates.items():
+    text = path.read_text()
+    updated, count = re.subn(pattern, replacement, text, count=1)
+    if count != 1:
+        raise SystemExit(f"Could not update version in {path}")
+    path.write_text(updated)
+PY
+echo "Updated backend app metadata to $VERSION_NUMBER"
+
 # Run tests and checks
 echo "Running checks..."
 cd frontend
@@ -49,7 +76,7 @@ npm run format:check
 cd ..
 
 # Commit and tag
-git add VERSION frontend/package.json frontend/package-lock.json
+git add VERSION frontend/package.json frontend/package-lock.json app/config.py app/main.py
 git commit -m "chore: bump version to $VERSION_NUMBER
 
 Co-Authored-By: Claude <noreply@anthropic.com>"

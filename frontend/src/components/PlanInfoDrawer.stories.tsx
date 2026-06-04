@@ -8,7 +8,10 @@ import PlanInfoDrawer from './PlanInfoDrawer'
 const featureMap = {
   borg_v2: 'pro',
   backup_plan_multi_repository: 'pro',
+  backup_plan_mixed_sources: 'pro',
   extra_users: 'pro',
+  rclone: 'pro',
+  managed_agents: 'pro',
   rbac: 'enterprise',
 } as const
 

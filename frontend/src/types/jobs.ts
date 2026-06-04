@@ -9,7 +9,7 @@
 
 export interface Job {
   id: string | number
-  repository_id?: number
+  repository_id?: number | null
   repository?: string | null
   repository_path?: string | null
   type?: string
@@ -36,6 +36,11 @@ export interface Job {
   scheduled_job_id?: number | null
   execution_mode?: string | null
   route_strategy?: string | null
+  retry_attempt?: number | null
+  retry_original_job_id?: number | null
+  retry_source_job_id?: number | null
+  retry_requested_by_user_id?: number | null
+  retry_requested_at?: string | null
   progress_details?: unknown
 }
 

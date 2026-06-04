@@ -39,7 +39,6 @@ from app.api.maintenance_jobs import (
     read_job_logs,
     serialize_job_status,
     serialize_job_summary,
-    ensure_no_running_job,
 )
 from app.core.authorization import authorize_request
 from app.core.security import get_current_user, check_repo_access, decrypt_secret
@@ -73,6 +72,12 @@ from app.services.check_flag_validation import (
     validate_check_flags_for_max_duration,
 )
 from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
+from app.services.job_admission import (
+    OPERATION_CHECK,
+    OPERATION_COMPACT,
+    OPERATION_PRUNE,
+    ensure_repository_admission,
+)
 from app.services.repository_command_lock import run_serialized_repository_command
 from app.services.rclone_repository_service import (
     SYNC_DIRECTION_AGENT_TO_REMOTE,
@@ -4792,11 +4797,11 @@ async def check_repository(
             _raise_check_flag_conflict(exc)
 
         if is_agent_executor(repository):
-            ensure_no_running_job(
+            ensure_repository_admission(
                 db,
-                CheckJob,
-                repo_id,
-                error_key="backend.errors.repo.checkAlreadyRunning",
+                repository,
+                OPERATION_CHECK,
+                duplicate_error_key="backend.errors.repo.checkAlreadyRunning",
             )
             check_job = create_maintenance_job(
                 db,
@@ -4952,11 +4957,11 @@ async def compact_repository(
             db, current_user, repo_id, required_role="operator"
         )
         if is_agent_executor(repository):
-            ensure_no_running_job(
+            ensure_repository_admission(
                 db,
-                CompactJob,
-                repo_id,
-                error_key="backend.errors.repo.compactAlreadyRunning",
+                repository,
+                OPERATION_COMPACT,
+                duplicate_error_key="backend.errors.repo.compactAlreadyRunning",
             )
             compact_job = create_maintenance_job(
                 db,
@@ -5031,11 +5036,11 @@ async def prune_repository(
         repository = get_repository_with_access(
             db, current_user, repo_id, required_role="operator"
         )
-        ensure_no_running_job(
+        ensure_repository_admission(
             db,
-            PruneJob,
-            repo_id,
-            error_key="backend.errors.repo.pruneAlreadyRunning",
+            repository,
+            OPERATION_PRUNE,
+            duplicate_error_key="backend.errors.repo.pruneAlreadyRunning",
         )
 
         # Extract retention policy from request
@@ -5722,6 +5727,12 @@ async def break_repository_lock(
     """Break a stale lock on a repository (user-initiated)"""
     try:
         repository = _load_repository_with_access(repo_id, current_user, db, "operator")
+        settings = db.query(SystemSettings).first()
+        if settings and not settings.lock_breaking_enabled:
+            raise HTTPException(
+                status_code=403,
+                detail={"key": "backend.errors.repo.lockBreakingDisabled"},
+            )
 
         logger.warning(
             "User requested lock break", repo_id=repo_id, user=current_user.username

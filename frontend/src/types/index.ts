@@ -135,6 +135,7 @@ export interface BackupJob {
   id: string | number
   repository: string
   repository_id?: number | null
+  repository_path?: string | null
   type?: string
   status: 'running' | 'completed' | 'completed_with_warnings' | 'failed' | 'cancelled' | string
   started_at?: string
@@ -149,6 +150,7 @@ export interface BackupJob {
   error_message?: string
   triggered_by?: string
   schedule_id?: number | null
+  scheduled_job_id?: number | null
   has_logs?: boolean
   maintenance_status?: string
   backup_plan_id?: number | null
@@ -157,6 +159,11 @@ export interface BackupJob {
   archive_name?: string | null
   execution_mode?: 'local' | 'remote_ssh' | 'agent' | string
   route_strategy?: string | null
+  retry_attempt?: number | null
+  retry_original_job_id?: number | null
+  retry_source_job_id?: number | null
+  retry_requested_by_user_id?: number | null
+  retry_requested_at?: string | null
   progress_details?: {
     original_size: number
     compressed_size?: number
@@ -238,6 +245,33 @@ export interface BackupPlanRepositoryLink {
   repository?: Repository | null
 }
 
+export type BackupPlanScriptHookType = 'pre-backup' | 'post-backup'
+export type BackupPlanScriptRunCondition = 'success' | 'failure' | 'warning' | 'always'
+
+export interface BackupPlanScriptHook {
+  id?: number | null
+  script_id: number
+  script_name?: string
+  script_description?: string | null
+  hook_type: BackupPlanScriptHookType
+  execution_order: number
+  enabled: boolean
+  custom_timeout?: number | null
+  custom_run_on?: BackupPlanScriptRunCondition | null
+  continue_on_error?: boolean | null
+  skip_on_failure?: boolean | null
+  default_timeout?: number | null
+  default_run_on?: BackupPlanScriptRunCondition | string | null
+  parameters?: Array<{
+    name: string
+    type: 'text' | 'password'
+    default: string
+    description: string
+    required: boolean
+  }> | null
+  parameter_values?: Record<string, string> | null
+}
+
 export interface BackupPlan {
   id: number
   name: string
@@ -267,6 +301,7 @@ export interface BackupPlan {
   post_backup_script_id?: number | null
   pre_backup_script_parameters?: Record<string, string> | null
   post_backup_script_parameters?: Record<string, string> | null
+  script_hooks?: BackupPlanScriptHook[]
   run_repository_scripts?: boolean
   run_prune_after?: boolean
   run_compact_after?: boolean
@@ -317,6 +352,11 @@ export interface BackupPlanRun {
   completed_at?: string | null
   error_message?: string | null
   created_at?: string | null
+  retry_attempt?: number | null
+  retry_original_run_id?: number | null
+  retry_source_run_id?: number | null
+  retry_requested_by_user_id?: number | null
+  retry_requested_at?: string | null
   repositories: BackupPlanRunRepository[]
   script_executions?: BackupPlanScriptExecution[]
 }
@@ -345,6 +385,7 @@ export interface BackupPlanData {
   post_backup_script_id?: number | null
   pre_backup_script_parameters?: Record<string, string> | null
   post_backup_script_parameters?: Record<string, string> | null
+  script_hooks?: BackupPlanScriptHook[]
   run_repository_scripts: boolean
   run_prune_after: boolean
   run_compact_after: boolean

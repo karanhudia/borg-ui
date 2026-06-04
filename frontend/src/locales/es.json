@@ -474,6 +474,8 @@
       "startFailed": "Error al iniciar la copia de seguridad",
       "cancelled": "¡Copia de seguridad cancelada correctamente!",
       "cancelFailed": "Error al cancelar la copia de seguridad",
+      "retryStarted": "Reintento de copia iniciado",
+      "retryFailed": "No se pudo reintentar la copia",
       "selectRepository": "Por favor selecciona un repositorio primero"
     }
   },
@@ -770,6 +772,8 @@
       "startFailed": "No se pudo iniciar el plan de copia",
       "cancelled": "Ejecución del plan cancelada",
       "cancelFailed": "No se pudo cancelar la ejecución del plan",
+      "retryStarted": "Reintento del plan de copia iniciado",
+      "retryFailed": "No se pudo reintentar la ejecución del plan",
       "repositoryCreated": "Repositorio creado",
       "repositoryCreateFailed": "No se pudo crear el repositorio",
       "multiRepositoryRequiresPro": "Varios repositorios en un plan de copia requieren Pro",
@@ -1017,6 +1021,24 @@
         "description": "Ejecuta scripts una vez para todo el plan de copia, antes de la primera copia de repositorio y después de que termine todo el trabajo de repositorio.",
         "runRepositoryScripts": "Ejecutar también scripts del repositorio",
         "runRepositoryScriptsHelper": "Usa los scripts pre/post copia configurados en cada repositorio durante su propia copia.",
+        "preBackupScripts": "Scripts previos a la copia",
+        "postBackupScripts": "Scripts posteriores a la copia",
+        "addPreBackupScript": "Agregar script previo",
+        "addPostBackupScript": "Agregar script posterior",
+        "noPreBackupScripts": "No hay scripts previos configurados.",
+        "noPostBackupScripts": "No hay scripts posteriores configurados.",
+        "onFailure": "Ante fallo",
+        "onFailureFail": "Fallar el plan",
+        "onFailureContinue": "Continuar copia",
+        "onFailureSkip": "Omitir copia",
+        "runCondition": "Condición de ejecución",
+        "runAlways": "Siempre",
+        "runOnSuccess": "Ante éxito",
+        "runOnFailure": "Ante fallo",
+        "runOnWarning": "Ante advertencia",
+        "removeScript": "Eliminar {{script}}",
+        "moveScriptUp": "Subir {{script}}",
+        "moveScriptDown": "Bajar {{script}}",
         "databaseSourceScripts": "Scripts de origen de base de datos",
         "databaseSourceScriptsDescription": "Se ejecutan una vez por cada origen de base de datos seleccionado antes y después de las copias del repositorio.",
         "preSourceScript": "Pre",
@@ -1136,6 +1158,17 @@
       },
       "repositoryProgress": "{{completed}}/{{total}} repositorios finalizados",
       "cancelRun": "Cancelar ejecución",
+      "retryRun": "Reintentar ejecución del plan",
+      "retryConfirm": "¿Reintentar la ejecución del plan #{{id}}?",
+      "retryTooltips": {
+        "ready": "Reintentar ejecución del plan",
+        "retrying": "Reintentando la ejecución del plan...",
+        "onlyFailed": "Solo se pueden reintentar ejecuciones fallidas del plan.",
+        "missingPlan": "Esta ejecución ya no está vinculada a un plan de copia.",
+        "activeRun": "Espera a que termine la ejecución activa del plan antes de reintentar.",
+        "noFailedRepositories": "Esta ejecución no tiene repositorios fallidos para reintentar.",
+        "requiresPermission": "Se requiere acceso de operador para cada repositorio fallido de esta ejecución."
+      },
       "noRepositories": "Aún no se han registrado ejecuciones de repositorio."
     }
   },
@@ -1218,6 +1251,10 @@
       "deleted": "Repositorio eliminado correctamente",
       "deleteFailed": "Error al eliminar el repositorio",
       "checkStarted": "Verificación iniciada",
+      "checkCompleted": "Verificación completada",
+      "checkCompletedWithWarnings": "Verificación completada con advertencias",
+      "checkRunFailed": "Verificación fallida",
+      "checkFailedWithMessage": "Verificación fallida: {{message}}",
       "checkFailed": "Error al iniciar la verificación",
       "compactStarted": "Compactación iniciada",
       "compactFailed": "Error al iniciar la compactación",
@@ -1770,6 +1807,40 @@
       "passwordPlaceholder": "Introduce la contraseña SSH",
       "passwordHelper": "La contraseña se usa para desplegar la clave pública en authorized_keys"
     },
+    "diagnostics": {
+      "title": "Diagnóstico de máquina remota",
+      "description": "Verifica la sesión SSH, el alcance TCP remoto opcional y la velocidad limitada del transporte SSH.",
+      "noConnection": "No hay conexión seleccionada",
+      "targetHost": "Host de destino",
+      "targetHostHelper": "Destino TCP remoto opcional",
+      "targetPort": "Puerto",
+      "targetTimeout": "Tiempo límite del destino",
+      "sshTimeout": "Tiempo límite SSH",
+      "speedProbeSize": "Tamaño de la prueba de velocidad",
+      "speedProbeHelper": "Bytes que se leerán por SSH, de 65536 a 5242880.",
+      "seconds": "Segundos",
+      "latency": "Latencia",
+      "runCheck": "Ejecutar comprobación",
+      "running": "Ejecutando diagnóstico",
+      "transferredIn": "{{bytes}} en {{elapsed}}",
+      "notReported": "No informado",
+      "noThroughputResult": "Sin resultado de rendimiento",
+      "sessionHealthy": "Sesión SSH correcta",
+      "sessionTimedOut": "SSH agotó el tiempo",
+      "sessionFailed": "SSH falló",
+      "tcpReachable": "TCP alcanzable",
+      "tcpTimedOut": "TCP agotó el tiempo",
+      "tcpFailed": "TCP falló",
+      "speedComplete": "Prueba de velocidad completada",
+      "speedTimedOut": "La prueba de velocidad agotó el tiempo",
+      "speedFailed": "La prueba de velocidad falló",
+      "errors": {
+        "targetPortRange": "Introduce un puerto TCP entre 1 y 65535.",
+        "targetTimeoutRange": "Introduce un tiempo límite del destino entre 0,5 y 15 segundos.",
+        "sshTimeoutRange": "Introduce un tiempo límite SSH entre 1 y 30 segundos.",
+        "speedProbeRange": "Introduce un tamaño de prueba de velocidad entre 65536 y 5242880 bytes."
+      }
+    },
     "remoteConnections": {
       "title": "Conexiones remotas",
       "configured_one": "{{count}} máquina configurada",
@@ -1796,7 +1867,9 @@
       "storageRefreshFailed": "Error al actualizar el almacenamiento",
       "keyDeleted": "¡Clave SSH del sistema eliminada correctamente!",
       "keyDeleteFailed": "Error al eliminar la clave SSH",
-      "publicKeyCopied": "¡Clave pública copiada al portapapeles!"
+      "publicKeyCopied": "¡Clave pública copiada al portapapeles!",
+      "diagnosticsComplete": "Diagnóstico completado",
+      "diagnosticsFailed": "Error al ejecutar el diagnóstico"
     }
   },
   "scripts": {
@@ -2036,6 +2109,11 @@
       "beforeBreakingCheck3": "Esto romperá tanto los bloqueos del repositorio como los de caché",
       "adminRequired": "Se requieren privilegios de administrador:",
       "adminRequiredDetail": "Solo los administradores pueden forzar el desbloqueo del repositorio. Por favor, contacta a tu administrador.",
+      "maintenanceRequired": "Se requiere acceso de mantenimiento al repositorio:",
+      "maintenanceRequiredDetail": "Necesitas acceso de mantenimiento a este repositorio para romper su bloqueo. Contacta a tu administrador para obtener ayuda.",
+      "lockBreakingDisabled": "Ruptura de bloqueo desactivada:",
+      "lockBreakingDisabledDetail": "Un administrador ha desactivado la ruptura manual de bloqueos para esta implementación.",
+      "breakLockUnavailable": "La ruptura de bloqueo no está disponible para este repositorio",
       "failedToBreakLock": "Error al forzar el desbloqueo del repositorio"
     },
     "errorDetails": {
@@ -2212,7 +2290,22 @@
       "errorDetails": "Detalles del error",
       "cancel": "Cancelar",
       "cancelJob": "Cancelar trabajo",
-      "breakLock": "Forzar desbloqueo"
+      "breakLock": "Forzar desbloqueo",
+      "retry": "Reintentar trabajo de copia"
+    },
+    "confirmations": {
+      "retryJob": "¿Reintentar el trabajo de copia #{{id}}?"
+    },
+    "retryTooltips": {
+      "ready": "Reintentar trabajo de copia",
+      "retrying": "Reintentando trabajo de copia...",
+      "onlyTerminal": "Solo se pueden reintentar trabajos de copia fallidos o cancelados.",
+      "destructiveType": "Los trabajos {{type}} no son seguros para reintentar desde esta tabla.",
+      "unsupportedType": "Los trabajos {{type}} no se pueden reintentar desde esta tabla.",
+      "backupPlanJob": "Reintenta este trabajo desde su ejecución del plan de copia.",
+      "scheduledJob": "Los trabajos programados deben volver a ejecutarse desde la programación o el plan.",
+      "missingRepository": "Este trabajo no se puede reintentar porque falta su repositorio de origen.",
+      "requiresPermission": "Se requiere acceso de operador para reintentar este trabajo de copia."
     },
     "never": "Nunca",
     "empty": "No se encontraron trabajos de copia de seguridad",
@@ -2746,6 +2839,9 @@
     "bypassLocksListTitle": "Omitir bloqueos para comandos List",
     "enableBypassLocksList": "Habilitar omisión de bloqueo para todos los comandos borg list",
     "bypassLocksListDescription": "Agrega --bypass-lock a todos los comandos borg list. Esto evita la contención de bloqueos cuando múltiples operaciones de lectura (como info + list) se ejecutan simultáneamente. Habilitar si ves errores de \"Error al adquirir bloqueo\". Nota: Puede mostrar datos obsoletos si hay una copia de seguridad activa.",
+    "lockBreakingTitle": "Ruptura manual de bloqueos",
+    "enableLockBreaking": "Permitir ruptura manual de bloqueos de repositorio",
+    "lockBreakingDescription": "Permite que usuarios con acceso de mantenimiento rompan bloqueos obsoletos de repositorios desde Borg UI. Desactívalo cuando otros servicios puedan mantener bloqueos transitorios normales.",
     "showLegacyRestoreTabTitle": "Mostrar pestaña de restauración heredada",
     "showLegacyRestoreTabLabel": "Mostrar la pestaña Restaurar dedicada en la navegación",
     "showLegacyRestoreTabDescription": "Habilitar esto para acceder a la pestaña de restauración heredada. La funcionalidad de restauración ahora está integrada en la página de Archivos, pero esta opción te permite usar la interfaz antigua si lo prefieres.",
@@ -3324,8 +3420,8 @@
       "rcloneProviderLabel": "Proveedor",
       "rcloneCustomProviderLabel": "Tipo de proveedor personalizado",
       "rcloneCustomProviderPlaceholder": "tipo de backend rclone",
-      "rcloneOAuthHelper": "Inicia la autorización de navegador de rclone desde Borg UI, completa el callback del proveedor y luego verifica la autorización para agregar el token a la configuración.",
-      "rcloneOAuthBorgUiHelper": "Borg UI recibirá el callback del proveedor e intercambiará el código en el servidor. Registra la URL de callback en la app OAuth del proveedor.",
+      "rcloneOAuthHelper": "Inicia la autorización de navegador de rclone desde Borg UI, completa el callback del proveedor y vuelve al diálogo.",
+      "rcloneOAuthBorgUiHelper": "Borg UI recibe el callback del proveedor en el servidor. Cuando el proveedor indique que la autorización terminó, vuelve aquí; este diálogo comprobará automáticamente.",
       "rcloneOAuthLoopbackHelper": "rclone usará su callback loopback local. Úsalo solo cuando el navegador pueda llegar al mismo host que el proceso rclone.",
       "rcloneOAuthSetupMissing": "El OAuth gestionado por Borg UI no está configurado para este proveedor.",
       "rcloneOAuthCallbackUrl": "Callback de Borg UI: {{url}}",
@@ -3335,9 +3431,10 @@
       "rcloneOAuthStartBorgUi": "Iniciar OAuth de Borg UI",
       "rcloneOAuthStarting": "Iniciando autorización...",
       "rcloneOAuthCheck": "Verificar autorización",
+      "rcloneOAuthChecking": "Verificando autorización...",
       "rcloneOAuthOpen": "Abrir enlace de autorización",
       "rcloneOAuthUseLoopback": "Usar loopback de rclone",
-      "rcloneOAuthWaiting": "Esperando el callback del proveedor.",
+      "rcloneOAuthWaiting": "Esperando el callback del proveedor. Este diálogo comprobará automáticamente cuando la autorización termine.",
       "rcloneOAuthAuthorized": "La autorización devolvió un token y actualizó la configuración.",
       "rcloneOAuthTokenReady": "Token listo para guardar en el servidor.",
       "rcloneOAuthFailed": "La autorización no se completó.",
@@ -3360,7 +3457,6 @@
       "rcloneOAuthClientSecretSet": "Secreto de cliente guardado",
       "rcloneOAuthCredentialSources": {
         "database": "Guardado en Borg UI",
-        "environment": "Desde el entorno",
         "unset": "No configurado",
         "unsupported": "No compatible"
       },
@@ -4097,13 +4193,30 @@
     "defaultPath": "Ruta predeterminada",
     "actions": {
       "testConnection": "Probar conexión",
-      "refreshStorage": "Actualizar almacenamiento"
+      "refreshStorage": "Actualizar almacenamiento",
+      "runDiagnostics": "Ejecutar diagnóstico"
     }
   },
   "repositoryInfoDialog": {
     "failedToDownloadKeyfile": "Error al descargar el archivo de clave",
     "noArchivesDescription": "Este repositorio ha sido inicializado pero no contiene archivos. Las estadísticas de almacenamiento aparecerán aquí después de crear tu primera copia de seguridad.",
-    "failedToLoad": "Error al cargar la información del repositorio. Asegúrate de que el repositorio sea accesible y esté correctamente inicializado."
+    "failedToLoad": "Error al cargar la información del repositorio. Asegúrate de que el repositorio sea accesible y esté correctamente inicializado.",
+    "recovery": {
+      "title": "Comandos de recuperación",
+      "description": "Usa estas plantillas de comandos cuando necesites diagnosticar, reparar o recrear este repositorio fuera de Borg UI.",
+      "checkCommand": "Comprobar repositorio",
+      "repairCommand": "Reparar repositorio",
+      "initCommand": "Inicializar repositorio",
+      "guidedCheckTitle": "Ejecutar comprobación de diagnóstico en Borg UI",
+      "guidedCheckDescription": "Abre la confirmación de comprobación existente y el flujo de registros del trabajo. La reparación y la inicialización siguen siendo manuales.",
+      "guidedCheckUnavailable": "Se requiere acceso de mantenimiento para ejecutar comprobaciones en Borg UI.",
+      "guidedCheckButton": "Ejecutar comprobación guiada",
+      "guidedCheckStarting": "Iniciando comprobación",
+      "copyCommand": "Copiar comando {{label}}",
+      "copiedCommand": "Comando {{label}} copiado",
+      "commandCopied": "Comando copiado",
+      "copyFailed": "Error al copiar el comando"
+    }
   },
   "analyticsBanner": {
     "viewDashboardLink": "Ver nuestro panel de análisis público",
@@ -4382,11 +4495,15 @@
         "failedGetBackupJobs": "Error al obtener los trabajos de copia de seguridad",
         "failedGetBackupStatus": "Error al obtener el estado de la copia de seguridad",
         "failedCancelBackup": "Error al cancelar la copia de seguridad",
-        "cannotDownloadLogsForRunningBackup": "No se pueden descargar los registros de una copia de seguridad en ejecución"
+        "cannotDownloadLogsForRunningBackup": "No se pueden descargar los registros de una copia de seguridad en ejecución",
+        "retryOnlyTerminalFailedCancelled": "Solo se pueden reintentar trabajos de copia fallidos o cancelados.",
+        "retryUnsupportedJobType": "Este tipo de trabajo de copia no se puede reintentar.",
+        "retryRequestNotReconstructable": "Este trabajo de copia ya no se puede reconstruir para reintentarlo."
       },
       "backupPlans": {
         "nameRequired": "El nombre del plan de copia de seguridad es obligatorio.",
-        "clearLegacyRepositoryNotSelected": "No se pueden borrar los ajustes de origen heredados de un repositorio que no está seleccionado en este plan de copia."
+        "clearLegacyRepositoryNotSelected": "No se pueden borrar los ajustes de origen heredados de un repositorio que no está seleccionado en este plan de copia.",
+        "retryUnsupported": "Esta ejecución del plan de copia no se puede reintentar."
       },
       "restore": {
         "cancelledByUser": "Restauración cancelada por el usuario",

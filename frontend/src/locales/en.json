@@ -474,6 +474,8 @@
       "startFailed": "Failed to start backup",
       "cancelled": "Backup cancelled successfully!",
       "cancelFailed": "Failed to cancel backup",
+      "retryStarted": "Backup retry started",
+      "retryFailed": "Failed to retry backup",
       "selectRepository": "Please select a repository first"
     }
   },
@@ -770,6 +772,8 @@
       "startFailed": "Failed to start backup plan",
       "cancelled": "Backup plan run cancelled",
       "cancelFailed": "Failed to cancel backup plan run",
+      "retryStarted": "Backup plan retry started",
+      "retryFailed": "Failed to retry backup plan run",
       "repositoryCreated": "Repository created",
       "repositoryCreateFailed": "Failed to create repository",
       "multiRepositoryRequiresPro": "Multiple repositories in one backup plan require Pro",
@@ -1017,6 +1021,24 @@
         "description": "Run scripts once for the whole backup plan, before the first repository copy and after all repository work finishes.",
         "runRepositoryScripts": "Also run repository scripts",
         "runRepositoryScriptsHelper": "Use each repository's configured pre/post backup scripts during its own copy.",
+        "preBackupScripts": "Pre-backup scripts",
+        "postBackupScripts": "Post-backup scripts",
+        "addPreBackupScript": "Add pre-backup script",
+        "addPostBackupScript": "Add post-backup script",
+        "noPreBackupScripts": "No pre-backup scripts configured.",
+        "noPostBackupScripts": "No post-backup scripts configured.",
+        "onFailure": "On failure",
+        "onFailureFail": "Fail plan",
+        "onFailureContinue": "Continue backup",
+        "onFailureSkip": "Skip backup",
+        "runCondition": "Run condition",
+        "runAlways": "Always",
+        "runOnSuccess": "On success",
+        "runOnFailure": "On failure",
+        "runOnWarning": "On warning",
+        "removeScript": "Remove {{script}}",
+        "moveScriptUp": "Move {{script}} up",
+        "moveScriptDown": "Move {{script}} down",
         "databaseSourceScripts": "Database source scripts",
         "databaseSourceScriptsDescription": "These run once per selected database source before and after repository backups.",
         "preSourceScript": "Pre",
@@ -1136,6 +1158,17 @@
       },
       "repositoryProgress": "{{completed}}/{{total}} repositories finished",
       "cancelRun": "Cancel Run",
+      "retryRun": "Retry backup plan run",
+      "retryConfirm": "Retry backup plan run #{{id}}?",
+      "retryTooltips": {
+        "ready": "Retry backup plan run",
+        "retrying": "Retrying backup plan run...",
+        "onlyFailed": "Only failed backup plan runs can be retried.",
+        "missingPlan": "This run is no longer linked to a backup plan.",
+        "activeRun": "Wait for the running backup plan run to finish before retrying.",
+        "noFailedRepositories": "This run has no failed repositories to retry.",
+        "requiresPermission": "Operator access is required for every failed repository in this run."
+      },
       "noRepositories": "No repository runs recorded yet."
     }
   },
@@ -1218,6 +1251,10 @@
       "deleted": "Repository deleted successfully",
       "deleteFailed": "Failed to delete repository",
       "checkStarted": "Check operation started",
+      "checkCompleted": "Check completed",
+      "checkCompletedWithWarnings": "Check completed with warnings",
+      "checkRunFailed": "Check failed",
+      "checkFailedWithMessage": "Check failed: {{message}}",
       "checkFailed": "Failed to start check",
       "compactStarted": "Compact operation started",
       "compactFailed": "Failed to start compact",
@@ -1770,6 +1807,40 @@
       "passwordPlaceholder": "Enter SSH password",
       "passwordHelper": "Password is used to deploy the public key to authorized_keys"
     },
+    "diagnostics": {
+      "title": "Remote machine diagnostics",
+      "description": "Verify the SSH session, optional remote TCP reachability, and bounded SSH transport speed.",
+      "noConnection": "No connection selected",
+      "targetHost": "Target host",
+      "targetHostHelper": "Optional remote TCP target",
+      "targetPort": "Port",
+      "targetTimeout": "Target timeout",
+      "sshTimeout": "SSH timeout",
+      "speedProbeSize": "Speed probe size",
+      "speedProbeHelper": "Bytes to read over SSH, 65536 to 5242880.",
+      "seconds": "Seconds",
+      "latency": "Latency",
+      "runCheck": "Run check",
+      "running": "Running diagnostics",
+      "transferredIn": "{{bytes}} in {{elapsed}}",
+      "notReported": "Not reported",
+      "noThroughputResult": "No throughput result",
+      "sessionHealthy": "SSH session healthy",
+      "sessionTimedOut": "SSH timed out",
+      "sessionFailed": "SSH failed",
+      "tcpReachable": "TCP reachable",
+      "tcpTimedOut": "TCP timed out",
+      "tcpFailed": "TCP failed",
+      "speedComplete": "Speed probe complete",
+      "speedTimedOut": "Speed probe timed out",
+      "speedFailed": "Speed probe failed",
+      "errors": {
+        "targetPortRange": "Enter a TCP port between 1 and 65535.",
+        "targetTimeoutRange": "Enter a target timeout between 0.5 and 15 seconds.",
+        "sshTimeoutRange": "Enter an SSH timeout between 1 and 30 seconds.",
+        "speedProbeRange": "Enter a speed probe size between 65536 and 5242880 bytes."
+      }
+    },
     "remoteConnections": {
       "title": "Remote Connections",
       "configured_one": "{{count}} machine configured",
@@ -1796,7 +1867,9 @@
       "storageRefreshFailed": "Failed to refresh storage",
       "keyDeleted": "System SSH key deleted successfully!",
       "keyDeleteFailed": "Failed to delete SSH key",
-      "publicKeyCopied": "Public key copied to clipboard!"
+      "publicKeyCopied": "Public key copied to clipboard!",
+      "diagnosticsComplete": "Diagnostics complete",
+      "diagnosticsFailed": "Failed to run diagnostics"
     }
   },
   "scripts": {
@@ -2036,6 +2109,11 @@
       "beforeBreakingCheck3": "This will break both repository and cache locks",
       "adminRequired": "Admin privileges required:",
       "adminRequiredDetail": "Only administrators can break repository locks. Please contact your admin for assistance.",
+      "maintenanceRequired": "Repository maintenance access required:",
+      "maintenanceRequiredDetail": "You need maintenance access to this repository to break its lock. Please contact your admin for assistance.",
+      "lockBreakingDisabled": "Lock breaking disabled:",
+      "lockBreakingDisabledDetail": "An administrator has disabled manual lock breaking for this deployment.",
+      "breakLockUnavailable": "Lock breaking is not available for this repository",
       "failedToBreakLock": "Failed to break repository lock"
     },
     "errorDetails": {
@@ -2212,7 +2290,22 @@
       "errorDetails": "Error Details",
       "cancel": "Cancel",
       "cancelJob": "Cancel Job",
-      "breakLock": "Break Lock"
+      "breakLock": "Break Lock",
+      "retry": "Retry backup job"
+    },
+    "confirmations": {
+      "retryJob": "Retry backup job #{{id}}?"
+    },
+    "retryTooltips": {
+      "ready": "Retry backup job",
+      "retrying": "Retrying backup job...",
+      "onlyTerminal": "Only failed or cancelled backup jobs can be retried.",
+      "destructiveType": "{{type}} jobs are not safe to retry from this table.",
+      "unsupportedType": "{{type}} jobs cannot be retried from this table.",
+      "backupPlanJob": "Retry this job from its backup plan run.",
+      "scheduledJob": "Scheduled backup jobs should be rerun from the schedule or plan.",
+      "missingRepository": "This job cannot be retried because its source repository is missing.",
+      "requiresPermission": "Operator access is required to retry this backup job."
     },
     "never": "Never",
     "empty": "No backup jobs found",
@@ -2746,6 +2839,9 @@
     "bypassLocksListTitle": "Bypass Locks for List Commands",
     "enableBypassLocksList": "Enable bypass-lock for all borg list commands",
     "bypassLocksListDescription": "Adds --bypass-lock to all borg list commands. This prevents lock contention when multiple read operations (like info + list) run simultaneously. Enable if you see \"Failed to acquire lock\" errors. Note: May show stale data if a backup is actively running.",
+    "lockBreakingTitle": "Manual Lock Breaking",
+    "enableLockBreaking": "Allow manual repository lock breaking",
+    "lockBreakingDescription": "Allows users with maintenance access to break stale repository locks from Borg UI. Disable this when other services may hold normal transient locks.",
     "showLegacyRestoreTabTitle": "Show Legacy Restore Tab",
     "showLegacyRestoreTabLabel": "Show the dedicated Restore tab in navigation",
     "showLegacyRestoreTabDescription": "Enable this to access the legacy Restore tab. Restore functionality is now integrated into the Archives page, but this option allows you to use the old interface if preferred.",
@@ -3324,8 +3420,8 @@
       "rcloneProviderLabel": "Provider",
       "rcloneCustomProviderLabel": "Custom provider type",
       "rcloneCustomProviderPlaceholder": "rclone backend type",
-      "rcloneOAuthHelper": "Start rclone browser authorization from Borg UI, complete the provider callback, then check authorization to add the token to the config.",
-      "rcloneOAuthBorgUiHelper": "Borg UI will receive the provider callback and exchange the code on the server. Register the callback URL with the provider OAuth app.",
+      "rcloneOAuthHelper": "Start rclone browser authorization from Borg UI, complete the provider callback, then return to the dialog.",
+      "rcloneOAuthBorgUiHelper": "Borg UI receives the provider callback server-side. After the provider says authorization is complete, return here; this dialog checks automatically.",
       "rcloneOAuthLoopbackHelper": "rclone will use its local loopback callback. Use this only when your browser can reach the same host as the rclone process.",
       "rcloneOAuthSetupMissing": "Borg UI-owned OAuth is not configured for this provider.",
       "rcloneOAuthCallbackUrl": "Borg UI callback: {{url}}",
@@ -3335,9 +3431,10 @@
       "rcloneOAuthStartBorgUi": "Start Borg UI OAuth",
       "rcloneOAuthStarting": "Starting authorization...",
       "rcloneOAuthCheck": "Check authorization",
+      "rcloneOAuthChecking": "Checking authorization...",
       "rcloneOAuthOpen": "Open authorization link",
       "rcloneOAuthUseLoopback": "Use rclone loopback",
-      "rcloneOAuthWaiting": "Waiting for provider callback.",
+      "rcloneOAuthWaiting": "Waiting for provider callback. This dialog checks automatically after authorization completes.",
       "rcloneOAuthAuthorized": "Authorization returned a token and updated the config.",
       "rcloneOAuthTokenReady": "Token ready to save server-side.",
       "rcloneOAuthFailed": "Authorization did not complete.",
@@ -3360,7 +3457,6 @@
       "rcloneOAuthClientSecretSet": "Client secret saved",
       "rcloneOAuthCredentialSources": {
         "database": "Stored in Borg UI",
-        "environment": "From environment",
         "unset": "Not configured",
         "unsupported": "Unsupported"
       },
@@ -4097,13 +4193,30 @@
     "defaultPath": "Default Path",
     "actions": {
       "testConnection": "Test Connection",
-      "refreshStorage": "Refresh Storage"
+      "refreshStorage": "Refresh Storage",
+      "runDiagnostics": "Run diagnostics"
     }
   },
   "repositoryInfoDialog": {
     "failedToDownloadKeyfile": "Failed to download keyfile",
     "noArchivesDescription": "This repository has been initialized but contains no archives. Storage statistics will appear here after you create your first backup.",
-    "failedToLoad": "Failed to load repository information. Make sure the repository is accessible and properly initialized."
+    "failedToLoad": "Failed to load repository information. Make sure the repository is accessible and properly initialized.",
+    "recovery": {
+      "title": "Recovery commands",
+      "description": "Use these command templates when you need to diagnose, repair, or recreate this repository outside Borg UI.",
+      "checkCommand": "Check repository",
+      "repairCommand": "Repair check",
+      "initCommand": "Initialize repository",
+      "guidedCheckTitle": "Run a diagnostic check in Borg UI",
+      "guidedCheckDescription": "Opens the existing check confirmation and job log flow. Repair and initialize stay manual.",
+      "guidedCheckUnavailable": "Maintenance access is required to run checks in Borg UI.",
+      "guidedCheckButton": "Run guided check",
+      "guidedCheckStarting": "Starting check",
+      "copyCommand": "Copy {{label}} command",
+      "copiedCommand": "Copied {{label}} command",
+      "commandCopied": "Command copied",
+      "copyFailed": "Failed to copy command"
+    }
   },
   "analyticsBanner": {
     "viewDashboardLink": "View our public analytics dashboard",
@@ -4382,11 +4495,15 @@
         "failedGetBackupJobs": "Failed to get backup jobs",
         "failedGetBackupStatus": "Failed to get backup status",
         "failedCancelBackup": "Failed to cancel backup",
-        "cannotDownloadLogsForRunningBackup": "Cannot download logs for running backup"
+        "cannotDownloadLogsForRunningBackup": "Cannot download logs for running backup",
+        "retryOnlyTerminalFailedCancelled": "Only failed or cancelled backup jobs can be retried.",
+        "retryUnsupportedJobType": "This backup job type cannot be retried.",
+        "retryRequestNotReconstructable": "This backup job can no longer be reconstructed for retry."
       },
       "backupPlans": {
         "nameRequired": "Backup plan name is required.",
-        "clearLegacyRepositoryNotSelected": "Cannot clear legacy source settings for a repository that is not selected in this backup plan."
+        "clearLegacyRepositoryNotSelected": "Cannot clear legacy source settings for a repository that is not selected in this backup plan.",
+        "retryUnsupported": "This backup plan run cannot be retried."
       },
       "restore": {
         "cancelledByUser": "Restore cancelled by user",

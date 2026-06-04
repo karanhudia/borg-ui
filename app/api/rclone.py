@@ -112,7 +112,7 @@ RCLONE_PROVIDER_CATALOG: list[dict[str, Any]] = [
                 "kind": "json",
                 "required": True,
                 "secret": True,
-                "helper": "Start browser authorization from Borg UI, then check authorization.",
+                "helper": "Start browser authorization from Borg UI, then return to the dialog.",
             },
             {
                 "name": "scope",
@@ -147,7 +147,7 @@ RCLONE_PROVIDER_CATALOG: list[dict[str, Any]] = [
                 "kind": "json",
                 "required": True,
                 "secret": True,
-                "helper": "Start browser authorization from Borg UI, then check authorization.",
+                "helper": "Start browser authorization from Borg UI, then return to the dialog.",
             },
             {
                 "name": "drive_type",
@@ -182,7 +182,7 @@ RCLONE_PROVIDER_CATALOG: list[dict[str, Any]] = [
                 "kind": "json",
                 "required": True,
                 "secret": True,
-                "helper": "Start browser authorization from Borg UI, then check authorization.",
+                "helper": "Start browser authorization from Borg UI, then return to the dialog.",
             }
         ],
     },
@@ -201,7 +201,7 @@ RCLONE_PROVIDER_CATALOG: list[dict[str, Any]] = [
                 "kind": "json",
                 "required": True,
                 "secret": True,
-                "helper": "Start browser authorization from Borg UI, then check authorization.",
+                "helper": "Start browser authorization from Borg UI, then return to the dialog.",
             }
         ],
     },
@@ -576,20 +576,6 @@ def _decrypt_optional_secret(value: str | None) -> str | None:
         return None
 
 
-def _provider_env_oauth_credentials(provider: str) -> tuple[str | None, str | None]:
-    if provider == "drive":
-        return (
-            _strip_optional(settings.google_drive_oauth_client_id),
-            _strip_optional(settings.google_drive_oauth_client_secret),
-        )
-    if provider == "onedrive":
-        return (
-            _strip_optional(settings.onedrive_oauth_client_id),
-            _strip_optional(settings.onedrive_oauth_client_secret),
-        )
-    return None, None
-
-
 def _provider_stored_oauth_credentials(
     provider: str, db: Session | None
 ) -> tuple[str | None, str | None, bool]:
@@ -633,17 +619,6 @@ def _provider_oauth_credential_state(
             "client_secret_set": bool(stored_secret),
             "configured": bool(stored_client_id and stored_secret),
             "source": "database",
-        }
-
-    env_client_id, env_secret = _provider_env_oauth_credentials(provider)
-    if env_client_id or env_secret:
-        return {
-            "client_id": env_client_id,
-            "client_secret": env_secret,
-            "client_id_set": bool(env_client_id),
-            "client_secret_set": bool(env_secret),
-            "configured": bool(env_client_id and env_secret),
-            "source": "environment",
         }
 
     return {
@@ -1960,8 +1935,9 @@ async def complete_borg_ui_oauth_callback(
         "<h1>Authorization complete</h1>"
         "<p>Borg UI received the provider callback and stored the token result "
         "server-side for this setup session.</p>"
-        "<p><strong>Return to Borg UI</strong> and check authorization to save "
-        "the remote.</p>"
+        "<p><strong>Return to Borg UI</strong>. The Cloud Storage dialog will "
+        "check authorization automatically; save the remote when the token is "
+        "ready.</p>"
         "</main>"
     )
 

@@ -61,6 +61,8 @@ class TestBorgWrapper:
         assert args[0] == [
             "borg",
             "extract",
+            "--umask",
+            "0022",
             "--noacls",
             "--noxattrs",
             "--noflags",
@@ -89,6 +91,8 @@ class TestBorgWrapper:
         assert args[0] == [
             "borg",
             "extract",
+            "--umask",
+            "0022",
             "--strip-components",
             "2",
             "--noacls",

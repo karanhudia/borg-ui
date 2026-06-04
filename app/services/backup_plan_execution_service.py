@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 import structlog
+from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.maintenance_jobs import create_started_maintenance_job
@@ -22,7 +23,9 @@ from app.database.models import (
     BackupJob,
     BackupPlan,
     BackupPlanRepository,
+    BackupPlanScript,
     BackupPlanRun,
+    BackupPlanRunRetryLineage,
     BackupPlanRunRepository,
     CheckJob,
     CompactJob,
@@ -40,6 +43,7 @@ from app.services.backup_route_planner import (
     plan_repository_route,
 )
 from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
+from app.services.job_admission import OPERATION_BACKUP, ensure_repository_admission
 from app.services.repository_executor import (
     cancel_agent_backup_job,
     is_agent_executor,
@@ -89,6 +93,7 @@ class PlanRunContext:
     post_backup_script_id: Optional[int]
     pre_backup_script_parameters: dict[str, Any]
     post_backup_script_parameters: dict[str, Any]
+    script_hooks: list[dict[str, Any]]
     run_repository_scripts: bool
     run_prune_after: bool
     run_compact_after: bool
@@ -267,6 +272,93 @@ def _database_source_script_assignments(
             assignment["source_index"],
         ),
     )
+
+
+def _decode_parameter_values(value: Optional[str]) -> dict[str, Any]:
+    if not value:
+        return {}
+    try:
+        decoded = json.loads(value)
+    except (TypeError, json.JSONDecodeError):
+        return {}
+    return decoded if isinstance(decoded, dict) else {}
+
+
+def _legacy_plan_script_hooks(plan: BackupPlan) -> list[dict[str, Any]]:
+    hooks: list[dict[str, Any]] = []
+    if plan.pre_backup_script_id:
+        hooks.append(
+            {
+                "legacy": True,
+                "script_id": plan.pre_backup_script_id,
+                "hook_type": "pre-backup",
+                "execution_order": 1,
+                "enabled": True,
+                "custom_timeout": None,
+                "custom_run_on": None,
+                "continue_on_error": False,
+                "skip_on_failure": False,
+                "parameter_values": plan.pre_backup_script_parameters or {},
+                "default_run_on": plan.pre_backup_script.run_on
+                if plan.pre_backup_script
+                else "always",
+            }
+        )
+    if plan.post_backup_script_id:
+        hooks.append(
+            {
+                "legacy": True,
+                "script_id": plan.post_backup_script_id,
+                "hook_type": "post-backup",
+                "execution_order": 1,
+                "enabled": True,
+                "custom_timeout": None,
+                "custom_run_on": None,
+                "continue_on_error": False,
+                "skip_on_failure": False,
+                "parameter_values": plan.post_backup_script_parameters or {},
+                "default_run_on": plan.post_backup_script.run_on
+                if plan.post_backup_script
+                else "always",
+            }
+        )
+    return hooks
+
+
+def _plan_script_hooks(plan: BackupPlan) -> list[dict[str, Any]]:
+    if not plan.script_hooks:
+        return _legacy_plan_script_hooks(plan)
+    explicit_hooks = [hook for hook in plan.script_hooks if hook.enabled]
+    hook_order = {"pre-backup": 0, "post-backup": 1}
+    return [
+        {
+            "legacy": False,
+            "script_id": hook.script_id,
+            "hook_type": hook.hook_type,
+            "execution_order": hook.execution_order,
+            "enabled": bool(hook.enabled),
+            "custom_timeout": hook.custom_timeout,
+            "custom_run_on": hook.custom_run_on,
+            "continue_on_error": bool(hook.continue_on_error),
+            "skip_on_failure": bool(hook.skip_on_failure),
+            "parameter_values": _decode_parameter_values(hook.parameter_values),
+            "default_run_on": hook.script.run_on if hook.script else "always",
+        }
+        for hook in sorted(
+            explicit_hooks,
+            key=lambda item: (
+                hook_order.get(item.hook_type, 99),
+                item.execution_order,
+                item.id,
+            ),
+        )
+    ]
+
+
+def _should_run_plan_script(run_on: str, backup_result: Optional[str]) -> bool:
+    if run_on == "always":
+        return True
+    return run_on == backup_result
 
 
 def _remote_script_body(script: str, env: dict[str, str]) -> str:
@@ -530,14 +622,139 @@ class BackupPlanExecutionService:
         asyncio.create_task(self.execute_run(run.id))
         return run.id
 
+    def retry_failed_run(
+        self,
+        db: Session,
+        source_run: BackupPlanRun,
+        *,
+        requested_by_user_id: Optional[int],
+    ) -> int:
+        if source_run.status != "failed":
+            raise ValueError("Only failed backup plan runs can be retried")
+        if not source_run.backup_plan_id:
+            raise ValueError("Backup plan run no longer references a plan")
+
+        plan = (
+            db.query(BackupPlan)
+            .options(
+                joinedload(BackupPlan.repositories).joinedload(
+                    BackupPlanRepository.repository
+                )
+            )
+            .filter(BackupPlan.id == source_run.backup_plan_id)
+            .first()
+        )
+        if not plan:
+            raise ValueError("Backup plan no longer exists")
+        if self.has_active_run(db, plan.id):
+            raise HTTPException(
+                status_code=409,
+                detail={"key": "backend.errors.backupPlans.runAlreadyActive"},
+            )
+
+        enabled_repository_ids = [
+            link.repository_id
+            for link in sorted(plan.repositories, key=lambda item: item.execution_order)
+            if link.enabled and link.repository
+        ]
+        enabled_repository_id_set = set(enabled_repository_ids)
+        failed_repository_ids: list[int] = []
+        skipped_repository_ids: list[int] = []
+
+        source_children = sorted(
+            source_run.repositories,
+            key=lambda item: (
+                item.repository_id is None,
+                item.repository_id or 0,
+                item.id,
+            ),
+        )
+        for child in source_children:
+            backup_status = child.backup_job.status if child.backup_job else None
+            failed = child.status == "failed" or backup_status == "failed"
+            if not failed or child.repository_id is None:
+                continue
+            if child.repository_id in enabled_repository_id_set:
+                if child.repository_id not in failed_repository_ids:
+                    failed_repository_ids.append(child.repository_id)
+            else:
+                skipped_repository_ids.append(child.repository_id)
+
+        if not failed_repository_ids:
+            raise ValueError("Backup plan run has no retryable failed repositories")
+
+        selected_repository_ids = [
+            repo_id
+            for repo_id in enabled_repository_ids
+            if repo_id in failed_repository_ids
+        ]
+        attempt_number = (source_run.retry_attempt or 1) + 1
+        original_run_id = source_run.retry_original_run_id or source_run.id
+        requested_at = datetime.utcnow()
+        retry_run = BackupPlanRun(
+            backup_plan_id=plan.id,
+            trigger="retry",
+            status="pending",
+            retry_original_run_id=original_run_id,
+            retry_source_run_id=source_run.id,
+            retry_attempt=attempt_number,
+            retry_requested_by_user_id=requested_by_user_id,
+            retry_requested_at=requested_at,
+            created_at=requested_at,
+        )
+        db.add(retry_run)
+        db.flush()
+
+        for repository_id in selected_repository_ids:
+            db.add(
+                BackupPlanRunRepository(
+                    backup_plan_run_id=retry_run.id,
+                    repository_id=repository_id,
+                    status="pending",
+                )
+            )
+
+        db.add(
+            BackupPlanRunRetryLineage(
+                original_run_id=original_run_id,
+                retry_source_run_id=source_run.id,
+                attempt_number=attempt_number,
+                requested_by_user_id=requested_by_user_id,
+                requested_at=requested_at,
+                created_run_id=retry_run.id,
+                request_snapshot={
+                    "kind": "backup_plan_run_retry",
+                    "mode": "failed_only",
+                    "source_run_id": source_run.id,
+                    "source_run_status": source_run.status,
+                    "backup_plan_id": plan.id,
+                    "selected_repository_ids": selected_repository_ids,
+                    "skipped_repository_ids": skipped_repository_ids,
+                    "uses_current_plan_configuration": True,
+                },
+            )
+        )
+        db.commit()
+        asyncio.create_task(self.execute_run(retry_run.id))
+        return retry_run.id
+
     async def execute_run(self, run_id: int) -> None:
         try:
             context, repositories = self._prepare_run(run_id)
-            pre_script_ok, pre_script_error = await self._execute_plan_script(
+            (
+                pre_script_ok,
+                pre_script_error,
+                pre_script_skip,
+            ) = await self._execute_plan_script_hooks(
                 run_id,
                 context,
                 hook_type="pre-backup",
             )
+            if pre_script_skip:
+                skip_message = pre_script_error or "Skipped by plan pre-backup script"
+                self._mark_pending_repositories_skipped(run_id, skip_message)
+                self._finalize_run(run_id, warning_message=skip_message)
+                return
             if not pre_script_ok:
                 error_message = pre_script_error or "Plan pre-backup script failed"
                 self._mark_pending_repositories_failed(run_id, error_message)
@@ -573,7 +790,11 @@ class BackupPlanExecutionService:
                     post_script_warnings.append(
                         source_post_error or "Database source post-backup script failed"
                     )
-                post_script_ok, post_script_error = await self._execute_plan_script(
+                (
+                    post_script_ok,
+                    post_script_error,
+                    _post_script_skip,
+                ) = await self._execute_plan_script_hooks(
                     run_id,
                     context,
                     hook_type="post-backup",
@@ -602,13 +823,27 @@ class BackupPlanExecutionService:
             run = db.query(BackupPlanRun).filter(BackupPlanRun.id == run_id).first()
             if not run:
                 raise ValueError(f"Backup plan run {run_id} not found")
+            retry_repository_ids = (
+                {
+                    child.repository_id
+                    for child in run.repositories
+                    if child.repository_id is not None
+                }
+                if run.trigger == "retry"
+                else None
+            )
 
             plan = (
                 db.query(BackupPlan)
                 .options(
                     joinedload(BackupPlan.repositories).joinedload(
                         BackupPlanRepository.repository
-                    )
+                    ),
+                    joinedload(BackupPlan.script_hooks).joinedload(
+                        BackupPlanScript.script
+                    ),
+                    joinedload(BackupPlan.pre_backup_script),
+                    joinedload(BackupPlan.post_backup_script),
                 )
                 .filter(BackupPlan.id == run.backup_plan_id)
                 .first()
@@ -625,6 +860,12 @@ class BackupPlanExecutionService:
                 )
                 if link.enabled and link.repository
             ]
+            if retry_repository_ids is not None:
+                enabled_links = [
+                    link
+                    for link in enabled_links
+                    if link.repository_id in retry_repository_ids
+                ]
             if not enabled_links:
                 raise ValueError("Backup plan has no enabled repositories")
 
@@ -653,6 +894,7 @@ class BackupPlanExecutionService:
                 post_backup_script_id=plan.post_backup_script_id,
                 pre_backup_script_parameters=plan.pre_backup_script_parameters or {},
                 post_backup_script_parameters=plan.post_backup_script_parameters or {},
+                script_hooks=_plan_script_hooks(plan),
                 run_repository_scripts=bool(plan.run_repository_scripts),
                 run_prune_after=bool(plan.run_prune_after),
                 run_compact_after=bool(plan.run_compact_after),
@@ -784,6 +1026,58 @@ class BackupPlanExecutionService:
                 return False, error
         return True, None
 
+    async def _execute_plan_script_hooks(
+        self,
+        run_id: int,
+        context: PlanRunContext,
+        *,
+        hook_type: str,
+        backup_result: Optional[str] = None,
+    ) -> tuple[bool, Optional[str], bool]:
+        warnings: list[str] = []
+        for hook in context.script_hooks:
+            if hook.get("hook_type") != hook_type or not hook.get("enabled", True):
+                continue
+            if hook_type == "post-backup":
+                run_on = (
+                    hook.get("custom_run_on") or hook.get("default_run_on") or "always"
+                )
+                if not _should_run_plan_script(str(run_on), backup_result):
+                    continue
+
+            kwargs: dict[str, Any] = {
+                "hook_type": hook_type,
+                "backup_result": backup_result,
+            }
+            if not hook.get("legacy"):
+                kwargs.update(
+                    {
+                        "script_id": hook.get("script_id"),
+                        "script_parameters": hook.get("parameter_values") or {},
+                        "custom_timeout": hook.get("custom_timeout"),
+                    }
+                )
+
+            ok, error = await self._execute_plan_script(run_id, context, **kwargs)
+            if ok:
+                continue
+
+            error_message = error or f"Plan {hook_type} script failed"
+            if hook_type == "pre-backup" and hook.get("skip_on_failure"):
+                return True, error_message, True
+            if hook_type == "pre-backup" and hook.get("continue_on_error"):
+                warnings.append(error_message)
+                continue
+            if hook_type == "pre-backup":
+                return False, error_message, False
+            warnings.append(error_message)
+
+        if warnings and hook_type == "pre-backup":
+            return True, None, False
+        if warnings:
+            return False, "; ".join(warnings), False
+        return True, None, False
+
     async def _execute_plan_script(
         self,
         run_id: int,
@@ -793,6 +1087,7 @@ class BackupPlanExecutionService:
         backup_result: Optional[str] = None,
         script_id: Optional[int] = None,
         script_parameters: Optional[dict[str, Any]] = None,
+        custom_timeout: Optional[int] = None,
         source_location: Optional[dict[str, Any]] = None,
         source_index: Optional[int] = None,
     ) -> tuple[bool, Optional[str]]:
@@ -906,7 +1201,7 @@ class BackupPlanExecutionService:
                 result = await self._execute_remote_source_script(
                     source_connection=source_connection,
                     script=script_content,
-                    timeout=float(script.timeout),
+                    timeout=float(custom_timeout or script.timeout),
                     env=script_env,
                     context=execution_context,
                     run_id=run_id,
@@ -915,7 +1210,7 @@ class BackupPlanExecutionService:
             else:
                 result = await execute_script(
                     script=script_content,
-                    timeout=float(script.timeout),
+                    timeout=float(custom_timeout or script.timeout),
                     env=script_env,
                     context=execution_context,
                 )
@@ -1126,6 +1421,8 @@ class BackupPlanExecutionService:
             route = plan_repository_route(repo, context.source_locations)
             if not route.supported:
                 raise ValueError(route.reason_key or "Unsupported backup route")
+
+            ensure_repository_admission(db, repo, OPERATION_BACKUP)
 
             backup_job = BackupJob(
                 repository=repo.path,
@@ -1427,6 +1724,28 @@ class BackupPlanExecutionService:
             now = datetime.utcnow()
             for child in children:
                 child.status = "failed"
+                child.completed_at = now
+                child.error_message = error_message
+            db.commit()
+        finally:
+            db.close()
+
+    def _mark_pending_repositories_skipped(
+        self, run_id: int, error_message: str
+    ) -> None:
+        db = SessionLocal()
+        try:
+            children = (
+                db.query(BackupPlanRunRepository)
+                .filter(
+                    BackupPlanRunRepository.backup_plan_run_id == run_id,
+                    BackupPlanRunRepository.status == "pending",
+                )
+                .all()
+            )
+            now = datetime.utcnow()
+            for child in children:
+                child.status = "skipped"
                 child.completed_at = now
                 child.error_message = error_message
             db.commit()

@@ -9,6 +9,7 @@ Key test focus:
 import pytest
 from app.database.models import (
     BackupPlan,
+    BackupPlanScript,
     Repository,
     ScheduledJob,
     Script,
@@ -301,6 +302,79 @@ class TestScriptUsageCount:
         assert test_script["usage_count"] == 3, (
             f"Expected usage_count=3 for 3 places used across 2 repos, got {test_script['usage_count']}"
         )
+
+    def test_usage_count_dedupes_mirrored_backup_plan_hooks(
+        self, test_client, admin_headers, test_db
+    ):
+        script = Script(
+            name="backup-plan-script",
+            description="Backup plan script",
+            file_path="library/backup-plan-script.sh",
+            category="custom",
+            timeout=300,
+            run_on="always",
+            usage_count=0,
+        )
+        backup_plan = BackupPlan(
+            name="Scripted Plan",
+            enabled=True,
+            source_type="local",
+            source_directories='["/data"]',
+            exclude_patterns="[]",
+            archive_name_template="{plan_name}-{now}",
+            compression="lz4",
+            repository_run_mode="series",
+            max_parallel_repositories=1,
+            failure_behavior="continue",
+            schedule_enabled=False,
+            timezone="UTC",
+            pre_backup_script_id=None,
+            post_backup_script_id=None,
+            run_repository_scripts=True,
+            run_prune_after=False,
+            run_compact_after=False,
+            run_check_after=False,
+            check_max_duration=3600,
+            prune_keep_hourly=0,
+            prune_keep_daily=7,
+            prune_keep_weekly=4,
+            prune_keep_monthly=6,
+            prune_keep_quarterly=0,
+            prune_keep_yearly=1,
+        )
+        test_db.add_all([script, backup_plan])
+        test_db.commit()
+        backup_plan.pre_backup_script_id = script.id
+        backup_plan.post_backup_script_id = script.id
+        test_db.add_all(
+            [
+                BackupPlanScript(
+                    backup_plan_id=backup_plan.id,
+                    script_id=script.id,
+                    hook_type="pre-backup",
+                    execution_order=1,
+                    enabled=True,
+                ),
+                BackupPlanScript(
+                    backup_plan_id=backup_plan.id,
+                    script_id=script.id,
+                    hook_type="post-backup",
+                    execution_order=1,
+                    enabled=True,
+                ),
+            ]
+        )
+        test_db.commit()
+
+        response = test_client.get("/api/scripts", headers=admin_headers)
+
+        assert response.status_code == 200
+        test_script = next(
+            script
+            for script in response.json()
+            if script["name"] == "backup-plan-script"
+        )
+        assert test_script["usage_count"] == 2
 
 
 @pytest.mark.unit
@@ -733,3 +807,66 @@ class TestScriptDeleteScheduleReference:
         assert backup_plan.post_backup_script_id is None
         assert backup_plan.pre_backup_script_parameters is None
         assert backup_plan.post_backup_script_parameters is None
+
+    def test_delete_script_clears_backup_plan_script_assignments(
+        self, test_client, admin_headers, test_db
+    ):
+        script = Script(
+            name="backup-plan-hook",
+            description="Backup plan hook",
+            file_path="library/backup-plan-hook.sh",
+            category="custom",
+            timeout=300,
+            run_on="always",
+            usage_count=0,
+        )
+        backup_plan = BackupPlan(
+            name="Scripted Hook Plan",
+            enabled=True,
+            source_type="local",
+            source_directories='["/data"]',
+            exclude_patterns="[]",
+            archive_name_template="{plan_name}-{now}",
+            compression="lz4",
+            repository_run_mode="series",
+            max_parallel_repositories=1,
+            failure_behavior="continue",
+            schedule_enabled=False,
+            timezone="UTC",
+            pre_backup_script_id=None,
+            post_backup_script_id=None,
+            run_repository_scripts=True,
+            run_prune_after=False,
+            run_compact_after=False,
+            run_check_after=False,
+            check_max_duration=3600,
+            prune_keep_hourly=0,
+            prune_keep_daily=7,
+            prune_keep_weekly=4,
+            prune_keep_monthly=6,
+            prune_keep_quarterly=0,
+            prune_keep_yearly=1,
+        )
+        test_db.add_all([script, backup_plan])
+        test_db.commit()
+        assignment = BackupPlanScript(
+            backup_plan_id=backup_plan.id,
+            script_id=script.id,
+            hook_type="pre-backup",
+            execution_order=1,
+            enabled=True,
+        )
+        test_db.add(assignment)
+        test_db.commit()
+
+        response = test_client.delete(
+            f"/api/scripts/{script.id}", headers=admin_headers
+        )
+
+        assert response.status_code == 204
+        assert (
+            test_db.query(BackupPlanScript)
+            .filter(BackupPlanScript.backup_plan_id == backup_plan.id)
+            .count()
+            == 0
+        )

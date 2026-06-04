@@ -1,7 +1,145 @@
 {
   "version": 1,
-  "generated_at": "2026-05-16T00:00:00Z",
+  "generated_at": "2026-06-02T06:58:07Z",
   "announcements": [
+    {
+      "id": "update-2.2.0-available",
+      "type": "update_available",
+      "priority": 130,
+      "title": "Borg UI 2.2.0 is available",
+      "title_localized": {
+        "es": "Borg UI 2.2.0 ya esta disponible",
+        "de": "Borg UI 2.2.0 ist verfugbar",
+        "it": "Borg UI 2.2.0 e disponibile"
+      },
+      "message": "Update to Borg UI 2.2.0 for rclone cloud storage, managed agents, mixed-source Backup Plans, database sources, and clearer setup and review flows.",
+      "message_localized": {
+        "es": "Actualiza a Borg UI 2.2.0 para obtener almacenamiento en la nube con rclone, agentes gestionados, Backup Plans de multiples origenes, origenes de base de datos y flujos de configuracion y revision mas claros.",
+        "de": "Aktualisieren Sie auf Borg UI 2.2.0 fur Cloud-Speicher mit rclone, Managed Agents, Backup Plans mit gemischten Quellen, Datenbankquellen und klarere Einrichtungs- und Prufablaufe.",
+        "it": "Aggiorna a Borg UI 2.2.0 per storage cloud con rclone, agent gestiti, Backup Plans con origini miste, origini database e flussi di configurazione e revisione piu chiari."
+      },
+      "highlights": [
+        "Cloud storage through rclone for repository mirrors and Borg 2 direct rclone destinations",
+        "Managed agents for backing up remote machines without opening inbound SSH",
+        "Mixed-source Backup Plans that combine local, SSH, managed-agent, and database sources",
+        "Filesystem snapshot support for local btrfs and ZFS source paths",
+        "Database source discovery for PostgreSQL, MySQL/MariaDB, MongoDB, Redis, and SQLite",
+        "More accessible Dashboard UI with clearer status labels and navigation structure",
+        "Source review that makes paths, destinations, and repository routing easier to verify before saving"
+      ],
+      "highlights_localized": {
+        "es": [
+          "Almacenamiento en la nube con rclone para replicas de repositorios y destinos rclone directos de Borg 2",
+          "Agentes gestionados para hacer copias de maquinas remotas sin abrir SSH entrante",
+          "Backup Plans de multiples origenes que combinan origenes locales, SSH, agentes gestionados y bases de datos",
+          "Snapshots del sistema de archivos para rutas de origen locales btrfs y ZFS",
+          "Descubrimiento de origenes de base de datos para PostgreSQL, MySQL/MariaDB, MongoDB, Redis y SQLite",
+          "Panel mas accesible con etiquetas de estado y estructura de navegacion mas claras",
+          "Revision de origenes que facilita verificar rutas, destinos y enrutamiento de repositorios antes de guardar"
+        ],
+        "de": [
+          "Cloud-Speicher mit rclone fur Repository-Spiegel und direkte Borg-2-rclone-Ziele",
+          "Managed Agents zum Sichern entfernter Maschinen ohne eingehendes SSH",
+          "Backup Plans mit gemischten Quellen fur lokale, SSH-, Managed-Agent- und Datenbankquellen",
+          "Dateisystem-Snapshots fur lokale btrfs- und ZFS-Quellpfade",
+          "Erkennung von Datenbankquellen fur PostgreSQL, MySQL/MariaDB, MongoDB, Redis und SQLite",
+          "Barrierearmeres Dashboard mit klareren Statusbeschriftungen und Navigationsstruktur",
+          "Quellenprufung, die Pfade, Ziele und Repository-Routing vor dem Speichern leichter verifizierbar macht"
+        ],
+        "it": [
+          "Storage cloud con rclone per mirror dei repository e destinazioni rclone dirette Borg 2",
+          "Agent gestiti per eseguire backup di macchine remote senza aprire SSH in ingresso",
+          "Backup Plans con origini miste che combinano origini locali, SSH, agent gestiti e database",
+          "Snapshot del filesystem per percorsi sorgente locali btrfs e ZFS",
+          "Rilevamento delle origini database per PostgreSQL, MySQL/MariaDB, MongoDB, Redis e SQLite",
+          "Dashboard piu accessibile con etichette di stato e struttura di navigazione piu chiare",
+          "Revisione delle origini che rende piu semplice verificare percorsi, destinazioni e routing dei repository prima di salvare"
+        ]
+      },
+      "cta_label": "Upgrade details",
+      "cta_label_localized": {
+        "es": "Detalles de la actualizacion",
+        "de": "Upgrade-Details",
+        "it": "Dettagli dell'aggiornamento"
+      },
+      "cta_url": "https://github.com/karanhudia/borg-ui/releases/tag/v2.2.0",
+      "dismissible": true,
+      "snooze_days": 7,
+      "starts_at": "2026-06-02T00:00:00Z",
+      "ends_at": "2027-06-02T00:00:00Z",
+      "min_app_version": "2.0.0",
+      "max_app_version": "2.2.0-alpha.999",
+      "target_plans": ["community", "pro", "enterprise"]
+    },
+    {
+      "id": "release-2.2.0-whats-new",
+      "type": "release_highlight",
+      "priority": 95,
+      "title": "What's new in 2.2.0",
+      "title_localized": {
+        "es": "Novedades de la version 2.2.0",
+        "de": "Neu in Version 2.2.0",
+        "it": "Novita della versione 2.2.0"
+      },
+      "message": "Borg UI 2.2.0 adds rclone cloud storage, managed agents, mixed-source Backup Plans with database sources, and clearer setup and review flows across backup definitions.",
+      "message_localized": {
+        "es": "Borg UI 2.2.0 agrega almacenamiento en la nube con rclone, agentes gestionados, Backup Plans de multiples origenes con bases de datos y flujos de configuracion y revision mas claros.",
+        "de": "Borg UI 2.2.0 erganzt Cloud-Speicher mit rclone, Managed Agents, Backup Plans mit gemischten Quellen und Datenbanken sowie klarere Einrichtungs- und Prufablaufe.",
+        "it": "Borg UI 2.2.0 aggiunge storage cloud con rclone, agent gestiti, Backup Plans con origini miste e database, e flussi di configurazione e revisione piu chiari."
+      },
+      "highlights": [
+        "Cloud storage through rclone for repository mirrors and Borg 2 direct rclone destinations",
+        "Managed agents for backing up remote machines without opening inbound SSH",
+        "Mixed-source Backup Plans that combine local, SSH, managed-agent, and database sources",
+        "Filesystem snapshot support for local btrfs and ZFS source paths",
+        "Database source discovery for PostgreSQL, MySQL/MariaDB, MongoDB, Redis, and SQLite",
+        "More accessible Dashboard UI with clearer status labels and navigation structure",
+        "Source review that makes paths, destinations, and repository routing easier to verify before saving"
+      ],
+      "highlights_localized": {
+        "es": [
+          "Almacenamiento en la nube con rclone para replicas de repositorios y destinos rclone directos de Borg 2",
+          "Agentes gestionados para hacer copias de maquinas remotas sin abrir SSH entrante",
+          "Backup Plans de multiples origenes que combinan origenes locales, SSH, agentes gestionados y bases de datos",
+          "Snapshots del sistema de archivos para rutas de origen locales btrfs y ZFS",
+          "Descubrimiento de origenes de base de datos para PostgreSQL, MySQL/MariaDB, MongoDB, Redis y SQLite",
+          "Panel mas accesible con etiquetas de estado y estructura de navegacion mas claras",
+          "Revision de origenes que facilita verificar rutas, destinos y enrutamiento de repositorios antes de guardar"
+        ],
+        "de": [
+          "Cloud-Speicher mit rclone fur Repository-Spiegel und direkte Borg-2-rclone-Ziele",
+          "Managed Agents zum Sichern entfernter Maschinen ohne eingehendes SSH",
+          "Backup Plans mit gemischten Quellen fur lokale, SSH-, Managed-Agent- und Datenbankquellen",
+          "Dateisystem-Snapshots fur lokale btrfs- und ZFS-Quellpfade",
+          "Erkennung von Datenbankquellen fur PostgreSQL, MySQL/MariaDB, MongoDB, Redis und SQLite",
+          "Barrierearmeres Dashboard mit klareren Statusbeschriftungen und Navigationsstruktur",
+          "Quellenprufung, die Pfade, Ziele und Repository-Routing vor dem Speichern leichter verifizierbar macht"
+        ],
+        "it": [
+          "Storage cloud con rclone per mirror dei repository e destinazioni rclone dirette Borg 2",
+          "Agent gestiti per eseguire backup di macchine remote senza aprire SSH in ingresso",
+          "Backup Plans con origini miste che combinano origini locali, SSH, agent gestiti e database",
+          "Snapshot del filesystem per percorsi sorgente locali btrfs e ZFS",
+          "Rilevamento delle origini database per PostgreSQL, MySQL/MariaDB, MongoDB, Redis e SQLite",
+          "Dashboard piu accessibile con etichette di stato e struttura di navigazione piu chiare",
+          "Revisione delle origini che rende piu semplice verificare percorsi, destinazioni e routing dei repository prima di salvare"
+        ]
+      },
+      "cta_label": "View release notes",
+      "cta_label_localized": {
+        "es": "Ver notas de la version",
+        "de": "Release Notes ansehen",
+        "it": "Vedi note di rilascio"
+      },
+      "cta_url": "https://github.com/karanhudia/borg-ui/releases/tag/v2.2.0",
+      "dismissible": true,
+      "snooze_days": 7,
+      "starts_at": "2026-06-02T00:00:00Z",
+      "ends_at": "2027-06-02T00:00:00Z",
+      "min_app_version": "2.2.0",
+      "max_app_version": "2.2.0",
+      "target_plans": ["community", "pro", "enterprise"]
+    },
     {
       "id": "update-2.1.0-available",
       "type": "update_available",

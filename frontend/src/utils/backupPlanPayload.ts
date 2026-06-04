@@ -1,5 +1,6 @@
 import type {
   BackupPlanData,
+  BackupPlanScriptHook,
   SourceDatabaseSelection,
   SourceLocation,
   SourceSnapshotConfig,
@@ -30,6 +31,7 @@ export interface BackupPlanPayloadState {
   postBackupScriptId: number | null
   preBackupScriptParameters: Record<string, string>
   postBackupScriptParameters: Record<string, string>
+  scriptHooks?: BackupPlanScriptHook[]
   runRepositoryScripts: boolean
   runPruneAfter: boolean
   runCompactAfter: boolean
@@ -47,6 +49,57 @@ export interface BackupPlanPayloadState {
   // backend remember the template choice across reloads. Null/undefined for
   // plain file plans.
   databaseTemplateId?: string | null
+}
+
+function normalizeParameterValues(
+  parameters?: Record<string, string> | null
+): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(parameters || {})
+      .map(([key, value]) => [key.trim(), String(value).trim()] as const)
+      .filter(([key, value]) => key.length > 0 && value.length > 0)
+  )
+}
+
+function normalizePlanScriptHooks(state: BackupPlanPayloadState): BackupPlanScriptHook[] {
+  const stateHooks = state.scriptHooks || []
+  if (stateHooks.length > 0) {
+    return stateHooks
+      .filter((hook) => Number.isInteger(Number(hook.script_id)) && Number(hook.script_id) > 0)
+      .map((hook, index) => ({
+        ...hook,
+        script_id: Number(hook.script_id),
+        execution_order:
+          Number(hook.execution_order) > 0 ? Number(hook.execution_order) : index + 1,
+        enabled: hook.enabled !== false,
+        continue_on_error: Boolean(hook.continue_on_error),
+        skip_on_failure: Boolean(hook.skip_on_failure),
+        parameter_values: normalizeParameterValues(hook.parameter_values),
+      }))
+  }
+
+  const hooks: BackupPlanScriptHook[] = []
+  if (state.preBackupScriptId) {
+    hooks.push({
+      script_id: state.preBackupScriptId,
+      hook_type: 'pre-backup',
+      execution_order: 1,
+      enabled: true,
+      continue_on_error: false,
+      skip_on_failure: false,
+      parameter_values: normalizeParameterValues(state.preBackupScriptParameters),
+    })
+  }
+  if (state.postBackupScriptId) {
+    hooks.push({
+      script_id: state.postBackupScriptId,
+      hook_type: 'post-backup',
+      execution_order: 1,
+      enabled: true,
+      parameter_values: normalizeParameterValues(state.postBackupScriptParameters),
+    })
+  }
+  return hooks
 }
 
 function mbToKib(value: string): number | null {
@@ -224,6 +277,13 @@ export function buildBackupPlanPayload(
   const sourceDirectories = sourceLocations.length
     ? sourceLocations.flatMap((location) => location.paths)
     : state.sourceDirectories
+  const scriptHooks = normalizePlanScriptHooks(state)
+  const firstPreHook = scriptHooks
+    .filter((hook) => hook.enabled !== false && hook.hook_type === 'pre-backup')
+    .sort((left, right) => left.execution_order - right.execution_order)[0]
+  const firstPostHook = scriptHooks
+    .filter((hook) => hook.enabled !== false && hook.hook_type === 'post-backup')
+    .sort((left, right) => left.execution_order - right.execution_order)[0]
 
   return {
     name: state.name.trim(),
@@ -246,10 +306,13 @@ export function buildBackupPlanPayload(
     schedule_enabled: state.scheduleEnabled,
     cron_expression: state.scheduleEnabled ? state.cronExpression : null,
     timezone: state.timezone,
-    pre_backup_script_id: state.preBackupScriptId,
-    post_backup_script_id: state.postBackupScriptId,
-    pre_backup_script_parameters: state.preBackupScriptParameters,
-    post_backup_script_parameters: state.postBackupScriptParameters,
+    pre_backup_script_id: firstPreHook?.script_id ?? state.preBackupScriptId,
+    post_backup_script_id: firstPostHook?.script_id ?? state.postBackupScriptId,
+    pre_backup_script_parameters:
+      firstPreHook?.parameter_values ?? normalizeParameterValues(state.preBackupScriptParameters),
+    post_backup_script_parameters:
+      firstPostHook?.parameter_values ?? normalizeParameterValues(state.postBackupScriptParameters),
+    script_hooks: scriptHooks,
     run_repository_scripts: state.runRepositoryScripts,
     run_prune_after: state.runPruneAfter,
     run_compact_after: state.runCompactAfter,

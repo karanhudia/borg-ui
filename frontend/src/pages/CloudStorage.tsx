@@ -53,6 +53,7 @@ import OperationalCard from '../components/OperationalCard'
 import PageHeader from '../components/PageHeader'
 import ListToolbar from '../components/ListToolbar'
 import StorageBrowserDialog, { type StorageBrowserItem } from '../components/StorageBrowserDialog'
+import RcloneProviderIcon, { RcloneProviderGlyph } from '../components/shared/RcloneProviderIcon'
 import { joinBrowserPath, normalizeBrowserPath } from '../utils/storageBrowserPaths'
 import { useAnalytics } from '../hooks/useAnalytics'
 
@@ -252,7 +253,7 @@ function CloudStorageRemoteCard({
 
   const statItems = [
     {
-      icon: <Cloud size={11} />,
+      icon: <RcloneProviderGlyph provider={remote.provider} size={12} />,
       label: t('cloudStorage.remoteProviderLabel'),
       value: remote.provider,
       colorKey: 'primary' as const,
@@ -284,6 +285,7 @@ function CloudStorageRemoteCard({
               mb: 0.4,
             }}
           >
+            <RcloneProviderIcon provider={remote.provider} size={30} iconSize={16} />
             <Box sx={{ minWidth: 0, flex: 1 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
                 <Typography variant="subtitle1" fontWeight={700} noWrap sx={{ lineHeight: 1.3 }}>

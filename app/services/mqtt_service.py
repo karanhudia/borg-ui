@@ -15,6 +15,7 @@ import structlog
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.config import get_runtime_app_version
 from app.database.database import SessionLocal
 from app.database.models import BackupJob, MQTTSyncState, Repository
 from app.utils.datetime_utils import serialize_datetime
@@ -110,8 +111,7 @@ REPOSITORY_STATE_TOPICS = [
 
 
 def _get_app_version():
-    # TODO provide actual version
-    return "unknown"
+    return get_runtime_app_version()
 
 
 def _serialize_first_datetime(

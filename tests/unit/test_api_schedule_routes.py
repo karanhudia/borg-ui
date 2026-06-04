@@ -405,6 +405,96 @@ class TestScheduleRouteContracts:
         assert backup_job.source_ssh_connection_id == connection.id
 
     @pytest.mark.asyncio
+    async def test_multi_repo_schedule_applies_backup_route_metadata(
+        self, test_db, monkeypatch
+    ):
+        connection = SSHConnection(
+            host="docker-host.example",
+            username="backup",
+            port=22,
+            is_backup_source=True,
+            borg_binary_path="/usr/local/bin/borg-wrapper",
+        )
+        test_db.add(connection)
+        test_db.flush()
+        repo = Repository(
+            name="Remote Direct Repo",
+            path="/repos/remote-direct",
+            encryption="none",
+            repository_type="ssh",
+            connection_id=connection.id,
+            source_ssh_connection_id=connection.id,
+            source_directories='["/var/lib/docker/volumes/app"]',
+        )
+        test_db.add(repo)
+        test_db.flush()
+        schedule = _create_schedule(test_db, "Due Remote Direct")
+        test_db.add(
+            ScheduledJobRepository(
+                scheduled_job_id=schedule.id,
+                repository_id=repo.id,
+                execution_order=0,
+            )
+        )
+        test_db.commit()
+
+        monkeypatch.setattr(
+            "app.services.backup_service.backup_service.execute_backup",
+            AsyncMock(),
+        )
+
+        await schedule_api.execute_multi_repo_schedule(schedule, test_db)
+
+        backup_job = test_db.query(BackupJob).one()
+        assert backup_job.route_strategy == "remote_direct"
+        assert backup_job.execution_mode == "remote_ssh"
+        assert backup_job.source_ssh_connection_id == connection.id
+
+    def test_dispatch_due_multi_repo_schedule_defers_for_active_repository_work(
+        self, test_db, monkeypatch
+    ):
+        from app.api.schedule import _dispatch_due_scheduled_job
+
+        repo = _create_repo(test_db, "Repo A", "/repos/a")
+        schedule = _create_schedule(
+            test_db,
+            "Busy Multi",
+            next_run=datetime.now(timezone.utc) - timedelta(minutes=1),
+        )
+        original_next_run = schedule.next_run
+        test_db.add(
+            ScheduledJobRepository(
+                scheduled_job_id=schedule.id,
+                repository_id=repo.id,
+                execution_order=0,
+            )
+        )
+        test_db.add(
+            BackupJob(
+                repository=repo.path,
+                repository_id=repo.id,
+                status="running",
+                scheduled_job_id=schedule.id,
+            )
+        )
+        test_db.commit()
+
+        def fail_create_task(coro):
+            coro.close()
+            raise AssertionError("multi-repo schedule task should not start")
+
+        monkeypatch.setattr("app.api.schedule.asyncio.create_task", fail_create_task)
+
+        run_key = _dispatch_due_scheduled_job(
+            test_db, schedule, datetime.now(timezone.utc)
+        )
+
+        test_db.refresh(schedule)
+        assert run_key is None
+        assert schedule.last_run is None
+        assert schedule.next_run == original_next_run
+
+    @pytest.mark.asyncio
     async def test_due_scheduled_rclone_mirror_records_failure_and_preserves_metadata(
         self, test_db, monkeypatch
     ):

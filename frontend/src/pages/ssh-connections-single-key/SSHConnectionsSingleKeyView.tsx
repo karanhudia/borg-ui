@@ -85,6 +85,7 @@ interface SSHConnectionsSingleKeyViewProps {
   confirmDeleteConnection: () => void
   handleTestConnection: (connection: SSHConnection) => void
   handleDeployKeyToConnection: (connection: SSHConnection) => void
+  handleRunDiagnostics: (connection: SSHConnection) => void
   handleConfirmRedeployKey: () => void
   handleDeleteKey: () => void
   onRefreshConnections: () => void
@@ -160,6 +161,7 @@ export function SSHConnectionsSingleKeyView({
   confirmDeleteConnection,
   handleTestConnection,
   handleDeployKeyToConnection,
+  handleRunDiagnostics,
   handleConfirmRedeployKey,
   handleDeleteKey,
   onRefreshConnections,
@@ -202,6 +204,7 @@ export function SSHConnectionsSingleKeyView({
         onRefreshStorage={onRefreshStorage}
         onTestConnection={handleTestConnection}
         onDeployKeyToConnection={handleDeployKeyToConnection}
+        onRunDiagnostics={handleRunDiagnostics}
       />
       <SSHConnectionDialogs
         t={t}
