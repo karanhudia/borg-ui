@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-06-04T08:35:48.550Z",
+  "generatedAt": "2026-06-04T08:46:29.426Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #623 visual report",
-    "commitSha": "fa890a40df7c",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26940335355"
+    "commitSha": "1248659867ce",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26940942911"
   },
   "totals": {
     "baseline": 312,
@@ -237,9 +237,9 @@
       "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups--mobile.png",
       "actualPath": "images/actual/backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups--mobile.png",
       "diffPath": "images/diff/backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups--mobile.png",
-      "diffPixels": 2125,
+      "diffPixels": 2101,
       "totalPixels": 329160,
-      "diffRatio": 0.006455826953457285,
+      "diffRatio": 0.0063829140843358854,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
