@@ -47,6 +47,14 @@ Username: backup
 Default path: /backups
 ```
 
+## Setup Presets
+
+The deploy dialog includes setup presets for Linux servers, BorgBase, Hetzner
+Storage Box, and NAS targets such as Synology and Unraid. Presets only prefill
+editable defaults like port, deployment mode, default path, SSH path prefix,
+and mount point. Review provider-specific path details in
+[Provider Guides](provider-guides) before saving.
+
 ## Connection Options
 
 Common options:
