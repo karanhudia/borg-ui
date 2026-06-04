@@ -238,6 +238,72 @@ class TestSourceDiscovery:
         assert "StrictHostKeyChecking=no" not in captured["cmd"]
         assert "UserKnownHostsFile=/dev/null" not in captured["cmd"]
 
+    def test_container_scan_reports_missing_docker_with_install_guidance(
+        self, test_client, admin_headers, monkeypatch
+    ):
+        def fake_local_container_scan(**kwargs):
+            del kwargs
+            return SimpleNamespace(
+                returncode=127,
+                stdout="",
+                stderr="sh: 2: docker: not found",
+            )
+
+        monkeypatch.setattr(
+            source_discovery,
+            "_run_local_container_scan",
+            fake_local_container_scan,
+            raising=False,
+        )
+
+        response = test_client.post(
+            "/api/source-discovery/containers/scan",
+            json={"source_type": "local", "source_ssh_connection_id": None},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        warning = response.json()["warnings"][0]
+        assert warning["code"] == "DOCKER_CLI_MISSING"
+        assert "Docker is not installed" in warning["message"]
+        assert "docker.io" in warning["message"]
+        assert "https://docs.docker.com/engine/install/" in warning["message"]
+        assert "sh: 2" not in warning["message"]
+
+    def test_container_scan_reports_docker_socket_permission_guidance(
+        self, test_client, admin_headers, monkeypatch
+    ):
+        def fake_local_container_scan(**kwargs):
+            del kwargs
+            return SimpleNamespace(
+                returncode=1,
+                stdout="",
+                stderr=(
+                    "Got permission denied while trying to connect to the Docker "
+                    "daemon socket at unix:///var/run/docker.sock"
+                ),
+            )
+
+        monkeypatch.setattr(
+            source_discovery,
+            "_run_local_container_scan",
+            fake_local_container_scan,
+            raising=False,
+        )
+
+        response = test_client.post(
+            "/api/source-discovery/containers/scan",
+            json={"source_type": "local", "source_ssh_connection_id": None},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        warning = response.json()["warnings"][0]
+        assert warning["code"] == "DOCKER_PERMISSION_DENIED"
+        assert "Docker socket" in warning["message"]
+        assert "/var/run/docker.sock" in warning["message"]
+        assert "Got permission denied" not in warning["message"]
+
     def test_sqlite_template_stages_backup_with_parameters(
         self, test_client, admin_headers
     ):

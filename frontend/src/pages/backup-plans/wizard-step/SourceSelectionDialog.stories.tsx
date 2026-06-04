@@ -626,24 +626,30 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.containerImage': 'Image (optional)',
   'backupPlans.sourceChooser.containerExportPath': 'Export staging path',
   'backupPlans.sourceChooser.containerExportHint':
-    'Borg UI exports the container filesystem to a staging path before Borg reads it. Docker named volumes are not included.',
+    'Borg UI exports the container filesystem to a staging path before Borg reads it. This does not back up the Docker image, bind mounts, or named volumes.',
   'backupPlans.sourceChooser.containerSourceMachine': 'Docker host',
   'backupPlans.sourceChooser.containerModeExport': 'docker export',
   'backupPlans.sourceChooser.scanContainers': 'Scan containers',
   'backupPlans.sourceChooser.rescanContainers': 'Re-scan containers',
   'backupPlans.sourceChooser.scanContainersHint': 'Find containers on the selected Docker host.',
   'backupPlans.sourceChooser.detectedContainers': 'Detected containers',
+  'backupPlans.sourceChooser.containerBackupCoverageTitle': 'What this source backs up',
   'backupPlans.sourceChooser.containerFilesystemIncluded':
-    'Container filesystem exported to {{path}}',
-  'backupPlans.sourceChooser.containerMountsNotIncluded': 'Mounts not included',
+    'Included: container filesystem export at {{path}}',
+  'backupPlans.sourceChooser.containerMountsNotIncluded': 'Not included: mounted data',
+  'backupPlans.sourceChooser.containerMountsNotIncludedHelp':
+    'Add these mount paths as Files sources if they contain data you need.',
   'backupPlans.sourceChooser.containerMountNotIncluded': 'Not included in docker export',
+  'backupPlans.sourceChooser.containerImageMetadata':
+    'Image {{image}} identifies this container; Borg UI does not back up the image.',
   'backupPlans.sourceChooser.addDetectedContainer': 'Add detected container',
   'backupPlans.sourceChooser.noContainersFoundTitle': 'No containers found',
   'backupPlans.sourceChooser.noContainersFoundBody':
     'Check Docker access on this host, or enter a container manually.',
   'backupPlans.sourceChooser.containerScanUnsupportedForAgents':
     'Docker container scanning is available for the Borg UI server and SSH sources. Enter managed-agent containers manually.',
-  'backupPlans.sourceChooser.containerScanFailedBody': 'Check Docker access or try again.',
+  'backupPlans.sourceChooser.containerScanFailedBody':
+    'Docker container scan did not return data. Check Docker access on this host and try again.',
   'backupPlans.sourceChooser.addContainer': 'Add container',
   'backupPlans.sourceChooser.selectedContainers': 'Selected containers',
   'backupPlans.sourceChooser.containerScriptsAssigned': 'Export scripts assigned',

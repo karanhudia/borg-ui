@@ -47,6 +47,7 @@ MIN_SCAN_TIMEOUT_SECONDS = 1
 MAX_SCAN_TIMEOUT_SECONDS = 300
 DEFAULT_CONTAINER_SCAN_TIMEOUT_SECONDS = 15
 DEFAULT_CONTAINER_EXPORT_ROOT = "/var/tmp/borg-ui/container-exports"
+DOCKER_INSTALL_URL = "https://docs.docker.com/engine/install/"
 
 # Directories that almost never contain a real DB the user wants to discover
 # and almost always contain a lot of noise. Safe to skip by default.
@@ -1135,10 +1136,40 @@ def _container_scan_warning_response(
 
 
 def _container_scan_failed_warning(stderr: str) -> ScanWarning:
-    detail = stderr.strip() or "Docker did not return container data."
+    detail = stderr.strip()
+    normalized_detail = detail.lower()
+    if "docker" in normalized_detail and "not found" in normalized_detail:
+        return ScanWarning(
+            code="DOCKER_CLI_MISSING",
+            message=(
+                "Docker is not installed on this host. Install Docker, for example "
+                f"the docker.io package on Debian/Ubuntu, or follow {DOCKER_INSTALL_URL}. "
+                "Then make sure Borg UI can run docker ps."
+            ),
+            path=None,
+        )
+
+    if "permission denied" in normalized_detail and (
+        "docker.sock" in normalized_detail
+        or "docker daemon socket" in normalized_detail
+        or "docker daemon" in normalized_detail
+    ):
+        return ScanWarning(
+            code="DOCKER_PERMISSION_DENIED",
+            message=(
+                "Borg UI cannot access the Docker socket on this host. Mount "
+                "/var/run/docker.sock into Borg UI and allow this process to read it, "
+                "then run the scan again."
+            ),
+            path=None,
+        )
+
     return ScanWarning(
         code="DOCKER_SCAN_FAILED",
-        message=f"Could not scan Docker containers: {detail}",
+        message=(
+            "Docker container scan did not return data. Check Docker access on this "
+            "host and try again."
+        ),
         path=None,
     )
 

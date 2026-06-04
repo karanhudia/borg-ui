@@ -287,7 +287,7 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.containerImage': 'Image (optional)',
   'backupPlans.sourceChooser.containerExportPath': 'Export staging path',
   'backupPlans.sourceChooser.containerExportHint':
-    'Borg UI exports the container filesystem to a staging path before Borg reads it. Docker named volumes are not included.',
+    'Borg UI exports the container filesystem to a staging path before Borg reads it. This does not back up the Docker image, bind mounts, or named volumes.',
   'backupPlans.sourceChooser.containerSourceMachine': 'Docker host',
   'backupPlans.sourceChooser.containerBackupPath': 'Export staging path',
   'backupPlans.sourceChooser.containerModeExport': 'docker export',
@@ -295,10 +295,15 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.rescanContainers': 'Re-scan containers',
   'backupPlans.sourceChooser.scanContainersHint': 'Find containers on the selected Docker host.',
   'backupPlans.sourceChooser.detectedContainers': 'Detected containers',
+  'backupPlans.sourceChooser.containerBackupCoverageTitle': 'What this source backs up',
   'backupPlans.sourceChooser.containerFilesystemIncluded':
-    'Container filesystem exported to {{path}}',
-  'backupPlans.sourceChooser.containerMountsNotIncluded': 'Mounts not included',
+    'Included: container filesystem export at {{path}}',
+  'backupPlans.sourceChooser.containerMountsNotIncluded': 'Not included: mounted data',
+  'backupPlans.sourceChooser.containerMountsNotIncludedHelp':
+    'Add these mount paths as Files sources if they contain data you need.',
   'backupPlans.sourceChooser.containerMountNotIncluded': 'Not included in docker export',
+  'backupPlans.sourceChooser.containerImageMetadata':
+    'Image {{image}} identifies this container; Borg UI does not back up the image.',
   'backupPlans.sourceChooser.addDetectedContainer': 'Add detected container',
   'backupPlans.sourceChooser.noContainersFoundTitle': 'No containers found',
   'backupPlans.sourceChooser.noContainersFoundBody':
@@ -389,7 +394,7 @@ const translations: Record<string, string> = {
   'backupPlans.wizard.fileExplorer.sourceTitle': 'Select source paths',
 }
 
-const t = (key: string, options?: { count?: number }) => {
+const t = (key: string, options?: { count?: number; image?: string }) => {
   if (key === 'backupPlans.sourceChooser.pathCount' && typeof options?.count === 'number') {
     return `${options.count} ${options.count === 1 ? 'path' : 'paths'}`
   }
@@ -401,6 +406,7 @@ const t = (key: string, options?: { count?: number }) => {
     .replace('{{provider}}', String((options as { provider?: string } | undefined)?.provider ?? ''))
     .replace('{{target}}', String((options as { target?: string } | undefined)?.target ?? ''))
     .replace('{{path}}', String((options as { path?: string } | undefined)?.path ?? ''))
+    .replace('{{image}}', String(options?.image ?? ''))
 }
 
 function clickExistingTextButton(name: string | RegExp) {
@@ -737,11 +743,11 @@ describe('SourceStep', () => {
         containers: [
           {
             id: '5ad07b8f01d2',
-            name: 'postgres',
-            image: 'postgres:17',
+            name: 'portainer',
+            image: 'portainer/portainer-ce:latest',
             status: 'running',
             state: 'running',
-            export_path: '/var/tmp/borg-ui/container-exports/postgres',
+            export_path: '/var/tmp/borg-ui/container-exports/portainer',
             backup_mode: 'export',
             notes: [
               'docker export captures the container filesystem.',
@@ -750,9 +756,9 @@ describe('SourceStep', () => {
             mounts: [
               {
                 type: 'volume',
-                name: 'postgres-data',
-                source: '/var/lib/docker/volumes/postgres-data/_data',
-                destination: '/var/lib/postgresql/data',
+                name: 'portainer_data',
+                source: '/var/lib/docker/volumes/portainer_data/_data',
+                destination: '/data',
                 backed_up: false,
                 reason:
                   'Not included in docker export; add this path separately from Files if needed.',
@@ -784,20 +790,29 @@ describe('SourceStep', () => {
       })
     })
     expect(await screen.findByText('Detected containers')).toBeInTheDocument()
-    expect(screen.getByText('postgres')).toBeInTheDocument()
-    expect(screen.getByText('postgres:17')).toBeInTheDocument()
+    expect(screen.getByText('portainer')).toBeInTheDocument()
+    expect(screen.queryByText('portainer/portainer-ce:latest')).not.toBeInTheDocument()
     expect(
       screen.getByText(
-        'Container filesystem exported to /var/tmp/borg-ui/container-exports/postgres'
+        'Image portainer/portainer-ce:latest identifies this container; Borg UI does not back up the image.'
       )
     ).toBeInTheDocument()
-    expect(screen.getByText('Mounts not included')).toBeInTheDocument()
-    expect(screen.getByText('/var/lib/postgresql/data')).toBeInTheDocument()
-    expect(screen.getByText('Not included in docker export')).toBeInTheDocument()
+    expect(screen.getByText('What this source backs up')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Included: container filesystem export at /var/tmp/borg-ui/container-exports/portainer'
+      )
+    ).toBeInTheDocument()
+    expect(screen.getByText('Not included: mounted data')).toBeInTheDocument()
+    expect(
+      screen.getByText('Add these mount paths as Files sources if they contain data you need.')
+    ).toBeInTheDocument()
+    expect(screen.getByText('/data')).toBeInTheDocument()
+    expect(screen.getByText('/var/lib/docker/volumes/portainer_data/_data')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /add detected container/i }))
     expect(screen.getByText('Selected containers')).toBeInTheDocument()
-    expect(screen.getByText('/var/tmp/borg-ui/container-exports/postgres')).toBeInTheDocument()
+    expect(screen.getByText('/var/tmp/borg-ui/container-exports/portainer')).toBeInTheDocument()
 
     clickExistingTextButton(/use these containers/i)
 
@@ -807,16 +822,16 @@ describe('SourceStep', () => {
     })
     expect(updateState).toHaveBeenCalledWith(
       expect.objectContaining({
-        sourceDirectories: ['/var/tmp/borg-ui/container-exports/postgres'],
+        sourceDirectories: ['/var/tmp/borg-ui/container-exports/portainer'],
         sourceLocations: [
           expect.objectContaining({
             source_type: 'local',
-            paths: ['/var/tmp/borg-ui/container-exports/postgres'],
+            paths: ['/var/tmp/borg-ui/container-exports/portainer'],
             container: expect.objectContaining({
-              container_name: 'postgres',
-              display_name: 'postgres',
-              image: 'postgres:17',
-              export_path: '/var/tmp/borg-ui/container-exports/postgres',
+              container_name: 'portainer',
+              display_name: 'portainer',
+              image: 'portainer/portainer-ce:latest',
+              export_path: '/var/tmp/borg-ui/container-exports/portainer',
               pre_backup_script_id: 401,
               post_backup_script_id: 402,
             }),
