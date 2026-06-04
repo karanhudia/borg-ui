@@ -63,6 +63,22 @@ SFTP deployment mode can break some older SSH servers or NAS devices. Disable it
 
 Remote Machines can also refresh storage usage by running `df` on the remote host.
 
+## Connection Diagnostics
+
+Use the diagnostics action on a configured remote machine when a connection test
+passes but backups or remote services still feel slow or unreliable.
+
+Diagnostics report:
+
+- SSH session health and elapsed time
+- latency for a simple remote command
+- optional TCP reachability from the remote machine to a host and port
+- bounded SSH download throughput with clear units
+
+The TCP target is optional. Leave it blank for a basic SSH and speed check, or
+enter a host and port such as `postgres.internal:5432` to verify whether the
+remote machine can reach a dependency from its own network.
+
 ## Manual Public Key Install
 
 On the remote server:

@@ -1807,6 +1807,40 @@
       "passwordPlaceholder": "Enter SSH password",
       "passwordHelper": "Password is used to deploy the public key to authorized_keys"
     },
+    "diagnostics": {
+      "title": "Remote machine diagnostics",
+      "description": "Verify the SSH session, optional remote TCP reachability, and bounded SSH transport speed.",
+      "noConnection": "No connection selected",
+      "targetHost": "Target host",
+      "targetHostHelper": "Optional remote TCP target",
+      "targetPort": "Port",
+      "targetTimeout": "Target timeout",
+      "sshTimeout": "SSH timeout",
+      "speedProbeSize": "Speed probe size",
+      "speedProbeHelper": "Bytes to read over SSH, 65536 to 5242880.",
+      "seconds": "Seconds",
+      "latency": "Latency",
+      "runCheck": "Run check",
+      "running": "Running diagnostics",
+      "transferredIn": "{{bytes}} in {{elapsed}}",
+      "notReported": "Not reported",
+      "noThroughputResult": "No throughput result",
+      "sessionHealthy": "SSH session healthy",
+      "sessionTimedOut": "SSH timed out",
+      "sessionFailed": "SSH failed",
+      "tcpReachable": "TCP reachable",
+      "tcpTimedOut": "TCP timed out",
+      "tcpFailed": "TCP failed",
+      "speedComplete": "Speed probe complete",
+      "speedTimedOut": "Speed probe timed out",
+      "speedFailed": "Speed probe failed",
+      "errors": {
+        "targetPortRange": "Enter a TCP port between 1 and 65535.",
+        "targetTimeoutRange": "Enter a target timeout between 0.5 and 15 seconds.",
+        "sshTimeoutRange": "Enter an SSH timeout between 1 and 30 seconds.",
+        "speedProbeRange": "Enter a speed probe size between 65536 and 5242880 bytes."
+      }
+    },
     "remoteConnections": {
       "title": "Remote Connections",
       "configured_one": "{{count}} machine configured",
@@ -1833,7 +1867,9 @@
       "storageRefreshFailed": "Failed to refresh storage",
       "keyDeleted": "System SSH key deleted successfully!",
       "keyDeleteFailed": "Failed to delete SSH key",
-      "publicKeyCopied": "Public key copied to clipboard!"
+      "publicKeyCopied": "Public key copied to clipboard!",
+      "diagnosticsComplete": "Diagnostics complete",
+      "diagnosticsFailed": "Failed to run diagnostics"
     }
   },
   "scripts": {
@@ -4157,7 +4193,8 @@
     "defaultPath": "Default Path",
     "actions": {
       "testConnection": "Test Connection",
-      "refreshStorage": "Refresh Storage"
+      "refreshStorage": "Refresh Storage",
+      "runDiagnostics": "Run diagnostics"
     }
   },
   "repositoryInfoDialog": {

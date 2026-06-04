@@ -1807,6 +1807,40 @@
       "passwordPlaceholder": "Introduce la contraseña SSH",
       "passwordHelper": "La contraseña se usa para desplegar la clave pública en authorized_keys"
     },
+    "diagnostics": {
+      "title": "Diagnóstico de máquina remota",
+      "description": "Verifica la sesión SSH, el alcance TCP remoto opcional y la velocidad limitada del transporte SSH.",
+      "noConnection": "No hay conexión seleccionada",
+      "targetHost": "Host de destino",
+      "targetHostHelper": "Destino TCP remoto opcional",
+      "targetPort": "Puerto",
+      "targetTimeout": "Tiempo límite del destino",
+      "sshTimeout": "Tiempo límite SSH",
+      "speedProbeSize": "Tamaño de la prueba de velocidad",
+      "speedProbeHelper": "Bytes que se leerán por SSH, de 65536 a 5242880.",
+      "seconds": "Segundos",
+      "latency": "Latencia",
+      "runCheck": "Ejecutar comprobación",
+      "running": "Ejecutando diagnóstico",
+      "transferredIn": "{{bytes}} en {{elapsed}}",
+      "notReported": "No informado",
+      "noThroughputResult": "Sin resultado de rendimiento",
+      "sessionHealthy": "Sesión SSH correcta",
+      "sessionTimedOut": "SSH agotó el tiempo",
+      "sessionFailed": "SSH falló",
+      "tcpReachable": "TCP alcanzable",
+      "tcpTimedOut": "TCP agotó el tiempo",
+      "tcpFailed": "TCP falló",
+      "speedComplete": "Prueba de velocidad completada",
+      "speedTimedOut": "La prueba de velocidad agotó el tiempo",
+      "speedFailed": "La prueba de velocidad falló",
+      "errors": {
+        "targetPortRange": "Introduce un puerto TCP entre 1 y 65535.",
+        "targetTimeoutRange": "Introduce un tiempo límite del destino entre 0,5 y 15 segundos.",
+        "sshTimeoutRange": "Introduce un tiempo límite SSH entre 1 y 30 segundos.",
+        "speedProbeRange": "Introduce un tamaño de prueba de velocidad entre 65536 y 5242880 bytes."
+      }
+    },
     "remoteConnections": {
       "title": "Conexiones remotas",
       "configured_one": "{{count}} máquina configurada",
@@ -1833,7 +1867,9 @@
       "storageRefreshFailed": "Error al actualizar el almacenamiento",
       "keyDeleted": "¡Clave SSH del sistema eliminada correctamente!",
       "keyDeleteFailed": "Error al eliminar la clave SSH",
-      "publicKeyCopied": "¡Clave pública copiada al portapapeles!"
+      "publicKeyCopied": "¡Clave pública copiada al portapapeles!",
+      "diagnosticsComplete": "Diagnóstico completado",
+      "diagnosticsFailed": "Error al ejecutar el diagnóstico"
     }
   },
   "scripts": {
@@ -4157,7 +4193,8 @@
     "defaultPath": "Ruta predeterminada",
     "actions": {
       "testConnection": "Probar conexión",
-      "refreshStorage": "Actualizar almacenamiento"
+      "refreshStorage": "Actualizar almacenamiento",
+      "runDiagnostics": "Ejecutar diagnóstico"
     }
   },
   "repositoryInfoDialog": {

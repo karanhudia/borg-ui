@@ -5,6 +5,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTheme } from '@mui/material'
 import { toast } from 'react-hot-toast'
 import { sshKeysAPI } from '../services/api'
+import type {
+  SSHConnectionDiagnosticsRequest,
+  SSHConnectionDiagnosticsResponse,
+} from '../services/api'
 import { getApiErrorDetail } from '../utils/apiErrors'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { useAnalytics } from '../hooks/useAnalytics'
@@ -17,6 +21,7 @@ import {
   createTestConnectionForm,
 } from './ssh-connections-single-key/formDefaults'
 import { normalizeSshHostInput } from './ssh-connections-single-key/hostValidation'
+import { ConnectionDiagnosticsDialog } from './ssh-connections-single-key/dialogs/ConnectionDiagnosticsDialog'
 import type {
   DeployConnectionPayload,
   ImportKeyPayload,
@@ -45,7 +50,11 @@ export default function SSHConnectionsSingleKey() {
   const [deleteConnectionDialogOpen, setDeleteConnectionDialogOpen] = useState(false)
   const [deleteKeyDialogOpen, setDeleteKeyDialogOpen] = useState(false)
   const [redeployKeyDialogOpen, setRedeployKeyDialogOpen] = useState(false)
+  const [diagnosticsDialogOpen, setDiagnosticsDialogOpen] = useState(false)
   const [selectedConnection, setSelectedConnection] = useState<SSHConnection | null>(null)
+  const [diagnosticsConnection, setDiagnosticsConnection] = useState<SSHConnection | null>(null)
+  const [diagnosticsResult, setDiagnosticsResult] =
+    useState<SSHConnectionDiagnosticsResponse | null>(null)
   const [keyType, setKeyType] = useState('ed25519')
   const [redeployPassword, setRedeployPassword] = useState('')
   const [importForm, setImportForm] = useState(createImportForm)
@@ -279,6 +288,28 @@ export default function SSHConnectionsSingleKey() {
     },
   })
 
+  const runConnectionDiagnosticsMutation = useMutation({
+    mutationFn: ({
+      connectionId,
+      payload,
+    }: {
+      connectionId: number
+      payload: SSHConnectionDiagnosticsRequest
+    }) => sshKeysAPI.runConnectionDiagnostics(connectionId, payload),
+    onSuccess: (response) => {
+      setDiagnosticsResult(response.data)
+      toast.success(t('sshConnections.toasts.diagnosticsComplete'))
+      track(EventCategory.SSH, EventAction.TEST, { resource: 'connection_diagnostics' })
+    },
+    onError: (error: unknown) => {
+      console.error('Failed to run connection diagnostics:', error)
+      toast.error(
+        translateBackendKey(getApiErrorDetail(error)) ||
+          t('sshConnections.toasts.diagnosticsFailed')
+      )
+    },
+  })
+
   // Auto-refresh storage for connections without storage info
   useEffect(() => {
     if (!canManageSsh) {
@@ -402,6 +433,23 @@ export default function SSHConnectionsSingleKey() {
     testExistingConnectionMutation.mutate(connection.id)
   }
 
+  const handleRunDiagnostics = (connection: SSHConnection) => {
+    setDiagnosticsConnection(connection)
+    setDiagnosticsResult(null)
+    setDiagnosticsDialogOpen(true)
+  }
+
+  const handleRunConnectionDiagnostics = async (
+    connection: SSHConnection,
+    payload: SSHConnectionDiagnosticsRequest
+  ) => {
+    const response = await runConnectionDiagnosticsMutation.mutateAsync({
+      connectionId: connection.id,
+      payload,
+    })
+    return response.data
+  }
+
   const handleDeployKeyToConnection = (connection: SSHConnection) => {
     setSelectedConnection(connection)
     setRedeployKeyDialogOpen(true)
@@ -421,79 +469,91 @@ export default function SSHConnectionsSingleKey() {
   }
 
   return (
-    <SSHConnectionsSingleKeyView
-      t={t}
-      theme={theme}
-      isDark={isDark}
-      keyLoading={keyLoading}
-      connectionsLoading={connectionsLoading}
-      keyExists={keyExists}
-      systemKey={systemKey}
-      connections={connections}
-      canManageSsh={canManageSsh}
-      keyVisible={keyVisible}
-      setKeyVisible={setKeyVisible}
-      fingerprintVisible={fingerprintVisible}
-      setFingerprintVisible={setFingerprintVisible}
-      generateDialogOpen={generateDialogOpen}
-      setGenerateDialogOpen={setGenerateDialogOpen}
-      importDialogOpen={importDialogOpen}
-      setImportDialogOpen={setImportDialogOpen}
-      deployDialogOpen={deployDialogOpen}
-      setDeployDialogOpen={setDeployDialogOpen}
-      testConnectionDialogOpen={testConnectionDialogOpen}
-      setTestConnectionDialogOpen={setTestConnectionDialogOpen}
-      editConnectionDialogOpen={editConnectionDialogOpen}
-      setEditConnectionDialogOpen={setEditConnectionDialogOpen}
-      deleteConnectionDialogOpen={deleteConnectionDialogOpen}
-      setDeleteConnectionDialogOpen={setDeleteConnectionDialogOpen}
-      deleteKeyDialogOpen={deleteKeyDialogOpen}
-      setDeleteKeyDialogOpen={setDeleteKeyDialogOpen}
-      redeployKeyDialogOpen={redeployKeyDialogOpen}
-      setRedeployKeyDialogOpen={setRedeployKeyDialogOpen}
-      selectedConnection={selectedConnection}
-      setSelectedConnection={setSelectedConnection}
-      keyType={keyType}
-      setKeyType={setKeyType}
-      redeployPassword={redeployPassword}
-      setRedeployPassword={setRedeployPassword}
-      importForm={importForm}
-      setImportForm={setImportForm}
-      connectionForm={connectionForm}
-      setConnectionForm={setConnectionForm}
-      connectionHostError={connectionHostError}
-      setConnectionHostError={setConnectionHostError}
-      testConnectionForm={testConnectionForm}
-      setTestConnectionForm={setTestConnectionForm}
-      testConnectionHostError={testConnectionHostError}
-      setTestConnectionHostError={setTestConnectionHostError}
-      editConnectionForm={editConnectionForm}
-      setEditConnectionForm={setEditConnectionForm}
-      editConnectionHostError={editConnectionHostError}
-      setEditConnectionHostError={setEditConnectionHostError}
-      generateKeyPending={generateKeyMutation.isPending}
-      importKeyPending={importKeyMutation.isPending}
-      deployKeyPending={deployKeyMutation.isPending}
-      testConnectionPending={testConnectionMutation.isPending}
-      updateConnectionPending={updateConnectionMutation.isPending}
-      deleteConnectionPending={deleteConnectionMutation.isPending}
-      deleteKeyPending={deleteKeyMutation.isPending}
-      redeployKeyPending={redeployKeyMutation.isPending}
-      handleGenerateKey={handleGenerateKey}
-      handleImportKey={handleImportKey}
-      handleCopyPublicKey={handleCopyPublicKey}
-      handleDeployKey={handleDeployKey}
-      handleTestManualConnection={handleTestManualConnection}
-      handleEditConnection={handleEditConnection}
-      handleUpdateConnection={handleUpdateConnection}
-      handleDeleteConnection={handleDeleteConnection}
-      confirmDeleteConnection={confirmDeleteConnection}
-      handleTestConnection={handleTestConnection}
-      handleDeployKeyToConnection={handleDeployKeyToConnection}
-      handleConfirmRedeployKey={handleConfirmRedeployKey}
-      handleDeleteKey={handleDeleteKey}
-      onRefreshConnections={() => queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })}
-      onRefreshStorage={(connectionId) => refreshStorageMutation.mutate(connectionId)}
-    />
+    <>
+      <SSHConnectionsSingleKeyView
+        t={t}
+        theme={theme}
+        isDark={isDark}
+        keyLoading={keyLoading}
+        connectionsLoading={connectionsLoading}
+        keyExists={keyExists}
+        systemKey={systemKey}
+        connections={connections}
+        canManageSsh={canManageSsh}
+        keyVisible={keyVisible}
+        setKeyVisible={setKeyVisible}
+        fingerprintVisible={fingerprintVisible}
+        setFingerprintVisible={setFingerprintVisible}
+        generateDialogOpen={generateDialogOpen}
+        setGenerateDialogOpen={setGenerateDialogOpen}
+        importDialogOpen={importDialogOpen}
+        setImportDialogOpen={setImportDialogOpen}
+        deployDialogOpen={deployDialogOpen}
+        setDeployDialogOpen={setDeployDialogOpen}
+        testConnectionDialogOpen={testConnectionDialogOpen}
+        setTestConnectionDialogOpen={setTestConnectionDialogOpen}
+        editConnectionDialogOpen={editConnectionDialogOpen}
+        setEditConnectionDialogOpen={setEditConnectionDialogOpen}
+        deleteConnectionDialogOpen={deleteConnectionDialogOpen}
+        setDeleteConnectionDialogOpen={setDeleteConnectionDialogOpen}
+        deleteKeyDialogOpen={deleteKeyDialogOpen}
+        setDeleteKeyDialogOpen={setDeleteKeyDialogOpen}
+        redeployKeyDialogOpen={redeployKeyDialogOpen}
+        setRedeployKeyDialogOpen={setRedeployKeyDialogOpen}
+        selectedConnection={selectedConnection}
+        setSelectedConnection={setSelectedConnection}
+        keyType={keyType}
+        setKeyType={setKeyType}
+        redeployPassword={redeployPassword}
+        setRedeployPassword={setRedeployPassword}
+        importForm={importForm}
+        setImportForm={setImportForm}
+        connectionForm={connectionForm}
+        setConnectionForm={setConnectionForm}
+        connectionHostError={connectionHostError}
+        setConnectionHostError={setConnectionHostError}
+        testConnectionForm={testConnectionForm}
+        setTestConnectionForm={setTestConnectionForm}
+        testConnectionHostError={testConnectionHostError}
+        setTestConnectionHostError={setTestConnectionHostError}
+        editConnectionForm={editConnectionForm}
+        setEditConnectionForm={setEditConnectionForm}
+        editConnectionHostError={editConnectionHostError}
+        setEditConnectionHostError={setEditConnectionHostError}
+        generateKeyPending={generateKeyMutation.isPending}
+        importKeyPending={importKeyMutation.isPending}
+        deployKeyPending={deployKeyMutation.isPending}
+        testConnectionPending={testConnectionMutation.isPending}
+        updateConnectionPending={updateConnectionMutation.isPending}
+        deleteConnectionPending={deleteConnectionMutation.isPending}
+        deleteKeyPending={deleteKeyMutation.isPending}
+        redeployKeyPending={redeployKeyMutation.isPending}
+        handleGenerateKey={handleGenerateKey}
+        handleImportKey={handleImportKey}
+        handleCopyPublicKey={handleCopyPublicKey}
+        handleDeployKey={handleDeployKey}
+        handleTestManualConnection={handleTestManualConnection}
+        handleEditConnection={handleEditConnection}
+        handleUpdateConnection={handleUpdateConnection}
+        handleDeleteConnection={handleDeleteConnection}
+        confirmDeleteConnection={confirmDeleteConnection}
+        handleTestConnection={handleTestConnection}
+        handleDeployKeyToConnection={handleDeployKeyToConnection}
+        handleRunDiagnostics={handleRunDiagnostics}
+        handleConfirmRedeployKey={handleConfirmRedeployKey}
+        handleDeleteKey={handleDeleteKey}
+        onRefreshConnections={() =>
+          queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
+        }
+        onRefreshStorage={(connectionId) => refreshStorageMutation.mutate(connectionId)}
+      />
+      <ConnectionDiagnosticsDialog
+        open={diagnosticsDialogOpen}
+        connection={diagnosticsConnection}
+        initialResult={diagnosticsResult}
+        onClose={() => setDiagnosticsDialogOpen(false)}
+        onRunDiagnostics={handleRunConnectionDiagnostics}
+      />
+    </>
   )
 }

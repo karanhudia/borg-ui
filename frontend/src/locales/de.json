@@ -1807,6 +1807,40 @@
       "passwordPlaceholder": "SSH-Passwort eingeben",
       "passwordHelper": "Das Passwort wird verwendet, um den öffentlichen Schlüssel in authorized_keys bereitzustellen"
     },
+    "diagnostics": {
+      "title": "Remote-Maschinen-Diagnose",
+      "description": "Prüft die SSH-Sitzung, optional erreichbare Remote-TCP-Ziele und begrenzte SSH-Transportgeschwindigkeit.",
+      "noConnection": "Keine Verbindung ausgewählt",
+      "targetHost": "Zielhost",
+      "targetHostHelper": "Optionales Remote-TCP-Ziel",
+      "targetPort": "Port",
+      "targetTimeout": "Ziel-Timeout",
+      "sshTimeout": "SSH-Timeout",
+      "speedProbeSize": "Speed-Probe-Größe",
+      "speedProbeHelper": "Bytes, die über SSH gelesen werden, 65536 bis 5242880.",
+      "seconds": "Sekunden",
+      "latency": "Latenz",
+      "runCheck": "Prüfung starten",
+      "running": "Diagnose läuft",
+      "transferredIn": "{{bytes}} in {{elapsed}}",
+      "notReported": "Nicht gemeldet",
+      "noThroughputResult": "Kein Durchsatz-Ergebnis",
+      "sessionHealthy": "SSH-Sitzung fehlerfrei",
+      "sessionTimedOut": "SSH-Zeitüberschreitung",
+      "sessionFailed": "SSH fehlgeschlagen",
+      "tcpReachable": "TCP erreichbar",
+      "tcpTimedOut": "TCP-Zeitüberschreitung",
+      "tcpFailed": "TCP fehlgeschlagen",
+      "speedComplete": "Speed-Probe abgeschlossen",
+      "speedTimedOut": "Speed-Probe-Zeitüberschreitung",
+      "speedFailed": "Speed-Probe fehlgeschlagen",
+      "errors": {
+        "targetPortRange": "Geben Sie einen TCP-Port zwischen 1 und 65535 ein.",
+        "targetTimeoutRange": "Geben Sie ein Ziel-Timeout zwischen 0,5 und 15 Sekunden ein.",
+        "sshTimeoutRange": "Geben Sie ein SSH-Timeout zwischen 1 und 30 Sekunden ein.",
+        "speedProbeRange": "Geben Sie eine Speed-Probe-Größe zwischen 65536 und 5242880 Byte ein."
+      }
+    },
     "remoteConnections": {
       "title": "Remote-Verbindungen",
       "configured_one": "{{count}} Maschine konfiguriert",
@@ -1833,7 +1867,9 @@
       "storageRefreshFailed": "Speicher konnte nicht aktualisiert werden",
       "keyDeleted": "System-SSH-Schlüssel erfolgreich gelöscht!",
       "keyDeleteFailed": "SSH-Schlüssel konnte nicht gelöscht werden",
-      "publicKeyCopied": "Öffentlicher Schlüssel in Zwischenablage kopiert!"
+      "publicKeyCopied": "Öffentlicher Schlüssel in Zwischenablage kopiert!",
+      "diagnosticsComplete": "Diagnose abgeschlossen",
+      "diagnosticsFailed": "Diagnose konnte nicht ausgeführt werden"
     }
   },
   "scripts": {
@@ -4157,7 +4193,8 @@
     "defaultPath": "Standardpfad",
     "actions": {
       "testConnection": "Verbindung testen",
-      "refreshStorage": "Speicher aktualisieren"
+      "refreshStorage": "Speicher aktualisieren",
+      "runDiagnostics": "Diagnose ausführen"
     }
   },
   "repositoryInfoDialog": {
