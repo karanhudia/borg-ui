@@ -1048,7 +1048,7 @@ def _parse_container_scan_output(stdout: str) -> list[ContainerCandidate]:
         slug = _container_export_slug(name, container_id)
         containers.append(
             ContainerCandidate(
-                id=container_id[:12],
+                id=container_id,
                 name=name,
                 image=_container_image(raw_container),
                 status=status,
@@ -1106,9 +1106,7 @@ def _run_remote_container_scan(
         "-p",
         str(connection.port or 22),
         "-o",
-        "StrictHostKeyChecking=no",
-        "-o",
-        "UserKnownHostsFile=/dev/null",
+        "StrictHostKeyChecking=accept-new",
         "-o",
         f"ConnectTimeout={max(1, int(timeout_seconds))}",
         f"{connection.username}@{connection.host}",

@@ -64,7 +64,10 @@ class TestSourceDiscovery:
                 returncode=0,
                 stdout=json.dumps(
                     {
-                        "Id": "5ad07b8f01d2",
+                        "Id": (
+                            "5ad07b8f01d2f9fef1b6ee4e8cc2d7ce"
+                            "2b6f0fc3f3ef024a23f1e3a0d5f0c3c1"
+                        ),
                         "Name": "/postgres",
                         "Config": {"Image": "postgres:17"},
                         "State": {"Status": "running"},
@@ -111,7 +114,10 @@ class TestSourceDiscovery:
         assert len(body["containers"]) == 1
 
         container = body["containers"][0]
-        assert container["id"] == "5ad07b8f01d2"
+        assert (
+            container["id"]
+            == "5ad07b8f01d2f9fef1b6ee4e8cc2d7ce2b6f0fc3f3ef024a23f1e3a0d5f0c3c1"
+        )
         assert container["name"] == "postgres"
         assert container["image"] == "postgres:17"
         assert container["status"] == "running"
@@ -204,6 +210,33 @@ class TestSourceDiscovery:
         assert body["warnings"] == []
         assert body["containers"][0]["name"] == "nginx"
         assert body["containers"][0]["image"] == "nginx:1.27"
+
+    def test_remote_container_scan_preserves_ssh_host_key_verification(
+        self, monkeypatch
+    ):
+        captured: dict[str, list[str]] = {}
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            captured["cmd"] = cmd
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(source_discovery.subprocess, "run", fake_run)
+
+        source_discovery._run_remote_container_scan(
+            connection=SimpleNamespace(
+                host="docker-host.test",
+                username="backup",
+                port=2222,
+            ),
+            key_file_path="/tmp/borg-ui-test-key",
+            include_stopped=True,
+            timeout_seconds=15,
+        )
+
+        assert "StrictHostKeyChecking=accept-new" in captured["cmd"]
+        assert "StrictHostKeyChecking=no" not in captured["cmd"]
+        assert "UserKnownHostsFile=/dev/null" not in captured["cmd"]
 
     def test_sqlite_template_stages_backup_with_parameters(
         self, test_client, admin_headers
