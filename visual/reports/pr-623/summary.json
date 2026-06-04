@@ -1,17 +1,17 @@
 {
-  "generatedAt": "2026-06-04T10:30:03.527Z",
+  "generatedAt": "2026-06-04T11:43:41.448Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #623 visual report",
-    "commitSha": "bea3941ca7b7",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26946048117"
+    "commitSha": "716e3ec74bf4",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26949402258"
   },
   "totals": {
     "baseline": 312,
-    "actual": 318,
+    "actual": 320,
     "compared": 312,
     "changed": 20,
-    "added": 6,
+    "added": 8,
     "removed": 0,
     "unchanged": 292
   },
@@ -385,6 +385,14 @@
     {
       "fileName": "backup-plans-reviewstep--docker-container-source-to-server-repo.png",
       "actualPath": "images/actual/backup-plans-reviewstep--docker-container-source-to-server-repo.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--container-picker-detected--mobile.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--container-picker-detected--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--container-picker-detected.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--container-picker-detected.png"
     },
     {
       "fileName": "backup-plans-sourceselectiondialog--container-picker-empty--mobile.png",
