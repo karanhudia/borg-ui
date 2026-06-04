@@ -210,23 +210,17 @@ instead of rclone's local loopback callback. This is the recommended mode for
 Docker, remote-server, and reverse-proxy deployments where a user's browser
 cannot reach `127.0.0.1` inside the Borg UI container.
 
-`PUBLIC_BASE_URL` is still configured on the backend/container. Provider OAuth
-app credentials can either be saved by an admin from the Cloud Storage add/edit
-remote dialog or supplied through backend environment variables:
+`PUBLIC_BASE_URL` is configured on the backend/container. Provider OAuth app
+credentials are saved by an admin from the Cloud Storage add/edit remote dialog;
+Borg UI no longer reads Google Drive or OneDrive OAuth client credentials from
+environment variables.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `PUBLIC_BASE_URL` | empty | Public browser URL for Borg UI, including `BASE_PATH` when served under a sub-path |
-| `GOOGLE_DRIVE_OAUTH_CLIENT_ID` | empty | Google OAuth web application client ID for Borg UI-owned Drive callbacks |
-| `GOOGLE_DRIVE_OAUTH_CLIENT_SECRET` | empty | Google OAuth web application client secret |
-| `ONEDRIVE_OAUTH_CLIENT_ID` | empty | Microsoft Entra application client ID for Borg UI-owned OneDrive callbacks |
-| `ONEDRIVE_OAUTH_CLIENT_SECRET` | empty | Microsoft Entra application client secret |
 
-Complete credentials saved in Borg UI take precedence over environment values.
-Environment variables remain useful for local development, immutable
-deployments, and secret-store-driven production setups. Borg UI stores UI-saved
-client secrets encrypted in the backend database and returns only credential
-source/status metadata to the frontend.
+Borg UI stores UI-saved client secrets encrypted in the backend database and
+returns only credential status metadata to the frontend.
 
 `PUBLIC_BASE_URL` must be the normal browser URL for the deployment and must
 use HTTPS, except for localhost development URLs. If Borg UI is served from a
@@ -259,10 +253,6 @@ localhost callback:
 
 ```dotenv
 PUBLIC_BASE_URL=http://localhost:7879
-GOOGLE_DRIVE_OAUTH_CLIENT_ID=your-google-client-id
-GOOGLE_DRIVE_OAUTH_CLIENT_SECRET=your-google-client-secret
-ONEDRIVE_OAUTH_CLIENT_ID=your-microsoft-client-id
-ONEDRIVE_OAUTH_CLIENT_SECRET=your-microsoft-client-secret
 ```
 
 ```text

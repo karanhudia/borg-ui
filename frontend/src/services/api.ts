@@ -141,7 +141,7 @@ export interface RcloneProvider {
   oauth_configured?: boolean
   oauth_callback_url?: string | null
   oauth_setup_key?: string | null
-  oauth_credentials_source?: 'database' | 'environment' | 'unset' | 'unsupported'
+  oauth_credentials_source?: 'database' | 'unset' | 'unsupported'
   oauth_client_id_set?: boolean
   oauth_client_secret_set?: boolean
 }
@@ -155,7 +155,7 @@ export interface RcloneOAuthCredentialStatus {
   provider: string
   label: string
   configured: boolean
-  credential_source: 'database' | 'environment' | 'unset' | 'unsupported'
+  credential_source: 'database' | 'unset' | 'unsupported'
   client_id: string | null
   client_id_set: boolean
   client_secret_set: boolean
@@ -225,6 +225,7 @@ export interface SystemSettings {
   dashboard_observe_freshness_critical_days?: number
   bypass_lock_on_info?: boolean
   bypass_lock_on_list?: boolean
+  lock_breaking_enabled?: boolean
   metrics_enabled?: boolean
   metrics_require_auth?: boolean
   metrics_token?: string
@@ -557,6 +558,7 @@ export const backupAPI = {
     }),
   getScheduledJobs: () => api.get('/backup/jobs?scheduled_only=true'),
   cancelJob: (jobId: string) => api.post(`/backup/cancel/${jobId}`),
+  retryJob: (jobId: string | number) => api.post(`/backup/jobs/${jobId}/retry`),
   // Download logs as file (only for failed/cancelled backups)
   downloadLogs: (jobId: string) =>
     window.open(buildDownloadUrl(`/backup/logs/${jobId}/download`), '_blank'),
@@ -870,7 +872,62 @@ export const backupPlansAPI = {
   listRuns: () => api.get('/backup-plans/runs'),
   getRun: (id: number) => api.get(`/backup-plans/runs/${id}`),
   cancelRun: (id: number) => api.post(`/backup-plans/runs/${id}/cancel`),
+  retryRun: (id: number) => api.post(`/backup-plans/runs/${id}/retry`),
   listRunsForPlan: (id: number) => api.get(`/backup-plans/${id}/runs`),
+}
+
+export interface SSHConnectionDiagnosticsTargetRequest {
+  host: string
+  port: number
+  timeout_seconds?: number
+}
+
+export interface SSHConnectionDiagnosticsRequest {
+  target?: SSHConnectionDiagnosticsTargetRequest
+  timeout_seconds?: number
+  speed_probe_bytes?: number
+}
+
+export interface SSHConnectionDiagnosticsMetadata {
+  id: number
+  host: string
+  username: string
+  port: number
+  status: string
+  last_test?: string | null
+  last_success?: string | null
+  error_message?: string | null
+}
+
+export interface SSHConnectionDiagnosticsProbeResult {
+  status: 'success' | 'failed' | 'timeout' | string
+  elapsed_ms?: number | null
+  error?: string | null
+  message?: string | null
+  output?: string | null
+}
+
+export interface SSHConnectionDiagnosticsTcpResult extends SSHConnectionDiagnosticsProbeResult {
+  target: {
+    host: string
+    port: number
+    timeout_seconds?: number
+  }
+}
+
+export interface SSHConnectionDiagnosticsThroughputResult extends SSHConnectionDiagnosticsProbeResult {
+  direction: 'download' | string
+  probe_size_bytes: number
+  bytes_transferred?: number | null
+  mbps?: number | null
+}
+
+export interface SSHConnectionDiagnosticsResponse {
+  connection: SSHConnectionDiagnosticsMetadata
+  session: SSHConnectionDiagnosticsProbeResult
+  latency: SSHConnectionDiagnosticsProbeResult
+  tcp?: SSHConnectionDiagnosticsTcpResult | null
+  throughput?: SSHConnectionDiagnosticsThroughputResult | null
 }
 
 // SSH Keys API
@@ -900,6 +957,11 @@ export const sshKeysAPI = {
     api.delete(`/ssh-keys/connections/${connectionId}`),
   refreshConnectionStorage: (connectionId: number) =>
     api.post(`/ssh-keys/connections/${connectionId}/refresh-storage`),
+  runConnectionDiagnostics: (connectionId: number, data: SSHConnectionDiagnosticsRequest) =>
+    api.post<SSHConnectionDiagnosticsResponse>(
+      `/ssh-keys/connections/${connectionId}/diagnostics`,
+      data
+    ),
   redeployKeyToConnection: (connectionId: number, password: string) =>
     api.post(`/ssh-keys/connections/${connectionId}/redeploy`, { password }),
   importSSHKey: (data: ApiData) => api.post('/ssh-keys/import', data),
@@ -1010,6 +1072,54 @@ export interface AgentFilesystemBrowseResponse {
   items_truncated?: boolean
 }
 
+export interface AgentDiagnosticsTargetRequest {
+  host: string
+  port: number
+  timeout_seconds?: number
+}
+
+export interface AgentDiagnosticsRequest {
+  target?: AgentDiagnosticsTargetRequest
+}
+
+export interface AgentDiagnosticsMetadata {
+  id: number
+  name: string
+  agent_id: string
+  hostname?: string | null
+  status: string
+  last_seen_at?: string | null
+  agent_version?: string | null
+  borg_versions?: Array<Record<string, unknown>> | null
+  capabilities?: string[] | null
+  last_error?: string | null
+}
+
+export interface AgentDiagnosticsSessionResult {
+  status: 'success' | 'offline' | 'timeout' | 'failed' | string
+  elapsed_ms?: number | null
+  error?: string | null
+  message?: string | null
+}
+
+export interface AgentDiagnosticsTcpResult {
+  target: {
+    host: string
+    port: number
+    timeout_seconds?: number
+  }
+  status: 'success' | 'failed' | string
+  elapsed_ms?: number | null
+  error?: string | null
+  message?: string | null
+}
+
+export interface AgentDiagnosticsResponse {
+  agent: AgentDiagnosticsMetadata
+  session: AgentDiagnosticsSessionResult
+  tcp?: AgentDiagnosticsTcpResult | null
+}
+
 export interface AgentEnrollmentTokenCreate {
   name: string
   default_path?: string | null
@@ -1043,6 +1153,8 @@ export const managedAgentsAPI = {
       `/managed-machines/agents/${agentId}/filesystem/browse`,
       { params: { path, include_hidden: includeHidden } }
     ),
+  runDiagnostics: (agentId: number, data: AgentDiagnosticsRequest) =>
+    api.post<AgentDiagnosticsResponse>(`/managed-machines/agents/${agentId}/diagnostics`, data),
 }
 
 // Schedule API

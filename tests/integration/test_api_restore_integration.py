@@ -451,6 +451,43 @@ class TestRestoreOperationBorg2:
 class TestRestoreSpeedETAIntegration:
     """Integration tests for restore speed and ETA calculation"""
 
+    def _drain_restore_job(self, test_client, job_id, admin_headers, timeout=45):
+        try:
+            wait_for_job_terminal_status(
+                test_client,
+                "/api/restore/status",
+                job_id,
+                admin_headers,
+                timeout=timeout,
+            )
+            return
+        except TimeoutError:
+            pass
+
+        response = test_client.get(
+            f"/api/restore/status/{job_id}", headers=admin_headers
+        )
+        if response.status_code != 200:
+            return
+
+        if response.json().get("status") != "running":
+            return
+
+        cancel_response = test_client.post(
+            f"/api/restore/cancel/{job_id}", headers=admin_headers
+        )
+        if cancel_response.status_code == 200:
+            try:
+                wait_for_job_terminal_status(
+                    test_client,
+                    "/api/restore/status",
+                    job_id,
+                    admin_headers,
+                    timeout=10,
+                )
+            except TimeoutError:
+                pass
+
     def wait_for_running_status(self, test_client, job_id, admin_headers, timeout=10):
         """Poll job status until it starts running"""
 
@@ -486,35 +523,42 @@ class TestRestoreSpeedETAIntegration:
         latest_archive = archive_names[-1]
         restore_dest = tmp_path / "restore_speed_test"
         restore_dest.mkdir()
+        job_id = None
 
-        # Trigger restore
-        response = test_client.post(
-            "/api/restore/start",
-            json={
-                "repository": str(repo_path),
-                "archive": latest_archive,
-                "paths": [],
-                "destination": str(restore_dest),
-                "repository_id": repo.id,
-            },
-            headers=admin_headers,
-        )
+        try:
+            # Trigger restore
+            response = test_client.post(
+                "/api/restore/start",
+                json={
+                    "repository": str(repo_path),
+                    "archive": latest_archive,
+                    "paths": [],
+                    "destination": str(restore_dest),
+                    "repository_id": repo.id,
+                },
+                headers=admin_headers,
+            )
 
-        assert response.status_code == 200
-        job_id = response.json()["job_id"]
+            assert response.status_code == 200
+            job_id = response.json()["job_id"]
 
-        # Wait for job to start running
-        running_data = self.wait_for_running_status(test_client, job_id, admin_headers)
+            # Wait for job to start running
+            running_data = self.wait_for_running_status(
+                test_client, job_id, admin_headers
+            )
 
-        if running_data:
-            # Verify progress_details includes speed
-            assert "progress_details" in running_data
-            progress = running_data["progress_details"]
-            assert "restore_speed" in progress
-            assert "estimated_time_remaining" in progress
-            # Speed might be 0 initially, but fields should exist
-            assert isinstance(progress["restore_speed"], (int, float))
-            assert isinstance(progress["estimated_time_remaining"], int)
+            if running_data:
+                # Verify progress_details includes speed
+                assert "progress_details" in running_data
+                progress = running_data["progress_details"]
+                assert "restore_speed" in progress
+                assert "estimated_time_remaining" in progress
+                # Speed might be 0 initially, but fields should exist
+                assert isinstance(progress["restore_speed"], (int, float))
+                assert isinstance(progress["estimated_time_remaining"], int)
+        finally:
+            if job_id is not None:
+                self._drain_restore_job(test_client, job_id, admin_headers)
 
     @pytest.mark.asyncio
     async def test_restore_calculates_eta(
@@ -529,55 +573,65 @@ class TestRestoreSpeedETAIntegration:
         latest_archive = archive_names[-1]
         restore_dest = tmp_path / "restore_eta_test"
         restore_dest.mkdir()
+        job_id = None
 
-        # Trigger restore
-        response = test_client.post(
-            "/api/restore/start",
-            json={
-                "repository": str(repo_path),
-                "archive": latest_archive,
-                "paths": [],
-                "destination": str(restore_dest),
-                "repository_id": repo.id,
-            },
-            headers=admin_headers,
-        )
+        try:
+            # Trigger restore
+            response = test_client.post(
+                "/api/restore/start",
+                json={
+                    "repository": str(repo_path),
+                    "archive": latest_archive,
+                    "paths": [],
+                    "destination": str(restore_dest),
+                    "repository_id": repo.id,
+                },
+                headers=admin_headers,
+            )
 
-        assert response.status_code == 200
-        job_id = response.json()["job_id"]
+            assert response.status_code == 200
+            job_id = response.json()["job_id"]
 
-        # Poll for progress with ETA
-        start_time = time.time()
-        found_eta = False
+            # Poll for progress with ETA
+            start_time = time.time()
+            found_eta = False
 
-        while time.time() - start_time < 15:  # 15 second timeout
+            while time.time() - start_time < 15:  # 15 second timeout
+                response = test_client.get(
+                    f"/api/restore/status/{job_id}", headers=admin_headers
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get("status") == "running":
+                        progress = data.get("progress_details", {})
+                        eta = progress.get("estimated_time_remaining", 0)
+                        speed = progress.get("restore_speed", 0.0)
+
+                        # If we have speed > 0 and ETA > 0, test passes
+                        if speed > 0 and eta > 0:
+                            found_eta = True
+                            break
+                    elif data.get("status") in ["completed", "failed"]:
+                        break
+                time.sleep(0.3)
+
+            # Test passes if we either found ETA during restore or restore completed.
+            # "pending" is also valid: TestClient runs the ASGI app via an anyio portal in a
+            # background thread, and asyncio.create_task() background jobs are not guaranteed
+            # to execute between synchronous test-client calls.
             response = test_client.get(
                 f"/api/restore/status/{job_id}", headers=admin_headers
             )
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("status") == "running":
-                    progress = data.get("progress_details", {})
-                    eta = progress.get("estimated_time_remaining", 0)
-                    speed = progress.get("restore_speed", 0.0)
-
-                    # If we have speed > 0 and ETA > 0, test passes
-                    if speed > 0 and eta > 0:
-                        found_eta = True
-                        break
-                elif data.get("status") in ["completed", "failed"]:
-                    break
-            time.sleep(0.3)
-
-        # Test passes if we either found ETA during restore or restore completed.
-        # "pending" is also valid: TestClient runs the ASGI app via an anyio portal in a
-        # background thread, and asyncio.create_task() background jobs are not guaranteed
-        # to execute between synchronous test-client calls.
-        response = test_client.get(
-            f"/api/restore/status/{job_id}", headers=admin_headers
-        )
-        final_data = response.json()
-        assert final_data.get("status") in ["pending", "running", "completed", "failed"]
+            final_data = response.json()
+            assert final_data.get("status") in [
+                "pending",
+                "running",
+                "completed",
+                "failed",
+            ]
+        finally:
+            if job_id is not None:
+                self._drain_restore_job(test_client, job_id, admin_headers)
 
     @pytest.mark.asyncio
     async def test_restore_speed_and_eta_in_jobs_list(
@@ -592,47 +646,52 @@ class TestRestoreSpeedETAIntegration:
         latest_archive = archive_names[-1]
         restore_dest = tmp_path / "restore_list_test"
         restore_dest.mkdir()
+        job_id = None
 
-        # Trigger restore
-        response = test_client.post(
-            "/api/restore/start",
-            json={
-                "repository": str(repo_path),
-                "archive": latest_archive,
-                "paths": [],
-                "destination": str(restore_dest),
-                "repository_id": repo.id,
-            },
-            headers=admin_headers,
-        )
+        try:
+            # Trigger restore
+            response = test_client.post(
+                "/api/restore/start",
+                json={
+                    "repository": str(repo_path),
+                    "archive": latest_archive,
+                    "paths": [],
+                    "destination": str(restore_dest),
+                    "repository_id": repo.id,
+                },
+                headers=admin_headers,
+            )
 
-        assert response.status_code == 200
-        job_id = response.json()["job_id"]
+            assert response.status_code == 200
+            job_id = response.json()["job_id"]
 
-        # Wait a bit for restore to start
-        time.sleep(0.5)
+            # Wait a bit for restore to start
+            time.sleep(0.5)
 
-        # Get jobs list
-        response = test_client.get("/api/restore/jobs", headers=admin_headers)
+            # Get jobs list
+            response = test_client.get("/api/restore/jobs", headers=admin_headers)
 
-        assert response.status_code == 200
-        data = response.json()
-        assert "jobs" in data
+            assert response.status_code == 200
+            data = response.json()
+            assert "jobs" in data
 
-        # Find our job
-        our_job = None
-        for job in data["jobs"]:
-            if job["id"] == job_id:
-                our_job = job
-                break
+            # Find our job
+            our_job = None
+            for job in data["jobs"]:
+                if job["id"] == job_id:
+                    our_job = job
+                    break
 
-        assert our_job is not None, "Created job not found in jobs list"
+            assert our_job is not None, "Created job not found in jobs list"
 
-        # Verify speed and ETA fields exist
-        assert "progress_details" in our_job
-        progress = our_job["progress_details"]
-        assert "restore_speed" in progress
-        assert "estimated_time_remaining" in progress
+            # Verify speed and ETA fields exist
+            assert "progress_details" in our_job
+            progress = our_job["progress_details"]
+            assert "restore_speed" in progress
+            assert "estimated_time_remaining" in progress
+        finally:
+            if job_id is not None:
+                self._drain_restore_job(test_client, job_id, admin_headers)
 
     @pytest.mark.asyncio
     async def test_restore_original_and_restored_size_tracking(
@@ -647,45 +706,50 @@ class TestRestoreSpeedETAIntegration:
         latest_archive = archive_names[-1]
         restore_dest = tmp_path / "restore_size_test"
         restore_dest.mkdir()
+        job_id = None
 
-        # Trigger restore
-        response = test_client.post(
-            "/api/restore/start",
-            json={
-                "repository": str(repo_path),
-                "archive": latest_archive,
-                "paths": [],
-                "destination": str(restore_dest),
-                "repository_id": repo.id,
-            },
-            headers=admin_headers,
-        )
-
-        assert response.status_code == 200
-        job_id = response.json()["job_id"]
-
-        # Wait for job to start and check database
-        time.sleep(1.0)
-
-        from app.database.models import RestoreJob
-        from app.database.database import SessionLocal
-
-        db = SessionLocal()
         try:
-            job = db.query(RestoreJob).filter(RestoreJob.id == job_id).first()
-            assert job is not None
+            # Trigger restore
+            response = test_client.post(
+                "/api/restore/start",
+                json={
+                    "repository": str(repo_path),
+                    "archive": latest_archive,
+                    "paths": [],
+                    "destination": str(restore_dest),
+                    "repository_id": repo.id,
+                },
+                headers=admin_headers,
+            )
 
-            # Check that size fields are being tracked
-            # original_size should be set (total bytes to restore)
-            # restored_size should be updating during restore
-            if job.status == "running":
-                # If still running, we should have some size data
-                assert hasattr(job, "original_size")
-                assert hasattr(job, "restored_size")
-                assert hasattr(job, "restore_speed")
-                assert hasattr(job, "estimated_time_remaining")
+            assert response.status_code == 200
+            job_id = response.json()["job_id"]
+
+            # Wait for job to start and check database
+            time.sleep(1.0)
+
+            from app.database.models import RestoreJob
+            from app.database.database import SessionLocal
+
+            db = SessionLocal()
+            try:
+                job = db.query(RestoreJob).filter(RestoreJob.id == job_id).first()
+                assert job is not None
+
+                # Check that size fields are being tracked
+                # original_size should be set (total bytes to restore)
+                # restored_size should be updating during restore
+                if job.status == "running":
+                    # If still running, we should have some size data
+                    assert hasattr(job, "original_size")
+                    assert hasattr(job, "restored_size")
+                    assert hasattr(job, "restore_speed")
+                    assert hasattr(job, "estimated_time_remaining")
+            finally:
+                db.close()
         finally:
-            db.close()
+            if job_id is not None:
+                self._drain_restore_job(test_client, job_id, admin_headers)
 
 
 @pytest.mark.integration

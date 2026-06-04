@@ -38,6 +38,12 @@ NO_FUSE_SUPPORT_MARKERS = (
     "borgfs is not supported",
 )
 
+SSHFS_NO_SUCH_FILE_MARKERS = (
+    "no such file or directory",
+    "no such file",
+    "not found",
+)
+
 
 class MountUnavailableError(Exception):
     """Raised when archive mounting is unavailable in the runtime environment."""
@@ -54,6 +60,29 @@ def _decrypt_with_module_secret(encrypted_value: str) -> str:
     encryption_key = settings.secret_key.encode()[:32]
     cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
     return cipher.decrypt(encrypted_value.encode()).decode()
+
+
+def _sshfs_missing_remote_path(error_message: str) -> bool:
+    normalized = (error_message or "").lower()
+    return any(marker in normalized for marker in SSHFS_NO_SUCH_FILE_MARKERS)
+
+
+def _sshfs_login_relative_candidate(
+    remote_path: str, default_path: Optional[str] = None
+) -> Optional[str]:
+    normalized = (remote_path or "").strip()
+    if not normalized.startswith("/") or normalized == "/":
+        return None
+    if normalized.startswith("/./"):
+        relative_path = normalized.lstrip("/")
+        return relative_path or None
+
+    normalized_default_path = (default_path or "").strip()
+    if normalized_default_path not in {"", "/"}:
+        return None
+
+    relative_path = normalized.lstrip("/")
+    return relative_path or None
 
 
 class MountType(Enum):
@@ -1574,73 +1603,112 @@ class MountService:
         current_uid = os.getuid()
         current_gid = os.getgid()
 
-        # Build SSHFS command WITH IdentityFile (this is the fix!)
-        cmd = [
-            "sshfs",
-            f"{connection.username}@{connection.host}:{remote_path}",
-            mount_point,
-            "-p",
-            str(connection.port),
-            "-o",
-            f"IdentityFile={temp_key_file}",  # CRITICAL: SSH key auth
-            "-o",
-            "StrictHostKeyChecking=no",
-            "-o",
-            "UserKnownHostsFile=/dev/null",
-            "-o",
-            "ConnectTimeout=30",
-            "-o",
-            "ServerAliveInterval=15",
-            "-o",
-            "ServerAliveCountMax=3",
-            "-o",
-            "reconnect",
-            "-o",
-            "follow_symlinks",
-            "-o",
-            "allow_other",
-            "-o",
-            f"uid={current_uid}",
-            "-o",
-            f"gid={current_gid}",
-            "-o",
-            "workaround=rename",
-        ]
+        def build_sshfs_command(path_to_mount: str) -> list[str]:
+            # Build SSHFS command WITH IdentityFile (this is the fix!)
+            cmd = [
+                "sshfs",
+                f"{connection.username}@{connection.host}:{path_to_mount}",
+                mount_point,
+                "-p",
+                str(connection.port),
+                "-o",
+                f"IdentityFile={temp_key_file}",  # CRITICAL: SSH key auth
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-o",
+                "UserKnownHostsFile=/dev/null",
+                "-o",
+                "ConnectTimeout=30",
+                "-o",
+                "ServerAliveInterval=15",
+                "-o",
+                "ServerAliveCountMax=3",
+                "-o",
+                "reconnect",
+                "-o",
+                "follow_symlinks",
+                "-o",
+                "allow_other",
+                "-o",
+                f"uid={current_uid}",
+                "-o",
+                f"gid={current_gid}",
+                "-o",
+                "workaround=rename",
+            ]
 
-        # When use_sudo is enabled, tell SSHFS to run the remote sftp-server via sudo.
-        # This allows reading files owned by root/other users (e.g. vault TLS keys, raft DB).
-        # Requires passwordless sudo for the SSH user on the remote host.
+            # When use_sudo is enabled, tell SSHFS to run the remote sftp-server via sudo.
+            # This allows reading files owned by root/other users (e.g. vault TLS keys, raft DB).
+            # Requires passwordless sudo for the SSH user on the remote host.
+            if use_sudo:
+                server = sftp_server_path or "/usr/lib/openssh/sftp-server"
+                cmd.extend(["-o", f"sftp_server=sudo {server}"])
+            return cmd
+
         if use_sudo:
-            server = sftp_server_path or "/usr/lib/openssh/sftp-server"
-            cmd.extend(["-o", f"sftp_server=sudo {server}"])
             logger.info(
                 "SSHFS: using sudo sftp-server for elevated file access",
                 host=connection.host,
-                sftp_server=server,
+                sftp_server=sftp_server_path or "/usr/lib/openssh/sftp-server",
             )
 
-        logger.info("Executing SSHFS mount", command=" ".join(cmd))
-
-        # Execute mount command
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            stdin=asyncio.subprocess.DEVNULL,
+        mount_attempts = [remote_path]
+        connection_default_path = getattr(connection, "default_path", None)
+        if not isinstance(connection_default_path, str):
+            connection_default_path = None
+        login_relative_path = _sshfs_login_relative_candidate(
+            remote_path, connection_default_path
         )
+        if login_relative_path and login_relative_path != remote_path:
+            mount_attempts.append(login_relative_path)
 
-        # Give SSHFS a moment to start mounting
-        await asyncio.sleep(1)
+        for attempt_index, path_to_mount in enumerate(mount_attempts):
+            cmd = build_sshfs_command(path_to_mount)
 
-        # Check for immediate errors
-        try:
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=5)
-            if process.returncode is not None and process.returncode != 0:
-                error_msg = stderr.decode() if stderr else "Unknown error"
-                raise Exception(f"SSHFS mount failed: {error_msg}")
-        except asyncio.TimeoutError:
-            # SSHFS forks to background, timeout is expected for successful mounts
-            pass
+            logger.info(
+                "Executing SSHFS mount",
+                command=" ".join(cmd),
+                remote_path=path_to_mount,
+                retry=attempt_index > 0,
+            )
+
+            # Execute mount command
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                stdin=asyncio.subprocess.DEVNULL,
+            )
+
+            # Give SSHFS a moment to start mounting
+            await asyncio.sleep(1)
+
+            # Check for immediate errors
+            try:
+                stdout, stderr = await asyncio.wait_for(
+                    process.communicate(), timeout=5
+                )
+                if process.returncode is not None and process.returncode != 0:
+                    error_msg = (
+                        stderr.decode(errors="replace") if stderr else "Unknown error"
+                    )
+                    if (
+                        attempt_index == 0
+                        and login_relative_path
+                        and _sshfs_missing_remote_path(error_msg)
+                    ):
+                        logger.warning(
+                            "SSHFS absolute path missing, retrying relative to login directory",
+                            remote_path=remote_path,
+                            retry_remote_path=login_relative_path,
+                            error=error_msg.strip(),
+                        )
+                        continue
+                    raise Exception(f"SSHFS mount failed: {error_msg}")
+                return
+            except asyncio.TimeoutError:
+                # SSHFS forks to background, timeout is expected for successful mounts
+                return
 
     async def _verify_mount_readable(self, mount_point: str):
         """

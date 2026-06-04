@@ -135,6 +135,7 @@ export interface BackupJob {
   id: string | number
   repository: string
   repository_id?: number | null
+  repository_path?: string | null
   type?: string
   status: 'running' | 'completed' | 'completed_with_warnings' | 'failed' | 'cancelled' | string
   started_at?: string
@@ -149,6 +150,7 @@ export interface BackupJob {
   error_message?: string
   triggered_by?: string
   schedule_id?: number | null
+  scheduled_job_id?: number | null
   has_logs?: boolean
   maintenance_status?: string
   backup_plan_id?: number | null
@@ -157,6 +159,11 @@ export interface BackupJob {
   archive_name?: string | null
   execution_mode?: 'local' | 'remote_ssh' | 'agent' | string
   route_strategy?: string | null
+  retry_attempt?: number | null
+  retry_original_job_id?: number | null
+  retry_source_job_id?: number | null
+  retry_requested_by_user_id?: number | null
+  retry_requested_at?: string | null
   progress_details?: {
     original_size: number
     compressed_size?: number
@@ -345,6 +352,11 @@ export interface BackupPlanRun {
   completed_at?: string | null
   error_message?: string | null
   created_at?: string | null
+  retry_attempt?: number | null
+  retry_original_run_id?: number | null
+  retry_source_run_id?: number | null
+  retry_requested_by_user_id?: number | null
+  retry_requested_at?: string | null
   repositories: BackupPlanRunRepository[]
   script_executions?: BackupPlanScriptExecution[]
 }

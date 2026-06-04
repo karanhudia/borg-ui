@@ -474,6 +474,8 @@
       "startFailed": "Impossibile avviare il backup",
       "cancelled": "Backup annullato con successo!",
       "cancelFailed": "Impossibile annullare il backup",
+      "retryStarted": "Ritentativo di backup avviato",
+      "retryFailed": "Impossibile ritentare il backup",
       "selectRepository": "Seleziona prima un repository"
     }
   },
@@ -770,6 +772,8 @@
       "startFailed": "Impossibile avviare il piano di backup",
       "cancelled": "Esecuzione del piano annullata",
       "cancelFailed": "Impossibile annullare l'esecuzione del piano",
+      "retryStarted": "Ritentativo del piano di backup avviato",
+      "retryFailed": "Impossibile ritentare l'esecuzione del piano",
       "repositoryCreated": "Repository creato",
       "repositoryCreateFailed": "Impossibile creare il repository",
       "multiRepositoryRequiresPro": "Più repository in un piano di backup richiedono Pro",
@@ -1154,6 +1158,17 @@
       },
       "repositoryProgress": "{{completed}}/{{total}} repository completati",
       "cancelRun": "Annulla esecuzione",
+      "retryRun": "Ritenta esecuzione piano di backup",
+      "retryConfirm": "Ritentare l'esecuzione del piano di backup #{{id}}?",
+      "retryTooltips": {
+        "ready": "Ritenta esecuzione piano di backup",
+        "retrying": "Ritentativo dell'esecuzione del piano in corso...",
+        "onlyFailed": "Solo le esecuzioni del piano fallite possono essere ritentate.",
+        "missingPlan": "Questa esecuzione non è più collegata a un piano di backup.",
+        "activeRun": "Attendi che l'esecuzione del piano in corso termini prima di ritentare.",
+        "noFailedRepositories": "Questa esecuzione non ha repository falliti da ritentare.",
+        "requiresPermission": "È richiesto l'accesso operatore per ogni repository fallito in questa esecuzione."
+      },
       "noRepositories": "Nessuna esecuzione repository registrata."
     }
   },
@@ -1236,6 +1251,10 @@
       "deleted": "Repository eliminato con successo",
       "deleteFailed": "Impossibile eliminare il repository",
       "checkStarted": "Operazione di controllo avviata",
+      "checkCompleted": "Controllo completato",
+      "checkCompletedWithWarnings": "Controllo completato con avvisi",
+      "checkRunFailed": "Controllo non riuscito",
+      "checkFailedWithMessage": "Controllo non riuscito: {{message}}",
       "checkFailed": "Impossibile avviare il controllo",
       "compactStarted": "Operazione di compattazione avviata",
       "compactFailed": "Impossibile avviare la compattazione",
@@ -1788,6 +1807,40 @@
       "passwordPlaceholder": "Inserisci la password SSH",
       "passwordHelper": "La password viene usata per distribuire la chiave pubblica in authorized_keys"
     },
+    "diagnostics": {
+      "title": "Diagnostica macchina remota",
+      "description": "Verifica la sessione SSH, la raggiungibilità TCP remota opzionale e la velocità limitata del trasporto SSH.",
+      "noConnection": "Nessuna connessione selezionata",
+      "targetHost": "Host di destinazione",
+      "targetHostHelper": "Destinazione TCP remota opzionale",
+      "targetPort": "Porta",
+      "targetTimeout": "Timeout destinazione",
+      "sshTimeout": "Timeout SSH",
+      "speedProbeSize": "Dimensione test velocità",
+      "speedProbeHelper": "Byte da leggere via SSH, da 65536 a 5242880.",
+      "seconds": "Secondi",
+      "latency": "Latenza",
+      "runCheck": "Esegui controllo",
+      "running": "Diagnostica in corso",
+      "transferredIn": "{{bytes}} in {{elapsed}}",
+      "notReported": "Non riportato",
+      "noThroughputResult": "Nessun risultato di throughput",
+      "sessionHealthy": "Sessione SSH integra",
+      "sessionTimedOut": "Timeout SSH",
+      "sessionFailed": "SSH non riuscito",
+      "tcpReachable": "TCP raggiungibile",
+      "tcpTimedOut": "Timeout TCP",
+      "tcpFailed": "TCP non riuscito",
+      "speedComplete": "Test velocità completato",
+      "speedTimedOut": "Timeout test velocità",
+      "speedFailed": "Test velocità non riuscito",
+      "errors": {
+        "targetPortRange": "Inserisci una porta TCP tra 1 e 65535.",
+        "targetTimeoutRange": "Inserisci un timeout della destinazione tra 0,5 e 15 secondi.",
+        "sshTimeoutRange": "Inserisci un timeout SSH tra 1 e 30 secondi.",
+        "speedProbeRange": "Inserisci una dimensione del test velocità tra 65536 e 5242880 byte."
+      }
+    },
     "remoteConnections": {
       "title": "Connessioni remote",
       "configured_one": "{{count}} macchina configurata",
@@ -1814,7 +1867,9 @@
       "storageRefreshFailed": "Impossibile aggiornare lo storage",
       "keyDeleted": "Chiave SSH di sistema eliminata con successo!",
       "keyDeleteFailed": "Impossibile eliminare la chiave SSH",
-      "publicKeyCopied": "Chiave pubblica copiata negli appunti!"
+      "publicKeyCopied": "Chiave pubblica copiata negli appunti!",
+      "diagnosticsComplete": "Diagnostica completata",
+      "diagnosticsFailed": "Impossibile eseguire la diagnostica"
     }
   },
   "scripts": {
@@ -2054,6 +2109,11 @@
       "beforeBreakingCheck3": "Questo romperà sia i blocchi del repository che della cache",
       "adminRequired": "Privilegi di amministratore richiesti:",
       "adminRequiredDetail": "Solo gli amministratori possono rompere i blocchi del repository. Contatta il tuo amministratore per assistenza.",
+      "maintenanceRequired": "Accesso di manutenzione al repository richiesto:",
+      "maintenanceRequiredDetail": "Serve accesso di manutenzione a questo repository per romperne il blocco. Contatta il tuo amministratore per assistenza.",
+      "lockBreakingDisabled": "Rottura blocchi disabilitata:",
+      "lockBreakingDisabledDetail": "Un amministratore ha disabilitato la rottura manuale dei blocchi per questa installazione.",
+      "breakLockUnavailable": "La rottura dei blocchi non è disponibile per questo repository",
       "failedToBreakLock": "Impossibile rompere il blocco del repository"
     },
     "errorDetails": {
@@ -2230,7 +2290,22 @@
       "errorDetails": "Dettagli Errore",
       "cancel": "Annulla",
       "cancelJob": "Annulla Job",
-      "breakLock": "Rompi Blocco"
+      "breakLock": "Rompi Blocco",
+      "retry": "Ritenta job di backup"
+    },
+    "confirmations": {
+      "retryJob": "Ritentare il job di backup #{{id}}?"
+    },
+    "retryTooltips": {
+      "ready": "Ritenta job di backup",
+      "retrying": "Ritentativo del job di backup in corso...",
+      "onlyTerminal": "Solo i job di backup falliti o annullati possono essere ritentati.",
+      "destructiveType": "Questo job di tipo {{type}} non è sicuro da ritentare da questa tabella.",
+      "unsupportedType": "Questo job di tipo {{type}} non può essere ritentato da questa tabella.",
+      "backupPlanJob": "Ritenta questo job dalla sua esecuzione del piano di backup.",
+      "scheduledJob": "I job di backup pianificati devono essere riavviati dalla pianificazione o dal piano.",
+      "missingRepository": "Questo job non può essere ritentato perché il repository sorgente manca.",
+      "requiresPermission": "È richiesto l'accesso operatore per ritentare questo job di backup."
     },
     "never": "Mai",
     "empty": "Nessun job di backup trovato",
@@ -2764,6 +2839,9 @@
     "bypassLocksListTitle": "Ignora Blocchi per Comandi List",
     "enableBypassLocksList": "Abilita bypass-lock per tutti i comandi borg list",
     "bypassLocksListDescription": "Aggiunge --bypass-lock a tutti i comandi borg list. Questo previene la contesa di blocco quando più operazioni di lettura (es., info + list) vengono eseguite simultaneamente. Abilita se vedi errori \"Failed to acquire lock\". Nota: Potrebbe mostrare dati obsoleti se un backup è attivamente in esecuzione.",
+    "lockBreakingTitle": "Rottura manuale dei blocchi",
+    "enableLockBreaking": "Consenti rottura manuale dei blocchi repository",
+    "lockBreakingDescription": "Consente agli utenti con accesso di manutenzione di rompere blocchi repository obsoleti da Borg UI. Disabilitalo quando altri servizi possono mantenere blocchi transitori normali.",
     "showLegacyRestoreTabTitle": "Mostra Scheda Ripristino Legacy",
     "showLegacyRestoreTabLabel": "Mostra la scheda Ripristino dedicata nella navigazione",
     "showLegacyRestoreTabDescription": "Abilita questa opzione per accedere alla scheda Ripristino legacy. La funzionalità di ripristino è ora integrata nella pagina Archivi, ma questa opzione ti permette di usare la vecchia interfaccia se preferisci.",
@@ -3342,8 +3420,8 @@
       "rcloneProviderLabel": "Provider",
       "rcloneCustomProviderLabel": "Tipo provider personalizzato",
       "rcloneCustomProviderPlaceholder": "tipo backend rclone",
-      "rcloneOAuthHelper": "Avvia l'autorizzazione browser di rclone da Borg UI, completa il callback del provider e poi controlla l'autorizzazione per aggiungere il token alla configurazione.",
-      "rcloneOAuthBorgUiHelper": "Borg UI riceverà il callback del provider ed eseguirà lo scambio del codice sul server. Registra l'URL di callback nell'app OAuth del provider.",
+      "rcloneOAuthHelper": "Avvia l'autorizzazione browser di rclone da Borg UI, completa il callback del provider e torna alla finestra.",
+      "rcloneOAuthBorgUiHelper": "Borg UI riceve il callback del provider lato server. Quando il provider indica che l'autorizzazione è completa, torna qui; questa finestra controllerà automaticamente.",
       "rcloneOAuthLoopbackHelper": "rclone userà il proprio callback loopback locale. Usalo solo quando il browser può raggiungere lo stesso host del processo rclone.",
       "rcloneOAuthSetupMissing": "L'OAuth gestito da Borg UI non è configurato per questo provider.",
       "rcloneOAuthCallbackUrl": "Callback Borg UI: {{url}}",
@@ -3353,9 +3431,10 @@
       "rcloneOAuthStartBorgUi": "Avvia OAuth Borg UI",
       "rcloneOAuthStarting": "Avvio autorizzazione...",
       "rcloneOAuthCheck": "Controlla autorizzazione",
+      "rcloneOAuthChecking": "Controllo autorizzazione...",
       "rcloneOAuthOpen": "Apri link di autorizzazione",
       "rcloneOAuthUseLoopback": "Usa loopback rclone",
-      "rcloneOAuthWaiting": "In attesa del callback del provider.",
+      "rcloneOAuthWaiting": "In attesa del callback del provider. Questa finestra controllerà automaticamente quando l'autorizzazione è completa.",
       "rcloneOAuthAuthorized": "L'autorizzazione ha restituito un token e aggiornato la configurazione.",
       "rcloneOAuthTokenReady": "Token pronto per il salvataggio lato server.",
       "rcloneOAuthFailed": "L'autorizzazione non è stata completata.",
@@ -3378,7 +3457,6 @@
       "rcloneOAuthClientSecretSet": "Segreto client salvato",
       "rcloneOAuthCredentialSources": {
         "database": "Salvato in Borg UI",
-        "environment": "Dall'ambiente",
         "unset": "Non configurato",
         "unsupported": "Non supportato"
       },
@@ -4115,13 +4193,30 @@
     "defaultPath": "Percorso Predefinito",
     "actions": {
       "testConnection": "Test Connessione",
-      "refreshStorage": "Aggiorna Archiviazione"
+      "refreshStorage": "Aggiorna Archiviazione",
+      "runDiagnostics": "Esegui diagnostica"
     }
   },
   "repositoryInfoDialog": {
     "failedToDownloadKeyfile": "Impossibile scaricare il file chiave",
     "noArchivesDescription": "Questo repository è stato inizializzato ma non contiene archivi. Le statistiche di archiviazione appariranno qui dopo aver creato il primo backup.",
-    "failedToLoad": "Impossibile caricare le informazioni del repository. Assicurati che il repository sia accessibile e inizializzato correttamente."
+    "failedToLoad": "Impossibile caricare le informazioni del repository. Assicurati che il repository sia accessibile e inizializzato correttamente.",
+    "recovery": {
+      "title": "Comandi di recupero",
+      "description": "Usa questi modelli di comando quando devi diagnosticare, riparare o ricreare questo repository fuori da Borg UI.",
+      "checkCommand": "Controlla repository",
+      "repairCommand": "Controllo con riparazione",
+      "initCommand": "Inizializza repository",
+      "guidedCheckTitle": "Esegui un controllo diagnostico in Borg UI",
+      "guidedCheckDescription": "Apre la conferma di controllo esistente e il flusso dei log del job. Riparazione e inizializzazione restano manuali.",
+      "guidedCheckUnavailable": "Serve l'accesso alla manutenzione per eseguire controlli in Borg UI.",
+      "guidedCheckButton": "Esegui controllo guidato",
+      "guidedCheckStarting": "Avvio controllo",
+      "copyCommand": "Copia comando {{label}}",
+      "copiedCommand": "Comando {{label}} copiato",
+      "commandCopied": "Comando copiato",
+      "copyFailed": "Impossibile copiare il comando"
+    }
   },
   "analyticsBanner": {
     "viewDashboardLink": "Visualizza la nostra dashboard di analisi pubblica",
@@ -4400,11 +4495,15 @@
         "failedGetBackupJobs": "Impossibile ottenere i job di backup",
         "failedGetBackupStatus": "Impossibile ottenere lo stato del backup",
         "failedCancelBackup": "Impossibile annullare il backup",
-        "cannotDownloadLogsForRunningBackup": "Impossibile scaricare i log per un backup in esecuzione"
+        "cannotDownloadLogsForRunningBackup": "Impossibile scaricare i log per un backup in esecuzione",
+        "retryOnlyTerminalFailedCancelled": "Solo i job di backup falliti o annullati possono essere ritentati.",
+        "retryUnsupportedJobType": "Questo tipo di job di backup non può essere ritentato.",
+        "retryRequestNotReconstructable": "Questo job di backup non può più essere ricostruito per il ritentativo."
       },
       "backupPlans": {
         "nameRequired": "Il nome del piano di backup è obbligatorio.",
-        "clearLegacyRepositoryNotSelected": "Impossibile cancellare le impostazioni sorgente legacy per un repository non selezionato in questo piano di backup."
+        "clearLegacyRepositoryNotSelected": "Impossibile cancellare le impostazioni sorgente legacy per un repository non selezionato in questo piano di backup.",
+        "retryUnsupported": "Questa esecuzione del piano di backup non può essere ritentata."
       },
       "restore": {
         "cancelledByUser": "Ripristino annullato dall'utente",

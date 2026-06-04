@@ -465,6 +465,11 @@ def test_runtime_advertises_repository_init_capability_and_handler():
 
 
 @pytest.mark.unit
+def test_runtime_advertises_diagnostics_capability():
+    assert "diagnostics.run" in get_capabilities()
+
+
+@pytest.mark.unit
 def test_repository_init_payload_builds_borg1_command():
     payload = RepositoryOperationPayload.from_job_payload(
         {
@@ -613,6 +618,183 @@ def test_session_runtime_handles_ephemeral_filesystem_browse(monkeypatch):
             "current_path": "/home",
             "parent_path": "/",
             "items": [{"name": "docs"}],
+        },
+    }
+
+
+@pytest.mark.unit
+def test_session_runtime_handles_diagnostics_without_tcp_target(monkeypatch):
+    from agent.borg_ui_agent.session import AgentSessionRuntime
+
+    socket = FakeWebSocket(
+        [
+            {
+                "type": "command",
+                "command_id": "cmd-diagnostics",
+                "command": "diagnostics.run",
+                "job_id": None,
+                "payload": {},
+            }
+        ]
+    )
+    monotonic_values = iter([10.0, 10.012])
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session.detect_platform",
+        lambda: {"hostname": "host.local", "os": "linux", "arch": "amd64"},
+    )
+    monkeypatch.setattr("agent.borg_ui_agent.session.detect_borg_binaries", lambda: [])
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session.time.monotonic",
+        lambda: next(monotonic_values),
+    )
+
+    runtime = AgentSessionRuntime(
+        AgentConfig("https://borgui.example.com", "agt_123", "secret"),
+        connect=lambda *args, **kwargs: socket,
+    )
+    runtime.run_session(max_messages=1)
+
+    assert socket.sent[1] == {
+        "type": "command_ack",
+        "command_id": "cmd-diagnostics",
+        "job_id": None,
+    }
+    assert socket.sent[2] == {
+        "type": "command_result",
+        "command_id": "cmd-diagnostics",
+        "job_id": None,
+        "result": {
+            "success": True,
+            "session": {"status": "success", "elapsed_ms": 12},
+        },
+    }
+
+
+@pytest.mark.unit
+def test_session_runtime_handles_diagnostics_tcp_success(monkeypatch):
+    from agent.borg_ui_agent.session import AgentSessionRuntime
+
+    socket = FakeWebSocket(
+        [
+            {
+                "type": "command",
+                "command_id": "cmd-diagnostics-tcp",
+                "command": "diagnostics.run",
+                "job_id": None,
+                "payload": {
+                    "target": {
+                        "host": "postgres.internal",
+                        "port": 5432,
+                        "timeout_seconds": 1.5,
+                    }
+                },
+            }
+        ]
+    )
+    opened = []
+    monotonic_values = iter([20.0, 20.1, 20.35, 20.4])
+
+    def fake_open_tcp_connection(host, port, timeout_seconds):
+        opened.append((host, port, timeout_seconds))
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session.detect_platform",
+        lambda: {"hostname": "host.local", "os": "linux", "arch": "amd64"},
+    )
+    monkeypatch.setattr("agent.borg_ui_agent.session.detect_borg_binaries", lambda: [])
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session.time.monotonic",
+        lambda: next(monotonic_values),
+    )
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session._open_tcp_connection",
+        fake_open_tcp_connection,
+        raising=False,
+    )
+
+    runtime = AgentSessionRuntime(
+        AgentConfig("https://borgui.example.com", "agt_123", "secret"),
+        connect=lambda *args, **kwargs: socket,
+    )
+    runtime.run_session(max_messages=1)
+
+    assert opened == [("postgres.internal", 5432, 1.5)]
+    assert socket.sent[2]["result"] == {
+        "success": True,
+        "session": {"status": "success", "elapsed_ms": 400},
+        "tcp": {
+            "target": {
+                "host": "postgres.internal",
+                "port": 5432,
+                "timeout_seconds": 1.5,
+            },
+            "status": "success",
+            "elapsed_ms": 250,
+        },
+    }
+
+
+@pytest.mark.unit
+def test_session_runtime_handles_diagnostics_tcp_failure(monkeypatch):
+    from agent.borg_ui_agent.session import AgentSessionRuntime
+
+    socket = FakeWebSocket(
+        [
+            {
+                "type": "command",
+                "command_id": "cmd-diagnostics-tcp-failed",
+                "command": "diagnostics.run",
+                "job_id": None,
+                "payload": {
+                    "target": {
+                        "host": "postgres.internal",
+                        "port": 5432,
+                        "timeout_seconds": 1.5,
+                    }
+                },
+            }
+        ]
+    )
+    monotonic_values = iter([30.0, 30.2, 30.24, 30.3])
+
+    def fake_open_tcp_connection(host, port, timeout_seconds):
+        raise ConnectionRefusedError("Connection refused")
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session.detect_platform",
+        lambda: {"hostname": "host.local", "os": "linux", "arch": "amd64"},
+    )
+    monkeypatch.setattr("agent.borg_ui_agent.session.detect_borg_binaries", lambda: [])
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session.time.monotonic",
+        lambda: next(monotonic_values),
+    )
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session._open_tcp_connection",
+        fake_open_tcp_connection,
+        raising=False,
+    )
+
+    runtime = AgentSessionRuntime(
+        AgentConfig("https://borgui.example.com", "agt_123", "secret"),
+        connect=lambda *args, **kwargs: socket,
+    )
+    runtime.run_session(max_messages=1)
+
+    assert socket.sent[2]["result"] == {
+        "success": True,
+        "session": {"status": "success", "elapsed_ms": 300},
+        "tcp": {
+            "target": {
+                "host": "postgres.internal",
+                "port": 5432,
+                "timeout_seconds": 1.5,
+            },
+            "status": "failed",
+            "elapsed_ms": 40,
+            "error": "connection_refused",
+            "message": "Connection refused",
         },
     }
 

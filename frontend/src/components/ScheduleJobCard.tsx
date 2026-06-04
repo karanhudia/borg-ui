@@ -260,7 +260,7 @@ export default function ScheduleJobCard({
               label: t('schedule.card.actions.runNow'),
               icon: <Play size={13} />,
               onClick: onRunNow,
-              disabled: !job.enabled || isRunNowPending,
+              disabled: Boolean(isRunNowPending),
             }
           : undefined
       }

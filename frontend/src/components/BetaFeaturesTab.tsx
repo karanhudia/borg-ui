@@ -13,6 +13,7 @@ const BetaFeaturesTab: React.FC = () => {
   const { trackSettings, EventAction } = useAnalytics()
   const [bypassLockOnInfo, setBypassLockOnInfo] = useState(false)
   const [bypassLockOnList, setBypassLockOnList] = useState(false)
+  const [lockBreakingEnabled, setLockBreakingEnabled] = useState(true)
   const [borg2FastBrowseBetaEnabled, setBorg2FastBrowseBetaEnabled] = useState(false)
   const [mqttBetaEnabled, setMqttBetaEnabled] = useState(false)
 
@@ -32,6 +33,7 @@ const BetaFeaturesTab: React.FC = () => {
     if (systemSettings) {
       setBypassLockOnInfo(systemSettings.bypass_lock_on_info ?? false)
       setBypassLockOnList(systemSettings.bypass_lock_on_list ?? false)
+      setLockBreakingEnabled(systemSettings.lock_breaking_enabled ?? true)
       setBorg2FastBrowseBetaEnabled(systemSettings.borg2_fast_browse_beta_enabled ?? false)
       setMqttBetaEnabled(systemSettings.mqtt_beta_enabled ?? false)
     }
@@ -42,6 +44,7 @@ const BetaFeaturesTab: React.FC = () => {
     mutationFn: async (settings: {
       bypass_lock_on_info?: boolean
       bypass_lock_on_list?: boolean
+      lock_breaking_enabled?: boolean
       borg2_fast_browse_beta_enabled?: boolean
       mqtt_beta_enabled?: boolean
     }) => {
@@ -57,6 +60,7 @@ const BetaFeaturesTab: React.FC = () => {
       if (systemSettings) {
         setBypassLockOnInfo(systemSettings.bypass_lock_on_info ?? false)
         setBypassLockOnList(systemSettings.bypass_lock_on_list ?? false)
+        setLockBreakingEnabled(systemSettings.lock_breaking_enabled ?? true)
         setBorg2FastBrowseBetaEnabled(systemSettings.borg2_fast_browse_beta_enabled ?? false)
         setMqttBetaEnabled(systemSettings.mqtt_beta_enabled ?? false)
       }
@@ -81,6 +85,16 @@ const BetaFeaturesTab: React.FC = () => {
       enabled: checked,
     })
     saveSettingsMutation.mutate({ bypass_lock_on_list: checked })
+  }
+
+  const handleLockBreakingToggle = (checked: boolean) => {
+    setLockBreakingEnabled(checked)
+    trackSettings(EventAction.EDIT, {
+      section: 'beta_features',
+      feature: 'lock_breaking_enabled',
+      enabled: checked,
+    })
+    saveSettingsMutation.mutate({ lock_breaking_enabled: checked })
   }
 
   const handleBorg2FastBrowseToggle = (checked: boolean) => {
@@ -170,6 +184,31 @@ const BetaFeaturesTab: React.FC = () => {
                   <Typography variant="body1">{t('betaFeatures.enableBypassLocksList')}</Typography>
                   <Typography variant="body2" color="text.secondary">
                     {t('betaFeatures.bypassLocksListDescription')}
+                  </Typography>
+                </Box>
+              }
+            />
+          </Box>
+
+          <Box>
+            <Typography variant="h6" fontSize="1rem" sx={{ mb: 2 }}>
+              {t('betaFeatures.lockBreakingTitle')}
+            </Typography>
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={lockBreakingEnabled}
+                  onChange={(e) => handleLockBreakingToggle(e.target.checked)}
+                  disabled={saveSettingsMutation.isPending}
+                  color="primary"
+                />
+              }
+              label={
+                <Box>
+                  <Typography variant="body1">{t('betaFeatures.enableLockBreaking')}</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {t('betaFeatures.lockBreakingDescription')}
                   </Typography>
                 </Box>
               }

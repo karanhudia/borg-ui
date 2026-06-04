@@ -97,7 +97,7 @@ const providers = [
     oauth_configured: true,
     oauth_callback_url: 'https://backups.example.com/api/rclone/oauth/callback/drive',
     oauth_setup_key: null,
-    oauth_credentials_source: 'environment',
+    oauth_credentials_source: 'database',
     oauth_client_id_set: true,
     oauth_client_secret_set: true,
   },
@@ -114,7 +114,7 @@ const providers = [
     oauth_configured: true,
     oauth_callback_url: 'https://backups.example.com/api/rclone/oauth/callback/onedrive',
     oauth_setup_key: null,
-    oauth_credentials_source: 'environment',
+    oauth_credentials_source: 'database',
     oauth_client_id_set: true,
     oauth_client_secret_set: true,
   },
@@ -439,7 +439,9 @@ describe('CloudStorage', () => {
       )
     })
 
-    fireEvent.click(screen.getByRole('button', { name: /Check authorization/i }))
+    await waitFor(() => {
+      expect(rcloneAPI.getOAuthSession).toHaveBeenCalledWith('oauth-1')
+    })
 
     await waitFor(() => {
       expect(screen.getByText(/Token ready to save/i)).toBeInTheDocument()
@@ -706,11 +708,14 @@ describe('CloudStorage', () => {
         'noopener,noreferrer'
       )
     })
-    fireEvent.click(await screen.findByRole('button', { name: /Check authorization/i }))
+    await waitFor(() => {
+      expect(rcloneAPI.getOAuthSession).toHaveBeenCalledWith('oauth-borg-ui')
+    })
 
     await waitFor(() => {
       expect(screen.getByText(/Token ready to save/i)).toBeInTheDocument()
     })
+    expect(screen.queryByRole('button', { name: /Check authorization/i })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /Use rclone loopback/i }))
 
@@ -793,7 +798,9 @@ describe('CloudStorage', () => {
         'noopener,noreferrer'
       )
     })
-    fireEvent.click(await screen.findByRole('button', { name: /Check authorization/i }))
+    await waitFor(() => {
+      expect(rcloneAPI.getOAuthSession).toHaveBeenCalledWith('oauth-borg-ui')
+    })
 
     await waitFor(() => {
       expect(screen.getByText(/Token ready to save/i)).toBeInTheDocument()

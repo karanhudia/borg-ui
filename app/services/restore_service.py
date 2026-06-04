@@ -26,6 +26,38 @@ class RestoreService:
     def __init__(self):
         self.running_processes = {}  # Track running restore processes by job_id
 
+    def _ensure_local_destination(self, destination: str) -> None:
+        dest_path = Path(destination)
+        if dest_path.exists():
+            return
+
+        missing_paths = []
+        owner_source = dest_path
+        while not owner_source.exists():
+            missing_paths.append(owner_source)
+            parent = owner_source.parent
+            if parent == owner_source:
+                break
+            owner_source = parent
+
+        owner_stat = owner_source.stat() if owner_source.exists() else None
+        dest_path.mkdir(parents=True, exist_ok=True)
+
+        if owner_stat is None or getattr(os, "geteuid", lambda: -1)() != 0:
+            return
+
+        for created_path in reversed(missing_paths):
+            try:
+                os.chown(str(created_path), owner_stat.st_uid, owner_stat.st_gid)
+            except OSError as e:
+                logger.warning(
+                    "Failed to adjust restore destination owner",
+                    path=str(created_path),
+                    uid=owner_stat.st_uid,
+                    gid=owner_stat.st_gid,
+                    error=str(e),
+                )
+
     async def execute_restore(
         self,
         job_id: int,
@@ -184,7 +216,7 @@ class RestoreService:
             dest_path = Path(destination)
             if not dest_path.exists():
                 try:
-                    dest_path.mkdir(parents=True, exist_ok=True)
+                    self._ensure_local_destination(destination)
                     logger.info("Created destination directory", path=destination)
                 except Exception as e:
                     logger.error("Failed to create destination directory", error=str(e))

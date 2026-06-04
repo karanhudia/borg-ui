@@ -21,7 +21,7 @@
 - [ ] Add failing tests that prove only admins can read/update rclone OAuth credentials, saved client secrets are encrypted/redacted, and provider metadata reports credential source without returning secrets.
 - [ ] Add `SystemSettings` columns for Google Drive and OneDrive OAuth client IDs and encrypted client secrets.
 - [ ] Add an idempotent migration for those columns.
-- [ ] Implement credential resolver helpers with database-first precedence and environment fallback.
+- [ ] Implement credential resolver helpers using persisted Borg UI credentials only.
 - [ ] Add `GET /api/rclone/oauth/credentials` and `PUT /api/rclone/oauth/credentials/{provider}`.
 - [ ] Extend provider metadata with non-secret credential source/status fields.
 - [ ] Verify the targeted backend tests fail before implementation and pass after implementation.
@@ -66,7 +66,7 @@
 
 - [ ] Update stories for configured credentials, setup missing, callback authorized/token-ready, token expired/refreshable, and save error states.
 - [ ] Run `cd frontend && npm run snapshots` and commit changed screenshots.
-- [ ] Document UI-managed and environment credential sources, local/production redirect URLs, callback path behavior, fallback behavior, Google Drive/OneDrive support, and why additional OAuth providers remain loopback/manual.
+- [ ] Document UI-managed credential storage, local/production redirect URLs, callback path behavior, fallback behavior, Google Drive/OneDrive support, and why additional OAuth providers remain loopback/manual.
 - [ ] Update navigation docs only if the Cloud Storage user flow guidance changes.
 
 ## Task 5: Final Validation and Handoff

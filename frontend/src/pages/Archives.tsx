@@ -25,6 +25,7 @@ import RestoreWizard, { RestoreData } from '../components/RestoreWizard'
 import type { RestoreLayout, RestorePathMetadata } from '../utils/restorePaths'
 import { getRepoCapabilities, getBorgVersion } from '../utils/repoCapabilities'
 import { usePermissions } from '../hooks/usePermissions'
+import { useLockBreakPermissions } from '../hooks/useLockBreakPermissions'
 import { useTrackedJobOutcomes } from '../hooks/useTrackedJobOutcomes'
 import { getArchiveAgeBucket, getJobDurationSeconds } from '../utils/analyticsProperties'
 
@@ -95,6 +96,10 @@ const Archives: React.FC = () => {
         : null,
     [repositories, selectedRepositoryId]
   )
+  const { canBreakLock, lockBreakingEnabled } = useLockBreakPermissions({
+    repositories,
+    fallbackRepositoryId: selectedRepositoryId,
+  })
 
   // Get repository info for statistics
   const {
@@ -603,6 +608,8 @@ const Archives: React.FC = () => {
           repositoryId={lockError.repositoryId}
           repositoryName={lockError.repositoryName}
           borgVersion={lockError.borgVersion}
+          canBreakLock={canBreakLock({ repository_id: lockError.repositoryId })}
+          lockBreakingEnabled={lockBreakingEnabled}
           onLockBroken={() => {
             // Invalidate queries to retry
             queryClient.invalidateQueries({

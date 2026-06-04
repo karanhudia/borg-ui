@@ -483,6 +483,86 @@ class TestMountService:
                 )
                 mount_service.active_mounts.clear()
 
+    @pytest.mark.asyncio
+    async def test_execute_sshfs_mount_retries_login_relative_path_when_absolute_missing(
+        self, mount_service
+    ):
+        connection = Mock(spec=SSHConnection)
+        connection.host = "192.168.1.150"
+        connection.username = "karanhudia"
+        connection.port = 22
+        connection.use_sudo = False
+        connection.default_path = "/"
+
+        first_process = AsyncMock()
+        first_process.returncode = 1
+        first_process.communicate = AsyncMock(
+            return_value=(
+                b"",
+                b"karanhudia@192.168.1.150:/test-backup-source: No such file or directory\n",
+            )
+        )
+        second_process = AsyncMock()
+        second_process.returncode = 0
+        second_process.communicate = AsyncMock(return_value=(b"", b""))
+
+        with (
+            patch(
+                "app.services.mount_service.asyncio.create_subprocess_exec",
+                new=AsyncMock(side_effect=[first_process, second_process]),
+            ) as mock_exec,
+            patch("app.services.mount_service.asyncio.sleep", new=AsyncMock()),
+        ):
+            await mount_service._execute_sshfs_mount(
+                connection=connection,
+                remote_path="/test-backup-source",
+                mount_point="/tmp/sshfs_mount_378/test-backup-source",
+                temp_key_file="/tmp/test.key",
+            )
+
+        assert mock_exec.await_count == 2
+        first_cmd = mock_exec.await_args_list[0].args
+        second_cmd = mock_exec.await_args_list[1].args
+        assert first_cmd[1] == "karanhudia@192.168.1.150:/test-backup-source"
+        assert second_cmd[1] == "karanhudia@192.168.1.150:test-backup-source"
+
+    @pytest.mark.asyncio
+    async def test_execute_sshfs_mount_does_not_retry_relative_path_for_explicit_default_path(
+        self, mount_service
+    ):
+        connection = Mock(spec=SSHConnection)
+        connection.host = "192.168.1.150"
+        connection.username = "karanhudia"
+        connection.port = 22
+        connection.use_sudo = False
+        connection.default_path = "/home/karanhudia"
+
+        process = AsyncMock()
+        process.returncode = 1
+        process.communicate = AsyncMock(
+            return_value=(
+                b"",
+                b"karanhudia@192.168.1.150:/missing: No such file or directory\n",
+            )
+        )
+
+        with (
+            patch(
+                "app.services.mount_service.asyncio.create_subprocess_exec",
+                new=AsyncMock(return_value=process),
+            ) as mock_exec,
+            patch("app.services.mount_service.asyncio.sleep", new=AsyncMock()),
+            pytest.raises(Exception, match="SSHFS mount failed"),
+        ):
+            await mount_service._execute_sshfs_mount(
+                connection=connection,
+                remote_path="/missing",
+                mount_point="/tmp/sshfs_mount_378/missing",
+                temp_key_file="/tmp/test.key",
+            )
+
+        assert mock_exec.await_count == 1
+
     @pytest.mark.skip(
         reason="_verify_mount_writable() method not yet implemented - planned feature"
     )

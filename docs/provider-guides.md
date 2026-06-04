@@ -35,14 +35,38 @@ Cloud Storage manages reusable rclone remotes. Open Cloud Storage, choose
 **Add remote**, pick the provider, and review the provider-specific config
 template before saving. Google Drive and OneDrive use Borg UI-owned OAuth
 callbacks when `PUBLIC_BASE_URL` and provider client credentials are configured;
-start authorization from Borg UI, complete the provider login, and check
-authorization to save the server-side token result. Provider credentials can be
-saved in the dialog or supplied through backend environment variables; provider
-secrets and Borg UI-owned access/refresh tokens are not exposed in ordinary
-browser responses. For
+start authorization from Borg UI, complete the provider login, return to Borg UI,
+and save the remote after the dialog detects the server-side token result.
+Provider credentials are saved in the dialog; provider secrets and Borg
+UI-owned access/refresh tokens are not exposed in ordinary browser responses. For
 OneDrive, Borg UI also records the default Microsoft Graph drive ID and drive
 type returned for the signed-in account. Enter a specific drive ID manually when
 targeting a SharePoint document library or another non-default drive.
+
+### Google Drive OAuth Setup
+
+For a self-hosted Borg UI at `https://borg.example.com`, use these steps:
+
+1. Set `PUBLIC_BASE_URL=https://borg.example.com` on the Borg UI backend or
+   container. If Borg UI is served under a sub-path, include it.
+2. In Google Cloud Console, create or select a project and enable the Google
+   Drive API.
+3. Configure the OAuth consent screen. While the app is in testing, add the
+   Google accounts that should be allowed to authorize Drive access as test
+   users.
+4. Create an OAuth client of type **Web application** and add this authorized
+   redirect URI:
+
+   ```text
+   https://borg.example.com/api/rclone/oauth/callback/drive
+   ```
+
+5. In Borg UI, open **Cloud Storage**, choose **Add remote**, select
+   **Google Drive**, and paste the OAuth client ID and client secret into
+   **Provider OAuth app**.
+6. Save the credentials, start Borg UI OAuth, complete Google's sign-in page,
+   then return to the Borg UI dialog. The dialog checks authorization
+   automatically; save the remote when the token is ready.
 
 If Borg UI-owned OAuth is not configured, or if you are using providers such as
 Dropbox or Box, Cloud Storage keeps the rclone loopback/manual authorization

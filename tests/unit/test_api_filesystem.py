@@ -34,6 +34,28 @@ def _create_ssh_key_record(test_db, secret_key: str) -> SSHKey:
     return ssh_key
 
 
+def _create_ssh_connection_record(
+    test_db,
+    ssh_key: SSHKey,
+    *,
+    host: str = "example.com",
+    username: str = "borg",
+    port: int = 22,
+    default_path: str = "/",
+) -> SSHConnection:
+    connection = SSHConnection(
+        ssh_key_id=ssh_key.id,
+        host=host,
+        username=username,
+        port=port,
+        default_path=default_path,
+    )
+    test_db.add(connection)
+    test_db.commit()
+    test_db.refresh(connection)
+    return connection
+
+
 @pytest.mark.unit
 class TestFilesystemBrowseLocal:
     def test_browse_local_filesystem_detects_borg_repo_and_mounts(
@@ -279,9 +301,15 @@ class TestFilesystemBrowseSSH:
                 )
             return SimpleNamespace(returncode=0, stdout="", stderr="")
 
+        repo_checks = []
+
+        def fake_is_borg_repository_ssh(host, username, key_file, remote_path, port):
+            repo_checks.append(remote_path)
+            return False
+
         monkeypatch.setattr(filesystem.subprocess, "run", run_side_effect)
         monkeypatch.setattr(
-            filesystem, "is_borg_repository_ssh", lambda *args, **kwargs: False
+            filesystem, "is_borg_repository_ssh", fake_is_borg_repository_ssh
         )
 
         response = await filesystem.browse_ssh_filesystem(
@@ -295,6 +323,8 @@ class TestFilesystemBrowseSSH:
 
         assert batch_commands[0] == "ls -la\n"
         assert [item.name for item in response.items] == ["backups"]
+        assert response.items[0].path == "/backups"
+        assert repo_checks == ["backups"]
 
     @pytest.mark.asyncio
     async def test_browse_ssh_filesystem_retries_non_root_sftp_path_relative_to_login_dir(
@@ -372,6 +402,83 @@ class TestFilesystemBrowseSSH:
         ]
         assert [item.name for item in response.items] == ["repo"]
         assert response.items[0].path == "/backups/repo"
+
+    @pytest.mark.asyncio
+    async def test_browse_ssh_filesystem_uses_relative_retry_path_for_repo_detection(
+        self,
+        monkeypatch,
+    ):
+        secret_key = "a" * 32
+        monkeypatch.setattr(
+            filesystem.settings, "secret_key", secret_key, raising=False
+        )
+        monkeypatch.setattr(
+            filesystem.settings.__class__, "get_local_mount_points", lambda self: []
+        )
+        ssh_key = SSHKey(
+            id=42,
+            name="ssh-key",
+            public_key="ssh-rsa AAA",
+            private_key=_encrypt_private_key(secret_key, "PRIVATE KEY"),
+        )
+
+        class QueryStub:
+            def filter(self, *args, **kwargs):
+                return self
+
+            def first(self):
+                return ssh_key
+
+        class SessionStub:
+            def query(self, *args, **kwargs):
+                return QueryStub()
+
+        def run_side_effect(cmd, *args, **kwargs):
+            if cmd[0] == "sftp":
+                batch_path = Path(cmd[cmd.index("-b") + 1])
+                commands = batch_path.read_text()
+
+                if commands == 'cd "/backups"\nls -la\n':
+                    return SimpleNamespace(
+                        returncode=0,
+                        stdout='sftp> cd "/backups"\nsftp> ls -la\n',
+                        stderr='remote readdir("/backups"): Permission denied\n',
+                    )
+
+                if commands == 'cd "backups"\nls -la\n':
+                    return SimpleNamespace(
+                        returncode=0,
+                        stdout=("drwxr-xr-x    ? user user 3 Aug 17 2023 repo\n"),
+                        stderr="",
+                    )
+
+                raise AssertionError(f"unexpected SFTP batch commands: {commands!r}")
+
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        repo_checks = []
+
+        def fake_is_borg_repository_ssh(host, username, key_file, remote_path, port):
+            repo_checks.append(remote_path)
+            return True
+
+        monkeypatch.setattr(filesystem.subprocess, "run", run_side_effect)
+        monkeypatch.setattr(
+            filesystem, "is_borg_repository_ssh", fake_is_borg_repository_ssh
+        )
+
+        response = await filesystem.browse_ssh_filesystem(
+            path="/backups",
+            ssh_key_id=ssh_key.id,
+            host="example.com",
+            username="borg",
+            port=22,
+            db=SessionStub(),
+        )
+
+        assert response.items[0].path == "/backups/repo"
+        assert response.items[0].is_borg_repo is True
+        assert repo_checks == ["backups/repo"]
 
     @pytest.mark.asyncio
     async def test_browse_ssh_filesystem_retries_nested_sftp_path_relative_to_login_dir(
@@ -601,6 +708,69 @@ class TestFilesystemValidationAndCreateFolder:
             "path": "/remote",
         }
 
+    @pytest.mark.asyncio
+    async def test_validate_path_ssh_retries_login_relative_path(
+        self,
+        test_db,
+        monkeypatch,
+    ):
+        secret_key = "a" * 32
+        monkeypatch.setattr(
+            filesystem.settings, "secret_key", secret_key, raising=False
+        )
+
+        ssh_key = _create_ssh_key_record(test_db, secret_key)
+        _create_ssh_connection_record(test_db, ssh_key, default_path="/")
+
+        stat_commands = []
+
+        def run_side_effect(cmd, *args, **kwargs):
+            stat_commands.append(cmd[-1])
+            if cmd[-1] == 'stat "/backups"':
+                return SimpleNamespace(
+                    returncode=1,
+                    stdout="",
+                    stderr='stat: cannot stat "/backups": No such file or directory',
+                )
+            if cmd[-1] == 'stat "backups"':
+                return SimpleNamespace(
+                    returncode=0,
+                    stdout="File: backups\nType: directory\n",
+                    stderr="",
+                )
+            raise AssertionError(f"unexpected SSH command: {cmd[-1]!r}")
+
+        repo_checks = []
+
+        def fake_is_borg_repository_ssh(host, username, key_file, remote_path, port):
+            repo_checks.append(remote_path)
+            return True
+
+        monkeypatch.setattr(filesystem.subprocess, "run", run_side_effect)
+        monkeypatch.setattr(
+            filesystem, "is_borg_repository_ssh", fake_is_borg_repository_ssh
+        )
+
+        payload = await filesystem.validate_path(
+            path="/backups",
+            connection_type="ssh",
+            ssh_key_id=ssh_key.id,
+            host="example.com",
+            username="borg",
+            port=22,
+            current_user=SimpleNamespace(username="admin"),
+            db=test_db,
+        )
+
+        assert stat_commands == ['stat "/backups"', 'stat "backups"']
+        assert repo_checks == ["backups"]
+        assert payload == {
+            "exists": True,
+            "is_directory": True,
+            "is_borg_repo": True,
+            "path": "/backups",
+        }
+
     def test_create_folder_local_success(
         self,
         test_client: TestClient,
@@ -774,6 +944,94 @@ class TestFilesystemValidationAndCreateFolder:
         assert response.status_code == 200
         assert response.json()["success"] is True
         assert response.json()["path"] == "/remote/new-folder"
+
+    def test_create_folder_ssh_retries_login_relative_path(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+        monkeypatch,
+    ):
+        secret_key = filesystem.settings.secret_key
+        ssh_key = _create_ssh_key_record(test_db, secret_key)
+        _create_ssh_connection_record(test_db, ssh_key, default_path="/")
+
+        batch_commands = []
+
+        def run_side_effect(cmd, *args, **kwargs):
+            batch_path = Path(cmd[cmd.index("-b") + 1])
+            commands = batch_path.read_text()
+            batch_commands.append(commands)
+
+            if commands == 'mkdir "/backups/new-folder"\n':
+                return SimpleNamespace(
+                    returncode=1,
+                    stdout="",
+                    stderr="Couldn't create directory: No such file or directory\n",
+                )
+            if commands == 'mkdir "backups/new-folder"\n':
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+            raise AssertionError(f"unexpected SFTP batch commands: {commands!r}")
+
+        monkeypatch.setattr(filesystem.subprocess, "run", run_side_effect)
+
+        response = test_client.post(
+            "/api/filesystem/create-folder",
+            json={
+                "path": "/backups",
+                "folder_name": "new-folder",
+                "connection_type": "ssh",
+                "ssh_key_id": ssh_key.id,
+                "host": "example.com",
+                "username": "borg",
+                "port": 22,
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+        assert response.json()["path"] == "/backups/new-folder"
+        assert batch_commands == [
+            'mkdir "/backups/new-folder"\n',
+            'mkdir "backups/new-folder"\n',
+        ]
+
+    def test_create_folder_ssh_returns_error_when_sftp_fails(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+        monkeypatch,
+    ):
+        secret_key = filesystem.settings.secret_key
+        ssh_key = _create_ssh_key_record(test_db, secret_key)
+        _create_ssh_connection_record(test_db, ssh_key, default_path="/home/borg")
+
+        monkeypatch.setattr(
+            filesystem.subprocess,
+            "run",
+            lambda *args, **kwargs: SimpleNamespace(
+                returncode=1, stdout="", stderr="Permission denied"
+            ),
+        )
+
+        response = test_client.post(
+            "/api/filesystem/create-folder",
+            json={
+                "path": "/backups",
+                "folder_name": "new-folder",
+                "connection_type": "ssh",
+                "ssh_key_id": ssh_key.id,
+                "host": "example.com",
+                "username": "borg",
+                "port": 22,
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 500
+        assert "Permission denied" in response.json()["detail"]
 
     def test_create_folder_ssh_existing_directory_returns_400(
         self,

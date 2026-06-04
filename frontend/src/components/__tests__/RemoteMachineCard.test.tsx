@@ -9,6 +9,7 @@ describe('RemoteMachineCard', () => {
   const mockOnRefreshStorage = vi.fn()
   const mockOnTestConnection = vi.fn()
   const mockOnDeployKey = vi.fn()
+  const mockOnRunDiagnostics = vi.fn()
 
   const baseMachine = {
     id: 1,
@@ -42,6 +43,7 @@ describe('RemoteMachineCard', () => {
     mockOnRefreshStorage.mockClear()
     mockOnTestConnection.mockClear()
     mockOnDeployKey.mockClear()
+    mockOnRunDiagnostics.mockClear()
   })
 
   describe('Rendering', () => {
@@ -359,6 +361,24 @@ describe('RemoteMachineCard', () => {
 
       await user.click(screen.getByRole('button', { name: 'Test Connection' }))
       expect(mockOnTestConnection).toHaveBeenCalledWith(baseMachine)
+    })
+
+    it('calls diagnostics handler from menu', async () => {
+      const user = userEvent.setup()
+      render(
+        <RemoteMachineCard
+          machine={baseMachine}
+          onEdit={mockOnEdit}
+          onDelete={mockOnDelete}
+          onRefreshStorage={mockOnRefreshStorage}
+          onTestConnection={mockOnTestConnection}
+          onDeployKey={mockOnDeployKey}
+          onRunDiagnostics={mockOnRunDiagnostics}
+        />
+      )
+
+      await user.click(screen.getByRole('button', { name: 'Run diagnostics' }))
+      expect(mockOnRunDiagnostics).toHaveBeenCalledWith(baseMachine)
     })
 
     it('calls onDeployKey from menu', async () => {

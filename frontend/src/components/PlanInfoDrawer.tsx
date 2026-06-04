@@ -33,6 +33,10 @@ interface PlanInfoDrawerProps {
 }
 
 const UPGRADE_PLANS: Plan[] = ['pro', 'enterprise']
+const REPLACED_PLAN_CONTENT_FEATURE_IDS: Record<string, string> = {
+  multi_source_policies: 'backup_plan_mixed_sources',
+  rclone_support: 'rclone',
+}
 
 type ActiveTab = 'your-plan' | 'upgrade'
 
@@ -60,6 +64,12 @@ function isFeatureIncluded(
   return (
     feature.availability === 'included' || isFeatureAvailableInCurrentVersion(feature, appVersion)
   )
+}
+
+function isReplacedByVisibleFeature(featureId: string, visibleFeatureIds: Set<string>) {
+  const replacementFeatureId = REPLACED_PLAN_CONTENT_FEATURE_IDS[featureId]
+
+  return Boolean(replacementFeatureId && visibleFeatureIds.has(replacementFeatureId))
 }
 
 function getDefaultSelectedPlan(plan: Plan, initialSelectedPlan?: Plan): Plan {
@@ -136,7 +146,11 @@ export default function PlanInfoDrawer({
     (feature) => feature.plan === selectedPlan
   )
   const visibleFeatures = manifestFeaturesForPlan
-    .filter((feature) => isFeatureIncluded(feature, appVersion))
+    .filter(
+      (feature) =>
+        (visibleFeatureIdSet.has(feature.id) || isFeatureIncluded(feature, appVersion)) &&
+        !isReplacedByVisibleFeature(feature.id, visibleFeatureIdSet)
+    )
     .map((feature) => ({
       id: feature.id,
       label: feature.label,
@@ -167,14 +181,17 @@ export default function PlanInfoDrawer({
 
   const upcomingVersionedFeatures = manifestFeaturesForPlan.filter(
     (feature) =>
-      isVersionedUpcomingFeature(feature, appVersion) && !visibleFeatureIdSet.has(feature.id)
+      isVersionedUpcomingFeature(feature, appVersion) &&
+      !visibleFeatureIdSet.has(feature.id) &&
+      !isReplacedByVisibleFeature(feature.id, visibleFeatureIdSet)
   )
 
   const comingSoonFeatures = manifestFeaturesForPlan.filter(
     (feature) =>
       !isVersionedUpcomingFeature(feature, appVersion) &&
-      (isComingSoonFeature(feature) ||
-        (feature.availability === undefined && !visibleFeatureIdSet.has(feature.id)))
+      !visibleFeatureIdSet.has(feature.id) &&
+      !isReplacedByVisibleFeature(feature.id, visibleFeatureIdSet) &&
+      (isComingSoonFeature(feature) || feature.availability === undefined)
   )
 
   const communityFeatures = planContentFeatures.filter(

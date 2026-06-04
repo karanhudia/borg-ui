@@ -557,6 +557,11 @@ def _serialize_backup_job(
         "archive_name": job.archive_name,
         "execution_mode": job.execution_mode or "local",
         "route_strategy": job.route_strategy,
+        "retry_attempt": job.retry_attempt or 1,
+        "retry_original_job_id": job.retry_original_job_id,
+        "retry_source_job_id": job.retry_source_job_id,
+        "retry_requested_by_user_id": job.retry_requested_by_user_id,
+        "retry_requested_at": serialize_datetime(job.retry_requested_at),
         "progress_details": serialize_backup_progress_details(job, repo),
     }
 
@@ -618,6 +623,11 @@ def _serialize_plan_run(run: BackupPlanRun, *, detail: bool = True) -> dict[str,
         "completed_at": serialize_datetime(run.completed_at),
         "error_message": run.error_message,
         "created_at": serialize_datetime(run.created_at),
+        "retry_attempt": run.retry_attempt or 1,
+        "retry_original_run_id": run.retry_original_run_id,
+        "retry_source_run_id": run.retry_source_run_id,
+        "retry_requested_by_user_id": run.retry_requested_by_user_id,
+        "retry_requested_at": serialize_datetime(run.retry_requested_at),
     }
     if detail:
         payload["repositories"] = [
@@ -1222,6 +1232,38 @@ async def cancel_backup_plan_run(
         "run": _serialize_plan_run(run),
         **result,
     }
+
+
+@router.post("/runs/{run_id}/retry", status_code=status.HTTP_202_ACCEPTED)
+async def retry_backup_plan_run(
+    run_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    run = _load_run_or_404(db, run_id)
+    _require_run_operator_access(db, current_user, run)
+    try:
+        retry_run_id = backup_plan_execution_service.retry_failed_run(
+            db,
+            run,
+            requested_by_user_id=current_user.id,
+        )
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.backupPlans.retryUnsupported"},
+        ) from exc
+
+    retry_run = _load_run_or_404(db, retry_run_id)
+    logger.info(
+        "Backup plan run retry started",
+        source_backup_plan_run_id=run.id,
+        retry_backup_plan_run_id=retry_run.id,
+        user=current_user.username,
+    )
+    return _serialize_plan_run(retry_run)
 
 
 @router.post("/from-repository/{repo_id}", status_code=status.HTTP_201_CREATED)
