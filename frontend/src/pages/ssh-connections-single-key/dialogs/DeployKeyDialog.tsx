@@ -1,10 +1,11 @@
+import { useEffect, useRef, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import type { TFunction } from 'i18next'
 import {
   Box,
   Button,
+  ButtonBase,
   Checkbox,
-  Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
@@ -15,7 +16,14 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
+import { alpha } from '@mui/material/styles'
 import { Info } from 'lucide-react'
+import ResponsiveDialog from '../../../components/shared/ResponsiveDialog'
+import { createConnectionForm } from '../formDefaults'
+import {
+  remoteMachineSetupPresets,
+  type RemoteMachineSetupPresetId,
+} from '../connectionPresets'
 import type { DeployConnectionPayload } from '../types'
 import { SshHostField } from './SshHostField'
 
@@ -31,6 +39,20 @@ interface DeployKeyDialogProps {
   onDeploy: () => void
 }
 
+function getPresetIdForForm(connectionForm: DeployConnectionPayload): RemoteMachineSetupPresetId {
+  const matchingPreset = remoteMachineSetupPresets.find((preset) => {
+    if (preset.id === 'custom') {
+      return false
+    }
+
+    return Object.entries(preset.defaults).every(([key, value]) => {
+      return connectionForm[key as keyof DeployConnectionPayload] === value
+    })
+  })
+
+  return matchingPreset?.id ?? 'custom'
+}
+
 export function DeployKeyDialog({
   t,
   open,
@@ -42,11 +64,210 @@ export function DeployKeyDialog({
   pending,
   onDeploy,
 }: DeployKeyDialogProps) {
+  const [selectedPreset, setSelectedPreset] = useState<RemoteMachineSetupPresetId>(() =>
+    getPresetIdForForm(connectionForm)
+  )
+  const wasOpenRef = useRef(open)
+
+  useEffect(() => {
+    if (open && !wasOpenRef.current) {
+      setSelectedPreset(getPresetIdForForm(connectionForm))
+    }
+    wasOpenRef.current = open
+  }, [connectionForm, open])
+
+  const presetLabels: Record<
+    RemoteMachineSetupPresetId,
+    { title: string; description: string; defaults: string }
+  > = {
+    custom: {
+      title: t('sshConnections.deployDialog.presetCustom'),
+      description: t('sshConnections.deployDialog.presetCustomDescription'),
+      defaults: t('sshConnections.deployDialog.presetCustomDefaults'),
+    },
+    linux: {
+      title: t('sshConnections.deployDialog.presetLinux'),
+      description: t('sshConnections.deployDialog.presetLinuxDescription'),
+      defaults: t('sshConnections.deployDialog.presetLinuxDefaults'),
+    },
+    borgbase: {
+      title: t('sshConnections.deployDialog.presetBorgBase'),
+      description: t('sshConnections.deployDialog.presetBorgBaseDescription'),
+      defaults: t('sshConnections.deployDialog.presetBorgBaseDefaults'),
+    },
+    hetzner: {
+      title: t('sshConnections.deployDialog.presetHetzner'),
+      description: t('sshConnections.deployDialog.presetHetznerDescription'),
+      defaults: t('sshConnections.deployDialog.presetHetznerDefaults'),
+    },
+    nas: {
+      title: t('sshConnections.deployDialog.presetNas'),
+      description: t('sshConnections.deployDialog.presetNasDescription'),
+      defaults: t('sshConnections.deployDialog.presetNasDefaults'),
+    },
+  }
+
+  const close = () => setOpen(false)
+
+  const applyPreset = (presetId: RemoteMachineSetupPresetId) => {
+    const preset = remoteMachineSetupPresets.find((item) => item.id === presetId)
+    if (!preset) return
+
+    setConnectionForm(
+      preset.id === 'custom'
+        ? createConnectionForm()
+        : {
+            ...connectionForm,
+            ...preset.defaults,
+            host: connectionForm.host,
+            password: connectionForm.password,
+          }
+    )
+    setHostError(undefined)
+    setSelectedPreset(preset.id)
+  }
+
   return (
-    <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth>
+    <ResponsiveDialog
+      open={open}
+      onClose={close}
+      maxWidth="md"
+      fullWidth
+      footer={
+        <DialogActions>
+          <Button onClick={close}>{t('common.buttons.cancel')}</Button>
+          <Button
+            variant="contained"
+            onClick={onDeploy}
+            disabled={
+              pending ||
+              !connectionForm.host ||
+              !connectionForm.username ||
+              !connectionForm.password
+            }
+          >
+            {pending
+              ? t('sshConnections.deployDialog.deploying')
+              : t('sshConnections.deployDialog.deploy')}
+          </Button>
+        </DialogActions>
+      }
+    >
       <DialogTitle>{t('sshConnections.deployDialog.title')}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
+          <Box>
+            <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+              {t('sshConnections.deployDialog.setupPreset')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+              {t('sshConnections.deployDialog.setupPresetHint')}
+            </Typography>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: {
+                  xs: '1fr',
+                  sm: 'repeat(2, minmax(0, 1fr))',
+                  md: 'repeat(3, minmax(0, 1fr))',
+                },
+                gap: 1,
+              }}
+            >
+              {remoteMachineSetupPresets.map((preset) => {
+                const Icon = preset.icon
+                const selected = selectedPreset === preset.id
+                const label = presetLabels[preset.id]
+
+                return (
+                  <ButtonBase
+                    key={preset.id}
+                    component="button"
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => applyPreset(preset.id)}
+                    sx={(theme) => ({
+                      alignItems: 'flex-start',
+                      border: 1,
+                      borderColor: selected ? 'primary.main' : 'divider',
+                      borderRadius: 1,
+                      bgcolor: selected
+                        ? alpha(
+                            theme.palette.primary.main,
+                            theme.palette.mode === 'dark' ? 0.18 : 0.08
+                          )
+                        : 'background.paper',
+                      color: 'text.primary',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      gap: 1.25,
+                      justifyContent: 'flex-start',
+                      minHeight: 112,
+                      p: 1.5,
+                      textAlign: 'left',
+                      transition:
+                        'border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease',
+                      width: '100%',
+                      '&:hover': {
+                        borderColor: selected ? 'primary.main' : 'text.secondary',
+                        bgcolor: selected
+                          ? alpha(
+                              theme.palette.primary.main,
+                              theme.palette.mode === 'dark' ? 0.22 : 0.1
+                            )
+                          : 'action.hover',
+                      },
+                      '&:focus-visible': {
+                        outline: `2px solid ${theme.palette.primary.main}`,
+                        outlineOffset: 2,
+                      },
+                    })}
+                  >
+                    <Box
+                      aria-hidden="true"
+                      sx={(theme) => ({
+                        alignItems: 'center',
+                        bgcolor: selected
+                          ? alpha(
+                              theme.palette.primary.main,
+                              theme.palette.mode === 'dark' ? 0.24 : 0.12
+                            )
+                          : 'action.hover',
+                        borderRadius: 1,
+                        color: selected ? 'primary.main' : 'text.secondary',
+                        display: 'flex',
+                        flexShrink: 0,
+                        height: 32,
+                        justifyContent: 'center',
+                        width: 32,
+                      })}
+                    >
+                      <Icon size={18} />
+                    </Box>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                        {label.title}
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ display: 'block', lineHeight: 1.35, mt: 0.25 }}
+                      >
+                        {label.description}
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ display: 'block', fontFamily: 'monospace', mt: 0.75 }}
+                      >
+                        {label.defaults}
+                      </Typography>
+                    </Box>
+                  </ButtonBase>
+                )
+              })}
+            </Box>
+          </Box>
           <SshHostField
             label={t('sshConnections.deployDialog.host')}
             value={connectionForm.host}
@@ -131,6 +352,17 @@ export function DeployKeyDialog({
             InputLabelProps={{ shrink: true }}
           />
           <TextField
+            label={t('sshConnections.deployDialog.sshPathPrefix')}
+            fullWidth
+            value={connectionForm.ssh_path_prefix}
+            onChange={(e) =>
+              setConnectionForm({ ...connectionForm, ssh_path_prefix: e.target.value })
+            }
+            placeholder="/volume1"
+            helperText={t('sshConnections.deployDialog.sshPathPrefixHelper')}
+            InputLabelProps={{ shrink: true }}
+          />
+          <TextField
             label={t('sshConnections.deployDialog.mountPoint')}
             fullWidth
             value={connectionForm.mount_point}
@@ -141,20 +373,6 @@ export function DeployKeyDialog({
           />
         </Stack>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={() => setOpen(false)}>{t('common.buttons.cancel')}</Button>
-        <Button
-          variant="contained"
-          onClick={onDeploy}
-          disabled={
-            pending || !connectionForm.host || !connectionForm.username || !connectionForm.password
-          }
-        >
-          {pending
-            ? t('sshConnections.deployDialog.deploying')
-            : t('sshConnections.deployDialog.deploy')}
-        </Button>
-      </DialogActions>
-    </Dialog>
+    </ResponsiveDialog>
   )
 }

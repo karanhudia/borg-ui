@@ -1,9 +1,13 @@
+import { useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { within } from '@testing-library/react'
+import { fireEvent, waitFor as rtlWaitFor, within } from '@testing-library/react'
 import i18n from '../../i18n'
 import { renderWithProviders, screen, userEvent, waitFor } from '../../test/test-utils'
 import SSHConnectionsSingleKey from '../SSHConnectionsSingleKey'
+import { createConnectionForm } from '../ssh-connections-single-key/formDefaults'
 import { ConnectionDiagnosticsDialog } from '../ssh-connections-single-key/dialogs/ConnectionDiagnosticsDialog'
+import { DeployKeyDialog } from '../ssh-connections-single-key/dialogs/DeployKeyDialog'
+import type { DeployConnectionPayload } from '../ssh-connections-single-key/types'
 
 const { track, toastSuccess, toastError, mockState } = vi.hoisted(() => ({
   track: vi.fn(),
@@ -245,57 +249,236 @@ describe('SSHConnectionsSingleKey', () => {
   })
 
   it('deploys the system key with the expected connection payload', async () => {
-    const user = userEvent.setup()
     const { sshKeysAPI } = await import('../../services/api')
 
     renderWithProviders(<SSHConnectionsSingleKey />)
 
     await screen.findByText('Remote Machines')
-    await user.click(
+    fireEvent.click(
       screen.getByRole('button', {
         name: /automatically deploy ssh key using password authentication/i,
       })
     )
-    await user.type(screen.getByLabelText(/^host$/i), 'nas.local')
-    await user.type(screen.getByLabelText(/^username$/i), 'root')
-    await user.clear(screen.getByLabelText(/^port$/i))
-    await user.type(screen.getByLabelText(/^port$/i), '2200')
-    await user.type(screen.getByLabelText(/^password$/i), 'secret')
-    await user.type(screen.getByLabelText(/default path/i), '/backups')
-    await user.type(screen.getByLabelText(/mount point/i), 'nas')
-    await user.click(screen.getByRole('button', { name: /^deploy key$/i }))
-
-    await waitFor(() => {
-      expect(sshKeysAPI.deploySSHKey).toHaveBeenCalledWith(7, {
-        host: 'nas.local',
-        username: 'root',
-        port: 2200,
-        password: 'secret',
-        use_sftp_mode: true,
-        default_path: '/backups',
-        ssh_path_prefix: '',
-        mount_point: 'nas',
-      })
+    const dialog = await screen.findByRole('dialog', { name: /deploy ssh key to server/i })
+    fireEvent.change(within(dialog).getByLabelText(/^host$/i), {
+      target: { value: 'nas.local' },
     })
-  })
+    fireEvent.change(within(dialog).getByLabelText(/^username$/i), {
+      target: { value: 'root' },
+    })
+    fireEvent.change(within(dialog).getByLabelText(/^port$/i), {
+      target: { value: '2200' },
+    })
+    fireEvent.change(within(dialog).getByLabelText(/^password$/i), {
+      target: { value: 'secret' },
+    })
+    fireEvent.change(within(dialog).getByLabelText(/default path/i), {
+      target: { value: '/backups' },
+    })
+    fireEvent.change(within(dialog).getByLabelText(/mount point/i), {
+      target: { value: 'nas' },
+    })
+    const deployButton = within(dialog).getByRole('button', { name: /^deploy key$/i })
+    await rtlWaitFor(() => expect(deployButton).not.toBeDisabled())
+    fireEvent.click(deployButton)
 
-  it('tests and adds a manual connection with the expected payload', async () => {
-    const user = userEvent.setup()
+    await rtlWaitFor(() => expect(sshKeysAPI.deploySSHKey).toHaveBeenCalledTimes(1))
+    expect(sshKeysAPI.deploySSHKey).toHaveBeenCalledWith(7, {
+      host: 'nas.local',
+      username: 'root',
+      port: 2200,
+      password: 'secret',
+      use_sftp_mode: true,
+      default_path: '/backups',
+      ssh_path_prefix: '',
+      mount_point: 'nas',
+    })
+  }, 30000)
+
+  it('applies the Hetzner Storage Box preset when deploying the system key', async () => {
     const { sshKeysAPI } = await import('../../services/api')
 
     renderWithProviders(<SSHConnectionsSingleKey />)
 
     await screen.findByText('Remote Machines')
-    await user.click(
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /automatically deploy ssh key using password authentication/i,
+      })
+    )
+    const dialog = await screen.findByRole('dialog', { name: /deploy ssh key to server/i })
+    fireEvent.click(within(dialog).getByRole('button', { name: /hetzner storage box/i }))
+    fireEvent.change(within(dialog).getByLabelText(/^host$/i), {
+      target: { value: 'u123456.your-storagebox.de' },
+    })
+    fireEvent.change(within(dialog).getByLabelText(/^username$/i), {
+      target: { value: 'u123456' },
+    })
+    fireEvent.change(within(dialog).getByLabelText(/^password$/i), {
+      target: { value: 'secret' },
+    })
+    const deployButton = within(dialog).getByRole('button', { name: /^deploy key$/i })
+    await rtlWaitFor(() => expect(deployButton).not.toBeDisabled())
+    fireEvent.click(deployButton)
+
+    await rtlWaitFor(() => expect(sshKeysAPI.deploySSHKey).toHaveBeenCalledTimes(1))
+    expect(sshKeysAPI.deploySSHKey).toHaveBeenCalledWith(7, {
+      host: 'u123456.your-storagebox.de',
+      username: 'u123456',
+      port: 23,
+      password: 'secret',
+      use_sftp_mode: true,
+      default_path: '/./borg-repository',
+      ssh_path_prefix: '',
+      mount_point: 'hetzner',
+    })
+  }, 30000)
+
+  it('keeps manual edits after applying the NAS preset', async () => {
+    const { sshKeysAPI } = await import('../../services/api')
+
+    renderWithProviders(<SSHConnectionsSingleKey />)
+
+    await screen.findByText('Remote Machines')
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /automatically deploy ssh key using password authentication/i,
+      })
+    )
+    const dialog = await screen.findByRole('dialog', { name: /deploy ssh key to server/i })
+    fireEvent.click(within(dialog).getByRole('button', { name: /^nas\b/i }))
+    fireEvent.change(within(dialog).getByLabelText(/^host$/i), {
+      target: { value: 'nas.local' },
+    })
+    fireEvent.change(within(dialog).getByLabelText(/^username$/i), {
+      target: { value: 'backup' },
+    })
+    fireEvent.change(within(dialog).getByLabelText(/^password$/i), {
+      target: { value: 'secret' },
+    })
+    fireEvent.change(within(dialog).getByLabelText(/default path/i), {
+      target: { value: '/backups/repo' },
+    })
+    const deployButton = within(dialog).getByRole('button', { name: /^deploy key$/i })
+    await rtlWaitFor(() => expect(deployButton).not.toBeDisabled())
+    fireEvent.click(deployButton)
+
+    await rtlWaitFor(() => expect(sshKeysAPI.deploySSHKey).toHaveBeenCalledTimes(1))
+    expect(sshKeysAPI.deploySSHKey).toHaveBeenCalledWith(7, {
+      host: 'nas.local',
+      username: 'backup',
+      port: 22,
+      password: 'secret',
+      use_sftp_mode: false,
+      default_path: '/backups/repo',
+      ssh_path_prefix: '/volume1',
+      mount_point: 'nas',
+    })
+  }, 30000)
+
+  it('resets deploy defaults after returning to the Custom setup preset', async () => {
+    renderWithProviders(<SSHConnectionsSingleKey />)
+
+    await screen.findByText('Remote Machines')
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /automatically deploy ssh key using password authentication/i,
+      })
+    )
+    const dialog = await screen.findByRole('dialog', { name: /deploy ssh key to server/i })
+    fireEvent.click(within(dialog).getByRole('button', { name: /borgbase/i }))
+    fireEvent.click(within(dialog).getByRole('button', { name: /custom setup/i }))
+
+    expect(within(dialog).getByLabelText(/^port$/i)).toHaveValue(22)
+    expect(within(dialog).getByRole('checkbox', { name: /use sftp mode/i })).toBeChecked()
+    expect(within(dialog).getByLabelText(/default path/i)).toHaveValue('')
+    expect(within(dialog).getByLabelText(/mount point/i)).toHaveValue('')
+  }, 30000)
+
+  it('shows the Custom setup preset when reopened with reset deploy defaults', async () => {
+    function DeployDialogHarness() {
+      const [open, setOpen] = useState(true)
+      const [connectionForm, setConnectionForm] = useState<DeployConnectionPayload>({
+        ...createConnectionForm(),
+        port: 23,
+        use_sftp_mode: true,
+        default_path: '/./borg-repository',
+        ssh_path_prefix: '',
+        mount_point: 'hetzner',
+      })
+      const [hostError, setHostError] = useState<string>()
+
+      return (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              setConnectionForm(createConnectionForm())
+              setOpen(true)
+            }}
+          >
+            Reopen deploy dialog
+          </button>
+          <DeployKeyDialog
+            t={i18n.t.bind(i18n)}
+            open={open}
+            setOpen={setOpen}
+            connectionForm={connectionForm}
+            setConnectionForm={setConnectionForm}
+            hostError={hostError}
+            setHostError={setHostError}
+            pending={false}
+            onDeploy={() => {}}
+          />
+        </>
+      )
+    }
+
+    renderWithProviders(<DeployDialogHarness />)
+
+    const dialog = await screen.findByRole('dialog', { name: /deploy ssh key to server/i })
+    expect(within(dialog).getByRole('button', { name: /hetzner storage box/i })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    )
+
+    fireEvent.click(within(dialog).getByRole('button', { name: /cancel/i }))
+    await rtlWaitFor(() =>
+      expect(screen.queryByRole('dialog', { name: /deploy ssh key to server/i })).not.toBeInTheDocument()
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /reopen deploy dialog/i }))
+    const reopenedDialog = await screen.findByRole('dialog', { name: /deploy ssh key to server/i })
+
+    expect(within(reopenedDialog).getByRole('button', { name: /custom setup/i })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    )
+    expect(within(reopenedDialog).getByLabelText(/^port$/i)).toHaveValue(22)
+  }, 30000)
+
+  it('tests and adds a manual connection with the expected payload', async () => {
+    const { sshKeysAPI } = await import('../../services/api')
+
+    renderWithProviders(<SSHConnectionsSingleKey />)
+
+    await screen.findByText('Remote Machines')
+    fireEvent.click(
       screen.getByRole('button', {
         name: /add a connection for a manually deployed ssh key/i,
       })
     )
-    await user.type(screen.getByLabelText(/^host$/i), 'manual.example.com')
-    await user.type(screen.getByLabelText(/^username$/i), 'backup')
-    await user.clear(screen.getByLabelText(/^port$/i))
-    await user.type(screen.getByLabelText(/^port$/i), '44')
-    await user.click(screen.getByRole('button', { name: /test & add connection/i }))
+    const dialog = await screen.findByRole('dialog', { name: /add manual connection/i })
+    fireEvent.change(within(dialog).getByLabelText(/^host$/i), {
+      target: { value: 'manual.example.com' },
+    })
+    fireEvent.change(within(dialog).getByLabelText(/^username$/i), {
+      target: { value: 'backup' },
+    })
+    fireEvent.change(within(dialog).getByLabelText(/^port$/i), {
+      target: { value: '44' },
+    })
+    fireEvent.click(within(dialog).getByRole('button', { name: /test & add connection/i }))
 
     await waitFor(() => {
       expect(sshKeysAPI.testSSHConnection).toHaveBeenCalledWith(7, {
@@ -422,35 +605,38 @@ describe('SSHConnectionsSingleKey', () => {
   })
 
   it('updates an existing connection and automatically retests it', async () => {
-    const user = userEvent.setup()
     const { sshKeysAPI } = await import('../../services/api')
 
     renderWithProviders(<SSHConnectionsSingleKey />)
 
     await screen.findByText('backup-host')
-    await user.click(screen.getByRole('button', { name: /edit backup-host/i }))
-    const hostInputs = screen.getAllByLabelText(/^host$/i)
-    await user.clear(hostInputs[0])
-    await user.type(hostInputs[0], 'updated-host')
-    const mountInputs = screen.getAllByLabelText(/mount point/i)
-    await user.clear(mountInputs[0])
-    await user.type(mountInputs[0], 'branch-office')
-    await user.click(screen.getByRole('button', { name: /update connection/i }))
+    fireEvent.click(screen.getByRole('button', { name: /edit backup-host/i }))
+    const dialog = await screen.findByRole('dialog', { name: /edit ssh connection/i })
+    const hostInput = within(dialog).getByLabelText(/^host$/i)
+    fireEvent.change(hostInput, {
+      target: { value: 'updated-host' },
+    })
+    await rtlWaitFor(() => expect(hostInput).toHaveValue('updated-host'))
+    const mountInput = within(dialog).getByLabelText(/mount point/i)
+    fireEvent.change(mountInput, {
+      target: { value: 'branch-office' },
+    })
+    await rtlWaitFor(() => expect(mountInput).toHaveValue('branch-office'))
+    const updateButton = within(dialog).getByRole('button', { name: /update connection/i })
+    await rtlWaitFor(() => expect(updateButton).not.toBeDisabled())
+    fireEvent.click(updateButton)
 
-    await waitFor(() => {
-      expect(sshKeysAPI.updateSSHConnection).toHaveBeenCalledWith(3, {
-        host: 'updated-host',
-        username: 'borg',
-        port: 2222,
-        use_sftp_mode: true,
-        use_sudo: false,
-        default_path: '/srv',
-        ssh_path_prefix: '/prefix',
-        mount_point: 'branch-office',
-      })
+    await rtlWaitFor(() => expect(sshKeysAPI.updateSSHConnection).toHaveBeenCalledTimes(1))
+    expect(sshKeysAPI.updateSSHConnection).toHaveBeenCalledWith(3, {
+      host: 'updated-host',
+      username: 'borg',
+      port: 2222,
+      use_sftp_mode: true,
+      use_sudo: false,
+      default_path: '/srv',
+      ssh_path_prefix: '/prefix',
+      mount_point: 'branch-office',
     })
-    await waitFor(() => {
-      expect(sshKeysAPI.testExistingConnection).toHaveBeenCalledWith(3)
-    })
-  })
+    await rtlWaitFor(() => expect(sshKeysAPI.testExistingConnection).toHaveBeenCalledWith(3))
+  }, 30000)
 })
