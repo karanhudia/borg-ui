@@ -919,6 +919,7 @@ class TestActivityLogContracts:
     ):
         from app.database.models import BackupJob
 
+        _set_log_save_policy(test_db, "all_jobs")
         log_file = tmp_path / "activity-log.txt"
         log_file.write_text("line-1\nline-2\nline-3\nline-4\n")
 
@@ -944,6 +945,66 @@ class TestActivityLogContracts:
         assert payload["has_more"] is True
         assert [line["content"] for line in payload["lines"]] == ["line-2", "line-3"]
         assert [line["line_number"] for line in payload["lines"]] == [2, 3]
+
+    def test_get_job_logs_hides_successful_file_logs_when_policy_skips_success(
+        self, test_client, admin_headers, test_db, tmp_path
+    ):
+        from app.database.models import BackupJob
+
+        _set_log_save_policy(test_db, "failed_only")
+        log_file = tmp_path / "hidden-success.log"
+        log_file.write_text("successful backup log\n", encoding="utf-8")
+        job = BackupJob(
+            repository="/tmp/repo",
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            log_file_path=str(log_file),
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.get(
+            f"/api/activity/backup/{job.id}/logs",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 404
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.activity.noLogsAvailableForJob"
+        )
+
+    def test_download_job_logs_hides_successful_file_logs_when_policy_skips_success(
+        self, test_client, admin_headers, test_db, tmp_path
+    ):
+        from app.database.models import BackupJob
+
+        _set_log_save_policy(test_db, "failed_only")
+        log_file = tmp_path / "hidden-download.log"
+        log_file.write_text("successful backup log\n", encoding="utf-8")
+        job = BackupJob(
+            repository="/tmp/repo",
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            log_file_path=str(log_file),
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.get(
+            f"/api/activity/backup/{job.id}/logs/download",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 404
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.activity.noLogsAvailableForJob"
+        )
 
     def test_download_job_logs_without_logs_returns_404(
         self, test_client, admin_headers, test_db
@@ -976,6 +1037,7 @@ class TestActivityLogContracts:
     ):
         from app.database.models import BackupJob
 
+        _set_log_save_policy(test_db, "all_jobs")
         job = BackupJob(
             repository="/tmp/repo",
             status="completed",
@@ -1039,11 +1101,124 @@ class TestActivityLogContracts:
         assert "stderr line" in contents
         assert "script failed" in contents
 
+    def test_get_script_execution_logs_hides_quiet_success_under_failed_only(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.database.models import Script, ScriptExecution
+
+        _set_log_save_policy(test_db, "failed_only")
+        script = Script(
+            name="Quiet Script",
+            file_path="library/quiet.sh",
+            category="custom",
+            timeout=300,
+        )
+        test_db.add(script)
+        test_db.flush()
+        execution = ScriptExecution(
+            script_id=script.id,
+            hook_type="pre-backup",
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            exit_code=0,
+            stdout="",
+            stderr="",
+            triggered_by="backup_plan",
+        )
+        test_db.add(execution)
+        test_db.commit()
+        test_db.refresh(execution)
+
+        response = test_client.get(
+            f"/api/activity/script_execution/{execution.id}/logs",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 404
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.activity.noLogsAvailableForJob"
+        )
+
+    def test_get_package_job_logs_allows_warning_output_under_warning_policy(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.database.models import InstalledPackage, PackageInstallJob
+
+        _set_log_save_policy(test_db, "failed_and_warnings")
+        package = InstalledPackage(
+            name="restic",
+            install_command="apt-get install -y restic",
+            status="installed",
+        )
+        test_db.add(package)
+        test_db.flush()
+        job = PackageInstallJob(
+            package_id=package.id,
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            exit_code=0,
+            stdout="WARNING: package already installed",
+            stderr="",
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.get(
+            f"/api/activity/package/{job.id}/logs",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        contents = [line["content"] for line in response.json()["lines"]]
+        assert "WARNING: package already installed" in contents
+
+    def test_download_package_job_logs_hides_quiet_success_under_warning_policy(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.database.models import InstalledPackage, PackageInstallJob
+
+        _set_log_save_policy(test_db, "failed_and_warnings")
+        package = InstalledPackage(
+            name="borgmatic",
+            install_command="apt-get install -y borgmatic",
+            status="installed",
+        )
+        test_db.add(package)
+        test_db.flush()
+        job = PackageInstallJob(
+            package_id=package.id,
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            exit_code=0,
+            stdout="installed cleanly",
+            stderr="",
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.get(
+            f"/api/activity/package/{job.id}/logs/download",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 404
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.activity.noLogsAvailableForJob"
+        )
+
     def test_get_restore_check_job_logs_uses_activity_log_contract(
         self, test_client, admin_headers, test_db
     ):
         from app.database.models import Repository, RestoreCheckJob
 
+        _set_log_save_policy(test_db, "all_jobs")
         repository = Repository(
             name="Restore Check Repo",
             path="/tmp/restore-check-repo",
@@ -1117,11 +1292,52 @@ class TestActivityLogContracts:
         assert payload["has_more"] is True
         assert payload["lines"][0]["content"] == "sync line 2"
 
+    def test_get_rclone_job_logs_hides_quiet_success_under_failed_only(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.database.models import Repository, RcloneSyncJob
+
+        _set_log_save_policy(test_db, "failed_only")
+        repository = Repository(
+            name="Cloud Hidden Logs Repo",
+            path="/tmp/cloud-hidden-logs-repo",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repository)
+        test_db.commit()
+        test_db.refresh(repository)
+        job = RcloneSyncJob(
+            repository_id=repository.id,
+            direction="primary_to_remote",
+            operation="sync",
+            status="completed",
+            triggered_by="initial",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            log_text="sync completed quietly",
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.get(
+            f"/api/activity/rclone_sync/{job.id}/logs",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 404
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.activity.noLogsAvailableForJob"
+        )
+
     def test_download_rclone_hydrate_job_logs_uses_database_text(
         self, test_client, admin_headers, test_db
     ):
         from app.database.models import Repository, RcloneSyncJob
 
+        _set_log_save_policy(test_db, "all_jobs")
         repository = Repository(
             name="Cloud Hydrate Logs Repo",
             path="/tmp/cloud-hydrate-logs-repo",
@@ -1153,6 +1369,53 @@ class TestActivityLogContracts:
         assert response.status_code == 200
         assert "text/plain" in response.headers.get("content-type", "")
         assert response.content.decode() == "hydrated repository"
+
+    def test_get_agent_backup_logs_hides_success_under_failed_only(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.database.models import AgentJob, AgentJobLog, BackupJob
+
+        _set_log_save_policy(test_db, "failed_only")
+        backup_job = BackupJob(
+            repository="/tmp/repo",
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            execution_mode="agent",
+        )
+        test_db.add(backup_job)
+        test_db.flush()
+        agent_job = AgentJob(
+            agent_machine_id=1,
+            backup_job_id=backup_job.id,
+            job_type="backup",
+            status="completed",
+            payload={},
+        )
+        test_db.add(agent_job)
+        test_db.flush()
+        test_db.add(
+            AgentJobLog(
+                agent_job_id=agent_job.id,
+                sequence=1,
+                stream="stdout",
+                message="agent backup completed",
+                created_at=datetime.now(),
+            )
+        )
+        test_db.commit()
+        test_db.refresh(backup_job)
+
+        response = test_client.get(
+            f"/api/activity/backup/{backup_job.id}/logs",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 404
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.activity.noLogsAvailableForJob"
+        )
 
     def test_delete_rclone_sync_job_removes_log_path(
         self, test_client, admin_headers, test_db, tmp_path
