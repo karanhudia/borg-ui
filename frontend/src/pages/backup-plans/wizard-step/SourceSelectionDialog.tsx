@@ -9,6 +9,7 @@ import {
   ButtonBase,
   Checkbox,
   Chip,
+  CircularProgress,
   DialogActions,
   DialogContent,
   DialogTitle,
@@ -26,9 +27,9 @@ import {
   TextField,
   Tooltip,
   Typography,
+  alpha,
 } from '@mui/material'
 import {
-  CheckCircle2,
   ChevronRight,
   Container as ContainerIcon,
   Database as DatabaseIcon,
@@ -41,9 +42,9 @@ import {
   Search,
   Server,
   Trash2,
-  TriangleAlert,
   X,
 } from 'lucide-react'
+import { SiDocker } from 'react-icons/si'
 import type { TFunction } from 'i18next'
 
 import CodeEditor from '../../../components/shared/CodeEditor'
@@ -817,7 +818,6 @@ export function SourceSelectionDialog({
   const [containerName, setContainerName] = useState('')
   const [containerImage, setContainerImage] = useState('')
   const [containerExportPath, setContainerExportPath] = useState(DEFAULT_CONTAINER_EXPORT_ROOT)
-  const [containerExportPathTouched, setContainerExportPathTouched] = useState(false)
   const [queuedContainerScriptDrafts, setQueuedContainerScriptDrafts] = useState<
     Record<string, QueuedContainerScriptDraft>
   >({})
@@ -888,7 +888,6 @@ export function SourceSelectionDialog({
     setContainerExportPath(
       containerLocation?.container?.export_path || DEFAULT_CONTAINER_EXPORT_ROOT
     )
-    setContainerExportPathTouched(Boolean(containerLocation?.container?.export_path))
     setQueuedContainerScriptDrafts({})
     setContainerScanLoading(false)
     setContainerScanResults([])
@@ -1172,41 +1171,44 @@ export function SourceSelectionDialog({
     setSourcePath('')
   }
 
-  const handleContainerNameChange = (value: string) => {
-    setContainerName(value)
-    if (!containerExportPathTouched) {
-      setContainerExportPath(
-        value.trim() ? defaultContainerExportPath(value) : DEFAULT_CONTAINER_EXPORT_ROOT
-      )
-    }
-  }
-
-  const handleContainerExportPathChange = (value: string) => {
-    setContainerExportPath(value)
-    setContainerExportPathTouched(true)
-  }
-
   const queueContainerSource = (
     detectedContainer?: Pick<
       SourceDiscoveryContainer,
       'id' | 'name' | 'image' | 'export_path' | 'mounts'
-    >
+    >,
+    options?: {
+      overrideMountPaths?: string[]
+      preserveMountSelection?: boolean
+    }
   ) => {
     const nextContainerName = (detectedContainer?.name ?? containerName).trim()
     const requestedExportPath =
       detectedContainer?.export_path?.trim() ||
       containerExportPath.trim() ||
       defaultContainerExportPath(nextContainerName)
-    const nextExportPath = uniqueContainerExportPath(requestedExportPath, draftSourceLocations)
+    // When re-queueing the same container on the same source (e.g. a mount
+    // checkbox toggles), preserve the existing draft's export_path so the
+    // draftLocationKey is stable. Otherwise uniqueContainerExportPath sees the
+    // prior draft and appends -1, -2, ... creating duplicate draft entries.
+    const existingDraftForContainer = draftSourceLocations.find(
+      (location) =>
+        locationKey(location) === selectedSourceKey &&
+        location.container?.container_name === nextContainerName
+    )
+    const nextExportPath =
+      existingDraftForContainer?.container?.export_path?.trim() ||
+      uniqueContainerExportPath(requestedExportPath, draftSourceLocations)
     if (!nextContainerName || !nextExportPath) return
     const selectedMountPaths = detectedContainer
-      ? detectedContainer.mounts
-          .filter((mount) => !mount.backed_up)
-          .filter(
-            (mount) => selectedContainerMountKeys[containerMountKey(detectedContainer.id, mount)]
-          )
-          .map(containerMountSourcePath)
-          .filter(Boolean)
+      ? options?.overrideMountPaths !== undefined
+        ? options.overrideMountPaths
+        : detectedContainer.mounts
+            .filter((mount) => !mount.backed_up)
+            .filter(
+              (mount) => selectedContainerMountKeys[containerMountKey(detectedContainer.id, mount)]
+            )
+            .map(containerMountSourcePath)
+            .filter(Boolean)
       : []
 
     const locationBase = locationForKey(selectedSourceKey)
@@ -1218,9 +1220,16 @@ export function SourceSelectionDialog({
       export_path: nextExportPath,
       script_execution_target: 'source',
     }
+    // Mount paths live INSIDE the container's location (alongside its export
+    // path), not as a separate Files-only source. That keeps them out of the
+    // Files tab summary and tied to the container they came from. Dedup against
+    // the export path so it doesn't appear twice.
+    const dedupedMountPaths = Array.from(new Set(selectedMountPaths)).filter(
+      (path) => path !== nextExportPath
+    )
     const nextLocation: SourceLocation = {
       ...locationBase,
-      paths: [nextExportPath],
+      paths: [nextExportPath, ...dedupedMountPaths],
       container,
     }
     const nextLocationKey = draftLocationKey(nextLocation)
@@ -1240,14 +1249,10 @@ export function SourceSelectionDialog({
         postScriptName: scriptDrafts.postBackup.name,
       },
     }))
-    if (selectedMountPaths.length > 0) {
-      addPathsToSourceKey(selectedSourceKey, selectedMountPaths)
-    }
     setContainerName('')
     setContainerImage('')
     setContainerExportPath(DEFAULT_CONTAINER_EXPORT_ROOT)
-    setContainerExportPathTouched(false)
-    if (detectedContainer) {
+    if (detectedContainer && !options?.preserveMountSelection) {
       setSelectedContainerMountKeys((current) => {
         const next = { ...current }
         detectedContainer.mounts.forEach((mount) => {
@@ -2770,11 +2775,6 @@ export function SourceSelectionDialog({
     const agentDisabled = sourceKind === 'agent' && (!canUseManagedAgents || !hasAgentOptions)
     const lockedByAgentRepo = !!agentRepoConstraint
     const queuedContainerLocations = draftSourceLocations.filter((location) => location.container)
-    const effectiveExportPath =
-      containerExportPath.trim() ||
-      (containerName.trim()
-        ? defaultContainerExportPath(containerName)
-        : DEFAULT_CONTAINER_EXPORT_ROOT)
 
     const handleSourceKindChange = (key: string) => {
       if (key === 'local') {
@@ -2891,12 +2891,45 @@ export function SourceSelectionDialog({
     const scanButtonLabel = containerScanResults.length
       ? t('backupPlans.sourceChooser.rescanContainers')
       : t('backupPlans.sourceChooser.scanContainers')
-    const toggleContainerMount = (mountKey: string, checked: boolean) => {
-      setSelectedContainerMountKeys((current) => {
-        if (checked) return { ...current, [mountKey]: true }
-        const next = { ...current }
-        delete next[mountKey]
-        return next
+    // Ticking a mount checkbox auto-queues the parent container (or updates its
+    // mount list if it was already queued). The scan tab is intentionally
+    // one-click: the mount checkbox itself is the source-add affordance, so we
+    // never expect the user to also remember to press an "Add" button after.
+    const toggleContainerMount = (
+      container: SourceDiscoveryContainer,
+      mount: SourceDiscoveryContainerMount,
+      checked: boolean
+    ) => {
+      const mountKey = containerMountKey(container.id, mount)
+      const mountSourcePath = containerMountSourcePath(mount)
+
+      const nextSelected = { ...selectedContainerMountKeys }
+      if (checked) {
+        nextSelected[mountKey] = true
+      } else {
+        delete nextSelected[mountKey]
+      }
+      setSelectedContainerMountKeys(nextSelected)
+
+      if (!mountSourcePath) return
+
+      const wasQueued = queuedContainerLocations.some(
+        (location) =>
+          locationKey(location) === selectedSourceKey &&
+          location.container?.container_name === container.name
+      )
+
+      if (!checked && !wasQueued) return
+
+      const nextMountPaths = container.mounts
+        .filter((m) => !m.backed_up)
+        .filter((m) => nextSelected[containerMountKey(container.id, m)])
+        .map(containerMountSourcePath)
+        .filter((path): path is string => Boolean(path))
+
+      queueContainerSource(container, {
+        overrideMountPaths: nextMountPaths,
+        preserveMountSelection: true,
       })
     }
 
@@ -2996,349 +3029,406 @@ export function SourceSelectionDialog({
           )}
         </Stack>
 
-        <Box
-          sx={{
-            border: 1,
-            borderColor: 'divider',
-            borderRadius: 1,
-            overflow: 'hidden',
-            bgcolor: 'background.paper',
-          }}
-        >
-          <Stack spacing={1.5}>
-            <Stack
-              direction={{ xs: 'column', sm: 'row' }}
-              spacing={1}
-              alignItems={{ xs: 'stretch', sm: 'center' }}
-              justifyContent="space-between"
-              sx={{ px: 1.5, pt: 1.5 }}
+        <Stack spacing={1.5}>
+          <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+            <Stack direction="row" spacing={0.5} alignItems="center" sx={{ minWidth: 0 }}>
+              <Typography variant="subtitle2">
+                {t('backupPlans.sourceChooser.detectedContainers')}
+              </Typography>
+              <Tooltip title={t('backupPlans.sourceChooser.containerExportHint')}>
+                <IconButton
+                  aria-label={t('backupPlans.sourceChooser.containerExportHint')}
+                  size="small"
+                  sx={{ width: 24, height: 24, color: 'text.secondary' }}
+                >
+                  <Info size={14} />
+                </IconButton>
+              </Tooltip>
+            </Stack>
+            <Button
+              variant="text"
+              size="small"
+              startIcon={<Search size={14} />}
+              onClick={scanContainers}
+              disabled={scanDisabled}
             >
-              <Stack spacing={0.25} sx={{ minWidth: 0 }}>
-                <Stack direction="row" spacing={0.75} alignItems="center">
-                  <Typography variant="subtitle2">
-                    {t('backupPlans.sourceChooser.detectedContainers')}
-                  </Typography>
-                  <Tooltip title={t('backupPlans.sourceChooser.containerExportHint')}>
-                    <IconButton
-                      aria-label={t('backupPlans.sourceChooser.containerExportHint')}
-                      size="small"
-                      sx={{ width: 24, height: 24 }}
-                    >
-                      <Info size={14} />
-                    </IconButton>
-                  </Tooltip>
-                </Stack>
+              {containerScanLoading ? t('backupPlans.sourceChooser.scanning') : scanButtonLabel}
+            </Button>
+          </Stack>
+
+          {sourceKind === 'agent' && (
+            <Alert severity="info" icon={<Info size={18} />} sx={{ py: 0.5 }}>
+              {t('backupPlans.sourceChooser.containerScanUnsupportedForAgents')}
+            </Alert>
+          )}
+
+          {containerScanWarnings.map((warning) => (
+            <Alert key={`${warning.code}:${warning.message}`} severity="warning" sx={{ py: 0.5 }}>
+              {warning.message}
+            </Alert>
+          ))}
+
+          <Box
+            sx={{
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 1,
+              bgcolor: (theme) =>
+                theme.palette.mode === 'dark'
+                  ? alpha(theme.palette.common.white, 0.025)
+                  : alpha(theme.palette.common.black, 0.018),
+              p: 1.5,
+              // Lock the zone to a stable height across empty / loading /
+              // results states so triggering a scan does not visibly jump the
+              // dialog. minHeight pairs with the inner scroll container's
+              // maxHeight (~360px + padding) so the frame stays consistent.
+              minHeight: 384,
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            {containerScanLoading && (
+              <Stack
+                spacing={1}
+                alignItems="center"
+                justifyContent="center"
+                sx={{ flex: 1, color: 'text.secondary' }}
+              >
+                <CircularProgress size={20} thickness={4} />
                 <Typography variant="body2" color="text.secondary">
-                  {t('backupPlans.sourceChooser.scanContainersHint')}
+                  {t('backupPlans.sourceChooser.scanning')}
                 </Typography>
               </Stack>
-              <Button
-                variant="outlined"
-                startIcon={<Search size={16} />}
-                onClick={scanContainers}
-                disabled={scanDisabled}
-                sx={{ alignSelf: { xs: 'flex-start', sm: 'center' } }}
-              >
-                {containerScanLoading ? t('backupPlans.sourceChooser.scanning') : scanButtonLabel}
-              </Button>
-            </Stack>
-
-            {sourceKind === 'agent' && (
-              <Alert severity="info" icon={<Info size={18} />} sx={{ mx: 1.5 }}>
-                {t('backupPlans.sourceChooser.containerScanUnsupportedForAgents')}
-              </Alert>
             )}
-
-            {containerScanWarnings.map((warning) => (
-              <Alert key={`${warning.code}:${warning.message}`} severity="warning" sx={{ mx: 1.5 }}>
-                {warning.message}
-              </Alert>
-            ))}
 
             {!containerScanLoading &&
               containerScanTargetLabel &&
               containerScanResults.length === 0 &&
               containerScanWarnings.length === 0 && (
-                <Alert severity="info" icon={<Info size={18} />} sx={{ mx: 1.5, mb: 1.5 }}>
-                  <Stack spacing={0.25}>
-                    <Typography variant="body2" fontWeight={600}>
-                      {t('backupPlans.sourceChooser.noContainersFoundTitle')}
-                    </Typography>
-                    <Typography variant="body2">
-                      {t('backupPlans.sourceChooser.noContainersFoundBody')}
-                    </Typography>
-                  </Stack>
-                </Alert>
+                <Stack
+                  spacing={0.5}
+                  alignItems="center"
+                  justifyContent="center"
+                  textAlign="center"
+                  sx={{ flex: 1, px: 2 }}
+                >
+                  <Typography variant="body2" fontWeight={600}>
+                    {t('backupPlans.sourceChooser.noContainersFoundTitle')}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {t('backupPlans.sourceChooser.noContainersFoundBody')}
+                  </Typography>
+                </Stack>
               )}
 
-            {containerScanResults.length > 0 && (
+            {!containerScanLoading &&
+              !containerScanTargetLabel &&
+              containerScanResults.length === 0 &&
+              containerScanWarnings.length === 0 && (
+                <Stack
+                  spacing={0.75}
+                  alignItems="center"
+                  justifyContent="center"
+                  textAlign="center"
+                  sx={{ flex: 1, px: 2 }}
+                >
+                  <Box sx={{ color: 'text.disabled', display: 'inline-flex' }}>
+                    <Search size={18} />
+                  </Box>
+                  <Typography variant="body2" color="text.secondary">
+                    {t('backupPlans.sourceChooser.scanContainersHint')}
+                  </Typography>
+                </Stack>
+              )}
+
+            {!containerScanLoading && containerScanResults.length > 0 && (
               <Box
                 data-testid="container-scan-results"
-                style={{ maxHeight: 360, overflowY: 'auto' }}
-                sx={{ borderTop: 1, borderColor: 'divider' }}
+                sx={{
+                  flex: 1,
+                  minHeight: 0,
+                  maxHeight: 360,
+                  overflowY: 'auto',
+                  // Inner padding gives the first/last card breathing room and
+                  // prevents the hover translateY(-1px) from being clipped at
+                  // the top of the scroll container.
+                  py: 0.5,
+                  px: 0.25,
+                }}
               >
-                {containerScanResults.map((container, index) => {
-                  const excludedMounts = container.mounts.filter((mount) => !mount.backed_up)
-                  const detectedContainerQueued = queuedContainerLocations.some(
-                    (location) =>
-                      locationKey(location) === selectedSourceKey &&
-                      location.container?.container_name === container.name
-                  )
-                  return (
-                    <Box
-                      key={container.id}
-                      sx={{
-                        p: 1.25,
-                        borderTop: index === 0 ? 0 : 1,
-                        borderColor: 'divider',
-                        bgcolor: detectedContainerQueued ? 'action.selected' : 'background.paper',
-                      }}
-                    >
-                      <Stack spacing={1.25}>
-                        <Stack
-                          direction={{ xs: 'column', sm: 'row' }}
-                          spacing={1}
-                          alignItems={{ xs: 'stretch', sm: 'center' }}
-                          justifyContent="space-between"
-                        >
-                          <Stack
-                            direction="row"
-                            spacing={1}
-                            alignItems="center"
-                            sx={{ minWidth: 0 }}
-                          >
-                            <Box sx={{ color: 'text.secondary', display: 'inline-flex' }}>
-                              <ContainerIcon size={16} />
-                            </Box>
-                            <Stack spacing={0.2} sx={{ minWidth: 0 }}>
-                              <Typography variant="subtitle2" noWrap>
-                                {container.name}
-                              </Typography>
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                                sx={{
-                                  fontFamily:
-                                    'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
-                                  overflowWrap: 'anywhere',
-                                }}
-                              >
-                                {container.export_path}
-                              </Typography>
-                            </Stack>
-                          </Stack>
-                          <Button
-                            variant="outlined"
-                            size="small"
-                            startIcon={
-                              detectedContainerQueued ? (
-                                <CheckCircle2 size={14} />
-                              ) : (
-                                <Plus size={14} />
-                              )
-                            }
-                            aria-label={t(
+                <Stack spacing={1.5}>
+                  {containerScanResults.map((container) => {
+                    const excludedMounts = container.mounts.filter((mount) => !mount.backed_up)
+                    const detectedContainerQueued = queuedContainerLocations.some(
+                      (location) =>
+                        locationKey(location) === selectedSourceKey &&
+                        location.container?.container_name === container.name
+                    )
+                    const queuedContainerLocation = queuedContainerLocations.find(
+                      (location) =>
+                        locationKey(location) === selectedSourceKey &&
+                        location.container?.container_name === container.name
+                    )
+                    const queuedContainerKey = queuedContainerLocation
+                      ? draftLocationKey(queuedContainerLocation)
+                      : null
+                    const handleRemoveContainer = () => {
+                      if (!queuedContainerKey) return
+                      removeSourceLocation(queuedContainerKey)
+                      setSelectedContainerMountKeys((current) => {
+                        const next = { ...current }
+                        container.mounts.forEach((mount) => {
+                          delete next[containerMountKey(container.id, mount)]
+                        })
+                        return next
+                      })
+                    }
+                    return (
+                      <Paper
+                        key={container.id}
+                        variant="outlined"
+                        sx={{
+                          px: 1,
+                          py: 0.75,
+                          borderRadius: 1,
+                          transition:
+                            'transform 180ms cubic-bezier(0.4,0,0.2,1), box-shadow 180ms cubic-bezier(0.4,0,0.2,1), border-color 180ms cubic-bezier(0.4,0,0.2,1)',
+                          bgcolor: (theme) =>
+                            detectedContainerQueued
+                              ? alpha('#059669', theme.palette.mode === 'dark' ? 0.18 : 0.08)
+                              : theme.palette.background.paper,
+                          borderColor: (theme) =>
+                            detectedContainerQueued
+                              ? alpha('#059669', theme.palette.mode === 'dark' ? 0.5 : 0.35)
+                              : theme.palette.divider,
+                          '&:hover': {
+                            transform: 'translateY(-1px)',
+                            boxShadow: (theme) =>
+                              `0 2px 8px ${alpha(theme.palette.text.primary, 0.08)}`,
+                            borderColor: (theme) =>
                               detectedContainerQueued
-                                ? 'backupPlans.sourceChooser.containerAdded'
-                                : 'backupPlans.sourceChooser.addDetectedContainer'
-                            )}
-                            onClick={() => queueContainerSource(container)}
-                            disabled={detectedContainerQueued}
-                            sx={{ alignSelf: { xs: 'flex-start', sm: 'center' } }}
+                                ? alpha('#059669', theme.palette.mode === 'dark' ? 0.7 : 0.55)
+                                : alpha(theme.palette.text.primary, 0.32),
+                          },
+                        }}
+                      >
+                        <Stack spacing={0.75}>
+                          <Stack
+                            direction={{ xs: 'column', sm: 'row' }}
+                            spacing={0.75}
+                            alignItems={{ xs: 'stretch', sm: 'center' }}
+                            justifyContent="space-between"
                           >
-                            {detectedContainerQueued
-                              ? t('backupPlans.sourceChooser.containerAdded')
-                              : t('backupPlans.sourceChooser.addDetectedContainerShort')}
-                          </Button>
-                        </Stack>
-
-                        <Stack direction="row" spacing={0.75} alignItems="flex-start">
-                          <Box sx={{ color: 'success.main', display: 'inline-flex', mt: 0.15 }}>
-                            <CheckCircle2 size={15} />
-                          </Box>
-                          <Typography
-                            variant="caption"
-                            sx={{
-                              fontFamily:
-                                'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
-                              overflowWrap: 'anywhere',
-                            }}
-                          >
-                            {t('backupPlans.sourceChooser.containerFilesystemIncluded', {
-                              path: container.export_path,
-                            })}
-                          </Typography>
-                        </Stack>
-
-                        {excludedMounts.length > 0 && (
-                          <Stack spacing={0.5}>
-                            <Stack direction="row" spacing={0.75} alignItems="center">
-                              <Box sx={{ color: 'warning.main', display: 'inline-flex' }}>
-                                <TriangleAlert size={15} />
+                            <Stack
+                              direction="row"
+                              spacing={1}
+                              alignItems="center"
+                              sx={{ minWidth: 0 }}
+                            >
+                              <Box
+                                sx={{
+                                  alignItems: 'center',
+                                  bgcolor: '#2496ED',
+                                  borderRadius: 1,
+                                  boxShadow: `0 2px 6px ${alpha('#2496ED', 0.35)}`,
+                                  color: 'common.white',
+                                  display: 'flex',
+                                  height: 28,
+                                  justifyContent: 'center',
+                                  width: 28,
+                                  flexShrink: 0,
+                                }}
+                                aria-hidden
+                              >
+                                <SiDocker size={16} />
                               </Box>
-                              <Typography variant="caption" fontWeight={600}>
-                                {t('backupPlans.sourceChooser.containerMountsOptional')}
-                              </Typography>
-                            </Stack>
-                            <Typography variant="caption" color="text.secondary">
-                              {t('backupPlans.sourceChooser.containerMountsNotIncludedHelp')}
-                            </Typography>
-                            <Stack spacing={0.25}>
-                              {excludedMounts.map((mount) => {
-                                const mountKey = containerMountKey(container.id, mount)
-                                const mountSourcePath = containerMountSourcePath(mount)
-                                const checked = Boolean(selectedContainerMountKeys[mountKey])
-                                const displayPath =
-                                  mountSourcePath ||
-                                  mount.destination ||
-                                  mount.name ||
-                                  mount.type ||
-                                  ''
-                                const mountSizeLabel = containerMountSizeLabel(t, mount)
-                                const mountSizeColor =
-                                  mount.size_status === 'permission_denied' ? 'warning' : 'default'
-                                return (
-                                  <FormControlLabel
-                                    key={mountKey}
+                              <Stack spacing={0.1} sx={{ minWidth: 0 }}>
+                                <Typography variant="subtitle2" noWrap>
+                                  {container.name}
+                                </Typography>
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  sx={{ overflowWrap: 'anywhere' }}
+                                >
+                                  {`${t('backupPlans.sourceChooser.containerExportsTo')} `}
+                                  <Box
+                                    component="span"
                                     sx={{
-                                      alignItems: 'flex-start',
-                                      borderRadius: 1,
-                                      bgcolor: checked ? 'action.selected' : 'transparent',
-                                      m: 0,
-                                      px: 0.75,
-                                      py: 0.35,
-                                      transition: 'background-color 150ms ease',
+                                      fontFamily:
+                                        'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
                                     }}
-                                    control={
-                                      <Checkbox
-                                        size="small"
-                                        checked={checked}
-                                        disabled={!mountSourcePath}
-                                        onChange={(event) =>
-                                          toggleContainerMount(mountKey, event.target.checked)
-                                        }
-                                        inputProps={{
-                                          'aria-label': t(
-                                            'backupPlans.sourceChooser.includeContainerMountAria',
-                                            { path: mountSourcePath || displayPath }
-                                          ),
-                                        }}
-                                        sx={{ mt: -0.25 }}
-                                      />
-                                    }
-                                    label={
-                                      <Stack spacing={0.1} sx={{ minWidth: 0, py: 0.25 }}>
-                                        <Stack
-                                          direction="row"
-                                          spacing={0.75}
-                                          alignItems="center"
-                                          flexWrap="wrap"
-                                          useFlexGap
-                                        >
-                                          <Typography
-                                            variant="caption"
-                                            sx={{
-                                              fontFamily:
-                                                'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
-                                              overflowWrap: 'anywhere',
-                                            }}
-                                          >
-                                            {displayPath}
-                                          </Typography>
-                                          {mountSizeLabel && (
-                                            <Chip
-                                              size="small"
-                                              variant="outlined"
-                                              color={mountSizeColor}
-                                              label={mountSizeLabel}
-                                              sx={{
-                                                height: 20,
-                                                '& .MuiChip-label': {
-                                                  px: 0.75,
-                                                  fontSize: '0.6875rem',
-                                                },
-                                              }}
-                                            />
-                                          )}
-                                        </Stack>
-                                        {mount.destination && (
-                                          <Typography variant="caption" color="text.secondary">
-                                            {t(
-                                              'backupPlans.sourceChooser.containerMountDestination',
-                                              { path: mount.destination }
-                                            )}
-                                          </Typography>
-                                        )}
-                                      </Stack>
-                                    }
-                                  />
-                                )
-                              })}
+                                  >
+                                    {container.export_path}
+                                  </Box>
+                                </Typography>
+                              </Stack>
                             </Stack>
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              color={detectedContainerQueued ? 'error' : 'primary'}
+                              startIcon={
+                                detectedContainerQueued ? <Trash2 size={13} /> : <Plus size={13} />
+                              }
+                              aria-label={t(
+                                detectedContainerQueued
+                                  ? 'backupPlans.sourceChooser.removeDetectedContainer'
+                                  : 'backupPlans.sourceChooser.addDetectedContainer'
+                              )}
+                              onClick={
+                                detectedContainerQueued
+                                  ? handleRemoveContainer
+                                  : () => queueContainerSource(container)
+                              }
+                              sx={{
+                                alignSelf: { xs: 'flex-start', sm: 'center' },
+                                minWidth: 0,
+                                px: 1,
+                                py: 0.15,
+                                fontSize: '0.75rem',
+                                lineHeight: 1.6,
+                                '& .MuiButton-startIcon': { mr: 0.5 },
+                              }}
+                            >
+                              {detectedContainerQueued
+                                ? t('common.buttons.remove')
+                                : t('backupPlans.sourceChooser.addDetectedContainerShort')}
+                            </Button>
                           </Stack>
-                        )}
-                      </Stack>
-                    </Box>
-                  )
-                })}
+
+                          {excludedMounts.length > 0 && (
+                            <>
+                              <Divider sx={{ my: 0.25 }} />
+                              <Stack spacing={0.25}>
+                                <Typography variant="caption" fontWeight={600} color="text.primary">
+                                  {t('backupPlans.sourceChooser.containerMountsOptional')}
+                                </Typography>
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  sx={{ pb: 0.25 }}
+                                >
+                                  {t('backupPlans.sourceChooser.containerMountsNotIncludedHelp')}
+                                </Typography>
+                                <Stack spacing={0.25}>
+                                  {excludedMounts.map((mount) => {
+                                    const mountKey = containerMountKey(container.id, mount)
+                                    const mountSourcePath = containerMountSourcePath(mount)
+                                    const checked = Boolean(selectedContainerMountKeys[mountKey])
+                                    const displayPath =
+                                      mountSourcePath ||
+                                      mount.destination ||
+                                      mount.name ||
+                                      mount.type ||
+                                      ''
+                                    const mountSizeLabel = containerMountSizeLabel(t, mount)
+                                    const mountSizeColor =
+                                      mount.size_status === 'permission_denied'
+                                        ? 'warning'
+                                        : 'default'
+                                    return (
+                                      <FormControlLabel
+                                        key={mountKey}
+                                        sx={{
+                                          alignItems: 'flex-start',
+                                          borderRadius: 1,
+                                          bgcolor: checked ? 'action.selected' : 'transparent',
+                                          m: 0,
+                                          px: 0.5,
+                                          py: 0.15,
+                                          transition: 'background-color 150ms ease',
+                                        }}
+                                        control={
+                                          <Checkbox
+                                            size="small"
+                                            checked={checked}
+                                            disabled={!mountSourcePath}
+                                            onChange={(event) =>
+                                              toggleContainerMount(
+                                                container,
+                                                mount,
+                                                event.target.checked
+                                              )
+                                            }
+                                            inputProps={{
+                                              'aria-label': t(
+                                                'backupPlans.sourceChooser.includeContainerMountAria',
+                                                { path: mountSourcePath || displayPath }
+                                              ),
+                                            }}
+                                            sx={{ mt: -0.25 }}
+                                          />
+                                        }
+                                        label={
+                                          <Stack spacing={0.1} sx={{ minWidth: 0, py: 0.25 }}>
+                                            <Stack
+                                              direction="row"
+                                              spacing={0.75}
+                                              alignItems="center"
+                                              flexWrap="wrap"
+                                              useFlexGap
+                                            >
+                                              <Typography
+                                                variant="caption"
+                                                sx={{
+                                                  fontFamily:
+                                                    'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+                                                  overflowWrap: 'anywhere',
+                                                }}
+                                              >
+                                                {displayPath}
+                                              </Typography>
+                                              {mountSizeLabel && (
+                                                <Chip
+                                                  size="small"
+                                                  variant="outlined"
+                                                  color={mountSizeColor}
+                                                  label={mountSizeLabel}
+                                                  sx={{
+                                                    height: 20,
+                                                    '& .MuiChip-label': {
+                                                      px: 0.75,
+                                                      fontSize: '0.6875rem',
+                                                    },
+                                                  }}
+                                                />
+                                              )}
+                                            </Stack>
+                                            {mount.destination && (
+                                              <Typography
+                                                variant="caption"
+                                                color="text.secondary"
+                                                title={t(
+                                                  'backupPlans.sourceChooser.containerMountDestination',
+                                                  { path: mount.destination }
+                                                )}
+                                                sx={{
+                                                  fontFamily:
+                                                    'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+                                                  overflowWrap: 'anywhere',
+                                                }}
+                                              >
+                                                {`→ ${mount.destination}`}
+                                              </Typography>
+                                            )}
+                                          </Stack>
+                                        }
+                                      />
+                                    )
+                                  })}
+                                </Stack>
+                              </Stack>
+                            </>
+                          )}
+                        </Stack>
+                      </Paper>
+                    )
+                  })}
+                </Stack>
               </Box>
             )}
-          </Stack>
-        </Box>
-
-        <Stack spacing={1.5}>
-          <TextField
-            label={t('backupPlans.sourceChooser.containerName')}
-            value={containerName}
-            onChange={(event) => handleContainerNameChange(event.target.value)}
-            size="small"
-            fullWidth
-            disabled={remoteDisabled || agentDisabled}
-          />
-          <TextField
-            label={t('backupPlans.sourceChooser.containerImage')}
-            value={containerImage}
-            onChange={(event) => setContainerImage(event.target.value)}
-            size="small"
-            fullWidth
-            disabled={remoteDisabled || agentDisabled}
-          />
-          <PathSelectorField
-            label={t('backupPlans.sourceChooser.containerExportPath')}
-            value={containerExportPath}
-            onChange={handleContainerExportPathChange}
-            size="small"
-            fullWidth
-            disabled={remoteDisabled || agentDisabled}
-            initialPath={
-              selectedSourceConnection
-                ? selectedSourceConnection.default_path || '/'
-                : selectedAgent?.default_path || '/'
-            }
-            selectMode="directories"
-            connectionType={
-              sourceKind === 'agent' ? 'agent' : selectedSourceConnection ? 'ssh' : 'local'
-            }
-            agentId={selectedAgent?.id}
-            agentName={selectedAgent?.name}
-            agentDefaultPath={selectedAgent?.default_path}
-            sshConfig={selectedSourceSshConfig}
-            showSshMountPoints={false}
-          />
-          <Button
-            variant="contained"
-            startIcon={<Plus size={16} />}
-            onClick={() => queueContainerSource()}
-            disabled={
-              !containerName.trim() ||
-              !effectiveExportPath.trim() ||
-              remoteDisabled ||
-              agentDisabled
-            }
-            sx={{ alignSelf: 'flex-start' }}
-          >
-            {t('backupPlans.sourceChooser.addContainer')}
-          </Button>
+          </Box>
         </Stack>
 
         {queuedContainerLocations.length > 0 && (
@@ -3372,7 +3462,23 @@ export function SourceSelectionDialog({
                         alignItems="center"
                         sx={{ minWidth: 0, flex: 1 }}
                       >
-                        <ContainerIcon size={16} />
+                        <Box
+                          sx={{
+                            alignItems: 'center',
+                            bgcolor: '#2496ED',
+                            borderRadius: 1,
+                            boxShadow: `0 2px 6px ${alpha('#2496ED', 0.35)}`,
+                            color: 'common.white',
+                            display: 'flex',
+                            height: 28,
+                            justifyContent: 'center',
+                            width: 28,
+                            flexShrink: 0,
+                          }}
+                          aria-hidden
+                        >
+                          <SiDocker size={16} />
+                        </Box>
                         <Stack spacing={0.2} sx={{ minWidth: 0, flex: 1 }}>
                           <Typography variant="subtitle2" noWrap>
                             {container.display_name}
@@ -3469,6 +3575,7 @@ export function SourceSelectionDialog({
           flexDirection: 'column',
         },
       }}
+      mobilePaperSx={{ height: '85vh' }}
       footer={
         <DialogActions>
           <Button onClick={handleFooterCancel}>{t('common.buttons.cancel')}</Button>

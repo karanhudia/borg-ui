@@ -659,6 +659,10 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.containerExportPath': 'Export staging path',
   'backupPlans.sourceChooser.containerExportHint':
     'Borg UI exports the container filesystem to a staging path before Borg reads it. This does not back up the Docker image, bind mounts, or named volumes.',
+  'backupPlans.sourceChooser.containerExportsTo': 'Exports to',
+  'backupPlans.sourceChooser.addContainerManually': 'Add by name',
+  'backupPlans.sourceChooser.addContainerManuallyHelp':
+    "If your container isn't listed above, add it here.",
   'backupPlans.sourceChooser.containerSourceMachine': 'Docker host',
   'backupPlans.sourceChooser.containerModeExport': 'docker export',
   'backupPlans.sourceChooser.scanContainers': 'Scan containers',
@@ -686,6 +690,7 @@ const translations: Record<string, string> = {
     'Image {{image}} identifies this container; Borg UI does not back up the image.',
   'backupPlans.sourceChooser.addDetectedContainer': 'Add detected container',
   'backupPlans.sourceChooser.addDetectedContainerShort': 'Add',
+  'backupPlans.sourceChooser.removeDetectedContainer': 'Remove detected container',
   'backupPlans.sourceChooser.containerAdded': 'Added',
   'backupPlans.sourceChooser.noContainersFoundTitle': 'No containers found',
   'backupPlans.sourceChooser.noContainersFoundBody':

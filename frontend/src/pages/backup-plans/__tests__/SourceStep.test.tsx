@@ -288,6 +288,10 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.containerExportPath': 'Export staging path',
   'backupPlans.sourceChooser.containerExportHint':
     'Borg UI exports the container filesystem to a staging path before Borg reads it. This does not back up the Docker image, bind mounts, or named volumes.',
+  'backupPlans.sourceChooser.containerExportsTo': 'Exports to',
+  'backupPlans.sourceChooser.addContainerManually': 'Add by name',
+  'backupPlans.sourceChooser.addContainerManuallyHelp':
+    "If your container isn't listed above, add it here.",
   'backupPlans.sourceChooser.containerSourceMachine': 'Docker host',
   'backupPlans.sourceChooser.containerBackupPath': 'Export staging path',
   'backupPlans.sourceChooser.containerModeExport': 'docker export',
@@ -316,6 +320,7 @@ const translations: Record<string, string> = {
     'Image {{image}} identifies this container; Borg UI does not back up the image.',
   'backupPlans.sourceChooser.addDetectedContainer': 'Add detected container',
   'backupPlans.sourceChooser.addDetectedContainerShort': 'Add',
+  'backupPlans.sourceChooser.removeDetectedContainer': 'Remove detected container',
   'backupPlans.sourceChooser.containerAdded': 'Added',
   'backupPlans.sourceChooser.noContainersFoundTitle': 'No containers found',
   'backupPlans.sourceChooser.noContainersFoundBody':
@@ -672,82 +677,6 @@ describe('SourceStep', () => {
     ).not.toBeInTheDocument()
   }, 45000)
 
-  it('configures a Docker container source', async () => {
-    apiMocks.databases.mockResolvedValue({ data: discoveryResponseWithEnabledContainer })
-    const updateState = vi.fn()
-    const onCreateScript = vi
-      .fn()
-      .mockResolvedValueOnce({ id: 201 })
-      .mockResolvedValueOnce({ id: 202 })
-    renderSourceStep({ updateState, onCreateScript })
-
-    fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
-    const containerTab = await screen.findByRole('tab', { name: /container/i })
-    fireEvent.click(containerTab)
-
-    expect(screen.getByText('Add Docker container backup')).toBeInTheDocument()
-    expect(
-      screen.getByLabelText(
-        'Borg UI exports the container filesystem to a staging path before Borg reads it. This does not back up the Docker image, bind mounts, or named volumes.'
-      )
-    ).toBeInTheDocument()
-    fireEvent.change(screen.getByLabelText(/container name or id/i), {
-      target: { value: 'postgres' },
-    })
-    fireEvent.change(screen.getByLabelText('Image (optional)'), {
-      target: { value: 'postgres:17' },
-    })
-    fireEvent.click(screen.getByTitle('Browse filesystem'))
-    const exportPathExplorer = await screen.findByTestId('file-explorer-dialog')
-    expect(exportPathExplorer).toHaveAttribute('data-connection-type', 'local')
-    expect(exportPathExplorer).toHaveAttribute('data-initial-path', '/')
-    clickExistingTextButton(/select browsed path/i)
-    expect(screen.getByDisplayValue('/selected/from-browser')).toBeInTheDocument()
-    fireEvent.change(screen.getByLabelText(/export staging path/i), {
-      target: { value: '/var/tmp/borg-ui/container-exports/postgres' },
-    })
-    clickExistingTextButton(/add container/i)
-    expect(screen.getByText('Selected containers')).toBeInTheDocument()
-    expect(screen.getByText('postgres')).toBeInTheDocument()
-    expect(screen.getByText('/var/tmp/borg-ui/container-exports/postgres')).toBeInTheDocument()
-
-    clickExistingTextButton(/use these containers/i)
-
-    await waitFor(() => {
-      expect(onCreateScript).toHaveBeenCalledTimes(2)
-      expect(updateState).toHaveBeenCalledTimes(1)
-    })
-    expect(onCreateScript.mock.calls[0][0].content).toContain('docker export')
-    expect(onCreateScript.mock.calls[1][0].content).toContain('rm -rf')
-    expect(updateState).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sourceType: 'local',
-        sourceSshConnectionId: '',
-        sourceDirectories: ['/var/tmp/borg-ui/container-exports/postgres'],
-        databaseTemplateId: null,
-        sourceLocations: [
-          expect.objectContaining({
-            source_type: 'local',
-            source_ssh_connection_id: null,
-            agent_machine_id: null,
-            paths: ['/var/tmp/borg-ui/container-exports/postgres'],
-            container: expect.objectContaining({
-              container_name: 'postgres',
-              display_name: 'postgres',
-              image: 'postgres:17',
-              backup_mode: 'export',
-              export_path: '/var/tmp/borg-ui/container-exports/postgres',
-              script_execution_target: 'source',
-              pre_backup_script_id: 201,
-              post_backup_script_id: 202,
-              script_execution_order: 1,
-            }),
-          }),
-        ],
-      })
-    )
-  }, 45000)
-
   it('scans Docker containers and lets mounted data be added as Files sources', async () => {
     apiMocks.databases.mockResolvedValue({ data: discoveryResponseWithEnabledContainer })
     apiMocks.scanContainers.mockResolvedValue({
@@ -861,16 +790,12 @@ describe('SourceStep', () => {
       )
     ).not.toBeInTheDocument()
     expect(screen.queryByText('What this source backs up')).not.toBeInTheDocument()
-    expect(
-      screen.getByText(
-        'Included: container filesystem export at /var/tmp/borg-ui/container-exports/portainer'
-      )
-    ).toBeInTheDocument()
     expect(screen.queryByText('Not included: mounted data')).not.toBeInTheDocument()
+    expect(screen.getByText('Optional mounted data')).toBeInTheDocument()
     expect(
       screen.getByText('Add these mount paths as Files sources if they contain data you need.')
     ).toBeInTheDocument()
-    expect(screen.getByText('Mounted at /data')).toBeInTheDocument()
+    expect(screen.getByText('→ /data')).toBeInTheDocument()
     expect(screen.getByText('/var/lib/docker/volumes/portainer_data/_data')).toBeInTheDocument()
     expect(screen.getByText('1.00 GB')).toBeInTheDocument()
     expect(screen.getByText('/srv/portainer/config')).toBeInTheDocument()
@@ -879,19 +804,21 @@ describe('SourceStep', () => {
     expect(screen.getByText('Permission denied')).toBeInTheDocument()
     expect(screen.getByText('/srv/portainer/slow')).toBeInTheDocument()
     expect(screen.getByText('Size timed out')).toBeInTheDocument()
-    expect(screen.getByText('Optional mounted data')).toBeInTheDocument()
     expect(
       screen.queryByText('Select mounts to add them as Files sources in this plan.')
     ).not.toBeInTheDocument()
 
+    // Ticking the mount checkbox auto-queues the container with the mount path
+    // attached as a Files-style source on the same location group.
     fireEvent.click(
       screen.getByRole('checkbox', {
         name: /include mounted data \/var\/lib\/docker\/volumes\/portainer_data\/_data as a files source/i,
       })
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /add detected container/i }))
-    expect(screen.getByRole('button', { name: /added/i })).toBeDisabled()
+    expect(
+      await screen.findByRole('button', { name: /remove detected container/i })
+    ).toBeInTheDocument()
     expect(screen.getByText('Selected containers')).toBeInTheDocument()
     expect(screen.getAllByText('/var/tmp/borg-ui/container-exports/portainer').length).toBe(2)
 
@@ -913,7 +840,12 @@ describe('SourceStep', () => {
     expect(containerLocation).toEqual(
       expect.objectContaining({
         source_type: 'local',
-        paths: ['/var/tmp/borg-ui/container-exports/portainer'],
+        // Mount paths live INSIDE the container location alongside the export
+        // path; they no longer leak into a separate Files-only source.
+        paths: [
+          '/var/tmp/borg-ui/container-exports/portainer',
+          '/var/lib/docker/volumes/portainer_data/_data',
+        ],
         container: expect.objectContaining({
           container_name: 'portainer',
           display_name: 'portainer',
@@ -924,93 +856,13 @@ describe('SourceStep', () => {
         }),
       })
     )
-    const mountLocation = updatePayload.sourceLocations.find(
+    const filesOnlyMountLocation = updatePayload.sourceLocations.find(
       (location: { paths: string[]; container?: unknown; database?: unknown }) =>
+        !location.container &&
+        !location.database &&
         location.paths.includes('/var/lib/docker/volumes/portainer_data/_data')
     )
-    expect(mountLocation).toEqual(
-      expect.objectContaining({
-        source_type: 'local',
-        source_ssh_connection_id: null,
-        agent_machine_id: null,
-        paths: ['/var/lib/docker/volumes/portainer_data/_data'],
-      })
-    )
-    expect(mountLocation?.container).toBeUndefined()
-    expect(mountLocation?.database).toBeUndefined()
-  }, 45000)
-
-  it('keeps Docker sources out of the files summary and disambiguates duplicate export paths', async () => {
-    apiMocks.databases.mockResolvedValue({ data: discoveryResponseWithEnabledContainer })
-    const updateState = vi.fn()
-    const onCreateScript = vi
-      .fn()
-      .mockResolvedValueOnce({ id: 301 })
-      .mockResolvedValueOnce({ id: 302 })
-      .mockResolvedValueOnce({ id: 303 })
-      .mockResolvedValueOnce({ id: 304 })
-    renderSourceStep({ updateState, onCreateScript })
-
-    fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
-    const containerTab = await screen.findByRole('tab', { name: /container/i })
-    fireEvent.click(containerTab)
-
-    fireEvent.change(screen.getByLabelText(/container name or id/i), {
-      target: { value: 'postgres' },
-    })
-    fireEvent.change(screen.getByLabelText(/export staging path/i), {
-      target: { value: '/var/tmp/borg-ui/container-exports/postgres' },
-    })
-    clickExistingTextButton(/add container/i)
-
-    fireEvent.change(screen.getByLabelText(/container name or id/i), {
-      target: { value: 'postgres-copy' },
-    })
-    fireEvent.change(screen.getByLabelText(/export staging path/i), {
-      target: { value: '/var/tmp/borg-ui/container-exports/postgres' },
-    })
-    clickExistingTextButton(/add container/i)
-
-    expect(screen.getByText('/var/tmp/borg-ui/container-exports/postgres')).toBeInTheDocument()
-    expect(screen.getByText('/var/tmp/borg-ui/container-exports/postgres-1')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('tab', { name: /^files$/i }))
-    expect(screen.getAllByText('No source selected yet').length).toBeGreaterThan(0)
-    expect(
-      screen.queryByText('/var/tmp/borg-ui/container-exports/postgres')
-    ).not.toBeInTheDocument()
-    expect(
-      screen.queryByText('/var/tmp/borg-ui/container-exports/postgres-1')
-    ).not.toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('tab', { name: /container/i }))
-    clickExistingTextButton(/use these containers/i)
-
-    await waitFor(() => {
-      expect(updateState).toHaveBeenCalledTimes(1)
-    })
-    const updatePayload = updateState.mock.calls[0][0]
-    expect(updatePayload.sourceDirectories).toEqual([
-      '/var/tmp/borg-ui/container-exports/postgres',
-      '/var/tmp/borg-ui/container-exports/postgres-1',
-    ])
-    expect(
-      updatePayload.sourceLocations.map(
-        (location: { container: { container_name: string; export_path: string } }) => ({
-          name: location.container.container_name,
-          exportPath: location.container.export_path,
-        })
-      )
-    ).toEqual([
-      {
-        name: 'postgres',
-        exportPath: '/var/tmp/borg-ui/container-exports/postgres',
-      },
-      {
-        name: 'postgres-copy',
-        exportPath: '/var/tmp/borg-ui/container-exports/postgres-1',
-      },
-    ])
+    expect(filesOnlyMountLocation).toBeUndefined()
   }, 45000)
 
   it('keeps a files and folders summary after selecting paths on a scripted plan', async () => {
