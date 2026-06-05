@@ -8,13 +8,14 @@ import math
 import re
 import secrets
 from collections import OrderedDict
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode, urlparse
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, model_validator
 from sqlalchemy.exc import IntegrityError
@@ -30,7 +31,13 @@ from app.core.security import (
     get_current_user,
 )
 from app.database.database import get_db
-from app.database.models import RepositoryStorage, RcloneRemote, SystemSettings, User
+from app.database.models import (
+    RepositoryStorage,
+    RcloneOAuthProviderCredential,
+    RcloneRemote,
+    SystemSettings,
+    User,
+)
 from app.services.rclone_repository_service import normalize_rclone_relative_path
 from app.services.rclone_service import RcloneUnavailable, rclone_service
 
@@ -44,6 +51,7 @@ public_router = APIRouter(tags=["rclone"])
 
 RCLONE_REMOTE_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 RCLONE_OAUTH_URL_RE = re.compile(r"https?://[^\s<>]+")
+RCLONE_SHAREFILE_HOST_PART_RE = re.compile(r"^[A-Za-z0-9.-]+$")
 RCLONE_OAUTH_START_TIMEOUT_SECONDS = 15
 RCLONE_OAUTH_SESSION_TTL_SECONDS = 15 * 60
 RCLONE_OAUTH_MAX_SESSIONS = 32
@@ -51,12 +59,44 @@ RCLONE_OAUTH_OUTPUT_LIMIT_CHARS = 20_000
 RCLONE_OAUTH_LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 BORG_UI_OAUTH_MARKER_KEY = "_borg_ui_oauth_provider"
 BORG_UI_OAUTH_SESSION_KEY = "_borg_ui_oauth_session_id"
-BORG_UI_OAUTH_PROVIDERS = {"drive", "onedrive"}
 GOOGLE_DRIVE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_DRIVE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 MICROSOFT_AUTH_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
 MICROSOFT_TOKEN_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
 MICROSOFT_GRAPH_ME_DRIVE_URL = "https://graph.microsoft.com/v1.0/me/drive"
+DROPBOX_AUTH_URL = "https://www.dropbox.com/oauth2/authorize"
+DROPBOX_TOKEN_URL = "https://api.dropboxapi.com/oauth2/token"
+BOX_AUTH_URL = "https://app.box.com/api/oauth2/authorize"
+BOX_TOKEN_URL = "https://app.box.com/api/oauth2/token"
+PCLOUD_AUTH_URL = "https://my.pcloud.com/oauth2/authorize"
+PCLOUD_TOKEN_URL = "https://api.pcloud.com/oauth2_token"
+GCS_SCOPE = "https://www.googleapis.com/auth/devstorage.read_write"
+GOOGLE_PHOTOS_APPEND_ONLY_SCOPE = (
+    "https://www.googleapis.com/auth/photoslibrary.appendonly"
+)
+GOOGLE_PHOTOS_READ_ONLY_SCOPE = (
+    "https://www.googleapis.com/auth/photoslibrary.readonly.appcreateddata"
+)
+GOOGLE_PHOTOS_READ_WRITE_SCOPE = (
+    "https://www.googleapis.com/auth/photoslibrary.edit.appcreateddata"
+)
+HIDRIVE_AUTH_URL = "https://my.hidrive.com/client/authorize"
+HIDRIVE_TOKEN_URL = "https://my.hidrive.com/oauth2/token"
+HUAWEI_DRIVE_AUTH_URL = "https://oauth-login.cloud.huawei.com/oauth2/v3/authorize"
+HUAWEI_DRIVE_TOKEN_URL = "https://oauth-login.cloud.huawei.com/oauth2/v3/token"
+PREMIUMIZE_AUTH_URL = "https://www.premiumize.me/authorize"
+PREMIUMIZE_TOKEN_URL = "https://www.premiumize.me/token"
+PUTIO_AUTH_URL = "https://api.put.io/v2/oauth2/authenticate"
+PUTIO_TOKEN_URL = "https://api.put.io/v2/oauth2/access_token"
+SHAREFILE_AUTH_URL = "https://secure.sharefile.com/oauth/authorize"
+SHAREFILE_TOKEN_PATH = "/oauth/token"
+YANDEX_AUTH_URL = "https://oauth.yandex.com/authorize"
+YANDEX_TOKEN_URL = "https://oauth.yandex.com/token"
+ZOHO_OAUTH_SCOPES = (
+    "aaaserver.profile.read WorkDrive.team.READ WorkDrive.workspace.READ "
+    "WorkDrive.files.ALL ZohoFiles.files.ALL"
+)
+ZOHO_REGIONS = {"com", "eu", "in", "jp", "com.cn", "com.au"}
 REDACTED_CONFIG_VALUE = "***"
 SAFE_CONFIG_KEY_EXCEPTIONS = {
     "key_file",
@@ -95,6 +135,129 @@ SENSITIVE_CONFIG_FRAGMENTS = (
     "secret",
     "token",
 )
+
+
+@dataclass(frozen=True)
+class RcloneOAuthAdapter:
+    auth_url: str
+    token_url: str
+    scope: str | None = None
+    extra_auth_params: dict[str, str] = field(default_factory=dict)
+    state_optional: bool = False
+    token_type: str | None = None
+
+
+BORG_UI_OAUTH_ADAPTERS: dict[str, RcloneOAuthAdapter] = {
+    "drive": RcloneOAuthAdapter(
+        auth_url=GOOGLE_DRIVE_AUTH_URL,
+        token_url=GOOGLE_DRIVE_TOKEN_URL,
+        extra_auth_params={"access_type": "offline", "prompt": "consent"},
+    ),
+    "onedrive": RcloneOAuthAdapter(
+        auth_url=MICROSOFT_AUTH_URL,
+        token_url=MICROSOFT_TOKEN_URL,
+        extra_auth_params={"response_mode": "query"},
+    ),
+    "dropbox": RcloneOAuthAdapter(
+        auth_url=DROPBOX_AUTH_URL,
+        token_url=DROPBOX_TOKEN_URL,
+        scope=(
+            "files.metadata.write files.content.write files.content.read "
+            "sharing.write account_info.read"
+        ),
+        extra_auth_params={"token_access_type": "offline"},
+    ),
+    "box": RcloneOAuthAdapter(auth_url=BOX_AUTH_URL, token_url=BOX_TOKEN_URL),
+    "gcs": RcloneOAuthAdapter(
+        auth_url=GOOGLE_DRIVE_AUTH_URL,
+        token_url=GOOGLE_DRIVE_TOKEN_URL,
+        scope=GCS_SCOPE,
+        extra_auth_params={"access_type": "offline", "prompt": "consent"},
+    ),
+    "gphotos": RcloneOAuthAdapter(
+        auth_url=GOOGLE_DRIVE_AUTH_URL,
+        token_url=GOOGLE_DRIVE_TOKEN_URL,
+        extra_auth_params={"access_type": "offline", "prompt": "consent"},
+    ),
+    "hidrive": RcloneOAuthAdapter(
+        auth_url=HIDRIVE_AUTH_URL,
+        token_url=HIDRIVE_TOKEN_URL,
+    ),
+    "huaweidrive": RcloneOAuthAdapter(
+        auth_url=HUAWEI_DRIVE_AUTH_URL,
+        token_url=HUAWEI_DRIVE_TOKEN_URL,
+        scope=(
+            "openid profile https://www.huawei.com/auth/drive "
+            "https://www.huawei.com/auth/drive.file"
+        ),
+        extra_auth_params={"access_type": "offline"},
+    ),
+    "pcloud": RcloneOAuthAdapter(
+        auth_url=PCLOUD_AUTH_URL,
+        token_url=PCLOUD_TOKEN_URL,
+        state_optional=True,
+    ),
+    "premiumizeme": RcloneOAuthAdapter(
+        auth_url=PREMIUMIZE_AUTH_URL,
+        token_url=PREMIUMIZE_TOKEN_URL,
+    ),
+    "putio": RcloneOAuthAdapter(
+        auth_url=PUTIO_AUTH_URL,
+        token_url=PUTIO_TOKEN_URL,
+    ),
+    "sharefile": RcloneOAuthAdapter(
+        auth_url=SHAREFILE_AUTH_URL,
+        token_url="",
+    ),
+    "yandex": RcloneOAuthAdapter(
+        auth_url=YANDEX_AUTH_URL,
+        token_url=YANDEX_TOKEN_URL,
+        token_type="OAuth",
+    ),
+    "zoho": RcloneOAuthAdapter(
+        auth_url="",
+        token_url="",
+        scope=ZOHO_OAUTH_SCOPES,
+        extra_auth_params={"approval_prompt": "force"},
+        token_type="Zoho-oauthtoken",
+    ),
+}
+
+RCLONE_OAUTH_PROVIDER_TYPES = {
+    "box",
+    "drive",
+    "dropbox",
+    "gcs",
+    "gphotos",
+    "hidrive",
+    "huaweidrive",
+    "jottacloud",
+    "mailru",
+    "onedrive",
+    "pcloud",
+    "premiumizeme",
+    "putio",
+    "sharefile",
+    "yandex",
+    "zoho",
+}
+
+RCLONE_NON_BROWSER_OAUTH_PROVIDER_TYPES = {"jottacloud", "mailru"}
+
+RCLONE_PROVIDER_DOC_OVERRIDES = {
+    "gphotos": "https://rclone.org/googlephotos/",
+    "premiumizeme": "https://rclone.org/premiumize/",
+}
+
+RCLONE_GENERATED_FIELD_EXCLUSIONS = {
+    "auth_url",
+    "client_id",
+    "client_secret",
+    "config_refresh_token",
+    "description",
+    "encoding",
+    "token_url",
+}
 
 RCLONE_PROVIDER_CATALOG: list[dict[str, Any]] = [
     {
@@ -507,10 +670,219 @@ def _normalize_provider(provider: str) -> str:
     return normalized
 
 
+def _option_name(option: dict[str, Any]) -> str:
+    return str(option.get("Name") or "").strip()
+
+
+def _option_is_sensitive(option: dict[str, Any]) -> bool:
+    name = _option_name(option).lower()
+    return bool(
+        option.get("Sensitive")
+        or option.get("IsPassword")
+        or name in SENSITIVE_CONFIG_KEYS
+        or any(fragment in name for fragment in SENSITIVE_CONFIG_FRAGMENTS)
+    )
+
+
+def _option_help(option: dict[str, Any]) -> str:
+    raw_help = str(option.get("Help") or "").strip()
+    if not raw_help:
+        return "rclone provider option."
+    first_paragraph = raw_help.split("\n\n", 1)[0].replace("\n", " ").strip()
+    return first_paragraph[:220]
+
+
+def _option_label(name: str) -> str:
+    label = name.replace("_", " ").strip().title()
+    return label.replace(" Id", " ID").replace(" Url", " URL")
+
+
+def _generated_field_from_option(option: dict[str, Any]) -> dict[str, Any]:
+    name = _option_name(option)
+    kind = "text"
+    if name == "token" or str(option.get("Type") or "").lower() == "json":
+        kind = "json"
+    elif _option_is_sensitive(option):
+        kind = "password"
+    return {
+        "name": name,
+        "label": _option_label(name),
+        "kind": kind,
+        "required": bool(option.get("Required")),
+        "secret": _option_is_sensitive(option),
+        "helper": _option_help(option),
+    }
+
+
+def _generated_provider_auth_type(provider: str, options: list[dict[str, Any]]) -> str:
+    option_names = {_option_name(option) for option in options}
+    if provider not in RCLONE_NON_BROWSER_OAUTH_PROVIDER_TYPES and (
+        provider in RCLONE_OAUTH_PROVIDER_TYPES
+        or {"client_id", "client_secret", "token"}.issubset(option_names)
+    ):
+        return "oauth_token"
+    if provider in {"local", "memory"}:
+        return "none"
+    if (
+        {"access_key_id", "secret_access_key"} <= option_names
+        or "api_key" in option_names
+        or "api_token" in option_names
+        or ({"account", "key"} <= option_names)
+    ):
+        return "access_key"
+    if option_names & {"pass", "password"} and option_names & {"user", "username"}:
+        return "basic"
+    if any(
+        bool(option.get("Required")) and _option_is_sensitive(option)
+        for option in options
+    ):
+        return "access_key"
+    return "manual"
+
+
+def _generated_provider_catalog_entry(
+    raw_provider: dict[str, Any],
+) -> dict[str, Any] | None:
+    provider = str(raw_provider.get("Prefix") or raw_provider.get("Name") or "").strip()
+    if not provider:
+        return None
+    raw_options = raw_provider.get("Options")
+    options = raw_options if isinstance(raw_options, list) else []
+    option_dicts = [
+        option
+        for option in options
+        if isinstance(option, dict) and _option_name(option)
+    ]
+    auth_type = _generated_provider_auth_type(provider, option_dicts)
+    if auth_type == "oauth_token":
+        fields = [
+            {
+                "name": "token",
+                "label": "OAuth token JSON",
+                "kind": "json",
+                "required": True,
+                "secret": True,
+                "helper": "Start browser authorization from Borg UI when configured, or use rclone's local authorization flow.",
+            }
+        ]
+        config_template: dict[str, Any] = {"type": provider, "token": ""}
+    else:
+        fields = [
+            _generated_field_from_option(option)
+            for option in option_dicts
+            if _option_name(option) not in RCLONE_GENERATED_FIELD_EXCLUSIONS
+            and (
+                bool(option.get("Required"))
+                or (not option.get("Advanced") and _option_is_sensitive(option))
+            )
+        ][:8]
+        config_template = {"type": provider}
+        for field_info in fields:
+            config_template[field_info["name"]] = ""
+
+    description = str(
+        raw_provider.get("Description") or raw_provider.get("Name") or provider
+    ).strip()
+    return {
+        "type": provider,
+        "label": description or provider,
+        "description": description or f"rclone {provider} backend.",
+        "auth_type": auth_type,
+        "type_editable": False,
+        "docs_url": RCLONE_PROVIDER_DOC_OVERRIDES.get(
+            provider, f"https://rclone.org/{provider}/"
+        ),
+        "config_template": config_template,
+        "fields": fields,
+    }
+
+
+def _minimal_oauth_provider_catalog_entry(provider: str) -> dict[str, Any]:
+    return {
+        "type": provider,
+        "label": _option_label(provider),
+        "description": f"rclone {provider} OAuth backend.",
+        "auth_type": "oauth_token",
+        "type_editable": False,
+        "docs_url": RCLONE_PROVIDER_DOC_OVERRIDES.get(
+            provider, f"https://rclone.org/{provider}/"
+        ),
+        "config_template": {"type": provider, "token": ""},
+        "fields": [
+            {
+                "name": "token",
+                "label": "OAuth token JSON",
+                "kind": "json",
+                "required": True,
+                "secret": True,
+                "helper": "Start browser authorization from Borg UI when configured, or use rclone's local authorization flow.",
+            }
+        ],
+    }
+
+
+async def _rclone_generated_provider_catalog() -> list[dict[str, Any]]:
+    try:
+        result = await rclone_service.execute(
+            rclone_service.providers_command(), timeout=30
+        )
+    except (RcloneUnavailable, TimeoutError, OSError) as exc:
+        logger.info("Unable to load rclone provider catalog: %s", exc, exc_info=True)
+        return []
+    if not result.success:
+        logger.info(
+            "rclone provider catalog command failed",
+            extra={"return_code": result.return_code, "stderr": result.stderr},
+        )
+        return []
+    try:
+        parsed = json.loads(result.stdout or "[]")
+    except json.JSONDecodeError:
+        logger.warning("rclone provider catalog returned invalid JSON")
+        return []
+    if not isinstance(parsed, list):
+        return []
+    entries = [
+        _generated_provider_catalog_entry(raw_provider)
+        for raw_provider in parsed
+        if isinstance(raw_provider, dict)
+    ]
+    return [entry for entry in entries if entry is not None]
+
+
+async def _provider_catalog() -> list[dict[str, Any]]:
+    generated_entries = await _rclone_generated_provider_catalog()
+    generated_by_type = {
+        str(entry["type"]): entry
+        for entry in generated_entries
+        if str(entry.get("type") or "")
+    }
+    curated_by_type = {entry["type"]: entry for entry in RCLONE_PROVIDER_CATALOG}
+    catalog: list[dict[str, Any]] = [
+        curated_by_type[entry["type"]]
+        for entry in RCLONE_PROVIDER_CATALOG
+        if entry["type"] != "custom"
+    ]
+    catalog.extend(
+        generated_by_type[provider]
+        for provider in sorted(generated_by_type)
+        if provider not in curated_by_type and provider != "custom"
+    )
+    custom_entry = curated_by_type.get("custom")
+    if custom_entry:
+        catalog.append(custom_entry)
+    return catalog
+
+
 def _provider_catalog_entry(provider: str) -> dict[str, Any] | None:
     for entry in RCLONE_PROVIDER_CATALOG:
         if entry["type"] == provider:
             return entry
+    if (
+        provider in RCLONE_OAUTH_PROVIDER_TYPES
+        and provider not in RCLONE_NON_BROWSER_OAUTH_PROVIDER_TYPES
+    ):
+        return _minimal_oauth_provider_catalog_entry(provider)
     return None
 
 
@@ -566,6 +938,18 @@ def _provider_oauth_label(provider: str) -> str:
     return str(entry.get("label") or provider) if entry else provider
 
 
+def _provider_supports_borg_ui_oauth(provider: str) -> bool:
+    return provider in BORG_UI_OAUTH_ADAPTERS
+
+
+def _require_borg_ui_oauth_provider(provider: str) -> None:
+    if not _provider_supports_borg_ui_oauth(provider):
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.oauthUnsupported"},
+        )
+
+
 def _decrypt_optional_secret(value: str | None) -> str | None:
     if not value:
         return None
@@ -576,10 +960,32 @@ def _decrypt_optional_secret(value: str | None) -> str | None:
         return None
 
 
+def _provider_oauth_credential_record(
+    provider: str, db: Session
+) -> RcloneOAuthProviderCredential | None:
+    return (
+        db.query(RcloneOAuthProviderCredential)
+        .filter(RcloneOAuthProviderCredential.provider == provider)
+        .first()
+    )
+
+
 def _provider_stored_oauth_credentials(
     provider: str, db: Session | None
 ) -> tuple[str | None, str | None, bool]:
-    if db is None or provider not in BORG_UI_OAUTH_PROVIDERS:
+    if db is None or not _provider_supports_borg_ui_oauth(provider):
+        return None, None, False
+    credential_row = _provider_oauth_credential_record(provider, db)
+    if credential_row is not None:
+        stored_client_id = _strip_optional(credential_row.client_id)
+        stored_secret = _decrypt_optional_secret(credential_row.client_secret_encrypted)
+        has_stored_credentials = bool(
+            stored_client_id or credential_row.client_secret_encrypted
+        )
+        if has_stored_credentials:
+            return stored_client_id, stored_secret, True
+
+    if provider not in {"drive", "onedrive"}:
         return None, None, False
     settings_row = db.query(SystemSettings).first()
     if settings_row is None:
@@ -598,7 +1004,7 @@ def _provider_stored_oauth_credentials(
 def _provider_oauth_credential_state(
     provider: str, db: Session | None = None
 ) -> dict[str, Any]:
-    if provider not in BORG_UI_OAUTH_PROVIDERS:
+    if not _provider_supports_borg_ui_oauth(provider):
         return {
             "client_id": None,
             "client_secret": None,
@@ -682,7 +1088,7 @@ def _borg_ui_oauth_callback_url(provider: str) -> str:
 def _borg_ui_oauth_setup_status(
     provider: str, db: Session | None = None
 ) -> dict[str, Any]:
-    if provider not in BORG_UI_OAUTH_PROVIDERS:
+    if not _provider_supports_borg_ui_oauth(provider):
         return {
             "oauth_mode": "rclone_loopback",
             "oauth_configured": False,
@@ -853,6 +1259,112 @@ def _onedrive_scope(config: dict[str, Any] | None) -> str:
     )
 
 
+def _google_photos_scope(config: dict[str, Any] | None) -> str:
+    if bool((config or {}).get("read_only")):
+        return f"openid profile {GOOGLE_PHOTOS_READ_ONLY_SCOPE}"
+    return (
+        "openid profile "
+        f"{GOOGLE_PHOTOS_APPEND_ONLY_SCOPE} "
+        f"{GOOGLE_PHOTOS_READ_ONLY_SCOPE} "
+        f"{GOOGLE_PHOTOS_READ_WRITE_SCOPE}"
+    )
+
+
+def _hidrive_scope(config: dict[str, Any] | None) -> str:
+    scope_access = str((config or {}).get("scope_access") or "rw").strip()
+    scope_role = str((config or {}).get("scope_role") or "user").strip()
+    if scope_access and scope_role:
+        return f"{scope_access},{scope_role}"
+    return scope_role or scope_access
+
+
+def _zoho_region(config: dict[str, Any] | None) -> str:
+    region = str((config or {}).get("region") or "com").strip().lower()
+    if region not in ZOHO_REGIONS:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.invalidProvider"},
+        )
+    return region
+
+
+def _zoho_oauth_url(config: dict[str, Any] | None, path: str) -> str:
+    region = _zoho_region(config)
+    return f"https://accounts.zoho.{region}/oauth/v2/{path}"
+
+
+def _sharefile_endpoint_from_callback(callback_params: dict[str, Any] | None) -> str:
+    params = callback_params or {}
+    subdomain = _strip_optional(str(params.get("subdomain") or ""))
+    apicp = _strip_optional(str(params.get("apicp") or ""))
+    if (
+        not subdomain
+        or not apicp
+        or not RCLONE_SHAREFILE_HOST_PART_RE.fullmatch(subdomain)
+        or not RCLONE_SHAREFILE_HOST_PART_RE.fullmatch(apicp)
+    ):
+        raise HTTPException(
+            status_code=502,
+            detail={"key": "backend.errors.rclone.oauthCodeExchangeFailed"},
+        )
+    return f"https://{subdomain}.{apicp}"
+
+
+def _provider_oauth_scope(
+    provider: str, adapter: RcloneOAuthAdapter, config: dict[str, Any] | None
+) -> str | None:
+    if provider == "drive":
+        return _google_drive_scope(config)
+    if provider == "onedrive":
+        return _onedrive_scope(config)
+    if provider == "gphotos":
+        return _google_photos_scope(config)
+    if provider == "hidrive":
+        return _hidrive_scope(config)
+    return adapter.scope
+
+
+def _provider_oauth_auth_url(
+    provider: str, adapter: RcloneOAuthAdapter, config: dict[str, Any] | None
+) -> str:
+    if provider == "zoho":
+        return _zoho_oauth_url(config, "auth")
+    return adapter.auth_url
+
+
+def _provider_oauth_token_url(
+    provider: str,
+    adapter: RcloneOAuthAdapter,
+    config: dict[str, Any] | None,
+    callback_params: dict[str, Any] | None = None,
+) -> str:
+    if provider == "sharefile":
+        return f"{_sharefile_endpoint_from_callback(callback_params)}{SHAREFILE_TOKEN_PATH}"
+    if provider == "zoho":
+        return _zoho_oauth_url(config, "token")
+    return adapter.token_url
+
+
+def _provider_oauth_config_updates(
+    provider: str,
+    config: dict[str, Any],
+    token_response: dict[str, Any],
+    callback_params: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    updates: dict[str, Any] = {}
+    if (
+        provider == "pcloud"
+        and token_response.get("hostname")
+        and not config.get("hostname")
+    ):
+        updates["hostname"] = str(token_response["hostname"])
+    if provider == "sharefile" and not config.get("endpoint"):
+        updates["endpoint"] = _sharefile_endpoint_from_callback(callback_params)
+    if provider == "zoho" and not config.get("region"):
+        updates["region"] = _zoho_region(config)
+    return updates
+
+
 def _provider_authorization_url(
     provider: str,
     *,
@@ -864,36 +1376,41 @@ def _provider_authorization_url(
     client_id, _client_secret = _provider_oauth_credentials(
         provider, db=db, required=True
     )
-    if provider == "drive":
-        params = {
-            "client_id": client_id,
-            "redirect_uri": redirect_uri,
-            "response_type": "code",
-            "scope": _google_drive_scope(config),
-            "state": state,
-            "access_type": "offline",
-            "prompt": "consent",
-        }
-        return f"{GOOGLE_DRIVE_AUTH_URL}?{urlencode(params)}"
-    if provider == "onedrive":
-        params = {
-            "client_id": client_id,
-            "redirect_uri": redirect_uri,
-            "response_type": "code",
-            "response_mode": "query",
-            "scope": _onedrive_scope(config),
-            "state": state,
-        }
-        return f"{MICROSOFT_AUTH_URL}?{urlencode(params)}"
-    raise HTTPException(
-        status_code=400,
-        detail={"key": "backend.errors.rclone.oauthUnsupported"},
-    )
+    adapter = BORG_UI_OAUTH_ADAPTERS.get(provider)
+    if adapter is None:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.oauthUnsupported"},
+        )
+
+    scope = _provider_oauth_scope(provider, adapter, config)
+    auth_url = _provider_oauth_auth_url(provider, adapter, config)
+
+    params = {
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "state": state,
+        **adapter.extra_auth_params,
+    }
+    if scope:
+        params["scope"] = scope
+    return f"{auth_url}?{urlencode(params)}"
 
 
-def _rclone_token_from_oauth_response(payload: dict[str, Any]) -> str:
+def _rclone_token_from_oauth_response(
+    payload: dict[str, Any], provider: str | None = None
+) -> str:
     token: dict[str, Any] = {}
-    for key in ("access_token", "token_type", "refresh_token", "id_token"):
+    adapter = BORG_UI_OAUTH_ADAPTERS.get(provider or "")
+    token_type = adapter.token_type if adapter else None
+    if payload.get("access_token"):
+        token["access_token"] = payload["access_token"]
+    if token_type:
+        token["token_type"] = token_type
+    elif payload.get("token_type"):
+        token["token_type"] = payload["token_type"]
+    for key in ("refresh_token", "id_token"):
         if payload.get(key):
             token[key] = payload[key]
     expires_in = payload.get("expires_in")
@@ -969,23 +1486,32 @@ def _oauth_token_status_from_value(value: Any) -> dict[str, Any]:
 def _oauth_token_status_from_config_values(
     provider: str, values: dict[str, Any] | None
 ) -> dict[str, Any] | None:
-    oauth_provider_types = {
-        entry["type"]
-        for entry in RCLONE_PROVIDER_CATALOG
-        if entry.get("auth_type") == "oauth_token"
-    }
-    if provider not in oauth_provider_types:
+    if provider not in RCLONE_OAUTH_PROVIDER_TYPES:
         return None
     return _oauth_token_status_from_value((values or {}).get("token"))
 
 
 async def _exchange_borg_ui_oauth_code(
-    provider: str, code: str, redirect_uri: str, db: Session | None = None
+    provider: str,
+    code: str,
+    redirect_uri: str,
+    db: Session | None = None,
+    *,
+    config: dict[str, Any] | None = None,
+    callback_params: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     client_id, client_secret = _provider_oauth_credentials(
         provider, db=db, required=True
     )
-    token_url = GOOGLE_DRIVE_TOKEN_URL if provider == "drive" else MICROSOFT_TOKEN_URL
+    adapter = BORG_UI_OAUTH_ADAPTERS.get(provider)
+    if adapter is None:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.oauthUnsupported"},
+        )
+    token_url = _provider_oauth_token_url(
+        provider, adapter, config, callback_params=callback_params
+    )
     data = {
         "client_id": client_id,
         "client_secret": client_secret,
@@ -1493,7 +2019,9 @@ def _managed_config_values(
         if not str(key).startswith("_borg_ui_oauth")
     }
     values["type"] = str(values.get("type") or provider).strip()
-    if borg_ui_oauth_provider == provider and provider in BORG_UI_OAUTH_PROVIDERS:
+    if borg_ui_oauth_provider == provider and _provider_supports_borg_ui_oauth(
+        provider
+    ):
         client_id, client_secret = _provider_oauth_credentials(
             provider, db=db, required=True
         )
@@ -1647,20 +2175,16 @@ async def list_providers(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     _require_admin(current_user)
+    catalog = await _provider_catalog()
     return {
         "providers": [
-            _serialize_provider_catalog_entry(provider, db)
-            for provider in RCLONE_PROVIDER_CATALOG
+            _serialize_provider_catalog_entry(provider, db) for provider in catalog
         ]
     }
 
 
 def _serialize_oauth_credential_status(provider: str, db: Session) -> dict[str, Any]:
-    if provider not in BORG_UI_OAUTH_PROVIDERS:
-        raise HTTPException(
-            status_code=400,
-            detail={"key": "backend.errors.rclone.oauthUnsupported"},
-        )
+    _require_borg_ui_oauth_provider(provider)
     credential_state = _provider_oauth_credential_state(provider, db)
     try:
         callback_url = _borg_ui_oauth_callback_url(provider)
@@ -1697,7 +2221,7 @@ async def list_oauth_credentials(
     return {
         "providers": [
             _serialize_oauth_credential_status(provider, db)
-            for provider in sorted(BORG_UI_OAUTH_PROVIDERS)
+            for provider in sorted(BORG_UI_OAUTH_ADAPTERS)
         ]
     }
 
@@ -1711,27 +2235,47 @@ async def update_oauth_credentials(
 ):
     _require_admin(current_user)
     provider = _normalize_provider(provider)
-    if provider not in BORG_UI_OAUTH_PROVIDERS:
-        raise HTTPException(
-            status_code=400,
-            detail={"key": "backend.errors.rclone.oauthUnsupported"},
+    _require_borg_ui_oauth_provider(provider)
+    credential_row = _provider_oauth_credential_record(provider, db)
+    if credential_row is None:
+        credential_row = RcloneOAuthProviderCredential(provider=provider)
+        db.add(credential_row)
+
+    legacy_settings_row: SystemSettings | None = None
+    legacy_client_id_field: str | None = None
+    legacy_client_secret_field: str | None = None
+    if provider in {"drive", "onedrive"}:
+        legacy_settings_row = _get_or_create_system_settings(db)
+        legacy_client_id_field, legacy_client_secret_field = (
+            _provider_oauth_db_field_names(provider)
         )
-    settings_row = _get_or_create_system_settings(db)
-    client_id_field, client_secret_field = _provider_oauth_db_field_names(provider)
     payload_fields = getattr(payload, "model_fields_set", None)
     if payload_fields is None:
         payload_fields = getattr(payload, "__fields_set__", set())
 
     if "client_id" in payload_fields:
-        setattr(settings_row, client_id_field, _strip_optional(payload.client_id))
+        stripped_client_id = _strip_optional(payload.client_id)
+        credential_row.client_id = stripped_client_id
+        if legacy_settings_row is not None and legacy_client_id_field is not None:
+            setattr(legacy_settings_row, legacy_client_id_field, stripped_client_id)
     if payload.clear_client_secret or "client_secret" in payload_fields:
         stripped_secret = _strip_optional(payload.client_secret)
-        setattr(settings_row, client_secret_field, None)
+        credential_row.client_secret_encrypted = None
+        if legacy_settings_row is not None and legacy_client_secret_field is not None:
+            setattr(legacy_settings_row, legacy_client_secret_field, None)
         if stripped_secret and not payload.clear_client_secret:
-            setattr(settings_row, client_secret_field, encrypt_secret(stripped_secret))
+            encrypted_secret = encrypt_secret(stripped_secret)
+            credential_row.client_secret_encrypted = encrypted_secret
+            if (
+                legacy_settings_row is not None
+                and legacy_client_secret_field is not None
+            ):
+                setattr(
+                    legacy_settings_row, legacy_client_secret_field, encrypted_secret
+                )
 
     db.commit()
-    db.refresh(settings_row)
+    db.refresh(credential_row)
     return _serialize_oauth_credential_status(provider, db)
 
 
@@ -1754,7 +2298,7 @@ async def start_oauth_session(
         )
     if mode == "borg_ui" or (
         mode == "auto"
-        and provider in BORG_UI_OAUTH_PROVIDERS
+        and _provider_supports_borg_ui_oauth(provider)
         and _borg_ui_oauth_setup_status(provider, db)["oauth_configured"]
     ):
         return await _start_borg_ui_oauth_session(
@@ -1856,6 +2400,7 @@ async def open_oauth_authorization(
 
 @public_router.get("/oauth/callback/{provider}")
 async def complete_borg_ui_oauth_callback(
+    request: Request,
     provider: str,
     state: str | None = None,
     code: str | None = None,
@@ -1864,17 +2409,18 @@ async def complete_borg_ui_oauth_callback(
     db: Session = Depends(get_db),
 ):
     provider = _normalize_provider(provider)
-    if provider not in BORG_UI_OAUTH_PROVIDERS:
-        raise HTTPException(
-            status_code=400, detail={"key": "backend.errors.rclone.oauthUnsupported"}
-        )
+    _require_borg_ui_oauth_provider(provider)
+    adapter = BORG_UI_OAUTH_ADAPTERS[provider]
     session_id = None
     session = None
     for candidate_id, candidate in RCLONE_OAUTH_SESSIONS.items():
+        state_matches = candidate.get("state") == state
+        if not state_matches and adapter.state_optional and not state:
+            state_matches = candidate.get("status") == "awaiting_callback"
         if (
             candidate.get("flow") == "borg_ui"
             and candidate.get("provider") == provider
-            and candidate.get("state") == state
+            and state_matches
         ):
             session_id = candidate_id
             session = candidate
@@ -1901,10 +2447,17 @@ async def complete_borg_ui_oauth_callback(
             status_code=400, detail={"key": "backend.errors.rclone.oauthCodeMissing"}
         )
 
+    callback_params = dict(request.query_params)
+    base_config = dict(session.get("base_config") or {})
+    exchange_kwargs: dict[str, Any] = {}
+    if provider == "sharefile":
+        exchange_kwargs["callback_params"] = callback_params
+    if provider == "zoho":
+        exchange_kwargs["config"] = base_config
     token_response = await _exchange_borg_ui_oauth_code(
-        provider, code, session["redirect_uri"], db
+        provider, code, session["redirect_uri"], db, **exchange_kwargs
     )
-    config = dict(session.get("base_config") or {})
+    config = dict(base_config)
     if (
         provider == "onedrive"
         and not config.get("drive_id")
@@ -1917,9 +2470,14 @@ async def complete_borg_ui_oauth_callback(
         if default_drive.get("driveType") and not config.get("drive_type"):
             config["drive_type"] = str(default_drive["driveType"])
     config.update(
+        _provider_oauth_config_updates(
+            provider, config, token_response, callback_params=callback_params
+        )
+    )
+    config.update(
         {
             "type": provider,
-            "token": _rclone_token_from_oauth_response(token_response),
+            "token": _rclone_token_from_oauth_response(token_response, provider),
             BORG_UI_OAUTH_MARKER_KEY: provider,
         }
     )

@@ -13,7 +13,6 @@ import {
   DialogTitle,
   IconButton,
   Link,
-  MenuItem,
   Stack,
   TextField,
   Tooltip,
@@ -34,7 +33,8 @@ import {
 import { useTranslation } from 'react-i18next'
 import CodeEditor from '../shared/CodeEditor'
 import ResponsiveDialog from '../shared/ResponsiveDialog'
-import RcloneProviderIcon from '../shared/RcloneProviderIcon'
+import RcloneProviderSelect from '../shared/RcloneProviderSelect'
+import { sortRcloneProviders } from '../shared/rcloneProviderSelectUtils'
 import type {
   RcloneOAuthCredentialUpdate,
   RcloneOAuthSession,
@@ -121,6 +121,26 @@ const browserAuthorizationUrl = (url: string | null | undefined) => {
   return url.startsWith('/rclone/') ? buildDownloadUrl(url) : url
 }
 
+function ProviderDocsLink({ href, label }: { href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      variant="caption"
+      sx={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 0.5,
+        flexShrink: 0,
+      }}
+    >
+      <ExternalLink size={12} />
+      {label}
+    </Link>
+  )
+}
+
 const OAUTH_AUTO_POLL_INTERVAL_MS = 750
 
 const formatTokenExpiry = (expiresAt?: string | null) => {
@@ -165,22 +185,22 @@ export default function RcloneRemoteDialog({
   const [oauthCredentialsError, setOauthCredentialsError] = useState<string | null>(null)
   const [isSavingOAuthCredentials, setIsSavingOAuthCredentials] = useState(false)
   const [credentialsExpanded, setCredentialsExpanded] = useState(false)
+  const [advancedExpanded, setAdvancedExpanded] = useState(false)
   const oauthRequestIdRef = useRef(0)
   const resolvedProviderRef = useRef('local')
   const initializedRemoteKeyRef = useRef<string | null>(null)
 
   const providerOptions = providers.length ? providers : DEFAULT_PROVIDERS
+  const sortedProviderOptions = useMemo(
+    () => sortRcloneProviders(providerOptions),
+    [providerOptions]
+  )
   const selectedProvider =
-    providerOptions.find((provider) => provider.type === providerType) ?? providerOptions[0]
+    sortedProviderOptions.find((provider) => provider.type === providerType) ??
+    sortedProviderOptions[0]
   const resolvedProvider = selectedProvider.type_editable
     ? customProvider.trim()
     : selectedProvider.type
-  const providerTypeLabel = selectedProvider.type_editable
-    ? customProvider.trim() || t('wizard.location.rcloneCustomProviderPlaceholder')
-    : selectedProvider.type
-  const authLabel = t(`wizard.location.rcloneAuthTypes.${selectedProvider.auth_type}`, {
-    defaultValue: selectedProvider.auth_type,
-  })
   const selectedOAuthMode =
     selectedProvider.auth_type === 'oauth_token'
       ? selectedProvider.oauth_mode || 'rclone_loopback'
@@ -199,10 +219,15 @@ export default function RcloneRemoteDialog({
   const canClearOAuthCredentials =
     selectedProvider.oauth_credentials_source === 'database' &&
     (!!selectedProvider.oauth_client_id_set || !!selectedProvider.oauth_client_secret_set)
+  const shouldOpenAdvancedByDefault = selectedProvider.auth_type !== 'oauth_token'
 
   useEffect(() => {
     setCredentialsExpanded(!bothOAuthCredsSaved)
   }, [bothOAuthCredsSaved, providerType])
+
+  useEffect(() => {
+    setAdvancedExpanded(shouldOpenAdvancedByDefault)
+  }, [providerType, shouldOpenAdvancedByDefault])
 
   useEffect(() => {
     resolvedProviderRef.current = resolvedProvider
@@ -242,7 +267,7 @@ export default function RcloneRemoteDialog({
     initializedRemoteKeyRef.current = initialRemoteKey
 
     const nextProvider = initialRemote?.provider || 'local'
-    const providerIsKnown = providerOptions.some((provider) => provider.type === nextProvider)
+    const providerIsKnown = sortedProviderOptions.some((provider) => provider.type === nextProvider)
     const nextProviderType = providerIsKnown ? nextProvider : 'custom'
     setName(initialRemote?.name || '')
     setProviderType(nextProviderType)
@@ -251,7 +276,7 @@ export default function RcloneRemoteDialog({
     setLocalError(null)
     resetOAuthState()
     resetOAuthCredentialForm()
-  }, [initialRemote, mode, open, providerOptions, resetOAuthCredentialForm, resetOAuthState])
+  }, [initialRemote, mode, open, resetOAuthCredentialForm, resetOAuthState, sortedProviderOptions])
 
   useEffect(() => {
     if (open) return
@@ -267,7 +292,8 @@ export default function RcloneRemoteDialog({
 
   const handleProviderTypeChange = (nextProviderType: string) => {
     const nextProvider =
-      providerOptions.find((provider) => provider.type === nextProviderType) ?? providerOptions[0]
+      sortedProviderOptions.find((provider) => provider.type === nextProviderType) ??
+      sortedProviderOptions[0]
     setProviderType(nextProvider.type)
     resetOAuthState()
     resetOAuthCredentialForm()
@@ -636,33 +662,16 @@ export default function RcloneRemoteDialog({
                 onChange={(event) => setName(event.target.value)}
                 required
                 disabled={isCreating}
+                size="medium"
               />
-              <TextField
-                select
-                label={t('wizard.location.rcloneProviderLabel')}
-                value={providerType}
-                onChange={(event) => handleProviderTypeChange(event.target.value)}
-                required
+              <RcloneProviderSelect
                 disabled={isCreating}
-                sx={{
-                  '& .MuiSelect-select': {
-                    minWidth: 0,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  },
-                }}
-              >
-                {providerOptions.map((provider) => (
-                  <MenuItem key={provider.type} value={provider.type}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
-                      <RcloneProviderIcon provider={provider.type} size={28} iconSize={15} />
-                      <Typography component="span" noWrap>
-                        {provider.label}
-                      </Typography>
-                    </Box>
-                  </MenuItem>
-                ))}
-              </TextField>
+                providers={providerOptions}
+                value={providerType}
+                onChange={handleProviderTypeChange}
+                label={t('wizard.location.rcloneProviderLabel')}
+                required
+              />
             </Box>
 
             {selectedProvider.type_editable ? (
@@ -676,56 +685,20 @@ export default function RcloneRemoteDialog({
               />
             ) : null}
 
-            <Box
-              sx={{
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 2,
-                p: 2,
-                display: 'grid',
-                gap: 1.25,
-              }}
-            >
-              <Stack direction="row" spacing={1.5} alignItems="flex-start">
-                <RcloneProviderIcon provider={resolvedProvider || selectedProvider.type} />
-                <Box sx={{ minWidth: 0, flex: 1 }}>
-                  <Typography variant="subtitle1" fontWeight={600} sx={{ lineHeight: 1.25 }}>
-                    {providerTypeLabel}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {authLabel}
-                    {selectedProvider.auth_type === 'oauth_token'
-                      ? ` · ${
-                          usesBorgUiOAuth
-                            ? t('wizard.location.rcloneOAuthModeBorgUi')
-                            : t('wizard.location.rcloneOAuthModeLoopback')
-                        }`
-                      : ''}
-                  </Typography>
-                </Box>
-              </Stack>
-              {selectedProvider.description ? (
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ overflowWrap: 'anywhere' }}
-                >
-                  {selectedProvider.description}
-                </Typography>
-              ) : null}
-              {selectedProvider.docs_url ? (
-                <Link
+            {selectedProvider.auth_type !== 'oauth_token' && selectedProvider.docs_url ? (
+              <Box
+                sx={{
+                  mt: -1,
+                  display: 'flex',
+                  justifyContent: { xs: 'flex-start', sm: 'flex-end' },
+                }}
+              >
+                <ProviderDocsLink
                   href={selectedProvider.docs_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  variant="caption"
-                  sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
-                >
-                  <ExternalLink size={12} />
-                  {t('wizard.location.rcloneProviderDocs')}
-                </Link>
-              ) : null}
-            </Box>
+                  label={t('wizard.location.rcloneProviderDocs')}
+                />
+              </Box>
+            ) : null}
 
             {selectedProvider.auth_type === 'oauth_token' && usesBorgUiOAuth ? (
               <Box
@@ -882,22 +855,38 @@ export default function RcloneRemoteDialog({
                   gap: 1.5,
                 }}
               >
-                <Stack direction="row" alignItems="center" spacing={0.5}>
-                  <Typography variant="subtitle2" fontWeight={600}>
-                    {t('wizard.location.rcloneConnectSectionTitle')}
-                  </Typography>
-                  <Tooltip
-                    title={t('wizard.location.rcloneOAuthHelpTooltip')}
-                    arrow
-                    placement="top"
-                    componentsProps={{
-                      tooltip: { sx: { maxWidth: 320, whiteSpace: 'pre-line' } },
-                    }}
-                  >
-                    <IconButton size="small" aria-label={t('wizard.location.rcloneOAuthHelpLabel')}>
-                      <Info size={14} />
-                    </IconButton>
-                  </Tooltip>
+                <Stack
+                  direction={{ xs: 'column', sm: 'row' }}
+                  alignItems={{ xs: 'flex-start', sm: 'center' }}
+                  justifyContent="space-between"
+                  spacing={1}
+                >
+                  <Stack direction="row" alignItems="center" spacing={0.5}>
+                    <Typography variant="subtitle2" fontWeight={600}>
+                      {t('wizard.location.rcloneConnectSectionTitle')}
+                    </Typography>
+                    <Tooltip
+                      title={t('wizard.location.rcloneOAuthHelpTooltip')}
+                      arrow
+                      placement="top"
+                      componentsProps={{
+                        tooltip: { sx: { maxWidth: 320, whiteSpace: 'pre-line' } },
+                      }}
+                    >
+                      <IconButton
+                        size="small"
+                        aria-label={t('wizard.location.rcloneOAuthHelpLabel')}
+                      >
+                        <Info size={14} />
+                      </IconButton>
+                    </Tooltip>
+                  </Stack>
+                  {selectedProvider.docs_url ? (
+                    <ProviderDocsLink
+                      href={selectedProvider.docs_url}
+                      label={t('wizard.location.rcloneProviderDocs')}
+                    />
+                  ) : null}
                 </Stack>
                 <Typography variant="body2" color="text.secondary">
                   {usesBorgUiOAuth
@@ -978,21 +967,33 @@ export default function RcloneRemoteDialog({
                   oauthSession.oauth_mode !== 'borg_ui' &&
                   oauthSession.status !== 'authorized' &&
                   oauthSession.status !== 'failed' ? (
-                    <Button
-                      size="small"
-                      variant="outlined"
+                    <Link
+                      component="button"
+                      type="button"
+                      variant="body2"
                       onClick={handleCheckOAuth}
                       disabled={!onGetOAuthSession || isCheckingOAuth}
-                      startIcon={
-                        isCheckingOAuth ? (
-                          <CircularProgress size={14} color="inherit" />
-                        ) : (
-                          <RefreshCcw size={14} />
-                        )
-                      }
+                      sx={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 0.5,
+                        background: 'none',
+                        border: 'none',
+                        p: 0,
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        '&:disabled': { opacity: 0.5, cursor: 'not-allowed' },
+                      }}
                     >
-                      {t('wizard.location.rcloneOAuthCheck')}
-                    </Button>
+                      {isCheckingOAuth ? (
+                        <CircularProgress size={13} color="inherit" />
+                      ) : (
+                        <RefreshCcw size={13} />
+                      )}
+                      {isCheckingOAuth
+                        ? t('wizard.location.rcloneOAuthChecking')
+                        : t('wizard.location.rcloneOAuthCheck')}
+                    </Link>
                   ) : null}
                 </Stack>
 
@@ -1037,6 +1038,8 @@ export default function RcloneRemoteDialog({
             <Accordion
               disableGutters
               elevation={0}
+              expanded={advancedExpanded}
+              onChange={(_, expanded) => setAdvancedExpanded(expanded)}
               sx={{
                 border: '1px solid',
                 borderColor: 'divider',

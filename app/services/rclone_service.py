@@ -54,6 +54,9 @@ class RcloneService:
     def listremotes_command(self) -> list[str]:
         return self._base_command() + ["listremotes"]
 
+    def providers_command(self) -> list[str]:
+        return self._base_command(include_config=False) + ["config", "providers"]
+
     def lsjson_command(self, target: str) -> list[str]:
         return self._base_command() + ["lsjson", target]
 

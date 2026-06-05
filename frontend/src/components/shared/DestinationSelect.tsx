@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
-import { FormControl, InputLabel, MenuItem, Select } from '@mui/material'
-import RichSelectRow from './RichSelectRow'
+import RichSelect, { type RichSelectOption } from './RichSelect'
 
 export interface DestinationOption {
   key: string
@@ -21,8 +20,6 @@ interface DestinationSelectProps {
   disabled?: boolean
 }
 
-let autoIdCounter = 0
-
 export default function DestinationSelect({
   value,
   onChange,
@@ -31,37 +28,22 @@ export default function DestinationSelect({
   labelId,
   disabled,
 }: DestinationSelectProps) {
-  const resolvedLabelId = labelId ?? `destination-select-${++autoIdCounter}`
+  const options: RichSelectOption[] = destinations.map((dest) => ({
+    value: dest.key,
+    icon: dest.icon,
+    primary: dest.label,
+    secondary: dest.description,
+    disabled: dest.disabled,
+  }))
 
   return (
-    <FormControl fullWidth disabled={disabled}>
-      <InputLabel id={resolvedLabelId}>{label}</InputLabel>
-      <Select
-        labelId={resolvedLabelId}
-        value={value}
-        label={label}
-        onChange={(event) => onChange(event.target.value)}
-        // Force a fixed 56px trigger height on the outlined wrapper AND the
-        // inner content area. Without both, the rich row collapses to the
-        // MuiSelect-select default min-height (~23px) instead of the standard
-        // outlined input height. Same trick as SshConnectionSelect and
-        // ManagedAgentSelect.
-        sx={{
-          '& .MuiOutlinedInput-root': { height: 56 },
-          '& .MuiSelect-select': {
-            height: 56,
-            boxSizing: 'border-box',
-            display: 'flex',
-            alignItems: 'center',
-          },
-        }}
-      >
-        {destinations.map((dest) => (
-          <MenuItem key={dest.key} value={dest.key} disabled={dest.disabled} sx={{ py: 1 }}>
-            <RichSelectRow icon={dest.icon} primary={dest.label} secondary={dest.description} />
-          </MenuItem>
-        ))}
-      </Select>
-    </FormControl>
+    <RichSelect
+      value={value}
+      onChange={onChange}
+      options={options}
+      label={label}
+      labelId={labelId}
+      disabled={disabled}
+    />
   )
 }

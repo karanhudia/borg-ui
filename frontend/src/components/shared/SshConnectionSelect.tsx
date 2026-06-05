@@ -1,6 +1,6 @@
-import { Alert, Box, FormControl, InputLabel, MenuItem, Select } from '@mui/material'
+import { Alert, Box } from '@mui/material'
 import { Cloud } from 'lucide-react'
-import RichSelectRow from './RichSelectRow'
+import RichSelect, { type RichSelectOption } from './RichSelect'
 
 export interface SshConnectionSummary {
   id: number
@@ -30,8 +30,6 @@ interface SshConnectionSelectProps {
   connectedTooltip?: string
 }
 
-let autoIdCounter = 0
-
 export default function SshConnectionSelect({
   value,
   onChange,
@@ -48,59 +46,44 @@ export default function SshConnectionSelect({
     return <Alert severity="warning">{emptyMessage}</Alert>
   }
 
-  const resolvedLabelId = labelId ?? `ssh-connection-select-${++autoIdCounter}`
+  const options: RichSelectOption[] = connections.map((conn) => ({
+    value: String(conn.id),
+    icon: <Cloud size={16} />,
+    primary: `${conn.username}@${conn.host}`,
+    secondary: formatSecondary(conn),
+    indicator:
+      conn.status === 'connected' ? (
+        <Box title={connectedTooltip} sx={{ display: 'flex' }}>
+          <StatusDot />
+        </Box>
+      ) : undefined,
+  }))
 
   return (
-    <FormControl fullWidth disabled={disabled}>
-      <InputLabel id={resolvedLabelId}>{label}</InputLabel>
-      <Select
-        labelId={resolvedLabelId}
-        value={value === '' ? '' : String(value)}
-        label={label}
-        onChange={(event) => {
-          const next = event.target.value
-          if (next) onChange(Number(next))
-        }}
-        // Force a fixed 56px trigger height on the outlined wrapper AND the
-        // inner content area. Without both, the empty state collapses to the
-        // MuiSelect-select default min-height (~23px) instead of the standard
-        // outlined input height.
-        sx={{
-          '& .MuiOutlinedInput-root': { height: 56 },
-          '& .MuiSelect-select': {
-            height: 56,
-            boxSizing: 'border-box',
-            display: 'flex',
-            alignItems: 'center',
-          },
-        }}
-      >
-        {connections.map((conn) => (
-          <MenuItem key={conn.id} value={String(conn.id)} sx={{ py: 1 }}>
-            <RichSelectRow
-              icon={<Cloud size={16} />}
-              primary={`${conn.username}@${conn.host}`}
-              secondary={formatSecondary(conn)}
-              indicator={
-                conn.status === 'connected' ? (
-                  <Box title={connectedTooltip} sx={{ display: 'flex' }}>
-                    <Box
-                      sx={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: '50%',
-                        bgcolor: 'success.main',
-                        flexShrink: 0,
-                      }}
-                    />
-                  </Box>
-                ) : undefined
-              }
-            />
-          </MenuItem>
-        ))}
-      </Select>
-    </FormControl>
+    <RichSelect
+      value={value === '' ? '' : String(value)}
+      onChange={(next) => {
+        if (next) onChange(Number(next))
+      }}
+      options={options}
+      label={label}
+      labelId={labelId}
+      disabled={disabled}
+    />
+  )
+}
+
+function StatusDot() {
+  return (
+    <Box
+      sx={{
+        width: 8,
+        height: 8,
+        borderRadius: '50%',
+        bgcolor: 'success.main',
+        flexShrink: 0,
+      }}
+    />
   )
 }
 
