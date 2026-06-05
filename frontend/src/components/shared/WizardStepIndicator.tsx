@@ -1,5 +1,6 @@
 import React from 'react'
 import { Box, Typography, alpha, useTheme, useMediaQuery } from '@mui/material'
+import { getWizardStepColor } from './wizardStepColors'
 
 interface WizardStep {
   key: string
@@ -13,22 +14,6 @@ interface WizardStepIndicatorProps {
   onStepClick?: (stepIndex: number) => void
 }
 
-// Step colors - tuned for each theme
-const stepColors = {
-  // RepositoryWizard colors
-  location: { light: '#1565c0', dark: '#64b5f6' }, // blue
-  source: { light: '#2e7d32', dark: '#81c784' }, // green
-  security: { light: '#7b1fa2', dark: '#ce93d8' }, // purple
-  config: { light: '#e65100', dark: '#ffb74d' }, // orange
-  review: { light: '#0277bd', dark: '#4fc3f7' }, // cyan
-
-  // ScheduleWizard colors (same palette, different mapping)
-  basic: { light: '#1565c0', dark: '#64b5f6' }, // blue (like location)
-  schedule: { light: '#e65100', dark: '#ffb74d' }, // orange (like config)
-  scripts: { light: '#7b1fa2', dark: '#ce93d8' }, // purple (like security)
-  maintenance: { light: '#2e7d32', dark: '#81c784' }, // green (like source)
-}
-
 export default function WizardStepIndicator({
   steps,
   currentStep,
@@ -39,8 +24,7 @@ export default function WizardStepIndicator({
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
 
   const getStepColor = (stepKey: string) => {
-    const colors = stepColors[stepKey as keyof typeof stepColors] || stepColors.location
-    return isDark ? colors.dark : colors.light
+    return getWizardStepColor(stepKey, isDark ? 'dark' : 'light')
   }
 
   // ── Mobile: compact icon-circles row + current step label ──
