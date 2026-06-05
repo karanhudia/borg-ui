@@ -328,9 +328,9 @@ class TestRecentActivityEndpoint:
     def test_recent_activity_marks_quiet_script_executions_loggable_for_all_jobs_policy(
         self, test_client, admin_headers, test_db
     ):
-        from app.database.models import Script, ScriptExecution, SystemSettings
+        from app.database.models import Script, ScriptExecution
 
-        test_db.add(SystemSettings(log_save_policy="all_jobs"))
+        _set_log_save_policy(test_db, "all_jobs")
         script = Script(
             name="Clean Docker export",
             file_path="library/clean-docker-export.sh",
@@ -368,9 +368,9 @@ class TestRecentActivityEndpoint:
     def test_recent_activity_hides_quiet_script_logs_when_policy_skips_success(
         self, test_client, admin_headers, test_db
     ):
-        from app.database.models import Script, ScriptExecution, SystemSettings
+        from app.database.models import Script, ScriptExecution
 
-        test_db.add(SystemSettings(log_save_policy="failed_only"))
+        _set_log_save_policy(test_db, "failed_only")
         script = Script(
             name="Clean Docker export",
             file_path="library/clean-docker-export.sh",
