@@ -75,6 +75,25 @@ describe('API Request Interceptor', () => {
     await api.get('/test')
     mock.restore()
   })
+
+  it('uses the active remote backend API base for requests', async () => {
+    const { createRemoteBackendClient, setActiveBackendTarget } =
+      await import('./remoteBackends/storage')
+    const remote = createRemoteBackendClient({
+      name: 'Remote',
+      backendUrl: 'https://remote.example.com/borg',
+    })
+    setActiveBackendTarget(remote.id)
+    const mock = new MockAdapter(api)
+
+    mock.onGet('/test').reply((config) => {
+      expect(config.baseURL).toBe('https://remote.example.com/borg/api')
+      return [200, { success: true }]
+    })
+
+    await api.get('/test')
+    mock.restore()
+  })
 })
 
 describe('API Response Interceptor - 401 Handling', () => {

@@ -13,8 +13,9 @@ import axios from 'axios'
 import { BASE_PATH } from '@/utils/basePath'
 import type { Repository } from '@/types'
 import { isV2Repo } from '@/utils/repoCapabilities'
-import { buildDownloadUrl } from '@/utils/downloadUrl'
-import { attachAccessTokenHeader } from '../authHeaders'
+import { buildDownloadUrl, getApiBaseUrl } from '@/utils/downloadUrl'
+import { attachAccessTokenHeader, clearAccessToken } from '../authHeaders'
+import type { InternalAxiosRequestConfig } from 'axios'
 
 export const httpClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL || `${BASE_PATH}/api`,
@@ -22,7 +23,10 @@ export const httpClient = axios.create({
 })
 
 // Mirror the shared auth interceptor so this client also attaches tokens.
-httpClient.interceptors.request.use(attachAccessTokenHeader)
+httpClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  config.baseURL = getApiBaseUrl()
+  return attachAccessTokenHeader(config)
+})
 
 httpClient.interceptors.response.use(
   (response) => response,
@@ -32,7 +36,7 @@ httpClient.interceptors.response.use(
       error.config?.url !== '/auth/login' &&
       error.config?.url !== '/auth/config'
     ) {
-      localStorage.removeItem('access_token')
+      clearAccessToken()
       window.location.href = `${BASE_PATH}/login`
     }
     return Promise.reject(error)

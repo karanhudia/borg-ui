@@ -1,8 +1,9 @@
 import axios from 'axios'
 import { toast } from 'react-hot-toast'
 import { BASE_PATH } from '@/utils/basePath'
-import { API_BASE_URL, buildDownloadUrl } from '@/utils/downloadUrl'
-import { attachAccessTokenHeader } from './authHeaders'
+import { API_BASE_URL, buildDownloadUrl, getApiBaseUrl } from '@/utils/downloadUrl'
+import { attachAccessTokenHeader, clearAccessToken } from './authHeaders'
+import type { InternalAxiosRequestConfig } from 'axios'
 import type { RestoreLayout, RestorePathMetadata } from '@/utils/restorePaths'
 import type {
   BackupPlan,
@@ -30,7 +31,10 @@ const api = axios.create({
 })
 
 // Request interceptor to add auth token
-api.interceptors.request.use(attachAccessTokenHeader)
+api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  config.baseURL = getApiBaseUrl()
+  return attachAccessTokenHeader(config)
+})
 
 // Response interceptor to handle auth errors
 api.interceptors.response.use(
@@ -52,7 +56,7 @@ api.interceptors.response.use(
       error.config?.url !== '/auth/config' &&
       authTransportMode === 'jwt'
     ) {
-      localStorage.removeItem('access_token')
+      clearAccessToken()
       window.location.href = `${BASE_PATH}/login`
     }
     return Promise.reject(error)

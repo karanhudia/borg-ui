@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders, screen, userEvent, waitFor } from '../../test/test-utils'
 import { AuthProvider, useAuth } from '../useAuth'
+import { RemoteBackendProvider, useRemoteBackends } from '../../services/remoteBackends/context'
+import {
+  resetRemoteBackendStateForTests,
+  setBackendAccessToken,
+} from '../../services/remoteBackends/storage'
 
 const getAuthConfigMock = vi.fn()
 const getProfileMock = vi.fn()
@@ -89,10 +94,30 @@ function AuthProbe() {
   )
 }
 
+function RemoteSwitchProbe() {
+  const { createClient, switchTarget } = useRemoteBackends()
+
+  return (
+    <button
+      onClick={() => {
+        const remote = createClient({
+          name: 'Remote API',
+          backendUrl: 'remote.example.com',
+        })
+        setBackendAccessToken('remote-token', remote.id)
+        switchTarget(remote.id)
+      }}
+    >
+      Switch backend
+    </button>
+  )
+}
+
 describe('AuthProvider', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
+    resetRemoteBackendStateForTests()
     sessionStorage.clear()
     getAuthConfigMock.mockResolvedValue({
       data: {
@@ -149,6 +174,34 @@ describe('AuthProvider', () => {
       expect(screen.getByText('authenticated:true')).toBeInTheDocument()
       expect(screen.getByText('proxy-warnings:none')).toBeInTheDocument()
       expect(screen.getByText('user:admin')).toBeInTheDocument()
+    })
+  })
+
+  it('re-checks auth config and profile when the active backend changes', async () => {
+    localStorage.setItem('access_token', 'local-token')
+    const user = userEvent.setup()
+
+    renderWithProviders(
+      <RemoteBackendProvider>
+        <AuthProvider>
+          <AuthProbe />
+          <RemoteSwitchProbe />
+        </AuthProvider>
+      </RemoteBackendProvider>
+    )
+
+    await waitFor(() => {
+      expect(getAuthConfigMock).toHaveBeenCalledTimes(1)
+      expect(getProfileMock).toHaveBeenCalledTimes(1)
+      expect(screen.getByText('authenticated:true')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Switch backend' }))
+
+    await waitFor(() => {
+      expect(getAuthConfigMock).toHaveBeenCalledTimes(2)
+      expect(getProfileMock).toHaveBeenCalledTimes(2)
+      expect(screen.getByText('authenticated:true')).toBeInTheDocument()
     })
   })
 
@@ -236,6 +289,7 @@ describe('AuthProvider', () => {
       )
 
       await vi.runAllTimersAsync()
+      vi.useRealTimers()
 
       await waitFor(() => {
         expect(setAuthTransportModeMock).toHaveBeenCalledWith('proxy')

@@ -109,6 +109,7 @@
     "items": {
       "dashboard": "Dashboard",
       "activity": "Attività",
+      "remoteClients": "Client remoti",
       "remoteMachines": "Macchine Remote",
       "managedAgents": "Agenti gestiti",
       "cloudStorage": "Archiviazione cloud",
@@ -158,6 +159,63 @@
     "welcome": "Benvenuto,",
     "logout": "Esci",
     "yourPlan": "Your Plan"
+  },
+  "remoteClients": {
+    "title": "Client remoti",
+    "description": "Registra backend Borg UI su altre macchine, controllane lo stato e usa questo browser con il backend selezionato.",
+    "addButton": "Aggiungi client remoto",
+    "status": {
+      "incompatible": "Incompatibile",
+      "online": "Online",
+      "offline": "Offline",
+      "checking": "Controllo in corso",
+      "unknown": "Sconosciuto"
+    },
+    "labels": {
+      "activeTarget": "Destinazione attiva",
+      "local": "Locale"
+    },
+    "localBackend": {
+      "title": "Backend locale",
+      "active": "Destinazione attiva",
+      "fallback": "Disponibile come destinazione di fallback"
+    },
+    "empty": {
+      "title": "Nessun client remoto",
+      "description": "Aggiungi l'URL di un backend Borg UI per controllarne lo stato e spostare questo frontend su quel backend."
+    },
+    "lastChecked": "Ultimo controllo: {{value}}",
+    "version": "Borg UI {{version}}",
+    "actions": {
+      "check": "Controlla",
+      "use": "Usa",
+      "edit": "Modifica client remoto",
+      "delete": "Elimina client remoto",
+      "checkAria": "Controlla {{name}}",
+      "useAria": "Usa {{name}}",
+      "editAria": "Modifica {{name}}",
+      "deleteAria": "Elimina {{name}}"
+    },
+    "dialog": {
+      "addTitle": "Aggiungi client remoto",
+      "editTitle": "Modifica client remoto",
+      "description": "Usa l'URL del backend Borg UI. Sono accettati nomi DNS, IP LAN, URL localhost e percorsi `/api`.",
+      "nameLabel": "Nome client",
+      "urlLabel": "URL backend",
+      "save": "Salva client"
+    },
+    "toasts": {
+      "added": "Client remoto aggiunto.",
+      "updated": "Client remoto aggiornato.",
+      "online": "{{name}} è online.",
+      "unavailable": "{{name}} non è disponibile.",
+      "checkFailed": "Controllo di {{name}} non riuscito: {{error}}",
+      "using": "{{name}} in uso."
+    },
+    "errors": {
+      "saveFailed": "Impossibile salvare il client remoto.",
+      "remoteUnavailable": "Il backend remoto non è disponibile."
+    }
   },
   "cloudStorage": {
     "title": "Archiviazione cloud",
@@ -4025,7 +4083,8 @@
     }
   },
   "protectedRoute": {
-    "unavailable": "Questa funzionalità non è attualmente disponibile"
+    "unavailable": "Questa funzionalità non è attualmente disponibile",
+    "permissionDenied": "Non hai il permesso di aprire questa pagina"
   },
   "repositoryCell": {
     "noPath": "Nessuna informazione sul percorso"

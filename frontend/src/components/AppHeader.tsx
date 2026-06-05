@@ -22,6 +22,7 @@ import { usePlan } from '../hooks/usePlan'
 import { useNavigate } from 'react-router-dom'
 import { PLAN_LABEL } from '../core/features'
 import { getProfileMenuColors, getRoleBadgeStyles } from './profileMenuColors'
+import BackendTargetSwitcher from './BackendTargetSwitcher'
 
 const drawerWidth = 240
 const headerHeight = 64
@@ -100,6 +101,10 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
         </IconButton>
 
         <Box sx={{ flexGrow: 1 }} />
+
+        <Box sx={{ mr: 1, display: 'flex', alignItems: 'center' }}>
+          <BackendTargetSwitcher />
+        </Box>
 
         <Box
           component="button"

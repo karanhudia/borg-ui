@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '@/utils/downloadUrl'
+import { getApiBaseUrl } from '@/utils/downloadUrl'
 import { getAccessTokenHeader } from './authHeaders'
 import type { AuthTransportMode } from './api'
 
@@ -32,7 +32,7 @@ export const fetchWithAuth = (
 }
 
 export const fetchJsonWithAuth = (path: string, init: RequestInit = {}): Promise<Response> =>
-  fetchWithAuth(`${API_BASE_URL}${path}`, init)
+  fetchWithAuth(`${getApiBaseUrl()}${path}`, init)
 
 export const fetchJsonForAuthMode = (
   path: string,
@@ -48,7 +48,7 @@ export const fetchJsonForAuthMode = (
     headers.set('Accept', 'application/json')
   }
 
-  return fetch(`${API_BASE_URL}${path}`, {
+  return fetch(`${getApiBaseUrl()}${path}`, {
     ...init,
     headers,
   })

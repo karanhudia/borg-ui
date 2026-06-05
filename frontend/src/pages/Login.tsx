@@ -10,6 +10,7 @@ import { useAnalytics } from '../hooks/useAnalytics'
 import { getApiErrorDetail } from '../utils/apiErrors'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { authAPI } from '../services/api'
+import { setAccessToken } from '../services/authHeaders'
 import { BASE_PATH } from '../utils/basePath'
 
 interface LoginForm {
@@ -101,7 +102,7 @@ export default function Login() {
         if (!access_token) {
           throw new Error('Missing access token')
         }
-        localStorage.setItem('access_token', access_token)
+        setAccessToken(access_token)
         handleSuccessfulLogin(null, must_change_password || false, 'passkey_autofill')
       } catch (error: unknown) {
         if (hasErrorName(error, 'AbortError') || cancelled) {

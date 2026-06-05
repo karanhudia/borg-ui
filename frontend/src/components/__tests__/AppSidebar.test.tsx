@@ -139,6 +139,10 @@ describe('AppSidebar', () => {
         'href',
         '/cloud-storage'
       )
+      expect(screen.getAllByRole('link', { name: /remote clients/i })[0]).toHaveAttribute(
+        'href',
+        '/remote-clients'
+      )
       expect(screen.getAllByRole('link', { name: /manual backup/i }).length).toBeGreaterThan(0)
       expect(screen.getAllByRole('link', { name: /managed agents/i }).length).toBeGreaterThan(0)
     })
