@@ -149,6 +149,7 @@ class TestSourceDiscovery:
                 "type": "volume",
                 "name": "postgres-data",
                 "source": "/var/lib/docker/volumes/postgres-data/_data",
+                "backup_source": "/var/lib/docker/volumes/postgres-data/_data",
                 "destination": "/var/lib/postgresql/data",
                 "backed_up": False,
                 "reason": "Not included in docker export; add this path separately from Files if needed.",
@@ -159,6 +160,7 @@ class TestSourceDiscovery:
                 "type": "bind",
                 "name": None,
                 "source": "/srv/postgres/conf",
+                "backup_source": "/srv/postgres/conf",
                 "destination": "/etc/postgresql/conf.d",
                 "backed_up": False,
                 "reason": "Not included in docker export; add this path separately from Files if needed.",
@@ -226,6 +228,11 @@ class TestSourceDiscovery:
             "get_local_mount_points",
             lambda self: ["/local"],
         )
+        monkeypatch.setattr(
+            source_discovery.os.path,
+            "lexists",
+            lambda path: path == "/local/var/lib/docker/volumes/postgres-data/_data",
+        )
 
         response = test_client.post(
             "/api/source-discovery/containers/scan",
@@ -236,6 +243,9 @@ class TestSourceDiscovery:
         assert response.status_code == 200
         mount = response.json()["containers"][0]["mounts"][0]
         assert mount["source"] == "/var/lib/docker/volumes/postgres-data/_data"
+        assert mount["backup_source"] == (
+            "/local/var/lib/docker/volumes/postgres-data/_data"
+        )
         assert mount["size_bytes"] == 16384
         assert mount["size_status"] == "available"
         assert probed_paths == [

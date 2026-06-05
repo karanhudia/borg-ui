@@ -1,7 +1,8 @@
-import { ReactNode } from 'react'
+import { ReactNode, useEffect, useRef } from 'react'
 import { Box, Tooltip } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import { Feature, FEATURES, PLAN_LABEL } from '../../core/features'
+import { useFeatureAnalytics } from '../../hooks/useFeatureAnalytics'
 import { usePlan } from '../../hooks/usePlan'
 import UpgradePrompt from '../UpgradePrompt'
 
@@ -13,6 +14,12 @@ interface PlanGateProps {
   when?: boolean
   /** Show children disabled instead of replacing them with an upgrade prompt */
   disabled?: boolean
+  /** Stable analytics surface name for blocked feature events */
+  surface?: string
+  /** Stable analytics operation name for blocked feature events */
+  operation?: string
+  /** Extra non-sensitive analytics data for blocked feature events */
+  analyticsData?: Record<string, unknown>
 }
 
 export default function PlanGate({
@@ -21,11 +28,41 @@ export default function PlanGate({
   fallback,
   when = true,
   disabled,
+  surface = 'plan_gate',
+  operation = 'render_gate',
+  analyticsData,
 }: PlanGateProps) {
   const { t } = useTranslation()
   const { can, isLoading } = usePlan()
+  const { trackFeatureBlocked } = useFeatureAnalytics()
+  const lastTrackedBlockedKey = useRef<string | null>(null)
+  const allowed = !when || can(feature)
+  const gateMode = disabled ? 'disabled' : fallback !== undefined ? 'fallback' : 'upgrade_prompt'
+
+  useEffect(() => {
+    if (isLoading || allowed) return
+    const blockedKey = `${feature}:${surface}:${operation}:${gateMode}`
+    if (lastTrackedBlockedKey.current === blockedKey) return
+    lastTrackedBlockedKey.current = blockedKey
+    trackFeatureBlocked(feature, {
+      surface,
+      operation,
+      gate_mode: gateMode,
+      ...(analyticsData || {}),
+    })
+  }, [
+    allowed,
+    analyticsData,
+    feature,
+    gateMode,
+    isLoading,
+    operation,
+    surface,
+    trackFeatureBlocked,
+  ])
+
   if (isLoading) return null
-  if (!when || can(feature)) return <>{children}</>
+  if (allowed) return <>{children}</>
   if (disabled) {
     return (
       <Tooltip

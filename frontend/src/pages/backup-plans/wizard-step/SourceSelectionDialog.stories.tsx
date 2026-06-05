@@ -607,6 +607,33 @@ const databaseSingleSqliteQueuedState: WizardState = {
   sourceLocations: databaseMultiSqliteQueuedState.sourceLocations?.slice(0, 1) || [],
 }
 
+const containerQueuedState: WizardState = {
+  ...createInitialState(),
+  sourceType: 'local',
+  sourceDirectories: ['/var/tmp/borg-ui/container-exports/postgres'],
+  sourceLocations: [
+    {
+      source_type: 'local',
+      source_ssh_connection_id: null,
+      agent_machine_id: null,
+      paths: ['/var/tmp/borg-ui/container-exports/postgres'],
+      container: {
+        container_name: 'postgres',
+        display_name: 'postgres',
+        image: 'postgres:17',
+        backup_mode: 'export',
+        export_path: '/var/tmp/borg-ui/container-exports/postgres',
+        script_execution_target: 'source',
+        pre_backup_script_id: 301,
+        post_backup_script_id: 302,
+        pre_backup_script_parameters: {},
+        post_backup_script_parameters: {},
+        script_execution_order: 1,
+      },
+    },
+  ],
+}
+
 const translations: Record<string, string> = {
   'backupPlans.sourceChooser.title': 'Choose backup source',
   'backupPlans.sourceChooser.where': 'Where are the files?',
@@ -673,7 +700,7 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.containerModeExport': 'docker export',
   'backupPlans.sourceChooser.scanContainers': 'Scan containers',
   'backupPlans.sourceChooser.rescanContainers': 'Re-scan containers',
-  'backupPlans.sourceChooser.scanContainersHint': 'Find containers on the selected Docker host.',
+  'backupPlans.sourceChooser.scanContainersHint': 'Scan selected Docker host.',
   'backupPlans.sourceChooser.detectedContainers': 'Detected containers',
   'backupPlans.sourceChooser.containerBackupCoverageTitle': 'What this source backs up',
   'backupPlans.sourceChooser.containerFilesystemIncluded':
@@ -952,6 +979,24 @@ export const ContainerPickerEmpty: Story = {
       description: {
         story:
           'Docker container source picker with host selection, generated export staging path, and queued source scripts.',
+      },
+    },
+  },
+}
+
+export const ContainerPickerQueuedEditMode: Story = {
+  render: () => (
+    <DialogStory
+      wizardState={containerQueuedState}
+      mockOptions={{ scanStatus: 'detected' }}
+      initialView="container"
+    />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Docker container source picker reopened with an existing selected container. The selected container appears before the compact scan prompt.',
       },
     },
   },

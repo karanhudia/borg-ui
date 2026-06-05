@@ -36,6 +36,7 @@ from app.api.auth import get_current_user, User
 from app.core.security import get_current_download_user
 from app.utils.datetime_utils import serialize_datetime
 from app.services.backup_service import backup_service
+from app.services.log_policy import get_log_save_policy, script_execution_has_logs
 
 logger = structlog.get_logger()
 
@@ -480,6 +481,7 @@ async def list_recent_activity(
 
     # Fetch script executions
     if not job_type or job_type == "script_execution":
+        log_save_policy = get_log_save_policy(db)
         script_executions = (
             db.query(ScriptExecution)
             .order_by(ScriptExecution.started_at.desc())
@@ -520,8 +522,8 @@ async def list_recent_activity(
                     "backup_plan_name": backup_plan_name,
                     "archive_name": execution.hook_type,
                     "package_name": script_name,
-                    "has_logs": bool(
-                        execution.stdout or execution.stderr or execution.error_message
+                    "has_logs": script_execution_has_logs(
+                        execution, log_save_policy=log_save_policy
                     ),
                     "_sort_at": execution.started_at,
                 }

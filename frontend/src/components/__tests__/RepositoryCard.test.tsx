@@ -115,6 +115,8 @@ describe('RepositoryCard', () => {
       EXPORT: 'Export',
       COMPLETE: 'Complete',
       FAIL: 'Fail',
+      FEATURE_USED: 'FeatureUsed',
+      FEATURE_BLOCKED: 'FeatureBlocked',
     } as const,
   }
 

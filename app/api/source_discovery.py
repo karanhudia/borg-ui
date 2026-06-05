@@ -175,6 +175,7 @@ class ContainerMount(BaseModel):
     type: str | None = None
     name: str | None = None
     source: str | None = None
+    backup_source: str | None = None
     destination: str | None = None
     backed_up: bool = False
     reason: str
@@ -1004,6 +1005,7 @@ def _container_mount(raw_mount: object) -> ContainerMount | None:
         type=mount_type,
         name=name,
         source=source,
+        backup_source=source,
         destination=destination,
         backed_up=False,
         reason=(
@@ -1041,6 +1043,23 @@ def _local_mount_size_probe_paths(path: str) -> list[str]:
         if mapped_path not in candidates:
             candidates.append(mapped_path)
     return candidates
+
+
+def _local_mount_backup_source(path: str) -> str:
+    for candidate_path in _local_mount_size_probe_paths(path):
+        if os.path.lexists(candidate_path):
+            return candidate_path
+    return os.path.normpath(path.strip()) if path.strip() else path
+
+
+def _enrich_local_container_mount_backup_sources(
+    containers: list[ContainerCandidate],
+) -> None:
+    for container in containers:
+        for mount in container.mounts:
+            source = (mount.source or "").strip()
+            if source:
+                mount.backup_source = _local_mount_backup_source(source)
 
 
 def _run_remote_mount_size_probe(
@@ -1149,6 +1168,7 @@ def _enrich_local_container_mount_sizes(
     *,
     scan_timeout_seconds: int,
 ) -> None:
+    _enrich_local_container_mount_backup_sources(containers)
     _enrich_container_mount_sizes(
         containers,
         probe=lambda path, timeout_seconds: _run_local_mount_size_probe(

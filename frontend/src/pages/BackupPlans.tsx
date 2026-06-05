@@ -27,6 +27,7 @@ import { BorgApiClient } from '../services/borgApi'
 import { usePlan } from '../hooks/usePlan'
 import { usePermissions } from '../hooks/usePermissions'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { useFeatureAnalytics } from '../hooks/useFeatureAnalytics'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { buildBackupPlanPayload } from '../utils/backupPlanPayload'
 import { getCheckFlagDurationConflict } from '../utils/checkFlagConflicts'
@@ -94,6 +95,7 @@ export default function BackupPlans() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { t } = useTranslation()
   const { track, EventCategory, EventAction } = useAnalytics()
+  const { trackFeatureUsed, trackFeatureBlocked } = useFeatureAnalytics()
   const { can } = usePlan()
   const permissions = usePermissions()
   const canUseMultiRepository = can('backup_plan_multi_repository')
@@ -129,18 +131,42 @@ export default function BackupPlans() {
   )
   const handledInitialRepositoryRef = useRef(false)
   const trackBackupPlanSubmit = (action: string, data: BackupPlanData) => {
+    const operation = action === EventAction.CREATE ? 'create_plan' : 'update_plan'
     track(EventCategory.BACKUP, action, {
       entity: 'backup_plan',
       section: BACKUP_PLANS_ANALYTICS_SECTION,
-      operation: action === EventAction.CREATE ? 'create_plan' : 'update_plan',
+      operation,
       source_type: data.source_type,
       repository_count: data.repositories.length,
+      repository_run_mode: data.repository_run_mode,
       schedule_enabled: data.schedule_enabled,
       run_repository_scripts: data.run_repository_scripts,
       run_prune_after: data.run_prune_after,
       run_compact_after: data.run_compact_after,
       run_check_after: data.run_check_after,
     })
+    if (data.repositories.length > 1 || data.repository_run_mode === 'parallel') {
+      trackFeatureUsed('backup_plan_multi_repository', {
+        surface: BACKUP_PLANS_ANALYTICS_SECTION,
+        operation,
+        repository_count: data.repositories.length,
+        repository_run_mode: data.repository_run_mode,
+      })
+    }
+    if (data.source_type === 'mixed') {
+      trackFeatureUsed('backup_plan_mixed_sources', {
+        surface: BACKUP_PLANS_ANALYTICS_SECTION,
+        operation,
+        source_type: data.source_type,
+      })
+    }
+    if (data.source_locations?.some((location) => location.source_type === 'agent')) {
+      trackFeatureUsed('managed_agents', {
+        surface: BACKUP_PLANS_ANALYTICS_SECTION,
+        operation,
+        usage: 'backup_plan_source',
+      })
+    }
   }
   const selectedRepositoryFilterId = useMemo(
     () => parseRepositoryFilterId(searchParams.get('repositoryId')),
@@ -460,6 +486,11 @@ export default function BackupPlans() {
           const nextSelection = applyRepositorySelectionLimit(nextIds, canUseMultiRepository)
           if (nextSelection.limited) {
             toast.error(t('backupPlans.toasts.multiRepositoryRequiresPro'))
+            trackFeatureBlocked('backup_plan_multi_repository', {
+              surface: BACKUP_PLANS_ANALYTICS_SECTION,
+              operation: 'select_multiple_repositories',
+              repository_count: nextIds.length,
+            })
           }
 
           return {
@@ -591,6 +622,11 @@ export default function BackupPlans() {
     const nextSelection = applyRepositorySelectionLimit(ids, canUseMultiRepository)
     if (nextSelection.limited) {
       toast.error(t('backupPlans.toasts.multiRepositoryRequiresPro'))
+      trackFeatureBlocked('backup_plan_multi_repository', {
+        surface: BACKUP_PLANS_ANALYTICS_SECTION,
+        operation: 'select_multiple_repositories',
+        repository_count: ids.length,
+      })
     }
 
     setWizardState((prev) => ({
@@ -675,6 +711,12 @@ export default function BackupPlans() {
   const submitPlan = () => {
     if (isRepositorySelectionOverLimit(wizardState.repositoryIds, canUseMultiRepository)) {
       toast.error(t('backupPlans.toasts.multiRepositoryRequiresPro'))
+      trackFeatureBlocked('backup_plan_multi_repository', {
+        surface: BACKUP_PLANS_ANALYTICS_SECTION,
+        operation: 'submit_plan',
+        repository_count: wizardState.repositoryIds.length,
+        repository_run_mode: wizardState.repositoryRunMode,
+      })
       return
     }
     const sourceLocations = wizardState.sourceLocations || []
@@ -683,6 +725,11 @@ export default function BackupPlans() {
       sourceLocations.some((location) => location.source_type === 'agent')
     ) {
       toast.error(t('backupPlans.sourceChooser.managedAgentRequiresPro'))
+      trackFeatureBlocked('managed_agents', {
+        surface: BACKUP_PLANS_ANALYTICS_SECTION,
+        operation: 'submit_plan',
+        usage: 'backup_plan_source',
+      })
       return
     }
     if (
@@ -690,6 +737,11 @@ export default function BackupPlans() {
       new Set(sourceLocations.map((location) => location.source_type)).size > 1
     ) {
       toast.error(t('backupPlans.sourceChooser.mixedSourceTypesRequiresPro'))
+      trackFeatureBlocked('backup_plan_mixed_sources', {
+        surface: BACKUP_PLANS_ANALYTICS_SECTION,
+        operation: 'submit_plan',
+        source_type: wizardState.sourceType,
+      })
       return
     }
     const selectedRepositories = wizardState.repositoryIds

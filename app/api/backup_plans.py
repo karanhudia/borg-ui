@@ -42,6 +42,11 @@ from app.services.check_flag_validation import (
     validate_check_flags_for_max_duration,
 )
 from app.services.backup_progress_contract import serialize_backup_progress_details
+from app.services.log_policy import (
+    DEFAULT_LOG_SAVE_POLICY,
+    get_log_save_policy,
+    script_execution_has_logs,
+)
 from app.services.repository_executor import repository_executor_type
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.schedule_time import (
@@ -593,7 +598,9 @@ def _serialize_plan_run_repository(link: BackupPlanRunRepository) -> dict[str, A
     }
 
 
-def _serialize_script_execution(execution: ScriptExecution) -> dict[str, Any]:
+def _serialize_script_execution(
+    execution: ScriptExecution, *, log_save_policy: str = DEFAULT_LOG_SAVE_POLICY
+) -> dict[str, Any]:
     return {
         "id": execution.id,
         "script_id": execution.script_id,
@@ -607,13 +614,18 @@ def _serialize_script_execution(execution: ScriptExecution) -> dict[str, Any]:
         "execution_time": execution.execution_time,
         "exit_code": execution.exit_code,
         "error_message": execution.error_message,
-        "has_logs": bool(
-            execution.stdout or execution.stderr or execution.error_message
+        "has_logs": script_execution_has_logs(
+            execution, log_save_policy=log_save_policy
         ),
     }
 
 
-def _serialize_plan_run(run: BackupPlanRun, *, detail: bool = True) -> dict[str, Any]:
+def _serialize_plan_run(
+    run: BackupPlanRun,
+    *,
+    detail: bool = True,
+    log_save_policy: str = DEFAULT_LOG_SAVE_POLICY,
+) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "id": run.id,
         "backup_plan_id": run.backup_plan_id,
@@ -635,7 +647,7 @@ def _serialize_plan_run(run: BackupPlanRun, *, detail: bool = True) -> dict[str,
             for link in sorted(run.repositories, key=lambda item: item.id)
         ]
         payload["script_executions"] = [
-            _serialize_script_execution(execution)
+            _serialize_script_execution(execution, log_save_policy=log_save_policy)
             for execution in sorted(
                 run.script_executions,
                 key=lambda item: (item.started_at or datetime.min, item.id),
@@ -1191,7 +1203,12 @@ async def list_backup_plan_runs(
         .limit(limit)
         .all()
     )
-    return {"runs": [_serialize_plan_run(run) for run in runs]}
+    log_save_policy = get_log_save_policy(db)
+    return {
+        "runs": [
+            _serialize_plan_run(run, log_save_policy=log_save_policy) for run in runs
+        ]
+    }
 
 
 @router.get("/runs/{run_id}")
@@ -1208,7 +1225,7 @@ async def get_backup_plan_run(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={"key": "backend.errors.auth.notEnoughPermissions"},
             )
-    return _serialize_plan_run(run)
+    return _serialize_plan_run(run, log_save_policy=get_log_save_policy(db))
 
 
 @router.post("/runs/{run_id}/cancel")
@@ -1229,7 +1246,7 @@ async def cancel_backup_plan_run(
     )
     return {
         "message": "backend.success.backupPlans.runCancelled",
-        "run": _serialize_plan_run(run),
+        "run": _serialize_plan_run(run, log_save_policy=get_log_save_policy(db)),
         **result,
     }
 
@@ -1263,7 +1280,7 @@ async def retry_backup_plan_run(
         retry_backup_plan_run_id=retry_run.id,
         user=current_user.username,
     )
-    return _serialize_plan_run(retry_run)
+    return _serialize_plan_run(retry_run, log_save_policy=get_log_save_policy(db))
 
 
 @router.post("/from-repository/{repo_id}", status_code=status.HTTP_201_CREATED)
@@ -1442,7 +1459,7 @@ async def run_backup_plan(
         backup_plan_run_id=run.id,
         user=current_user.username,
     )
-    return _serialize_plan_run(run)
+    return _serialize_plan_run(run, log_save_policy=get_log_save_policy(db))
 
 
 @router.get("/{plan_id}/runs")
@@ -1476,7 +1493,12 @@ async def list_backup_plan_runs_for_plan(
         .limit(limit)
         .all()
     )
-    return {"runs": [_serialize_plan_run(run) for run in runs]}
+    log_save_policy = get_log_save_policy(db)
+    return {
+        "runs": [
+            _serialize_plan_run(run, log_save_policy=log_save_policy) for run in runs
+        ]
+    }
 
 
 @router.post("/{plan_id}/toggle")

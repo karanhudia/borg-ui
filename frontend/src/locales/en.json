@@ -873,7 +873,7 @@
       "containerModeExport": "docker export",
       "scanContainers": "Scan containers",
       "rescanContainers": "Re-scan containers",
-      "scanContainersHint": "Find containers on the selected Docker host.",
+      "scanContainersHint": "Scan selected Docker host.",
       "detectedContainers": "Detected containers",
       "containerBackupCoverageTitle": "What this source backs up",
       "containerFilesystemIncluded": "Included: container filesystem export at {{path}}",

@@ -448,6 +448,7 @@ export interface SourceDiscoveryContainerMount {
   type: string | null
   name: string | null
   source: string | null
+  backup_source?: string | null
   destination: string | null
   backed_up: boolean
   reason: string
