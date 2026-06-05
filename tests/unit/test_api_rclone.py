@@ -319,10 +319,40 @@ def test_rclone_provider_metadata_reports_borg_ui_oauth_callbacks_without_secret
 def test_rclone_provider_metadata_reports_generic_oauth_callbacks_without_secrets(
     test_client: TestClient, admin_headers, monkeypatch
 ):
+    async def fake_execute(command, *, timeout):
+        assert command == ["rclone", "config", "providers"]
+        return RcloneCommandResult(
+            success=True,
+            return_code=0,
+            stdout=json.dumps(
+                [
+                    {
+                        "Name": "pcloud",
+                        "Prefix": "pcloud",
+                        "Description": "Pcloud",
+                        "Options": [
+                            {
+                                "Name": "token",
+                                "Help": "OAuth Access Token as a JSON blob.",
+                                "Required": False,
+                                "Advanced": True,
+                                "Sensitive": True,
+                                "Type": "string",
+                            },
+                        ],
+                    },
+                ]
+            ),
+            stderr="",
+            command=command,
+            redacted_command="rclone config providers",
+        )
+
     monkeypatch.setattr(
         "app.api.rclone.settings.public_base_url",
         "https://backups.example.com",
     )
+    monkeypatch.setattr("app.api.rclone.rclone_service.execute", fake_execute)
 
     update_response = test_client.put(
         "/api/rclone/oauth/credentials/pcloud",
