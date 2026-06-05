@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-06-04T04:06:14.931Z",
+  "generatedAt": "2026-06-05T11:39:33.726Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #387 visual report",
-    "commitSha": "225fb99789e8",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26929630219"
+    "commitSha": "aaa715b73da5",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/27012490090"
   },
   "totals": {
-    "baseline": 304,
-    "actual": 304,
-    "compared": 304,
+    "baseline": 338,
+    "actual": 338,
+    "compared": 338,
     "changed": 0,
     "added": 0,
     "removed": 0,
-    "unchanged": 304
+    "unchanged": 338
   },
   "changed": [],
   "added": [],
@@ -30,6 +30,12 @@
     },
     {
       "fileName": "backup-plans-reviewstep--database-source-to-server-repo.png"
+    },
+    {
+      "fileName": "backup-plans-reviewstep--docker-container-source-to-server-repo--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-reviewstep--docker-container-source-to-server-repo.png"
     },
     {
       "fileName": "backup-plans-reviewstep--server-source-to-server-repo--mobile.png"
@@ -78,6 +84,18 @@
     },
     {
       "fileName": "backup-plans-sourceselectiondialog--community-mixed-sources-locked.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--container-picker-detected--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--container-picker-detected.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--container-picker-empty--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--container-picker-empty.png"
     },
     {
       "fileName": "backup-plans-sourceselectiondialog--database-detected-sqlite-detail--mobile.png"
@@ -152,6 +170,12 @@
       "fileName": "backup-plans-sourceselectiondialog--database-scan-remote-target.png"
     },
     {
+      "fileName": "backup-plans-sourceselectiondialog--database-scan-returned-after-add--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-scan-returned-after-add.png"
+    },
+    {
       "fileName": "backup-plans-sourceselectiondialog--database-scan-single-sqlite-detected--mobile.png"
     },
     {
@@ -216,6 +240,12 @@
     },
     {
       "fileName": "backup-plans-sourcestep--database-dump-source.png"
+    },
+    {
+      "fileName": "backup-plans-sourcestep--docker-container-source--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourcestep--docker-container-source.png"
     },
     {
       "fileName": "backup-plans-sourcestep--empty-state--mobile.png"
@@ -350,6 +380,18 @@
       "fileName": "components-destinationselect--repository-destinations.png"
     },
     {
+      "fileName": "components-diagnosticstcptargetfields--collapsed--mobile.png"
+    },
+    {
+      "fileName": "components-diagnosticstcptargetfields--collapsed.png"
+    },
+    {
+      "fileName": "components-diagnosticstcptargetfields--expanded-with-invalid-port--mobile.png"
+    },
+    {
+      "fileName": "components-diagnosticstcptargetfields--expanded-with-invalid-port.png"
+    },
+    {
       "fileName": "components-emptystatecard--cloud-storage-no-match-fallback--mobile.png"
     },
     {
@@ -462,6 +504,18 @@
     },
     {
       "fileName": "components-prunerepositorydialog--retention-preview.png"
+    },
+    {
+      "fileName": "components-rcloneproviderselect--narrow-width--mobile.png"
+    },
+    {
+      "fileName": "components-rcloneproviderselect--narrow-width.png"
+    },
+    {
+      "fileName": "components-rcloneproviderselect--provider-search--mobile.png"
+    },
+    {
+      "fileName": "components-rcloneproviderselect--provider-search.png"
     },
     {
       "fileName": "components-rcloneremoteselect--configured-remote--mobile.png"
@@ -578,6 +632,24 @@
       "fileName": "components-retryjobdialog--backup-plan-run-retry.png"
     },
     {
+      "fileName": "components-richselect--default--mobile.png"
+    },
+    {
+      "fileName": "components-richselect--default.png"
+    },
+    {
+      "fileName": "components-richselect--narrow-width--mobile.png"
+    },
+    {
+      "fileName": "components-richselect--narrow-width.png"
+    },
+    {
+      "fileName": "components-richselect--search-enabled--mobile.png"
+    },
+    {
+      "fileName": "components-richselect--search-enabled.png"
+    },
+    {
       "fileName": "components-runningcloudstoragejobssection--active-jobs--mobile.png"
     },
     {
@@ -600,6 +672,12 @@
     },
     {
       "fileName": "components-schedulejobcard--enabled-schedule.png"
+    },
+    {
+      "fileName": "components-shared-rclone-provider-icon--o-auth-provider-coverage--mobile.png"
+    },
+    {
+      "fileName": "components-shared-rclone-provider-icon--o-auth-provider-coverage.png"
     },
     {
       "fileName": "components-terminallogviewer--unicode-json-log--mobile.png"
@@ -806,6 +884,18 @@
       "fileName": "pages-cloudstorage--unavailable.png"
     },
     {
+      "fileName": "pages-dashboardv3-repositoryhealthpanel--mixed-warning-and-healthy--mobile.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-repositoryhealthpanel--mixed-warning-and-healthy.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-resourcegaugegrid--narrow-rail--mobile.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-resourcegaugegrid--narrow-rail.png"
+    },
+    {
       "fileName": "pages-managedagents--add-agent-details-step--mobile.png"
     },
     {
@@ -912,6 +1002,18 @@
     },
     {
       "fileName": "remote-machines-connectiondiagnosticsdialog--timeout.png"
+    },
+    {
+      "fileName": "remote-machines-deploykeydialog--custom-defaults--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-deploykeydialog--custom-defaults.png"
+    },
+    {
+      "fileName": "remote-machines-deploykeydialog--hetzner-defaults--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-deploykeydialog--hetzner-defaults.png"
     },
     {
       "fileName": "remote-machines-remotemachinecard--with-run-diagnostics--mobile.png"
