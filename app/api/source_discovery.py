@@ -1023,6 +1023,26 @@ def _run_local_mount_size_probe(
     )
 
 
+def _local_mount_size_probe_paths(path: str) -> list[str]:
+    cleaned_path = os.path.normpath(path.strip())
+    if not cleaned_path or not os.path.isabs(cleaned_path):
+        return [path]
+
+    candidates = [cleaned_path]
+    for mount_point in settings.get_local_mount_points():
+        normalized_mount = os.path.normpath(mount_point.strip())
+        if not normalized_mount or not os.path.isabs(normalized_mount):
+            continue
+        if cleaned_path == normalized_mount or cleaned_path.startswith(
+            normalized_mount + os.sep
+        ):
+            continue
+        mapped_path = os.path.join(normalized_mount, cleaned_path.lstrip(os.sep))
+        if mapped_path not in candidates:
+            candidates.append(mapped_path)
+    return candidates
+
+
 def _run_remote_mount_size_probe(
     *,
     connection: SSHConnection,
@@ -1086,6 +1106,7 @@ def _enrich_container_mount_sizes(
     containers: list[ContainerCandidate],
     *,
     probe,
+    path_candidates=None,
     scan_timeout_seconds: int,
 ) -> None:
     deadline = time.monotonic() + min(
@@ -1099,18 +1120,27 @@ def _enrich_container_mount_sizes(
                 _set_mount_size(mount, None, "unavailable")
                 continue
 
-            timeout_seconds = _remaining_mount_size_timeout(deadline)
-            if timeout_seconds is None:
-                _set_mount_size(mount, None, "timeout")
-                continue
+            size_bytes: int | None = None
+            status = "unavailable"
+            candidate_paths = (
+                path_candidates(source) if path_candidates is not None else [source]
+            )
+            for candidate_path in candidate_paths:
+                timeout_seconds = _remaining_mount_size_timeout(deadline)
+                if timeout_seconds is None:
+                    status = "timeout"
+                    break
 
-            try:
-                result = probe(source, timeout_seconds)
-            except subprocess.TimeoutExpired:
-                _set_mount_size(mount, None, "timeout")
-                continue
+                try:
+                    result = probe(candidate_path, timeout_seconds)
+                except subprocess.TimeoutExpired:
+                    status = "timeout"
+                    break
 
-            size_bytes, status = _mount_size_result_status(result)
+                size_bytes, status = _mount_size_result_status(result)
+                if status != "unavailable":
+                    break
+
             _set_mount_size(mount, size_bytes, status)
 
 
@@ -1124,6 +1154,7 @@ def _enrich_local_container_mount_sizes(
         probe=lambda path, timeout_seconds: _run_local_mount_size_probe(
             path, timeout_seconds
         ),
+        path_candidates=_local_mount_size_probe_paths,
         scan_timeout_seconds=scan_timeout_seconds,
     )
 

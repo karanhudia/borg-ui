@@ -167,6 +167,82 @@ class TestSourceDiscovery:
             },
         ]
 
+    def test_container_scan_uses_local_mount_prefix_for_host_mount_size(
+        self, test_client, admin_headers, monkeypatch
+    ):
+        def fake_local_container_scan(**kwargs):
+            del kwargs
+            return SimpleNamespace(
+                returncode=0,
+                stdout=json.dumps(
+                    {
+                        "Id": "8f2d6d67b2e2",
+                        "Name": "/postgres",
+                        "Config": {"Image": "postgres:17"},
+                        "State": {"Status": "running"},
+                        "Mounts": [
+                            {
+                                "Type": "volume",
+                                "Name": "postgres-data",
+                                "Source": "/var/lib/docker/volumes/postgres-data/_data",
+                                "Destination": "/var/lib/postgresql/data",
+                            }
+                        ],
+                    }
+                )
+                + "\n",
+                stderr="",
+            )
+
+        probed_paths: list[str] = []
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            path = cmd[-1]
+            probed_paths.append(path)
+            if path == "/var/lib/docker/volumes/postgres-data/_data":
+                return SimpleNamespace(
+                    returncode=1,
+                    stdout="",
+                    stderr="du: cannot access '/var/lib/docker/volumes/postgres-data/_data': No such file or directory",
+                )
+            if path == "/local/var/lib/docker/volumes/postgres-data/_data":
+                return SimpleNamespace(
+                    returncode=0,
+                    stdout="16384\t/local/var/lib/docker/volumes/postgres-data/_data\n",
+                    stderr="",
+                )
+            raise AssertionError(f"Unexpected size probe for {path}")
+
+        monkeypatch.setattr(
+            source_discovery,
+            "_run_local_container_scan",
+            fake_local_container_scan,
+            raising=False,
+        )
+        monkeypatch.setattr(source_discovery.subprocess, "run", fake_run)
+        monkeypatch.setattr(
+            source_discovery.settings.__class__,
+            "get_local_mount_points",
+            lambda self: ["/local"],
+        )
+
+        response = test_client.post(
+            "/api/source-discovery/containers/scan",
+            json={"source_type": "local", "source_ssh_connection_id": None},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        mount = response.json()["containers"][0]["mounts"][0]
+        assert mount["source"] == "/var/lib/docker/volumes/postgres-data/_data"
+        assert mount["size_bytes"] == 16384
+        assert mount["size_status"] == "available"
+        assert probed_paths == [
+            "/var/lib/docker/volumes/postgres-data/_data",
+            "/local/var/lib/docker/volumes/postgres-data/_data",
+        ]
+
     def test_container_scan_reports_per_mount_size_failures(
         self, test_client, admin_headers, monkeypatch
     ):
@@ -222,6 +298,12 @@ class TestSourceDiscovery:
                     returncode=1,
                     stdout="",
                     stderr="du: cannot access '/srv/missing': No such file or directory",
+                )
+            if path == "/local/srv/missing":
+                return SimpleNamespace(
+                    returncode=1,
+                    stdout="",
+                    stderr="du: cannot access '/local/srv/missing': No such file or directory",
                 )
             if path == "/srv/slow":
                 raise subprocess.TimeoutExpired(cmd, timeout=2)
