@@ -2336,6 +2336,14 @@ class BackupService:
                     job_id=job_id,
                     repository_id=repo_record.id,
                 )
+                db.refresh(job)
+                if job.status == "cancelled":
+                    logger.info(
+                        "Backup cancelled while waiting for repository command lock",
+                        job_id=job_id,
+                        repository_id=repo_record.id,
+                    )
+                    return
 
             # Execute command - NO LOG FILE FOR MAXIMUM PERFORMANCE
             process = await asyncio.create_subprocess_exec(
