@@ -207,10 +207,16 @@
     "toasts": {
       "added": "Remote-Client hinzugefügt.",
       "updated": "Remote-Client aktualisiert.",
+      "deleted": "Remote-Client gelöscht.",
       "online": "{{name}} ist online.",
       "unavailable": "{{name}} ist nicht verfügbar.",
       "checkFailed": "Prüfung von {{name}} fehlgeschlagen: {{error}}",
       "using": "{{name}} wird verwendet."
+    },
+    "deleteDialog": {
+      "title": "Remote-Client löschen?",
+      "description": "\"{{name}}\" aus diesem Browser entfernen? Du kannst ihn später mit seiner Backend-URL erneut hinzufügen.",
+      "confirm": "Client löschen"
     },
     "errors": {
       "saveFailed": "Remote-Client konnte nicht gespeichert werden.",

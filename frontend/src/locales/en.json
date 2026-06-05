@@ -207,10 +207,16 @@
     "toasts": {
       "added": "Remote client added.",
       "updated": "Remote client updated.",
+      "deleted": "Remote client deleted.",
       "online": "{{name}} is online.",
       "unavailable": "{{name}} is unavailable.",
       "checkFailed": "{{name}} check failed: {{error}}",
       "using": "Using {{name}}."
+    },
+    "deleteDialog": {
+      "title": "Delete remote client?",
+      "description": "Remove \"{{name}}\" from this browser? You can add it again later with its backend URL.",
+      "confirm": "Delete client"
     },
     "errors": {
       "saveFailed": "Failed to save remote client.",

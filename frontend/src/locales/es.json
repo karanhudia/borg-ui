@@ -207,10 +207,16 @@
     "toasts": {
       "added": "Cliente remoto añadido.",
       "updated": "Cliente remoto actualizado.",
+      "deleted": "Cliente remoto eliminado.",
       "online": "{{name}} está en línea.",
       "unavailable": "{{name}} no está disponible.",
       "checkFailed": "Error al comprobar {{name}}: {{error}}",
       "using": "Usando {{name}}."
+    },
+    "deleteDialog": {
+      "title": "¿Eliminar cliente remoto?",
+      "description": "¿Eliminar \"{{name}}\" de este navegador? Puedes añadirlo de nuevo más tarde con la URL del backend.",
+      "confirm": "Eliminar cliente"
     },
     "errors": {
       "saveFailed": "No se pudo guardar el cliente remoto.",

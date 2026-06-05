@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
 import { Navigate } from 'react-router-dom'
@@ -102,6 +102,7 @@ export function RemoteClientsContent() {
   const [form, setForm] = useState<ClientFormState>(emptyForm)
   const [formError, setFormError] = useState<string | null>(null)
   const [checkingId, setCheckingId] = useState<string | null>(null)
+  const [deletingClient, setDeletingClient] = useState<RemoteBackendClient | null>(null)
 
   const openCreateDialog = () => {
     setEditingClient(null)
@@ -165,6 +166,17 @@ export function RemoteClientsContent() {
         error instanceof Error ? error.message : t('remoteClients.errors.remoteUnavailable')
       )
     }
+  }
+
+  const closeDeleteDialog = () => {
+    setDeletingClient(null)
+  }
+
+  const handleDelete = () => {
+    if (!deletingClient) return
+    deleteClient(deletingClient.id)
+    toast.success(t('remoteClients.toasts.deleted'))
+    closeDeleteDialog()
   }
 
   return (
@@ -356,7 +368,7 @@ export function RemoteClientsContent() {
                       <IconButton
                         size="small"
                         color="error"
-                        onClick={() => deleteClient(client.id)}
+                        onClick={() => setDeletingClient(client)}
                         aria-label={t('remoteClients.actions.deleteAria', { name: client.name })}
                       >
                         <Trash2 size={16} />
@@ -414,14 +426,51 @@ export function RemoteClientsContent() {
           </Box>
         </ResponsiveDialog>
       )}
+
+      {deletingClient && (
+        <ResponsiveDialog
+          open={Boolean(deletingClient)}
+          onClose={closeDeleteDialog}
+          maxWidth="xs"
+          fullWidth
+        >
+          <Box sx={{ p: 2.5 }}>
+            <Typography variant="h6" sx={{ fontWeight: 800 }}>
+              {t('remoteClients.deleteDialog.title')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+              {t('remoteClients.deleteDialog.description', { name: deletingClient.name })}
+            </Typography>
+            <Stack direction="row" spacing={1} justifyContent="flex-end" sx={{ mt: 2.5 }}>
+              <Button onClick={closeDeleteDialog}>{t('common.buttons.cancel')}</Button>
+              <Button variant="contained" color="error" onClick={handleDelete}>
+                {t('remoteClients.deleteDialog.confirm')}
+              </Button>
+            </Stack>
+          </Box>
+        </ResponsiveDialog>
+      )}
     </Box>
   )
 }
 
 export default function RemoteClients() {
+  const { t } = useTranslation()
   const { hasGlobalPermission } = useAuth()
+  const hasPermission = hasGlobalPermission('settings.ssh.manage')
+  const hasShownPermissionToast = useRef(false)
 
-  if (!hasGlobalPermission('settings.ssh.manage')) {
+  useEffect(() => {
+    if (!hasPermission && !hasShownPermissionToast.current) {
+      toast.error(t('protectedRoute.permissionDenied'), { duration: 4000 })
+      hasShownPermissionToast.current = true
+    }
+    if (hasPermission) {
+      hasShownPermissionToast.current = false
+    }
+  }, [hasPermission, t])
+
+  if (!hasPermission) {
     return <Navigate to="/dashboard" replace />
   }
 

@@ -37,6 +37,10 @@ describe('RemoteClients', () => {
 
     renderPage()
 
+    expect(
+      await screen.findByText('You do not have permission to open this page')
+    ).toBeInTheDocument()
+
     await waitFor(() => {
       expect(window.location.pathname).toBe('/dashboard')
     })
@@ -106,5 +110,28 @@ describe('RemoteClients', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Backend URL must use HTTP or HTTPS.'
     )
+  })
+
+  it('requires confirmation before deleting a remote client', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    await user.click(screen.getByRole('button', { name: /add remote client/i }))
+    await user.type(screen.getByLabelText('Client name'), 'Studio NAS')
+    await user.type(screen.getByLabelText('Backend URL'), 'nas.local:9000')
+    await user.click(screen.getByRole('button', { name: 'Save client' }))
+
+    await user.click(screen.getByRole('button', { name: /delete studio nas/i }))
+
+    expect(screen.getByText('Studio NAS')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Delete remote client?' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.getByText('Studio NAS')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /delete studio nas/i }))
+    await user.click(screen.getByRole('button', { name: 'Delete client' }))
+
+    expect(screen.queryByText('Studio NAS')).not.toBeInTheDocument()
   })
 })

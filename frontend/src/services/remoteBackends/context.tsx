@@ -181,6 +181,7 @@ export function RemoteBackendProvider({
           compatibilityMessage: compatibility.message,
         }
 
+        if (!isLatestCheck()) return readCurrentClient() ?? client
         return updateRemoteBackendHealth(id, health)
       } catch (error) {
         if (!isLatestCheck()) return readCurrentClient() ?? client

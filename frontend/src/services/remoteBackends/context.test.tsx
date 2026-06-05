@@ -163,4 +163,61 @@ describe('RemoteBackendProvider', () => {
     expect(screen.getByText('status:offline')).toBeInTheDocument()
     expect(screen.getByText('compatibility:unknown')).toBeInTheDocument()
   })
+
+  it('keeps the latest health check result when an older check resolves late', async () => {
+    let firstSystemInfoResolve: (value: Record<string, unknown>) => void = () => {}
+    let healthCallCount = 0
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url === 'http://nas.local:9000/health') {
+        healthCallCount += 1
+        if (healthCallCount === 1) {
+          return Promise.resolve(
+            new Response(JSON.stringify({ status: 'healthy' }), { status: 200 })
+          )
+        }
+        return Promise.resolve(new Response(JSON.stringify({ status: 'down' }), { status: 503 }))
+      }
+      if (url === 'http://nas.local:9000/api/system/info') {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            new Promise<Record<string, unknown>>((resolve) => {
+              firstSystemInfoResolve = resolve
+            }),
+        } as Response)
+      }
+      return Promise.reject(new Error(`Unexpected fetch: ${url}`))
+    })
+    const user = userEvent.setup()
+    renderWithProviders(
+      <RemoteBackendProvider frontendVersion="2.2.2-alpha.1" fetchImpl={fetchMock}>
+        <RemoteBackendProbe />
+      </RemoteBackendProvider>
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Add' }))
+    await user.click(screen.getByRole('button', { name: 'Check' }))
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Check' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('status:offline')).toBeInTheDocument()
+    })
+
+    await act(async () => {
+      firstSystemInfoResolve({
+        app_version: '2.1.0',
+        borg_version: 'borg 1.4.0',
+      })
+    })
+
+    expect(screen.getByText('status:offline')).toBeInTheDocument()
+    expect(screen.getByText('compatibility:unknown')).toBeInTheDocument()
+  })
 })
