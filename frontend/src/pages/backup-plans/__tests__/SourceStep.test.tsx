@@ -308,6 +308,10 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.includeContainerMountAria':
     'Include mounted data {{path}} as a Files source',
   'backupPlans.sourceChooser.containerMountDestination': 'Mounted at {{path}}',
+  'backupPlans.sourceChooser.containerMountSizeAvailable': '{{size}}',
+  'backupPlans.sourceChooser.containerMountSizeUnavailable': 'Size unavailable',
+  'backupPlans.sourceChooser.containerMountSizePermissionDenied': 'Permission denied',
+  'backupPlans.sourceChooser.containerMountSizeTimeout': 'Size timed out',
   'backupPlans.sourceChooser.containerImageMetadata':
     'Image {{image}} identifies this container; Borg UI does not back up the image.',
   'backupPlans.sourceChooser.addDetectedContainer': 'Add detected container',
@@ -402,7 +406,7 @@ const translations: Record<string, string> = {
   'backupPlans.wizard.fileExplorer.sourceTitle': 'Select source paths',
 }
 
-const t = (key: string, options?: { count?: number; image?: string }) => {
+const t = (key: string, options?: { count?: number; image?: string; size?: string }) => {
   if (key === 'backupPlans.sourceChooser.pathCount' && typeof options?.count === 'number') {
     return `${options.count} ${options.count === 1 ? 'path' : 'paths'}`
   }
@@ -415,6 +419,7 @@ const t = (key: string, options?: { count?: number; image?: string }) => {
     .replace('{{target}}', String((options as { target?: string } | undefined)?.target ?? ''))
     .replace('{{path}}', String((options as { path?: string } | undefined)?.path ?? ''))
     .replace('{{image}}', String(options?.image ?? ''))
+    .replace('{{size}}', String(options?.size ?? ''))
 }
 
 function clickExistingTextButton(name: string | RegExp) {
@@ -774,6 +779,41 @@ describe('SourceStep', () => {
                 backed_up: false,
                 reason:
                   'Not included in docker export; add this path separately from Files if needed.',
+                size_bytes: 1073741824,
+                size_status: 'available',
+              },
+              {
+                type: 'bind',
+                name: null,
+                source: '/srv/portainer/config',
+                destination: '/config',
+                backed_up: false,
+                reason:
+                  'Not included in docker export; add this path separately from Files if needed.',
+                size_bytes: null,
+                size_status: 'unavailable',
+              },
+              {
+                type: 'bind',
+                name: null,
+                source: '/srv/portainer/private',
+                destination: '/private',
+                backed_up: false,
+                reason:
+                  'Not included in docker export; add this path separately from Files if needed.',
+                size_bytes: null,
+                size_status: 'permission_denied',
+              },
+              {
+                type: 'bind',
+                name: null,
+                source: '/srv/portainer/slow',
+                destination: '/slow',
+                backed_up: false,
+                reason:
+                  'Not included in docker export; add this path separately from Files if needed.',
+                size_bytes: null,
+                size_status: 'timeout',
               },
             ],
           },
@@ -832,6 +872,13 @@ describe('SourceStep', () => {
     ).toBeInTheDocument()
     expect(screen.getByText('Mounted at /data')).toBeInTheDocument()
     expect(screen.getByText('/var/lib/docker/volumes/portainer_data/_data')).toBeInTheDocument()
+    expect(screen.getByText('1.00 GB')).toBeInTheDocument()
+    expect(screen.getByText('/srv/portainer/config')).toBeInTheDocument()
+    expect(screen.getByText('Size unavailable')).toBeInTheDocument()
+    expect(screen.getByText('/srv/portainer/private')).toBeInTheDocument()
+    expect(screen.getByText('Permission denied')).toBeInTheDocument()
+    expect(screen.getByText('/srv/portainer/slow')).toBeInTheDocument()
+    expect(screen.getByText('Size timed out')).toBeInTheDocument()
     expect(screen.getByText('Optional mounted data')).toBeInTheDocument()
     expect(
       screen.queryByText('Select mounts to add them as Files sources in this plan.')

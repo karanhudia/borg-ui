@@ -451,6 +451,8 @@ export interface SourceDiscoveryContainerMount {
   destination: string | null
   backed_up: boolean
   reason: string
+  size_bytes?: number | null
+  size_status?: 'available' | 'unavailable' | 'permission_denied' | 'timeout' | string | null
 }
 
 export interface SourceDiscoveryContainer {
