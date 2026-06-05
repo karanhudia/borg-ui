@@ -1,21 +1,39 @@
 {
-  "generatedAt": "2026-06-05T20:08:08.665Z",
+  "generatedAt": "2026-06-05T21:05:00.308Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #634 visual report",
-    "commitSha": "3f97ea2a6365",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/27037278816"
+    "commitSha": "5a98be1f2667",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/27039850761"
   },
   "totals": {
     "baseline": 342,
     "actual": 354,
     "compared": 342,
-    "changed": 6,
+    "changed": 8,
     "added": 12,
     "removed": 0,
-    "unchanged": 336
+    "unchanged": 334
   },
   "changed": [
+    {
+      "fileName": "components-wizard-repository-location--agent-destination-empty--mobile.png",
+      "baselinePath": "images/baseline/components-wizard-repository-location--agent-destination-empty--mobile.png",
+      "actualPath": "images/actual/components-wizard-repository-location--agent-destination-empty--mobile.png",
+      "diffPath": "images/diff/components-wizard-repository-location--agent-destination-empty--mobile.png",
+      "diffPixels": 49371,
+      "totalPixels": 329160,
+      "diffRatio": 0.14999088589135984,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
     {
       "fileName": "components-wizard-repository-location--agent-destination-empty.png",
       "baselinePath": "images/baseline/components-wizard-repository-location--agent-destination-empty.png",
@@ -24,6 +42,24 @@
       "diffPixels": 74349,
       "totalPixels": 1024000,
       "diffRatio": 0.0726064453125,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-wizard-repository-location--agent-destination-multiple.png",
+      "baselinePath": "images/baseline/components-wizard-repository-location--agent-destination-multiple.png",
+      "actualPath": "images/actual/components-wizard-repository-location--agent-destination-multiple.png",
+      "diffPath": "images/diff/components-wizard-repository-location--agent-destination-multiple.png",
+      "diffPixels": 44318,
+      "totalPixels": 1024000,
+      "diffRatio": 0.043279296875,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -53,49 +89,13 @@
       }
     },
     {
-      "fileName": "components-wizard-repository-location--community-plan-locked-destinations.png",
-      "baselinePath": "images/baseline/components-wizard-repository-location--community-plan-locked-destinations.png",
-      "actualPath": "images/actual/components-wizard-repository-location--community-plan-locked-destinations.png",
-      "diffPath": "images/diff/components-wizard-repository-location--community-plan-locked-destinations.png",
-      "diffPixels": 111998,
-      "totalPixels": 1024000,
-      "diffRatio": 0.109373046875,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "components-wizard-repository-location--direct-borg-2-rclone--mobile.png",
-      "baselinePath": "images/baseline/components-wizard-repository-location--direct-borg-2-rclone--mobile.png",
-      "actualPath": "images/actual/components-wizard-repository-location--direct-borg-2-rclone--mobile.png",
-      "diffPath": "images/diff/components-wizard-repository-location--direct-borg-2-rclone--mobile.png",
-      "diffPixels": 57015,
+      "fileName": "components-wizard-repository-location--community-plan-locked-destinations--mobile.png",
+      "baselinePath": "images/baseline/components-wizard-repository-location--community-plan-locked-destinations--mobile.png",
+      "actualPath": "images/actual/components-wizard-repository-location--community-plan-locked-destinations--mobile.png",
+      "diffPath": "images/diff/components-wizard-repository-location--community-plan-locked-destinations--mobile.png",
+      "diffPixels": 71763,
       "totalPixels": 329160,
-      "diffRatio": 0.1732136347065257,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "components-wizard-repository-location--filesystem-destinations--mobile.png",
-      "baselinePath": "images/baseline/components-wizard-repository-location--filesystem-destinations--mobile.png",
-      "actualPath": "images/actual/components-wizard-repository-location--filesystem-destinations--mobile.png",
-      "diffPath": "images/diff/components-wizard-repository-location--filesystem-destinations--mobile.png",
-      "diffPixels": 27406,
-      "totalPixels": 329160,
-      "diffRatio": 0.08326042046421193,
+      "diffRatio": 0.21801859278162597,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -114,6 +114,42 @@
       "diffPixels": 31750,
       "totalPixels": 1024000,
       "diffRatio": 0.031005859375,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-wizard-repository-location--ssh-destination-no-connections.png",
+      "baselinePath": "images/baseline/components-wizard-repository-location--ssh-destination-no-connections.png",
+      "actualPath": "images/actual/components-wizard-repository-location--ssh-destination-no-connections.png",
+      "diffPath": "images/diff/components-wizard-repository-location--ssh-destination-no-connections.png",
+      "diffPixels": 70772,
+      "totalPixels": 1024000,
+      "diffRatio": 0.06911328125,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-wizard-repository-location--ssh-destination.png",
+      "baselinePath": "images/baseline/components-wizard-repository-location--ssh-destination.png",
+      "actualPath": "images/actual/components-wizard-repository-location--ssh-destination.png",
+      "diffPath": "images/diff/components-wizard-repository-location--ssh-destination.png",
+      "diffPixels": 43287,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0422724609375,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -934,34 +970,28 @@
       "fileName": "components-wizard-rclone-remote-dialog--guided-google-drive-remote.png"
     },
     {
-      "fileName": "components-wizard-repository-location--agent-destination-empty--mobile.png"
-    },
-    {
       "fileName": "components-wizard-repository-location--agent-destination-multiple--mobile.png"
-    },
-    {
-      "fileName": "components-wizard-repository-location--agent-destination-multiple.png"
     },
     {
       "fileName": "components-wizard-repository-location--agent-execution-with-ssh-repository--mobile.png"
     },
     {
-      "fileName": "components-wizard-repository-location--community-plan-locked-destinations--mobile.png"
+      "fileName": "components-wizard-repository-location--community-plan-locked-destinations.png"
+    },
+    {
+      "fileName": "components-wizard-repository-location--direct-borg-2-rclone--mobile.png"
     },
     {
       "fileName": "components-wizard-repository-location--direct-borg-2-rclone.png"
+    },
+    {
+      "fileName": "components-wizard-repository-location--filesystem-destinations--mobile.png"
     },
     {
       "fileName": "components-wizard-repository-location--ssh-destination--mobile.png"
     },
     {
       "fileName": "components-wizard-repository-location--ssh-destination-no-connections--mobile.png"
-    },
-    {
-      "fileName": "components-wizard-repository-location--ssh-destination-no-connections.png"
-    },
-    {
-      "fileName": "components-wizard-repository-location--ssh-destination.png"
     },
     {
       "fileName": "components-wizard-repository-review--cloud-mirror--mobile.png"
