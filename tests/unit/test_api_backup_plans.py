@@ -28,6 +28,7 @@ from app.database.models import (
     ScheduledJob,
     ScheduledJobRepository,
     SSHConnection,
+    SystemSettings,
     UserRepositoryPermission,
 )
 from app.core.security import get_password_hash
@@ -85,6 +86,15 @@ def _create_script(test_db, name: str, **kwargs) -> Script:
     test_db.commit()
     test_db.refresh(script)
     return script
+
+
+def _set_log_save_policy(test_db, policy: str) -> None:
+    settings_row = test_db.query(SystemSettings).first()
+    if settings_row is None:
+        settings_row = SystemSettings()
+        test_db.add(settings_row)
+    settings_row.log_save_policy = policy
+    test_db.commit()
 
 
 def _set_plan(test_db, plan: str) -> None:
@@ -737,6 +747,74 @@ class TestBackupPlanRoutes:
         assert row["has_logs"] is True
         assert row["started_at"]
         assert row["completed_at"]
+
+    def test_run_response_hides_quiet_backup_logs_under_failed_only(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _set_log_save_policy(test_db, "failed_only")
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        _plan, run = _create_execution_plan(test_db, [repo])
+        backup_job = BackupJob(
+            repository=repo.path,
+            repository_id=repo.id,
+            backup_plan_run_id=run.id,
+            status="completed",
+            started_at=datetime.utcnow(),
+            completed_at=datetime.utcnow(),
+            logs="quiet successful transcript",
+        )
+        test_db.add(backup_job)
+        test_db.flush()
+        run_repo = (
+            test_db.query(BackupPlanRunRepository)
+            .filter_by(backup_plan_run_id=run.id, repository_id=repo.id)
+            .one()
+        )
+        run_repo.status = "completed"
+        run_repo.backup_job_id = backup_job.id
+        test_db.commit()
+
+        response = test_client.get(
+            f"/api/backup-plans/runs/{run.id}", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        backup_row = response.json()["repositories"][0]["backup_job"]
+        assert backup_row["id"] == backup_job.id
+        assert backup_row["has_logs"] is False
+
+    def test_run_response_applies_log_policy_to_quiet_script_execution(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _set_log_save_policy(test_db, "failed_and_warnings")
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        script = _create_script(test_db, "Quiet Source Prepare")
+        plan, run = _create_execution_plan(test_db, [repo])
+        execution = ScriptExecution(
+            script_id=script.id,
+            backup_plan_id=plan.id,
+            backup_plan_run_id=run.id,
+            hook_type="pre-backup",
+            status="completed",
+            started_at=datetime.utcnow(),
+            completed_at=datetime.utcnow(),
+            execution_time=1.25,
+            exit_code=0,
+            stdout="completed successfully",
+            stderr="",
+            triggered_by="backup_plan",
+        )
+        test_db.add(execution)
+        test_db.commit()
+
+        response = test_client.get(
+            f"/api/backup-plans/runs/{run.id}", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        row = response.json()["script_executions"][0]
+        assert row["id"] == execution.id
+        assert row["has_logs"] is False
 
     def test_create_plan_supports_remote_source(
         self, test_client: TestClient, admin_headers, test_db

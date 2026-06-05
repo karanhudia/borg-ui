@@ -36,6 +36,7 @@ from app.api.auth import get_current_user, User
 from app.core.security import get_current_download_user
 from app.utils.datetime_utils import serialize_datetime
 from app.services.backup_service import backup_service
+from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 
 logger = structlog.get_logger()
 
@@ -173,6 +174,7 @@ async def list_recent_activity(
     """
 
     activities = []
+    log_save_policy = get_log_save_policy(db)
 
     # Fetch backup jobs
     if not job_type or job_type == "backup":
@@ -236,7 +238,12 @@ async def list_recent_activity(
                     "backup_plan_name": backup_plan_name,
                     "archive_name": getattr(job, "archive_name", None),
                     "package_name": None,
-                    "has_logs": bool(job.log_file_path or job.logs),
+                    "has_logs": job_has_logs_by_policy(
+                        job,
+                        log_save_policy,
+                        output_text=[job.logs, job.error_message],
+                        file_path=job.log_file_path,
+                    ),
                 }
             )
 
@@ -272,9 +279,11 @@ async def list_recent_activity(
                     "schedule_id": None,
                     "archive_name": job.archive,
                     "package_name": None,
-                    "has_logs": bool(
-                        job.logs
-                    ),  # Check logs field instead of log_file_path
+                    "has_logs": job_has_logs_by_policy(
+                        job,
+                        log_save_policy,
+                        output_text=[job.logs, job.error_message],
+                    ),
                 }
             )
 
@@ -309,7 +318,15 @@ async def list_recent_activity(
                     "schedule_id": None,
                     "archive_name": None,
                     "package_name": None,
-                    "has_logs": bool(getattr(job, "log_file_path", None)),
+                    "has_logs": job_has_logs_by_policy(
+                        job,
+                        log_save_policy,
+                        output_text=[
+                            getattr(job, "logs", None),
+                            job.error_message,
+                        ],
+                        file_path=getattr(job, "log_file_path", None),
+                    ),
                     "_sort_at": job.started_at or job.created_at,
                 }
             )
@@ -351,10 +368,14 @@ async def list_recent_activity(
                     "schedule_id": None,
                     "archive_name": job.archive_name,
                     "package_name": None,
-                    "has_logs": bool(
-                        getattr(job, "has_logs", False)
-                        or getattr(job, "log_file_path", None)
-                        or getattr(job, "logs", None)
+                    "has_logs": job_has_logs_by_policy(
+                        job,
+                        log_save_policy,
+                        output_text=[
+                            getattr(job, "logs", None),
+                            job.error_message,
+                        ],
+                        file_path=getattr(job, "log_file_path", None),
                     ),
                     "_sort_at": job.started_at or job.created_at,
                 }
@@ -398,7 +419,15 @@ async def list_recent_activity(
                     "schedule_id": None,
                     "archive_name": None,
                     "package_name": None,
-                    "has_logs": bool(getattr(job, "log_file_path", None)),
+                    "has_logs": job_has_logs_by_policy(
+                        job,
+                        log_save_policy,
+                        output_text=[
+                            getattr(job, "logs", None),
+                            job.error_message,
+                        ],
+                        file_path=getattr(job, "log_file_path", None),
+                    ),
                 }
             )
 
@@ -437,7 +466,15 @@ async def list_recent_activity(
                     "schedule_id": None,
                     "archive_name": None,
                     "package_name": None,
-                    "has_logs": bool(job.logs),
+                    "has_logs": job_has_logs_by_policy(
+                        job,
+                        log_save_policy,
+                        output_text=[
+                            getattr(job, "logs", None),
+                            job.error_message,
+                        ],
+                        file_path=getattr(job, "log_file_path", None),
+                    ),
                 }
             )
 
@@ -474,7 +511,16 @@ async def list_recent_activity(
                     "schedule_id": None,
                     "archive_name": None,
                     "package_name": package_name,
-                    "has_logs": bool(getattr(job, "log_file_path", None)),
+                    "has_logs": job_has_logs_by_policy(
+                        job,
+                        log_save_policy,
+                        output_text=[
+                            getattr(job, "stdout", None),
+                            getattr(job, "stderr", None),
+                            job.error_message,
+                        ],
+                        file_path=getattr(job, "log_file_path", None),
+                    ),
                 }
             )
 
@@ -520,8 +566,15 @@ async def list_recent_activity(
                     "backup_plan_name": backup_plan_name,
                     "archive_name": execution.hook_type,
                     "package_name": script_name,
-                    "has_logs": bool(
-                        execution.stdout or execution.stderr or execution.error_message
+                    "has_logs": job_has_logs_by_policy(
+                        execution,
+                        log_save_policy,
+                        output_text=[
+                            execution.stdout,
+                            execution.stderr,
+                            execution.error_message,
+                        ],
+                        exit_code=execution.exit_code,
                     ),
                     "_sort_at": execution.started_at,
                 }
@@ -566,7 +619,12 @@ async def list_recent_activity(
                     "schedule_id": None,
                     "archive_name": None,
                     "package_name": None,
-                    "has_logs": bool(job.log_path or job.log_text or job.error_text),
+                    "has_logs": job_has_logs_by_policy(
+                        job,
+                        log_save_policy,
+                        output_text=[job.log_text, job.error_text],
+                        file_path=job.log_path,
+                    ),
                     "_sort_at": job.started_at or job.created_at,
                 }
             )

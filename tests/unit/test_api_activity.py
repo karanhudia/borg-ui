@@ -6,6 +6,33 @@ import pytest
 from datetime import datetime, timedelta
 
 
+def _set_log_save_policy(test_db, policy: str) -> None:
+    from app.database.models import SystemSettings
+
+    settings = test_db.query(SystemSettings).first()
+    if settings is None:
+        settings = SystemSettings()
+        test_db.add(settings)
+    settings.log_save_policy = policy
+    test_db.commit()
+
+
+def _create_activity_repository(test_db, name: str = "Policy Repo"):
+    from app.database.models import Repository
+
+    repo = Repository(
+        name=name,
+        path=f"/tmp/{name.lower().replace(' ', '-')}",
+        encryption="none",
+        compression="lz4",
+        repository_type="local",
+    )
+    test_db.add(repo)
+    test_db.commit()
+    test_db.refresh(repo)
+    return repo
+
+
 class TestBackupServiceLogBuffer:
     """Test BackupService log buffer methods"""
 
@@ -124,6 +151,7 @@ class TestRecentActivityEndpoint:
             ScheduledJob,
         )
 
+        _set_log_save_policy(test_db, "all_jobs")
         base = datetime(2024, 1, 1, 12, 0, 0)
         repository = Repository(
             name="Activity Repo",
@@ -302,6 +330,7 @@ class TestRecentActivityEndpoint:
     ):
         from app.database.models import Repository, RcloneSyncJob
 
+        _set_log_save_policy(test_db, "all_jobs")
         repository = Repository(
             name="Cloud File Logs Repo",
             path="/tmp/cloud-file-logs-repo",
@@ -481,6 +510,294 @@ class TestRecentActivityEndpoint:
         assert activity[0]["id"] == completed_job.id
         assert activity[0]["status"] == "completed"
         assert activity[0]["type"] == "backup"
+
+
+@pytest.mark.unit
+class TestRecentActivityLogPolicy:
+    """Test Activity has_logs serialization against SystemSettings.log_save_policy."""
+
+    def test_quiet_successful_backup_db_logs_hidden_under_failed_only(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.database.models import BackupJob
+
+        _set_log_save_policy(test_db, "failed_only")
+        repo = _create_activity_repository(test_db, "Policy Backup Repo")
+        job = BackupJob(
+            repository=repo.path,
+            repository_id=repo.id,
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            logs="quiet successful transcript",
+        )
+        test_db.add(job)
+        test_db.commit()
+
+        response = test_client.get(
+            "/api/activity/recent?job_type=backup", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        activity = response.json()
+        assert activity[0]["id"] == job.id
+        assert activity[0]["has_logs"] is False
+
+    def test_quiet_successful_file_backed_check_hidden_under_failed_and_warnings(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.database.models import CheckJob
+
+        _set_log_save_policy(test_db, "failed_and_warnings")
+        repo = _create_activity_repository(test_db, "Policy Check Repo")
+        job = CheckJob(
+            repository_id=repo.id,
+            repository_path=repo.path,
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            log_file_path="/tmp/check-policy.log",
+        )
+        test_db.add(job)
+        test_db.commit()
+
+        response = test_client.get(
+            "/api/activity/recent?job_type=check", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        activity = response.json()
+        assert activity[0]["id"] == job.id
+        assert activity[0]["has_logs"] is False
+
+    def test_quiet_successful_file_backed_check_visible_under_all_jobs(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.database.models import CheckJob
+
+        _set_log_save_policy(test_db, "all_jobs")
+        repo = _create_activity_repository(test_db, "All Jobs Check Repo")
+        job = CheckJob(
+            repository_id=repo.id,
+            repository_path=repo.path,
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            log_file_path="/tmp/check-all-jobs.log",
+        )
+        test_db.add(job)
+        test_db.commit()
+
+        response = test_client.get(
+            "/api/activity/recent?job_type=check", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        activity = response.json()
+        assert activity[0]["id"] == job.id
+        assert activity[0]["has_logs"] is True
+
+    @pytest.mark.parametrize(
+        "policy", ["failed_only", "failed_and_warnings", "all_jobs"]
+    )
+    def test_failed_restore_visible_under_all_policies(
+        self, test_client, admin_headers, test_db, policy
+    ):
+        from app.database.models import RestoreJob
+
+        _set_log_save_policy(test_db, policy)
+        repo = _create_activity_repository(test_db, f"Failed Restore {policy}")
+        job = RestoreJob(
+            repository=repo.path,
+            archive="archive-1",
+            destination="/restore",
+            status="failed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            error_message="restore failed",
+        )
+        test_db.add(job)
+        test_db.commit()
+
+        response = test_client.get(
+            "/api/activity/recent?job_type=restore", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        activity = response.json()
+        assert activity[0]["id"] == job.id
+        assert activity[0]["has_logs"] is True
+
+    def test_quiet_successful_script_hidden_but_warning_visible_under_failed_and_warnings(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.database.models import Script, ScriptExecution
+
+        _set_log_save_policy(test_db, "failed_and_warnings")
+        quiet_script = Script(
+            name="Quiet Policy Script",
+            file_path="library/quiet-policy.sh",
+            category="custom",
+            timeout=300,
+        )
+        warning_script = Script(
+            name="Warning Policy Script",
+            file_path="library/warning-policy.sh",
+            category="custom",
+            timeout=300,
+        )
+        test_db.add_all([quiet_script, warning_script])
+        test_db.flush()
+        quiet_execution = ScriptExecution(
+            script_id=quiet_script.id,
+            hook_type="standalone",
+            status="completed",
+            started_at=datetime(2024, 1, 1, 10, 0, 0),
+            completed_at=datetime(2024, 1, 1, 10, 0, 1),
+            exit_code=0,
+            stdout="completed successfully",
+            stderr="",
+            triggered_by="manual",
+        )
+        warning_execution = ScriptExecution(
+            script_id=warning_script.id,
+            hook_type="standalone",
+            status="completed",
+            started_at=datetime(2024, 1, 1, 10, 1, 0),
+            completed_at=datetime(2024, 1, 1, 10, 1, 1),
+            exit_code=0,
+            stdout="completed with warning",
+            stderr="WARNING: disk almost full",
+            triggered_by="manual",
+        )
+        test_db.add_all([quiet_execution, warning_execution])
+        test_db.commit()
+
+        response = test_client.get(
+            "/api/activity/recent?job_type=script_execution", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        activity = response.json()
+        rows = {row["id"]: row for row in activity}
+        assert rows[quiet_execution.id]["has_logs"] is False
+        assert rows[warning_execution.id]["has_logs"] is True
+
+    def test_warning_package_output_visible_under_failed_and_warnings(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.database.models import InstalledPackage, PackageInstallJob
+
+        _set_log_save_policy(test_db, "failed_and_warnings")
+        package = InstalledPackage(
+            name="policy-package",
+            install_command="apt-get install -y policy-package",
+            status="installed",
+        )
+        test_db.add(package)
+        test_db.flush()
+        job = PackageInstallJob(
+            package_id=package.id,
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            exit_code=0,
+            stdout="WARNING: package already installed",
+        )
+        test_db.add(job)
+        test_db.commit()
+
+        response = test_client.get(
+            "/api/activity/recent?job_type=package", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        activity = response.json()
+        assert activity[0]["id"] == job.id
+        assert activity[0]["has_logs"] is True
+
+    def test_quiet_successful_rclone_logs_hidden_under_failed_only(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.database.models import RcloneSyncJob
+
+        _set_log_save_policy(test_db, "failed_only")
+        repo = _create_activity_repository(test_db, "Policy Rclone Repo")
+        job = RcloneSyncJob(
+            repository_id=repo.id,
+            direction="primary_to_remote",
+            operation="sync",
+            status="completed",
+            triggered_by="manual",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            log_text="sync completed quietly",
+        )
+        test_db.add(job)
+        test_db.commit()
+
+        response = test_client.get(
+            "/api/activity/recent?job_type=rclone_sync", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        activity = response.json()
+        assert activity[0]["id"] == job.id
+        assert activity[0]["has_logs"] is False
+
+    def test_running_log_capable_rclone_visible_under_failed_only(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.database.models import RcloneSyncJob
+
+        _set_log_save_policy(test_db, "failed_only")
+        repo = _create_activity_repository(test_db, "Running Rclone Repo")
+        job = RcloneSyncJob(
+            repository_id=repo.id,
+            direction="primary_to_remote",
+            operation="sync",
+            status="running",
+            triggered_by="manual",
+            started_at=datetime.now(),
+            log_path="/tmp/rclone-running.log",
+        )
+        test_db.add(job)
+        test_db.commit()
+
+        response = test_client.get(
+            "/api/activity/recent?job_type=rclone_sync", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        activity = response.json()
+        assert activity[0]["id"] == job.id
+        assert activity[0]["has_logs"] is True
+
+    def test_pending_log_capable_check_hidden_under_all_jobs(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.database.models import CheckJob
+
+        _set_log_save_policy(test_db, "all_jobs")
+        repo = _create_activity_repository(test_db, "Pending Policy Check Repo")
+        job = CheckJob(
+            repository_id=repo.id,
+            repository_path=repo.path,
+            status="pending",
+            started_at=None,
+            log_file_path="/tmp/check-pending.log",
+        )
+        test_db.add(job)
+        test_db.commit()
+
+        response = test_client.get(
+            "/api/activity/recent?job_type=check", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        activity = response.json()
+        assert activity[0]["id"] == job.id
+        assert activity[0]["has_logs"] is False
 
 
 @pytest.mark.unit
