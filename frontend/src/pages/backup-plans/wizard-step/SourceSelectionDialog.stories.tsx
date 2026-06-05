@@ -601,6 +601,12 @@ const databaseMultiSqliteQueuedState: WizardState = {
   databaseTemplateId: 'sqlite',
 }
 
+const databaseSingleSqliteQueuedState: WizardState = {
+  ...databaseMultiSqliteQueuedState,
+  sourceDirectories: ['/var/tmp/borg-ui/database-dumps/sqlite/state'],
+  sourceLocations: databaseMultiSqliteQueuedState.sourceLocations?.slice(0, 1) || [],
+}
+
 const translations: Record<string, string> = {
   'backupPlans.sourceChooser.title': 'Choose backup source',
   'backupPlans.sourceChooser.where': 'Where are the files?',
@@ -1083,6 +1089,26 @@ export const DatabaseScanMultipleSqliteDetected: Story = {
       description: {
         story:
           'Scan sub-dialog with multiple same-type SQLite detections visible in the results grid.',
+      },
+    },
+  },
+}
+
+export const DatabaseScanReturnedAfterAdd: Story = {
+  render: () => (
+    <DialogStory
+      wizardState={databaseSingleSqliteQueuedState}
+      mockOptions={{ scanStatus: 'multiple-sqlite' }}
+      initialView="database"
+      initialScanDialogOpen
+      scrollToText="/srv/app/cache.sqlite3"
+    />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Post-add scan state: one detected SQLite database is already queued, and the scan sub-dialog remains open with the same scan paths and detected results so another database can be configured without rescanning.',
       },
     },
   },
