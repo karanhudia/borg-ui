@@ -596,6 +596,25 @@ class TestRecentActivityEndpoint:
 class TestRecentActivityLogPolicy:
     """Test Activity has_logs serialization against SystemSettings.log_save_policy."""
 
+    def test_mapping_output_uses_values_for_warning_detection(self):
+        from types import SimpleNamespace
+
+        from app.services.log_policy import job_has_logs_by_policy
+
+        job = SimpleNamespace(status="completed")
+
+        assert (
+            job_has_logs_by_policy(
+                job,
+                "failed_and_warnings",
+                output_text={
+                    "stdout": "completed successfully",
+                    "stderr": "WARNING: skipped one optional file",
+                },
+            )
+            is True
+        )
+
     def test_quiet_successful_backup_db_logs_hidden_under_failed_only(
         self, test_client, admin_headers, test_db
     ):

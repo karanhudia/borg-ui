@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -96,6 +96,8 @@ def _text_parts(output_text: Any) -> list[str]:
         return []
     if isinstance(output_text, str):
         return [output_text]
+    if isinstance(output_text, Mapping):
+        return [str(part) for part in output_text.values() if part is not None]
     if isinstance(output_text, Iterable):
         return [str(part) for part in output_text if part is not None]
     return [str(output_text)]
