@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-06-05T04:11:48.878Z",
+  "generatedAt": "2026-06-05T05:12:14.742Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #629 visual report",
-    "commitSha": "cc5775c2a12e",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26994735768"
+    "commitSha": "949a87d484dd",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26996634172"
   },
   "totals": {
     "baseline": 324,
@@ -21,9 +21,9 @@
       "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--container-picker-detected--mobile.png",
       "actualPath": "images/actual/backup-plans-sourceselectiondialog--container-picker-detected--mobile.png",
       "diffPath": "images/diff/backup-plans-sourceselectiondialog--container-picker-detected--mobile.png",
-      "diffPixels": 9253,
+      "diffPixels": 9275,
       "totalPixels": 329160,
-      "diffRatio": 0.028110949082513062,
+      "diffRatio": 0.02817778587920768,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -39,9 +39,9 @@
       "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--container-picker-detected.png",
       "actualPath": "images/actual/backup-plans-sourceselectiondialog--container-picker-detected.png",
       "diffPath": "images/diff/backup-plans-sourceselectiondialog--container-picker-detected.png",
-      "diffPixels": 15676,
+      "diffPixels": 16866,
       "totalPixels": 1024000,
-      "diffRatio": 0.01530859375,
+      "diffRatio": 0.016470703125,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
