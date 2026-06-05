@@ -873,7 +873,7 @@
       "containerModeExport": "docker export",
       "scanContainers": "Escanear contenedores",
       "rescanContainers": "Volver a escanear contenedores",
-      "scanContainersHint": "Busca contenedores en el host Docker seleccionado.",
+      "scanContainersHint": "Escanea el host Docker seleccionado.",
       "detectedContainers": "Contenedores detectados",
       "containerBackupCoverageTitle": "Qué respalda esta fuente",
       "containerFilesystemIncluded": "Incluido: exportación del sistema de archivos del contenedor en {{path}}",

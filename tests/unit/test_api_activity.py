@@ -325,6 +325,86 @@ class TestRecentActivityEndpoint:
         assert hydrate_activity["error_message"] == "remote unavailable"
         assert hydrate_activity["has_logs"] is True
 
+    def test_recent_activity_marks_quiet_script_executions_loggable_for_all_jobs_policy(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.database.models import Script, ScriptExecution, SystemSettings
+
+        test_db.add(SystemSettings(log_save_policy="all_jobs"))
+        script = Script(
+            name="Clean Docker export",
+            file_path="library/clean-docker-export.sh",
+            category="custom",
+            timeout=300,
+        )
+        test_db.add(script)
+        test_db.flush()
+        execution = ScriptExecution(
+            script_id=script.id,
+            hook_type="source-post-backup",
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            exit_code=0,
+            stdout="",
+            stderr="",
+            triggered_by="backup_plan",
+        )
+        test_db.add(execution)
+        test_db.commit()
+
+        response = test_client.get(
+            "/api/activity/recent?job_type=script_execution",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        activity = response.json()
+        assert len(activity) == 1
+        assert activity[0]["id"] == execution.id
+        assert activity[0]["type"] == "script_execution"
+        assert activity[0]["has_logs"] is True
+
+    def test_recent_activity_hides_quiet_script_logs_when_policy_skips_success(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.database.models import Script, ScriptExecution, SystemSettings
+
+        test_db.add(SystemSettings(log_save_policy="failed_only"))
+        script = Script(
+            name="Clean Docker export",
+            file_path="library/clean-docker-export.sh",
+            category="custom",
+            timeout=300,
+        )
+        test_db.add(script)
+        test_db.flush()
+        execution = ScriptExecution(
+            script_id=script.id,
+            hook_type="source-post-backup",
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            exit_code=0,
+            stdout="",
+            stderr="",
+            triggered_by="backup_plan",
+        )
+        test_db.add(execution)
+        test_db.commit()
+
+        response = test_client.get(
+            "/api/activity/recent?job_type=script_execution",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        activity = response.json()
+        assert len(activity) == 1
+        assert activity[0]["id"] == execution.id
+        assert activity[0]["type"] == "script_execution"
+        assert activity[0]["has_logs"] is False
+
     def test_recent_activity_marks_file_backed_rclone_logs_available(
         self, test_client, admin_headers, test_db
     ):

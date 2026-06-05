@@ -1,3 +1,5 @@
+"""Shared helpers for job log visibility policies."""
+
 from __future__ import annotations
 
 from collections.abc import Iterable
@@ -9,6 +11,7 @@ from app.database.models import SystemSettings
 
 DEFAULT_LOG_SAVE_POLICY = "failed_and_warnings"
 LOG_SAVE_POLICIES = {"failed_only", "failed_and_warnings", "all_jobs"}
+VALID_LOG_SAVE_POLICIES = LOG_SAVE_POLICIES
 PENDING_STATUSES = {"pending", "queued", "scheduled"}
 RUNNING_STATUSES = {"running", "installing", "in_progress"}
 FAILED_STATUSES = {"failed", "cancelled", "canceled"}
@@ -96,3 +99,16 @@ def _text_parts(output_text: Any) -> list[str]:
     if isinstance(output_text, Iterable):
         return [str(part) for part in output_text if part is not None]
     return [str(output_text)]
+
+
+def script_execution_has_logs(execution: Any, *, log_save_policy: str) -> bool:
+    return job_has_logs_by_policy(
+        execution,
+        log_save_policy,
+        output_text=[
+            getattr(execution, "stdout", None),
+            getattr(execution, "stderr", None),
+            getattr(execution, "error_message", None),
+        ],
+        exit_code=getattr(execution, "exit_code", None),
+    )

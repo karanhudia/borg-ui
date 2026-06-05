@@ -25,6 +25,7 @@ import type {
   RcloneStatus,
 } from '../services/api'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { useFeatureAnalytics } from '../hooks/useFeatureAnalytics'
 import { getApiErrorDetail } from '../utils/apiErrors'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import type { SourceLocation } from '../types'
@@ -207,6 +208,7 @@ const RepositoryWizard = ({
   canUseRclone = true,
 }: RepositoryWizardProps) => {
   const { track, trackRepository, EventCategory, EventAction } = useAnalytics()
+  const { trackFeatureUsed, trackFeatureBlocked } = useFeatureAnalytics()
   const { t } = useTranslation()
   const [activeStep, setActiveStep] = useState(0)
   const [wizardState, setWizardState] = useState<WizardState>(() => createInitialState())
@@ -774,9 +776,30 @@ const RepositoryWizard = ({
   }
 
   const handleSubmit = async () => {
-    if (wizardState.repositoryLocation === 'rclone' && !canUseRclone) return
-    if (wizardState.cloudMirrorEnabled && !canUseRclone) return
-    if (wizardState.executionTarget === 'agent' && !canUseManagedAgents) return
+    if (wizardState.repositoryLocation === 'rclone' && !canUseRclone) {
+      trackFeatureBlocked('rclone', {
+        surface: 'repository_wizard',
+        operation: 'submit_direct_rclone_repository',
+        mode,
+      })
+      return
+    }
+    if (wizardState.cloudMirrorEnabled && !canUseRclone) {
+      trackFeatureBlocked('rclone', {
+        surface: 'repository_wizard',
+        operation: 'submit_cloud_mirror_repository',
+        mode,
+      })
+      return
+    }
+    if (wizardState.executionTarget === 'agent' && !canUseManagedAgents) {
+      trackFeatureBlocked('managed_agents', {
+        surface: 'repository_wizard',
+        operation: 'submit_agent_repository',
+        mode,
+      })
+      return
+    }
 
     const storageBackend = isCachedRcloneRepositoryEdit
       ? 'rclone'
@@ -906,17 +929,56 @@ const RepositoryWizard = ({
       { name: wizardState.name }
     )
 
+    const submitOperation =
+      mode === 'create'
+        ? 'create_repository'
+        : mode === 'import'
+          ? 'import_repository'
+          : 'update_repository'
+    const featureContext = {
+      surface: 'repository_wizard',
+      operation: submitOperation,
+      mode,
+      storage_backend: data.storage_backend,
+      repository_mode: data.mode,
+    }
+
     // Pass keyfile for import mode
     setIsSubmitting(true)
     try {
       await onSubmit(data, mode === 'import' ? wizardState.selectedKeyfile : null)
+      if (wizardState.borgVersion === 2) {
+        trackFeatureUsed('borg_v2', featureContext)
+      }
+
+      if (data.agent_machine_id) {
+        trackFeatureUsed('managed_agents', featureContext)
+      }
+
+      if (
+        data.storage_backend === 'rclone' ||
+        data.storage_backend === 'rclone_direct' ||
+        data.cloud_mirror_enabled
+      ) {
+        trackFeatureUsed('rclone', {
+          ...featureContext,
+          sync_policy: data.rclone_sync_policy,
+        })
+      }
     } finally {
       setIsSubmitting(false)
     }
   }
 
   const handleCreateRcloneRemote = async (data: CreateRcloneRemoteRequest) => {
-    if (!canUseRclone) return
+    if (!canUseRclone) {
+      trackFeatureBlocked('rclone', {
+        surface: 'repository_wizard',
+        operation: 'create_rclone_remote',
+        mode,
+      })
+      return
+    }
     setIsCreatingRcloneRemote(true)
     setRcloneRemoteCreateError(null)
     try {
@@ -931,6 +993,13 @@ const RepositoryWizard = ({
         cloudMirrorEnabled: true,
         rcloneRemoteId: remote.id,
         rcloneRemotePathVerified: false,
+      })
+      trackFeatureUsed('rclone', {
+        surface: 'repository_wizard',
+        operation: 'create_rclone_remote',
+        mode,
+        provider: data.provider,
+        config_source: data.config_source,
       })
       setShowRcloneRemoteDialog(false)
     } catch (error) {

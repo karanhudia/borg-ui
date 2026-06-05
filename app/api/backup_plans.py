@@ -42,7 +42,11 @@ from app.services.check_flag_validation import (
     validate_check_flags_for_max_duration,
 )
 from app.services.backup_progress_contract import serialize_backup_progress_details
-from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
+from app.services.log_policy import (
+    DEFAULT_LOG_SAVE_POLICY,
+    get_log_save_policy,
+    job_has_logs_by_policy,
+)
 from app.services.repository_executor import repository_executor_type
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.schedule_time import (
@@ -540,7 +544,10 @@ def _serialize_plan(plan: BackupPlan, *, detail: bool = False) -> dict[str, Any]
 
 
 def _serialize_backup_job(
-    job: Optional[BackupJob], repo: Optional[Repository], *, log_save_policy: str
+    job: Optional[BackupJob],
+    repo: Optional[Repository],
+    *,
+    log_save_policy: str = DEFAULT_LOG_SAVE_POLICY,
 ) -> Optional[dict[str, Any]]:
     if not job:
         return None
@@ -573,7 +580,7 @@ def _serialize_backup_job(
 
 
 def _serialize_plan_run_repository(
-    link: BackupPlanRunRepository, *, log_save_policy: str
+    link: BackupPlanRunRepository, *, log_save_policy: str = DEFAULT_LOG_SAVE_POLICY
 ) -> dict[str, Any]:
     repo = link.repository
     return {
@@ -606,7 +613,7 @@ def _serialize_plan_run_repository(
 
 
 def _serialize_script_execution(
-    execution: ScriptExecution, *, log_save_policy: str
+    execution: ScriptExecution, *, log_save_policy: str = DEFAULT_LOG_SAVE_POLICY
 ) -> dict[str, Any]:
     return {
         "id": execution.id,
@@ -635,7 +642,10 @@ def _serialize_script_execution(
 
 
 def _serialize_plan_run(
-    run: BackupPlanRun, *, log_save_policy: str, detail: bool = True
+    run: BackupPlanRun,
+    *,
+    detail: bool = True,
+    log_save_policy: str = DEFAULT_LOG_SAVE_POLICY,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "id": run.id,

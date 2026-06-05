@@ -816,6 +816,40 @@ class TestBackupPlanRoutes:
         assert row["id"] == execution.id
         assert row["has_logs"] is False
 
+    def test_run_response_uses_log_policy_for_quiet_script_executions(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _set_log_save_policy(test_db, "failed_only")
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        script = _create_script(test_db, "Clean Docker export")
+        plan, run = _create_execution_plan(test_db, [repo])
+        execution = ScriptExecution(
+            script_id=script.id,
+            backup_plan_id=plan.id,
+            backup_plan_run_id=run.id,
+            hook_type="source-post-backup",
+            status="completed",
+            started_at=datetime.utcnow(),
+            completed_at=datetime.utcnow(),
+            execution_time=0.1,
+            exit_code=0,
+            stdout="",
+            stderr="",
+            triggered_by="backup_plan",
+        )
+        test_db.add(execution)
+        test_db.commit()
+
+        response = test_client.get(
+            f"/api/backup-plans/runs/{run.id}", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        script_executions = response.json()["script_executions"]
+        assert len(script_executions) == 1
+        assert script_executions[0]["id"] == execution.id
+        assert script_executions[0]["has_logs"] is False
+
     def test_create_plan_supports_remote_source(
         self, test_client: TestClient, admin_headers, test_db
     ):
