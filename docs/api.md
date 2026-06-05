@@ -75,9 +75,11 @@ Successful responses use this shape:
 
 The JSON body uses the `repository` string accepted by Borg UI's manual backup
 flow. For the current `/api/backup/start` and `/api/backup/run` endpoints, pass
-the repository path shown in Borg UI. Older clients may still work without a
-registered repository path, but automation should send one so permissions,
-routing, and logs resolve against the intended repository.
+the repository path shown in Borg UI. Older clients may still submit requests
+without a registered repository path. For compatibility, those requests can be
+accepted, but unknown paths fail to authorize or route. Automation should send a
+registered repository path so permissions, routing, and logs resolve against the
+intended repository.
 
 ## Compatibility alias
 
