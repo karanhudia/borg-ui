@@ -144,7 +144,16 @@ export function DeployKeyDialog({
 
     return (
       <RichSelectRow
-        icon={<Icon size={18} />}
+        icon={
+          <Box
+            aria-hidden
+            component="span"
+            data-testid={`remote-machine-preset-icon-${preset.id}`}
+            style={{ color: preset.color, display: 'inline-flex', lineHeight: 0 }}
+          >
+            <Icon size={18} />
+          </Box>
+        }
         primary={label.title}
         secondary={`${label.description} ${label.defaults}`}
       />

@@ -4,6 +4,7 @@ import { fireEvent, waitFor as rtlWaitFor, within } from '@testing-library/react
 import i18n from '../../i18n'
 import { renderWithProviders, screen, userEvent, waitFor } from '../../test/test-utils'
 import SSHConnectionsSingleKey from '../SSHConnectionsSingleKey'
+import { remoteMachineSetupPresets } from '../ssh-connections-single-key/connectionPresets'
 import { createConnectionForm } from '../ssh-connections-single-key/formDefaults'
 import { ConnectionDiagnosticsDialog } from '../ssh-connections-single-key/dialogs/ConnectionDiagnosticsDialog'
 import { DeployKeyDialog } from '../ssh-connections-single-key/dialogs/DeployKeyDialog'
@@ -14,6 +15,26 @@ async function chooseDeployPreset(dialog: HTMLElement, name: RegExp) {
   const listbox = await screen.findByRole('listbox')
   fireEvent.click(within(listbox).getByRole('option', { name }))
   await rtlWaitFor(() => expect(screen.queryByRole('listbox')).not.toBeInTheDocument())
+}
+
+function DeployDialogHarness({ initialForm }: { initialForm: DeployConnectionPayload }) {
+  const [open, setOpen] = useState(true)
+  const [connectionForm, setConnectionForm] = useState(initialForm)
+  const [hostError, setHostError] = useState<string>()
+
+  return (
+    <DeployKeyDialog
+      t={i18n.t.bind(i18n)}
+      open={open}
+      setOpen={setOpen}
+      connectionForm={connectionForm}
+      setConnectionForm={setConnectionForm}
+      hostError={hostError}
+      setHostError={setHostError}
+      pending={false}
+      onDeploy={() => {}}
+    />
+  )
 }
 
 const { track, toastSuccess, toastError, mockState } = vi.hoisted(() => ({
@@ -470,6 +491,36 @@ describe('SSHConnectionsSingleKey', () => {
       within(reopenedDialog).getByRole('combobox', { name: /setup preset/i })
     ).toHaveTextContent(/custom setup/i)
     expect(within(reopenedDialog).getByLabelText(/^port$/i)).toHaveValue(22)
+  }, 30000)
+
+  it('renders deploy preset icons with their configured colors', async () => {
+    const selectedPreset = remoteMachineSetupPresets.find((preset) => preset.id === 'hetzner')
+
+    renderWithProviders(
+      <DeployDialogHarness
+        initialForm={{
+          ...createConnectionForm(),
+          port: 23,
+          use_sftp_mode: true,
+          default_path: '/./borg-repository',
+          ssh_path_prefix: '',
+          mount_point: 'hetzner',
+        }}
+      />
+    )
+
+    const dialog = await screen.findByRole('dialog', { name: /deploy ssh key to server/i })
+    const selectedIcon = within(dialog).getByTestId('remote-machine-preset-icon-hetzner')
+    expect(selectedIcon).toHaveStyle({ color: selectedPreset?.color })
+
+    fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: /setup preset/i }))
+    const listbox = await screen.findByRole('listbox')
+
+    remoteMachineSetupPresets.forEach((preset) => {
+      expect(within(listbox).getByTestId(`remote-machine-preset-icon-${preset.id}`)).toHaveStyle({
+        color: preset.color,
+      })
+    })
   }, 30000)
 
   it('tests and adds a manual connection with the expected payload', async () => {
