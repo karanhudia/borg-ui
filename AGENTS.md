@@ -46,7 +46,13 @@ Current shared inventory:
 - `ResponsiveDialog` — required replacement for raw MUI `Dialog`.
 - `WizardDialog` and `WizardStepIndicator` — required shell for multi-step wizards.
 - `SchedulePicker`, `CronExpressionInput`, and `CronBuilderDialog` — required schedule controls.
-- `SshConnectionSelect`, `ManagedAgentSelect`, `RcloneRemoteSelect`, `DestinationSelect`, and `RichSelectRow` — canonical rich-row select primitives.
+- `RichSelect` and `RichSelectRow` — canonical 56px rich-row dropdown shell
+  and row primitive. Use `RichSelect` for new shared dropdowns that need the
+  Borg UI rich-row format, fixed trigger/menu width, ellipsized text with
+  tooltips, grouped options, or optional in-menu search.
+- `SshConnectionSelect`, `ManagedAgentSelect`, `RcloneRemoteSelect`, and
+  `DestinationSelect` — product-specific wrappers around the shared rich select
+  pattern.
 - `PathSelectorField`, `PlanGate`, and `CodeEditor` — canonical path picker, plan gate, and code editor primitives.
 
 Use the existing component APIs and extend these files when a shared primitive

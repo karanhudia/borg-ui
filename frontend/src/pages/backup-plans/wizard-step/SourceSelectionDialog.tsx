@@ -74,6 +74,7 @@ import type {
   SourceSnapshotConfig,
   SourceType,
 } from '../../../types'
+import { formatBytes } from '../../../utils/dateUtils'
 import type { ScriptOption, SSHConnection, WizardState } from '../types'
 import type { SourceScriptCreateInput } from './types'
 import { DatabaseBrandTile } from './DatabaseBrandTile'
@@ -407,6 +408,27 @@ function containerMountKey(containerId: string, mount: SourceDiscoveryContainerM
 
 function containerMountSourcePath(mount: SourceDiscoveryContainerMount): string {
   return mount.source?.trim() || ''
+}
+
+function containerMountSizeLabel(
+  t: TFunction,
+  mount: SourceDiscoveryContainerMount
+): string | null {
+  if (mount.size_status === 'available' && typeof mount.size_bytes === 'number') {
+    return t('backupPlans.sourceChooser.containerMountSizeAvailable', {
+      size: formatBytes(mount.size_bytes),
+    })
+  }
+  if (mount.size_status === 'permission_denied') {
+    return t('backupPlans.sourceChooser.containerMountSizePermissionDenied')
+  }
+  if (mount.size_status === 'timeout') {
+    return t('backupPlans.sourceChooser.containerMountSizeTimeout')
+  }
+  if (mount.size_status === 'unavailable') {
+    return t('backupPlans.sourceChooser.containerMountSizeUnavailable')
+  }
+  return null
 }
 
 function containerScriptDrafts(
@@ -3200,6 +3222,9 @@ export function SourceSelectionDialog({
                                   mount.name ||
                                   mount.type ||
                                   ''
+                                const mountSizeLabel = containerMountSizeLabel(t, mount)
+                                const mountSizeColor =
+                                  mount.size_status === 'permission_denied' ? 'warning' : 'default'
                                 return (
                                   <FormControlLabel
                                     key={mountKey}
@@ -3231,16 +3256,39 @@ export function SourceSelectionDialog({
                                     }
                                     label={
                                       <Stack spacing={0.1} sx={{ minWidth: 0, py: 0.25 }}>
-                                        <Typography
-                                          variant="caption"
-                                          sx={{
-                                            fontFamily:
-                                              'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
-                                            overflowWrap: 'anywhere',
-                                          }}
+                                        <Stack
+                                          direction="row"
+                                          spacing={0.75}
+                                          alignItems="center"
+                                          flexWrap="wrap"
+                                          useFlexGap
                                         >
-                                          {displayPath}
-                                        </Typography>
+                                          <Typography
+                                            variant="caption"
+                                            sx={{
+                                              fontFamily:
+                                                'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+                                              overflowWrap: 'anywhere',
+                                            }}
+                                          >
+                                            {displayPath}
+                                          </Typography>
+                                          {mountSizeLabel && (
+                                            <Chip
+                                              size="small"
+                                              variant="outlined"
+                                              color={mountSizeColor}
+                                              label={mountSizeLabel}
+                                              sx={{
+                                                height: 20,
+                                                '& .MuiChip-label': {
+                                                  px: 0.75,
+                                                  fontSize: '0.6875rem',
+                                                },
+                                              }}
+                                            />
+                                          )}
+                                        </Stack>
                                         {mount.destination && (
                                           <Typography variant="caption" color="text.secondary">
                                             {t(
