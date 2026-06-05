@@ -1,40 +1,21 @@
 {
-  "generatedAt": "2026-06-05T05:35:49.061Z",
+  "generatedAt": "2026-06-05T08:12:20.193Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #630 visual report",
-    "commitSha": "782ea404fada",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26997385696"
+    "commitSha": "5b1fca7b0961",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/27003411644"
   },
   "totals": {
-    "baseline": 324,
-    "actual": 326,
-    "compared": 324,
-    "changed": 1,
+    "baseline": 336,
+    "actual": 338,
+    "compared": 336,
+    "changed": 0,
     "added": 2,
     "removed": 0,
-    "unchanged": 323
+    "unchanged": 336
   },
-  "changed": [
-    {
-      "fileName": "backup-plans-sourceselectiondialog--database-queued-multiple-selection--mobile.png",
-      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--database-queued-multiple-selection--mobile.png",
-      "actualPath": "images/actual/backup-plans-sourceselectiondialog--database-queued-multiple-selection--mobile.png",
-      "diffPath": "images/diff/backup-plans-sourceselectiondialog--database-queued-multiple-selection--mobile.png",
-      "diffPixels": 18,
-      "totalPixels": 329160,
-      "diffRatio": 0.00005468465184104995,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    }
-  ],
+  "changed": [],
   "added": [
     {
       "fileName": "backup-plans-sourceselectiondialog--database-scan-returned-after-add--mobile.png",
@@ -130,6 +111,9 @@
     },
     {
       "fileName": "backup-plans-sourceselectiondialog--database-detected-sqlite-detail.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-queued-multiple-selection--mobile.png"
     },
     {
       "fileName": "backup-plans-sourceselectiondialog--database-queued-multiple-selection.png"
@@ -525,6 +509,18 @@
       "fileName": "components-prunerepositorydialog--retention-preview.png"
     },
     {
+      "fileName": "components-rcloneproviderselect--narrow-width--mobile.png"
+    },
+    {
+      "fileName": "components-rcloneproviderselect--narrow-width.png"
+    },
+    {
+      "fileName": "components-rcloneproviderselect--provider-search--mobile.png"
+    },
+    {
+      "fileName": "components-rcloneproviderselect--provider-search.png"
+    },
+    {
       "fileName": "components-rcloneremoteselect--configured-remote--mobile.png"
     },
     {
@@ -639,6 +635,24 @@
       "fileName": "components-retryjobdialog--backup-plan-run-retry.png"
     },
     {
+      "fileName": "components-richselect--default--mobile.png"
+    },
+    {
+      "fileName": "components-richselect--default.png"
+    },
+    {
+      "fileName": "components-richselect--narrow-width--mobile.png"
+    },
+    {
+      "fileName": "components-richselect--narrow-width.png"
+    },
+    {
+      "fileName": "components-richselect--search-enabled--mobile.png"
+    },
+    {
+      "fileName": "components-richselect--search-enabled.png"
+    },
+    {
       "fileName": "components-runningcloudstoragejobssection--active-jobs--mobile.png"
     },
     {
@@ -661,6 +675,12 @@
     },
     {
       "fileName": "components-schedulejobcard--enabled-schedule.png"
+    },
+    {
+      "fileName": "components-shared-rclone-provider-icon--o-auth-provider-coverage--mobile.png"
+    },
+    {
+      "fileName": "components-shared-rclone-provider-icon--o-auth-provider-coverage.png"
     },
     {
       "fileName": "components-terminallogviewer--unicode-json-log--mobile.png"
