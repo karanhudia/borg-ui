@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import posixpath
 import shlex
@@ -44,6 +45,9 @@ MAX_SCAN_MAX_DEPTH = 10
 DEFAULT_SCAN_TIMEOUT_SECONDS = 30
 MIN_SCAN_TIMEOUT_SECONDS = 1
 MAX_SCAN_TIMEOUT_SECONDS = 300
+DEFAULT_CONTAINER_SCAN_TIMEOUT_SECONDS = 15
+DEFAULT_CONTAINER_EXPORT_ROOT = "/var/tmp/borg-ui/container-exports"
+DOCKER_INSTALL_URL = "https://docs.docker.com/engine/install/"
 
 # Directories that almost never contain a real DB the user wants to discover
 # and almost always contain a lot of noise. Safe to skip by default.
@@ -161,6 +165,40 @@ class DatabaseScanResponse(BaseModel):
     scanned_paths: list[str]
     detections: list[DatabaseCandidate]
     templates: list[DatabaseCandidate]
+    warnings: list[ScanWarning]
+
+
+class ContainerMount(BaseModel):
+    type: str | None = None
+    name: str | None = None
+    source: str | None = None
+    destination: str | None = None
+    backed_up: bool = False
+    reason: str
+
+
+class ContainerCandidate(BaseModel):
+    id: str
+    name: str
+    image: str | None = None
+    status: str | None = None
+    state: str | None = None
+    export_path: str
+    backup_mode: str = "export"
+    notes: list[str]
+    mounts: list[ContainerMount]
+
+
+class ContainerScanRequest(BaseModel):
+    source_type: str
+    source_ssh_connection_id: int | None = None
+    include_stopped: bool = True
+    timeout_seconds: int | None = None
+
+
+class ContainerScanResponse(BaseModel):
+    scan_target: DatabaseScanTarget
+    containers: list[ContainerCandidate]
     warnings: list[ScanWarning]
 
 
@@ -493,9 +531,8 @@ def _source_types() -> list[SourceTypeOption]:
         SourceTypeOption(
             id="container",
             label="Docker containers",
-            description="Container scanning will use the same source chooser later.",
-            status="planned",
-            disabled=True,
+            description="Export a Docker container filesystem into a Borg-readable staging path.",
+            status="enabled",
         ),
     ]
 
@@ -872,6 +909,268 @@ def _scan_target(
         source_type="local",
         source_ssh_connection_id=None,
         label="This Borg UI server",
+    )
+
+
+def _validate_container_scan_request(request: ContainerScanRequest) -> None:
+    source_type = request.source_type.strip().lower()
+    if source_type not in {"local", "remote"}:
+        raise HTTPException(
+            status_code=400,
+            detail="source_type must be 'local' or 'remote'",
+        )
+    request.source_type = source_type
+
+    if source_type == "remote" and request.source_ssh_connection_id is None:
+        raise HTTPException(
+            status_code=400,
+            detail="source_ssh_connection_id is required for remote container scans",
+        )
+
+    timeout_seconds = (
+        request.timeout_seconds
+        if request.timeout_seconds is not None
+        else DEFAULT_CONTAINER_SCAN_TIMEOUT_SECONDS
+    )
+    if (
+        timeout_seconds < MIN_SCAN_TIMEOUT_SECONDS
+        or timeout_seconds > MAX_SCAN_TIMEOUT_SECONDS
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"timeout_seconds must be between {MIN_SCAN_TIMEOUT_SECONDS}"
+                f" and {MAX_SCAN_TIMEOUT_SECONDS}"
+            ),
+        )
+    request.timeout_seconds = timeout_seconds
+
+
+def _container_export_slug(container_name: str, container_id: str) -> str:
+    raw_name = (container_name or container_id[:12] or "container").strip().lstrip("/")
+    chars: list[str] = []
+    previous_dash = False
+    for char in raw_name.lower():
+        if char.isalnum():
+            chars.append(char)
+            previous_dash = False
+        elif not previous_dash:
+            chars.append("-")
+            previous_dash = True
+    slug = "".join(chars).strip("-")
+    return slug or "container"
+
+
+def _container_name(raw_container: dict[str, object]) -> str:
+    names = raw_container.get("Names")
+    if isinstance(names, list) and names:
+        first_name = str(names[0]).strip().lstrip("/")
+        if first_name:
+            return first_name
+
+    name = str(raw_container.get("Name") or "").strip().lstrip("/")
+    if name:
+        return name
+
+    container_id = str(raw_container.get("Id") or "").strip()
+    return container_id[:12] or "container"
+
+
+def _container_image(raw_container: dict[str, object]) -> str | None:
+    config = raw_container.get("Config")
+    if isinstance(config, dict):
+        image = str(config.get("Image") or "").strip()
+        if image:
+            return image
+    image = str(raw_container.get("Image") or "").strip()
+    return image or None
+
+
+def _container_mount(raw_mount: object) -> ContainerMount | None:
+    if not isinstance(raw_mount, dict):
+        return None
+    destination = str(raw_mount.get("Destination") or "").strip() or None
+    source = str(raw_mount.get("Source") or "").strip() or None
+    mount_type = str(raw_mount.get("Type") or "").strip() or None
+    name = str(raw_mount.get("Name") or "").strip() or None
+    if not any([destination, source, mount_type, name]):
+        return None
+    return ContainerMount(
+        type=mount_type,
+        name=name,
+        source=source,
+        destination=destination,
+        backed_up=False,
+        reason=(
+            "Not included in docker export; add this path separately from Files if needed."
+        ),
+    )
+
+
+def _container_notes(mounts: list[ContainerMount]) -> list[str]:
+    notes = ["docker export captures the container filesystem."]
+    if mounts:
+        notes.append(
+            "Bind mounts and Docker named volumes are not included by docker export."
+        )
+    return notes
+
+
+def _parse_container_scan_output(stdout: str) -> list[ContainerCandidate]:
+    containers: list[ContainerCandidate] = []
+    for raw_line in stdout.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        try:
+            raw_container = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(raw_container, dict):
+            continue
+
+        container_id = str(raw_container.get("Id") or "").strip()
+        if not container_id:
+            continue
+        name = _container_name(raw_container)
+        mounts = [
+            mount
+            for raw_mount in raw_container.get("Mounts") or []
+            if (mount := _container_mount(raw_mount)) is not None
+        ]
+        state = raw_container.get("State")
+        state_label = None
+        if isinstance(state, dict):
+            state_label = str(state.get("Status") or "").strip() or None
+        elif isinstance(state, str):
+            state_label = state.strip() or None
+
+        status = str(raw_container.get("Status") or "").strip() or state_label
+        slug = _container_export_slug(name, container_id)
+        containers.append(
+            ContainerCandidate(
+                id=container_id,
+                name=name,
+                image=_container_image(raw_container),
+                status=status,
+                state=state_label,
+                export_path=f"{DEFAULT_CONTAINER_EXPORT_ROOT}/{slug}",
+                backup_mode="export",
+                notes=_container_notes(mounts),
+                mounts=mounts,
+            )
+        )
+
+    containers.sort(key=lambda container: container.name.lower())
+    return containers
+
+
+def _build_container_scan_script(include_stopped: bool) -> str:
+    ps_flag = "--all --quiet" if include_stopped else "--quiet"
+    return "\n".join(
+        [
+            "set -eu",
+            f'CONTAINER_IDS="$(docker ps {ps_flag})"',
+            'if [ -z "$CONTAINER_IDS" ]; then exit 0; fi',
+            "docker inspect --format '{{json .}}' $CONTAINER_IDS",
+        ]
+    )
+
+
+def _run_local_container_scan(
+    *,
+    include_stopped: bool,
+    timeout_seconds: int,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["sh", "-c", _build_container_scan_script(include_stopped)],
+        capture_output=True,
+        text=True,
+        timeout=timeout_seconds,
+    )
+
+
+def _run_remote_container_scan(
+    *,
+    connection: SSHConnection,
+    key_file_path: str,
+    include_stopped: bool,
+    timeout_seconds: int,
+) -> subprocess.CompletedProcess[str]:
+    remote_command = (
+        f"sh -c {shlex.quote(_build_container_scan_script(include_stopped))}"
+    )
+    ssh_cmd = [
+        "ssh",
+        "-i",
+        key_file_path,
+        "-p",
+        str(connection.port or 22),
+        "-o",
+        "StrictHostKeyChecking=accept-new",
+        "-o",
+        f"ConnectTimeout={max(1, int(timeout_seconds))}",
+        f"{connection.username}@{connection.host}",
+        remote_command,
+    ]
+    return subprocess.run(
+        ssh_cmd,
+        capture_output=True,
+        text=True,
+        timeout=timeout_seconds,
+    )
+
+
+def _container_scan_warning_response(
+    *,
+    status_code: int,
+    scan_target: DatabaseScanTarget,
+    warning: ScanWarning,
+) -> JSONResponse:
+    response = ContainerScanResponse(
+        scan_target=scan_target,
+        containers=[],
+        warnings=[warning],
+    )
+    return JSONResponse(status_code=status_code, content=response.model_dump())
+
+
+def _container_scan_failed_warning(stderr: str) -> ScanWarning:
+    detail = stderr.strip()
+    normalized_detail = detail.lower()
+    if "docker" in normalized_detail and "not found" in normalized_detail:
+        return ScanWarning(
+            code="DOCKER_CLI_MISSING",
+            message=(
+                "Docker is not installed on this host. Install Docker, for example "
+                f"the docker.io package on Debian/Ubuntu, or follow {DOCKER_INSTALL_URL}. "
+                "Then make sure Borg UI can run docker ps."
+            ),
+            path=None,
+        )
+
+    if "permission denied" in normalized_detail and (
+        "docker.sock" in normalized_detail
+        or "docker daemon socket" in normalized_detail
+        or "docker daemon" in normalized_detail
+    ):
+        return ScanWarning(
+            code="DOCKER_PERMISSION_DENIED",
+            message=(
+                "Borg UI cannot access the Docker socket on this host. Mount "
+                "/var/run/docker.sock into Borg UI and allow this process to read it, "
+                "then run the scan again."
+            ),
+            path=None,
+        )
+
+    return ScanWarning(
+        code="DOCKER_SCAN_FAILED",
+        message=(
+            "Docker container scan did not return data. Check Docker access on this "
+            "host and try again."
+        ),
+        path=None,
     )
 
 
@@ -1380,6 +1679,131 @@ async def _scan_remote_database_paths(
     )
 
 
+async def _scan_local_containers(
+    request: ContainerScanRequest,
+) -> ContainerScanResponse | JSONResponse:
+    scan_target = _scan_target("local")
+    timeout_seconds = (
+        request.timeout_seconds
+        if request.timeout_seconds is not None
+        else DEFAULT_CONTAINER_SCAN_TIMEOUT_SECONDS
+    )
+    try:
+        result = await asyncio.to_thread(
+            _run_local_container_scan,
+            include_stopped=request.include_stopped,
+            timeout_seconds=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired:
+        return _container_scan_warning_response(
+            status_code=504,
+            scan_target=scan_target,
+            warning=ScanWarning(
+                code="SCAN_TIMEOUT",
+                message="Docker container scan timed out",
+                path=None,
+            ),
+        )
+
+    if result.returncode != 0:
+        return _container_scan_warning_response(
+            status_code=200,
+            scan_target=scan_target,
+            warning=_container_scan_failed_warning(result.stderr or ""),
+        )
+
+    return ContainerScanResponse(
+        scan_target=scan_target,
+        containers=_parse_container_scan_output(result.stdout or ""),
+        warnings=[],
+    )
+
+
+async def _scan_remote_containers(
+    request: ContainerScanRequest,
+    db: Session,
+) -> ContainerScanResponse | JSONResponse:
+    connection = (
+        db.query(SSHConnection)
+        .filter(SSHConnection.id == request.source_ssh_connection_id)
+        .first()
+    )
+    if not connection:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "source_ssh_connection_id must reference an existing SSH connection"
+            ),
+        )
+
+    scan_target = _scan_target("remote", connection)
+    if connection.ssh_key_id is None:
+        raise HTTPException(
+            status_code=400,
+            detail="SSH connection has no SSH key configured",
+        )
+
+    ssh_key = db.query(SSHKey).filter(SSHKey.id == connection.ssh_key_id).first()
+    if not ssh_key:
+        raise HTTPException(
+            status_code=400,
+            detail="SSH connection references a missing SSH key",
+        )
+
+    timeout_seconds = (
+        request.timeout_seconds
+        if request.timeout_seconds is not None
+        else DEFAULT_CONTAINER_SCAN_TIMEOUT_SECONDS
+    )
+    key_file_path = write_ssh_key_to_tempfile(ssh_key)
+    try:
+        result = await asyncio.to_thread(
+            _run_remote_container_scan,
+            connection=connection,
+            key_file_path=key_file_path,
+            include_stopped=request.include_stopped,
+            timeout_seconds=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired:
+        return _container_scan_warning_response(
+            status_code=504,
+            scan_target=scan_target,
+            warning=ScanWarning(
+                code="SCAN_TIMEOUT",
+                message=f"Docker container scan timed out for {scan_target.label}",
+                path=None,
+            ),
+        )
+    finally:
+        if os.path.exists(key_file_path):
+            os.unlink(key_file_path)
+
+    if result.returncode != 0:
+        stderr = (result.stderr or "").strip()
+        normalized_stderr = stderr.lower()
+        if result.returncode == 255 or "ssh:" in normalized_stderr:
+            return _container_scan_warning_response(
+                status_code=502,
+                scan_target=scan_target,
+                warning=ScanWarning(
+                    code=_ssh_warning_code(stderr),
+                    message=f"Could not connect to {scan_target.label}: {stderr}",
+                    path=None,
+                ),
+            )
+        return _container_scan_warning_response(
+            status_code=200,
+            scan_target=scan_target,
+            warning=_container_scan_failed_warning(stderr),
+        )
+
+    return ContainerScanResponse(
+        scan_target=scan_target,
+        containers=_parse_container_scan_output(result.stdout or ""),
+        warnings=[],
+    )
+
+
 @router.get(
     "/filesystem-snapshots", response_model=FilesystemSnapshotCapabilitiesResponse
 )
@@ -1433,6 +1857,20 @@ async def scan_databases(
                 path=None,
             ),
         )
+
+
+@router.post("/containers/scan", response_model=ContainerScanResponse)
+async def scan_containers(
+    request: ContainerScanRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ContainerScanResponse | JSONResponse:
+    del current_user
+    _validate_container_scan_request(request)
+
+    if request.source_type == "remote":
+        return await _scan_remote_containers(request, db)
+    return await _scan_local_containers(request)
 
 
 @router.get("/databases", response_model=DatabaseDiscoveryResponse)
