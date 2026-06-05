@@ -481,6 +481,17 @@ class RcloneRemote(Base):
     storages = relationship("RepositoryStorage", back_populates="rclone_remote")
 
 
+class RcloneOAuthProviderCredential(Base):
+    __tablename__ = "rclone_oauth_provider_credentials"
+
+    id = Column(Integer, primary_key=True, index=True)
+    provider = Column(String, unique=True, index=True, nullable=False)
+    client_id = Column(String, nullable=True)
+    client_secret_encrypted = Column(String, nullable=True)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+
 class RepositoryStorage(Base):
     __tablename__ = "repository_storage"
 

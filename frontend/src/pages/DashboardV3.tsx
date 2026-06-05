@@ -24,9 +24,10 @@ import { DashboardSkeleton } from './dashboard-v3/DashboardSkeleton'
 import { PulseDot } from './dashboard-v3/health'
 import { UpcomingBackupsPanel } from './dashboard-v3/UpcomingBackupsPanel'
 import { RepositoryHealthPanel } from './dashboard-v3/RepositoryHealthPanel'
+import { ResourceGaugeGrid } from './dashboard-v3/ResourceGaugeGrid'
 import { makeT, STATUS, TokenContext } from './dashboard-v3/tokens'
 import type { DashboardOverview } from './dashboard-v3/types'
-import { gaugeColor, toGB } from './dashboard-v3/utils'
+import { gaugeColor, toCompactGB } from './dashboard-v3/utils'
 
 const RESOLVING_ACTIVITY_STATUSES = new Set(['completed', 'completed_with_warnings'])
 
@@ -410,7 +411,7 @@ export default function DashboardV3() {
               </Stack>
             </Box>
 
-            <Box sx={{ ...surface, p: 2.5 }}>
+            <Box sx={{ ...surface, p: 2 }}>
               <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 2 }}>
                 <Cpu size={14} color={T.textMuted} />
                 <Typography
@@ -423,7 +424,7 @@ export default function DashboardV3() {
                   {t('dashboard.resources')}
                 </Typography>
               </Stack>
-              <Stack direction="row" justifyContent="space-around">
+              <ResourceGaugeGrid>
                 <ArcGauge
                   value={sys.cpu_usage}
                   color={gaugeColor(sys.cpu_usage, T)}
@@ -434,15 +435,15 @@ export default function DashboardV3() {
                   value={sys.memory_usage}
                   color={gaugeColor(sys.memory_usage, T)}
                   label={t('dashboard.memAbbr')}
-                  sub={`${toGB(sys.memory_total - sys.memory_available)}/${toGB(sys.memory_total)}G`}
+                  sub={`${toCompactGB(sys.memory_total - sys.memory_available)}/${toCompactGB(sys.memory_total)}G`}
                 />
                 <ArcGauge
                   value={sys.disk_usage}
                   color={gaugeColor(sys.disk_usage, T)}
                   label={t('dashboard.diskAbbr')}
-                  sub={`${toGB(sys.disk_total - sys.disk_free)}/${toGB(sys.disk_total)}G`}
+                  sub={`${toCompactGB(sys.disk_total - sys.disk_free)}/${toCompactGB(sys.disk_total)}G`}
                 />
-              </Stack>
+              </ResourceGaugeGrid>
             </Box>
 
             <UpcomingBackupsPanel tasks={ov.upcoming_tasks} />

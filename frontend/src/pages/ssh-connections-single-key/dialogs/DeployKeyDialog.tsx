@@ -1,21 +1,34 @@
+import { useEffect, useRef, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import type { TFunction } from 'i18next'
 import {
   Box,
   Button,
   Checkbox,
-  Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControl,
   FormControlLabel,
+  FormHelperText,
+  InputLabel,
   InputAdornment,
+  MenuItem,
+  Select,
   Stack,
   TextField,
   Tooltip,
   Typography,
 } from '@mui/material'
 import { Info } from 'lucide-react'
+import RichSelectRow from '../../../components/shared/RichSelectRow'
+import ResponsiveDialog from '../../../components/shared/ResponsiveDialog'
+import { createConnectionForm } from '../formDefaults'
+import {
+  remoteMachineSetupPresets,
+  type RemoteMachineSetupPreset,
+  type RemoteMachineSetupPresetId,
+} from '../connectionPresets'
 import type { DeployConnectionPayload } from '../types'
 import { SshHostField } from './SshHostField'
 
@@ -31,6 +44,20 @@ interface DeployKeyDialogProps {
   onDeploy: () => void
 }
 
+function getPresetIdForForm(connectionForm: DeployConnectionPayload): RemoteMachineSetupPresetId {
+  const matchingPreset = remoteMachineSetupPresets.find((preset) => {
+    if (preset.id === 'custom') {
+      return false
+    }
+
+    return Object.entries(preset.defaults).every(([key, value]) => {
+      return connectionForm[key as keyof DeployConnectionPayload] === value
+    })
+  })
+
+  return matchingPreset?.id ?? 'custom'
+}
+
 export function DeployKeyDialog({
   t,
   open,
@@ -42,11 +69,148 @@ export function DeployKeyDialog({
   pending,
   onDeploy,
 }: DeployKeyDialogProps) {
+  const [selectedPreset, setSelectedPreset] = useState<RemoteMachineSetupPresetId>(() =>
+    getPresetIdForForm(connectionForm)
+  )
+  const wasOpenRef = useRef(open)
+
+  useEffect(() => {
+    if (open && !wasOpenRef.current) {
+      setSelectedPreset(getPresetIdForForm(connectionForm))
+    }
+    wasOpenRef.current = open
+  }, [connectionForm, open])
+
+  const presetLabels: Record<
+    RemoteMachineSetupPresetId,
+    { title: string; description: string; defaults: string }
+  > = {
+    custom: {
+      title: t('sshConnections.deployDialog.presetCustom'),
+      description: t('sshConnections.deployDialog.presetCustomDescription'),
+      defaults: t('sshConnections.deployDialog.presetCustomDefaults'),
+    },
+    linux: {
+      title: t('sshConnections.deployDialog.presetLinux'),
+      description: t('sshConnections.deployDialog.presetLinuxDescription'),
+      defaults: t('sshConnections.deployDialog.presetLinuxDefaults'),
+    },
+    borgbase: {
+      title: t('sshConnections.deployDialog.presetBorgBase'),
+      description: t('sshConnections.deployDialog.presetBorgBaseDescription'),
+      defaults: t('sshConnections.deployDialog.presetBorgBaseDefaults'),
+    },
+    hetzner: {
+      title: t('sshConnections.deployDialog.presetHetzner'),
+      description: t('sshConnections.deployDialog.presetHetznerDescription'),
+      defaults: t('sshConnections.deployDialog.presetHetznerDefaults'),
+    },
+    nas: {
+      title: t('sshConnections.deployDialog.presetNas'),
+      description: t('sshConnections.deployDialog.presetNasDescription'),
+      defaults: t('sshConnections.deployDialog.presetNasDefaults'),
+    },
+  }
+
+  const close = () => setOpen(false)
+
+  const applyPreset = (presetId: RemoteMachineSetupPresetId) => {
+    const preset = remoteMachineSetupPresets.find((item) => item.id === presetId)
+    if (!preset) return
+
+    setConnectionForm((current) => {
+      const nextForm =
+        preset.id === 'custom'
+          ? createConnectionForm()
+          : {
+              ...current,
+              ...preset.defaults,
+            }
+
+      return {
+        ...nextForm,
+        host: current.host,
+        password: current.password,
+      }
+    })
+    setHostError(undefined)
+    setSelectedPreset(preset.id)
+  }
+
+  const getPresetLabel = (presetId: RemoteMachineSetupPresetId) => presetLabels[presetId]
+  const renderPresetRow = (preset: RemoteMachineSetupPreset) => {
+    const Icon = preset.icon
+    const label = getPresetLabel(preset.id)
+
+    return (
+      <RichSelectRow
+        icon={<Icon size={18} />}
+        primary={label.title}
+        secondary={`${label.description} ${label.defaults}`}
+      />
+    )
+  }
+
   return (
-    <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth>
+    <ResponsiveDialog
+      open={open}
+      onClose={close}
+      maxWidth="md"
+      fullWidth
+      footer={
+        <DialogActions>
+          <Button onClick={close}>{t('common.buttons.cancel')}</Button>
+          <Button
+            variant="contained"
+            onClick={onDeploy}
+            disabled={
+              pending ||
+              !connectionForm.host ||
+              !connectionForm.username ||
+              !connectionForm.password
+            }
+          >
+            {pending
+              ? t('sshConnections.deployDialog.deploying')
+              : t('sshConnections.deployDialog.deploy')}
+          </Button>
+        </DialogActions>
+      }
+    >
       <DialogTitle>{t('sshConnections.deployDialog.title')}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
+          <FormControl fullWidth>
+            <InputLabel id="deploy-key-setup-preset-label">
+              {t('sshConnections.deployDialog.setupPreset')}
+            </InputLabel>
+            <Select
+              labelId="deploy-key-setup-preset-label"
+              label={t('sshConnections.deployDialog.setupPreset')}
+              value={selectedPreset}
+              onChange={(event) => applyPreset(event.target.value as RemoteMachineSetupPresetId)}
+              renderValue={(value) => {
+                const preset =
+                  remoteMachineSetupPresets.find((item) => item.id === value) ??
+                  remoteMachineSetupPresets[0]
+                return renderPresetRow(preset)
+              }}
+              sx={{
+                '& .MuiSelect-select': {
+                  alignItems: 'center',
+                  display: 'flex',
+                  minHeight: 40,
+                },
+              }}
+            >
+              {remoteMachineSetupPresets.map((preset) => (
+                <MenuItem key={preset.id} value={preset.id} sx={{ py: 1 }}>
+                  {renderPresetRow(preset)}
+                </MenuItem>
+              ))}
+            </Select>
+            <FormHelperText>{t('sshConnections.deployDialog.setupPresetHint')}</FormHelperText>
+          </FormControl>
           <SshHostField
             label={t('sshConnections.deployDialog.host')}
             value={connectionForm.host}
@@ -131,6 +295,17 @@ export function DeployKeyDialog({
             InputLabelProps={{ shrink: true }}
           />
           <TextField
+            label={t('sshConnections.deployDialog.sshPathPrefix')}
+            fullWidth
+            value={connectionForm.ssh_path_prefix}
+            onChange={(e) =>
+              setConnectionForm({ ...connectionForm, ssh_path_prefix: e.target.value })
+            }
+            placeholder="/volume1"
+            helperText={t('sshConnections.deployDialog.sshPathPrefixHelper')}
+            InputLabelProps={{ shrink: true }}
+          />
+          <TextField
             label={t('sshConnections.deployDialog.mountPoint')}
             fullWidth
             value={connectionForm.mount_point}
@@ -141,20 +316,6 @@ export function DeployKeyDialog({
           />
         </Stack>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={() => setOpen(false)}>{t('common.buttons.cancel')}</Button>
-        <Button
-          variant="contained"
-          onClick={onDeploy}
-          disabled={
-            pending || !connectionForm.host || !connectionForm.username || !connectionForm.password
-          }
-        >
-          {pending
-            ? t('sshConnections.deployDialog.deploying')
-            : t('sshConnections.deployDialog.deploy')}
-        </Button>
-      </DialogActions>
-    </Dialog>
+    </ResponsiveDialog>
   )
 }

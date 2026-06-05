@@ -11,6 +11,8 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.databaseBackupPaths': 'Final Borg paths',
   'backupPlans.sourceChooser.databaseLivePath': 'Live database path',
   'backupPlans.sourceChooser.databaseTitle': 'Database scan',
+  'backupPlans.sourceChooser.containerBackupPath': 'Export staging path',
+  'backupPlans.sourceChooser.containerTitle': 'Docker container',
   'backupPlans.sourceChooser.mixedSources': 'Multiple sources',
   'backupPlans.wizard.fields.archiveNameTemplate': 'Archive name',
   'backupPlans.wizard.fields.cronExpression': 'Cron expression',
@@ -106,5 +108,36 @@ describe('ReviewStep', () => {
     expect(screen.getByText('/home/app/state.sqlite')).toBeInTheDocument()
     expect(screen.getByText('Final Borg paths')).toBeInTheDocument()
     expect(screen.getByText('/var/tmp/borg-ui/database-dumps/sqlite')).toBeInTheDocument()
+  })
+
+  it('shows Docker container source details next to the export path', () => {
+    renderReview({
+      ...createInitialState(),
+      name: 'Postgres container backup',
+      sourceType: 'local',
+      sourceDirectories: ['/var/tmp/borg-ui/container-exports/postgres'],
+      sourceLocations: [
+        {
+          source_type: 'local',
+          source_ssh_connection_id: null,
+          paths: ['/var/tmp/borg-ui/container-exports/postgres'],
+          container: {
+            container_name: 'postgres',
+            display_name: 'postgres',
+            image: 'postgres:17',
+            backup_mode: 'export',
+            export_path: '/var/tmp/borg-ui/container-exports/postgres',
+            script_execution_target: 'source',
+          },
+        },
+      ],
+      repositoryIds: [10],
+    })
+
+    expect(screen.getByText('Docker container')).toBeInTheDocument()
+    expect(screen.getByText('postgres')).toBeInTheDocument()
+    expect(screen.getByText('postgres:17')).toBeInTheDocument()
+    expect(screen.getByText('Export staging path')).toBeInTheDocument()
+    expect(screen.getByText('/var/tmp/borg-ui/container-exports/postgres')).toBeInTheDocument()
   })
 })

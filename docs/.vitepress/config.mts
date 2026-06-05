@@ -1,4 +1,4 @@
-import { copyFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitepress';
@@ -16,7 +16,12 @@ export default defineConfig({
   title: 'Borg Web UI',
   description: 'A modern web interface for Borg Backup management',
   cleanUrls: true,
-  srcExclude: ['engineering/**', 'superpowers/**'],
+  srcExclude: [
+    'engineering/**',
+    'superpowers/**',
+    'managed-agent-spec.md',
+    'symphony.md',
+  ],
   lastUpdated: true,
   appearance: 'dark',
   head: [['link', { rel: 'icon', href: withBase('/favicon.png') }]],
@@ -25,6 +30,7 @@ export default defineConfig({
       {
         name: 'copy-docs-manifests',
         closeBundle() {
+          mkdirSync(outDir, { recursive: true });
           for (const file of publicManifests) {
             copyFileSync(resolve(docsRoot, file), resolve(outDir, file));
           }
@@ -91,9 +97,9 @@ export default defineConfig({
       {
         text: 'Reference',
         items: [
+          { text: 'API', link: '/api' },
           { text: 'Architecture', link: '/SPECIFICATION' },
           { text: 'Job System', link: '/architecture/job-system' },
-          { text: 'Managed Agent Spec', link: '/managed-agent-spec' },
           { text: 'Development', link: '/development' },
           { text: 'Testing', link: '/testing' },
           { text: 'Contributing', link: '/contributing' },

@@ -1,12 +1,17 @@
 import { useTheme, useMediaQuery, Dialog, SwipeableDrawer, Box, IconButton } from '@mui/material'
 import Close from '@mui/icons-material/Close'
-import type { DialogProps } from '@mui/material'
+import type { DialogProps, SxProps, Theme } from '@mui/material'
 import type { ReactNode } from 'react'
 
 type ResponsiveDialogProps = DialogProps & {
   /** On mobile: rendered in a sticky bar above the safe-area inset, outside the scroll area.
    *  On desktop: rendered as a direct child of Dialog (place DialogActions here). */
   footer?: ReactNode
+  /** Mobile-only sx merged into the SwipeableDrawer's Paper. Use to set things like
+   *  `height` or `minHeight` so the bottom sheet has a consistent size across views.
+   *  The drawer's default borderRadius / display / maxHeight stay in place unless
+   *  explicitly overridden here. */
+  mobilePaperSx?: SxProps<Theme>
 }
 
 export default function ResponsiveDialog({
@@ -14,10 +19,11 @@ export default function ResponsiveDialog({
   onClose,
   children,
   footer,
-  // The following props are desktop-only (spread into <Dialog> via ...rest) — silently ignored on mobile:
-  // maxWidth, fullWidth, PaperProps, TransitionProps, and other DialogProps
+  // maxWidth, fullWidth, PaperProps, TransitionProps, and other DialogProps spread to <Dialog>
+  // via ...rest — silently ignored on mobile, except for mobilePaperSx (see prop docs).
   maxWidth,
   fullWidth,
+  mobilePaperSx,
   ...rest
 }: ResponsiveDialogProps) {
   const theme = useTheme()
@@ -38,12 +44,19 @@ export default function ResponsiveDialog({
         disableDiscovery
         ModalProps={{ keepMounted: false }}
         PaperProps={{
-          sx: {
-            borderRadius: '16px 16px 0 0',
-            maxHeight: '90vh',
-            display: 'flex',
-            flexDirection: 'column',
-          },
+          sx: [
+            {
+              borderRadius: '16px 16px 0 0',
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
+            },
+            ...(Array.isArray(mobilePaperSx)
+              ? mobilePaperSx
+              : mobilePaperSx
+                ? [mobilePaperSx]
+                : []),
+          ],
         }}
       >
         {/* Drag handle row with X close button */}

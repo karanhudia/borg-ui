@@ -24,6 +24,16 @@ async def _get_lock(repo_id: int, scope: str) -> asyncio.Lock:
         return lock
 
 
+async def acquire_repository_command_lock(
+    repo_id: int,
+    *,
+    scope: str = "metadata",
+) -> asyncio.Lock:
+    lock = await _get_lock(repo_id, scope)
+    await lock.acquire()
+    return lock
+
+
 async def run_serialized_repository_command(
     repo_id: int,
     operation: Callable[[], Awaitable[T]],
@@ -31,12 +41,12 @@ async def run_serialized_repository_command(
     scope: str = "metadata",
 ) -> T:
     """
-    Serialize repository-scoped Borg reads that can contend on the local cache.
+    Serialize repository-scoped Borg commands that can contend on Borg locks.
 
-    Borg can still require an exclusive local cache lock for read-only commands
-    like `info` and `list`, especially on SSH/remote repositories. Queueing
-    those commands per repository avoids the first-load race without blocking
-    unrelated repositories.
+    Borg can require exclusive repository or local cache locks even for
+    read-only commands like `info` and `list`, especially on SSH/remote
+    repositories. Queueing commands per repository avoids those races without
+    blocking unrelated repositories.
     """
     lock = await _get_lock(repo_id, scope)
     async with lock:

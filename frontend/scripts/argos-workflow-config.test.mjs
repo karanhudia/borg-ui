@@ -55,7 +55,8 @@ describe('GitHub Pages visual regression workflow', () => {
     expect(workflow).toContain(
       'rm -rf visual-state/visual/reports/pr-${{ steps.visual_mode.outputs.pr_number }}'
     )
-    expect(workflow).toContain('actions/deploy-pages@v4')
+    expect(workflow).toContain('id: deployment')
+    expect(workflow).toContain('steps.deployment.outputs.page_url')
     expect(workflow).toContain('GITHUB_TOKEN: ${{ github.token }}')
     expect(workflow).toContain('pull-requests: write')
     expect(workflow).not.toContain('ARGOS_TOKEN')

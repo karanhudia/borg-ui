@@ -437,6 +437,46 @@ export interface DatabaseScanResponse {
   warnings: DatabaseScanWarning[]
 }
 
+export interface ContainerScanRequest {
+  source_type: 'local' | 'remote'
+  source_ssh_connection_id: number | null
+  include_stopped?: boolean
+  timeout_seconds?: number
+}
+
+export interface SourceDiscoveryContainerMount {
+  type: string | null
+  name: string | null
+  source: string | null
+  destination: string | null
+  backed_up: boolean
+  reason: string
+  size_bytes?: number | null
+  size_status?: 'available' | 'unavailable' | 'permission_denied' | 'timeout' | string | null
+}
+
+export interface SourceDiscoveryContainer {
+  id: string
+  name: string
+  image: string | null
+  status: string | null
+  state: string | null
+  export_path: string
+  backup_mode: 'export'
+  notes: string[]
+  mounts: SourceDiscoveryContainerMount[]
+}
+
+export interface ContainerScanResponse {
+  scan_target: {
+    source_type: 'local' | 'remote'
+    source_ssh_connection_id: number | null
+    label: string
+  }
+  containers: SourceDiscoveryContainer[]
+  warnings: DatabaseScanWarning[]
+}
+
 export interface FilesystemSnapshotProviderCapability {
   id: 'btrfs' | 'zfs'
   label: string
@@ -1248,6 +1288,8 @@ export const sourceDiscoveryAPI = {
   databases: () => api.get<SourceDiscoveryResponse>('/source-discovery/databases'),
   scanDatabases: (body: DatabaseScanRequest) =>
     api.post<DatabaseScanResponse>('/source-discovery/databases/scan', body),
+  scanContainers: (body: ContainerScanRequest) =>
+    api.post<ContainerScanResponse>('/source-discovery/containers/scan', body),
   filesystemSnapshots: () =>
     api.get<FilesystemSnapshotCapabilitiesResponse>('/source-discovery/filesystem-snapshots'),
 }

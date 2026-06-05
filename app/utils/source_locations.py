@@ -117,6 +117,65 @@ def normalize_database_config(
     return normalized
 
 
+def normalize_container_config(
+    container: Any,
+    *,
+    source_paths: list[str],
+) -> Optional[dict[str, Any]]:
+    if not isinstance(container, dict):
+        return None
+
+    container_name = _clean_optional_string(container.get("container_name"))
+    if not container_name:
+        raise ValueError("Container source locations require a container name")
+
+    backup_mode = _clean_optional_string(container.get("backup_mode")) or "export"
+    if backup_mode != "export":
+        raise ValueError("Invalid container backup mode")
+
+    export_path = _clean_optional_string(container.get("export_path"))
+    if not export_path and source_paths:
+        export_path = source_paths[0]
+    if not export_path:
+        raise ValueError("Container source locations require an export path")
+
+    script_execution_target = (
+        _clean_optional_string(container.get("script_execution_target")) or "source"
+    )
+    if script_execution_target not in {"source", "server"}:
+        raise ValueError("Invalid container script execution target")
+
+    normalized: dict[str, Any] = {
+        "container_name": container_name,
+        "display_name": _clean_optional_string(container.get("display_name"))
+        or container_name,
+        "image": _clean_optional_string(container.get("image")),
+        "backup_mode": backup_mode,
+        "export_path": export_path,
+        "script_execution_target": script_execution_target,
+    }
+
+    pre_script_id = _clean_optional_int(container.get("pre_backup_script_id"))
+    if pre_script_id is not None:
+        normalized["pre_backup_script_id"] = pre_script_id
+        normalized["pre_backup_script_parameters"] = _clean_parameter_values(
+            container.get("pre_backup_script_parameters")
+        )
+
+    post_script_id = _clean_optional_int(container.get("post_backup_script_id"))
+    if post_script_id is not None:
+        normalized["post_backup_script_id"] = post_script_id
+        normalized["post_backup_script_parameters"] = _clean_parameter_values(
+            container.get("post_backup_script_parameters")
+        )
+
+    execution_order = _clean_optional_int(container.get("script_execution_order"))
+    if execution_order is not None:
+        normalized["script_execution_order"] = execution_order
+
+    return normalized
+
+
 def normalize_source_locations(
     source_locations: Optional[list[dict[str, Any]]] = None,
     *,
@@ -194,6 +253,12 @@ def normalize_source_locations(
             )
             if database:
                 normalized_location["database"] = database
+            container = normalize_container_config(
+                location.get("container"),
+                source_paths=paths,
+            )
+            if container:
+                normalized_location["container"] = container
 
             normalized.append(normalized_location)
         return normalized

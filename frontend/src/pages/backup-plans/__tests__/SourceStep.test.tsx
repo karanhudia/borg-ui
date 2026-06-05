@@ -6,10 +6,12 @@ import type { ReactNode } from 'react'
 
 import { createInitialState } from '../state'
 import { SourceStep } from '../wizard-step/SourceStep'
+import { SourceSelectionDialog } from '../wizard-step/SourceSelectionDialog'
 
 const apiMocks = vi.hoisted(() => ({
   databases: vi.fn(),
   scanDatabases: vi.fn(),
+  scanContainers: vi.fn(),
   filesystemSnapshots: vi.fn(),
 }))
 
@@ -20,6 +22,7 @@ vi.mock('../../../services/api', () => ({
   sourceDiscoveryAPI: {
     databases: apiMocks.databases,
     scanDatabases: apiMocks.scanDatabases,
+    scanContainers: apiMocks.scanContainers,
     filesystemSnapshots: apiMocks.filesystemSnapshots,
   },
 }))
@@ -249,6 +252,7 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.backToTypes': 'Back to source types',
   'backupPlans.sourceChooser.back': 'Back',
   'backupPlans.sourceChooser.applyPaths': 'Use these paths',
+  'backupPlans.sourceChooser.applyContainers': 'Use these containers',
   'backupPlans.sourceChooser.loading': 'Scanning sources...',
   'backupPlans.sourceChooser.noDatabaseTemplates': 'No database templates available',
   'backupPlans.sourceChooser.databaseTemplates': 'Templates',
@@ -278,6 +282,53 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.databaseDumpPath': 'Dump path',
   'backupPlans.sourceChooser.databaseBackupPaths': 'Final Borg paths',
   'backupPlans.sourceChooser.databaseBackupTitle': 'Add database backup',
+  'backupPlans.sourceChooser.containerTitle': 'Docker container',
+  'backupPlans.sourceChooser.containerBackupTitle': 'Add Docker container backup',
+  'backupPlans.sourceChooser.containerName': 'Container name or ID',
+  'backupPlans.sourceChooser.containerImage': 'Image (optional)',
+  'backupPlans.sourceChooser.containerExportPath': 'Export staging path',
+  'backupPlans.sourceChooser.containerExportHint':
+    'Borg UI exports the container filesystem to a staging path before Borg reads it. This does not back up the Docker image, bind mounts, or named volumes.',
+  'backupPlans.sourceChooser.containerExportsTo': 'Exports to',
+  'backupPlans.sourceChooser.addContainerManually': 'Add by name',
+  'backupPlans.sourceChooser.addContainerManuallyHelp':
+    "If your container isn't listed above, add it here.",
+  'backupPlans.sourceChooser.containerSourceMachine': 'Docker host',
+  'backupPlans.sourceChooser.containerBackupPath': 'Export staging path',
+  'backupPlans.sourceChooser.containerModeExport': 'docker export',
+  'backupPlans.sourceChooser.scanContainers': 'Scan containers',
+  'backupPlans.sourceChooser.rescanContainers': 'Re-scan containers',
+  'backupPlans.sourceChooser.scanContainersHint': 'Find containers on the selected Docker host.',
+  'backupPlans.sourceChooser.detectedContainers': 'Detected containers',
+  'backupPlans.sourceChooser.containerBackupCoverageTitle': 'What this source backs up',
+  'backupPlans.sourceChooser.containerFilesystemIncluded':
+    'Included: container filesystem export at {{path}}',
+  'backupPlans.sourceChooser.containerMountsNotIncluded': 'Not included: mounted data',
+  'backupPlans.sourceChooser.containerMountsNotIncludedHelp':
+    'Add these mount paths as Files sources if they contain data you need.',
+  'backupPlans.sourceChooser.containerMountNotIncluded': 'Not included in docker export',
+  'backupPlans.sourceChooser.containerMountsOptional': 'Optional mounted data',
+  'backupPlans.sourceChooser.containerMountsOptionalHelp':
+    'Select mounts to add them as Files sources in this plan.',
+  'backupPlans.sourceChooser.includeContainerMountAria':
+    'Include mounted data {{path}} as a Files source',
+  'backupPlans.sourceChooser.containerMountDestination': 'Mounted at {{path}}',
+  'backupPlans.sourceChooser.containerMountSizeAvailable': '{{size}}',
+  'backupPlans.sourceChooser.containerMountSizeUnavailable': 'Size unavailable',
+  'backupPlans.sourceChooser.containerMountSizePermissionDenied': 'Permission denied',
+  'backupPlans.sourceChooser.containerMountSizeTimeout': 'Size timed out',
+  'backupPlans.sourceChooser.containerImageMetadata':
+    'Image {{image}} identifies this container; Borg UI does not back up the image.',
+  'backupPlans.sourceChooser.addDetectedContainer': 'Add detected container',
+  'backupPlans.sourceChooser.addDetectedContainerShort': 'Add',
+  'backupPlans.sourceChooser.removeDetectedContainer': 'Remove detected container',
+  'backupPlans.sourceChooser.containerAdded': 'Added',
+  'backupPlans.sourceChooser.noContainersFoundTitle': 'No containers found',
+  'backupPlans.sourceChooser.noContainersFoundBody':
+    'Check Docker access on this host, or enter a container manually.',
+  'backupPlans.sourceChooser.addContainer': 'Add container',
+  'backupPlans.sourceChooser.selectedContainers': 'Selected containers',
+  'backupPlans.sourceChooser.containerScriptsAssigned': 'Export scripts assigned',
   'backupPlans.sourceChooser.addSourceGroup': 'Add source group',
   'backupPlans.sourceChooser.localSource': 'Borg UI server',
   'backupPlans.sourceChooser.borgUiServer': 'Borg UI server',
@@ -361,7 +412,7 @@ const translations: Record<string, string> = {
   'backupPlans.wizard.fileExplorer.sourceTitle': 'Select source paths',
 }
 
-const t = (key: string, options?: { count?: number }) => {
+const t = (key: string, options?: { count?: number; image?: string; size?: string }) => {
   if (key === 'backupPlans.sourceChooser.pathCount' && typeof options?.count === 'number') {
     return `${options.count} ${options.count === 1 ? 'path' : 'paths'}`
   }
@@ -372,6 +423,9 @@ const t = (key: string, options?: { count?: number }) => {
     .replace('{{command}}', String((options as { command?: string } | undefined)?.command ?? ''))
     .replace('{{provider}}', String((options as { provider?: string } | undefined)?.provider ?? ''))
     .replace('{{target}}', String((options as { target?: string } | undefined)?.target ?? ''))
+    .replace('{{path}}', String((options as { path?: string } | undefined)?.path ?? ''))
+    .replace('{{image}}', String(options?.image ?? ''))
+    .replace('{{size}}', String(options?.size ?? ''))
 }
 
 function clickExistingTextButton(name: string | RegExp) {
@@ -412,6 +466,16 @@ async function selectRemoteMachine(optionName: RegExp) {
   fireEvent.click(option)
   await waitFor(() => {
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  })
+}
+
+async function closeDatabaseScanDialog() {
+  const scanDialogTitle = await screen.findByRole('heading', { name: /scan for databases/i })
+  const scanDialog =
+    (scanDialogTitle.closest('[role="dialog"]') as HTMLElement | null) || document.body
+  fireEvent.click(within(scanDialog).getByRole('button', { name: /cancel/i }))
+  await waitFor(() => {
+    expect(screen.queryByRole('heading', { name: /scan for databases/i })).not.toBeInTheDocument()
   })
 }
 
@@ -488,6 +552,20 @@ function StatefulSourceStep({
       t={t as never}
     />
   )
+}
+
+const discoveryResponseWithEnabledContainer = {
+  ...discoveryResponse,
+  source_types: discoveryResponse.source_types.map((sourceType) =>
+    sourceType.id === 'container'
+      ? {
+          ...sourceType,
+          description: 'Back up a Docker container filesystem.',
+          status: 'enabled',
+          disabled: false,
+        }
+      : sourceType
+  ),
 }
 
 const emptyScanResponse = {
@@ -589,7 +667,7 @@ describe('SourceStep', () => {
   })
 
   it('opens straight into the path picker with the source-kind pivot', async () => {
-    apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
+    apiMocks.databases.mockResolvedValue({ data: discoveryResponseWithEnabledContainer })
     renderSourceStep()
 
     fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
@@ -602,12 +680,200 @@ describe('SourceStep', () => {
     expect(screen.getByRole('tab', { name: /^files$/i })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('tab', { name: /^database$/i })).toBeInTheDocument()
     const containerTab = screen.getByRole('tab', { name: /container/i })
-    expect(containerTab).toHaveAttribute('aria-disabled', 'true')
-    expect(containerTab).toHaveTextContent(/soon/i)
+    expect(containerTab).not.toHaveAttribute('aria-disabled', 'true')
+    expect(containerTab).not.toHaveTextContent(/soon/i)
     expect(screen.queryByText(/planned/i)).not.toBeInTheDocument()
     expect(
       screen.queryByRole('button', { name: /scan a database instead/i })
     ).not.toBeInTheDocument()
+  }, 45000)
+
+  it('scans Docker containers and lets mounted data be added as Files sources', async () => {
+    apiMocks.databases.mockResolvedValue({ data: discoveryResponseWithEnabledContainer })
+    apiMocks.scanContainers.mockResolvedValue({
+      data: {
+        scan_target: {
+          source_type: 'local',
+          source_ssh_connection_id: null,
+          label: 'This Borg UI server',
+        },
+        containers: [
+          {
+            id: '5ad07b8f01d2',
+            name: 'portainer',
+            image: 'portainer/portainer-ce:latest',
+            status: 'running',
+            state: 'running',
+            export_path: '/var/tmp/borg-ui/container-exports/portainer',
+            backup_mode: 'export',
+            notes: [
+              'docker export captures the container filesystem.',
+              'Bind mounts and Docker named volumes are not included by docker export.',
+            ],
+            mounts: [
+              {
+                type: 'volume',
+                name: 'portainer_data',
+                source: '/var/lib/docker/volumes/portainer_data/_data',
+                destination: '/data',
+                backed_up: false,
+                reason:
+                  'Not included in docker export; add this path separately from Files if needed.',
+                size_bytes: 1073741824,
+                size_status: 'available',
+              },
+              {
+                type: 'bind',
+                name: null,
+                source: '/srv/portainer/config',
+                destination: '/config',
+                backed_up: false,
+                reason:
+                  'Not included in docker export; add this path separately from Files if needed.',
+                size_bytes: null,
+                size_status: 'unavailable',
+              },
+              {
+                type: 'bind',
+                name: null,
+                source: '/srv/portainer/private',
+                destination: '/private',
+                backed_up: false,
+                reason:
+                  'Not included in docker export; add this path separately from Files if needed.',
+                size_bytes: null,
+                size_status: 'permission_denied',
+              },
+              {
+                type: 'bind',
+                name: null,
+                source: '/srv/portainer/slow',
+                destination: '/slow',
+                backed_up: false,
+                reason:
+                  'Not included in docker export; add this path separately from Files if needed.',
+                size_bytes: null,
+                size_status: 'timeout',
+              },
+            ],
+          },
+        ],
+        warnings: [],
+      },
+    })
+    const updateState = vi.fn()
+    const onCreateScript = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 401 })
+      .mockResolvedValueOnce({ id: 402 })
+
+    renderSourceStep({ updateState, onCreateScript })
+
+    fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
+    const containerTab = await screen.findByRole('tab', { name: /container/i })
+    fireEvent.click(containerTab)
+    fireEvent.click(await screen.findByRole('button', { name: /scan containers/i }))
+
+    await waitFor(() => {
+      expect(apiMocks.scanContainers).toHaveBeenCalledWith({
+        source_type: 'local',
+        source_ssh_connection_id: null,
+        include_stopped: true,
+      })
+    })
+    expect(await screen.findByText('Detected containers')).toBeInTheDocument()
+    expect(screen.getByTestId('container-scan-results')).toHaveStyle({
+      maxHeight: '360px',
+      overflowY: 'auto',
+    })
+    expect(screen.getByText('portainer')).toBeInTheDocument()
+    expect(screen.queryByText('portainer/portainer-ce:latest')).not.toBeInTheDocument()
+    expect(screen.queryByText('running')).not.toBeInTheDocument()
+    expect(screen.queryByText('docker export')).not.toBeInTheDocument()
+    expect(
+      screen.getByLabelText(
+        'Borg UI exports the container filesystem to a staging path before Borg reads it. This does not back up the Docker image, bind mounts, or named volumes.'
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText(
+        'Image portainer/portainer-ce:latest identifies this container; Borg UI does not back up the image.'
+      )
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('What this source backs up')).not.toBeInTheDocument()
+    expect(screen.queryByText('Not included: mounted data')).not.toBeInTheDocument()
+    expect(screen.getByText('Optional mounted data')).toBeInTheDocument()
+    expect(
+      screen.getByText('Add these mount paths as Files sources if they contain data you need.')
+    ).toBeInTheDocument()
+    expect(screen.getByText('→ /data')).toBeInTheDocument()
+    expect(screen.getByText('/var/lib/docker/volumes/portainer_data/_data')).toBeInTheDocument()
+    expect(screen.getByText('1.00 GB')).toBeInTheDocument()
+    expect(screen.getByText('/srv/portainer/config')).toBeInTheDocument()
+    expect(screen.getByText('Size unavailable')).toBeInTheDocument()
+    expect(screen.getByText('/srv/portainer/private')).toBeInTheDocument()
+    expect(screen.getByText('Permission denied')).toBeInTheDocument()
+    expect(screen.getByText('/srv/portainer/slow')).toBeInTheDocument()
+    expect(screen.getByText('Size timed out')).toBeInTheDocument()
+    expect(
+      screen.queryByText('Select mounts to add them as Files sources in this plan.')
+    ).not.toBeInTheDocument()
+
+    // Ticking the mount checkbox auto-queues the container with the mount path
+    // attached as a Files-style source on the same location group.
+    fireEvent.click(
+      screen.getByRole('checkbox', {
+        name: /include mounted data \/var\/lib\/docker\/volumes\/portainer_data\/_data as a files source/i,
+      })
+    )
+
+    expect(
+      await screen.findByRole('button', { name: /remove detected container/i })
+    ).toBeInTheDocument()
+    expect(screen.getByText('Selected containers')).toBeInTheDocument()
+    expect(screen.getAllByText('/var/tmp/borg-ui/container-exports/portainer').length).toBe(2)
+
+    clickExistingTextButton(/use these containers/i)
+
+    await waitFor(() => {
+      expect(onCreateScript).toHaveBeenCalledTimes(2)
+      expect(updateState).toHaveBeenCalledTimes(1)
+    })
+    const updatePayload = updateState.mock.calls[0][0]
+    expect(updatePayload.sourceDirectories).toEqual([
+      '/var/tmp/borg-ui/container-exports/portainer',
+      '/var/lib/docker/volumes/portainer_data/_data',
+    ])
+    const containerLocation = updatePayload.sourceLocations.find(
+      (location: { container?: { container_name?: string } }) =>
+        location.container?.container_name === 'portainer'
+    )
+    expect(containerLocation).toEqual(
+      expect.objectContaining({
+        source_type: 'local',
+        // Mount paths live INSIDE the container location alongside the export
+        // path; they no longer leak into a separate Files-only source.
+        paths: [
+          '/var/tmp/borg-ui/container-exports/portainer',
+          '/var/lib/docker/volumes/portainer_data/_data',
+        ],
+        container: expect.objectContaining({
+          container_name: 'portainer',
+          display_name: 'portainer',
+          image: 'portainer/portainer-ce:latest',
+          export_path: '/var/tmp/borg-ui/container-exports/portainer',
+          pre_backup_script_id: 401,
+          post_backup_script_id: 402,
+        }),
+      })
+    )
+    const filesOnlyMountLocation = updatePayload.sourceLocations.find(
+      (location: { paths: string[]; container?: unknown; database?: unknown }) =>
+        !location.container &&
+        !location.database &&
+        location.paths.includes('/var/lib/docker/volumes/portainer_data/_data')
+    )
+    expect(filesOnlyMountLocation).toBeUndefined()
   }, 45000)
 
   it('keeps a files and folders summary after selecting paths on a scripted plan', async () => {
@@ -628,8 +894,12 @@ describe('SourceStep', () => {
     fireEvent.change(screen.getByLabelText(/source path/i), {
       target: { value: '/srv/app-data' },
     })
-    clickExistingTextButton(/add path/i)
-    clickExistingTextButton(/use these paths/i)
+    const addPathButton = screen.getByRole('button', { name: /add path/i })
+    await waitFor(() => expect(addPathButton).toBeEnabled())
+    fireEvent.click(addPathButton)
+    const usePathsButton = screen.getByRole('button', { name: /use these paths/i })
+    await waitFor(() => expect(usePathsButton).toBeEnabled())
+    fireEvent.click(usePathsButton)
 
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
@@ -1313,6 +1583,7 @@ describe('SourceStep', () => {
       ).toBeInTheDocument()
     })
 
+    await closeDatabaseScanDialog()
     fireEvent.click(screen.getByRole('button', { name: /use these paths/i }))
 
     await waitFor(() => {
@@ -1371,7 +1642,6 @@ describe('SourceStep', () => {
       ).toBeInTheDocument()
     })
 
-    fireEvent.click(screen.getByRole('button', { name: /scan for databases/i }))
     const cacheSqlite = await screen.findByText('/srv/app/cache.sqlite3')
     fireEvent.click(cacheSqlite.closest('button') || cacheSqlite)
     fireEvent.click(screen.getByRole('button', { name: /add database/i }))
@@ -1382,6 +1652,7 @@ describe('SourceStep', () => {
       ).toBeInTheDocument()
     })
 
+    await closeDatabaseScanDialog()
     fireEvent.click(screen.getByRole('button', { name: /use these paths/i }))
 
     await waitFor(() => {
@@ -1408,6 +1679,65 @@ describe('SourceStep', () => {
       )
     ).toEqual(['/srv/app/state.sqlite', '/srv/app/cache.sqlite3'])
   })
+
+  it('returns to preserved scan results after adding a detected database', async () => {
+    apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
+    apiMocks.scanDatabases.mockResolvedValue({
+      data: {
+        scan_target: {
+          source_type: 'local',
+          source_ssh_connection_id: null,
+          label: 'This Borg UI server',
+        },
+        scanned_paths: ['/srv'],
+        detections: [
+          sqliteScanDetection('/srv/app/state.sqlite'),
+          sqliteScanDetection('/srv/app/cache.sqlite3'),
+        ],
+        templates: discoveryResponse.templates,
+        warnings: [],
+      },
+    })
+
+    render(
+      <SourceSelectionDialog
+        open
+        wizardState={createInitialState()}
+        sshConnections={[]}
+        agentMachines={[]}
+        fullRepositories={[]}
+        scripts={[]}
+        loadingScripts={false}
+        onClose={vi.fn()}
+        updateState={vi.fn()}
+        onCreateScript={vi.fn(async () => ({ id: 101 }))}
+        t={t as never}
+        initialView="database"
+      />
+    )
+    fireEvent.click(await screen.findByRole('button', { name: /scan for databases/i }))
+
+    const stateSqlite = await screen.findByText('/srv/app/state.sqlite')
+    expect(screen.getByText('/srv/app/cache.sqlite3')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(apiMocks.scanDatabases).toHaveBeenCalledTimes(1)
+    })
+
+    fireEvent.click(stateSqlite.closest('button') || stateSqlite)
+    fireEvent.click(screen.getByRole('button', { name: /add database/i }))
+
+    const scanDialogTitle = await waitFor(
+      () => screen.getByRole('heading', { name: /scan for databases/i }),
+      { timeout: 2000 }
+    )
+    const scanDialog = scanDialogTitle.closest('[role="dialog"]') || document.body
+    const restoredScanText = scanDialog.textContent || ''
+
+    expect(restoredScanText).toContain('/srv/app/state.sqlite')
+    expect(restoredScanText).toContain('/srv/app/cache.sqlite3')
+    expect(restoredScanText).toContain('/var/lib/postgresql')
+    expect(apiMocks.scanDatabases).toHaveBeenCalledTimes(1)
+  }, 60000)
 
   it('does not let existing template hydration overwrite a detected database choice', async () => {
     let resolveDatabases: ((value: { data: typeof discoveryResponse }) => void) | undefined
@@ -1488,6 +1818,7 @@ describe('SourceStep', () => {
       ).toBeInTheDocument()
     })
 
+    await closeDatabaseScanDialog()
     fireEvent.click(screen.getByRole('button', { name: /use these paths/i }))
 
     await waitFor(() => {
