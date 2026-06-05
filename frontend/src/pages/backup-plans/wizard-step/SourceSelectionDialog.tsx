@@ -765,6 +765,7 @@ export function SourceSelectionDialog({
 }: SourceSelectionDialogProps) {
   const [view, setView] = useState<SourceChoiceView>(initialView)
   const [scanDialogOpen, setScanDialogOpen] = useState(initialScanDialogOpen)
+  const [restoreScanDialogOnOpen, setRestoreScanDialogOnOpen] = useState(false)
   // Carries the scan target (and, when known, its display label) over from
   // the DatabaseScanDialog so applyDatabase places the chosen database on the
   // right source machine. Updated when the sub-modal returns a choice; reset
@@ -780,6 +781,7 @@ export function SourceSelectionDialog({
   const [snapshotCapabilities, setSnapshotCapabilities] =
     useState<FilesystemSnapshotCapabilitiesResponse | null>(null)
   const [selectedDatabase, setSelectedDatabase] = useState<SourceDiscoveryDatabase | null>(null)
+  const [selectedDatabaseFromScan, setSelectedDatabaseFromScan] = useState(false)
   const [scriptMode, setScriptMode] = useState<ScriptMode>('create')
   const [preScriptName, setPreScriptName] = useState('')
   const [postScriptName, setPostScriptName] = useState('')
@@ -853,6 +855,7 @@ export function SourceSelectionDialog({
     setCaptureModeExpanded(initialCaptureModeExpanded)
     setSourcePath('')
     setSelectedDatabase(initialDetailDatabase)
+    setSelectedDatabaseFromScan(Boolean(initialDetailDatabase?.detected))
     setScriptMode('create')
     setPreScriptName(initialDetailDatabase?.script_drafts.pre_backup.name || '')
     setPostScriptName(initialDetailDatabase?.script_drafts.post_backup.name || '')
@@ -882,6 +885,7 @@ export function SourceSelectionDialog({
         ''
     )
     setScanDialogOpen(initialScanDialogOpen)
+    setRestoreScanDialogOnOpen(false)
     setLastScanContext({
       scanTarget: initialScanTarget ?? { type: 'local', sshId: '' },
       label: null,
@@ -996,8 +1000,12 @@ export function SourceSelectionDialog({
     })
   }
 
-  const chooseDatabase = (database: SourceDiscoveryDatabase) => {
+  const chooseDatabase = (
+    database: SourceDiscoveryDatabase,
+    options: { fromScan?: boolean } = {}
+  ) => {
     setSelectedDatabase(database)
+    setSelectedDatabaseFromScan(Boolean(options.fromScan))
     setPreScriptName(database.script_drafts.pre_backup.name)
     setPostScriptName(database.script_drafts.post_backup.name)
     setPreScriptContent(database.script_drafts.pre_backup.content)
@@ -1010,12 +1018,23 @@ export function SourceSelectionDialog({
   const handleScanChoice = (choice: DatabaseScanChoice) => {
     setLastScanContext({ scanTarget: choice.scanTarget, label: choice.scanTargetLabel })
     setScanDialogOpen(false)
-    chooseDatabase(choice.database)
+    chooseDatabase(choice.database, { fromScan: true })
+  }
+
+  const handleOpenScanDialog = () => {
+    setRestoreScanDialogOnOpen(false)
+    setScanDialogOpen(true)
+  }
+
+  const handleCloseScanDialog = () => {
+    setScanDialogOpen(false)
+    setRestoreScanDialogOnOpen(false)
   }
 
   const applyDatabase = async () => {
     if (!selectedDatabase) return
 
+    const shouldReturnToScan = selectedDatabaseFromScan
     setApplying(true)
     try {
       const contextTarget = lastScanContext.scanTarget
@@ -1092,7 +1111,14 @@ export function SourceSelectionDialog({
         }
       })
       setSelectedSourceKey(targetKey)
+      setSelectedDatabaseFromScan(false)
       setView('database')
+      if (shouldReturnToScan) {
+        setRestoreScanDialogOnOpen(true)
+        setScanDialogOpen(true)
+      } else {
+        setRestoreScanDialogOnOpen(false)
+      }
     } finally {
       setApplying(false)
     }
@@ -1101,6 +1127,8 @@ export function SourceSelectionDialog({
   const handleFooterCancel = () => {
     if (view === 'database-detail') {
       setSelectedDatabase(null)
+      setSelectedDatabaseFromScan(false)
+      setRestoreScanDialogOnOpen(false)
       setView('database')
       return
     }
@@ -2297,7 +2325,7 @@ export function SourceSelectionDialog({
           variant="contained"
           size="large"
           startIcon={<Search size={18} />}
-          onClick={() => setScanDialogOpen(true)}
+          onClick={handleOpenScanDialog}
           sx={{ alignSelf: 'flex-start' }}
         >
           {t('backupPlans.sourceChooser.scanForDatabases')}
@@ -3506,7 +3534,7 @@ export function SourceSelectionDialog({
       </DialogContent>
       <DatabaseScanDialog
         open={scanDialogOpen}
-        onClose={() => setScanDialogOpen(false)}
+        onClose={handleCloseScanDialog}
         onChoose={handleScanChoice}
         sshConnections={sshConnections}
         t={t}
@@ -3514,6 +3542,7 @@ export function SourceSelectionDialog({
         // the user sees the machine they just chose. handleScanChoice writes
         // the modal's final target back to lastScanContext on commit.
         initialScanTarget={lastScanContext.scanTarget}
+        preserveStateOnOpen={restoreScanDialogOnOpen}
       />
     </ResponsiveDialog>
   )

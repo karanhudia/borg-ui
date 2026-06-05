@@ -6,6 +6,7 @@ import type { ReactNode } from 'react'
 
 import { createInitialState } from '../state'
 import { SourceStep } from '../wizard-step/SourceStep'
+import { SourceSelectionDialog } from '../wizard-step/SourceSelectionDialog'
 
 const apiMocks = vi.hoisted(() => ({
   databases: vi.fn(),
@@ -455,6 +456,16 @@ async function selectRemoteMachine(optionName: RegExp) {
   fireEvent.click(option)
   await waitFor(() => {
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  })
+}
+
+async function closeDatabaseScanDialog() {
+  const scanDialogTitle = await screen.findByRole('heading', { name: /scan for databases/i })
+  const scanDialog =
+    (scanDialogTitle.closest('[role="dialog"]') as HTMLElement | null) || document.body
+  fireEvent.click(within(scanDialog).getByRole('button', { name: /cancel/i }))
+  await waitFor(() => {
+    expect(screen.queryByRole('heading', { name: /scan for databases/i })).not.toBeInTheDocument()
   })
 }
 
@@ -1673,6 +1684,7 @@ describe('SourceStep', () => {
       ).toBeInTheDocument()
     })
 
+    await closeDatabaseScanDialog()
     fireEvent.click(screen.getByRole('button', { name: /use these paths/i }))
 
     await waitFor(() => {
@@ -1731,7 +1743,6 @@ describe('SourceStep', () => {
       ).toBeInTheDocument()
     })
 
-    fireEvent.click(screen.getByRole('button', { name: /scan for databases/i }))
     const cacheSqlite = await screen.findByText('/srv/app/cache.sqlite3')
     fireEvent.click(cacheSqlite.closest('button') || cacheSqlite)
     fireEvent.click(screen.getByRole('button', { name: /add database/i }))
@@ -1742,6 +1753,7 @@ describe('SourceStep', () => {
       ).toBeInTheDocument()
     })
 
+    await closeDatabaseScanDialog()
     fireEvent.click(screen.getByRole('button', { name: /use these paths/i }))
 
     await waitFor(() => {
@@ -1768,6 +1780,65 @@ describe('SourceStep', () => {
       )
     ).toEqual(['/srv/app/state.sqlite', '/srv/app/cache.sqlite3'])
   })
+
+  it('returns to preserved scan results after adding a detected database', async () => {
+    apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
+    apiMocks.scanDatabases.mockResolvedValue({
+      data: {
+        scan_target: {
+          source_type: 'local',
+          source_ssh_connection_id: null,
+          label: 'This Borg UI server',
+        },
+        scanned_paths: ['/srv'],
+        detections: [
+          sqliteScanDetection('/srv/app/state.sqlite'),
+          sqliteScanDetection('/srv/app/cache.sqlite3'),
+        ],
+        templates: discoveryResponse.templates,
+        warnings: [],
+      },
+    })
+
+    render(
+      <SourceSelectionDialog
+        open
+        wizardState={createInitialState()}
+        sshConnections={[]}
+        agentMachines={[]}
+        fullRepositories={[]}
+        scripts={[]}
+        loadingScripts={false}
+        onClose={vi.fn()}
+        updateState={vi.fn()}
+        onCreateScript={vi.fn(async () => ({ id: 101 }))}
+        t={t as never}
+        initialView="database"
+      />
+    )
+    fireEvent.click(await screen.findByRole('button', { name: /scan for databases/i }))
+
+    const stateSqlite = await screen.findByText('/srv/app/state.sqlite')
+    expect(screen.getByText('/srv/app/cache.sqlite3')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(apiMocks.scanDatabases).toHaveBeenCalledTimes(1)
+    })
+
+    fireEvent.click(stateSqlite.closest('button') || stateSqlite)
+    fireEvent.click(screen.getByRole('button', { name: /add database/i }))
+
+    const scanDialogTitle = await waitFor(
+      () => screen.getByRole('heading', { name: /scan for databases/i }),
+      { timeout: 2000 }
+    )
+    const scanDialog = scanDialogTitle.closest('[role="dialog"]') || document.body
+    const restoredScanText = scanDialog.textContent || ''
+
+    expect(restoredScanText).toContain('/srv/app/state.sqlite')
+    expect(restoredScanText).toContain('/srv/app/cache.sqlite3')
+    expect(restoredScanText).toContain('/var/lib/postgresql')
+    expect(apiMocks.scanDatabases).toHaveBeenCalledTimes(1)
+  }, 60000)
 
   it('does not let existing template hydration overwrite a detected database choice', async () => {
     let resolveDatabases: ((value: { data: typeof discoveryResponse }) => void) | undefined
@@ -1848,6 +1919,7 @@ describe('SourceStep', () => {
       ).toBeInTheDocument()
     })
 
+    await closeDatabaseScanDialog()
     fireEvent.click(screen.getByRole('button', { name: /use these paths/i }))
 
     await waitFor(() => {

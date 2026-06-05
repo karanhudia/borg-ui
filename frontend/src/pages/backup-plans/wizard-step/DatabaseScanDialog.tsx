@@ -126,6 +126,8 @@ export interface DatabaseScanDialogProps {
   t: TFunction
   /** Override the initial scan target. Used by Storybook for specific states. */
   initialScanTarget?: ScanTargetState
+  /** Reopen with the previous paths/results after a scan result was configured. */
+  preserveStateOnOpen?: boolean
 }
 
 export function DatabaseScanDialog({
@@ -135,6 +137,7 @@ export function DatabaseScanDialog({
   sshConnections,
   t,
   initialScanTarget,
+  preserveStateOnOpen = false,
 }: DatabaseScanDialogProps) {
   const [scanTarget, setScanTarget] = useState<ScanTargetState>(() =>
     resolveInitialScanTarget(initialScanTarget, sshConnections)
@@ -150,9 +153,11 @@ export function DatabaseScanDialog({
   const [scanLoading, setScanLoading] = useState(false)
   const [scanError, setScanError] = useState<ScanErrorState | null>(null)
   const scanRequestId = useRef(0)
+  const restoredOpenSkippedScan = useRef(false)
 
   useEffect(() => {
     if (!open) return
+    if (preserveStateOnOpen) return
     setScanTarget(resolveInitialScanTarget(initialScanTarget, sshConnections))
     setScanPaths(DEFAULT_DB_SCAN_PATHS)
     setScanPathDraft('')
@@ -161,7 +166,7 @@ export function DatabaseScanDialog({
     setScanIgnorePatternsText(DEFAULT_SCAN_IGNORE_PATTERNS.join('\n'))
     setScanResult(null)
     setScanError(null)
-  }, [open, initialScanTarget, sshConnections])
+  }, [open, preserveStateOnOpen, initialScanTarget, sshConnections])
 
   const runDatabaseScan = (immediate = false) => {
     if (!open) return
@@ -213,6 +218,12 @@ export function DatabaseScanDialog({
   useEffect(() => {
     if (!open) {
       initialScanDone.current = false
+      restoredOpenSkippedScan.current = false
+      return
+    }
+    if (preserveStateOnOpen && scanResult && !restoredOpenSkippedScan.current) {
+      initialScanDone.current = true
+      restoredOpenSkippedScan.current = true
       return
     }
     const immediate = !initialScanDone.current
@@ -228,6 +239,7 @@ export function DatabaseScanDialog({
     scanMaxDepth,
     scanTimeoutSeconds,
     scanIgnorePatternsText,
+    preserveStateOnOpen,
   ])
 
   const detections = scanResult?.detections || []
