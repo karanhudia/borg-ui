@@ -58,6 +58,19 @@ class TestSourceDiscovery:
     def test_container_scan_detects_local_containers_with_mount_coverage(
         self, test_client, admin_headers, monkeypatch
     ):
+        du_outputs = {
+            "/var/lib/docker/volumes/postgres-data/_data": SimpleNamespace(
+                returncode=0,
+                stdout="8192\t/var/lib/docker/volumes/postgres-data/_data\n",
+                stderr="",
+            ),
+            "/srv/postgres/conf": SimpleNamespace(
+                returncode=0,
+                stdout="4096\t/srv/postgres/conf\n",
+                stderr="",
+            ),
+        }
+
         def fake_local_container_scan(**kwargs):
             del kwargs
             return SimpleNamespace(
@@ -90,12 +103,18 @@ class TestSourceDiscovery:
                 stderr="",
             )
 
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            assert cmd[:3] == ["du", "-s", "-B1"]
+            return du_outputs[cmd[-1]]
+
         monkeypatch.setattr(
             source_discovery,
             "_run_local_container_scan",
             fake_local_container_scan,
             raising=False,
         )
+        monkeypatch.setattr(source_discovery.subprocess, "run", fake_run)
 
         response = test_client.post(
             "/api/source-discovery/containers/scan",
@@ -133,6 +152,8 @@ class TestSourceDiscovery:
                 "destination": "/var/lib/postgresql/data",
                 "backed_up": False,
                 "reason": "Not included in docker export; add this path separately from Files if needed.",
+                "size_bytes": 8192,
+                "size_status": "available",
             },
             {
                 "type": "bind",
@@ -141,7 +162,95 @@ class TestSourceDiscovery:
                 "destination": "/etc/postgresql/conf.d",
                 "backed_up": False,
                 "reason": "Not included in docker export; add this path separately from Files if needed.",
+                "size_bytes": 4096,
+                "size_status": "available",
             },
+        ]
+
+    def test_container_scan_reports_per_mount_size_failures(
+        self, test_client, admin_headers, monkeypatch
+    ):
+        def fake_local_container_scan(**kwargs):
+            del kwargs
+            return SimpleNamespace(
+                returncode=0,
+                stdout=json.dumps(
+                    {
+                        "Id": "93b3f8a1c2d4",
+                        "Name": "/files",
+                        "Config": {"Image": "busybox:latest"},
+                        "State": {"Status": "running"},
+                        "Mounts": [
+                            {
+                                "Type": "bind",
+                                "Source": "/srv/private",
+                                "Destination": "/private",
+                            },
+                            {
+                                "Type": "bind",
+                                "Source": "/srv/missing",
+                                "Destination": "/missing",
+                            },
+                            {
+                                "Type": "volume",
+                                "Name": "anonymous-volume",
+                                "Destination": "/anonymous",
+                            },
+                            {
+                                "Type": "bind",
+                                "Source": "/srv/slow",
+                                "Destination": "/slow",
+                            },
+                        ],
+                    }
+                )
+                + "\n",
+                stderr="",
+            )
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            path = cmd[-1]
+            if path == "/srv/private":
+                return SimpleNamespace(
+                    returncode=1,
+                    stdout="",
+                    stderr="du: cannot read directory '/srv/private': Permission denied",
+                )
+            if path == "/srv/missing":
+                return SimpleNamespace(
+                    returncode=1,
+                    stdout="",
+                    stderr="du: cannot access '/srv/missing': No such file or directory",
+                )
+            if path == "/srv/slow":
+                raise subprocess.TimeoutExpired(cmd, timeout=2)
+            raise AssertionError(f"Unexpected size probe for {path}")
+
+        monkeypatch.setattr(
+            source_discovery,
+            "_run_local_container_scan",
+            fake_local_container_scan,
+            raising=False,
+        )
+        monkeypatch.setattr(source_discovery.subprocess, "run", fake_run)
+
+        response = test_client.post(
+            "/api/source-discovery/containers/scan",
+            json={"source_type": "local", "source_ssh_connection_id": None},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        mounts = response.json()["containers"][0]["mounts"]
+        assert [
+            (mount["source"], mount["size_bytes"], mount["size_status"])
+            for mount in mounts
+        ] == [
+            ("/srv/private", None, "permission_denied"),
+            ("/srv/missing", None, "unavailable"),
+            (None, None, "unavailable"),
+            ("/srv/slow", None, "timeout"),
         ]
 
     def test_container_scan_detects_remote_containers(
@@ -177,10 +286,27 @@ class TestSourceDiscovery:
                         "Name": "/nginx",
                         "Config": {"Image": "nginx:1.27"},
                         "State": {"Status": "running"},
-                        "Mounts": [],
+                        "Mounts": [
+                            {
+                                "Type": "bind",
+                                "Source": "/srv/nginx/html",
+                                "Destination": "/usr/share/nginx/html",
+                            }
+                        ],
                     }
                 )
                 + "\n",
+                stderr="",
+            )
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            assert cmd[0] == "ssh"
+            assert "StrictHostKeyChecking=accept-new" in cmd
+            assert "du -s -B1 /srv/nginx/html" in cmd[-1]
+            return SimpleNamespace(
+                returncode=0,
+                stdout="16384\t/srv/nginx/html\n",
                 stderr="",
             )
 
@@ -190,6 +316,7 @@ class TestSourceDiscovery:
             fake_remote_container_scan,
             raising=False,
         )
+        monkeypatch.setattr(source_discovery.subprocess, "run", fake_run)
 
         response = test_client.post(
             "/api/source-discovery/containers/scan",
@@ -210,6 +337,8 @@ class TestSourceDiscovery:
         assert body["warnings"] == []
         assert body["containers"][0]["name"] == "nginx"
         assert body["containers"][0]["image"] == "nginx:1.27"
+        assert body["containers"][0]["mounts"][0]["size_bytes"] == 16384
+        assert body["containers"][0]["mounts"][0]["size_status"] == "available"
 
     def test_remote_container_scan_preserves_ssh_host_key_verification(
         self, monkeypatch

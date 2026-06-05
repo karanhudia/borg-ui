@@ -284,6 +284,38 @@ const detectedContainerScanResponse = {
           destination: '/var/lib/postgresql/data',
           backed_up: false,
           reason: 'Not included in docker export; add this path separately from Files if needed.',
+          size_bytes: 1073741824,
+          size_status: 'available',
+        },
+        {
+          type: 'bind',
+          name: null,
+          source: '/srv/postgres/conf',
+          destination: '/etc/postgresql/conf.d',
+          backed_up: false,
+          reason: 'Not included in docker export; add this path separately from Files if needed.',
+          size_bytes: null,
+          size_status: 'permission_denied',
+        },
+        {
+          type: 'bind',
+          name: null,
+          source: '/srv/postgres/archive',
+          destination: '/var/lib/postgresql/archive',
+          backed_up: false,
+          reason: 'Not included in docker export; add this path separately from Files if needed.',
+          size_bytes: null,
+          size_status: 'unavailable',
+        },
+        {
+          type: 'volume',
+          name: 'postgres-wal',
+          source: '/var/lib/docker/volumes/postgres-wal/_data',
+          destination: '/var/lib/postgresql/wal',
+          backed_up: false,
+          reason: 'Not included in docker export; add this path separately from Files if needed.',
+          size_bytes: null,
+          size_status: 'timeout',
         },
       ],
     },
@@ -646,6 +678,10 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.includeContainerMountAria':
     'Include mounted data {{path}} as a Files source',
   'backupPlans.sourceChooser.containerMountDestination': 'Mounted at {{path}}',
+  'backupPlans.sourceChooser.containerMountSizeAvailable': '{{size}}',
+  'backupPlans.sourceChooser.containerMountSizeUnavailable': 'Size unavailable',
+  'backupPlans.sourceChooser.containerMountSizePermissionDenied': 'Permission denied',
+  'backupPlans.sourceChooser.containerMountSizeTimeout': 'Size timed out',
   'backupPlans.sourceChooser.containerImageMetadata':
     'Image {{image}} identifies this container; Borg UI does not back up the image.',
   'backupPlans.sourceChooser.addDetectedContainer': 'Add detected container',
@@ -752,6 +788,7 @@ const t = (key: string, options?: Record<string, unknown>) => {
     .replace('{{command}}', String(options?.command ?? ''))
     .replace('{{provider}}', String(options?.provider ?? ''))
     .replace('{{path}}', String(options?.path ?? ''))
+    .replace('{{size}}', String(options?.size ?? ''))
 }
 
 interface DialogStoryArgs {

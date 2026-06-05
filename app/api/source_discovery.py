@@ -4,6 +4,7 @@ import os
 import posixpath
 import shlex
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from shutil import which
@@ -46,6 +47,8 @@ DEFAULT_SCAN_TIMEOUT_SECONDS = 30
 MIN_SCAN_TIMEOUT_SECONDS = 1
 MAX_SCAN_TIMEOUT_SECONDS = 300
 DEFAULT_CONTAINER_SCAN_TIMEOUT_SECONDS = 15
+DEFAULT_CONTAINER_MOUNT_SIZE_TIMEOUT_SECONDS = 2.0
+DEFAULT_CONTAINER_MOUNT_SIZE_TOTAL_TIMEOUT_SECONDS = 8.0
 DEFAULT_CONTAINER_EXPORT_ROOT = "/var/tmp/borg-ui/container-exports"
 DOCKER_INSTALL_URL = "https://docs.docker.com/engine/install/"
 
@@ -175,6 +178,8 @@ class ContainerMount(BaseModel):
     destination: str | None = None
     backed_up: bool = False
     reason: str
+    size_bytes: int | None = None
+    size_status: str = "unavailable"
 
 
 class ContainerCandidate(BaseModel):
@@ -1007,6 +1012,141 @@ def _container_mount(raw_mount: object) -> ContainerMount | None:
     )
 
 
+def _run_local_mount_size_probe(
+    path: str, timeout_seconds: float
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["du", "-s", "-B1", path],
+        capture_output=True,
+        text=True,
+        timeout=timeout_seconds,
+    )
+
+
+def _run_remote_mount_size_probe(
+    *,
+    connection: SSHConnection,
+    key_file_path: str,
+    path: str,
+    timeout_seconds: float,
+) -> subprocess.CompletedProcess[str]:
+    remote_command = f"du -s -B1 {shlex.quote(path)}"
+    ssh_cmd = [
+        "ssh",
+        "-i",
+        key_file_path,
+        "-p",
+        str(connection.port or 22),
+        "-o",
+        "StrictHostKeyChecking=accept-new",
+        "-o",
+        f"ConnectTimeout={max(1, int(timeout_seconds))}",
+        f"{connection.username}@{connection.host}",
+        remote_command,
+    ]
+    return subprocess.run(
+        ssh_cmd,
+        capture_output=True,
+        text=True,
+        timeout=timeout_seconds,
+    )
+
+
+def _mount_size_result_status(
+    result: subprocess.CompletedProcess[str],
+) -> tuple[int | None, str]:
+    stdout = (result.stdout or "").strip()
+    if result.returncode == 0 and stdout:
+        first_token = stdout.split()[0]
+        if first_token.isdigit():
+            return int(first_token), "available"
+
+    stderr = (result.stderr or "").lower()
+    if any(
+        phrase in stderr
+        for phrase in ("permission denied", "operation not permitted", "access denied")
+    ):
+        return None, "permission_denied"
+    return None, "unavailable"
+
+
+def _remaining_mount_size_timeout(deadline: float) -> float | None:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        return None
+    return min(DEFAULT_CONTAINER_MOUNT_SIZE_TIMEOUT_SECONDS, remaining)
+
+
+def _set_mount_size(mount: ContainerMount, size_bytes: int | None, status: str) -> None:
+    mount.size_bytes = size_bytes if status == "available" else None
+    mount.size_status = status
+
+
+def _enrich_container_mount_sizes(
+    containers: list[ContainerCandidate],
+    *,
+    probe,
+    scan_timeout_seconds: int,
+) -> None:
+    deadline = time.monotonic() + min(
+        DEFAULT_CONTAINER_MOUNT_SIZE_TOTAL_TIMEOUT_SECONDS,
+        float(scan_timeout_seconds),
+    )
+    for container in containers:
+        for mount in container.mounts:
+            source = (mount.source or "").strip()
+            if not source:
+                _set_mount_size(mount, None, "unavailable")
+                continue
+
+            timeout_seconds = _remaining_mount_size_timeout(deadline)
+            if timeout_seconds is None:
+                _set_mount_size(mount, None, "timeout")
+                continue
+
+            try:
+                result = probe(source, timeout_seconds)
+            except subprocess.TimeoutExpired:
+                _set_mount_size(mount, None, "timeout")
+                continue
+
+            size_bytes, status = _mount_size_result_status(result)
+            _set_mount_size(mount, size_bytes, status)
+
+
+def _enrich_local_container_mount_sizes(
+    containers: list[ContainerCandidate],
+    *,
+    scan_timeout_seconds: int,
+) -> None:
+    _enrich_container_mount_sizes(
+        containers,
+        probe=lambda path, timeout_seconds: _run_local_mount_size_probe(
+            path, timeout_seconds
+        ),
+        scan_timeout_seconds=scan_timeout_seconds,
+    )
+
+
+def _enrich_remote_container_mount_sizes(
+    containers: list[ContainerCandidate],
+    *,
+    connection: SSHConnection,
+    key_file_path: str,
+    scan_timeout_seconds: int,
+) -> None:
+    _enrich_container_mount_sizes(
+        containers,
+        probe=lambda path, timeout_seconds: _run_remote_mount_size_probe(
+            connection=connection,
+            key_file_path=key_file_path,
+            path=path,
+            timeout_seconds=timeout_seconds,
+        ),
+        scan_timeout_seconds=scan_timeout_seconds,
+    )
+
+
 def _container_notes(mounts: list[ContainerMount]) -> list[str]:
     notes = ["docker export captures the container filesystem."]
     if mounts:
@@ -1712,9 +1852,15 @@ async def _scan_local_containers(
             warning=_container_scan_failed_warning(result.stderr or ""),
         )
 
+    containers = _parse_container_scan_output(result.stdout or "")
+    await asyncio.to_thread(
+        _enrich_local_container_mount_sizes,
+        containers,
+        scan_timeout_seconds=timeout_seconds,
+    )
     return ContainerScanResponse(
         scan_target=scan_target,
-        containers=_parse_container_scan_output(result.stdout or ""),
+        containers=containers,
         warnings=[],
     )
 
@@ -1757,51 +1903,60 @@ async def _scan_remote_containers(
     )
     key_file_path = write_ssh_key_to_tempfile(ssh_key)
     try:
-        result = await asyncio.to_thread(
-            _run_remote_container_scan,
+        try:
+            result = await asyncio.to_thread(
+                _run_remote_container_scan,
+                connection=connection,
+                key_file_path=key_file_path,
+                include_stopped=request.include_stopped,
+                timeout_seconds=timeout_seconds,
+            )
+        except subprocess.TimeoutExpired:
+            return _container_scan_warning_response(
+                status_code=504,
+                scan_target=scan_target,
+                warning=ScanWarning(
+                    code="SCAN_TIMEOUT",
+                    message=f"Docker container scan timed out for {scan_target.label}",
+                    path=None,
+                ),
+            )
+
+        if result.returncode != 0:
+            stderr = (result.stderr or "").strip()
+            normalized_stderr = stderr.lower()
+            if result.returncode == 255 or "ssh:" in normalized_stderr:
+                return _container_scan_warning_response(
+                    status_code=502,
+                    scan_target=scan_target,
+                    warning=ScanWarning(
+                        code=_ssh_warning_code(stderr),
+                        message=f"Could not connect to {scan_target.label}: {stderr}",
+                        path=None,
+                    ),
+                )
+            return _container_scan_warning_response(
+                status_code=200,
+                scan_target=scan_target,
+                warning=_container_scan_failed_warning(stderr),
+            )
+
+        containers = _parse_container_scan_output(result.stdout or "")
+        await asyncio.to_thread(
+            _enrich_remote_container_mount_sizes,
+            containers,
             connection=connection,
             key_file_path=key_file_path,
-            include_stopped=request.include_stopped,
-            timeout_seconds=timeout_seconds,
+            scan_timeout_seconds=timeout_seconds,
         )
-    except subprocess.TimeoutExpired:
-        return _container_scan_warning_response(
-            status_code=504,
+        return ContainerScanResponse(
             scan_target=scan_target,
-            warning=ScanWarning(
-                code="SCAN_TIMEOUT",
-                message=f"Docker container scan timed out for {scan_target.label}",
-                path=None,
-            ),
+            containers=containers,
+            warnings=[],
         )
     finally:
         if os.path.exists(key_file_path):
             os.unlink(key_file_path)
-
-    if result.returncode != 0:
-        stderr = (result.stderr or "").strip()
-        normalized_stderr = stderr.lower()
-        if result.returncode == 255 or "ssh:" in normalized_stderr:
-            return _container_scan_warning_response(
-                status_code=502,
-                scan_target=scan_target,
-                warning=ScanWarning(
-                    code=_ssh_warning_code(stderr),
-                    message=f"Could not connect to {scan_target.label}: {stderr}",
-                    path=None,
-                ),
-            )
-        return _container_scan_warning_response(
-            status_code=200,
-            scan_target=scan_target,
-            warning=_container_scan_failed_warning(stderr),
-        )
-
-    return ContainerScanResponse(
-        scan_target=scan_target,
-        containers=_parse_container_scan_output(result.stdout or ""),
-        warnings=[],
-    )
 
 
 @router.get(
