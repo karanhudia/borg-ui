@@ -627,7 +627,6 @@ async def list_recent_activity(
 
     # Fetch script executions
     if not job_type or job_type == "script_execution":
-        log_save_policy = get_log_save_policy(db)
         script_executions = (
             db.query(ScriptExecution)
             .order_by(ScriptExecution.started_at.desc())
