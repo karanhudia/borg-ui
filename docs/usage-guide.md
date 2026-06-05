@@ -184,11 +184,9 @@ Use Database capture mode only if you need to back up the original live path
 instead of a generated dump.
 
 You can add more than one database before choosing Use these paths. When you use
-Scan for databases, Borg UI keeps the scan results open after Add database so
-you can configure another detected database without selecting the same source
-paths and rescanning. When you use generated database scripts, Borg UI tracks
-the script assignments for each selected database source, so each database runs
-with its own dump path and metadata.
+generated database scripts, Borg UI tracks the script assignments for each
+selected database source, so each database runs with its own dump path and
+metadata.
 
 ## Create a Backup Plan
 
