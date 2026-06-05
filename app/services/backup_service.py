@@ -39,6 +39,10 @@ from app.utils.borg_env import (
     cleanup_temp_key_file,
     setup_borg_env,
 )
+from app.services.repository_command_lock import (
+    acquire_repository_command_lock,
+    run_serialized_repository_command,
+)
 from app.utils.ssh_utils import (
     resolve_repo_ssh_key_file,  # noqa: F401
     resolve_ssh_key_file_by_id,
@@ -484,60 +488,65 @@ class BackupService:
             # Get timeouts from DB settings (with fallback to config)
             timeouts = self._get_operation_timeouts(db)
 
-            info_cmd = router.build_archive_info_command(repository_path, archive_name)
-            info_process = await asyncio.create_subprocess_exec(
-                *info_cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=env,
-            )
-            info_stdout, info_stderr = await asyncio.wait_for(
-                info_process.communicate(), timeout=timeouts["info_timeout"]
-            )
-
-            if info_process.returncode == 0:
-                try:
-                    info_data = json.loads(info_stdout.decode())
-                    archives = info_data.get("archives", [])
-                    if archives:
-                        archive_info = archives[0]
-                        stats = archive_info.get("stats", {})
-
-                        # Update job with final statistics
-                        job.original_size = stats.get(
-                            "original_size", job.original_size or 0
-                        )
-                        job.compressed_size = stats.get(
-                            "compressed_size", job.compressed_size or 0
-                        )
-                        job.deduplicated_size = stats.get(
-                            "deduplicated_size", job.deduplicated_size or 0
-                        )
-                        job.nfiles = stats.get("nfiles", job.nfiles or 0)
-
-                        db.commit()
-                        logger.info(
-                            "Updated archive statistics",
-                            job_id=job_id,
-                            archive=archive_name,
-                            original_size=job.original_size,
-                            compressed_size=job.compressed_size,
-                            deduplicated_size=job.deduplicated_size,
-                            nfiles=job.nfiles,
-                        )
-                except json.JSONDecodeError as e:
-                    logger.warning(
-                        "Failed to parse borg info output for archive",
-                        job_id=job_id,
-                        error=str(e),
-                    )
-            else:
-                logger.warning(
-                    "Failed to get archive info",
-                    job_id=job_id,
-                    archive=archive_name,
-                    returncode=info_process.returncode,
+            async def _operation():
+                info_cmd = router.build_archive_info_command(
+                    repository_path, archive_name
                 )
+                info_process = await asyncio.create_subprocess_exec(
+                    *info_cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env=env,
+                )
+                info_stdout, info_stderr = await asyncio.wait_for(
+                    info_process.communicate(), timeout=timeouts["info_timeout"]
+                )
+
+                if info_process.returncode == 0:
+                    try:
+                        info_data = json.loads(info_stdout.decode())
+                        archives = info_data.get("archives", [])
+                        if archives:
+                            archive_info = archives[0]
+                            stats = archive_info.get("stats", {})
+
+                            # Update job with final statistics
+                            job.original_size = stats.get(
+                                "original_size", job.original_size or 0
+                            )
+                            job.compressed_size = stats.get(
+                                "compressed_size", job.compressed_size or 0
+                            )
+                            job.deduplicated_size = stats.get(
+                                "deduplicated_size", job.deduplicated_size or 0
+                            )
+                            job.nfiles = stats.get("nfiles", job.nfiles or 0)
+
+                            db.commit()
+                            logger.info(
+                                "Updated archive statistics",
+                                job_id=job_id,
+                                archive=archive_name,
+                                original_size=job.original_size,
+                                compressed_size=job.compressed_size,
+                                deduplicated_size=job.deduplicated_size,
+                                nfiles=job.nfiles,
+                            )
+                    except json.JSONDecodeError as e:
+                        logger.warning(
+                            "Failed to parse borg info output for archive",
+                            job_id=job_id,
+                            error=str(e),
+                        )
+                else:
+                    logger.warning(
+                        "Failed to get archive info",
+                        job_id=job_id,
+                        archive=archive_name,
+                        returncode=info_process.returncode,
+                    )
+
+            await run_serialized_repository_command(repo_record.id, _operation)
 
         except asyncio.TimeoutError:
             logger.warning("Timeout while updating archive stats", job_id=job_id)
@@ -563,67 +572,70 @@ class BackupService:
             # Get timeouts from DB settings (with fallback to config)
             timeouts = self._get_operation_timeouts(db)
 
-            list_cmd = router.build_repo_list_command(repository_path)
-            list_process = await asyncio.create_subprocess_exec(
-                *list_cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=env,
-            )
-            list_stdout, list_stderr = await asyncio.wait_for(
-                list_process.communicate(), timeout=timeouts["list_timeout"]
-            )
+            async def _operation():
+                list_cmd = router.build_repo_list_command(repository_path)
+                list_process = await asyncio.create_subprocess_exec(
+                    *list_cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env=env,
+                )
+                list_stdout, list_stderr = await asyncio.wait_for(
+                    list_process.communicate(), timeout=timeouts["list_timeout"]
+                )
 
-            if list_process.returncode == 0:
-                try:
-                    archives_data = json.loads(list_stdout.decode())
-                    archive_count = len(archives_data.get("archives", []))
-                    repo_record.archive_count = archive_count
-                    logger.info(
-                        "Updated archive count",
-                        repository=repository_path,
-                        count=archive_count,
-                    )
-                except json.JSONDecodeError as e:
-                    logger.warning("Failed to parse borg list output", error=str(e))
-
-            info_cmd = router.build_repo_info_command(repository_path)
-            info_process = await asyncio.create_subprocess_exec(
-                *info_cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=env,
-            )
-            info_stdout, info_stderr = await asyncio.wait_for(
-                info_process.communicate(), timeout=timeouts["info_timeout"]
-            )
-
-            if info_process.returncode == 0:
-                try:
-                    info_data = json.loads(info_stdout.decode())
-                    cache_stats = info_data.get("cache", {}).get("stats", {})
-
-                    # Get total repository size (unique_size is deduplicated size)
-                    unique_size = cache_stats.get("unique_size", 0)
-                    if unique_size > 0:
-                        # Format size to human readable
-                        repo_record.total_size = self._format_bytes(unique_size)
+                if list_process.returncode == 0:
+                    try:
+                        archives_data = json.loads(list_stdout.decode())
+                        archive_count = len(archives_data.get("archives", []))
+                        repo_record.archive_count = archive_count
                         logger.info(
-                            "Updated repository size",
+                            "Updated archive count",
                             repository=repository_path,
-                            size=repo_record.total_size,
+                            count=archive_count,
                         )
-                except json.JSONDecodeError as e:
-                    logger.warning("Failed to parse borg info output", error=str(e))
+                    except json.JSONDecodeError as e:
+                        logger.warning("Failed to parse borg list output", error=str(e))
 
-            # Update last_backup timestamp
-            repo_record.last_backup = datetime.utcnow()
+                info_cmd = router.build_repo_info_command(repository_path)
+                info_process = await asyncio.create_subprocess_exec(
+                    *info_cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env=env,
+                )
+                info_stdout, info_stderr = await asyncio.wait_for(
+                    info_process.communicate(), timeout=timeouts["info_timeout"]
+                )
 
-            db.commit()
-            logger.info("Repository statistics updated", repository=repository_path)
+                if info_process.returncode == 0:
+                    try:
+                        info_data = json.loads(info_stdout.decode())
+                        cache_stats = info_data.get("cache", {}).get("stats", {})
 
-            # Publish a full DB-derived MQTT snapshot immediately after stats changes.
-            mqtt_service.sync_state_with_db(db, reason="repository stats updated")
+                        # Get total repository size (unique_size is deduplicated size)
+                        unique_size = cache_stats.get("unique_size", 0)
+                        if unique_size > 0:
+                            # Format size to human readable
+                            repo_record.total_size = self._format_bytes(unique_size)
+                            logger.info(
+                                "Updated repository size",
+                                repository=repository_path,
+                                size=repo_record.total_size,
+                            )
+                    except json.JSONDecodeError as e:
+                        logger.warning("Failed to parse borg info output", error=str(e))
+
+                # Update last_backup timestamp
+                repo_record.last_backup = datetime.utcnow()
+
+                db.commit()
+                logger.info("Repository statistics updated", repository=repository_path)
+
+                # Publish a full DB-derived MQTT snapshot immediately after stats changes.
+                mqtt_service.sync_state_with_db(db, reason="repository stats updated")
+
+            await run_serialized_repository_command(repo_record.id, _operation)
 
         except asyncio.TimeoutError:
             logger.warning(
@@ -1709,6 +1721,7 @@ class BackupService:
             db = SessionLocal()
             close_db = True
         temp_key_file = None  # Track SSH key file for cleanup
+        borg_command_lock = None
 
         try:
             # Get job
@@ -2314,6 +2327,16 @@ class BackupService:
             except Exception as e:
                 logger.warning("Failed to send backup start notification", error=str(e))
 
+            if repo_record and repo_record.id:
+                borg_command_lock = await acquire_repository_command_lock(
+                    repo_record.id
+                )
+                logger.info(
+                    "Acquired repository command lock for borg backup",
+                    job_id=job_id,
+                    repository_id=repo_record.id,
+                )
+
             # Execute command - NO LOG FILE FOR MAXIMUM PERFORMANCE
             process = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -2803,6 +2826,15 @@ class BackupService:
                     captured_exit_code=captured_exit_code,
                 )
                 actual_returncode = captured_exit_code
+
+            if borg_command_lock is not None:
+                borg_command_lock.release()
+                borg_command_lock = None
+                logger.info(
+                    "Released repository command lock for borg backup",
+                    job_id=job_id,
+                    repository_id=repo_record.id if repo_record else None,
+                )
 
             # Update job status using modern exit codes (if not already cancelled)
             # 0 = success, 1 = warning (legacy), 2 = error (legacy)
@@ -3410,6 +3442,17 @@ class BackupService:
                 finally:
                     retry_db.close()
         finally:
+            if borg_command_lock is not None:
+                try:
+                    borg_command_lock.release()
+                    logger.info(
+                        "Released repository command lock during backup cleanup",
+                        job_id=job_id,
+                    )
+                except RuntimeError:
+                    pass
+                borg_command_lock = None
+
             # Ensure log file handle is closed
             if "log_file_handle" in locals() and log_file_handle:
                 try:
