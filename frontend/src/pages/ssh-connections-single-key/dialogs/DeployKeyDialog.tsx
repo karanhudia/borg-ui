@@ -19,10 +19,12 @@ import {
   TextField,
   Tooltip,
   Typography,
+  useTheme,
 } from '@mui/material'
 import { Info } from 'lucide-react'
 import RichSelectRow from '../../../components/shared/RichSelectRow'
 import ResponsiveDialog from '../../../components/shared/ResponsiveDialog'
+import { getWizardStepColor } from '../../../components/shared/wizardStepColors'
 import { createConnectionForm } from '../formDefaults'
 import {
   remoteMachineSetupPresets,
@@ -69,6 +71,7 @@ export function DeployKeyDialog({
   pending,
   onDeploy,
 }: DeployKeyDialogProps) {
+  const theme = useTheme()
   const [selectedPreset, setSelectedPreset] = useState<RemoteMachineSetupPresetId>(() =>
     getPresetIdForForm(connectionForm)
   )
@@ -141,6 +144,7 @@ export function DeployKeyDialog({
   const renderPresetRow = (preset: RemoteMachineSetupPreset) => {
     const Icon = preset.icon
     const label = getPresetLabel(preset.id)
+    const presetColor = getWizardStepColor(preset.colorKey, theme.palette.mode)
 
     return (
       <RichSelectRow
@@ -149,7 +153,7 @@ export function DeployKeyDialog({
             aria-hidden
             component="span"
             data-testid={`remote-machine-preset-icon-${preset.id}`}
-            style={{ color: preset.color, display: 'inline-flex', lineHeight: 0 }}
+            style={{ color: presetColor, display: 'inline-flex', lineHeight: 0 }}
           >
             <Icon size={18} />
           </Box>

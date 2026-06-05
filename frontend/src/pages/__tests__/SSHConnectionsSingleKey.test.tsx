@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, waitFor as rtlWaitFor, within } from '@testing-library/react'
+import { getWizardStepColor } from '../../components/shared/wizardStepColors'
 import i18n from '../../i18n'
 import { renderWithProviders, screen, userEvent, waitFor } from '../../test/test-utils'
 import SSHConnectionsSingleKey from '../SSHConnectionsSingleKey'
@@ -495,6 +496,7 @@ describe('SSHConnectionsSingleKey', () => {
 
   it('renders deploy preset icons with their configured colors', async () => {
     const selectedPreset = remoteMachineSetupPresets.find((preset) => preset.id === 'hetzner')
+    expect(selectedPreset).toBeDefined()
 
     renderWithProviders(
       <DeployDialogHarness
@@ -511,14 +513,16 @@ describe('SSHConnectionsSingleKey', () => {
 
     const dialog = await screen.findByRole('dialog', { name: /deploy ssh key to server/i })
     const selectedIcon = within(dialog).getByTestId('remote-machine-preset-icon-hetzner')
-    expect(selectedIcon).toHaveStyle({ color: selectedPreset?.color })
+    expect(selectedIcon).toHaveStyle({
+      color: getWizardStepColor(selectedPreset!.colorKey, 'light'),
+    })
 
     fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: /setup preset/i }))
     const listbox = await screen.findByRole('listbox')
 
     remoteMachineSetupPresets.forEach((preset) => {
       expect(within(listbox).getByTestId(`remote-machine-preset-icon-${preset.id}`)).toHaveStyle({
-        color: preset.color,
+        color: getWizardStepColor(preset.colorKey, 'light'),
       })
     })
   }, 30000)

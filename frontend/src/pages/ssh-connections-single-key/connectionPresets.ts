@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 import { Settings2 } from 'lucide-react'
 import { SiBorgbackup, SiHetzner, SiLinux, SiSynology } from 'react-icons/si'
+import type { WizardStepColorKey } from '../../components/shared/wizardStepColors'
 import type { DeployConnectionPayload } from './types'
 
 export type RemoteMachineSetupPresetId = 'custom' | 'linux' | 'borgbase' | 'hetzner' | 'nas'
@@ -8,29 +9,29 @@ export type RemoteMachineSetupPresetId = 'custom' | 'linux' | 'borgbase' | 'hetz
 export interface RemoteMachineSetupPreset {
   id: RemoteMachineSetupPresetId
   icon: ComponentType<{ size?: number | string }>
-  color: string
+  colorKey: WizardStepColorKey
   defaults: Partial<DeployConnectionPayload>
 }
 
-export const remoteMachineSetupPresetIconColors = {
-  custom: '#7c3aed',
-  linux: '#ca8a04',
-  borgbase: '#16a34a',
-  hetzner: '#d50c2d',
-  nas: '#0891b2',
-} satisfies Record<RemoteMachineSetupPresetId, string>
+export const remoteMachineSetupPresetIconColorKeys = {
+  custom: 'config',
+  linux: 'basic',
+  borgbase: 'source',
+  hetzner: 'location',
+  nas: 'maintenance',
+} satisfies Record<RemoteMachineSetupPresetId, WizardStepColorKey>
 
 export const remoteMachineSetupPresets: RemoteMachineSetupPreset[] = [
   {
     id: 'custom',
     icon: Settings2,
-    color: remoteMachineSetupPresetIconColors.custom,
+    colorKey: remoteMachineSetupPresetIconColorKeys.custom,
     defaults: {},
   },
   {
     id: 'linux',
     icon: SiLinux,
-    color: remoteMachineSetupPresetIconColors.linux,
+    colorKey: remoteMachineSetupPresetIconColorKeys.linux,
     defaults: {
       username: 'root',
       port: 22,
@@ -43,7 +44,7 @@ export const remoteMachineSetupPresets: RemoteMachineSetupPreset[] = [
   {
     id: 'borgbase',
     icon: SiBorgbackup,
-    color: remoteMachineSetupPresetIconColors.borgbase,
+    colorKey: remoteMachineSetupPresetIconColorKeys.borgbase,
     defaults: {
       username: '',
       port: 22,
@@ -56,7 +57,7 @@ export const remoteMachineSetupPresets: RemoteMachineSetupPreset[] = [
   {
     id: 'hetzner',
     icon: SiHetzner,
-    color: remoteMachineSetupPresetIconColors.hetzner,
+    colorKey: remoteMachineSetupPresetIconColorKeys.hetzner,
     defaults: {
       username: '',
       port: 23,
@@ -69,7 +70,7 @@ export const remoteMachineSetupPresets: RemoteMachineSetupPreset[] = [
   {
     id: 'nas',
     icon: SiSynology,
-    color: remoteMachineSetupPresetIconColors.nas,
+    colorKey: remoteMachineSetupPresetIconColorKeys.nas,
     defaults: {
       username: '',
       port: 22,
