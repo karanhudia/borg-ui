@@ -33,11 +33,10 @@ TOKEN="$(
 
 SSO, TOTP, and passkey deployments may require their normal interactive login
 flow to produce an accepted bearer token. Generated tokens from
-`Settings > Account` are shown once and can be revoked there, but current
-backend authentication still expects the normal bearer access token for API
-requests. Do not use generated `borgui_...` account tokens as standalone
-credentials for manual backup endpoints until backend token authentication is
-wired through.
+`Settings > Account` are shown once and can be revoked there, but manual API
+requests still require the bearer token from a normal login. Do not use
+generated `borgui_...` account tokens as standalone credentials for manual
+backup endpoints yet.
 
 The token inherits the signed-in user's permissions:
 
@@ -76,10 +75,11 @@ Successful responses use this shape:
 
 The JSON body uses the `repository` string accepted by Borg UI's manual backup
 flow. For the current `/api/backup/start` and `/api/backup/run` endpoints, pass
-the repository path shown in Borg UI and stored as `Repository.path`. The
-backend keeps legacy compatibility for omitted or unknown repository strings,
-but automation should send a registered repository path so permissions,
-admission checks, routing, and logs resolve against the intended repository.
+the repository path shown in Borg UI. Older clients may still submit requests
+without a registered repository path. For compatibility, those requests can be
+accepted, but unknown paths fail to authorize or route. Automation should send a
+registered repository path so permissions, routing, and logs resolve against the
+intended repository.
 
 ## Compatibility alias
 

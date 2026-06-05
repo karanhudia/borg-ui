@@ -112,10 +112,9 @@ Settings > Account
 
 Generated tokens are shown once.
 
-Current backend authentication still uses the normal login bearer token for API
-requests. Do not rely on generated API tokens as standalone API credentials
-until token authentication is wired through the backend. See [API](api) for the
-supported bearer-token flow and manual backup examples.
+Manual API calls currently still use the bearer token from a normal login. Do
+not rely on generated account tokens as standalone API credentials yet. See
+[API](api) for the supported bearer-token flow and manual backup examples.
 
 ## Related
 

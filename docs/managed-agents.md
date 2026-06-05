@@ -7,9 +7,8 @@ description: "Install and run Borg UI Agent on client machines"
 # Managed Agents
 
 Managed Agents let one Borg UI server coordinate backups on client machines.
-The client runs `borg-ui-agent`, keeps one authenticated outbound WebSocket
-session open to Borg UI, runs Borg locally, and streams progress and logs back
-to the server. The `once` command still uses the polling path for compatibility.
+The client runs `borg-ui-agent`, connects outbound to Borg UI, runs Borg
+locally, and streams progress and logs back to the server.
 
 Open Managed Agents from the Infrastructure navigation group.
 
@@ -77,8 +76,8 @@ the agent run on the same machine, `localhost` is valid. If the agent runs on
 another machine, `localhost` points at that client machine, so use the Borg UI
 server host name, IP address, reverse-proxy URL, or HTTPS URL.
 
-The Add Agent wizard derives the backend URL from Borg UI's API URL. You can
-edit it before generating the command.
+Borg UI proposes a server URL in the Add Agent wizard. You can edit it before
+generating the command.
 
 ## Enrollment Tokens and Agent Credentials
 
@@ -92,17 +91,16 @@ you revoke access, delete it from the fleet list, or unregister it on the client
 ## Revoke and Delete
 
 - **Run diagnostics** opens a focused check for the selected agent. A
-  session-only run verifies that Borg UI can reach the agent over the existing
-  outbound WebSocket session and shows troubleshooting metadata such as online
-  state, last seen time, agent version, Borg versions, capabilities, and last
-  error.
+  session-only run verifies that Borg UI can reach the agent over its current
+  connection and shows troubleshooting details such as online state, last seen
+  time, agent version, Borg versions, capabilities, and last error.
 - To check whether the agent host can reach another service, open
   **Advanced: test another service** and enter the service host, port, and
   timeout in seconds before running diagnostics. The timeout controls how long
   the agent waits for that TCP connection before reporting a timeout. The agent
   attempts the connection from the agent machine and reports success or failure,
   elapsed time, timeout, and normalized error text. Borg UI validates the target
-  input and the agent uses socket APIs, not shell commands.
+  input before asking the agent to run the check.
 - **Revoke access** blocks the agent credential but keeps the machine visible for
   history and troubleshooting.
 - **Delete agent** removes the machine from active fleet lists. Existing job and
@@ -141,13 +139,13 @@ borg-ui-agent register \
   --name laptop
 ```
 
-Poll once through the compatibility job-polling path:
+Run one manual agent check:
 
 ```bash
 borg-ui-agent once
 ```
 
-Run continuously with the live WebSocket session and reconnect backoff:
+Run continuously:
 
 ```bash
 borg-ui-agent run
@@ -227,4 +225,4 @@ sudo launchctl bootstrap system /Library/LaunchDaemons/com.borg-ui.agent.plist
 Keep the agent config file readable only by the service user or local admin. It
 contains the agent credential used to authenticate with Borg UI.
 
-macOS and Windows one-command installers are not included in this phase.
+macOS and Windows one-command installers are not available yet.
