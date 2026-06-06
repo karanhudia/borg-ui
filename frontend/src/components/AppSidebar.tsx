@@ -30,6 +30,7 @@ import {
   ListChecks,
   Activity,
   Cloud,
+  Network,
 } from 'lucide-react'
 import api, { settingsAPI, backupPlansAPI } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
@@ -95,6 +96,7 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
       Dashboard: t('navigation.items.dashboard'),
       Activity: t('navigation.items.activity'),
       'Remote Machines': t('navigation.items.remoteMachines'),
+      'Remote Clients': t('navigation.items.remoteClients'),
       'Managed Agents': t('navigation.items.managedAgents'),
       'Cloud Storage': t('navigation.items.cloudStorage'),
       'Backup Plans': t('navigation.items.backupPlans'),
@@ -164,6 +166,12 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
     }> = [
       ...(canManageSsh
         ? [
+            {
+              name: 'Remote Clients',
+              href: '/remote-clients',
+              icon: Network,
+              key: 'connections' as const,
+            },
             {
               name: 'Remote Machines',
               href: '/ssh-connections',

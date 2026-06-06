@@ -4,6 +4,8 @@ import { renderWithProviders, screen, userEvent, waitFor } from '../../test/test
 import { darkTheme, theme } from '../../theme'
 import AppHeader from '../AppHeader'
 import { getProfileMenuContrastPairs } from '../profileMenuColors'
+import { RemoteBackendProvider } from '../../services/remoteBackends/context'
+import { resetRemoteBackendStateForTests } from '../../services/remoteBackends/storage'
 
 type Rgb = [number, number, number]
 
@@ -110,15 +112,27 @@ vi.mock('../../context/ThemeContext', async () => {
   }
 })
 
+function renderHeader(ui = <AppHeader onToggleMobileMenu={vi.fn()} />) {
+  return renderWithProviders(<RemoteBackendProvider>{ui}</RemoteBackendProvider>)
+}
+
 describe('AppHeader', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    localStorage.clear()
+    resetRemoteBackendStateForTests()
+  })
+
+  it('shows the server target switcher near the profile controls', () => {
+    renderHeader()
+
+    expect(screen.getByRole('button', { name: /server target this server/i })).toBeInTheDocument()
   })
 
   it('tracks user menu views and logout from the user menu', async () => {
     const user = userEvent.setup()
 
-    renderWithProviders(<AppHeader onToggleMobileMenu={vi.fn()} />)
+    renderHeader()
 
     await user.click(screen.getByRole('button', { name: /user menu/i }))
 
@@ -134,7 +148,7 @@ describe('AppHeader', () => {
 
   it('shows user name and role badge in the hero header when menu opens', async () => {
     const user = userEvent.setup()
-    renderWithProviders(<AppHeader onToggleMobileMenu={vi.fn()} />)
+    renderHeader()
 
     await user.click(screen.getByRole('button', { name: /user menu/i }))
 
@@ -145,7 +159,7 @@ describe('AppHeader', () => {
 
   it('shows the plan card when menu opens', async () => {
     const user = userEvent.setup()
-    renderWithProviders(<AppHeader onToggleMobileMenu={vi.fn()} />)
+    renderHeader()
 
     await user.click(screen.getByRole('button', { name: /user menu/i }))
 
@@ -153,19 +167,20 @@ describe('AppHeader', () => {
     expect(await screen.findByText('All Pro features unlocked')).toBeInTheDocument()
   })
 
-  it('shows the settings navigation links when menu opens', async () => {
+  it('shows all three settings navigation links when menu opens', async () => {
     const user = userEvent.setup()
-    renderWithProviders(<AppHeader onToggleMobileMenu={vi.fn()} />)
+    renderHeader()
 
     await user.click(screen.getByRole('button', { name: /user menu/i }))
 
     expect(await screen.findByText('Account & Security')).toBeInTheDocument()
+    expect(await screen.findByText('Appearance')).toBeInTheDocument()
     expect(await screen.findByText('Notifications')).toBeInTheDocument()
   })
 
   it('shows the theme quick switch with the three modes when menu opens', async () => {
     const user = userEvent.setup()
-    renderWithProviders(<AppHeader onToggleMobileMenu={vi.fn()} />)
+    renderHeader()
 
     await user.click(screen.getByRole('button', { name: /user menu/i }))
 
@@ -178,7 +193,7 @@ describe('AppHeader', () => {
 
   it('switches theme and tracks the change when a theme option is clicked', async () => {
     const user = userEvent.setup()
-    renderWithProviders(<AppHeader onToggleMobileMenu={vi.fn()} />)
+    renderHeader()
 
     await user.click(screen.getByRole('button', { name: /user menu/i }))
 
@@ -217,7 +232,7 @@ describe('AppHeader', () => {
   ])('opens the profile menu in %s theme', async (_mode, muiTheme) => {
     const user = userEvent.setup()
 
-    renderWithProviders(
+    renderHeader(
       <MuiThemeProvider theme={muiTheme}>
         <AppHeader onToggleMobileMenu={vi.fn()} />
       </MuiThemeProvider>
@@ -233,7 +248,7 @@ describe('AppHeader', () => {
 
   it('navigates to account settings when Account & Security link is clicked', async () => {
     const user = userEvent.setup()
-    renderWithProviders(<AppHeader onToggleMobileMenu={vi.fn()} />)
+    renderHeader()
 
     await user.click(screen.getByRole('button', { name: /user menu/i }))
     await user.click(await screen.findByText('Account & Security'))
@@ -241,9 +256,19 @@ describe('AppHeader', () => {
     expect(navigateMock).toHaveBeenCalledWith('/settings/account')
   })
 
+  it('navigates to appearance settings when Appearance link is clicked', async () => {
+    const user = userEvent.setup()
+    renderHeader()
+
+    await user.click(screen.getByRole('button', { name: /user menu/i }))
+    await user.click(await screen.findByText('Appearance'))
+
+    expect(navigateMock).toHaveBeenCalledWith('/settings/appearance')
+  })
+
   it('navigates to notifications settings when Notifications link is clicked', async () => {
     const user = userEvent.setup()
-    renderWithProviders(<AppHeader onToggleMobileMenu={vi.fn()} />)
+    renderHeader()
 
     await user.click(screen.getByRole('button', { name: /user menu/i }))
     await user.click(await screen.findByText('Notifications'))

@@ -7,6 +7,8 @@ import {
   ProxyAuthWarning,
 } from '../services/api'
 import { fetchJsonForAuthMode, setFetchAuthMode } from '../services/authRequest'
+import { clearAccessToken, getAccessToken, setAccessToken } from '../services/authHeaders'
+import { useActiveBackendTarget } from '../services/remoteBackends/context'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { clearRecentPasswordLogin, markRecentPasswordLogin } from '../utils/passkeyPrompt'
 import { getDefaultPasskeyDeviceName } from '../utils/passkeyDeviceName'
@@ -56,6 +58,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const activeBackendTarget = useActiveBackendTarget()
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [oidcEnabled, setOidcEnabled] = useState(false)
@@ -125,7 +128,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
+    let cancelled = false
     const initAuth = async () => {
+      setIsLoading(true)
+      setUser(null)
       try {
         // First, check if proxy authentication is enabled
         const configResponse = await authAPI.getAuthConfig()
@@ -156,23 +162,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setAuthError(null)
 
         if (insecure_no_auth_enabled) {
-          localStorage.removeItem('access_token')
+          clearAccessToken()
           try {
             await refreshUser('insecure-no-auth')
-            setAuthError(null)
+            if (!cancelled) {
+              setAuthError(null)
+            }
           } catch (error) {
             console.error('Failed to get profile in insecure no-auth mode:', error)
             const { detail } = extractAuthError(error)
-            setUser(null)
-            setAuthError(
-              translateBackendKey(
-                detail as
-                  | string
-                  | { key: string; params?: Record<string, unknown> }
-                  | null
-                  | undefined
-              ) || 'Insecure no-auth mode is enabled but Borg UI could not resolve a local user.'
-            )
+            if (!cancelled) {
+              setUser(null)
+              setAuthError(
+                translateBackendKey(
+                  detail as
+                    | string
+                    | { key: string; params?: Record<string, unknown> }
+                    | null
+                    | undefined
+                ) || 'Insecure no-auth mode is enabled but Borg UI could not resolve a local user.'
+              )
+            }
           }
         } else if (proxy_auth_enabled) {
           // Proxy auth mode: trust the reverse proxy, but fail closed when no identity header arrives.
@@ -183,21 +193,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             try {
               await refreshUser()
               success = true
-              setAuthError(null)
+              if (!cancelled) {
+                setAuthError(null)
+              }
             } catch (error: unknown) {
               console.error('Failed to get profile in proxy auth mode, retrying...', error)
               const { status, detail } = extractAuthError(error)
 
               if (status === 401 || status === 403) {
-                setAuthError(
-                  translateBackendKey(
-                    detail as
-                      | string
-                      | { key: string; params?: Record<string, unknown> }
-                      | null
-                      | undefined
+                if (!cancelled) {
+                  setAuthError(
+                    translateBackendKey(
+                      detail as
+                        | string
+                        | { key: string; params?: Record<string, unknown> }
+                        | null
+                        | undefined
+                    )
                   )
-                )
+                }
                 retries = 0
                 break
               }
@@ -211,22 +225,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           if (!success) {
             console.error('Failed to authenticate after retries')
-            setUser(null)
-            setAuthError(
-              (existing) =>
-                existing ??
-                'Proxy authentication is enabled but Borg UI did not receive an authenticated user from the reverse proxy.'
-            )
+            if (!cancelled) {
+              setUser(null)
+              setAuthError(
+                (existing) =>
+                  existing ??
+                  'Proxy authentication is enabled but Borg UI did not receive an authenticated user from the reverse proxy.'
+              )
+            }
           }
         } else {
           // JWT auth mode: check for token
-          const token = localStorage.getItem('access_token')
+          const token = getAccessToken()
           if (token) {
             try {
               await refreshUser()
             } catch (error) {
               console.error('Failed to get profile with JWT:', error)
-              localStorage.removeItem('access_token')
+              clearAccessToken()
             }
           }
         }
@@ -241,21 +257,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setProxyAuthEnabled(false)
         setInsecureNoAuthEnabled(false)
         setProxyAuthWarnings([])
-        const token = localStorage.getItem('access_token')
+        const token = getAccessToken()
         if (token) {
           try {
             await refreshUser()
           } catch {
-            localStorage.removeItem('access_token')
+            clearAccessToken()
           }
         }
       } finally {
-        setIsLoading(false)
+        if (!cancelled) {
+          setIsLoading(false)
+        }
       }
     }
 
     initAuth()
-  }, [])
+    return () => {
+      cancelled = true
+    }
+  }, [activeBackendTarget.id, activeBackendTarget.apiBaseUrl])
 
   const login = async (
     username: string,
@@ -281,7 +302,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error('Missing access token')
     }
 
-    localStorage.setItem('access_token', access_token)
+    setAccessToken(access_token)
     markRecentPasswordConfirmation(password)
 
     await refreshUser()
@@ -299,7 +320,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error('Missing access token')
     }
 
-    localStorage.setItem('access_token', access_token)
+    setAccessToken(access_token)
     setAuthTransportMode('jwt')
     setFetchAuthMode('jwt')
     await refreshUser('jwt')
@@ -313,7 +334,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!access_token) {
       throw new Error('Missing access token')
     }
-    localStorage.setItem('access_token', access_token)
+    setAccessToken(access_token)
     markRecentPasswordLogin()
     await refreshUser()
     return { mustChangePassword: must_change_password || false }
@@ -331,7 +352,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!access_token) {
       throw new Error('Missing access token')
     }
-    localStorage.setItem('access_token', access_token)
+    setAccessToken(access_token)
     clearRecentPasswordLogin()
     clearRecentPasskeyEnrollmentState()
     await refreshUser()
@@ -379,7 +400,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // Ignore logout errors
     }
-    localStorage.removeItem('access_token')
+    clearAccessToken()
     clearRecentPasswordLogin()
     clearRecentPasskeyEnrollmentState()
     setUser(null)

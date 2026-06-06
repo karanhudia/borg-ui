@@ -15,7 +15,8 @@ license supports it.
 For a new setup, follow the sidebar in this order:
 
 1. Open Dashboard to check overall health.
-2. Add storage targets from Repositories, Cloud Storage, or Remote Machines.
+2. Add storage targets from Repositories or Cloud Storage, and register infrastructure endpoints
+   from Remote Clients or Remote Machines.
 3. Create a plan from Backup Plans.
 4. Configure automatic runs from the plan schedule or the Schedule page.
 5. Watch work in Activity and browse results in Archives.
@@ -27,6 +28,7 @@ For a new setup, follow the sidebar in this order:
 | --- | --- | --- |
 | Main | Dashboard | Check repository health, recent activity, backup freshness, and restore-check status. |
 | Main | Activity | Review job history, live or recent logs, failures, and completed backup, restore, check, prune, compact, script, or package work. |
+| Infrastructure | Remote Clients | Register other Borg UI client servers, check health and version compatibility, and switch this browser to a remote client. |
 | Infrastructure | Remote Machines | Add SSH-connected machines for remote repositories, remote backup sources, and SSH restore destinations. |
 | Infrastructure | Managed Agents | Enroll and manage Borg UI agents on remote machines. |
 | Infrastructure | Cloud Storage | Configure reusable rclone remotes for Cloud Mirror targets and advanced direct Borg 2 rclone repository URLs. |
@@ -80,5 +82,6 @@ administration.
 ## Where To Go Next
 
 - For a first backup, continue with the [Usage Guide](usage-guide#create-a-backup-plan).
+- For Borg UI instances on other machines, see [Remote Clients](remote-clients).
 - For SSH targets or remote sources, see [Remote Machines](ssh-keys).
 - For notification setup, see [Notifications](notifications).

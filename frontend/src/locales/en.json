@@ -109,6 +109,7 @@
     "items": {
       "dashboard": "Dashboard",
       "activity": "Activity",
+      "remoteClients": "Remote Clients",
       "remoteMachines": "Remote Machines",
       "managedAgents": "Managed Agents",
       "cloudStorage": "Cloud Storage",
@@ -158,6 +159,87 @@
     "welcome": "Welcome,",
     "logout": "Logout",
     "yourPlan": "Your Plan"
+  },
+  "remoteClients": {
+    "title": "Remote Clients",
+    "description": "Register Borg UI client servers on other machines, check their health, and use this browser against the selected server.",
+    "addButton": "Add remote client",
+    "status": {
+      "incompatible": "Incompatible",
+      "online": "Online",
+      "offline": "Offline",
+      "checking": "Checking",
+      "unknown": "Unknown"
+    },
+    "labels": {
+      "activeTarget": "Active target",
+      "local": "Local",
+      "remoteClient": "Remote client"
+    },
+    "switcher": {
+      "title": "Server targets",
+      "description": "Choose whether this browser uses this server or a remote client.",
+      "menuLabel": "Server targets",
+      "ariaLabel": "Server target {{name}}",
+      "selectLabel": "Server",
+      "noClients": "No remote clients found",
+      "localName": "This server",
+      "localHelper": "Current Borg UI server",
+      "localCompatibility": "This browser is connected to this Borg UI server.",
+      "remoteHelper": "Remote client server",
+      "remoteUnavailable": "Remote client unavailable",
+      "versionMismatch": "Version mismatch",
+      "versionHelper": "Borg UI {{version}}",
+      "manage": "Manage remote clients"
+    },
+    "localBackend": {
+      "title": "This server",
+      "active": "Active target",
+      "fallback": "Available as the local fallback"
+    },
+    "empty": {
+      "title": "No remote clients yet",
+      "description": "Add a Borg UI server URL to check its health and switch this browser to it."
+    },
+    "lastChecked": "Last checked: {{value}}",
+    "version": "Borg UI {{version}}",
+    "actions": {
+      "check": "Check",
+      "use": "Use",
+      "edit": "Edit remote client",
+      "delete": "Delete remote client",
+      "checkAria": "Check {{name}}",
+      "useAria": "Use {{name}}",
+      "useLocalAria": "Use this server",
+      "editAria": "Edit {{name}}",
+      "deleteAria": "Delete {{name}}"
+    },
+    "dialog": {
+      "addTitle": "Add remote client",
+      "editTitle": "Edit remote client",
+      "description": "Use the Borg UI server URL. DNS names, LAN IPs, localhost URLs, and `/api` paths are accepted.",
+      "nameLabel": "Client name",
+      "urlLabel": "Server URL",
+      "save": "Save client"
+    },
+    "toasts": {
+      "added": "Remote client added.",
+      "updated": "Remote client updated.",
+      "deleted": "Remote client deleted.",
+      "online": "{{name}} is online.",
+      "unavailable": "{{name}} is unavailable.",
+      "checkFailed": "{{name}} check failed: {{error}}",
+      "using": "Using {{name}}."
+    },
+    "deleteDialog": {
+      "title": "Delete remote client?",
+      "description": "Remove \"{{name}}\" from this browser? You can add it again later with its server URL.",
+      "confirm": "Delete client"
+    },
+    "errors": {
+      "saveFailed": "Failed to save remote client.",
+      "remoteUnavailable": "Remote client server is unavailable."
+    }
   },
   "cloudStorage": {
     "title": "Cloud Storage",
@@ -4025,7 +4107,8 @@
     }
   },
   "protectedRoute": {
-    "unavailable": "This feature is currently unavailable"
+    "unavailable": "This feature is currently unavailable",
+    "permissionDenied": "You do not have permission to open this page"
   },
   "repositoryCell": {
     "noPath": "No path information"

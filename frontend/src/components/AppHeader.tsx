@@ -10,6 +10,7 @@ import {
   Menu,
   Monitor,
   Moon,
+  Palette,
   Shield,
   Sparkles,
   Sun,
@@ -24,6 +25,7 @@ import { usePlan } from '../hooks/usePlan'
 import { useNavigate } from 'react-router-dom'
 import { PLAN_LABEL } from '../core/features'
 import { getProfileMenuColors, getRoleBadgeStyles } from './profileMenuColors'
+import BackendTargetSwitcher from './BackendTargetSwitcher'
 import { useTheme } from '../context/ThemeContext'
 
 const drawerWidth = 240
@@ -107,6 +109,10 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
         </IconButton>
 
         <Box sx={{ flexGrow: 1 }} />
+
+        <Box sx={{ mr: 1, display: 'flex', alignItems: 'center' }}>
+          <BackendTargetSwitcher />
+        </Box>
 
         <Box
           component="button"
@@ -485,6 +491,12 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
                     'Profile, password, 2FA, passkeys'
                   ),
                   route: '/settings/account',
+                },
+                {
+                  icon: Palette,
+                  label: t('navigation.settings.appearance', 'Appearance'),
+                  desc: t('navigation.menu.appearanceDesc', 'Theme, language'),
+                  route: '/settings/appearance',
                 },
                 {
                   icon: Bell,

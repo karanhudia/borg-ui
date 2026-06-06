@@ -1,8 +1,15 @@
 import axios from 'axios'
 import { toast } from 'react-hot-toast'
 import { BASE_PATH } from '@/utils/basePath'
-import { API_BASE_URL, buildDownloadUrl } from '@/utils/downloadUrl'
-import { attachAccessTokenHeader } from './authHeaders'
+import { API_BASE_URL, buildApiUrl, buildDownloadUrl } from './remoteBackends/gateway'
+import { getActiveBackendTarget } from './remoteBackends/storage'
+import {
+  attachAccessTokenHeader,
+  BACKEND_TARGET_ID_CONFIG_KEY,
+  clearAccessToken,
+  type BackendTargetRequestConfig,
+} from './authHeaders'
+import type { InternalAxiosRequestConfig } from 'axios'
 import type { RestoreLayout, RestorePathMetadata } from '@/utils/restorePaths'
 import type {
   BackupPlan,
@@ -30,7 +37,13 @@ const api = axios.create({
 })
 
 // Request interceptor to add auth token
-api.interceptors.request.use(attachAccessTokenHeader)
+api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  const target = getActiveBackendTarget()
+  const targetConfig = config as BackendTargetRequestConfig
+  targetConfig.baseURL = target.apiBaseUrl
+  targetConfig[BACKEND_TARGET_ID_CONFIG_KEY] = target.id
+  return attachAccessTokenHeader(targetConfig, target.id)
+})
 
 // Response interceptor to handle auth errors
 api.interceptors.response.use(
@@ -52,7 +65,10 @@ api.interceptors.response.use(
       error.config?.url !== '/auth/config' &&
       authTransportMode === 'jwt'
     ) {
-      localStorage.removeItem('access_token')
+      const requestTargetId = (error.config as BackendTargetRequestConfig | undefined)?.[
+        BACKEND_TARGET_ID_CONFIG_KEY
+      ]
+      clearAccessToken(requestTargetId)
       window.location.href = `${BASE_PATH}/login`
     }
     return Promise.reject(error)
@@ -496,20 +512,10 @@ export interface FilesystemSnapshotCapabilitiesResponse {
 export const authAPI = {
   getAuthConfig: () => api.get<AuthConfigResponse>('/auth/config'),
   getOidcLoginUrl: (returnTo?: string) => {
-    const params = new URLSearchParams()
-    if (returnTo) {
-      params.set('return_to', returnTo)
-    }
-    const suffix = params.toString()
-    return `${API_BASE_URL}/auth/oidc/login${suffix ? `?${suffix}` : ''}`
+    return buildApiUrl('/auth/oidc/login', { return_to: returnTo })
   },
   getOidcLinkUrl: (returnTo?: string) => {
-    const params = new URLSearchParams()
-    if (returnTo) {
-      params.set('return_to', returnTo)
-    }
-    const suffix = params.toString()
-    return `${API_BASE_URL}/auth/oidc/link${suffix ? `?${suffix}` : ''}`
+    return buildApiUrl('/auth/oidc/link', { return_to: returnTo })
   },
   beginOidcLink: (returnTo?: string) =>
     api.post<OidcLinkStartResponse>('/auth/oidc/link', { return_to: returnTo }),

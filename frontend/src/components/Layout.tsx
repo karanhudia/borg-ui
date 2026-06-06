@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { hasConsentBeenGiven, loadUserPreference } from '../utils/analytics'
 import AnalyticsConsentBanner from './AnalyticsConsentBanner'
 import AnnouncementModal from './AnnouncementModal'
@@ -7,6 +8,7 @@ import AppSidebar from './AppSidebar'
 import { useAuth } from '../hooks/useAuth'
 import { useAnnouncementSurface } from '../hooks/useAnnouncementSurface'
 import PasskeyEnrollmentPrompt from './PasskeyEnrollmentPrompt'
+import { useActiveBackendTarget } from '../services/remoteBackends/context'
 import {
   clearPasskeyPromptIgnore,
   clearPasskeyPromptSnooze,
@@ -35,6 +37,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [showConsentBanner, setShowConsentBanner] = useState(false)
   const [showPasskeyPrompt, setShowPasskeyPrompt] = useState(false)
+  const activeBackendTarget = useActiveBackendTarget()
+  const queryClient = useQueryClient()
+  const previousBackendTargetId = useRef(activeBackendTarget.id)
 
   useEffect(() => {
     const checkConsent = async () => {
@@ -47,6 +52,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     }
     checkConsent()
   }, [])
+
+  useEffect(() => {
+    if (previousBackendTargetId.current === activeBackendTarget.id) {
+      return
+    }
+
+    previousBackendTargetId.current = activeBackendTarget.id
+    queryClient.clear()
+  }, [activeBackendTarget.id, queryClient])
 
   useEffect(() => {
     if (!user?.username) {
