@@ -61,7 +61,7 @@ describe('RemoteBackendProvider', () => {
       </RemoteBackendProvider>
     )
 
-    expect(screen.getByText('active:Local backend')).toBeInTheDocument()
+    expect(screen.getByText('active:This server')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Add' }))
     expect(screen.getByText('clients:1')).toBeInTheDocument()
@@ -70,7 +70,7 @@ describe('RemoteBackendProvider', () => {
     expect(screen.getByText('active:Studio NAS')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'SwitchLocal' }))
-    expect(screen.getByText('active:Local backend')).toBeInTheDocument()
+    expect(screen.getByText('active:This server')).toBeInTheDocument()
   })
 
   it('checks reachability and version compatibility for a remote client', async () => {
@@ -126,7 +126,7 @@ describe('RemoteBackendProvider', () => {
     await waitFor(() => {
       expect(screen.getByText('status:offline')).toBeInTheDocument()
       expect(screen.getByText('compatibility:unknown')).toBeInTheDocument()
-      expect(screen.getByText('active:Local backend')).toBeInTheDocument()
+      expect(screen.getByText('active:This server')).toBeInTheDocument()
     })
   })
 

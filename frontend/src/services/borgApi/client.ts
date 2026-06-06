@@ -13,7 +13,7 @@ import axios from 'axios'
 import { BASE_PATH } from '@/utils/basePath'
 import type { Repository } from '@/types'
 import { isV2Repo } from '@/utils/repoCapabilities'
-import { buildDownloadUrl, getApiBaseUrl } from '@/utils/downloadUrl'
+import { buildDownloadUrl, getApiBaseUrl } from '../remoteBackends/gateway'
 import { attachAccessTokenHeader, clearAccessToken } from '../authHeaders'
 import type { InternalAxiosRequestConfig } from 'axios'
 

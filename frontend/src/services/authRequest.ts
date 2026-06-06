@@ -1,4 +1,4 @@
-import { getApiBaseUrl } from '@/utils/downloadUrl'
+import { getApiBaseUrl } from './remoteBackends/gateway'
 import { getAccessTokenHeader } from './authHeaders'
 import type { AuthTransportMode } from './api'
 

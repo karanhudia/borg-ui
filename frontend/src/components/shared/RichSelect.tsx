@@ -11,6 +11,7 @@ import {
   type SxProps,
   type Theme,
 } from '@mui/material'
+import type { SystemStyleObject } from '@mui/system'
 import { Search } from 'lucide-react'
 import type { KeyboardEvent, MouseEvent, ReactNode } from 'react'
 import { useId, useMemo, useRef, useState } from 'react'
@@ -42,6 +43,8 @@ interface RichSelectProps {
   searchPlaceholder?: string
   noResultsText?: string
   sx?: SxProps<Theme>
+  selectSx?: SxProps<Theme>
+  menuPaperSx?: SxProps<Theme>
 }
 
 export default function RichSelect({
@@ -58,6 +61,8 @@ export default function RichSelect({
   searchPlaceholder = 'Search',
   noResultsText = 'No results found',
   sx,
+  selectSx,
+  menuPaperSx,
 }: RichSelectProps) {
   const generatedId = useId()
   const resolvedLabelId = labelId ?? `${generatedId}-label`
@@ -65,6 +70,8 @@ export default function RichSelect({
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuWidth, setMenuWidth] = useState<number | null>(null)
   const [search, setSearch] = useState('')
+  const selectSxList = toSxArray(selectSx)
+  const menuPaperSxList = toSxArray(menuPaperSx)
 
   const selectedOption = options.find((option) => option.value === value)
   const normalizedSearch = search.trim().toLocaleLowerCase()
@@ -152,29 +159,35 @@ export default function RichSelect({
             },
           },
           PaperProps: {
-            sx: {
-              mt: 0.5,
-              width: menuWidth ?? undefined,
-              minWidth: menuWidth ?? undefined,
-              maxWidth: menuWidth ?? undefined,
-              maxHeight: 430,
-              overflowX: 'hidden',
+            sx: [
+              {
+                mt: 0.5,
+                width: menuWidth ?? undefined,
+                minWidth: menuWidth ?? undefined,
+                maxWidth: menuWidth ?? undefined,
+                maxHeight: 430,
+                overflowX: 'hidden',
+              },
+              ...menuPaperSxList,
+            ],
+          },
+        }}
+        sx={[
+          {
+            height: 56,
+            '& .MuiSelect-select': {
+              height: 56,
+              boxSizing: 'border-box',
+              display: 'flex',
+              alignItems: 'center',
+              minWidth: 0,
+              py: 0,
+              pl: 1,
+              pr: 4,
             },
           },
-        }}
-        sx={{
-          height: 56,
-          '& .MuiSelect-select': {
-            height: 56,
-            boxSizing: 'border-box',
-            display: 'flex',
-            alignItems: 'center',
-            minWidth: 0,
-            py: 0,
-            pl: 1,
-            pr: 4,
-          },
-        }}
+          ...selectSxList,
+        ]}
       >
         {searchEnabled && (
           <ListSubheader
@@ -273,4 +286,14 @@ const menuItemSx = {
   minWidth: 0,
   px: 1,
   py: 1,
+}
+
+type RichSelectSxItem =
+  | boolean
+  | SystemStyleObject<Theme>
+  | ((theme: Theme) => SystemStyleObject<Theme>)
+
+function toSxArray(sx?: SxProps<Theme>): RichSelectSxItem[] {
+  if (!sx) return []
+  return (Array.isArray(sx) ? sx : [sx]) as RichSelectSxItem[]
 }

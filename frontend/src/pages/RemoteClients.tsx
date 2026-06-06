@@ -27,8 +27,10 @@ import {
   WifiOff,
 } from 'lucide-react'
 import ResponsiveDialog from '../components/shared/ResponsiveDialog'
+import EmptyStateCard from '../components/EmptyStateCard'
 import { useAuth } from '../hooks/useAuth'
 import { useRemoteBackends } from '../services/remoteBackends/context'
+import { LOCAL_BACKEND_ID } from '../services/remoteBackends/storage'
 import type { RemoteBackendClient } from '../services/remoteBackends/types'
 
 interface ClientFormState {
@@ -157,15 +159,23 @@ export function RemoteClientsContent() {
     }
   }
 
-  const handleSwitch = (client: RemoteBackendClient) => {
+  const handleSwitchTarget = (targetId: string, name: string) => {
     try {
-      switchTarget(client.id)
-      toast.success(t('remoteClients.toasts.using', { name: client.name }))
+      switchTarget(targetId)
+      toast.success(t('remoteClients.toasts.using', { name }))
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : t('remoteClients.errors.remoteUnavailable')
       )
     }
+  }
+
+  const handleSwitch = (client: RemoteBackendClient) => {
+    handleSwitchTarget(client.id, client.name)
+  }
+
+  const handleSwitchLocal = () => {
+    handleSwitchTarget(LOCAL_BACKEND_ID, t('remoteClients.localBackend.title'))
   }
 
   const closeDeleteDialog = () => {
@@ -211,25 +221,41 @@ export function RemoteClientsContent() {
           bgcolor: alpha(muiTheme.palette.background.paper, 0.78),
         }}
       >
-        <Stack direction="row" spacing={1.25} alignItems="center">
-          <Monitor size={18} />
-          <Box sx={{ minWidth: 0, flex: 1 }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
-              {t('remoteClients.localBackend.title')}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {activeTarget.kind === 'local'
-                ? t('remoteClients.localBackend.active')
-                : t('remoteClients.localBackend.fallback')}
-            </Typography>
-          </Box>
-          <Chip
-            label={
-              activeTarget.kind === 'local'
-                ? t('remoteClients.labels.activeTarget')
-                : t('remoteClients.labels.local')
-            }
-          />
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1.25}
+          alignItems={{ xs: 'stretch', sm: 'center' }}
+        >
+          <Stack direction="row" spacing={1.25} alignItems="center" sx={{ minWidth: 0, flex: 1 }}>
+            <Monitor size={18} />
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+                {t('remoteClients.localBackend.title')}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {activeTarget.kind === 'local'
+                  ? t('remoteClients.localBackend.active')
+                  : t('remoteClients.localBackend.fallback')}
+              </Typography>
+            </Box>
+          </Stack>
+          <Stack direction="row" spacing={1} justifyContent={{ xs: 'flex-start', sm: 'flex-end' }}>
+            <Chip
+              label={
+                activeTarget.kind === 'local'
+                  ? t('remoteClients.labels.activeTarget')
+                  : t('remoteClients.labels.local')
+              }
+            />
+            <Button
+              variant={activeTarget.kind === 'local' ? 'contained' : 'outlined'}
+              size="small"
+              onClick={handleSwitchLocal}
+              aria-label={t('remoteClients.actions.useLocalAria')}
+            >
+              {t('remoteClients.actions.use')}
+            </Button>
+          </Stack>
         </Stack>
       </Paper>
 
@@ -243,13 +269,12 @@ export function RemoteClientsContent() {
             bgcolor: alpha(muiTheme.palette.background.paper, 0.72),
           }}
         >
-          <Server size={28} />
-          <Typography variant="h6" sx={{ mt: 1.5, fontWeight: 800 }}>
-            {t('remoteClients.empty.title')}
-          </Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-            {t('remoteClients.empty.description')}
-          </Typography>
+          <EmptyStateCard
+            inline
+            icon={<Server size={32} />}
+            title={t('remoteClients.empty.title')}
+            description={t('remoteClients.empty.description')}
+          />
         </Paper>
       ) : (
         <Stack spacing={1.5}>

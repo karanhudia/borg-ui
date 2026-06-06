@@ -16,13 +16,13 @@ import {
   updateRemoteBackendHealth,
 } from './storage'
 
-describe('remote backend storage', () => {
+describe('remote client storage', () => {
   beforeEach(() => {
     localStorage.clear()
     resetRemoteBackendStateForTests()
   })
 
-  it('defaults to the local backend when nothing is stored', () => {
+  it('defaults to this server when nothing is stored', () => {
     expect(readRemoteBackendState()).toEqual({
       activeTargetId: LOCAL_BACKEND_ID,
       clients: [],
@@ -30,7 +30,7 @@ describe('remote backend storage', () => {
 
     expect(getActiveBackendTarget()).toMatchObject({
       id: LOCAL_BACKEND_ID,
-      name: 'Local backend',
+      name: 'This server',
       kind: 'local',
       apiBaseUrl: '/api',
     })

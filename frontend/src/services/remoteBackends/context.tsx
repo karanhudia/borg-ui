@@ -67,9 +67,9 @@ function readSnapshot(): {
 
 function extractErrorMessage(error: unknown): string {
   if (error instanceof Error && error.name === 'AbortError') {
-    return 'Remote backend health check timed out.'
+    return 'Remote client health check timed out.'
   }
-  return error instanceof Error ? error.message : 'Remote backend could not be reached.'
+  return error instanceof Error ? error.message : 'Remote client server could not be reached.'
 }
 
 async function readJsonResponse(response: Response): Promise<Record<string, unknown>> {
@@ -190,7 +190,7 @@ export function RemoteBackendProvider({
           checkedAt: new Date().toISOString(),
           error: extractErrorMessage(error),
           compatibility: 'unknown',
-          compatibilityMessage: 'Remote backend compatibility could not be checked.',
+          compatibilityMessage: 'Remote client server compatibility could not be checked.',
         })
       } finally {
         window.clearTimeout(timeoutId)

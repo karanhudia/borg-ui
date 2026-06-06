@@ -1,7 +1,12 @@
 import axios from 'axios'
 import { toast } from 'react-hot-toast'
 import { BASE_PATH } from '@/utils/basePath'
-import { API_BASE_URL, buildDownloadUrl, getApiBaseUrl } from '@/utils/downloadUrl'
+import {
+  API_BASE_URL,
+  buildApiUrl,
+  buildDownloadUrl,
+  getApiBaseUrl,
+} from './remoteBackends/gateway'
 import { attachAccessTokenHeader, clearAccessToken } from './authHeaders'
 import type { InternalAxiosRequestConfig } from 'axios'
 import type { RestoreLayout, RestorePathMetadata } from '@/utils/restorePaths'
@@ -500,20 +505,10 @@ export interface FilesystemSnapshotCapabilitiesResponse {
 export const authAPI = {
   getAuthConfig: () => api.get<AuthConfigResponse>('/auth/config'),
   getOidcLoginUrl: (returnTo?: string) => {
-    const params = new URLSearchParams()
-    if (returnTo) {
-      params.set('return_to', returnTo)
-    }
-    const suffix = params.toString()
-    return `${API_BASE_URL}/auth/oidc/login${suffix ? `?${suffix}` : ''}`
+    return buildApiUrl('/auth/oidc/login', { return_to: returnTo })
   },
   getOidcLinkUrl: (returnTo?: string) => {
-    const params = new URLSearchParams()
-    if (returnTo) {
-      params.set('return_to', returnTo)
-    }
-    const suffix = params.toString()
-    return `${API_BASE_URL}/auth/oidc/link${suffix ? `?${suffix}` : ''}`
+    return buildApiUrl('/auth/oidc/link', { return_to: returnTo })
   },
   beginOidcLink: (returnTo?: string) =>
     api.post<OidcLinkStartResponse>('/auth/oidc/link', { return_to: returnTo }),

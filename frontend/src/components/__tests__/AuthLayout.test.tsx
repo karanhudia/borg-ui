@@ -10,7 +10,7 @@ describe('AuthLayout', () => {
     resetRemoteBackendStateForTests()
   })
 
-  it('shows the backend target switcher in the auth shell', () => {
+  it('leaves server selection to the login form content', () => {
     renderWithProviders(
       <RemoteBackendProvider>
         <AuthLayout>
@@ -20,7 +20,7 @@ describe('AuthLayout', () => {
     )
 
     expect(
-      screen.getByRole('button', { name: /backend target local backend/i })
-    ).toBeInTheDocument()
+      screen.queryByRole('button', { name: /server target this server/i })
+    ).not.toBeInTheDocument()
   })
 })

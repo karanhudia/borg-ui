@@ -31,16 +31,14 @@ describe('BackendTargetSwitcher', () => {
     resetRemoteBackendStateForTests()
   })
 
-  it('shows the local backend as the default target', () => {
+  it('shows this server as the default target', () => {
     renderSwitcher()
 
-    expect(
-      screen.getByRole('button', { name: /backend target local backend/i })
-    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /server target this server/i })).toBeInTheDocument()
     expect(screen.getByText('Local')).toBeInTheDocument()
   })
 
-  it('switches to a compatible remote backend', async () => {
+  it('switches to a compatible remote client', async () => {
     const remote = createRemoteBackendClient({
       name: 'Studio NAS',
       backendUrl: 'nas.local:9000',
@@ -55,13 +53,13 @@ describe('BackendTargetSwitcher', () => {
     const user = userEvent.setup()
     renderSwitcher()
 
-    await user.click(screen.getByRole('button', { name: /backend target local backend/i }))
-    const menu = await screen.findByRole('menu', { name: /backend targets/i })
+    await user.click(screen.getByRole('button', { name: /server target this server/i }))
+    const menu = await screen.findByRole('menu', { name: /server targets/i })
     await user.click(within(menu).getByRole('menuitem', { name: /studio nas/i }))
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /backend target studio nas/i })).toBeInTheDocument()
-      expect(screen.getByText('Remote')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /server target studio nas/i })).toBeInTheDocument()
+      expect(screen.getByText('Remote client')).toBeInTheDocument()
     })
   })
 
@@ -80,8 +78,8 @@ describe('BackendTargetSwitcher', () => {
     const user = userEvent.setup()
     renderSwitcher()
 
-    await user.click(screen.getByRole('button', { name: /backend target local backend/i }))
-    const menu = await screen.findByRole('menu', { name: /backend targets/i })
+    await user.click(screen.getByRole('button', { name: /server target this server/i }))
+    const menu = await screen.findByRole('menu', { name: /server targets/i })
 
     expect(within(menu).getByRole('menuitem', { name: /old server/i })).toHaveAttribute(
       'aria-disabled',
@@ -98,7 +96,7 @@ describe('BackendTargetSwitcher', () => {
     const user = userEvent.setup()
     renderSwitcher()
 
-    await user.click(screen.getByRole('button', { name: /backend target studio nas/i }))
+    await user.click(screen.getByRole('button', { name: /server target studio nas/i }))
     await user.click(await screen.findByRole('menuitem', { name: /manage remote clients/i }))
 
     expect(navigateMock).toHaveBeenCalledWith('/remote-clients')

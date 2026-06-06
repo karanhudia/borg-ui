@@ -6,8 +6,8 @@ import {
   compareBackendVersions,
 } from './url'
 
-describe('remote backend URL normalization', () => {
-  it('keeps the local backend API base compatible with the existing default', () => {
+describe('remote server URL normalization', () => {
+  it('keeps the local server API base compatible with the existing default', () => {
     expect(getLocalApiBaseUrl()).toBe('/api')
     expect(getLocalWebBaseUrl()).toBe('')
   })
@@ -47,7 +47,7 @@ describe('remote backend URL normalization', () => {
   )
 })
 
-describe('backend version compatibility', () => {
+describe('server version compatibility', () => {
   it('treats matching major versions as compatible', () => {
     expect(compareBackendVersions('2.2.2-alpha.1', '2.1.0')).toEqual({
       status: 'compatible',
@@ -65,15 +65,15 @@ describe('backend version compatibility', () => {
   it('marks missing or unparsable versions as unknown', () => {
     expect(compareBackendVersions('2.2.2-alpha.1', null)).toEqual({
       status: 'unknown',
-      message: 'Remote backend version is unavailable.',
+      message: 'Remote client server version is unavailable.',
     })
     expect(compareBackendVersions('dev', 'nightly')).toEqual({
       status: 'unknown',
-      message: 'Remote backend version could not be compared.',
+      message: 'Remote client server version could not be compared.',
     })
     expect(compareBackendVersions('2.2.2-alpha.1', '2abc')).toEqual({
       status: 'unknown',
-      message: 'Remote backend version could not be compared.',
+      message: 'Remote client server version could not be compared.',
     })
   })
 })

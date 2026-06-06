@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BASE_PATH } from '@/utils/basePath'
-import BackendTargetSwitcher from './BackendTargetSwitcher'
 
 // ─── Animated background nodes ──────────────────────────────────────────────
 
@@ -146,10 +145,6 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
           overflow: 'hidden',
         }}
       >
-        <div style={{ position: 'fixed', top: 18, right: 18, zIndex: 30 }}>
-          <BackendTargetSwitcher />
-        </div>
-
         {/* ── LEFT: Brand panel ──────────────────────────────────────────────── */}
         <div
           className="flex lg:w-[52%] xl:w-[55%]"

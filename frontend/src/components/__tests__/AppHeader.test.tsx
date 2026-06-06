@@ -102,12 +102,10 @@ describe('AppHeader', () => {
     resetRemoteBackendStateForTests()
   })
 
-  it('shows the backend target switcher near the profile controls', () => {
+  it('shows the server target switcher near the profile controls', () => {
     renderHeader()
 
-    expect(
-      screen.getByRole('button', { name: /backend target local backend/i })
-    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /server target this server/i })).toBeInTheDocument()
   })
 
   it('tracks user menu views and logout from the user menu', async () => {

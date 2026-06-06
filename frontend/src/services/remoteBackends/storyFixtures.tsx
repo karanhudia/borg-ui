@@ -66,7 +66,7 @@ function seedRemoteBackends(state: RemoteBackendStoryState): void {
     checkedAt: '2026-06-05T05:12:00.000Z',
     error: 'Health check failed with HTTP 502.',
     compatibility: 'unknown',
-    compatibilityMessage: 'Remote backend compatibility could not be checked.',
+    compatibilityMessage: 'Remote client server compatibility could not be checked.',
   })
 
   const incompatible = createRemoteBackendClient({

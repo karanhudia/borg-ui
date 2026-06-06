@@ -99,14 +99,14 @@ export function getLocalBackendTarget(): BackendTarget {
   return {
     id: LOCAL_BACKEND_ID,
     kind: 'local',
-    name: 'Local backend',
+    name: 'This server',
     apiBaseUrl: getLocalApiBaseUrl(),
     webBaseUrl: getLocalWebBaseUrl(),
     health: {
       ...defaultHealth(),
       status: 'online',
       compatibility: 'compatible',
-      compatibilityMessage: 'This browser is connected to the local Borg UI backend.',
+      compatibilityMessage: 'This browser is connected to this Borg UI server.',
     },
   }
 }
@@ -227,7 +227,7 @@ export function setActiveBackendTarget(targetId: string): void {
   }
 
   if (client.health.compatibility === 'incompatible') {
-    throw new Error(client.health.compatibilityMessage || 'Remote backend is incompatible.')
+    throw new Error(client.health.compatibilityMessage || 'Remote client server is incompatible.')
   }
 
   writeActiveTargetId(targetId)

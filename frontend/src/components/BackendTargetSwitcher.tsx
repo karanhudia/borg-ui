@@ -1,84 +1,32 @@
 import { type MouseEvent, useState } from 'react'
 import { Box, Button, Chip, Divider, MenuItem, MenuList, Popover, Typography } from '@mui/material'
 import { alpha, useTheme } from '@mui/material/styles'
-import { CheckCircle2, CircleAlert, Monitor, Server, Settings, WifiOff } from 'lucide-react'
+import { Settings } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { LOCAL_BACKEND_ID } from '@/services/remoteBackends/storage'
 import { useRemoteBackends } from '@/services/remoteBackends/context'
 import type { BackendTarget } from '@/services/remoteBackends/types'
+import {
+  buildBackendTargets,
+  getBackendTargetName,
+  getBackendTargetStatus,
+  isBackendTargetDisabled,
+} from './backendTargetPresentation'
 
 interface BackendTargetSwitcherProps {
   compact?: boolean
 }
 
-function getTargetStatus(target: BackendTarget) {
-  if (target.kind === 'local') {
-    return {
-      label: 'Local',
-      color: 'default' as const,
-      icon: <Monitor size={14} />,
-      helper: 'Current Borg UI server',
-    }
-  }
-
-  if (target.health.compatibility === 'incompatible') {
-    return {
-      label: 'Incompatible',
-      color: 'warning' as const,
-      icon: <CircleAlert size={14} />,
-      helper: target.health.compatibilityMessage || 'Version mismatch',
-    }
-  }
-
-  if (target.health.status === 'online') {
-    return {
-      label: 'Online',
-      color: 'success' as const,
-      icon: <CheckCircle2 size={14} />,
-      helper: target.health.appVersion ? `Borg UI ${target.health.appVersion}` : 'Remote backend',
-    }
-  }
-
-  if (target.health.status === 'offline') {
-    return {
-      label: 'Offline',
-      color: 'error' as const,
-      icon: <WifiOff size={14} />,
-      helper: target.health.error || 'Remote backend unavailable',
-    }
-  }
-
-  return {
-    label: 'Remote',
-    color: 'default' as const,
-    icon: <Server size={14} />,
-    helper: 'Remote backend',
-  }
-}
-
 export default function BackendTargetSwitcher({ compact = false }: BackendTargetSwitcherProps) {
+  const { t } = useTranslation()
   const muiTheme = useTheme()
   const navigate = useNavigate()
   const { activeTarget, clients, switchTarget } = useRemoteBackends()
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
   const open = Boolean(anchorEl)
-  const targets: BackendTarget[] = [
-    {
-      id: LOCAL_BACKEND_ID,
-      kind: 'local',
-      name: 'Local backend',
-      // Preserve custom local API bases while local is active; fall back to the proxy path in menus.
-      apiBaseUrl: activeTarget.kind === 'local' ? activeTarget.apiBaseUrl : '/api',
-      webBaseUrl: '',
-      health: {
-        status: 'online',
-        compatibility: 'compatible',
-        compatibilityMessage: 'This browser is connected to the local Borg UI backend.',
-      },
-    },
-    ...clients,
-  ]
-  const activeStatus = getTargetStatus(activeTarget)
+  const targets = buildBackendTargets(activeTarget, clients, t)
+  const activeStatus = getBackendTargetStatus(activeTarget, t)
+  const activeName = getBackendTargetName(activeTarget, t)
 
   const closeMenu = () => setAnchorEl(null)
 
@@ -103,7 +51,7 @@ export default function BackendTargetSwitcher({ compact = false }: BackendTarget
         size="small"
         startIcon={activeStatus.icon}
         onClick={handleOpen}
-        aria-label={`Backend target ${activeTarget.name}`}
+        aria-label={t('remoteClients.switcher.ariaLabel', { name: activeName })}
         aria-haspopup="menu"
         aria-expanded={open}
         sx={{
@@ -125,11 +73,15 @@ export default function BackendTargetSwitcher({ compact = false }: BackendTarget
               noWrap
               sx={{ maxWidth: 130, fontWeight: 700, textTransform: 'none' }}
             >
-              {activeTarget.name}
+              {activeName}
             </Typography>
             <Chip
               size="small"
-              label={activeTarget.kind === 'local' ? 'Local' : 'Remote'}
+              label={
+                activeTarget.kind === 'local'
+                  ? t('remoteClients.labels.local')
+                  : t('remoteClients.labels.remoteClient')
+              }
               color={activeTarget.kind === 'local' ? 'default' : 'primary'}
               sx={{ height: 20, '& .MuiChip-label': { px: 0.75, fontSize: '0.65rem' } }}
             />
@@ -160,18 +112,22 @@ export default function BackendTargetSwitcher({ compact = false }: BackendTarget
       >
         <Box sx={{ px: 1.5, py: 1.25 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
-            Backend targets
+            {t('remoteClients.switcher.title')}
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            Choose which Borg UI backend this browser uses.
+            {t('remoteClients.switcher.description')}
           </Typography>
         </Box>
         <Divider />
-        <MenuList role="menu" aria-label="Backend targets" dense sx={{ py: 0.75 }}>
+        <MenuList
+          role="menu"
+          aria-label={t('remoteClients.switcher.menuLabel')}
+          dense
+          sx={{ py: 0.75 }}
+        >
           {targets.map((target) => {
-            const status = getTargetStatus(target)
-            const disabled =
-              target.kind === 'remote' && target.health.compatibility === 'incompatible'
+            const status = getBackendTargetStatus(target, t)
+            const disabled = isBackendTargetDisabled(target)
             const selected = activeTarget.id === target.id
 
             return (
@@ -196,7 +152,7 @@ export default function BackendTargetSwitcher({ compact = false }: BackendTarget
                 <Box sx={{ minWidth: 0, flex: 1 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
                     <Typography variant="body2" noWrap sx={{ fontWeight: 700, flex: 1 }}>
-                      {target.name}
+                      {getBackendTargetName(target, t)}
                     </Typography>
                     <Chip
                       size="small"
@@ -223,7 +179,7 @@ export default function BackendTargetSwitcher({ compact = false }: BackendTarget
           >
             <Settings size={14} />
             <Typography variant="body2" sx={{ fontWeight: 700 }}>
-              Manage remote clients
+              {t('remoteClients.switcher.manage')}
             </Typography>
           </MenuItem>
         </MenuList>

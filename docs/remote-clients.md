@@ -1,26 +1,26 @@
 ---
 title: Remote Clients
 nav_order: 6
-description: "Switch this browser between local and remote Borg UI backends"
+description: "Switch this browser between this Borg UI server and remote clients"
 ---
 
 # Remote Clients
 
-Remote Clients let one Borg UI frontend use another Borg UI backend. This is
+Remote Clients let one Borg UI browser session use another Borg UI server. This is
 useful when you run Borg UI on several machines and want one browser session to
 inspect or operate on a different machine without changing environment files or
 opening another deployment URL.
 
 Open Remote Clients from the Infrastructure navigation group. The global
-backend target control near the account menu shows whether the browser is using
-the local backend or a registered remote backend.
+server target control near the account menu shows whether the browser is using
+this server or a registered remote client.
 
 ## Add a Remote Client
 
 In Remote Clients, choose **Add remote client** and enter:
 
 - client name: a short label such as `Studio NAS`
-- backend URL: the Borg UI URL for the other machine
+- server URL: the Borg UI URL for the other machine
 
 The URL can be a DNS name, LAN IP address, localhost URL, HTTPS deployment, or
 an explicit `/api` path. Borg UI normalizes browser URLs to the matching API
@@ -42,22 +42,22 @@ Use **Check** on a remote client before switching. Borg UI checks:
 
 - the remote web health endpoint
 - the remote `/api/system/info` endpoint
-- the remote Borg UI version reported by that backend
+- the remote Borg UI version reported by that server
 
 The client row shows online, offline, unknown, or incompatible status, the last
-check time, and the reported Borg UI version. Incompatible backends cannot be
-selected because frontend and backend API contracts may differ.
+check time, and the reported Borg UI version. Incompatible clients cannot be
+selected because frontend and server API contracts may differ.
 
 ## Switch Targets
 
-Use **Use** on a compatible remote client, or open the backend target control
-near the account menu and select a target. After switching, frontend API
-requests use that backend's API base. The local backend remains available as the
-fallback target in the same control.
+Use **Use** on this server or on a compatible remote client, or open the server
+target control near the account menu and select a target. After switching,
+frontend API requests use that server's API base. This server remains available
+as the local fallback in the same control.
 
-Authentication tokens are stored per backend target in the browser. If the
-remote backend requires login, Borg UI sends you through that backend's normal
-login flow without replacing the local backend token.
+Authentication tokens are stored per server target in the browser. If the
+remote client requires login, Borg UI sends you through that server's normal
+login flow without replacing this server's token.
 
 ## DNS and Reverse Proxy Notes
 

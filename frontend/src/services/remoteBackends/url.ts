@@ -56,18 +56,18 @@ function stripTrailingSlash(value: string): string {
 export function normalizeRemoteBackendUrl(input: string): NormalizedRemoteBackendUrl {
   const trimmed = input.trim()
   if (!trimmed) {
-    throw new Error('Enter a backend URL.')
+    throw new Error('Enter a server URL.')
   }
 
   let url: URL
   try {
     url = new URL(ensureUrlProtocol(trimmed), window.location.origin)
   } catch {
-    throw new Error('Enter a valid backend URL.')
+    throw new Error('Enter a valid server URL.')
   }
 
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new Error('Backend URL must use HTTP or HTTPS.')
+    throw new Error('Server URL must use HTTP or HTTPS.')
   }
 
   url.hash = ''
@@ -100,7 +100,7 @@ export function compareBackendVersions(
   if (!backendVersion) {
     return {
       status: 'unknown',
-      message: 'Remote backend version is unavailable.',
+      message: 'Remote client server version is unavailable.',
     }
   }
 
@@ -110,7 +110,7 @@ export function compareBackendVersions(
   if (frontendMajor === null || backendMajor === null) {
     return {
       status: 'unknown',
-      message: 'Remote backend version could not be compared.',
+      message: 'Remote client server version could not be compared.',
     }
   }
 

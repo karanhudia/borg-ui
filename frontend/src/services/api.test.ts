@@ -6,7 +6,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest'
 import MockAdapter from 'axios-mock-adapter'
-import api, { backupAPI, backupPlansAPI, repositoriesAPI } from './api'
+import api, { authAPI, backupAPI, backupPlansAPI, repositoriesAPI } from './api'
 
 describe('API Request Interceptor', () => {
   let localStorageMock: { [key: string]: string }
@@ -93,6 +93,21 @@ describe('API Request Interceptor', () => {
 
     await api.get('/test')
     mock.restore()
+  })
+
+  it('builds OIDC URLs from the active backend API base', async () => {
+    const { createRemoteBackendClient, setActiveBackendTarget } =
+      await import('./remoteBackends/storage')
+    const remote = createRemoteBackendClient({
+      name: 'Remote',
+      backendUrl: 'https://remote.example.com/borg',
+    })
+    setActiveBackendTarget(remote.id)
+
+    expect(authAPI.getOidcLoginUrl('https://app.example.com/login')).toBe(
+      'https://remote.example.com/borg/api/auth/oidc/login?return_to=https%3A%2F%2Fapp.example.com%2Flogin'
+    )
+    expect(authAPI.getOidcLinkUrl()).toBe('https://remote.example.com/borg/api/auth/oidc/link')
   })
 })
 

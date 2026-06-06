@@ -162,7 +162,7 @@
   },
   "remoteClients": {
     "title": "Clientes remotos",
-    "description": "Registra backends de Borg UI en otras máquinas, comprueba su estado y usa este navegador con el backend seleccionado.",
+    "description": "Registra servidores cliente de Borg UI en otras máquinas, comprueba su estado y usa este navegador con el servidor seleccionado.",
     "addButton": "Añadir cliente remoto",
     "status": {
       "incompatible": "Incompatible",
@@ -173,16 +173,33 @@
     },
     "labels": {
       "activeTarget": "Destino activo",
-      "local": "Local"
+      "local": "Local",
+      "remoteClient": "Cliente remoto"
+    },
+    "switcher": {
+      "title": "Destinos de servidor",
+      "description": "Elige si este navegador usa este servidor o un cliente remoto.",
+      "menuLabel": "Destinos de servidor",
+      "ariaLabel": "Destino de servidor {{name}}",
+      "selectLabel": "Servidor",
+      "noClients": "No se encontraron clientes remotos",
+      "localName": "Este servidor",
+      "localHelper": "Servidor Borg UI actual",
+      "localCompatibility": "Este navegador está conectado a este servidor Borg UI.",
+      "remoteHelper": "Servidor del cliente remoto",
+      "remoteUnavailable": "Cliente remoto no disponible",
+      "versionMismatch": "Conflicto de versión",
+      "versionHelper": "Borg UI {{version}}",
+      "manage": "Gestionar clientes remotos"
     },
     "localBackend": {
-      "title": "Backend local",
+      "title": "Este servidor",
       "active": "Destino activo",
-      "fallback": "Disponible como destino de reserva"
+      "fallback": "Disponible como reserva local"
     },
     "empty": {
       "title": "Aún no hay clientes remotos",
-      "description": "Añade una URL de backend de Borg UI para comprobar su estado y cambiar este frontend a ella."
+      "description": "Añade una URL de servidor Borg UI para comprobar su estado y cambiar este navegador a ella."
     },
     "lastChecked": "Última comprobación: {{value}}",
     "version": "Borg UI {{version}}",
@@ -193,15 +210,16 @@
       "delete": "Eliminar cliente remoto",
       "checkAria": "Comprobar {{name}}",
       "useAria": "Usar {{name}}",
+      "useLocalAria": "Usar este servidor",
       "editAria": "Editar {{name}}",
       "deleteAria": "Eliminar {{name}}"
     },
     "dialog": {
       "addTitle": "Añadir cliente remoto",
       "editTitle": "Editar cliente remoto",
-      "description": "Usa la URL del backend de Borg UI. Se aceptan nombres DNS, IP de LAN, URLs localhost y rutas `/api`.",
+      "description": "Usa la URL del servidor Borg UI. Se aceptan nombres DNS, IP de LAN, URLs localhost y rutas `/api`.",
       "nameLabel": "Nombre del cliente",
-      "urlLabel": "URL del backend",
+      "urlLabel": "URL del servidor",
       "save": "Guardar cliente"
     },
     "toasts": {
@@ -215,12 +233,12 @@
     },
     "deleteDialog": {
       "title": "¿Eliminar cliente remoto?",
-      "description": "¿Eliminar \"{{name}}\" de este navegador? Puedes añadirlo de nuevo más tarde con la URL del backend.",
+      "description": "¿Eliminar \"{{name}}\" de este navegador? Puedes añadirlo de nuevo más tarde con la URL del servidor.",
       "confirm": "Eliminar cliente"
     },
     "errors": {
       "saveFailed": "No se pudo guardar el cliente remoto.",
-      "remoteUnavailable": "El backend remoto no está disponible."
+      "remoteUnavailable": "El servidor del cliente remoto no está disponible."
     }
   },
   "cloudStorage": {
