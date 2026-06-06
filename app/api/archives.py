@@ -23,6 +23,7 @@ from app.core.security import (
 from app.database.database import get_db
 from app.database.models import DeleteArchiveJob, Repository, User
 from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
+from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.services.repository_executor import (
     is_agent_executor,
     queue_agent_repository_operation_job,
@@ -462,9 +463,16 @@ async def get_delete_job_status(
         if repo:
             check_repo_access(db, current_user, repo, "viewer")
 
-        # Read log file if it exists
+        has_logs = job_has_logs_by_policy(
+            job,
+            get_log_save_policy(db),
+            output_text=[job.logs, job.error_message],
+            file_path=job.log_file_path,
+        )
+
+        # Read log file only when the current policy allows this job's logs.
         logs = None
-        if job.log_file_path and os.path.exists(job.log_file_path):
+        if has_logs and job.log_file_path and os.path.exists(job.log_file_path):
             try:
                 with open(job.log_file_path, "r") as f:
                     logs = f.read()
@@ -482,7 +490,7 @@ async def get_delete_job_status(
             "progress_message": job.progress_message,
             "error_message": job.error_message,
             "logs": logs,
-            "has_logs": job.has_logs,
+            "has_logs": has_logs,
         }
     except HTTPException:
         raise

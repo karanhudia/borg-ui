@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from app.database.models import Repository, RepositoryWipeJob
+from app.database.models import Repository, RepositoryWipeJob, SystemSettings
 
 
 def _create_repository(test_db, *, name: str = "Primary") -> Repository:
@@ -177,6 +177,83 @@ class TestRepositoryWipeApi:
         assert body["id"] == job.id
         assert body["status"] == "completed"
         assert body["repository_id"] == repo.id
+
+    def test_status_applies_log_save_policy(
+        self, test_client: TestClient, admin_headers, test_db, tmp_path
+    ):
+        settings = test_db.query(SystemSettings).first()
+        if settings is None:
+            settings = SystemSettings()
+            test_db.add(settings)
+        settings.log_save_policy = "failed_only"
+        repo = _create_repository(test_db)
+        log_file = tmp_path / "wipe.log"
+        log_file.write_text("successful wipe log", encoding="utf-8")
+        job = RepositoryWipeJob(
+            repository_id=repo.id,
+            repository_path=repo.path,
+            repository_name=repo.name,
+            borg_version=1,
+            status="completed",
+            phase="completed",
+            archive_count=2,
+            archive_fingerprint="sha256:abc",
+            run_compact=True,
+            started_at=datetime.utcnow(),
+            completed_at=datetime.utcnow(),
+            progress=100,
+            log_file_path=str(log_file),
+            has_logs=True,
+        )
+        test_db.add(job)
+        test_db.commit()
+
+        response = test_client.get(
+            f"/api/repositories/{repo.id}/wipe-jobs/{job.id}",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["has_logs"] is False
+        assert body["logs"] == ""
+
+    def test_status_returns_error_message_when_policy_treats_it_as_log(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        settings = test_db.query(SystemSettings).first()
+        if settings is None:
+            settings = SystemSettings()
+            test_db.add(settings)
+        settings.log_save_policy = "failed_only"
+        repo = _create_repository(test_db)
+        job = RepositoryWipeJob(
+            repository_id=repo.id,
+            repository_path=repo.path,
+            repository_name=repo.name,
+            borg_version=1,
+            status="failed",
+            phase="failed",
+            archive_count=2,
+            archive_fingerprint="sha256:abc",
+            run_compact=True,
+            started_at=datetime.utcnow(),
+            completed_at=datetime.utcnow(),
+            progress=40,
+            error_message="Repository wipe failed before log file creation",
+        )
+        test_db.add(job)
+        test_db.commit()
+
+        response = test_client.get(
+            f"/api/repositories/{repo.id}/wipe-jobs/{job.id}",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["has_logs"] is True
+        assert body["logs"] == "Repository wipe failed before log file creation"
 
     def test_cancel_preview_records_cancelled_audit_state(
         self, test_client: TestClient, admin_headers, test_db

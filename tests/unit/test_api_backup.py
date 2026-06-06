@@ -10,6 +10,7 @@ from app.core.agent_auth import AGENT_AUTH_HEADER
 from app.core.security import get_password_hash
 from app.database.models import (
     AgentJob,
+    AgentJobLog,
     AgentMachine,
     Repository,
     BackupJob,
@@ -1586,6 +1587,7 @@ class TestBackupLogs:
         self, test_client: TestClient, admin_headers, test_db
     ):
         """Test downloading backup logs accepts standard bearer auth."""
+        _set_log_save_policy(test_db, "all_jobs")
         job = BackupJob(
             repository="/test/repo",
             status="completed",
@@ -1647,6 +1649,7 @@ class TestBackupLogs:
         """Proxy-auth mode should not require a JWT query token for log downloads."""
         from app import config
 
+        _set_log_save_policy(test_db, "all_jobs")
         monkeypatch.setattr(config.settings, "disable_authentication", True)
 
         job = BackupJob(
@@ -1667,6 +1670,194 @@ class TestBackupLogs:
 
         assert response.status_code == 200
         assert "text/plain" in response.headers.get("content-type", "")
+
+    @pytest.mark.parametrize(
+        ("policy", "job_status", "logs", "expected_has_logs"),
+        [
+            ("failed_only", "completed", "successful backup log", False),
+            (
+                "failed_and_warnings",
+                "completed",
+                "WARNING: skipped unreadable file",
+                True,
+            ),
+            ("all_jobs", "completed", "successful backup log", True),
+        ],
+    )
+    def test_legacy_backup_log_surfaces_follow_log_save_policy(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+        policy,
+        job_status,
+        logs,
+        expected_has_logs,
+    ):
+        _set_log_save_policy(test_db, policy)
+        job = BackupJob(
+            repository="/test/repo",
+            status=job_status,
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            logs=logs,
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        jobs_response = test_client.get(
+            "/api/backup/jobs", params={"manual_only": True}, headers=admin_headers
+        )
+        assert jobs_response.status_code == 200
+        history_job = next(
+            item for item in jobs_response.json()["jobs"] if item["id"] == job.id
+        )
+        assert history_job["has_logs"] is expected_has_logs
+
+        status_response = test_client.get(
+            f"/api/backup/status/{job.id}", headers=admin_headers
+        )
+        assert status_response.status_code == 200
+        assert status_response.json()["logs"] == (logs if expected_has_logs else None)
+
+        stream_response = test_client.get(
+            f"/api/backup/logs/{job.id}/stream", headers=admin_headers
+        )
+        assert stream_response.status_code == 200
+        stream_body = stream_response.json()
+        if expected_has_logs:
+            assert stream_body["lines"] == [{"line_number": 1, "content": logs}]
+        else:
+            assert stream_body["lines"] == []
+
+        download_response = test_client.get(
+            f"/api/backup/logs/{job.id}/download", headers=admin_headers
+        )
+        assert download_response.status_code == (200 if expected_has_logs else 404)
+
+    def test_agent_backup_log_rows_follow_log_save_policy(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _set_log_save_policy(test_db, "failed_only")
+        agent = AgentMachine(
+            name="Laptop",
+            agent_id="agt_policy",
+            token_hash=get_password_hash("agent-secret"),
+            token_prefix="agent-secret",
+            status="online",
+        )
+        test_db.add(agent)
+        test_db.flush()
+        backup_job = BackupJob(
+            repository="/agent/repo",
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            execution_mode="agent",
+        )
+        test_db.add(backup_job)
+        test_db.flush()
+        agent_job = AgentJob(
+            agent_machine_id=agent.id,
+            backup_job_id=backup_job.id,
+            job_type="backup.create",
+            status="completed",
+            payload={},
+            completed_at=datetime.now(),
+        )
+        test_db.add(agent_job)
+        test_db.flush()
+        test_db.add(
+            AgentJobLog(
+                agent_job_id=agent_job.id,
+                sequence=1,
+                stream="stdout",
+                message="agent success log",
+                created_at=datetime.now(),
+            )
+        )
+        test_db.commit()
+
+        jobs_response = test_client.get(
+            "/api/backup/jobs", params={"manual_only": True}, headers=admin_headers
+        )
+        assert jobs_response.status_code == 200
+        history_job = next(
+            item for item in jobs_response.json()["jobs"] if item["id"] == backup_job.id
+        )
+        assert history_job["has_logs"] is False
+
+        stream_response = test_client.get(
+            f"/api/backup/logs/{backup_job.id}/stream", headers=admin_headers
+        )
+        assert stream_response.status_code == 200
+        assert stream_response.json()["lines"] == []
+
+        download_response = test_client.get(
+            f"/api/backup/logs/{backup_job.id}/download", headers=admin_headers
+        )
+        assert download_response.status_code == 404
+
+    def test_agent_backup_warning_log_rows_are_visible_for_warning_policy(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _set_log_save_policy(test_db, "failed_and_warnings")
+        agent = AgentMachine(
+            name="Laptop",
+            agent_id="agt_policy_warning",
+            token_hash=get_password_hash("agent-secret"),
+            token_prefix="agent-secret",
+            status="online",
+        )
+        test_db.add(agent)
+        test_db.flush()
+        backup_job = BackupJob(
+            repository="/agent/repo",
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            execution_mode="agent",
+        )
+        test_db.add(backup_job)
+        test_db.flush()
+        agent_job = AgentJob(
+            agent_machine_id=agent.id,
+            backup_job_id=backup_job.id,
+            job_type="backup.create",
+            status="completed",
+            payload={},
+            completed_at=datetime.now(),
+        )
+        test_db.add(agent_job)
+        test_db.flush()
+        test_db.add(
+            AgentJobLog(
+                agent_job_id=agent_job.id,
+                sequence=1,
+                stream="stderr",
+                message="WARNING: skipped unreadable file",
+                created_at=datetime.now(),
+            )
+        )
+        test_db.commit()
+
+        jobs_response = test_client.get(
+            "/api/backup/jobs", params={"manual_only": True}, headers=admin_headers
+        )
+        assert jobs_response.status_code == 200
+        history_job = next(
+            item for item in jobs_response.json()["jobs"] if item["id"] == backup_job.id
+        )
+        assert history_job["has_logs"] is True
+
+        stream_response = test_client.get(
+            f"/api/backup/logs/{backup_job.id}/stream", headers=admin_headers
+        )
+        assert stream_response.status_code == 200
+        assert stream_response.json()["lines"] == [
+            {"line_number": 1, "content": "WARNING: skipped unreadable file"}
+        ]
 
     def test_stream_backup_logs_success(
         self, test_client: TestClient, admin_headers, test_db

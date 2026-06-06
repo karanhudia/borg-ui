@@ -26,6 +26,7 @@ from app.services.archive_browse_service import (
     parse_archive_items,
 )
 from app.services.cache_service import archive_cache
+from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.services.v2.archive_browse import get_browse_depth, is_fast_browse_enabled
 from app.utils.borg_env import repository_borg_env
 from app.utils.datetime_utils import serialize_datetime
@@ -544,8 +545,15 @@ async def get_delete_job_status(
             status_code=404, detail={"key": "backend.errors.archives.deleteJobNotFound"}
         )
 
+    has_logs = job_has_logs_by_policy(
+        job,
+        get_log_save_policy(db),
+        output_text=[job.logs, job.error_message],
+        file_path=job.log_file_path,
+    )
+
     logs = None
-    if job.log_file_path and os.path.exists(job.log_file_path):
+    if has_logs and job.log_file_path and os.path.exists(job.log_file_path):
         try:
             with open(job.log_file_path) as f:
                 logs = f.read()
@@ -563,5 +571,5 @@ async def get_delete_job_status(
         "progress_message": job.progress_message,
         "error_message": job.error_message,
         "logs": logs,
-        "has_logs": job.has_logs,
+        "has_logs": has_logs,
     }
