@@ -7,8 +7,9 @@ import { formatDateTimeFull } from '../../utils/dateUtils'
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
 const mockNavigate = vi.fn()
-const { getOverviewMock } = vi.hoisted(() => ({
+const { getOverviewMock, listRemotesMock } = vi.hoisted(() => ({
   getOverviewMock: vi.fn(),
+  listRemotesMock: vi.fn(),
 }))
 
 vi.mock('react-router-dom', () => ({
@@ -26,6 +27,9 @@ vi.mock('../../utils/basePath', () => ({
 vi.mock('../../services/api', () => ({
   dashboardAPI: {
     getOverview: getOverviewMock,
+  },
+  rcloneAPI: {
+    listRemotes: listRemotesMock,
   },
 }))
 
@@ -178,6 +182,7 @@ function makeOverview(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks()
   getOverviewMock.mockResolvedValue({ data: makeOverview() })
+  listRemotesMock.mockResolvedValue({ data: { remotes: [] } })
   // Default: suppress localStorage access
   vi.stubGlobal('localStorage', { getItem: () => 'test-token' })
 })
@@ -692,6 +697,59 @@ describe('DashboardV3', () => {
       expect(screen.getByText('Backup Plan')).toBeInTheDocument()
       expect(screen.getAllByText('Nightly Documents').length).toBeGreaterThan(0)
       expect(screen.getByText('2 repositories')).toBeInTheDocument()
+    })
+  })
+
+  describe('operations launchpad', () => {
+    it('summarizes newer Borg UI capabilities and routes actions to existing workflows', async () => {
+      listRemotesMock.mockResolvedValueOnce({
+        data: {
+          remotes: [
+            { id: 10, name: 'prod-s3', provider: 's3' },
+            { id: 11, name: 'archive-b2', provider: 'b2' },
+          ],
+        },
+      })
+      vi.stubGlobal('localStorage', {
+        getItem: (key: string) => {
+          if (key === 'borg_ui_remote_backends') {
+            return JSON.stringify([
+              {
+                id: 'remote-1',
+                name: 'Offsite client',
+                apiBaseUrl: 'https://offsite.example.com/api',
+                webBaseUrl: 'https://offsite.example.com',
+              },
+            ])
+          }
+          return key === 'borg_ui_active_backend_target' ? null : 'test-token'
+        },
+      })
+      mockFetchSuccess(makeOverview())
+      renderDashboard()
+
+      await waitFor(() => screen.getAllByText('my-server'))
+      expect(screen.getByText('Operations launchpad')).toBeInTheDocument()
+      expect(screen.getByText('Backup plans')).toBeInTheDocument()
+      expect(screen.getByText('2 plans')).toBeInTheDocument()
+      await waitFor(() => expect(screen.getByText('Cloud storage')).toBeInTheDocument())
+      expect(screen.getByText('2 remotes')).toBeInTheDocument()
+      expect(screen.getByText('Remote clients')).toBeInTheDocument()
+      expect(screen.getByText('1 client')).toBeInTheDocument()
+      expect(screen.getByText('Restore verification')).toBeInTheDocument()
+      expect(screen.getByText('1/2 covered')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: /open backup plans/i }))
+      expect(mockNavigate).toHaveBeenCalledWith('/backup-plans')
+
+      fireEvent.click(screen.getByRole('button', { name: /open cloud storage/i }))
+      expect(mockNavigate).toHaveBeenCalledWith('/cloud-storage')
+
+      fireEvent.click(screen.getByRole('button', { name: /open remote clients/i }))
+      expect(mockNavigate).toHaveBeenCalledWith('/remote-clients')
+
+      fireEvent.click(screen.getByRole('button', { name: /open restore verification/i }))
+      expect(mockNavigate).toHaveBeenCalledWith('/schedule/restore-checks')
     })
   })
 

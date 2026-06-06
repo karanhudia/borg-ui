@@ -410,6 +410,41 @@
     "upcomingBackups": {
       "title": "Upcoming backups"
     },
+    "launchpad": {
+      "title": "Operations launchpad",
+      "openAction": "Open {{title}}: {{value}}, {{status}}",
+      "backupPlans": {
+        "title": "Backup plans",
+        "value_one": "{{count}} plan",
+        "value_other": "{{count}} plans",
+        "active_one": "{{count}} active",
+        "active_other": "{{count}} active",
+        "empty": "Create first",
+        "action": "Open plans"
+      },
+      "cloudStorage": {
+        "title": "Cloud storage",
+        "value_one": "{{count}} remote",
+        "value_other": "{{count}} remotes",
+        "active": "Configured",
+        "empty": "No remotes"
+      },
+      "remoteClients": {
+        "title": "Remote clients",
+        "value_one": "{{count}} client",
+        "value_other": "{{count}} clients",
+        "active": "Available",
+        "empty": "This server"
+      },
+      "restoreVerification": {
+        "title": "Restore verification",
+        "value": "{{configured}}/{{total}} covered",
+        "noRepositories": "No repos",
+        "complete": "Covered",
+        "partial": "Needs setup",
+        "action": "Schedule checks"
+      }
+    },
     "scheduleBadge": {
       "noSchedule": "No automated schedule",
       "manual": "manual",

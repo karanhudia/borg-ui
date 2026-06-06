@@ -8,7 +8,8 @@ import { ResourceGaugeGrid } from './ResourceGaugeGrid'
  * dashboard:
  *
  * - 200px + 1fr bento grid (md+).
- * - Left rail: success donut (96px), resources (3 arc gauges), storage donut.
+ * - Left rail: success donut (96px), resources (3 arc gauges), launchpad,
+ *   upcoming backups, storage donut.
  * - Right rail: repository health panel (with recent failures strip and
  *   mixed compact + full card grid), then activity lane chart.
  * - Banner stat strip with 5 cells (System Status + 4 stats).
@@ -126,7 +127,7 @@ export function DashboardSkeleton({ T }: { T: Tokens }) {
           alignItems: 'start',
         }}
       >
-        {/* Left column: success donut + resources + storage */}
+        {/* Left column: success donut + resources + launchpad + upcoming backups + storage */}
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
           {/* Success donut card */}
           <Box
@@ -217,6 +218,97 @@ export function DashboardSkeleton({ T }: { T: Tokens }) {
                 </Box>
               ))}
             </ResourceGaugeGrid>
+          </Box>
+
+          {/* Capability launchpad */}
+          <Box
+            sx={{
+              bgcolor: T.bgCard,
+              border: `1px solid ${T.border}`,
+              borderRadius: '14px',
+              p: 2,
+            }}
+          >
+            <Skeleton
+              variant="text"
+              width={136}
+              height={14}
+              sx={{ mb: 1.5, transform: 'none', borderRadius: 0.5 }}
+            />
+            <Stack spacing={0.5}>
+              {[0, 1, 2, 3].map((i) => (
+                <Box
+                  key={i}
+                  sx={{
+                    borderRadius: '8px',
+                    border: `1px solid ${T.border}`,
+                    p: 0.75,
+                  }}
+                >
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: '28px minmax(0, 1fr) 16px',
+                      alignItems: 'center',
+                      gap: 1,
+                      minWidth: 0,
+                    }}
+                  >
+                    <Skeleton variant="rounded" width={28} height={28} sx={{ borderRadius: 2 }} />
+                    <Box sx={{ minWidth: 0 }}>
+                      <Skeleton
+                        variant="text"
+                        width={[84, 92, 96, 118][i]}
+                        height={14}
+                        sx={{ transform: 'none', borderRadius: 0.5 }}
+                      />
+                      <Skeleton
+                        variant="text"
+                        width={[88, 78, 76, 90][i]}
+                        height={12}
+                        sx={{ mt: 0.35, transform: 'none', borderRadius: 0.5 }}
+                      />
+                    </Box>
+                    <Skeleton variant="circular" width={14} height={14} />
+                  </Box>
+                </Box>
+              ))}
+            </Stack>
+          </Box>
+
+          {/* Upcoming backups */}
+          <Box
+            sx={{
+              bgcolor: T.bgCard,
+              border: `1px solid ${T.border}`,
+              borderRadius: '14px',
+              p: 2,
+            }}
+          >
+            <Skeleton
+              variant="text"
+              width={126}
+              height={14}
+              sx={{ mb: 1.25, transform: 'none', borderRadius: 0.5 }}
+            />
+            <Stack spacing={1}>
+              {[0, 1].map((i) => (
+                <Box key={i}>
+                  <Skeleton
+                    variant="text"
+                    width={[118, 94][i]}
+                    height={14}
+                    sx={{ transform: 'none', borderRadius: 0.5 }}
+                  />
+                  <Skeleton
+                    variant="text"
+                    width={[84, 72][i]}
+                    height={12}
+                    sx={{ mt: 0.35, transform: 'none', borderRadius: 0.5 }}
+                  />
+                </Box>
+              ))}
+            </Stack>
           </Box>
 
           {/* Storage donut card */}

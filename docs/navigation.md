@@ -14,7 +14,7 @@ license supports it.
 
 For a new setup, follow the sidebar in this order:
 
-1. Open Dashboard to check overall health.
+1. Open Dashboard to check overall health and spot setup gaps.
 2. Add storage targets from Repositories or Cloud Storage, and register infrastructure endpoints
    from Remote Clients or Remote Machines.
 3. Create a plan from Backup Plans.
@@ -26,7 +26,7 @@ For a new setup, follow the sidebar in this order:
 
 | Sidebar area | Tab | Use it for |
 | --- | --- | --- |
-| Main | Dashboard | Check repository health, recent activity, backup freshness, and restore-check status. |
+| Main | Dashboard | Check repository health, recent activity, backup freshness, restore-check status, and setup-gap actions for backup plans, cloud storage, remote clients, and verification. |
 | Main | Activity | Review job history, live or recent logs, failures, and completed backup, restore, check, prune, compact, script, or package work. |
 | Infrastructure | Remote Clients | Register other Borg UI client servers, check health and version compatibility, and switch this browser to a remote client. |
 | Infrastructure | Remote Machines | Add SSH-connected machines for remote repositories, remote backup sources, and SSH restore destinations. |
