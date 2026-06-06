@@ -3,6 +3,7 @@ import { Box, Skeleton } from '@mui/material'
 import VersionChip from './VersionChip'
 import PlanBadge from './PlanBadge'
 import PlanInfoDrawer from './PlanInfoDrawer'
+import SidebarUpdateNotice from './SidebarUpdateNotice'
 import { usePlan } from '../hooks/usePlan'
 import { useAnalytics } from '../hooks/useAnalytics'
 
@@ -39,7 +40,10 @@ export default function SidebarVersionInfo({ systemInfo }: SidebarVersionInfoPro
   }
 
   return (
-    <Box sx={{ mt: 'auto', px: 2, pt: 1, pb: 1.5, borderTop: 1, borderColor: 'divider' }}>
+    <Box sx={{ mt: 'auto', px: 2, pt: 1.75, pb: 1.5, borderTop: 1, borderColor: 'divider' }}>
+      {/* Persistent update reminder. Dismiss state is separate from announcement modal. */}
+      <SidebarUpdateNotice />
+
       {/* Plan badge — own row, full width */}
       <Box sx={{ mb: 1 }}>
         {isPlanLoading ? (
