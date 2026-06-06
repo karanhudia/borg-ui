@@ -8,9 +8,11 @@ import {
   ChevronRight,
   LogOut,
   Menu,
-  Palette,
+  Monitor,
+  Moon,
   Shield,
   Sparkles,
+  Sun,
   User,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -22,6 +24,7 @@ import { usePlan } from '../hooks/usePlan'
 import { useNavigate } from 'react-router-dom'
 import { PLAN_LABEL } from '../core/features'
 import { getProfileMenuColors, getRoleBadgeStyles } from './profileMenuColors'
+import { useTheme } from '../context/ThemeContext'
 
 const drawerWidth = 240
 const headerHeight = 64
@@ -33,15 +36,19 @@ interface AppHeaderProps {
 export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
   const { t } = useTranslation()
   const { user, logout } = useAuth()
-  const { trackAuth, trackNavigation, trackPlan, EventAction } = useAnalytics()
+  const { trackAuth, trackNavigation, trackPlan, trackSettings, EventAction } = useAnalytics()
   const muiTheme = useMuiTheme()
   const isDark = muiTheme.palette.mode === 'dark'
   const menuColors = getProfileMenuColors(muiTheme)
   const { plan, features, entitlement } = usePlan()
+  const { mode: themeMode, effectiveMode, setTheme } = useTheme()
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
   const [planDrawerOpen, setPlanDrawerOpen] = useState(false)
   const open = Boolean(anchorEl)
   const navigate = useNavigate()
+
+  const themeAccent =
+    effectiveMode === 'dark' ? '#60a5fa' : themeMode === 'auto' ? '#0891b2' : '#2563eb'
 
   const displayName = user?.full_name?.trim() || user?.username || user?.email || ''
   const roleLabel = formatRoleLabel(user?.role)
@@ -177,7 +184,7 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
           slotProps={{
             paper: {
               sx: {
-                mt: 1,
+                mt: 1.5,
                 width: 300,
                 borderRadius: 3,
                 border: `1px solid ${alpha(muiTheme.palette.divider, isDark ? 0.4 : 0.2)}`,
@@ -197,7 +204,7 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
               py: 1.5,
               display: 'flex',
               alignItems: 'center',
-              gap: 1.5,
+              gap: 1.25,
               bgcolor: menuColors.heroSurface,
               borderBottom: `1px solid ${alpha(muiTheme.palette.divider, 0.06)}`,
             }}
@@ -216,10 +223,101 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
             >
               {initials}
             </Avatar>
-            <Box sx={{ minWidth: 0 }}>
-              <Typography variant="body2" noWrap sx={{ fontWeight: 700, fontSize: '0.875rem' }}>
-                {displayName}
-              </Typography>
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 1,
+                }}
+              >
+                <Typography
+                  variant="body2"
+                  noWrap
+                  sx={{ fontWeight: 700, fontSize: '0.875rem', minWidth: 0, flex: 1 }}
+                >
+                  {displayName}
+                </Typography>
+                <Box
+                  role="radiogroup"
+                  aria-label={t('settings.appearance.themeAriaLabel', 'Theme mode')}
+                  sx={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 0.125,
+                    p: 0.25,
+                    flexShrink: 0,
+                    borderRadius: 999,
+                    border: `1px solid ${alpha(muiTheme.palette.divider, isDark ? 0.45 : 0.22)}`,
+                    bgcolor: isDark ? 'rgba(15,23,42,0.35)' : 'rgba(255,255,255,0.7)',
+                    backdropFilter: 'blur(6px)',
+                  }}
+                >
+                  {(
+                    [
+                      { id: 'light', icon: Sun },
+                      { id: 'auto', icon: Monitor },
+                      { id: 'dark', icon: Moon },
+                    ] as const
+                  ).map(({ id, icon: ThemeIcon }) => {
+                    const isActive = themeMode === id
+                    return (
+                      <Box
+                        key={id}
+                        component="button"
+                        type="button"
+                        role="radio"
+                        aria-checked={isActive}
+                        aria-label={t(`settings.appearance.themeOptions.${id}`)}
+                        title={t(`settings.appearance.themeOptions.${id}`)}
+                        onClick={() => {
+                          setTheme(id)
+                          trackSettings(EventAction.EDIT, {
+                            section: 'appearance',
+                            setting: 'theme',
+                            theme: id,
+                            surface: 'user_menu',
+                          })
+                        }}
+                        sx={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: 22,
+                          height: 22,
+                          borderRadius: '50%',
+                          border: 'none',
+                          cursor: 'pointer',
+                          padding: 0,
+                          fontFamily: 'inherit',
+                          bgcolor: isActive ? (isDark ? '#f8fafc' : '#ffffff') : 'transparent',
+                          color: isActive
+                            ? '#0f172a'
+                            : isDark
+                              ? alpha('#f8fafc', 0.55)
+                              : alpha('#0f172a', 0.5),
+                          boxShadow: isActive
+                            ? isDark
+                              ? '0 1px 2px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06)'
+                              : '0 1px 2px rgba(15,23,42,0.12), 0 0 0 1px rgba(15,23,42,0.04)'
+                            : 'none',
+                          transition: 'background-color 160ms ease, color 160ms ease',
+                          '&:hover': {
+                            color: isActive ? '#0f172a' : isDark ? '#f8fafc' : '#0f172a',
+                          },
+                          '&:focus-visible': {
+                            outline: `2px solid ${alpha(themeAccent, 0.6)}`,
+                            outlineOffset: 2,
+                          },
+                        }}
+                      >
+                        <ThemeIcon size={11} aria-hidden="true" />
+                      </Box>
+                    )
+                  })}
+                </Box>
+              </Box>
               <Typography
                 variant="caption"
                 noWrap
@@ -387,12 +485,6 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
                     'Profile, password, 2FA, passkeys'
                   ),
                   route: '/settings/account',
-                },
-                {
-                  icon: Palette,
-                  label: t('navigation.settings.appearance', 'Appearance'),
-                  desc: t('navigation.menu.appearanceDesc', 'Theme, language'),
-                  route: '/settings/appearance',
                 },
                 {
                   icon: Bell,

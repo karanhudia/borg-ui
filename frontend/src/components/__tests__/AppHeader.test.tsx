@@ -43,12 +43,14 @@ function contrastRatio(foreground: string, background: string) {
   return (lighter + 0.05) / (darker + 0.05)
 }
 
-const { logoutMock, trackAuthMock, trackNavigationMock, navigateMock } = vi.hoisted(() => ({
-  logoutMock: vi.fn(),
-  trackAuthMock: vi.fn(),
-  trackNavigationMock: vi.fn(),
-  navigateMock: vi.fn(),
-}))
+const { logoutMock, trackAuthMock, trackNavigationMock, trackSettingsMock, navigateMock } =
+  vi.hoisted(() => ({
+    logoutMock: vi.fn(),
+    trackAuthMock: vi.fn(),
+    trackNavigationMock: vi.fn(),
+    trackSettingsMock: vi.fn(),
+    navigateMock: vi.fn(),
+  }))
 
 vi.mock('../../hooks/useAuth', () => ({
   useAuth: () => ({
@@ -68,9 +70,11 @@ vi.mock('../../hooks/useAnalytics', () => ({
     trackAuth: trackAuthMock,
     trackNavigation: trackNavigationMock,
     trackPlan: vi.fn(),
+    trackSettings: trackSettingsMock,
     EventAction: {
       VIEW: 'View',
       LOGOUT: 'Logout',
+      EDIT: 'Edit',
     },
   }),
 }))
@@ -87,6 +91,23 @@ vi.mock('../../hooks/usePlan', () => ({
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
   return { ...actual, useNavigate: () => navigateMock }
+})
+
+vi.mock('../../context/ThemeContext', async () => {
+  const React = await vi.importActual<typeof import('react')>('react')
+  type Mode = 'auto' | 'light' | 'dark'
+  return {
+    useTheme: () => {
+      const [mode, setMode] = React.useState<Mode>('auto')
+      return {
+        mode,
+        effectiveMode: mode === 'dark' ? 'dark' : 'light',
+        setTheme: (next: Mode) => setMode(next),
+        toggleTheme: () => {},
+      }
+    },
+    ThemeProvider: ({ children }: { children: React.ReactNode }) => children,
+  }
 })
 
 describe('AppHeader', () => {
@@ -132,15 +153,50 @@ describe('AppHeader', () => {
     expect(await screen.findByText('All Pro features unlocked')).toBeInTheDocument()
   })
 
-  it('shows all three settings navigation links when menu opens', async () => {
+  it('shows the settings navigation links when menu opens', async () => {
     const user = userEvent.setup()
     renderWithProviders(<AppHeader onToggleMobileMenu={vi.fn()} />)
 
     await user.click(screen.getByRole('button', { name: /user menu/i }))
 
     expect(await screen.findByText('Account & Security')).toBeInTheDocument()
-    expect(await screen.findByText('Appearance')).toBeInTheDocument()
     expect(await screen.findByText('Notifications')).toBeInTheDocument()
+  })
+
+  it('shows the theme quick switch with the three modes when menu opens', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<AppHeader onToggleMobileMenu={vi.fn()} />)
+
+    await user.click(screen.getByRole('button', { name: /user menu/i }))
+
+    const group = await screen.findByRole('radiogroup', { name: /theme mode/i })
+    expect(group).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Light' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Dark' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Auto' })).toBeInTheDocument()
+  })
+
+  it('switches theme and tracks the change when a theme option is clicked', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<AppHeader onToggleMobileMenu={vi.fn()} />)
+
+    await user.click(screen.getByRole('button', { name: /user menu/i }))
+
+    const darkOption = await screen.findByRole('radio', { name: 'Dark' })
+    await user.click(darkOption)
+
+    await waitFor(() => {
+      expect(trackSettingsMock).toHaveBeenCalledWith('Edit', {
+        section: 'appearance',
+        setting: 'theme',
+        theme: 'dark',
+        surface: 'user_menu',
+      })
+    })
+
+    expect(screen.getByRole('radio', { name: 'Dark' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('radio', { name: 'Light' })).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByRole('radio', { name: 'Auto' })).toHaveAttribute('aria-checked', 'false')
   })
 
   it('keeps profile menu text colors above WCAG AA contrast in light and dark themes', () => {
@@ -171,7 +227,7 @@ describe('AppHeader', () => {
 
     expect(await screen.findByText('Pro Plan')).toBeInTheDocument()
     expect(await screen.findByText('Account & Security')).toBeInTheDocument()
-    expect(await screen.findByText('Appearance')).toBeInTheDocument()
+    expect(await screen.findByRole('radiogroup', { name: /theme mode/i })).toBeInTheDocument()
     expect(await screen.findByText('Logout')).toBeInTheDocument()
   })
 
@@ -183,16 +239,6 @@ describe('AppHeader', () => {
     await user.click(await screen.findByText('Account & Security'))
 
     expect(navigateMock).toHaveBeenCalledWith('/settings/account')
-  })
-
-  it('navigates to appearance settings when Appearance link is clicked', async () => {
-    const user = userEvent.setup()
-    renderWithProviders(<AppHeader onToggleMobileMenu={vi.fn()} />)
-
-    await user.click(screen.getByRole('button', { name: /user menu/i }))
-    await user.click(await screen.findByText('Appearance'))
-
-    expect(navigateMock).toHaveBeenCalledWith('/settings/appearance')
   })
 
   it('navigates to notifications settings when Notifications link is clicked', async () => {
