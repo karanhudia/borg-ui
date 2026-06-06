@@ -174,10 +174,7 @@ Contributors will be recognized in:
 
 ## Code of Conduct
 
-- Be respectful and inclusive
-- Provide constructive feedback
-- Focus on the code, not the person
-- Help make this a welcoming community
+Please read and follow the [Borg UI Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Need Help?
 

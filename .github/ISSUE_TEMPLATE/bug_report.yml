@@ -1,0 +1,94 @@
+name: Bug report
+description: Report something in Borg UI that is not working as expected.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please include enough detail for maintainers to reproduce the issue.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened, and what did you expect to happen instead?
+      placeholder: Borg UI failed to...
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: List the exact actions that trigger the issue.
+      placeholder: |
+        1. Go to...
+        2. Click...
+        3. See...
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Describe the broken behavior, error message, or unexpected result.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: Describe what should have happened.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Borg UI version
+      description: Include the image tag, release version, or commit SHA if known.
+      placeholder: "2.0.0, latest, or commit SHA"
+    validations:
+      required: false
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment method
+      options:
+        - Docker Compose
+        - Docker run
+        - Unraid
+        - Bare metal / source checkout
+        - Other
+    validations:
+      required: false
+  - type: input
+    id: platform
+    attributes:
+      label: Host platform
+      description: Include OS, architecture, Docker version, and browser if relevant.
+      placeholder: "Ubuntu 24.04 amd64, Docker 27.x, Chrome 125"
+    validations:
+      required: false
+  - type: input
+    id: borg-version
+    attributes:
+      label: BorgBackup version
+      description: Include the Borg 1.x or Borg 2 version if the issue involves repositories, archives, or backups.
+      placeholder: "borg 1.4.0"
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and screenshots
+      description: Paste relevant logs, stack traces, browser console output, or screenshots.
+      render: shell
+    validations:
+      required: false
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Add anything else that may help reproduce or diagnose the issue.
+    validations:
+      required: false
