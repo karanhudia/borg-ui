@@ -91,6 +91,16 @@ const remotes: RcloneRemote[] = [
     redacted_config: { type: 's3', provider: 'AWS', access_key_id: '***' },
     last_test_status: 'connected',
     last_error: null,
+    storage: {
+      total: 10 * 1024 ** 3,
+      total_formatted: '10.00 GB',
+      used: 4 * 1024 ** 3,
+      used_formatted: '4.00 GB',
+      available: 6 * 1024 ** 3,
+      available_formatted: '6.00 GB',
+      percent_used: 40.0,
+      last_check: '2026-06-06T12:30:00+00:00',
+    },
   },
   {
     id: 3,
@@ -106,6 +116,16 @@ const remotes: RcloneRemote[] = [
       expires_at: '2026-05-30T01:00:00Z',
       refresh_available: true,
     },
+    storage: {
+      total: 2 * 1024 ** 4,
+      total_formatted: '2.00 TB',
+      used: 1536 * 1024 ** 3,
+      used_formatted: '1.50 TB',
+      available: 512 * 1024 ** 3,
+      available_formatted: '512.00 GB',
+      percent_used: 75.0,
+      last_check: '2026-06-06T12:45:00+00:00',
+    },
   },
   {
     id: 2,
@@ -116,6 +136,7 @@ const remotes: RcloneRemote[] = [
     redacted_config: { type: 'b2', account: '***' },
     last_test_status: 'failed',
     last_error: 'Credential validation failed',
+    storage: null,
   },
 ]
 

@@ -50,6 +50,11 @@ router = APIRouter(
 public_router = APIRouter(tags=["rclone"])
 
 RCLONE_REMOTE_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+RCLONE_ABOUT_STORAGE_LINE_RE = re.compile(
+    r"^\s*(total|used|free|available)\s*:\s*"
+    r"([0-9]+(?:\.[0-9]+)?)\s*([A-Za-z]+)?\s*$",
+    re.IGNORECASE,
+)
 RCLONE_OAUTH_URL_RE = re.compile(r"https?://[^\s<>]+")
 RCLONE_SHAREFILE_HOST_PART_RE = re.compile(r"^[A-Za-z0-9.-]+$")
 RCLONE_OAUTH_START_TIMEOUT_SECONDS = 15
@@ -2142,6 +2147,123 @@ def _remote_oauth_token_status(remote: RcloneRemote) -> dict[str, Any] | None:
     return _oauth_token_status_from_config_values(remote.provider, values)
 
 
+def _format_bytes(bytes_size: int) -> str:
+    value = float(bytes_size)
+    for unit in ["B", "KB", "MB", "GB", "TB", "PB"]:
+        if value < 1024.0:
+            return f"{value:.2f} {unit}"
+        value /= 1024.0
+    return f"{value:.2f} EB"
+
+
+def _parse_about_size_value(value: str, unit: str | None) -> int | None:
+    try:
+        parsed = float(value)
+    except ValueError:
+        return None
+
+    normalized_unit = (unit or "B").strip().lower()
+    multipliers = {
+        "b": 1,
+        "byte": 1,
+        "bytes": 1,
+        "kb": 1024,
+        "kib": 1024,
+        "mb": 1024**2,
+        "mib": 1024**2,
+        "gb": 1024**3,
+        "gib": 1024**3,
+        "tb": 1024**4,
+        "tib": 1024**4,
+        "pb": 1024**5,
+        "pib": 1024**5,
+        "eb": 1024**6,
+        "eib": 1024**6,
+    }
+    multiplier = multipliers.get(normalized_unit)
+    if multiplier is None:
+        return None
+    return int(parsed * multiplier)
+
+
+def _parse_rclone_about_storage(stdout: str | None) -> dict[str, Any] | None:
+    if not stdout:
+        return None
+
+    values: dict[str, int] = {}
+    for line in stdout.splitlines():
+        match = RCLONE_ABOUT_STORAGE_LINE_RE.match(line)
+        if not match:
+            continue
+        key = match.group(1).lower()
+        if key == "free":
+            key = "available"
+        parsed = _parse_about_size_value(match.group(2), match.group(3))
+        if parsed is not None:
+            values[key] = parsed
+
+    total = values.get("total")
+    used = values.get("used")
+    available = values.get("available")
+
+    if total is None and used is not None and available is not None:
+        total = used + available
+    if used is None and total is not None and available is not None:
+        used = max(total - available, 0)
+    if available is None and total is not None and used is not None:
+        available = max(total - used, 0)
+
+    if total is None or used is None or available is None:
+        return None
+
+    percent_used = 0.0 if total <= 0 else round((used / total) * 100, 1)
+    return {
+        "total": total,
+        "used": used,
+        "available": available,
+        "percent_used": percent_used,
+    }
+
+
+def _serialize_remote_storage(remote: RcloneRemote) -> dict[str, Any] | None:
+    if (
+        remote.storage_total is None
+        or remote.storage_used is None
+        or remote.storage_available is None
+        or remote.storage_percent_used is None
+    ):
+        return None
+
+    return {
+        "total": remote.storage_total,
+        "total_formatted": _format_bytes(remote.storage_total),
+        "used": remote.storage_used,
+        "used_formatted": _format_bytes(remote.storage_used),
+        "available": remote.storage_available,
+        "available_formatted": _format_bytes(remote.storage_available),
+        "percent_used": remote.storage_percent_used,
+        "last_check": _iso(remote.last_storage_check),
+    }
+
+
+def _apply_remote_storage_snapshot(
+    remote: RcloneRemote, storage: dict[str, Any] | None
+) -> None:
+    if storage is None:
+        remote.storage_total = None
+        remote.storage_used = None
+        remote.storage_available = None
+        remote.storage_percent_used = None
+        remote.last_storage_check = None
+        return
+
+    remote.storage_total = storage["total"]
+    remote.storage_used = storage["used"]
+    remote.storage_available = storage["available"]
+    remote.storage_percent_used = storage["percent_used"]
+    remote.last_storage_check = datetime.now(timezone.utc)
+
+
 def _serialize_remote(remote: RcloneRemote) -> dict[str, Any]:
     return {
         "id": remote.id,
@@ -2154,6 +2276,7 @@ def _serialize_remote(remote: RcloneRemote) -> dict[str, Any]:
         "config_path": remote.config_path,
         "redacted_config": _redact_config_values(remote.redacted_config),
         "oauth_token": _remote_oauth_token_status(remote),
+        "storage": _serialize_remote_storage(remote),
         "last_tested_at": _iso(remote.last_tested_at),
         "last_test_status": remote.last_test_status,
         "last_error": remote.last_error,
@@ -2746,6 +2869,9 @@ async def test_remote(
     if result["success"]:
         remote.last_test_status = "connected"
         remote.last_error = None
+        _apply_remote_storage_snapshot(
+            remote, _parse_rclone_about_storage(result.get("stdout"))
+        )
     else:
         remote.last_test_status = "failed"
         remote.last_error = result.get("stderr") or "rclone remote test failed"

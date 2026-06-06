@@ -475,6 +475,11 @@ class RcloneRemote(Base):
     last_tested_at = Column(DateTime, nullable=True)
     last_test_status = Column(String, default="unknown", nullable=False)
     last_error = Column(Text, nullable=True)
+    storage_total = Column(BigInteger, nullable=True)
+    storage_used = Column(BigInteger, nullable=True)
+    storage_available = Column(BigInteger, nullable=True)
+    storage_percent_used = Column(Float, nullable=True)
+    last_storage_check = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=utc_now, nullable=False)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
 

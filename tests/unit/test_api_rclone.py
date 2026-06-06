@@ -1869,6 +1869,40 @@ def test_list_rclone_remotes_includes_repository_usage_count(
 
 
 @pytest.mark.unit
+def test_list_rclone_remotes_includes_storage_snapshot(
+    test_client: TestClient, admin_headers, test_db
+):
+    checked_at = datetime(2026, 6, 6, 12, 30, tzinfo=timezone.utc)
+    remote = RcloneRemote(
+        name="prod-s3",
+        provider="s3",
+        config_source="managed",
+        storage_total=10 * 1024**3,
+        storage_used=4 * 1024**3,
+        storage_available=6 * 1024**3,
+        storage_percent_used=40.0,
+        last_storage_check=checked_at,
+    )
+    test_db.add(remote)
+    test_db.commit()
+
+    response = test_client.get("/api/rclone/remotes", headers=admin_headers)
+
+    assert response.status_code == 200
+    listed = response.json()["remotes"][0]
+    assert listed["storage"] == {
+        "total": 10 * 1024**3,
+        "total_formatted": "10.00 GB",
+        "used": 4 * 1024**3,
+        "used_formatted": "4.00 GB",
+        "available": 6 * 1024**3,
+        "available_formatted": "6.00 GB",
+        "percent_used": 40.0,
+        "last_check": "2026-06-06T12:30:00+00:00",
+    }
+
+
+@pytest.mark.unit
 def test_create_rclone_remote_rejects_blank_provider(
     test_client: TestClient, admin_headers
 ):
@@ -2230,6 +2264,91 @@ def test_test_remote_updates_status(
     assert response.json()["status"] == "connected"
     test_db.refresh(remote)
     assert remote.last_test_status == "connected"
+
+
+@pytest.mark.unit
+def test_test_remote_updates_storage_snapshot_from_about_output(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    test_db.add(remote)
+    test_db.commit()
+    test_db.refresh(remote)
+
+    monkeypatch.setattr(
+        "app.api.rclone.rclone_service.about",
+        AsyncMock(
+            return_value={
+                "success": True,
+                "stdout": "Total: 10 GiB\nUsed: 4 GiB\nFree: 6 GiB\n",
+                "stderr": "",
+            }
+        ),
+    )
+
+    response = test_client.post(
+        f"/api/rclone/remotes/{remote.id}/test", headers=admin_headers
+    )
+
+    assert response.status_code == 200
+    storage = response.json()["remote"]["storage"]
+    assert storage["total"] == 10 * 1024**3
+    assert storage["used"] == 4 * 1024**3
+    assert storage["available"] == 6 * 1024**3
+    assert storage["total_formatted"] == "10.00 GB"
+    assert storage["used_formatted"] == "4.00 GB"
+    assert storage["available_formatted"] == "6.00 GB"
+    assert storage["percent_used"] == 40.0
+    assert storage["last_check"] is not None
+    test_db.refresh(remote)
+    assert remote.storage_total == 10 * 1024**3
+    assert remote.storage_used == 4 * 1024**3
+    assert remote.storage_available == 6 * 1024**3
+    assert remote.storage_percent_used == 40.0
+    assert remote.last_storage_check is not None
+
+
+@pytest.mark.unit
+def test_test_remote_clears_storage_snapshot_when_about_has_no_size(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    remote = RcloneRemote(
+        name="prod-s3",
+        provider="s3",
+        config_source="managed",
+        storage_total=10 * 1024**3,
+        storage_used=4 * 1024**3,
+        storage_available=6 * 1024**3,
+        storage_percent_used=40.0,
+        last_storage_check=datetime(2026, 6, 6, 12, 30, tzinfo=timezone.utc),
+    )
+    test_db.add(remote)
+    test_db.commit()
+    test_db.refresh(remote)
+
+    monkeypatch.setattr(
+        "app.api.rclone.rclone_service.about",
+        AsyncMock(
+            return_value={
+                "success": True,
+                "stdout": "Remote does not report quota information\n",
+                "stderr": "",
+            }
+        ),
+    )
+
+    response = test_client.post(
+        f"/api/rclone/remotes/{remote.id}/test", headers=admin_headers
+    )
+
+    assert response.status_code == 200
+    assert response.json()["remote"]["storage"] is None
+    test_db.refresh(remote)
+    assert remote.storage_total is None
+    assert remote.storage_used is None
+    assert remote.storage_available is None
+    assert remote.storage_percent_used is None
+    assert remote.last_storage_check is None
 
 
 @pytest.mark.unit
