@@ -27,6 +27,7 @@ import {
   WifiOff,
 } from 'lucide-react'
 import ResponsiveDialog from '../components/shared/ResponsiveDialog'
+import PlanGate from '../components/shared/PlanGate'
 import EmptyStateCard from '../components/EmptyStateCard'
 import { useAuth } from '../hooks/useAuth'
 import { useRemoteBackends } from '../services/remoteBackends/context'
@@ -504,5 +505,14 @@ export default function RemoteClients() {
     return <Navigate to="/dashboard" replace />
   }
 
-  return <RemoteClientsContent />
+  return (
+    <PlanGate
+      feature="remote_clients"
+      message={t('remoteClients.planGate.message')}
+      surface="remote_clients"
+      operation="view_management"
+    >
+      <RemoteClientsContent />
+    </PlanGate>
+  )
 }

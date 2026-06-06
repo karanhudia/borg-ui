@@ -1,11 +1,13 @@
-import { type MouseEvent, useState } from 'react'
+import { type MouseEvent, useEffect, useState } from 'react'
 import { Box, Button, Chip, Divider, MenuItem, MenuList, Popover, Typography } from '@mui/material'
 import { alpha, useTheme } from '@mui/material/styles'
-import { Settings } from 'lucide-react'
+import { Lock, Settings } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { useRemoteBackends } from '@/services/remoteBackends/context'
+import { LOCAL_BACKEND_ID } from '@/services/remoteBackends/storage'
 import type { BackendTarget } from '@/services/remoteBackends/types'
+import { usePlan } from '@/hooks/usePlan'
 import {
   buildBackendTargets,
   getBackendTargetName,
@@ -22,11 +24,21 @@ export default function BackendTargetSwitcher({ compact = false }: BackendTarget
   const muiTheme = useTheme()
   const navigate = useNavigate()
   const { activeTarget, clients, switchTarget } = useRemoteBackends()
+  const { can } = usePlan()
+  const canUseRemoteClients = can('remote_clients')
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
   const open = Boolean(anchorEl)
   const targets = buildBackendTargets(clients, t)
-  const activeStatus = getBackendTargetStatus(activeTarget, t)
+  const activeStatus = getBackendTargetStatus(activeTarget, t, {
+    remoteClientsAvailable: canUseRemoteClients,
+  })
   const activeName = getBackendTargetName(activeTarget, t)
+
+  useEffect(() => {
+    if (!canUseRemoteClients && activeTarget.kind === 'remote') {
+      switchTarget(LOCAL_BACKEND_ID)
+    }
+  }, [activeTarget.kind, canUseRemoteClients, switchTarget])
 
   const closeMenu = () => setAnchorEl(null)
 
@@ -35,7 +47,7 @@ export default function BackendTargetSwitcher({ compact = false }: BackendTarget
   }
 
   const handleSwitch = (target: BackendTarget) => {
-    if (target.kind === 'remote' && target.health.compatibility === 'incompatible') {
+    if (isBackendTargetDisabled(target, { remoteClientsAvailable: canUseRemoteClients })) {
       return
     }
 
@@ -126,8 +138,12 @@ export default function BackendTargetSwitcher({ compact = false }: BackendTarget
           sx={{ py: 0.75 }}
         >
           {targets.map((target) => {
-            const status = getBackendTargetStatus(target, t)
-            const disabled = isBackendTargetDisabled(target)
+            const status = getBackendTargetStatus(target, t, {
+              remoteClientsAvailable: canUseRemoteClients,
+            })
+            const disabled = isBackendTargetDisabled(target, {
+              remoteClientsAvailable: canUseRemoteClients,
+            })
             const selected = activeTarget.id === target.id
 
             return (
@@ -169,19 +185,37 @@ export default function BackendTargetSwitcher({ compact = false }: BackendTarget
             )
           })}
           <Divider sx={{ my: 0.75 }} />
-          <MenuItem
-            role="menuitem"
-            onClick={() => {
-              closeMenu()
-              navigate('/remote-clients')
-            }}
-            sx={{ mx: 0.75, borderRadius: 1, gap: 1.25 }}
-          >
-            <Settings size={14} />
-            <Typography variant="body2" sx={{ fontWeight: 700 }}>
-              {t('remoteClients.switcher.manage')}
-            </Typography>
-          </MenuItem>
+          {canUseRemoteClients ? (
+            <MenuItem
+              role="menuitem"
+              onClick={() => {
+                closeMenu()
+                navigate('/remote-clients')
+              }}
+              sx={{ mx: 0.75, borderRadius: 1, gap: 1.25 }}
+            >
+              <Settings size={14} />
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                {t('remoteClients.switcher.manage')}
+              </Typography>
+            </MenuItem>
+          ) : (
+            <MenuItem
+              role="menuitem"
+              disabled
+              sx={{ mx: 0.75, borderRadius: 1, gap: 1.25, alignItems: 'flex-start' }}
+            >
+              <Lock size={14} />
+              <Box>
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                  {t('remoteClients.switcher.manageRequiresPlan')}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {t('remoteClients.switcher.remotePlanUnavailable')}
+                </Typography>
+              </Box>
+            </MenuItem>
+          )}
         </MenuList>
       </Popover>
     </>

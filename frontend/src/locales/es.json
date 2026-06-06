@@ -164,6 +164,9 @@
     "title": "Clientes remotos",
     "description": "Registra servidores cliente de Borg UI en otras máquinas, comprueba su estado y usa este navegador con el servidor seleccionado.",
     "addButton": "Añadir cliente remoto",
+    "planGate": {
+      "message": "El cambio a clientes remotos está disponible en los planes Pro y Enterprise. Mejora el plan para añadir o cambiar a servidores Borg UI remotos."
+    },
     "status": {
       "incompatible": "Incompatible",
       "online": "En línea",
@@ -174,7 +177,8 @@
     "labels": {
       "activeTarget": "Destino activo",
       "local": "Local",
-      "remoteClient": "Cliente remoto"
+      "remoteClient": "Cliente remoto",
+      "requiresPlan": "Requiere Pro"
     },
     "switcher": {
       "title": "Destinos de servidor",
@@ -188,9 +192,11 @@
       "localCompatibility": "Este navegador está conectado a este servidor Borg UI.",
       "remoteHelper": "Servidor del cliente remoto",
       "remoteUnavailable": "Cliente remoto no disponible",
+      "remotePlanUnavailable": "El cambio a clientes remotos requiere Pro.",
       "versionMismatch": "Conflicto de versión",
       "versionHelper": "Borg UI {{version}}",
-      "manage": "Gestionar clientes remotos"
+      "manage": "Gestionar clientes remotos",
+      "manageRequiresPlan": "Los clientes remotos requieren Pro"
     },
     "localBackend": {
       "title": "Este servidor",

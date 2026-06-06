@@ -164,6 +164,9 @@
     "title": "Remote Clients",
     "description": "Register Borg UI client servers on other machines, check their health, and use this browser against the selected server.",
     "addButton": "Add remote client",
+    "planGate": {
+      "message": "Remote client switching is available on Pro and Enterprise plans. Upgrade to add or switch to remote Borg UI servers."
+    },
     "status": {
       "incompatible": "Incompatible",
       "online": "Online",
@@ -174,7 +177,8 @@
     "labels": {
       "activeTarget": "Active target",
       "local": "Local",
-      "remoteClient": "Remote client"
+      "remoteClient": "Remote client",
+      "requiresPlan": "Requires Pro"
     },
     "switcher": {
       "title": "Server targets",
@@ -188,9 +192,11 @@
       "localCompatibility": "This browser is connected to this Borg UI server.",
       "remoteHelper": "Remote client server",
       "remoteUnavailable": "Remote client unavailable",
+      "remotePlanUnavailable": "Remote client switching requires Pro.",
       "versionMismatch": "Version mismatch",
       "versionHelper": "Borg UI {{version}}",
-      "manage": "Manage remote clients"
+      "manage": "Manage remote clients",
+      "manageRequiresPlan": "Remote Clients require Pro"
     },
     "localBackend": {
       "title": "This server",

@@ -20,6 +20,8 @@ interface PlanGateProps {
   operation?: string
   /** Extra non-sensitive analytics data for blocked feature events */
   analyticsData?: Record<string, unknown>
+  /** Optional feature-specific upgrade prompt message */
+  message?: string
 }
 
 export default function PlanGate({
@@ -31,6 +33,7 @@ export default function PlanGate({
   surface = 'plan_gate',
   operation = 'render_gate',
   analyticsData,
+  message,
 }: PlanGateProps) {
   const { t } = useTranslation()
   const { can, isLoading } = usePlan()
@@ -77,5 +80,5 @@ export default function PlanGate({
     )
   }
   if (fallback !== undefined) return <>{fallback}</>
-  return <UpgradePrompt requiredPlan={FEATURES[feature]} />
+  return <UpgradePrompt requiredPlan={FEATURES[feature]} message={message} />
 }

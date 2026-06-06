@@ -13,6 +13,7 @@ export const FEATURES = {
   backup_plan_mixed_sources: 'pro',
   rclone: 'pro',
   managed_agents: 'pro',
+  remote_clients: 'pro',
   multi_user: 'community',
   extra_users: 'pro',
   rbac: 'enterprise',

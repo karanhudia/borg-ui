@@ -1,8 +1,10 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { Chip, type SxProps, type Theme } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import RichSelect, { type RichSelectOption } from './shared/RichSelect'
+import { usePlan } from '@/hooks/usePlan'
 import { useRemoteBackends } from '@/services/remoteBackends/context'
+import { LOCAL_BACKEND_ID } from '@/services/remoteBackends/storage'
 import {
   buildBackendTargets,
   getBackendTargetName,
@@ -25,17 +27,30 @@ export default function BackendTargetSelect({
 }: BackendTargetSelectProps) {
   const { t } = useTranslation()
   const { activeTarget, clients, switchTarget } = useRemoteBackends()
+  const { can } = usePlan()
+  const canUseRemoteClients = can('remote_clients')
   const targets = useMemo(() => buildBackendTargets(clients, t), [clients, t])
+
+  useEffect(() => {
+    if (!canUseRemoteClients && activeTarget.kind === 'remote') {
+      switchTarget(LOCAL_BACKEND_ID)
+    }
+  }, [activeTarget.kind, canUseRemoteClients, switchTarget])
+
   const options = useMemo<RichSelectOption[]>(
     () =>
       targets.map((target) => {
-        const status = getBackendTargetStatus(target, t)
+        const status = getBackendTargetStatus(target, t, {
+          remoteClientsAvailable: canUseRemoteClients,
+        })
         return {
           value: target.id,
           primary: getBackendTargetName(target, t),
           secondary: status.helper,
           icon: status.icon,
-          disabled: isBackendTargetDisabled(target),
+          disabled: isBackendTargetDisabled(target, {
+            remoteClientsAvailable: canUseRemoteClients,
+          }),
           indicator: (
             <Chip
               size="small"
@@ -46,12 +61,17 @@ export default function BackendTargetSelect({
           ),
         }
       }),
-    [targets, t]
+    [canUseRemoteClients, targets, t]
   )
 
   const handleChange = (targetId: string) => {
     const target = targets.find((item) => item.id === targetId)
-    if (!target || isBackendTargetDisabled(target)) return
+    if (
+      !target ||
+      isBackendTargetDisabled(target, { remoteClientsAvailable: canUseRemoteClients })
+    ) {
+      return
+    }
     switchTarget(targetId)
   }
 

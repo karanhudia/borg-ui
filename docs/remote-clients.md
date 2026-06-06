@@ -15,6 +15,10 @@ Open Remote Clients from the Infrastructure navigation group. The global
 server target control near the account menu shows whether the browser is using
 this server or a registered remote client.
 
+Remote Clients require a Pro or Enterprise plan. Community installations keep
+using this server locally, but cannot add remote clients or switch the browser
+to a remote Borg UI server until the instance is upgraded.
+
 ## Add a Remote Client
 
 In Remote Clients, choose **Add remote client** and enter:

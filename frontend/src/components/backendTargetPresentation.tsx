@@ -1,8 +1,12 @@
-import { CheckCircle2, CircleAlert, Monitor, Server, WifiOff } from 'lucide-react'
+import { CheckCircle2, CircleAlert, Lock, Monitor, Server, WifiOff } from 'lucide-react'
 import { getLocalBackendTarget } from '@/services/remoteBackends/storage'
 import type { BackendTarget, RemoteBackendClient } from '@/services/remoteBackends/types'
 
 type Translate = (key: string, options?: Record<string, unknown>) => string
+
+interface BackendTargetPresentationOptions {
+  remoteClientsAvailable?: boolean
+}
 
 export function buildBackendTargets(clients: RemoteBackendClient[], t: Translate): BackendTarget[] {
   const localTarget = getLocalBackendTarget()
@@ -23,17 +27,38 @@ export function getBackendTargetName(target: BackendTarget, t: Translate): strin
   return target.kind === 'local' ? t('remoteClients.switcher.localName') : target.name
 }
 
-export function isBackendTargetDisabled(target: BackendTarget): boolean {
-  return target.kind === 'remote' && target.health.compatibility === 'incompatible'
+export function isBackendTargetDisabled(
+  target: BackendTarget,
+  options: BackendTargetPresentationOptions = {}
+): boolean {
+  const remoteClientsAvailable = options.remoteClientsAvailable ?? true
+  return (
+    target.kind === 'remote' &&
+    (!remoteClientsAvailable || target.health.compatibility === 'incompatible')
+  )
 }
 
-export function getBackendTargetStatus(target: BackendTarget, t: Translate) {
+export function getBackendTargetStatus(
+  target: BackendTarget,
+  t: Translate,
+  options: BackendTargetPresentationOptions = {}
+) {
+  const remoteClientsAvailable = options.remoteClientsAvailable ?? true
   if (target.kind === 'local') {
     return {
       label: t('remoteClients.labels.local'),
       color: 'default' as const,
       icon: <Monitor size={14} />,
       helper: t('remoteClients.switcher.localHelper'),
+    }
+  }
+
+  if (!remoteClientsAvailable) {
+    return {
+      label: t('remoteClients.labels.requiresPlan'),
+      color: 'warning' as const,
+      icon: <Lock size={14} />,
+      helper: t('remoteClients.switcher.remotePlanUnavailable'),
     }
   }
 
