@@ -1,57 +1,21 @@
 {
-  "generatedAt": "2026-06-05T22:16:01.186Z",
+  "generatedAt": "2026-06-06T08:22:25.209Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #634 visual report",
-    "commitSha": "02282b785c6c",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/27042773953"
+    "commitSha": "d72e85c451f1",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/27057234655"
   },
   "totals": {
-    "baseline": 342,
-    "actual": 354,
-    "compared": 342,
-    "changed": 9,
-    "added": 12,
+    "baseline": 352,
+    "actual": 368,
+    "compared": 352,
+    "changed": 2,
+    "added": 16,
     "removed": 0,
-    "unchanged": 333
+    "unchanged": 350
   },
   "changed": [
-    {
-      "fileName": "components-wizard-repository-location--agent-destination-empty--mobile.png",
-      "baselinePath": "images/baseline/components-wizard-repository-location--agent-destination-empty--mobile.png",
-      "actualPath": "images/actual/components-wizard-repository-location--agent-destination-empty--mobile.png",
-      "diffPath": "images/diff/components-wizard-repository-location--agent-destination-empty--mobile.png",
-      "diffPixels": 49371,
-      "totalPixels": 329160,
-      "diffRatio": 0.14999088589135984,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "components-wizard-repository-location--agent-destination-empty.png",
-      "baselinePath": "images/baseline/components-wizard-repository-location--agent-destination-empty.png",
-      "actualPath": "images/actual/components-wizard-repository-location--agent-destination-empty.png",
-      "diffPath": "images/diff/components-wizard-repository-location--agent-destination-empty.png",
-      "diffPixels": 74349,
-      "totalPixels": 1024000,
-      "diffRatio": 0.0726064453125,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
     {
       "fileName": "components-wizard-repository-location--agent-destination-multiple.png",
       "baselinePath": "images/baseline/components-wizard-repository-location--agent-destination-multiple.png",
@@ -60,60 +24,6 @@
       "diffPixels": 44318,
       "totalPixels": 1024000,
       "diffRatio": 0.043279296875,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "components-wizard-repository-location--agent-execution-with-ssh-repository.png",
-      "baselinePath": "images/baseline/components-wizard-repository-location--agent-execution-with-ssh-repository.png",
-      "actualPath": "images/actual/components-wizard-repository-location--agent-execution-with-ssh-repository.png",
-      "diffPath": "images/diff/components-wizard-repository-location--agent-execution-with-ssh-repository.png",
-      "diffPixels": 95950,
-      "totalPixels": 1024000,
-      "diffRatio": 0.093701171875,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "components-wizard-repository-location--community-plan-locked-destinations.png",
-      "baselinePath": "images/baseline/components-wizard-repository-location--community-plan-locked-destinations.png",
-      "actualPath": "images/actual/components-wizard-repository-location--community-plan-locked-destinations.png",
-      "diffPath": "images/diff/components-wizard-repository-location--community-plan-locked-destinations.png",
-      "diffPixels": 111998,
-      "totalPixels": 1024000,
-      "diffRatio": 0.109373046875,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "components-wizard-repository-location--direct-borg-2-rclone.png",
-      "baselinePath": "images/baseline/components-wizard-repository-location--direct-borg-2-rclone.png",
-      "actualPath": "images/actual/components-wizard-repository-location--direct-borg-2-rclone.png",
-      "diffPath": "images/diff/components-wizard-repository-location--direct-borg-2-rclone.png",
-      "diffPixels": 81786,
-      "totalPixels": 1024000,
-      "diffRatio": 0.079869140625,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -141,45 +51,25 @@
         "width": 1280,
         "height": 800
       }
-    },
-    {
-      "fileName": "components-wizard-repository-location--ssh-destination--mobile.png",
-      "baselinePath": "images/baseline/components-wizard-repository-location--ssh-destination--mobile.png",
-      "actualPath": "images/actual/components-wizard-repository-location--ssh-destination--mobile.png",
-      "diffPath": "images/diff/components-wizard-repository-location--ssh-destination--mobile.png",
-      "diffPixels": 37493,
-      "totalPixels": 329160,
-      "diffRatio": 0.11390509174869365,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "components-wizard-repository-location--ssh-destination.png",
-      "baselinePath": "images/baseline/components-wizard-repository-location--ssh-destination.png",
-      "actualPath": "images/actual/components-wizard-repository-location--ssh-destination.png",
-      "diffPath": "images/diff/components-wizard-repository-location--ssh-destination.png",
-      "diffPixels": 43287,
-      "totalPixels": 1024000,
-      "diffRatio": 0.0422724609375,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
     }
   ],
   "added": [
+    {
+      "fileName": "components-backendtargetselect--login-form-selector--mobile.png",
+      "actualPath": "images/actual/components-backendtargetselect--login-form-selector--mobile.png"
+    },
+    {
+      "fileName": "components-backendtargetselect--login-form-selector.png",
+      "actualPath": "images/actual/components-backendtargetselect--login-form-selector.png"
+    },
+    {
+      "fileName": "components-backendtargetselect--remote-selected--mobile.png",
+      "actualPath": "images/actual/components-backendtargetselect--remote-selected--mobile.png"
+    },
+    {
+      "fileName": "components-backendtargetselect--remote-selected.png",
+      "actualPath": "images/actual/components-backendtargetselect--remote-selected.png"
+    },
     {
       "fileName": "components-backendtargetswitcher--compact--mobile.png",
       "actualPath": "images/actual/components-backendtargetswitcher--compact--mobile.png"
@@ -898,6 +788,36 @@
       "fileName": "components-shared-rclone-provider-icon--o-auth-provider-coverage.png"
     },
     {
+      "fileName": "components-sidebarupdatenotice--dark--mobile.png"
+    },
+    {
+      "fileName": "components-sidebarupdatenotice--dark.png"
+    },
+    {
+      "fileName": "components-sidebarupdatenotice--light--mobile.png"
+    },
+    {
+      "fileName": "components-sidebarupdatenotice--light.png"
+    },
+    {
+      "fileName": "components-sidebarupdatenotice--stacked-above-plan-badge--mobile.png"
+    },
+    {
+      "fileName": "components-sidebarupdatenotice--stacked-above-plan-badge.png"
+    },
+    {
+      "fileName": "components-sidebarupdatenotice--without-cta--mobile.png"
+    },
+    {
+      "fileName": "components-sidebarupdatenotice--without-cta.png"
+    },
+    {
+      "fileName": "components-sidebarupdatenotice--without-version--mobile.png"
+    },
+    {
+      "fileName": "components-sidebarupdatenotice--without-version.png"
+    },
+    {
       "fileName": "components-terminallogviewer--unicode-json-log--mobile.png"
     },
     {
@@ -988,25 +908,46 @@
       "fileName": "components-wizard-rclone-remote-dialog--guided-google-drive-remote.png"
     },
     {
+      "fileName": "components-wizard-repository-location--agent-destination-empty--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-repository-location--agent-destination-empty.png"
+    },
+    {
       "fileName": "components-wizard-repository-location--agent-destination-multiple--mobile.png"
     },
     {
       "fileName": "components-wizard-repository-location--agent-execution-with-ssh-repository--mobile.png"
     },
     {
+      "fileName": "components-wizard-repository-location--agent-execution-with-ssh-repository.png"
+    },
+    {
       "fileName": "components-wizard-repository-location--community-plan-locked-destinations--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-repository-location--community-plan-locked-destinations.png"
     },
     {
       "fileName": "components-wizard-repository-location--direct-borg-2-rclone--mobile.png"
     },
     {
+      "fileName": "components-wizard-repository-location--direct-borg-2-rclone.png"
+    },
+    {
       "fileName": "components-wizard-repository-location--filesystem-destinations--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-repository-location--ssh-destination--mobile.png"
     },
     {
       "fileName": "components-wizard-repository-location--ssh-destination-no-connections--mobile.png"
     },
     {
       "fileName": "components-wizard-repository-location--ssh-destination-no-connections.png"
+    },
+    {
+      "fileName": "components-wizard-repository-location--ssh-destination.png"
     },
     {
       "fileName": "components-wizard-repository-review--cloud-mirror--mobile.png"
