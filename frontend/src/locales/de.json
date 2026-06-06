@@ -178,7 +178,7 @@
       "activeTarget": "Aktives Ziel",
       "local": "Lokal",
       "remoteClient": "Remote-Client",
-      "requiresPlan": "Pro erforderlich"
+      "requiresPlan": "Pro oder Enterprise erforderlich"
     },
     "switcher": {
       "title": "Serverziele",
@@ -192,11 +192,11 @@
       "localCompatibility": "Dieser Browser ist mit diesem Borg-UI-Server verbunden.",
       "remoteHelper": "Remote-Client-Server",
       "remoteUnavailable": "Remote-Client nicht verfügbar",
-      "remotePlanUnavailable": "Remote-Client-Wechsel erfordert Pro.",
+      "remotePlanUnavailable": "Remote-Client-Wechsel erfordert Pro oder Enterprise.",
       "versionMismatch": "Versionskonflikt",
       "versionHelper": "Borg UI {{version}}",
       "manage": "Remote-Clients verwalten",
-      "manageRequiresPlan": "Remote-Clients erfordern Pro"
+      "manageRequiresPlan": "Remote-Clients erfordern Pro oder Enterprise"
     },
     "localBackend": {
       "title": "Dieser Server",

@@ -178,7 +178,7 @@
       "activeTarget": "Destino activo",
       "local": "Local",
       "remoteClient": "Cliente remoto",
-      "requiresPlan": "Requiere Pro"
+      "requiresPlan": "Requiere Pro o Enterprise"
     },
     "switcher": {
       "title": "Destinos de servidor",
@@ -192,11 +192,11 @@
       "localCompatibility": "Este navegador está conectado a este servidor Borg UI.",
       "remoteHelper": "Servidor del cliente remoto",
       "remoteUnavailable": "Cliente remoto no disponible",
-      "remotePlanUnavailable": "El cambio a clientes remotos requiere Pro.",
+      "remotePlanUnavailable": "El cambio a clientes remotos requiere Pro o Enterprise.",
       "versionMismatch": "Conflicto de versión",
       "versionHelper": "Borg UI {{version}}",
       "manage": "Gestionar clientes remotos",
-      "manageRequiresPlan": "Los clientes remotos requieren Pro"
+      "manageRequiresPlan": "Los clientes remotos requieren Pro o Enterprise"
     },
     "localBackend": {
       "title": "Este servidor",

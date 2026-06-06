@@ -87,6 +87,7 @@ vi.mock('../../hooks/usePlan', () => ({
     features: {},
     entitlement: undefined,
     isLoading: false,
+    can: () => true,
   }),
 }))
 
