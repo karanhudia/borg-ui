@@ -1,17 +1,17 @@
 {
-  "generatedAt": "2026-06-06T11:29:49.849Z",
+  "generatedAt": "2026-06-06T14:01:05.635Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #636 visual report",
-    "commitSha": "654a109bb4a5",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/27060979847"
+    "commitSha": "ebbe223902da",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/27064190426"
   },
   "totals": {
     "baseline": 368,
-    "actual": 374,
+    "actual": 380,
     "compared": 368,
     "changed": 2,
-    "added": 6,
+    "added": 12,
     "removed": 0,
     "unchanged": 366
   },
@@ -55,6 +55,22 @@
   ],
   "added": [
     {
+      "fileName": "components-appsidebar--with-remote-clients--mobile.png",
+      "actualPath": "images/actual/components-appsidebar--with-remote-clients--mobile.png"
+    },
+    {
+      "fileName": "components-appsidebar--with-remote-clients.png",
+      "actualPath": "images/actual/components-appsidebar--with-remote-clients.png"
+    },
+    {
+      "fileName": "components-appsidebar--without-remote-clients--mobile.png",
+      "actualPath": "images/actual/components-appsidebar--without-remote-clients--mobile.png"
+    },
+    {
+      "fileName": "components-appsidebar--without-remote-clients.png",
+      "actualPath": "images/actual/components-appsidebar--without-remote-clients.png"
+    },
+    {
       "fileName": "components-backendtargetselect--locked-community--mobile.png",
       "actualPath": "images/actual/components-backendtargetselect--locked-community--mobile.png"
     },
@@ -69,6 +85,14 @@
     {
       "fileName": "components-backendtargetswitcher--locked-community.png",
       "actualPath": "images/actual/components-backendtargetswitcher--locked-community.png"
+    },
+    {
+      "fileName": "components-plangate--with-message--mobile.png",
+      "actualPath": "images/actual/components-plangate--with-message--mobile.png"
+    },
+    {
+      "fileName": "components-plangate--with-message.png",
+      "actualPath": "images/actual/components-plangate--with-message.png"
     },
     {
       "fileName": "pages-remoteclients--locked-community--mobile.png",
