@@ -64,6 +64,7 @@ vi.mock('../../hooks/useAuth', () => ({
       deployment_type: 'individual',
     },
     logout: logoutMock,
+    hasGlobalPermission: () => true,
   }),
 }))
 

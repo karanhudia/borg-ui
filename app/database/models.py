@@ -492,6 +492,25 @@ class RcloneOAuthProviderCredential(Base):
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
 
 
+class RemoteBackendClient(Base):
+    __tablename__ = "remote_backend_clients"
+
+    id = Column(String, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    api_base_url = Column(String, nullable=False)
+    web_base_url = Column(String, nullable=False)
+    health_status = Column(String, default="unknown", nullable=False)
+    health_checked_at = Column(DateTime, nullable=True)
+    app_version = Column(String, nullable=True)
+    borg_version = Column(String, nullable=True)
+    borg2_version = Column(String, nullable=True)
+    health_error = Column(Text, nullable=True)
+    compatibility = Column(String, default="unknown", nullable=False)
+    compatibility_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+
 class RepositoryStorage(Base):
     __tablename__ = "repository_storage"
 

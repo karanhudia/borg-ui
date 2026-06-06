@@ -6,6 +6,7 @@ type Translate = (key: string, options?: Record<string, unknown>) => string
 
 interface BackendTargetPresentationOptions {
   remoteClientsAvailable?: boolean
+  remoteClientsUnavailableReason?: 'permission' | 'plan'
 }
 
 export function buildBackendTargets(clients: RemoteBackendClient[], t: Translate): BackendTarget[] {
@@ -44,6 +45,7 @@ export function getBackendTargetStatus(
   options: BackendTargetPresentationOptions = {}
 ) {
   const remoteClientsAvailable = options.remoteClientsAvailable ?? true
+  const unavailableReason = options.remoteClientsUnavailableReason ?? 'plan'
   if (target.kind === 'local') {
     return {
       label: t('remoteClients.labels.local'),
@@ -54,6 +56,15 @@ export function getBackendTargetStatus(
   }
 
   if (!remoteClientsAvailable) {
+    if (unavailableReason === 'permission') {
+      return {
+        label: t('remoteClients.labels.requiresAdmin'),
+        color: 'warning' as const,
+        icon: <Lock size={14} />,
+        helper: t('remoteClients.switcher.remoteAdminUnavailable'),
+      }
+    }
+
     return {
       label: t('remoteClients.labels.requiresPlan'),
       color: 'warning' as const,

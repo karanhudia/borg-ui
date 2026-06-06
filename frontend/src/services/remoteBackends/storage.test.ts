@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clearBackendAccessToken,
+  clearLegacyRemoteBackendClients,
   createRemoteBackendClient,
   deleteRemoteBackendClient,
   getActiveBackendTarget,
@@ -8,6 +9,8 @@ import {
   listRemoteBackendClients,
   LOCAL_BACKEND_ID,
   readRemoteBackendState,
+  readLegacyRemoteBackendClients,
+  replaceRemoteBackendClients,
   resetRemoteBackendStateForTests,
   setActiveBackendTarget,
   setBackendAccessToken,
@@ -66,6 +69,76 @@ describe('remote client storage', () => {
 
     expect(listRemoteBackendClients()).toEqual([])
     expect(getActiveBackendTarget().id).toBe(LOCAL_BACKEND_ID)
+    expect(localStorage.getItem('borg_ui_remote_backends')).toBeNull()
+  })
+
+  it('keeps the remote client cache out of localStorage', () => {
+    createRemoteBackendClient({
+      name: 'Studio NAS',
+      backendUrl: 'nas.local:9000',
+    })
+
+    expect(listRemoteBackendClients()).toHaveLength(1)
+    expect(localStorage.getItem('borg_ui_remote_backends')).toBeNull()
+
+    replaceRemoteBackendClients([])
+
+    expect(listRemoteBackendClients()).toEqual([])
+    expect(localStorage.getItem('borg_ui_remote_backends')).toBeNull()
+  })
+
+  it('returns defensive copies of cached remote clients', () => {
+    const created = createRemoteBackendClient({
+      name: 'Studio NAS',
+      backendUrl: 'nas.local:9000',
+    })
+
+    const listed = listRemoteBackendClients()
+    listed[0].name = 'Mutated NAS'
+    listed[0].health.status = 'offline'
+
+    expect(listRemoteBackendClients()[0]).toMatchObject({
+      id: created.id,
+      name: 'Studio NAS',
+      health: {
+        status: 'unknown',
+      },
+    })
+
+    const state = readRemoteBackendState()
+    state.clients[0].name = 'Mutated again'
+
+    expect(readRemoteBackendState().clients[0].name).toBe('Studio NAS')
+  })
+
+  it('reads and clears legacy localStorage clients for admin migration', () => {
+    const legacyClient = {
+      id: 'legacy-client-1',
+      kind: 'remote',
+      name: 'Legacy NAS',
+      apiBaseUrl: 'https://legacy.example.com/api',
+      webBaseUrl: 'https://legacy.example.com',
+      createdAt: '2026-06-05T00:00:00.000Z',
+      updatedAt: '2026-06-05T00:00:00.000Z',
+      health: {
+        status: 'unknown',
+        checkedAt: null,
+        appVersion: null,
+        borgVersion: null,
+        borg2Version: null,
+        error: null,
+        compatibility: 'unknown',
+        compatibilityMessage: null,
+      },
+    }
+    localStorage.setItem('borg_ui_remote_backends', JSON.stringify([legacyClient]))
+
+    expect(readLegacyRemoteBackendClients()).toEqual([legacyClient])
+
+    clearLegacyRemoteBackendClients()
+
+    expect(readLegacyRemoteBackendClients()).toEqual([])
+    expect(localStorage.getItem('borg_ui_remote_backends')).toBeNull()
   })
 
   it('persists and switches the active remote target', () => {
@@ -134,11 +207,12 @@ describe('remote client storage', () => {
 
     createRemoteBackendClient({ name: 'Lab', backendUrl: 'lab.example.com' })
     setBackendAccessToken('token')
+    replaceRemoteBackendClients([])
 
-    expect(listener).toHaveBeenCalledTimes(2)
+    expect(listener).toHaveBeenCalledTimes(3)
 
     unsubscribe()
     createRemoteBackendClient({ name: 'Office', backendUrl: 'office.example.com' })
-    expect(listener).toHaveBeenCalledTimes(2)
+    expect(listener).toHaveBeenCalledTimes(3)
   })
 })

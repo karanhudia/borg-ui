@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders, screen, userEvent, waitFor } from '../../test/test-utils'
 import { AuthProvider, useAuth } from '../useAuth'
-import { RemoteBackendProvider, useRemoteBackends } from '../../services/remoteBackends/context'
+import { RemoteBackendProvider } from '../../services/remoteBackends/context'
 import {
+  createRemoteBackendClient,
   resetRemoteBackendStateForTests,
+  setActiveBackendTarget,
   setBackendAccessToken,
 } from '../../services/remoteBackends/storage'
 
@@ -95,17 +97,15 @@ function AuthProbe() {
 }
 
 function RemoteSwitchProbe() {
-  const { createClient, switchTarget } = useRemoteBackends()
-
   return (
     <button
       onClick={() => {
-        const remote = createClient({
+        const remote = createRemoteBackendClient({
           name: 'Remote API',
           backendUrl: 'remote.example.com',
         })
         setBackendAccessToken('remote-token', remote.id)
-        switchTarget(remote.id)
+        setActiveBackendTarget(remote.id)
       }}
     >
       Switch backend
