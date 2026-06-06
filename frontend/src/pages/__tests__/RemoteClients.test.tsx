@@ -67,6 +67,16 @@ describe('RemoteClients', () => {
     expect(screen.getByText('Unknown')).toBeInTheDocument()
   })
 
+  it('vertically centers the local server status and use action', () => {
+    renderPage()
+
+    const useLocalButton = screen.getByRole('button', { name: /use this server/i })
+    const actionGroup = useLocalButton.parentElement
+
+    expect(actionGroup).not.toBeNull()
+    expect(getComputedStyle(actionGroup!).alignItems).toBe('center')
+  })
+
   it('checks health and switches to an online compatible remote client', async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const url = String(input)

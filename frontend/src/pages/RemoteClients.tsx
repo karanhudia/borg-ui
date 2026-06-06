@@ -239,7 +239,12 @@ export function RemoteClientsContent() {
               </Typography>
             </Box>
           </Stack>
-          <Stack direction="row" spacing={1} justifyContent={{ xs: 'flex-start', sm: 'flex-end' }}>
+          <Stack
+            direction="row"
+            spacing={1}
+            alignItems="center"
+            justifyContent={{ xs: 'flex-start', sm: 'flex-end' }}
+          >
             <Chip
               label={
                 activeTarget.kind === 'local'
