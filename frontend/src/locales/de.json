@@ -4415,6 +4415,14 @@
     "systemInformation": "Systeminformationen",
     "logoAlt": "Borg UI Logo"
   },
+  "sidebar": {
+    "update": {
+      "title": "Aktualisierung verfügbar",
+      "dismiss": "Schließen",
+      "releaseNotes": "Was ist neu",
+      "ariaLabel": "Software-Aktualisierung verfügbar"
+    }
+  },
   "logViewer": {
     "title": "{{label}} Protokolle - Aufgabe #{{jobId}}",
     "typeBackup": "Sicherung",

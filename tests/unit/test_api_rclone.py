@@ -2346,6 +2346,52 @@ def test_repository_rclone_status_endpoint(
 
 
 @pytest.mark.unit
+def test_repository_rclone_status_applies_log_save_policy_to_latest_sync_job(
+    test_client: TestClient, admin_headers, test_db
+):
+    settings = test_db.query(SystemSettings).first()
+    if settings is None:
+        settings = SystemSettings()
+        test_db.add(settings)
+    settings.log_save_policy = "failed_only"
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    repository = Repository(
+        name="App",
+        path="/cache/repositories/1",
+        encryption="none",
+        repository_type="rclone",
+    )
+    test_db.add_all([remote, repository])
+    test_db.flush()
+    storage = RepositoryStorage(
+        repository_id=repository.id,
+        backend="rclone",
+        rclone_remote_id=remote.id,
+        rclone_remote_path="borg-ui/repositories/app",
+        cache_path="/cache/repositories/1",
+        sync_policy="after_success",
+        sync_status="synced",
+    )
+    sync_job = RcloneSyncJob(
+        repository_id=repository.id,
+        direction="primary_to_remote",
+        operation="sync",
+        status="completed",
+        triggered_by="manual",
+        log_text="successful sync output",
+    )
+    test_db.add_all([storage, sync_job])
+    test_db.commit()
+
+    response = test_client.get(
+        f"/api/repositories/{repository.id}/rclone/status", headers=admin_headers
+    )
+
+    assert response.status_code == 200
+    assert response.json()["latest_sync_job"]["has_log"] is False
+
+
+@pytest.mark.unit
 def test_create_rclone_repository_rejects_client_cache_path(
     test_client: TestClient, admin_headers, test_db
 ):

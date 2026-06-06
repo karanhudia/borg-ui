@@ -33,6 +33,17 @@ def _enable_borg_v2(test_db) -> None:
     test_db.commit()
 
 
+def _set_log_save_policy(test_db, policy: str) -> None:
+    from app.database.models import SystemSettings
+
+    settings = test_db.query(SystemSettings).first()
+    if settings is None:
+        settings = SystemSettings()
+        test_db.add(settings)
+    settings.log_save_policy = policy
+    test_db.commit()
+
+
 def _create_borg2_repo_with_archives(test_db, tmp_path):
     from app.database.models import Repository
     from tests.utils.borg import (
@@ -826,10 +837,12 @@ class TestRestoreLogsIntegration:
         self,
         test_client: TestClient,
         admin_headers,
+        test_db,
         db_borg_repo_with_archives,
         tmp_path,
     ):
         """Test that restore logs are accessible via /api/restore/jobs"""
+        _set_log_save_policy(test_db, "all_jobs")
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
         latest_archive = archive_names[-1]
         restore_dest = tmp_path / "restore_api_logs_test"
@@ -866,10 +879,12 @@ class TestRestoreLogsIntegration:
         self,
         test_client: TestClient,
         admin_headers,
+        test_db,
         db_borg_repo_with_archives,
         tmp_path,
     ):
         """Test that restore logs are accessible via /api/restore/status/{id}"""
+        _set_log_save_policy(test_db, "all_jobs")
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
         latest_archive = archive_names[-1]
         restore_dest = tmp_path / "restore_status_logs_test"

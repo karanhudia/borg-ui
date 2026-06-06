@@ -4415,6 +4415,14 @@
     "systemInformation": "Información del sistema",
     "logoAlt": "Logo de Borg UI"
   },
+  "sidebar": {
+    "update": {
+      "title": "Actualización disponible",
+      "dismiss": "Descartar",
+      "releaseNotes": "Ver novedades",
+      "ariaLabel": "Actualización de software disponible"
+    }
+  },
   "logViewer": {
     "title": "Registros de {{label}} - Trabajo #{{jobId}}",
     "typeBackup": "Copia de seguridad",

@@ -11,7 +11,13 @@ from app.core.agent_constants import (
 )
 from app.core.agent_auth import AGENT_AUTH_HEADER
 from app.core.security import get_password_hash
-from app.database.models import AgentJob, AgentJobLog, AgentMachine, LicensingState
+from app.database.models import (
+    AgentJob,
+    AgentJobLog,
+    AgentMachine,
+    LicensingState,
+    SystemSettings,
+)
 from app.services.agent_connection_manager import (
     AgentCommandTimeout,
     AgentConnectionUnavailable,
@@ -27,6 +33,15 @@ def _set_plan(test_db, plan: str) -> None:
     state.plan = plan
     state.status = "active"
     test_db.commit()
+
+
+def _set_log_save_policy(test_db, policy: str) -> None:
+    settings = test_db.query(SystemSettings).first()
+    if settings is None:
+        settings = SystemSettings()
+        test_db.add(settings)
+    settings.log_save_policy = policy
+    test_db.flush()
 
 
 @pytest.fixture(autouse=True)
@@ -692,6 +707,7 @@ def test_delete_agent_hides_it_from_list_and_keeps_job_logs(
 ):
     agent = _agent(test_db)
     job = _agent_job(test_db, agent)
+    job.status = "failed"
     now = datetime.now(timezone.utc)
     test_db.add(
         AgentJobLog(
@@ -725,3 +741,61 @@ def test_delete_agent_hides_it_from_list_and_keeps_job_logs(
     )
     assert logs.status_code == 200
     assert logs.json()[0]["message"] == "still readable"
+
+
+def test_agent_job_logs_apply_log_save_policy(
+    test_client: TestClient, admin_headers, test_db
+):
+    _set_log_save_policy(test_db, "failed_only")
+    agent = _agent(test_db)
+    job = _agent_job(test_db, agent)
+    job.status = "completed"
+    now = datetime.now(timezone.utc)
+    test_db.add(
+        AgentJobLog(
+            agent_job_id=job.id,
+            sequence=1,
+            stream="stdout",
+            message="successful agent log",
+            created_at=now,
+            received_at=now,
+        )
+    )
+    test_db.commit()
+
+    response = test_client.get(
+        f"/api/managed-machines/agent-jobs/{job.id}/logs",
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_agent_job_logs_keep_running_logs_visible(
+    test_client: TestClient, admin_headers, test_db
+):
+    _set_log_save_policy(test_db, "failed_only")
+    agent = _agent(test_db)
+    job = _agent_job(test_db, agent)
+    job.status = "running"
+    now = datetime.now(timezone.utc)
+    test_db.add(
+        AgentJobLog(
+            agent_job_id=job.id,
+            sequence=1,
+            stream="stdout",
+            message="live agent log",
+            created_at=now,
+            received_at=now,
+        )
+    )
+    test_db.commit()
+
+    response = test_client.get(
+        f"/api/managed-machines/agent-jobs/{job.id}/logs",
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()[0]["message"] == "live agent log"
