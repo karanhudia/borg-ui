@@ -27,6 +27,12 @@ class TestPlanIncludes:
     def test_plan_includes(self, current, required, expected):
         assert plan_includes(current, required) is expected
 
+    def test_remote_clients_are_a_pro_feature(self):
+        assert FEATURES["remote_clients"] == Plan.PRO
+        assert plan_includes(Plan.PRO, FEATURES["remote_clients"]) is True
+        assert plan_includes(Plan.ENTERPRISE, FEATURES["remote_clients"]) is True
+        assert plan_includes(Plan.COMMUNITY, FEATURES["remote_clients"]) is False
+
 
 @pytest.mark.unit
 class TestCurrentPlan:

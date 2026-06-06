@@ -7,13 +7,24 @@ import {
   resetRemoteBackendStateForTests,
 } from '../../services/remoteBackends/storage'
 
-const { mockHasGlobalPermission } = vi.hoisted(() => ({
+const { mockHasGlobalPermission, mockPlanCan } = vi.hoisted(() => ({
   mockHasGlobalPermission: vi.fn(() => true),
+  mockPlanCan: vi.fn((_feature: string) => true),
 }))
 
 vi.mock('../../hooks/useAuth', () => ({
   useAuth: () => ({
     hasGlobalPermission: mockHasGlobalPermission,
+  }),
+}))
+
+vi.mock('../../hooks/usePlan', () => ({
+  usePlan: () => ({
+    plan: 'community',
+    features: {},
+    entitlement: undefined,
+    isLoading: false,
+    can: mockPlanCan,
   }),
 }))
 
@@ -33,6 +44,7 @@ describe('RemoteClients', () => {
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
     mockHasGlobalPermission.mockReturnValue(true)
+    mockPlanCan.mockReturnValue(true)
   })
 
   it('redirects when the user lacks SSH management permission', async () => {
@@ -65,6 +77,18 @@ describe('RemoteClients', () => {
     expect(screen.getByText('Studio NAS')).toBeInTheDocument()
     expect(screen.getByText('http://nas.local:9000/api')).toBeInTheDocument()
     expect(screen.getByText('Unknown')).toBeInTheDocument()
+  })
+
+  it('shows the plan gate instead of management controls when remote clients are unavailable', async () => {
+    mockPlanCan.mockImplementation((feature) => feature !== 'remote_clients')
+
+    renderPage()
+
+    expect(
+      await screen.findByText(/remote client switching is available on pro and enterprise plans/i)
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /add remote client/i })).not.toBeInTheDocument()
+    expect(screen.queryByText('No remote clients yet')).not.toBeInTheDocument()
   })
 
   it('vertically centers the local server status and use action', () => {

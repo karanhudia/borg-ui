@@ -10,11 +10,24 @@ import {
 } from '../../services/remoteBackends/storage'
 
 const navigateMock = vi.fn()
+const { mockPlanCan } = vi.hoisted(() => ({
+  mockPlanCan: vi.fn((_feature: string) => true),
+}))
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
   return { ...actual, useNavigate: () => navigateMock }
 })
+
+vi.mock('../../hooks/usePlan', () => ({
+  usePlan: () => ({
+    plan: 'community',
+    features: {},
+    entitlement: undefined,
+    isLoading: false,
+    can: mockPlanCan,
+  }),
+}))
 
 function renderSwitcher() {
   return renderWithProviders(
@@ -29,6 +42,7 @@ describe('BackendTargetSwitcher', () => {
     vi.clearAllMocks()
     localStorage.clear()
     resetRemoteBackendStateForTests()
+    mockPlanCan.mockReturnValue(true)
   })
 
   it('shows this server as the default target', () => {
@@ -61,6 +75,37 @@ describe('BackendTargetSwitcher', () => {
       expect(screen.getByRole('button', { name: /server target studio nas/i })).toBeInTheDocument()
       expect(screen.getByText('Remote client')).toBeInTheDocument()
     })
+  })
+
+  it('keeps the local server available but blocks remote switching when the plan lacks access', async () => {
+    mockPlanCan.mockImplementation((feature) => feature !== 'remote_clients')
+    const remote = createRemoteBackendClient({
+      name: 'Studio NAS',
+      backendUrl: 'nas.local:9000',
+    })
+    updateRemoteBackendHealth(remote.id, {
+      status: 'online',
+      checkedAt: '2026-06-05T00:00:00.000Z',
+      appVersion: '2.2.1',
+      compatibility: 'compatible',
+      compatibilityMessage: 'Compatible',
+    })
+    const user = userEvent.setup()
+    renderSwitcher()
+
+    await user.click(screen.getByRole('button', { name: /server target this server/i }))
+    const menu = await screen.findByRole('menu', { name: /server targets/i })
+
+    expect(within(menu).getByRole('menuitem', { name: /this server/i })).not.toHaveAttribute(
+      'aria-disabled',
+      'true'
+    )
+    expect(within(menu).getByRole('menuitem', { name: /studio nas/i })).toHaveAttribute(
+      'aria-disabled',
+      'true'
+    )
+
+    expect(navigateMock).not.toHaveBeenCalled()
   })
 
   it('disables incompatible remote targets', async () => {
@@ -100,5 +145,20 @@ describe('BackendTargetSwitcher', () => {
     await user.click(await screen.findByRole('menuitem', { name: /manage remote clients/i }))
 
     expect(navigateMock).toHaveBeenCalledWith('/remote-clients')
+  })
+
+  it('does not navigate to remote client management when the plan lacks access', async () => {
+    mockPlanCan.mockImplementation((feature) => feature !== 'remote_clients')
+    const user = userEvent.setup()
+    renderSwitcher()
+
+    await user.click(screen.getByRole('button', { name: /server target this server/i }))
+    const menu = await screen.findByRole('menu', { name: /server targets/i })
+    const upgradeItem = within(menu).getByRole('menuitem', {
+      name: /remote clients require pro/i,
+    })
+
+    expect(upgradeItem).toHaveAttribute('aria-disabled', 'true')
+    expect(navigateMock).not.toHaveBeenCalled()
   })
 })

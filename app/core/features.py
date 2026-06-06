@@ -23,6 +23,7 @@ FEATURES: dict[str, Plan] = {
     "backup_plan_mixed_sources": Plan.PRO,
     "rclone": Plan.PRO,
     "managed_agents": Plan.PRO,
+    "remote_clients": Plan.PRO,
     "multi_user": Plan.COMMUNITY,  # up to 5 users
     "extra_users": Plan.PRO,  # >5 users (up to 10 on Pro)
     "rbac": Plan.ENTERPRISE,  # role-based access control
