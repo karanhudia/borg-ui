@@ -1,13 +1,14 @@
 import axios from 'axios'
 import { toast } from 'react-hot-toast'
 import { BASE_PATH } from '@/utils/basePath'
+import { API_BASE_URL, buildApiUrl, buildDownloadUrl } from './remoteBackends/gateway'
+import { getActiveBackendTarget } from './remoteBackends/storage'
 import {
-  API_BASE_URL,
-  buildApiUrl,
-  buildDownloadUrl,
-  getApiBaseUrl,
-} from './remoteBackends/gateway'
-import { attachAccessTokenHeader, clearAccessToken } from './authHeaders'
+  attachAccessTokenHeader,
+  BACKEND_TARGET_ID_CONFIG_KEY,
+  clearAccessToken,
+  type BackendTargetRequestConfig,
+} from './authHeaders'
 import type { InternalAxiosRequestConfig } from 'axios'
 import type { RestoreLayout, RestorePathMetadata } from '@/utils/restorePaths'
 import type {
@@ -37,8 +38,11 @@ const api = axios.create({
 
 // Request interceptor to add auth token
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  config.baseURL = getApiBaseUrl()
-  return attachAccessTokenHeader(config)
+  const target = getActiveBackendTarget()
+  const targetConfig = config as BackendTargetRequestConfig
+  targetConfig.baseURL = target.apiBaseUrl
+  targetConfig[BACKEND_TARGET_ID_CONFIG_KEY] = target.id
+  return attachAccessTokenHeader(targetConfig, target.id)
 })
 
 // Response interceptor to handle auth errors
@@ -61,7 +65,10 @@ api.interceptors.response.use(
       error.config?.url !== '/auth/config' &&
       authTransportMode === 'jwt'
     ) {
-      clearAccessToken()
+      const requestTargetId = (error.config as BackendTargetRequestConfig | undefined)?.[
+        BACKEND_TARGET_ID_CONFIG_KEY
+      ]
+      clearAccessToken(requestTargetId)
       window.location.href = `${BASE_PATH}/login`
     }
     return Promise.reject(error)

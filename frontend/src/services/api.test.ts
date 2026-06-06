@@ -7,6 +7,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import MockAdapter from 'axios-mock-adapter'
 import api, { authAPI, backupAPI, backupPlansAPI, repositoriesAPI } from './api'
+import { httpClient } from './borgApi/client'
 
 describe('API Request Interceptor', () => {
   let localStorageMock: { [key: string]: string }
@@ -243,6 +244,76 @@ describe('API Response Interceptor - 401 Handling', () => {
     }
 
     expect(localStorageMock['access_token']).toBeUndefined()
+    expect(windowLocationHref).toBe('/login')
+
+    mock.restore()
+  })
+
+  it('clears the token for the request target when the active backend changes before 401 handling', async () => {
+    const {
+      createRemoteBackendClient,
+      getAccessTokenKey,
+      LOCAL_BACKEND_ID,
+      setActiveBackendTarget,
+    } = await import('./remoteBackends/storage')
+    const remote = createRemoteBackendClient({
+      name: 'Remote',
+      backendUrl: 'https://remote.example.com',
+    })
+    setActiveBackendTarget(remote.id)
+
+    localStorageMock[getAccessTokenKey(remote.id)] = 'remote-token'
+    localStorageMock[getAccessTokenKey(LOCAL_BACKEND_ID)] = 'local-token'
+
+    const mock = new MockAdapter(api)
+    mock.onGet('/repositories/').reply(() => {
+      setActiveBackendTarget(LOCAL_BACKEND_ID)
+      return [401]
+    })
+
+    try {
+      await api.get('/repositories/')
+    } catch {
+      // Expected
+    }
+
+    expect(localStorageMock[getAccessTokenKey(remote.id)]).toBeUndefined()
+    expect(localStorageMock[getAccessTokenKey(LOCAL_BACKEND_ID)]).toBe('local-token')
+    expect(windowLocationHref).toBe('/login')
+
+    mock.restore()
+  })
+
+  it('clears the Borg API token for the request target when the active backend changes before 401 handling', async () => {
+    const {
+      createRemoteBackendClient,
+      getAccessTokenKey,
+      LOCAL_BACKEND_ID,
+      setActiveBackendTarget,
+    } = await import('./remoteBackends/storage')
+    const remote = createRemoteBackendClient({
+      name: 'Remote',
+      backendUrl: 'https://remote.example.com',
+    })
+    setActiveBackendTarget(remote.id)
+
+    localStorageMock[getAccessTokenKey(remote.id)] = 'remote-token'
+    localStorageMock[getAccessTokenKey(LOCAL_BACKEND_ID)] = 'local-token'
+
+    const mock = new MockAdapter(httpClient)
+    mock.onGet('/repositories/').reply(() => {
+      setActiveBackendTarget(LOCAL_BACKEND_ID)
+      return [401]
+    })
+
+    try {
+      await httpClient.get('/repositories/')
+    } catch {
+      // Expected
+    }
+
+    expect(localStorageMock[getAccessTokenKey(remote.id)]).toBeUndefined()
+    expect(localStorageMock[getAccessTokenKey(LOCAL_BACKEND_ID)]).toBe('local-token')
     expect(windowLocationHref).toBe('/login')
 
     mock.restore()

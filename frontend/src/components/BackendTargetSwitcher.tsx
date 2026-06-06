@@ -24,7 +24,7 @@ export default function BackendTargetSwitcher({ compact = false }: BackendTarget
   const { activeTarget, clients, switchTarget } = useRemoteBackends()
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
   const open = Boolean(anchorEl)
-  const targets = buildBackendTargets(activeTarget, clients, t)
+  const targets = buildBackendTargets(clients, t)
   const activeStatus = getBackendTargetStatus(activeTarget, t)
   const activeName = getBackendTargetName(activeTarget, t)
 

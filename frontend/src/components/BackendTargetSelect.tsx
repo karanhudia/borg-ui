@@ -25,10 +25,7 @@ export default function BackendTargetSelect({
 }: BackendTargetSelectProps) {
   const { t } = useTranslation()
   const { activeTarget, clients, switchTarget } = useRemoteBackends()
-  const targets = useMemo(
-    () => buildBackendTargets(activeTarget, clients, t),
-    [activeTarget, clients, t]
-  )
+  const targets = useMemo(() => buildBackendTargets(clients, t), [clients, t])
   const options = useMemo<RichSelectOption[]>(
     () =>
       targets.map((target) => {

@@ -4,17 +4,12 @@ import type { BackendTarget, RemoteBackendClient } from '@/services/remoteBacken
 
 type Translate = (key: string, options?: Record<string, unknown>) => string
 
-export function buildBackendTargets(
-  activeTarget: BackendTarget,
-  clients: RemoteBackendClient[],
-  t: Translate
-): BackendTarget[] {
+export function buildBackendTargets(clients: RemoteBackendClient[], t: Translate): BackendTarget[] {
   const localTarget = getLocalBackendTarget()
   return [
     {
       ...localTarget,
       name: t('remoteClients.switcher.localName'),
-      apiBaseUrl: activeTarget.kind === 'local' ? activeTarget.apiBaseUrl : localTarget.apiBaseUrl,
       health: {
         ...localTarget.health,
         compatibilityMessage: t('remoteClients.switcher.localCompatibility'),
