@@ -27,7 +27,7 @@ def upgrade(db):
                 text(
                     f"""
                     ALTER TABLE rclone_remotes
-                    ADD COLUMN {column_name} {column_type}
+                    ADD COLUMN {column_name} {column_type} NULL
                     """
                 )
             )

@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Backend Storage Contract
+## Task 1: Backend Storage Contract
 
 **Files:**
 - Modify: `tests/unit/test_api_rclone.py`
@@ -25,7 +25,7 @@
 - [ ] Add rclone-about parsing and shared storage serialization helpers in `app/api/rclone.py`.
 - [ ] Run the targeted backend tests and confirm they pass.
 
-### Task 2: Frontend Rendering
+## Task 2: Frontend Rendering
 
 **Files:**
 - Modify: `frontend/src/services/api.ts`
@@ -45,7 +45,7 @@
 - [ ] Update Storybook fixtures so at least one remote has storage and one has no storage.
 - [ ] Run the targeted frontend test and confirm it passes.
 
-### Task 3: Validation And Handoff
+## Task 3: Validation And Handoff
 
 **Files:**
 - Modify: Linear workpad only for evidence.
