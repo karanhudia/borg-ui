@@ -45,7 +45,7 @@ from app.services.backup_progress_contract import serialize_backup_progress_deta
 from app.services.log_policy import (
     DEFAULT_LOG_SAVE_POLICY,
     get_log_save_policy,
-    script_execution_has_logs,
+    job_has_logs_by_policy,
 )
 from app.services.repository_executor import repository_executor_type
 from app.utils.datetime_utils import serialize_datetime
@@ -544,7 +544,10 @@ def _serialize_plan(plan: BackupPlan, *, detail: bool = False) -> dict[str, Any]
 
 
 def _serialize_backup_job(
-    job: Optional[BackupJob], repo: Optional[Repository]
+    job: Optional[BackupJob],
+    repo: Optional[Repository],
+    *,
+    log_save_policy: str = DEFAULT_LOG_SAVE_POLICY,
 ) -> Optional[dict[str, Any]]:
     if not job:
         return None
@@ -557,7 +560,12 @@ def _serialize_backup_job(
         "completed_at": serialize_datetime(job.completed_at),
         "progress": job.progress,
         "error_message": job.error_message,
-        "has_logs": bool(job.log_file_path or job.logs),
+        "has_logs": job_has_logs_by_policy(
+            job,
+            log_save_policy,
+            output_text=[job.logs, job.error_message],
+            file_path=job.log_file_path,
+        ),
         "maintenance_status": job.maintenance_status,
         "archive_name": job.archive_name,
         "execution_mode": job.execution_mode or "local",
@@ -571,7 +579,9 @@ def _serialize_backup_job(
     }
 
 
-def _serialize_plan_run_repository(link: BackupPlanRunRepository) -> dict[str, Any]:
+def _serialize_plan_run_repository(
+    link: BackupPlanRunRepository, *, log_save_policy: str = DEFAULT_LOG_SAVE_POLICY
+) -> dict[str, Any]:
     repo = link.repository
     return {
         "id": link.id,
@@ -594,7 +604,11 @@ def _serialize_plan_run_repository(link: BackupPlanRunRepository) -> dict[str, A
         }
         if repo
         else None,
-        "backup_job": _serialize_backup_job(link.backup_job, repo),
+        "backup_job": _serialize_backup_job(
+            link.backup_job,
+            repo,
+            log_save_policy=log_save_policy,
+        ),
     }
 
 
@@ -614,8 +628,15 @@ def _serialize_script_execution(
         "execution_time": execution.execution_time,
         "exit_code": execution.exit_code,
         "error_message": execution.error_message,
-        "has_logs": script_execution_has_logs(
-            execution, log_save_policy=log_save_policy
+        "has_logs": job_has_logs_by_policy(
+            execution,
+            log_save_policy,
+            output_text=[
+                execution.stdout,
+                execution.stderr,
+                execution.error_message,
+            ],
+            exit_code=execution.exit_code,
         ),
     }
 
@@ -643,11 +664,14 @@ def _serialize_plan_run(
     }
     if detail:
         payload["repositories"] = [
-            _serialize_plan_run_repository(link)
+            _serialize_plan_run_repository(link, log_save_policy=log_save_policy)
             for link in sorted(run.repositories, key=lambda item: item.id)
         ]
         payload["script_executions"] = [
-            _serialize_script_execution(execution, log_save_policy=log_save_policy)
+            _serialize_script_execution(
+                execution,
+                log_save_policy=log_save_policy,
+            )
             for execution in sorted(
                 run.script_executions,
                 key=lambda item: (item.started_at or datetime.min, item.id),

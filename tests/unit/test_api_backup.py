@@ -36,6 +36,15 @@ def _close_background_task(coro):
     return None
 
 
+def _set_log_save_policy(test_db, policy: str) -> None:
+    settings = test_db.query(SystemSettings).first()
+    if settings is None:
+        settings = SystemSettings()
+        test_db.add(settings)
+    settings.log_save_policy = policy
+    test_db.flush()
+
+
 @pytest.mark.unit
 class TestBackupStart:
     """Test starting backup operations"""
@@ -572,6 +581,7 @@ class TestBackupStart:
     def test_agent_completion_updates_linked_backup_job(
         self, test_client: TestClient, admin_headers, test_db
     ):
+        _set_log_save_policy(test_db, "all_jobs")
         raw_token = "borgui_agent_secret"
         agent = AgentMachine(
             name="Laptop",
