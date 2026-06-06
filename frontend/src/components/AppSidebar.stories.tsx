@@ -8,10 +8,7 @@ import { AppProvider } from '../context/AppContext'
 import { AuthProvider } from '../hooks/useAuth'
 import api from '../services/api'
 import { RemoteBackendProvider } from '../services/remoteBackends/context'
-import {
-  communitySystemInfo,
-  proSystemInfo,
-} from '../services/remoteBackends/planStoryFixtures'
+import { communitySystemInfo, proSystemInfo } from '../services/remoteBackends/planStoryFixtures'
 import type { SystemInfo } from '../hooks/useSystemInfo'
 
 const adminUser = {
