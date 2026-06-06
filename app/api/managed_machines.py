@@ -32,6 +32,7 @@ from app.services.agent_connection_manager import (
     AgentCommandTimeout,
     AgentConnectionUnavailable,
 )
+from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
@@ -692,12 +693,20 @@ async def list_agent_job_logs(
             detail={"key": "backend.errors.agents.jobNotFound"},
         )
 
-    return (
+    logs = (
         db.query(AgentJobLog)
         .filter(AgentJobLog.agent_job_id == job.id)
         .order_by(AgentJobLog.sequence.asc(), AgentJobLog.id.asc())
         .all()
     )
+    if not job_has_logs_by_policy(
+        job,
+        get_log_save_policy(db),
+        output_text=[*(log.message for log in logs), job.error_message],
+    ):
+        return []
+
+    return logs
 
 
 @router.post(

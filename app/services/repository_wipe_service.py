@@ -23,6 +23,7 @@ from app.database.models import (
     RestoreJob,
     User,
 )
+from app.services.log_policy import DEFAULT_LOG_SAVE_POLICY, job_has_logs_by_policy
 from app.services.repository_command_lock import run_serialized_repository_command
 from app.utils.borg_env import build_repository_borg_env, cleanup_temp_key_file
 from app.utils.datetime_utils import serialize_datetime
@@ -535,7 +536,14 @@ class RepositoryWipeService:
         *,
         include_preview: bool = False,
         include_logs: bool = False,
+        log_save_policy: str = DEFAULT_LOG_SAVE_POLICY,
     ) -> dict[str, Any]:
+        has_logs = job_has_logs_by_policy(
+            job,
+            log_save_policy,
+            output_text=[job.logs, job.error_message],
+            file_path=job.log_file_path,
+        )
         payload = {
             "id": job.id,
             "repository_id": job.repository_id,
@@ -550,7 +558,7 @@ class RepositoryWipeService:
             "archive_count": job.archive_count,
             "archive_fingerprint": job.archive_fingerprint,
             "run_compact": bool(job.run_compact),
-            "has_logs": bool(job.has_logs),
+            "has_logs": has_logs,
         }
         if include_preview:
             manifest = _decode_json_list(job.archive_manifest_json)
@@ -565,7 +573,7 @@ class RepositoryWipeService:
                 }
             )
         if include_logs:
-            payload["logs"] = self._read_logs(job)
+            payload["logs"] = self._read_logs(job) if has_logs else ""
         return payload
 
     def _read_logs(self, job: RepositoryWipeJob) -> str:
@@ -576,7 +584,7 @@ class RepositoryWipeService:
                     return path.read_text()
                 except Exception as exc:
                     return f"Failed to read log file: {exc}"
-        return job.logs or ""
+        return job.logs or job.error_message or ""
 
 
 repository_wipe_service = RepositoryWipeService()
