@@ -416,6 +416,41 @@
     "upcomingBackups": {
       "title": "Copias próximas"
     },
+    "launchpad": {
+      "title": "Panel de operaciones",
+      "openAction": "Abrir {{title}}: {{value}}, {{status}}",
+      "backupPlans": {
+        "title": "Planes de backup",
+        "value_one": "{{count}} plan",
+        "value_other": "{{count}} planes",
+        "active_one": "{{count}} activo",
+        "active_other": "{{count}} activos",
+        "empty": "Crear primero",
+        "action": "Abrir planes"
+      },
+      "cloudStorage": {
+        "title": "Almacenamiento cloud",
+        "value_one": "{{count}} remoto",
+        "value_other": "{{count}} remotos",
+        "active": "Configurado",
+        "empty": "Sin remotos"
+      },
+      "remoteClients": {
+        "title": "Clientes remotos",
+        "value_one": "{{count}} cliente",
+        "value_other": "{{count}} clientes",
+        "active": "Disponible",
+        "empty": "Este servidor"
+      },
+      "restoreVerification": {
+        "title": "Verificación de restauración",
+        "value": "{{configured}}/{{total}} cubiertos",
+        "noRepositories": "Sin repos",
+        "complete": "Cubierto",
+        "partial": "Configurar",
+        "action": "Programar checks"
+      }
+    },
     "scheduleBadge": {
       "noSchedule": "Sin programación automática",
       "manual": "manual",

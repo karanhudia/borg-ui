@@ -416,6 +416,41 @@
     "upcomingBackups": {
       "title": "Backup imminenti"
     },
+    "launchpad": {
+      "title": "Launchpad operativo",
+      "openAction": "Apri {{title}}: {{value}}, {{status}}",
+      "backupPlans": {
+        "title": "Piani di backup",
+        "value_one": "{{count}} piano",
+        "value_other": "{{count}} piani",
+        "active_one": "{{count}} attivo",
+        "active_other": "{{count}} attivi",
+        "empty": "Crea il primo",
+        "action": "Apri piani"
+      },
+      "cloudStorage": {
+        "title": "Storage cloud",
+        "value_one": "{{count}} remoto",
+        "value_other": "{{count}} remoti",
+        "active": "Configurato",
+        "empty": "Nessun remoto"
+      },
+      "remoteClients": {
+        "title": "Client remoti",
+        "value_one": "{{count}} client",
+        "value_other": "{{count}} client",
+        "active": "Disponibile",
+        "empty": "Questo server"
+      },
+      "restoreVerification": {
+        "title": "Verifica ripristino",
+        "value": "{{configured}}/{{total}} coperti",
+        "noRepositories": "Nessun repo",
+        "complete": "Coperto",
+        "partial": "Da configurare",
+        "action": "Pianifica check"
+      }
+    },
     "scheduleBadge": {
       "noSchedule": "Nessuna pianificazione automatica",
       "manual": "manuale",

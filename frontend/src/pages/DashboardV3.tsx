@@ -17,12 +17,14 @@ import { Activity, ArrowRight, Cpu, HardDrive } from 'lucide-react'
 import { differenceInDays, formatDistanceToNow } from 'date-fns'
 import { useTheme } from '../context/ThemeContext'
 import { useAnalytics } from '../hooks/useAnalytics'
-import { dashboardAPI } from '../services/api'
+import { dashboardAPI, rcloneAPI } from '../services/api'
+import { listRemoteBackendClients } from '../services/remoteBackends/storage'
 import { ActivityTimeline } from './dashboard-v3/ActivityTimeline'
 import { ArcGauge, StorageDonut, SuccessDonut } from './dashboard-v3/charts'
 import { DashboardSkeleton } from './dashboard-v3/DashboardSkeleton'
 import { PulseDot } from './dashboard-v3/health'
 import { UpcomingBackupsPanel } from './dashboard-v3/UpcomingBackupsPanel'
+import { CapabilityLaunchpad } from './dashboard-v3/CapabilityLaunchpad'
 import { RepositoryHealthPanel } from './dashboard-v3/RepositoryHealthPanel'
 import { ResourceGaugeGrid } from './dashboard-v3/ResourceGaugeGrid'
 import { makeT, STATUS, TokenContext } from './dashboard-v3/tokens'
@@ -72,6 +74,22 @@ export default function DashboardV3() {
     queryFn: () => dashboardAPI.getOverview().then((response) => response.data),
     refetchInterval: 30_000,
   })
+
+  const { data: cloudRemotes = [] } = useQuery({
+    queryKey: ['dashboard-v3', 'cloud-remotes'],
+    queryFn: () => rcloneAPI.listRemotes().then((response) => response.data.remotes),
+    enabled: !isLoading && !error,
+    retry: false,
+    staleTime: 30_000,
+  })
+
+  const remoteClientCount = React.useMemo(() => {
+    try {
+      return listRemoteBackendClients().length
+    } catch {
+      return 0
+    }
+  }, [])
 
   if (isLoading) return <DashboardSkeleton T={T} />
   if (error || !ov)
@@ -445,6 +463,21 @@ export default function DashboardV3() {
                 />
               </ResourceGaugeGrid>
             </Box>
+
+            <CapabilityLaunchpad
+              summary={summary}
+              repositories={repos}
+              cloudRemoteCount={cloudRemotes.length}
+              remoteClientCount={remoteClientCount}
+              onNavigate={(route, source) => {
+                trackNavigation(EventAction.VIEW, {
+                  section: 'dashboard',
+                  destination: route.substring(1),
+                  source,
+                })
+                navigate(route)
+              }}
+            />
 
             <UpcomingBackupsPanel tasks={ov.upcoming_tasks} />
 
