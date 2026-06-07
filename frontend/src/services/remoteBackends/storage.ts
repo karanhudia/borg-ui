@@ -14,6 +14,9 @@ const REMOTE_BACKENDS_STORAGE_KEY = 'borg_ui_remote_backends'
 const REMOTE_BACKEND_ACTIVE_KEY = 'borg_ui_active_backend_target'
 const REMOTE_TOKEN_PREFIX = 'borg_ui_access_token'
 const LEGACY_LOCAL_TOKEN_KEY = 'access_token'
+const remoteBackendClientsByStorage = new WeakMap<Storage, RemoteBackendClient[]>()
+let fallbackRemoteBackendClients: RemoteBackendClient[] = []
+export type RemoteBackendStorageChangeReason = 'clients' | 'target' | 'token'
 
 const defaultHealth = (): RemoteBackendHealth => ({
   status: 'unknown',
@@ -26,7 +29,7 @@ const defaultHealth = (): RemoteBackendHealth => ({
   compatibilityMessage: null,
 })
 
-const listeners = new Set<() => void>()
+const listeners = new Set<(reason: RemoteBackendStorageChangeReason) => void>()
 
 function nowIso(): string {
   return new Date().toISOString()
@@ -39,14 +42,53 @@ function createId(): string {
   return `remote-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
-function emitChange(): void {
+function emitChange(reason: RemoteBackendStorageChangeReason = 'clients'): void {
   for (const listener of listeners) {
-    listener()
+    listener(reason)
+  }
+}
+
+function getClientStorage(): Storage | null {
+  return typeof localStorage === 'undefined' ? null : localStorage
+}
+
+function cloneRemoteBackendClient(client: RemoteBackendClient): RemoteBackendClient {
+  return {
+    ...client,
+    health: {
+      ...client.health,
+    },
   }
 }
 
 function readClients(): RemoteBackendClient[] {
-  const raw = localStorage.getItem(REMOTE_BACKENDS_STORAGE_KEY)
+  const storage = getClientStorage()
+  const clients = storage
+    ? (remoteBackendClientsByStorage.get(storage) ?? [])
+    : fallbackRemoteBackendClients
+  return clients.map(cloneRemoteBackendClient)
+}
+
+function writeClients(clients: RemoteBackendClient[]): void {
+  const nextClients = clients.map(cloneRemoteBackendClient)
+  const storage = getClientStorage()
+  if (storage) {
+    remoteBackendClientsByStorage.set(storage, nextClients)
+    return
+  }
+  fallbackRemoteBackendClients = nextClients
+}
+
+export function replaceRemoteBackendClients(clients: RemoteBackendClient[]): void {
+  writeClients(clients)
+  emitChange('clients')
+}
+
+export function readLegacyRemoteBackendClients(): RemoteBackendClient[] {
+  const storage = getClientStorage()
+  if (!storage) return []
+
+  const raw = storage.getItem(REMOTE_BACKENDS_STORAGE_KEY)
   if (!raw) return []
 
   try {
@@ -67,8 +109,8 @@ function readClients(): RemoteBackendClient[] {
   }
 }
 
-function writeClients(clients: RemoteBackendClient[]): void {
-  localStorage.setItem(REMOTE_BACKENDS_STORAGE_KEY, JSON.stringify(clients))
+export function clearLegacyRemoteBackendClients(): void {
+  getClientStorage()?.removeItem(REMOTE_BACKENDS_STORAGE_KEY)
 }
 
 function getStoredActiveTargetId(): string {
@@ -145,7 +187,7 @@ export function createRemoteBackendClient(input: RemoteBackendClientInput): Remo
   }
 
   writeClients([...readClients(), client])
-  emitChange()
+  emitChange('clients')
   return client
 }
 
@@ -175,7 +217,7 @@ export function updateRemoteBackendClient(
   const nextClients = [...clients]
   nextClients[index] = updated
   writeClients(nextClients)
-  emitChange()
+  emitChange('clients')
   return updated
 }
 
@@ -200,7 +242,7 @@ export function updateRemoteBackendHealth(
   const nextClients = [...clients]
   nextClients[index] = updated
   writeClients(nextClients)
-  emitChange()
+  emitChange('clients')
   return updated
 }
 
@@ -211,13 +253,13 @@ export function deleteRemoteBackendClient(id: string): void {
     writeActiveTargetId(LOCAL_BACKEND_ID)
   }
   localStorage.removeItem(getAccessTokenKey(id))
-  emitChange()
+  emitChange('clients')
 }
 
 export function setActiveBackendTarget(targetId: string): void {
   if (targetId === LOCAL_BACKEND_ID) {
     writeActiveTargetId(LOCAL_BACKEND_ID)
-    emitChange()
+    emitChange('target')
     return
   }
 
@@ -231,7 +273,7 @@ export function setActiveBackendTarget(targetId: string): void {
   }
 
   writeActiveTargetId(targetId)
-  emitChange()
+  emitChange('target')
 }
 
 export function getAccessTokenKey(targetId = getActiveBackendTarget().id): string {
@@ -246,15 +288,17 @@ export function getBackendAccessToken(targetId?: string): string | null {
 
 export function setBackendAccessToken(token: string, targetId?: string): void {
   localStorage.setItem(getAccessTokenKey(targetId), token)
-  emitChange()
+  emitChange('token')
 }
 
 export function clearBackendAccessToken(targetId?: string): void {
   localStorage.removeItem(getAccessTokenKey(targetId))
-  emitChange()
+  emitChange('token')
 }
 
-export function subscribeRemoteBackendStorage(listener: () => void): () => void {
+export function subscribeRemoteBackendStorage(
+  listener: (reason: RemoteBackendStorageChangeReason) => void
+): () => void {
   listeners.add(listener)
   return () => {
     listeners.delete(listener)
@@ -262,6 +306,7 @@ export function subscribeRemoteBackendStorage(listener: () => void): () => void 
 }
 
 export function resetRemoteBackendStateForTests(): void {
+  writeClients([])
   localStorage.removeItem(REMOTE_BACKENDS_STORAGE_KEY)
   localStorage.removeItem(REMOTE_BACKEND_ACTIVE_KEY)
   for (const key of Object.keys(localStorage)) {

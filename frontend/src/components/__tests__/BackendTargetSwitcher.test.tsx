@@ -4,13 +4,16 @@ import BackendTargetSwitcher from '../BackendTargetSwitcher'
 import { RemoteBackendProvider } from '../../services/remoteBackends/context'
 import {
   createRemoteBackendClient,
+  listRemoteBackendClients,
   resetRemoteBackendStateForTests,
   setActiveBackendTarget,
   updateRemoteBackendHealth,
 } from '../../services/remoteBackends/storage'
+import type { RemoteBackendClient } from '../../services/remoteBackends/types'
 
 const navigateMock = vi.fn()
-const { mockPlanCan } = vi.hoisted(() => ({
+const { mockHasGlobalPermission, mockPlanCan } = vi.hoisted(() => ({
+  mockHasGlobalPermission: vi.fn((_permission: string) => true),
   mockPlanCan: vi.fn((_feature: string) => true),
 }))
 
@@ -29,9 +32,47 @@ vi.mock('../../hooks/usePlan', () => ({
   }),
 }))
 
+vi.mock('../../hooks/useAuth', () => ({
+  useAuth: () => ({
+    hasGlobalPermission: mockHasGlobalPermission,
+  }),
+}))
+
+function remoteClientResponse(client: RemoteBackendClient) {
+  return {
+    id: client.id,
+    name: client.name,
+    api_base_url: client.apiBaseUrl,
+    web_base_url: client.webBaseUrl,
+    created_at: client.createdAt,
+    updated_at: client.updatedAt,
+    health: {
+      status: client.health.status,
+      checked_at: client.health.checkedAt ?? null,
+      app_version: client.health.appVersion ?? null,
+      borg_version: client.health.borgVersion ?? null,
+      borg2_version: client.health.borg2Version ?? null,
+      error: client.health.error ?? null,
+      compatibility: client.health.compatibility,
+      compatibility_message: client.health.compatibilityMessage ?? null,
+    },
+  }
+}
+
+const switcherFetch: typeof fetch = async (input) => {
+  const url = String(input)
+  if (url.endsWith('/api/remote-clients')) {
+    return new Response(JSON.stringify(listRemoteBackendClients().map(remoteClientResponse)), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+  throw new Error(`Unexpected fetch: ${url}`)
+}
+
 function renderSwitcher() {
   return renderWithProviders(
-    <RemoteBackendProvider>
+    <RemoteBackendProvider fetchImpl={switcherFetch}>
       <BackendTargetSwitcher />
     </RemoteBackendProvider>
   )
@@ -42,6 +83,7 @@ describe('BackendTargetSwitcher', () => {
     vi.clearAllMocks()
     localStorage.clear()
     resetRemoteBackendStateForTests()
+    mockHasGlobalPermission.mockReturnValue(true)
     mockPlanCan.mockReturnValue(true)
   })
 
@@ -160,5 +202,35 @@ describe('BackendTargetSwitcher', () => {
 
     expect(upgradeItem).toHaveAttribute('aria-disabled', 'true')
     expect(navigateMock).not.toHaveBeenCalled()
+  })
+
+  it('blocks stale remote targets when the user lacks remote client admin permission', async () => {
+    mockHasGlobalPermission.mockReturnValue(false)
+    const remote = createRemoteBackendClient({
+      name: 'Studio NAS',
+      backendUrl: 'nas.local:9000',
+    })
+    updateRemoteBackendHealth(remote.id, {
+      status: 'online',
+      checkedAt: '2026-06-05T00:00:00.000Z',
+      appVersion: '2.2.1',
+      compatibility: 'compatible',
+      compatibilityMessage: 'Compatible',
+    })
+    const user = userEvent.setup()
+    renderSwitcher()
+
+    await user.click(screen.getByRole('button', { name: /server target this server/i }))
+    const menu = await screen.findByRole('menu', { name: /server targets/i })
+
+    expect(within(menu).getByRole('menuitem', { name: /studio nas/i })).toHaveAttribute(
+      'aria-disabled',
+      'true'
+    )
+
+    expect(within(menu).getByRole('menuitem', { name: /this server/i })).not.toHaveAttribute(
+      'aria-disabled',
+      'true'
+    )
   })
 })

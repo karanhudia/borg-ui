@@ -3,6 +3,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import Dashboard from '../DashboardV3'
 import { formatDateTimeFull } from '../../utils/dateUtils'
+import {
+  createRemoteBackendClient,
+  resetRemoteBackendStateForTests,
+} from '../../services/remoteBackends/storage'
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -184,7 +188,12 @@ beforeEach(() => {
   getOverviewMock.mockResolvedValue({ data: makeOverview() })
   listRemotesMock.mockResolvedValue({ data: { remotes: [] } })
   // Default: suppress localStorage access
-  vi.stubGlobal('localStorage', { getItem: () => 'test-token' })
+  vi.stubGlobal('localStorage', {
+    getItem: () => 'test-token',
+    removeItem: vi.fn(),
+    setItem: vi.fn(),
+  })
+  resetRemoteBackendStateForTests()
 })
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -712,18 +721,12 @@ describe('DashboardV3', () => {
       })
       vi.stubGlobal('localStorage', {
         getItem: (key: string) => {
-          if (key === 'borg_ui_remote_backends') {
-            return JSON.stringify([
-              {
-                id: 'remote-1',
-                name: 'Offsite client',
-                apiBaseUrl: 'https://offsite.example.com/api',
-                webBaseUrl: 'https://offsite.example.com',
-              },
-            ])
-          }
           return key === 'borg_ui_active_backend_target' ? null : 'test-token'
         },
+      })
+      createRemoteBackendClient({
+        name: 'Offsite client',
+        backendUrl: 'https://offsite.example.com',
       })
       mockFetchSuccess(makeOverview())
       renderDashboard()

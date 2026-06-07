@@ -15,9 +15,13 @@ Open Remote Clients from the Infrastructure navigation group. The global
 server target control near the account menu shows whether the browser is using
 this server or a registered remote client.
 
-Remote Clients require a Pro or Enterprise plan. Community installations keep
-using this server locally, but cannot add remote clients or switch the browser
-to a remote Borg UI server until the instance is upgraded.
+Remote Clients require an admin account and a Pro or Enterprise plan. Community
+installations and non-admin users keep using this server locally, but cannot
+add remote clients or switch the browser to a remote Borg UI server.
+
+Saved remote clients are stored in the Borg UI database so admins can use the
+same saved list from another browser or device after signing in. Authentication
+tokens remain browser-local and are stored separately for each server target.
 
 ## Add a Remote Client
 
@@ -61,7 +65,9 @@ as the local fallback in the same control.
 
 Authentication tokens are stored per server target in the browser. If the
 remote client requires login, Borg UI sends you through that server's normal
-login flow without replacing this server's token.
+login flow without replacing this server's token. Non-admin users cannot switch
+to saved remote clients, even if the browser still has an old remote target
+reference.
 
 ## DNS and Reverse Proxy Notes
 

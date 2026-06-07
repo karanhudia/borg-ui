@@ -106,6 +106,10 @@ export function RemoteClientsContent() {
   const [formError, setFormError] = useState<string | null>(null)
   const [checkingId, setCheckingId] = useState<string | null>(null)
   const [deletingClient, setDeletingClient] = useState<RemoteBackendClient | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const saveInFlightRef = useRef(false)
+  const deleteInFlightRef = useRef(false)
 
   const openCreateDialog = () => {
     setEditingClient(null)
@@ -122,22 +126,33 @@ export function RemoteClientsContent() {
   }
 
   const closeDialog = () => {
+    if (saveInFlightRef.current) return
     setDialogOpen(false)
     setFormError(null)
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (saveInFlightRef.current) return
+    saveInFlightRef.current = true
+    setIsSaving(true)
+    let saved = false
     try {
       if (editingClient) {
-        updateClient(editingClient.id, form)
+        await updateClient(editingClient.id, form)
         toast.success(t('remoteClients.toasts.updated'))
       } else {
-        createClient(form)
+        await createClient(form)
         toast.success(t('remoteClients.toasts.added'))
       }
-      closeDialog()
+      saved = true
     } catch (error) {
       setFormError(error instanceof Error ? error.message : t('remoteClients.errors.saveFailed'))
+    } finally {
+      saveInFlightRef.current = false
+      setIsSaving(false)
+      if (saved) {
+        closeDialog()
+      }
     }
   }
 
@@ -180,14 +195,25 @@ export function RemoteClientsContent() {
   }
 
   const closeDeleteDialog = () => {
+    if (deleteInFlightRef.current) return
     setDeletingClient(null)
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!deletingClient) return
-    deleteClient(deletingClient.id)
-    toast.success(t('remoteClients.toasts.deleted'))
-    closeDeleteDialog()
+    if (deleteInFlightRef.current) return
+    deleteInFlightRef.current = true
+    setIsDeleting(true)
+    try {
+      await deleteClient(deletingClient.id)
+      toast.success(t('remoteClients.toasts.deleted'))
+      setDeletingClient(null)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t('common.errors.unexpectedError'))
+    } finally {
+      deleteInFlightRef.current = false
+      setIsDeleting(false)
+    }
   }
 
   return (
@@ -448,8 +474,10 @@ export function RemoteClientsContent() {
                 fullWidth
               />
               <Stack direction="row" spacing={1} justifyContent="flex-end">
-                <Button onClick={closeDialog}>{t('common.buttons.cancel')}</Button>
-                <Button variant="contained" onClick={handleSave}>
+                <Button onClick={closeDialog} disabled={isSaving}>
+                  {t('common.buttons.cancel')}
+                </Button>
+                <Button variant="contained" onClick={() => void handleSave()} disabled={isSaving}>
                   {t('remoteClients.dialog.save')}
                 </Button>
               </Stack>
@@ -473,8 +501,15 @@ export function RemoteClientsContent() {
               {t('remoteClients.deleteDialog.description', { name: deletingClient.name })}
             </Typography>
             <Stack direction="row" spacing={1} justifyContent="flex-end" sx={{ mt: 2.5 }}>
-              <Button onClick={closeDeleteDialog}>{t('common.buttons.cancel')}</Button>
-              <Button variant="contained" color="error" onClick={handleDelete}>
+              <Button onClick={closeDeleteDialog} disabled={isDeleting}>
+                {t('common.buttons.cancel')}
+              </Button>
+              <Button
+                variant="contained"
+                color="error"
+                onClick={() => void handleDelete()}
+                disabled={isDeleting}
+              >
                 {t('remoteClients.deleteDialog.confirm')}
               </Button>
             </Stack>

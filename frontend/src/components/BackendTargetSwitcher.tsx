@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom'
 import { useRemoteBackends } from '@/services/remoteBackends/context'
 import { LOCAL_BACKEND_ID } from '@/services/remoteBackends/storage'
 import type { BackendTarget } from '@/services/remoteBackends/types'
+import { useAuth } from '@/hooks/useAuth'
 import { usePlan } from '@/hooks/usePlan'
 import {
   buildBackendTargets,
@@ -24,13 +25,17 @@ export default function BackendTargetSwitcher({ compact = false }: BackendTarget
   const muiTheme = useTheme()
   const navigate = useNavigate()
   const { activeTarget, clients, switchTarget } = useRemoteBackends()
+  const { hasGlobalPermission } = useAuth()
   const { can } = usePlan()
-  const canUseRemoteClients = can('remote_clients')
+  const canManageRemoteClients = hasGlobalPermission('settings.ssh.manage')
+  const canUseRemoteClients = canManageRemoteClients && can('remote_clients')
+  const remoteClientsUnavailableReason = canManageRemoteClients ? 'plan' : 'permission'
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
   const open = Boolean(anchorEl)
   const targets = buildBackendTargets(clients, t)
   const activeStatus = getBackendTargetStatus(activeTarget, t, {
     remoteClientsAvailable: canUseRemoteClients,
+    remoteClientsUnavailableReason,
   })
   const activeName = getBackendTargetName(activeTarget, t)
 
@@ -140,6 +145,7 @@ export default function BackendTargetSwitcher({ compact = false }: BackendTarget
           {targets.map((target) => {
             const status = getBackendTargetStatus(target, t, {
               remoteClientsAvailable: canUseRemoteClients,
+              remoteClientsUnavailableReason,
             })
             const disabled = isBackendTargetDisabled(target, {
               remoteClientsAvailable: canUseRemoteClients,
@@ -208,10 +214,18 @@ export default function BackendTargetSwitcher({ compact = false }: BackendTarget
               <Lock size={14} />
               <Box>
                 <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                  {t('remoteClients.switcher.manageRequiresPlan')}
+                  {t(
+                    canManageRemoteClients
+                      ? 'remoteClients.switcher.manageRequiresPlan'
+                      : 'remoteClients.switcher.manageRequiresAdmin'
+                  )}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  {t('remoteClients.switcher.remotePlanUnavailable')}
+                  {t(
+                    canManageRemoteClients
+                      ? 'remoteClients.switcher.remotePlanUnavailable'
+                      : 'remoteClients.switcher.remoteAdminUnavailable'
+                  )}
                 </Typography>
               </Box>
             </MenuItem>

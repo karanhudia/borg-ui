@@ -2,8 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClient } from '@tanstack/react-query'
 import { renderWithProviders, screen, userEvent, waitFor } from '../../test/test-utils'
 import Layout from '../Layout'
-import { RemoteBackendProvider, useRemoteBackends } from '../../services/remoteBackends/context'
-import { resetRemoteBackendStateForTests } from '../../services/remoteBackends/storage'
+import { RemoteBackendProvider } from '../../services/remoteBackends/context'
+import {
+  createRemoteBackendClient,
+  resetRemoteBackendStateForTests,
+  setActiveBackendTarget,
+} from '../../services/remoteBackends/storage'
 
 const {
   logoutMock,
@@ -98,13 +102,14 @@ vi.mock('../AppSidebar', () => ({
 }))
 
 function RemoteBackendSwitchButton() {
-  const { createClient, switchTarget } = useRemoteBackends()
-
   return (
     <button
       onClick={() => {
-        const remote = createClient({ name: 'Remote', backendUrl: 'remote.example.com' })
-        switchTarget(remote.id)
+        const remote = createRemoteBackendClient({
+          name: 'Remote',
+          backendUrl: 'remote.example.com',
+        })
+        setActiveBackendTarget(remote.id)
       }}
     >
       Switch backend
@@ -136,6 +141,7 @@ describe('Layout', () => {
     useAuthMock.mockReturnValue({
       user: { username: 'admin', email: 'admin@example.com', role: 'admin', passkey_count: 0 },
       proxyAuthEnabled: false,
+      hasGlobalPermission: () => true,
       canEnrollPasskeyFromRecentLogin: true,
       clearRecentPasskeyEnrollmentState: vi.fn(),
       refreshUser: refreshUserMock,
@@ -166,7 +172,9 @@ describe('Layout', () => {
       </Layout>
     )
 
-    await user.click(await screen.findByRole('button', { name: 'Dismiss Banner' }))
+    await user.click(
+      await screen.findByRole('button', { name: 'Dismiss Banner' }, { timeout: 5000 })
+    )
 
     await waitFor(() => {
       expect(screen.queryByText('Consent Banner')).not.toBeInTheDocument()
@@ -229,6 +237,7 @@ describe('Layout', () => {
         passkey_count: 0,
       },
       proxyAuthEnabled: false,
+      hasGlobalPermission: () => true,
       canEnrollPasskeyFromRecentLogin: true,
       clearRecentPasskeyEnrollmentState: vi.fn(),
       refreshUser: refreshUserMock,
@@ -263,6 +272,7 @@ describe('Layout', () => {
     useAuthMock.mockReturnValue({
       user: { username: 'admin', email: 'admin@example.com', role: 'admin', passkey_count: 1 },
       proxyAuthEnabled: false,
+      hasGlobalPermission: () => true,
       canEnrollPasskeyFromRecentLogin: true,
       clearRecentPasskeyEnrollmentState: vi.fn(),
       refreshUser: refreshUserMock,

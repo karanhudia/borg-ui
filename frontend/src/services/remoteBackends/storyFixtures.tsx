@@ -1,11 +1,15 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { RemoteBackendProvider } from './context'
 import {
   createRemoteBackendClient,
+  deleteRemoteBackendClient,
+  listRemoteBackendClients,
   resetRemoteBackendStateForTests,
   setActiveBackendTarget,
+  updateRemoteBackendClient,
   updateRemoteBackendHealth,
 } from './storage'
+import type { RemoteBackendClient } from './types'
 
 type RemoteBackendStoryState = 'empty' | 'mixed' | 'activeRemote'
 
@@ -14,9 +18,98 @@ interface RemoteBackendStoryProviderProps {
   state?: RemoteBackendStoryState
 }
 
-const storyFetch: typeof fetch = async (input) => {
+function storyClientResponse(client: RemoteBackendClient) {
+  return {
+    id: client.id,
+    name: client.name,
+    api_base_url: client.apiBaseUrl,
+    web_base_url: client.webBaseUrl,
+    created_at: client.createdAt,
+    updated_at: client.updatedAt,
+    health: {
+      status: client.health.status,
+      checked_at: client.health.checkedAt ?? null,
+      app_version: client.health.appVersion ?? null,
+      borg_version: client.health.borgVersion ?? null,
+      borg2_version: client.health.borg2Version ?? null,
+      error: client.health.error ?? null,
+      compatibility: client.health.compatibility,
+      compatibility_message: client.health.compatibilityMessage ?? null,
+    },
+  }
+}
+
+const storyFetch: typeof fetch = async (input, init) => {
   const url =
     typeof input === 'string' ? input : input instanceof Request ? input.url : String(input)
+  const path = new URL(url, window.location.origin).pathname
+  const remoteClientsIndex = path.lastIndexOf('/api/remote-clients')
+
+  if (remoteClientsIndex !== -1) {
+    const method = init?.method ?? 'GET'
+    const tail = path.slice(remoteClientsIndex + '/api/remote-clients'.length)
+
+    if (tail === '' && method === 'GET') {
+      return new Response(JSON.stringify(listRemoteBackendClients().map(storyClientResponse)), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (tail === '' && method === 'POST') {
+      const body = JSON.parse(String(init?.body ?? '{}')) as {
+        name?: string
+        backend_url?: string
+      }
+      const client = createRemoteBackendClient({
+        name: body.name ?? 'Remote client',
+        backendUrl: body.backend_url ?? '',
+      })
+      return new Response(JSON.stringify(storyClientResponse(client)), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    const id = decodeURIComponent(tail.replace(/^\//, '').replace(/\/health$/, ''))
+    if (id && method === 'PUT') {
+      const body = JSON.parse(String(init?.body ?? '{}')) as {
+        name?: string
+        backend_url?: string
+      }
+      const client = updateRemoteBackendClient(id, {
+        name: body.name ?? 'Remote client',
+        backendUrl: body.backend_url ?? '',
+      })
+      return new Response(JSON.stringify(storyClientResponse(client)), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (id && method === 'PATCH' && tail.endsWith('/health')) {
+      const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>
+      const client = updateRemoteBackendHealth(id, {
+        status: body.status as RemoteBackendClient['health']['status'],
+        checkedAt: body.checked_at as string | null,
+        appVersion: body.app_version as string | null,
+        borgVersion: body.borg_version as string | null,
+        borg2Version: body.borg2_version as string | null,
+        error: body.error as string | null,
+        compatibility: body.compatibility as RemoteBackendClient['health']['compatibility'],
+        compatibilityMessage: body.compatibility_message as string | null,
+      })
+      return new Response(JSON.stringify(storyClientResponse(client)), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (id && method === 'DELETE') {
+      deleteRemoteBackendClient(id)
+      return new Response(null, { status: 204 })
+    }
+  }
 
   if (url.endsWith('/health')) {
     return new Response(JSON.stringify({ status: 'ok' }), {
@@ -90,13 +183,26 @@ export function RemoteBackendStoryProvider({
   children,
   state = 'mixed',
 }: RemoteBackendStoryProviderProps) {
-  const seededRef = useRef(false)
+  return (
+    <SeededRemoteBackendStoryProvider key={state} state={state}>
+      {children}
+    </SeededRemoteBackendStoryProvider>
+  )
+}
 
-  useEffect(() => {
-    if (seededRef.current) return
-    seededRef.current = true
+function SeededRemoteBackendStoryProvider({
+  children,
+  state,
+}: Required<RemoteBackendStoryProviderProps>) {
+  const [seededState] = useState(() => {
+    // Storybook fixtures must exist before RemoteBackendProvider reads its initial snapshot.
     seedRemoteBackends(state)
-  }, [state])
+    return state
+  })
 
-  return <RemoteBackendProvider fetchImpl={storyFetch}>{children}</RemoteBackendProvider>
+  return (
+    <RemoteBackendProvider key={seededState} fetchImpl={storyFetch}>
+      {children}
+    </RemoteBackendProvider>
+  )
 }
