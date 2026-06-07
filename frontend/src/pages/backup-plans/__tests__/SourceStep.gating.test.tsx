@@ -81,8 +81,7 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.remoteMachine': 'Remote machine',
   'backupPlans.sourceChooser.remoteMachineDescription': 'Pull from an SSH connection',
   'backupPlans.sourceChooser.managedAgent': 'Managed agent',
-  'backupPlans.sourceChooser.managedAgentDescription':
-    'Read paths from an enrolled managed agent',
+  'backupPlans.sourceChooser.managedAgentDescription': 'Read paths from an enrolled managed agent',
   'backupPlans.sourceChooser.selectManagedAgent': 'Select a managed agent',
   'backupPlans.sourceChooser.noManagedAgents': 'No managed agents available',
   'backupPlans.sourceChooser.selectRemoteMachine': 'Select a remote machine',

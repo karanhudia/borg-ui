@@ -3,10 +3,7 @@ import { Box } from '@mui/material'
 import MonitoringReportsTab from './MonitoringReportsTab'
 import { settingsAPI } from '../services/api'
 import type { SystemSettings } from '../services/api'
-import {
-  communitySystemInfo,
-  proSystemInfo,
-} from '../services/remoteBackends/planStoryFixtures'
+import { communitySystemInfo, proSystemInfo } from '../services/remoteBackends/planStoryFixtures'
 
 const sampleSettings: SystemSettings = {
   backup_monitoring_enabled: true,

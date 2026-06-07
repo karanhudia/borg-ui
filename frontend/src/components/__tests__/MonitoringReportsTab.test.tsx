@@ -112,8 +112,7 @@ describe('MonitoringReportsTab', () => {
       plan: 'community',
       features: {},
       isLoading: false,
-      can: (feature: string) =>
-        feature !== 'alerting_monitoring' && feature !== 'backup_reports',
+      can: (feature: string) => feature !== 'alerting_monitoring' && feature !== 'backup_reports',
     })
 
     renderWithProviders(<MonitoringReportsTab />)

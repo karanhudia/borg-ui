@@ -365,17 +365,17 @@ const MonitoringReportsTab: React.FC = () => {
             <FormControlLabel
               disabled={!canUseBackupReports}
               control={
-                  <Switch
-                    checked={reportsEnabled}
-                    disabled={!canUseBackupReports}
-                    slotProps={{
-                      input: {
-                        role: 'switch',
-                        'aria-label': t('monitoringReports.enableReports'),
-                      },
-                    }}
-                    onChange={(event) => setReportsEnabled(event.target.checked)}
-                  />
+                <Switch
+                  checked={reportsEnabled}
+                  disabled={!canUseBackupReports}
+                  slotProps={{
+                    input: {
+                      role: 'switch',
+                      'aria-label': t('monitoringReports.enableReports'),
+                    },
+                  }}
+                  onChange={(event) => setReportsEnabled(event.target.checked)}
+                />
               }
               label={t('monitoringReports.enableReports')}
             />
@@ -469,11 +469,7 @@ const MonitoringReportsTab: React.FC = () => {
               <Button
                 variant="outlined"
                 startIcon={
-                  sendReportMutation.isPending ? (
-                    <CircularProgress size={16} />
-                  ) : (
-                    <Send size={16} />
-                  )
+                  sendReportMutation.isPending ? <CircularProgress size={16} /> : <Send size={16} />
                 }
                 onClick={() => sendReportMutation.mutate()}
                 disabled={sendReportMutation.isPending || !canUseBackupReports}
