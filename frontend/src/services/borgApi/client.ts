@@ -28,6 +28,11 @@ export const httpClient = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
+function isOnLoginRoute(): boolean {
+  const loginPath = `${BASE_PATH}/login`
+  return window.location.pathname === loginPath || window.location.pathname === `${loginPath}/`
+}
+
 // Mirror the shared auth interceptor so this client also attaches tokens.
 httpClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const target = getActiveBackendTarget()
@@ -49,7 +54,9 @@ httpClient.interceptors.response.use(
         BACKEND_TARGET_ID_CONFIG_KEY
       ]
       clearAccessToken(requestTargetId)
-      window.location.href = `${BASE_PATH}/login`
+      if (!isOnLoginRoute()) {
+        window.location.href = `${BASE_PATH}/login`
+      }
     }
     return Promise.reject(error)
   }

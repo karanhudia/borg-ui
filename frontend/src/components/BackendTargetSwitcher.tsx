@@ -41,7 +41,7 @@ export default function BackendTargetSwitcher({ compact = false }: BackendTarget
   const remoteClientsUnavailableReason = canManageRemoteClients ? 'plan' : 'permission'
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
   const open = Boolean(anchorEl)
-  const targets = buildBackendTargets(clients, t)
+  const targets = buildBackendTargets(clients, t, activeTarget)
   const activeStatus = getBackendTargetStatus(activeTarget, t, {
     remoteClientsAvailable: canUseRemoteClients,
     remoteClientsUnavailableReason,

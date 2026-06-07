@@ -160,6 +160,26 @@ describe('remote client storage', () => {
     expect(getActiveBackendTarget().id).toBe(LOCAL_BACKEND_ID)
   })
 
+  it('restores the active remote target when the client cache has not hydrated yet', () => {
+    const created = createRemoteBackendClient({
+      name: 'Office server',
+      backendUrl: 'https://office.example.com',
+    })
+    setActiveBackendTarget(created.id)
+
+    replaceRemoteBackendClients([])
+
+    expect(readRemoteBackendState().activeTargetId).toBe(created.id)
+    expect(listRemoteBackendClients()).toEqual([])
+    expect(getActiveBackendTarget()).toMatchObject({
+      id: created.id,
+      name: 'Office server',
+      apiBaseUrl: 'https://office.example.com/api',
+      kind: 'remote',
+    })
+    expect(() => setActiveBackendTarget(created.id)).not.toThrow()
+  })
+
   it('blocks activating an incompatible remote target', () => {
     const created = createRemoteBackendClient({
       name: 'Old server',

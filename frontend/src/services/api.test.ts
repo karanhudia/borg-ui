@@ -147,6 +147,7 @@ describe('API Response Interceptor - 401 Handling', () => {
         set href(value: string) {
           windowLocationHref = value
         },
+        pathname: '/',
       },
       writable: true,
     })
@@ -245,6 +246,28 @@ describe('API Response Interceptor - 401 Handling', () => {
 
     expect(localStorageMock['access_token']).toBeUndefined()
     expect(windowLocationHref).toBe('/login')
+
+    mock.restore()
+  })
+
+  it('does not hard-reload the login route on a 401 from a stale session check', async () => {
+    const mock = new MockAdapter(api)
+    localStorageMock['access_token'] = 'expired-token'
+    Object.defineProperty(window.location, 'pathname', {
+      value: '/login',
+      configurable: true,
+    })
+
+    mock.onGet('/auth/me').reply(401)
+
+    try {
+      await api.get('/auth/me')
+    } catch {
+      // Expected
+    }
+
+    expect(localStorageMock['access_token']).toBeUndefined()
+    expect(windowLocationHref).toBe('')
 
     mock.restore()
   })

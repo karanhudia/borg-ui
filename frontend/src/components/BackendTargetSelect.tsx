@@ -29,7 +29,10 @@ export default function BackendTargetSelect({
   const { activeTarget, clients, switchTarget } = useRemoteBackends()
   const { can, isLoading: isPlanLoading } = usePlan()
   const canUseRemoteClients = can('remote_clients')
-  const targets = useMemo(() => buildBackendTargets(clients, t), [clients, t])
+  const targets = useMemo(
+    () => buildBackendTargets(clients, t, activeTarget),
+    [activeTarget, clients, t]
+  )
 
   useEffect(() => {
     if (!isPlanLoading && !canUseRemoteClients && activeTarget.kind === 'remote') {

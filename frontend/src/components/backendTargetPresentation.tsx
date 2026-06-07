@@ -9,8 +9,17 @@ interface BackendTargetPresentationOptions {
   remoteClientsUnavailableReason?: 'permission' | 'plan'
 }
 
-export function buildBackendTargets(clients: RemoteBackendClient[], t: Translate): BackendTarget[] {
+export function buildBackendTargets(
+  clients: RemoteBackendClient[],
+  t: Translate,
+  activeTarget?: BackendTarget
+): BackendTarget[] {
   const localTarget = getLocalBackendTarget()
+  const remoteTargets =
+    activeTarget?.kind === 'remote' && !clients.some((client) => client.id === activeTarget.id)
+      ? [activeTarget, ...clients]
+      : clients
+
   return [
     {
       ...localTarget,
@@ -20,7 +29,7 @@ export function buildBackendTargets(clients: RemoteBackendClient[], t: Translate
         compatibilityMessage: t('remoteClients.switcher.localCompatibility'),
       },
     },
-    ...clients,
+    ...remoteTargets,
   ]
 }
 

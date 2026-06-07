@@ -6,6 +6,7 @@ import {
   createRemoteBackendClient,
   getActiveBackendTarget,
   listRemoteBackendClients,
+  replaceRemoteBackendClients,
   resetRemoteBackendStateForTests,
   setActiveBackendTarget,
   updateRemoteBackendHealth,
@@ -145,6 +146,31 @@ describe('BackendTargetSwitcher', () => {
       screen.queryByRole('button', { name: /server target this server/i })
     ).not.toBeInTheDocument()
     expect(getActiveBackendTarget().id).toBe(remote.id)
+  })
+
+  it('keeps the selected remote visible while saved clients hydrate', async () => {
+    const remote = createRemoteBackendClient({
+      name: 'Studio NAS',
+      backendUrl: 'nas.local:9000',
+    })
+    updateRemoteBackendHealth(remote.id, {
+      status: 'online',
+      checkedAt: '2026-06-05T00:00:00.000Z',
+      appVersion: '2.2.1',
+      compatibility: 'compatible',
+      compatibilityMessage: 'Compatible',
+    })
+    setActiveBackendTarget(remote.id)
+    replaceRemoteBackendClients([])
+    const user = userEvent.setup()
+
+    renderSwitcher()
+
+    expect(screen.getByRole('button', { name: /server target studio nas/i })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /server target studio nas/i }))
+    const menu = await screen.findByRole('menu', { name: /server targets/i })
+    expect(within(menu).getByRole('menuitem', { name: /studio nas/i })).toBeInTheDocument()
   })
 
   it('keeps the local server available but blocks remote switching when the plan lacks access', async () => {

@@ -36,6 +36,11 @@ const api = axios.create({
   },
 })
 
+function isOnLoginRoute(): boolean {
+  const loginPath = `${BASE_PATH}/login`
+  return window.location.pathname === loginPath || window.location.pathname === `${loginPath}/`
+}
+
 // Request interceptor to add auth token
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const target = getActiveBackendTarget()
@@ -69,7 +74,9 @@ api.interceptors.response.use(
         BACKEND_TARGET_ID_CONFIG_KEY
       ]
       clearAccessToken(requestTargetId)
-      window.location.href = `${BASE_PATH}/login`
+      if (!isOnLoginRoute()) {
+        window.location.href = `${BASE_PATH}/login`
+      }
     }
     return Promise.reject(error)
   }
