@@ -47,6 +47,14 @@ Username: backup
 Default path: /backups
 ```
 
+## Setup Presets
+
+The deploy dialog includes setup presets for Linux servers, BorgBase, Hetzner
+Storage Box, and NAS targets such as Synology and Unraid. Presets only prefill
+editable defaults like port, deployment mode, default path, SSH path prefix,
+and mount point. Review provider-specific path details in
+[Provider Guides](provider-guides) before saving.
+
 ## Connection Options
 
 Common options:
@@ -62,6 +70,24 @@ Common options:
 SFTP deployment mode can break some older SSH servers or NAS devices. Disable it when key deployment fails on those systems.
 
 Remote Machines can also refresh storage usage by running `df` on the remote host.
+
+## Connection Diagnostics
+
+Use the diagnostics action on a configured remote machine when a connection test
+passes but backups or remote services still feel slow or unreliable.
+
+Diagnostics report:
+
+- SSH session health and elapsed time
+- latency for a simple remote command
+- optional TCP reachability from the remote machine to a host and port
+- bounded SSH download throughput with clear units
+
+The TCP target is optional and lives under **Advanced: test another service**.
+Leave it blank for a basic SSH and speed check, or enter a service host and port
+such as `postgres.internal:5432` to verify whether the remote machine can reach a
+dependency from its own network. Optionally adjust the timeout in seconds to
+control how long the remote TCP check waits before reporting a timeout.
 
 ## Manual Public Key Install
 

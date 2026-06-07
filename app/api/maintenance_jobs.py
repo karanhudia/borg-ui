@@ -13,6 +13,7 @@ from app.services.job_admission import (
     ensure_repository_admission,
     operation_for_maintenance_model,
 )
+from app.services.log_policy import DEFAULT_LOG_SAVE_POLICY, job_has_logs_by_policy
 from app.utils.datetime_utils import serialize_datetime
 
 
@@ -208,7 +209,29 @@ def get_repository_jobs(
     )
 
 
-def read_job_logs(job: Any, *, fallback_to_logs: bool = True) -> str:
+def job_has_logs_for_policy(
+    job: Any, *, log_save_policy: str = DEFAULT_LOG_SAVE_POLICY
+) -> bool:
+    return job_has_logs_by_policy(
+        job,
+        log_save_policy,
+        output_text=[
+            getattr(job, "logs", None),
+            getattr(job, "error_message", None),
+        ],
+        file_path=getattr(job, "log_file_path", None),
+    )
+
+
+def read_job_logs(
+    job: Any,
+    *,
+    fallback_to_logs: bool = True,
+    log_save_policy: str = DEFAULT_LOG_SAVE_POLICY,
+) -> str:
+    if not job_has_logs_for_policy(job, log_save_policy=log_save_policy):
+        return ""
+
     log_file_path = getattr(job, "log_file_path", None)
     if log_file_path and os.path.exists(log_file_path):
         try:
@@ -229,6 +252,7 @@ def serialize_job_status(
     include_logs: bool = False,
     include_has_logs: bool = False,
     fallback_to_logs: bool = True,
+    log_save_policy: str = DEFAULT_LOG_SAVE_POLICY,
 ) -> dict[str, Any]:
     payload = {
         "id": job.id,
@@ -242,9 +266,15 @@ def serialize_job_status(
         payload["progress"] = getattr(job, "progress", None)
         payload["progress_message"] = getattr(job, "progress_message", None)
     if include_logs:
-        payload["logs"] = read_job_logs(job, fallback_to_logs=fallback_to_logs)
+        payload["logs"] = read_job_logs(
+            job,
+            fallback_to_logs=fallback_to_logs,
+            log_save_policy=log_save_policy,
+        )
     if include_has_logs:
-        payload["has_logs"] = bool(getattr(job, "has_logs", False))
+        payload["has_logs"] = job_has_logs_for_policy(
+            job, log_save_policy=log_save_policy
+        )
     return payload
 
 
@@ -253,6 +283,7 @@ def serialize_job_summary(
     *,
     include_progress: bool = False,
     include_has_logs: bool = False,
+    log_save_policy: str = DEFAULT_LOG_SAVE_POLICY,
 ) -> dict[str, Any]:
     payload = {
         "id": job.id,
@@ -266,5 +297,7 @@ def serialize_job_summary(
         payload["progress"] = getattr(job, "progress", None)
         payload["progress_message"] = getattr(job, "progress_message", None)
     if include_has_logs:
-        payload["has_logs"] = bool(getattr(job, "has_logs", False))
+        payload["has_logs"] = job_has_logs_for_policy(
+            job, log_save_policy=log_save_policy
+        )
     return payload

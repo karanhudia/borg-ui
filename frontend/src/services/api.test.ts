@@ -6,7 +6,8 @@
 
 import { describe, it, expect, beforeEach } from 'vitest'
 import MockAdapter from 'axios-mock-adapter'
-import api, { repositoriesAPI } from './api'
+import api, { authAPI, backupAPI, backupPlansAPI, repositoriesAPI } from './api'
+import { httpClient } from './borgApi/client'
 
 describe('API Request Interceptor', () => {
   let localStorageMock: { [key: string]: string }
@@ -74,6 +75,40 @@ describe('API Request Interceptor', () => {
 
     await api.get('/test')
     mock.restore()
+  })
+
+  it('uses the active remote backend API base for requests', async () => {
+    const { createRemoteBackendClient, setActiveBackendTarget } =
+      await import('./remoteBackends/storage')
+    const remote = createRemoteBackendClient({
+      name: 'Remote',
+      backendUrl: 'https://remote.example.com/borg',
+    })
+    setActiveBackendTarget(remote.id)
+    const mock = new MockAdapter(api)
+
+    mock.onGet('/test').reply((config) => {
+      expect(config.baseURL).toBe('https://remote.example.com/borg/api')
+      return [200, { success: true }]
+    })
+
+    await api.get('/test')
+    mock.restore()
+  })
+
+  it('builds OIDC URLs from the active backend API base', async () => {
+    const { createRemoteBackendClient, setActiveBackendTarget } =
+      await import('./remoteBackends/storage')
+    const remote = createRemoteBackendClient({
+      name: 'Remote',
+      backendUrl: 'https://remote.example.com/borg',
+    })
+    setActiveBackendTarget(remote.id)
+
+    expect(authAPI.getOidcLoginUrl('https://app.example.com/login')).toBe(
+      'https://remote.example.com/borg/api/auth/oidc/login?return_to=https%3A%2F%2Fapp.example.com%2Flogin'
+    )
+    expect(authAPI.getOidcLinkUrl()).toBe('https://remote.example.com/borg/api/auth/oidc/link')
   })
 })
 
@@ -209,6 +244,76 @@ describe('API Response Interceptor - 401 Handling', () => {
     }
 
     expect(localStorageMock['access_token']).toBeUndefined()
+    expect(windowLocationHref).toBe('/login')
+
+    mock.restore()
+  })
+
+  it('clears the token for the request target when the active backend changes before 401 handling', async () => {
+    const {
+      createRemoteBackendClient,
+      getAccessTokenKey,
+      LOCAL_BACKEND_ID,
+      setActiveBackendTarget,
+    } = await import('./remoteBackends/storage')
+    const remote = createRemoteBackendClient({
+      name: 'Remote',
+      backendUrl: 'https://remote.example.com',
+    })
+    setActiveBackendTarget(remote.id)
+
+    localStorageMock[getAccessTokenKey(remote.id)] = 'remote-token'
+    localStorageMock[getAccessTokenKey(LOCAL_BACKEND_ID)] = 'local-token'
+
+    const mock = new MockAdapter(api)
+    mock.onGet('/repositories/').reply(() => {
+      setActiveBackendTarget(LOCAL_BACKEND_ID)
+      return [401]
+    })
+
+    try {
+      await api.get('/repositories/')
+    } catch {
+      // Expected
+    }
+
+    expect(localStorageMock[getAccessTokenKey(remote.id)]).toBeUndefined()
+    expect(localStorageMock[getAccessTokenKey(LOCAL_BACKEND_ID)]).toBe('local-token')
+    expect(windowLocationHref).toBe('/login')
+
+    mock.restore()
+  })
+
+  it('clears the Borg API token for the request target when the active backend changes before 401 handling', async () => {
+    const {
+      createRemoteBackendClient,
+      getAccessTokenKey,
+      LOCAL_BACKEND_ID,
+      setActiveBackendTarget,
+    } = await import('./remoteBackends/storage')
+    const remote = createRemoteBackendClient({
+      name: 'Remote',
+      backendUrl: 'https://remote.example.com',
+    })
+    setActiveBackendTarget(remote.id)
+
+    localStorageMock[getAccessTokenKey(remote.id)] = 'remote-token'
+    localStorageMock[getAccessTokenKey(LOCAL_BACKEND_ID)] = 'local-token'
+
+    const mock = new MockAdapter(httpClient)
+    mock.onGet('/repositories/').reply(() => {
+      setActiveBackendTarget(LOCAL_BACKEND_ID)
+      return [401]
+    })
+
+    try {
+      await httpClient.get('/repositories/')
+    } catch {
+      // Expected
+    }
+
+    expect(localStorageMock[getAccessTokenKey(remote.id)]).toBeUndefined()
+    expect(localStorageMock[getAccessTokenKey(LOCAL_BACKEND_ID)]).toBe('local-token')
     expect(windowLocationHref).toBe('/login')
 
     mock.restore()
@@ -408,6 +513,46 @@ describe('Repositories API - Repository wipe', () => {
 
     expect(status.data).toEqual({ id: 11, status: 'running' })
     expect(cancelled.data).toEqual({ id: 11, status: 'cancelled' })
+    mock.restore()
+  })
+})
+
+describe('Retry API helpers', () => {
+  it('retries backup jobs through the backend retry endpoint', async () => {
+    const mock = new MockAdapter(api)
+    mock.onPost('/backup/jobs/42/retry').reply(202, {
+      job_id: 108,
+      status: 'pending',
+      retry_source_job_id: 42,
+    })
+
+    const response = await backupAPI.retryJob(42)
+
+    expect(response.data).toEqual({
+      job_id: 108,
+      status: 'pending',
+      retry_source_job_id: 42,
+    })
+    mock.restore()
+  })
+
+  it('retries backup plan runs through the backend retry endpoint', async () => {
+    const mock = new MockAdapter(api)
+    mock.onPost('/backup-plans/runs/77/retry').reply(202, {
+      id: 93,
+      status: 'pending',
+      trigger: 'retry',
+      retry_source_run_id: 77,
+    })
+
+    const response = await backupPlansAPI.retryRun(77)
+
+    expect(response.data).toEqual({
+      id: 93,
+      status: 'pending',
+      trigger: 'retry',
+      retry_source_run_id: 77,
+    })
     mock.restore()
   })
 })

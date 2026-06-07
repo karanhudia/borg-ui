@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { QueryClient } from '@tanstack/react-query'
 import { renderWithProviders, screen, userEvent, waitFor } from '../../test/test-utils'
 import Layout from '../Layout'
+import { RemoteBackendProvider } from '../../services/remoteBackends/context'
+import {
+  createRemoteBackendClient,
+  resetRemoteBackendStateForTests,
+  setActiveBackendTarget,
+} from '../../services/remoteBackends/storage'
 
 const {
   logoutMock,
@@ -94,10 +101,34 @@ vi.mock('../AppSidebar', () => ({
   default: () => <div>Sidebar</div>,
 }))
 
+function RemoteBackendSwitchButton() {
+  return (
+    <button
+      onClick={() => {
+        const remote = createRemoteBackendClient({
+          name: 'Remote',
+          backendUrl: 'remote.example.com',
+        })
+        setActiveBackendTarget(remote.id)
+      }}
+    >
+      Switch backend
+    </button>
+  )
+}
+
+function renderLayout(
+  ui: Parameters<typeof renderWithProviders>[0],
+  options?: Parameters<typeof renderWithProviders>[1]
+) {
+  return renderWithProviders(<RemoteBackendProvider>{ui}</RemoteBackendProvider>, options)
+}
+
 describe('Layout', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
+    resetRemoteBackendStateForTests()
     sessionStorage.clear()
     loadUserPreferenceMock.mockResolvedValue(undefined)
     hasConsentBeenGivenMock.mockReturnValue(true)
@@ -110,6 +141,7 @@ describe('Layout', () => {
     useAuthMock.mockReturnValue({
       user: { username: 'admin', email: 'admin@example.com', role: 'admin', passkey_count: 0 },
       proxyAuthEnabled: false,
+      hasGlobalPermission: () => true,
       canEnrollPasskeyFromRecentLogin: true,
       clearRecentPasskeyEnrollmentState: vi.fn(),
       refreshUser: refreshUserMock,
@@ -120,7 +152,7 @@ describe('Layout', () => {
   it('shows the analytics consent banner when consent has not been given', async () => {
     hasConsentBeenGivenMock.mockReturnValue(false)
 
-    renderWithProviders(
+    renderLayout(
       <Layout>
         <div>Page Content</div>
       </Layout>
@@ -134,13 +166,15 @@ describe('Layout', () => {
     hasConsentBeenGivenMock.mockReturnValue(false)
     const user = userEvent.setup()
 
-    renderWithProviders(
+    renderLayout(
       <Layout>
         <div>Page Content</div>
       </Layout>
     )
 
-    await user.click(await screen.findByRole('button', { name: 'Dismiss Banner' }))
+    await user.click(
+      await screen.findByRole('button', { name: 'Dismiss Banner' }, { timeout: 5000 })
+    )
 
     await waitFor(() => {
       expect(screen.queryByText('Consent Banner')).not.toBeInTheDocument()
@@ -150,7 +184,7 @@ describe('Layout', () => {
   it('renders the current user and logs out from the header action', async () => {
     const user = userEvent.setup()
 
-    renderWithProviders(
+    renderLayout(
       <Layout>
         <div>Page Content</div>
       </Layout>
@@ -161,6 +195,34 @@ describe('Layout', () => {
     await user.click(await screen.findByRole('button', { name: /logout/i }))
 
     expect(logoutMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears query data when the active backend target changes', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    })
+    queryClient.setQueryData(['repositories'], [{ id: 1, name: 'Local Repo' }])
+    const user = userEvent.setup()
+
+    renderWithProviders(
+      <RemoteBackendProvider>
+        <Layout>
+          <RemoteBackendSwitchButton />
+        </Layout>
+      </RemoteBackendProvider>,
+      { queryClient }
+    )
+
+    expect(queryClient.getQueryData(['repositories'])).toEqual([{ id: 1, name: 'Local Repo' }])
+
+    await user.click(screen.getByRole('button', { name: 'Switch backend' }))
+
+    await waitFor(() => {
+      expect(queryClient.getQueryData(['repositories'])).toBeUndefined()
+    })
   })
 
   it('shows the passkey prompt before analytics even when password setup is still pending', async () => {
@@ -175,13 +237,14 @@ describe('Layout', () => {
         passkey_count: 0,
       },
       proxyAuthEnabled: false,
+      hasGlobalPermission: () => true,
       canEnrollPasskeyFromRecentLogin: true,
       clearRecentPasskeyEnrollmentState: vi.fn(),
       refreshUser: refreshUserMock,
       logout: logoutMock,
     })
 
-    renderWithProviders(
+    renderLayout(
       <Layout>
         <div>Page Content</div>
       </Layout>,
@@ -195,7 +258,7 @@ describe('Layout', () => {
   it('shows the passkey prompt after a recent password login when no passkeys exist', async () => {
     sessionStorage.setItem('recent_password_login', '1')
 
-    renderWithProviders(
+    renderLayout(
       <Layout>
         <div>Page Content</div>
       </Layout>
@@ -209,13 +272,14 @@ describe('Layout', () => {
     useAuthMock.mockReturnValue({
       user: { username: 'admin', email: 'admin@example.com', role: 'admin', passkey_count: 1 },
       proxyAuthEnabled: false,
+      hasGlobalPermission: () => true,
       canEnrollPasskeyFromRecentLogin: true,
       clearRecentPasskeyEnrollmentState: vi.fn(),
       refreshUser: refreshUserMock,
       logout: logoutMock,
     })
 
-    renderWithProviders(
+    renderLayout(
       <Layout>
         <div>Page Content</div>
       </Layout>
@@ -230,7 +294,7 @@ describe('Layout', () => {
     sessionStorage.setItem('recent_password_login', '1')
     const user = userEvent.setup()
 
-    const { unmount } = renderWithProviders(
+    const { unmount } = renderLayout(
       <Layout>
         <div>Page Content</div>
       </Layout>
@@ -248,7 +312,7 @@ describe('Layout', () => {
 
     sessionStorage.setItem('recent_password_login', '1')
     unmount()
-    renderWithProviders(
+    renderLayout(
       <Layout>
         <div>Page Content</div>
       </Layout>
@@ -261,7 +325,7 @@ describe('Layout', () => {
     localStorage.setItem('passkey_prompt_snoozed_admin', String(Date.now() - 1000))
     sessionStorage.setItem('recent_password_login', '1')
     unmount()
-    renderWithProviders(
+    renderLayout(
       <Layout>
         <div>Page Content</div>
       </Layout>
@@ -274,7 +338,7 @@ describe('Layout', () => {
     sessionStorage.setItem('recent_password_login', '1')
     const user = userEvent.setup()
 
-    const { unmount } = renderWithProviders(
+    const { unmount } = renderLayout(
       <Layout>
         <div>Page Content</div>
       </Layout>
@@ -290,7 +354,7 @@ describe('Layout', () => {
 
     sessionStorage.setItem('recent_password_login', '1')
     unmount()
-    renderWithProviders(
+    renderLayout(
       <Layout>
         <div>Page Content</div>
       </Layout>
@@ -315,7 +379,7 @@ describe('Layout', () => {
       trackAnnouncementCtaClick: vi.fn(),
     })
 
-    renderWithProviders(
+    renderLayout(
       <Layout>
         <div>Page Content</div>
       </Layout>
@@ -339,7 +403,7 @@ describe('Layout', () => {
       trackAnnouncementCtaClick: vi.fn(),
     })
 
-    renderWithProviders(
+    renderLayout(
       <Layout>
         <div>Page Content</div>
       </Layout>

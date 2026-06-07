@@ -124,4 +124,47 @@ describe('ScheduleJobCard', () => {
     })
     expect(nextRunStat?.tooltip?.props?.display?.scheduledTimeZone).toBe(baseJob.timezone)
   })
+
+  it('keeps run now available when the schedule is disabled', () => {
+    renderWithProviders(
+      <ScheduleJobCard
+        job={{ ...baseJob, enabled: false }}
+        repositories={[{ id: 1, name: 'My Repo', path: '/backups/my-repo' }]}
+        canManage
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onDuplicate={vi.fn()}
+        onRunNow={vi.fn()}
+        onToggle={vi.fn()}
+      />
+    )
+
+    const props = entityCardMock.mock.lastCall?.[0] as
+      | { primaryAction?: { disabled?: boolean } }
+      | undefined
+
+    expect(props?.primaryAction?.disabled).toBe(false)
+  })
+
+  it('disables run now while the manual run is pending', () => {
+    renderWithProviders(
+      <ScheduleJobCard
+        job={{ ...baseJob, enabled: false }}
+        repositories={[{ id: 1, name: 'My Repo', path: '/backups/my-repo' }]}
+        canManage
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onDuplicate={vi.fn()}
+        onRunNow={vi.fn()}
+        onToggle={vi.fn()}
+        isRunNowPending
+      />
+    )
+
+    const props = entityCardMock.mock.lastCall?.[0] as
+      | { primaryAction?: { disabled?: boolean } }
+      | undefined
+
+    expect(props?.primaryAction?.disabled).toBe(true)
+  })
 })

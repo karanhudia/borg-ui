@@ -7,7 +7,7 @@ Provides a unified view of all operations (backups, restores, checks, compacts, 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import Any, List, Optional
 from datetime import datetime
 from pydantic import BaseModel
 import os
@@ -36,6 +36,7 @@ from app.api.auth import get_current_user, User
 from app.core.security import get_current_download_user
 from app.utils.datetime_utils import serialize_datetime
 from app.services.backup_service import backup_service
+from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 
 logger = structlog.get_logger()
 
@@ -139,6 +140,13 @@ RCLONE_ACTIVITY_OPERATIONS = {
 }
 
 
+def _no_logs_available_exception() -> HTTPException:
+    return HTTPException(
+        status_code=404,
+        detail={"key": "backend.errors.activity.noLogsAvailableForJob"},
+    )
+
+
 def _format_rclone_job_logs(job: RcloneSyncJob) -> str:
     parts = []
     if job.log_text:
@@ -148,6 +156,25 @@ def _format_rclone_job_logs(job: RcloneSyncJob) -> str:
     return "\n".join(parts)
 
 
+def _format_package_install_logs(job: PackageInstallJob) -> str:
+    lines = [f"PACKAGE: Package #{job.package_id}", f"STATUS: {job.status}"]
+    if job.exit_code is not None:
+        lines.append(f"EXIT CODE: {job.exit_code}")
+    lines.extend(
+        [
+            "",
+            "STDOUT:",
+            job.stdout or "(empty)",
+            "",
+            "STDERR:",
+            job.stderr or "(empty)",
+        ]
+    )
+    if job.error_message:
+        lines.extend(["", "ERROR:", job.error_message])
+    return "\n".join(lines)
+
+
 def _get_rclone_job(db: Session, job_type: str, job_id: int) -> RcloneSyncJob | None:
     operation = RCLONE_ACTIVITY_OPERATIONS[job_type]
     return (
@@ -155,6 +182,81 @@ def _get_rclone_job(db: Session, job_type: str, job_id: int) -> RcloneSyncJob | 
         .filter(RcloneSyncJob.id == job_id, RcloneSyncJob.operation == operation)
         .first()
     )
+
+
+def _activity_log_policy_sources(job_type: str, job: Any) -> dict[str, Any]:
+    if job_type == "script_execution":
+        return {
+            "output_text": [
+                getattr(job, "stdout", None),
+                getattr(job, "stderr", None),
+                getattr(job, "error_message", None),
+            ],
+            "file_path": None,
+            "exit_code": getattr(job, "exit_code", None),
+        }
+    if job_type in RCLONE_ACTIVITY_OPERATIONS:
+        return {
+            "output_text": [
+                getattr(job, "log_text", None),
+                getattr(job, "error_text", None),
+            ],
+            "file_path": getattr(job, "log_path", None),
+            "exit_code": None,
+        }
+    if job_type == "package":
+        return {
+            "output_text": [
+                getattr(job, "stdout", None),
+                getattr(job, "stderr", None),
+                getattr(job, "error_message", None),
+            ],
+            "file_path": getattr(job, "log_file_path", None),
+            "exit_code": getattr(job, "exit_code", None),
+        }
+    return {
+        "output_text": [
+            getattr(job, "logs", None),
+            getattr(job, "error_message", None),
+        ],
+        "file_path": getattr(job, "log_file_path", None),
+        "exit_code": getattr(job, "exit_code", None),
+    }
+
+
+def _activity_job_has_logs(job_type: str, job: Any, *, log_save_policy: str) -> bool:
+    sources = _activity_log_policy_sources(job_type, job)
+    return job_has_logs_by_policy(
+        job,
+        log_save_policy,
+        output_text=sources["output_text"],
+        file_path=sources["file_path"],
+        exit_code=sources["exit_code"],
+    )
+
+
+def _ensure_activity_logs_visible(job_type: str, job: Any, db: Session) -> None:
+    if not _activity_job_has_logs(
+        job_type, job, log_save_policy=get_log_save_policy(db)
+    ):
+        raise _no_logs_available_exception()
+
+
+def _text_download_response(log_text: str, *, filename: str) -> FileResponse:
+    temp_file = tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt")
+    try:
+        temp_file.write(log_text)
+        temp_file.flush()
+        temp_file.close()
+        return FileResponse(
+            path=temp_file.name,
+            filename=filename,
+            media_type="text/plain",
+        )
+    except Exception as e:
+        if os.path.exists(temp_file.name):
+            os.unlink(temp_file.name)
+        raise e
 
 
 @router.get("/recent", response_model=List[ActivityItem])
@@ -173,6 +275,7 @@ async def list_recent_activity(
     """
 
     activities = []
+    log_save_policy = get_log_save_policy(db)
 
     # Fetch backup jobs
     if not job_type or job_type == "backup":
@@ -236,7 +339,12 @@ async def list_recent_activity(
                     "backup_plan_name": backup_plan_name,
                     "archive_name": getattr(job, "archive_name", None),
                     "package_name": None,
-                    "has_logs": bool(job.log_file_path or job.logs),
+                    "has_logs": job_has_logs_by_policy(
+                        job,
+                        log_save_policy,
+                        output_text=[job.logs, job.error_message],
+                        file_path=job.log_file_path,
+                    ),
                 }
             )
 
@@ -272,9 +380,11 @@ async def list_recent_activity(
                     "schedule_id": None,
                     "archive_name": job.archive,
                     "package_name": None,
-                    "has_logs": bool(
-                        job.logs
-                    ),  # Check logs field instead of log_file_path
+                    "has_logs": job_has_logs_by_policy(
+                        job,
+                        log_save_policy,
+                        output_text=[job.logs, job.error_message],
+                    ),
                 }
             )
 
@@ -309,7 +419,15 @@ async def list_recent_activity(
                     "schedule_id": None,
                     "archive_name": None,
                     "package_name": None,
-                    "has_logs": bool(getattr(job, "log_file_path", None)),
+                    "has_logs": job_has_logs_by_policy(
+                        job,
+                        log_save_policy,
+                        output_text=[
+                            getattr(job, "logs", None),
+                            job.error_message,
+                        ],
+                        file_path=getattr(job, "log_file_path", None),
+                    ),
                     "_sort_at": job.started_at or job.created_at,
                 }
             )
@@ -351,10 +469,14 @@ async def list_recent_activity(
                     "schedule_id": None,
                     "archive_name": job.archive_name,
                     "package_name": None,
-                    "has_logs": bool(
-                        getattr(job, "has_logs", False)
-                        or getattr(job, "log_file_path", None)
-                        or getattr(job, "logs", None)
+                    "has_logs": job_has_logs_by_policy(
+                        job,
+                        log_save_policy,
+                        output_text=[
+                            getattr(job, "logs", None),
+                            job.error_message,
+                        ],
+                        file_path=getattr(job, "log_file_path", None),
                     ),
                     "_sort_at": job.started_at or job.created_at,
                 }
@@ -398,7 +520,15 @@ async def list_recent_activity(
                     "schedule_id": None,
                     "archive_name": None,
                     "package_name": None,
-                    "has_logs": bool(getattr(job, "log_file_path", None)),
+                    "has_logs": job_has_logs_by_policy(
+                        job,
+                        log_save_policy,
+                        output_text=[
+                            getattr(job, "logs", None),
+                            job.error_message,
+                        ],
+                        file_path=getattr(job, "log_file_path", None),
+                    ),
                 }
             )
 
@@ -437,7 +567,15 @@ async def list_recent_activity(
                     "schedule_id": None,
                     "archive_name": None,
                     "package_name": None,
-                    "has_logs": bool(job.logs),
+                    "has_logs": job_has_logs_by_policy(
+                        job,
+                        log_save_policy,
+                        output_text=[
+                            getattr(job, "logs", None),
+                            job.error_message,
+                        ],
+                        file_path=getattr(job, "log_file_path", None),
+                    ),
                 }
             )
 
@@ -474,7 +612,16 @@ async def list_recent_activity(
                     "schedule_id": None,
                     "archive_name": None,
                     "package_name": package_name,
-                    "has_logs": bool(getattr(job, "log_file_path", None)),
+                    "has_logs": job_has_logs_by_policy(
+                        job,
+                        log_save_policy,
+                        output_text=[
+                            getattr(job, "stdout", None),
+                            getattr(job, "stderr", None),
+                            job.error_message,
+                        ],
+                        file_path=getattr(job, "log_file_path", None),
+                    ),
                 }
             )
 
@@ -520,8 +667,15 @@ async def list_recent_activity(
                     "backup_plan_name": backup_plan_name,
                     "archive_name": execution.hook_type,
                     "package_name": script_name,
-                    "has_logs": bool(
-                        execution.stdout or execution.stderr or execution.error_message
+                    "has_logs": job_has_logs_by_policy(
+                        execution,
+                        log_save_policy,
+                        output_text=[
+                            execution.stdout,
+                            execution.stderr,
+                            execution.error_message,
+                        ],
+                        exit_code=execution.exit_code,
                     ),
                     "_sort_at": execution.started_at,
                 }
@@ -566,7 +720,12 @@ async def list_recent_activity(
                     "schedule_id": None,
                     "archive_name": None,
                     "package_name": None,
-                    "has_logs": bool(job.log_path or job.log_text or job.error_text),
+                    "has_logs": job_has_logs_by_policy(
+                        job,
+                        log_save_policy,
+                        output_text=[job.log_text, job.error_text],
+                        file_path=job.log_path,
+                    ),
                     "_sort_at": job.started_at or job.created_at,
                 }
             )
@@ -625,6 +784,7 @@ async def get_job_logs(
                     "params": {"jobType": job_type},
                 },
             )
+        _ensure_activity_logs_visible(job_type, execution, db)
         return _paginate_log_text(
             _format_script_execution_logs(execution), offset, limit
         )
@@ -639,6 +799,7 @@ async def get_job_logs(
                     "params": {"jobType": job_type},
                 },
             )
+        _ensure_activity_logs_visible(job_type, job, db)
         log_text = _format_rclone_job_logs(job)
         if log_text:
             return _paginate_log_text(log_text, offset, limit)
@@ -668,6 +829,11 @@ async def get_job_logs(
                 "params": {"jobType": job_type},
             },
         )
+
+    _ensure_activity_logs_visible(job_type, job, db)
+
+    if job_type == "package":
+        return _paginate_log_text(_format_package_install_logs(job), offset, limit)
 
     if job_type == "backup" and getattr(job, "execution_mode", None) == "agent":
         agent_job = _get_agent_job_for_backup(db, job.id)
@@ -730,8 +896,9 @@ async def get_job_logs(
                 )
 
         # Fallback to stored logs in database (hooks or error messages)
-        if job.logs:
-            lines = job.logs.split("\n")
+        stored_logs = getattr(job, "logs", None)
+        if stored_logs:
+            lines = stored_logs.split("\n")
             total_lines = len(lines)
 
             # Apply offset and limit
@@ -936,26 +1103,14 @@ async def download_job_logs(
                     "key": "backend.errors.activity.cannotDownloadLogsForRunningJob"
                 },
             )
+        _ensure_activity_logs_visible(job_type, execution, db)
         log_text = _format_script_execution_logs(execution)
         if not log_text.strip():
-            raise HTTPException(
-                status_code=404,
-                detail={"key": "backend.errors.activity.noLogsAvailableForJob"},
-            )
-        temp_file = tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt")
-        try:
-            temp_file.write(log_text)
-            temp_file.flush()
-            temp_file.close()
-            return FileResponse(
-                path=temp_file.name,
-                filename=f"{job_type}_job_{job_id}_logs.txt",
-                media_type="text/plain",
-            )
-        except Exception as e:
-            if os.path.exists(temp_file.name):
-                os.unlink(temp_file.name)
-            raise e
+            raise _no_logs_available_exception()
+        return _text_download_response(
+            log_text,
+            filename=f"{job_type}_job_{job_id}_logs.txt",
+        )
 
     if job_type in RCLONE_ACTIVITY_OPERATIONS:
         job = _get_rclone_job(db, job_type, job_id)
@@ -974,6 +1129,7 @@ async def download_job_logs(
                     "key": "backend.errors.activity.cannotDownloadLogsForRunningJob"
                 },
             )
+        _ensure_activity_logs_visible(job_type, job, db)
         if job.log_path and os.path.exists(job.log_path):
             return FileResponse(
                 path=job.log_path,
@@ -982,24 +1138,11 @@ async def download_job_logs(
             )
         log_text = _format_rclone_job_logs(job)
         if not log_text.strip():
-            raise HTTPException(
-                status_code=404,
-                detail={"key": "backend.errors.activity.noLogsAvailableForJob"},
-            )
-        temp_file = tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt")
-        try:
-            temp_file.write(log_text)
-            temp_file.flush()
-            temp_file.close()
-            return FileResponse(
-                path=temp_file.name,
-                filename=f"{job_type}_job_{job_id}_logs.txt",
-                media_type="text/plain",
-            )
-        except Exception as e:
-            if os.path.exists(temp_file.name):
-                os.unlink(temp_file.name)
-            raise e
+            raise _no_logs_available_exception()
+        return _text_download_response(
+            log_text,
+            filename=f"{job_type}_job_{job_id}_logs.txt",
+        )
 
     if job_type not in job_models:
         raise HTTPException(
@@ -1027,6 +1170,17 @@ async def download_job_logs(
         raise HTTPException(
             status_code=400,
             detail={"key": "backend.errors.activity.cannotDownloadLogsForRunningJob"},
+        )
+
+    _ensure_activity_logs_visible(job_type, job, db)
+
+    if job_type == "package":
+        log_text = _format_package_install_logs(job)
+        if not log_text.strip():
+            raise _no_logs_available_exception()
+        return _text_download_response(
+            log_text,
+            filename=f"{job_type}_job_{job_id}_logs.txt",
         )
 
     # Try to get logs from log file first
@@ -1078,9 +1232,7 @@ async def download_job_logs(
                 raise e
 
     # No logs available
-    raise HTTPException(
-        status_code=404, detail={"key": "backend.errors.activity.noLogsAvailableForJob"}
-    )
+    raise _no_logs_available_exception()
 
 
 @router.delete("/{job_type}/{job_id}")

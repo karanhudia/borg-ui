@@ -30,6 +30,20 @@ export interface SourceDatabaseSelection {
   script_execution_order?: number
 }
 
+export interface SourceContainerSelection {
+  container_name: string
+  display_name: string
+  image?: string | null
+  backup_mode: 'export'
+  export_path: string
+  script_execution_target: 'source' | 'server'
+  pre_backup_script_id?: number | null
+  post_backup_script_id?: number | null
+  pre_backup_script_parameters?: Record<string, string> | null
+  post_backup_script_parameters?: Record<string, string> | null
+  script_execution_order?: number
+}
+
 export interface SourceLocation {
   source_type: SourceLocationKind
   source_ssh_connection_id?: number | null
@@ -37,6 +51,7 @@ export interface SourceLocation {
   paths: string[]
   snapshot?: SourceSnapshotConfig
   database?: SourceDatabaseSelection
+  container?: SourceContainerSelection
 }
 
 export interface Repository {
@@ -135,6 +150,7 @@ export interface BackupJob {
   id: string | number
   repository: string
   repository_id?: number | null
+  repository_path?: string | null
   type?: string
   status: 'running' | 'completed' | 'completed_with_warnings' | 'failed' | 'cancelled' | string
   started_at?: string
@@ -149,6 +165,7 @@ export interface BackupJob {
   error_message?: string
   triggered_by?: string
   schedule_id?: number | null
+  scheduled_job_id?: number | null
   has_logs?: boolean
   maintenance_status?: string
   backup_plan_id?: number | null
@@ -157,6 +174,11 @@ export interface BackupJob {
   archive_name?: string | null
   execution_mode?: 'local' | 'remote_ssh' | 'agent' | string
   route_strategy?: string | null
+  retry_attempt?: number | null
+  retry_original_job_id?: number | null
+  retry_source_job_id?: number | null
+  retry_requested_by_user_id?: number | null
+  retry_requested_at?: string | null
   progress_details?: {
     original_size: number
     compressed_size?: number
@@ -345,6 +367,11 @@ export interface BackupPlanRun {
   completed_at?: string | null
   error_message?: string | null
   created_at?: string | null
+  retry_attempt?: number | null
+  retry_original_run_id?: number | null
+  retry_source_run_id?: number | null
+  retry_requested_by_user_id?: number | null
+  retry_requested_at?: string | null
   repositories: BackupPlanRunRepository[]
   script_executions?: BackupPlanScriptExecution[]
 }

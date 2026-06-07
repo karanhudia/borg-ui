@@ -78,6 +78,7 @@ from app.services.job_admission import (
     OPERATION_PRUNE,
     ensure_repository_admission,
 )
+from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.services.repository_command_lock import run_serialized_repository_command
 from app.services.rclone_repository_service import (
     SYNC_DIRECTION_AGENT_TO_REMOTE,
@@ -1584,7 +1585,7 @@ def _discard_rclone_repository_record(
 
 
 def _serialize_rclone_storage(
-    repository: Repository, db: Session
+    repository: Repository, db: Session, *, log_save_policy: str | None = None
 ) -> Optional[Dict[str, Any]]:
     storage = (
         db.query(RepositoryStorage)
@@ -1606,6 +1607,8 @@ def _serialize_rclone_storage(
         .order_by(RcloneSyncJob.created_at.desc(), RcloneSyncJob.id.desc())
         .first()
     )
+    if log_save_policy is None:
+        log_save_policy = get_log_save_policy(db)
     status["latest_sync_job"] = (
         {
             "id": latest_job.id,
@@ -1616,8 +1619,11 @@ def _serialize_rclone_storage(
             "completed_at": format_datetime(latest_job.completed_at),
             "error_text": latest_job.error_text,
             "operation": latest_job.operation,
-            "has_log": bool(
-                latest_job.log_path or latest_job.log_text or latest_job.error_text
+            "has_log": job_has_logs_by_policy(
+                latest_job,
+                log_save_policy,
+                output_text=[latest_job.log_text, latest_job.error_text],
+                file_path=latest_job.log_path,
             ),
         }
         if latest_job
@@ -2622,6 +2628,7 @@ async def get_repositories(
 
         # Check for running maintenance jobs for each repository
         repo_list = []
+        log_save_policy = get_log_save_policy(db)
         for repo in repositories:
             # Check if this repository has running check, compact, or prune jobs
             has_check = (
@@ -2703,7 +2710,9 @@ async def get_repositories(
                 "source_ssh_connection_id": repo.source_ssh_connection_id,
                 "borg_version": repo.borg_version or 1,
             }
-            rclone_storage = _serialize_rclone_storage(repo, db)
+            rclone_storage = _serialize_rclone_storage(
+                repo, db, log_save_policy=log_save_policy
+            )
             if rclone_storage:
                 repo_payload["storage_backend"] = _primary_storage_backend(repo)
                 repo_payload["rclone_storage"] = rclone_storage
@@ -5298,6 +5307,7 @@ async def get_repository_wipe_job(
             job,
             include_preview=True,
             include_logs=True,
+            log_save_policy=get_log_save_policy(db),
         )
     except HTTPException:
         raise
@@ -5727,6 +5737,12 @@ async def break_repository_lock(
     """Break a stale lock on a repository (user-initiated)"""
     try:
         repository = _load_repository_with_access(repo_id, current_user, db, "operator")
+        settings = db.query(SystemSettings).first()
+        if settings and not settings.lock_breaking_enabled:
+            raise HTTPException(
+                status_code=403,
+                detail={"key": "backend.errors.repo.lockBreakingDisabled"},
+            )
 
         logger.warning(
             "User requested lock break", repo_id=repo_id, user=current_user.username
@@ -5843,7 +5859,12 @@ async def get_check_job_status(
             job_id,
             not_found_key="backend.errors.repo.checkJobNotFound",
         )
-        return serialize_job_status(job, include_progress=True, include_logs=True)
+        return serialize_job_status(
+            job,
+            include_progress=True,
+            include_logs=True,
+            log_save_policy=get_log_save_policy(db),
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -5866,11 +5887,15 @@ async def get_repository_check_jobs(
         jobs = get_repository_jobs(db, current_user, repo_id, CheckJob, limit=limit)
         if scheduled_only:
             jobs = [job for job in jobs if bool(getattr(job, "scheduled_check", False))]
+        log_save_policy = get_log_save_policy(db)
         return {
             "jobs": [
                 {
                     **serialize_job_summary(
-                        job, include_progress=True, include_has_logs=True
+                        job,
+                        include_progress=True,
+                        include_has_logs=True,
+                        log_save_policy=log_save_policy,
                     ),
                     "scheduled_check": bool(getattr(job, "scheduled_check", False)),
                 }
@@ -5902,7 +5927,11 @@ async def get_restore_check_job_status(
             not_found_key="backend.errors.repo.restoreCheckJobNotFound",
         )
         payload = serialize_job_status(
-            job, include_progress=True, include_logs=True, include_has_logs=True
+            job,
+            include_progress=True,
+            include_logs=True,
+            include_has_logs=True,
+            log_save_policy=get_log_save_policy(db),
         )
         probe_paths = json.loads(job.probe_paths) if job.probe_paths else []
         payload["archive_name"] = job.archive_name
@@ -5936,12 +5965,16 @@ async def get_repository_restore_check_jobs(
         jobs = get_repository_jobs(
             db, current_user, repo_id, RestoreCheckJob, limit=limit
         )
+        log_save_policy = get_log_save_policy(db)
         return {
             "jobs": [
                 (
                     lambda probe_paths: {
                         **serialize_job_summary(
-                            job, include_progress=True, include_has_logs=True
+                            job,
+                            include_progress=True,
+                            include_has_logs=True,
+                            log_save_policy=log_save_policy,
                         ),
                         "archive_name": job.archive_name,
                         "probe_paths": probe_paths,
@@ -5983,7 +6016,12 @@ async def get_compact_job_status(
             job_id,
             not_found_key="backend.errors.repo.compactJobNotFound",
         )
-        return serialize_job_status(job, include_progress=True, include_logs=True)
+        return serialize_job_status(
+            job,
+            include_progress=True,
+            include_logs=True,
+            log_save_policy=get_log_save_policy(db),
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -6003,8 +6041,16 @@ async def get_repository_compact_jobs(
     """Get recent compact jobs for a repository"""
     try:
         jobs = get_repository_jobs(db, current_user, repo_id, CompactJob, limit=limit)
+        log_save_policy = get_log_save_policy(db)
         return {
-            "jobs": [serialize_job_summary(job, include_progress=True) for job in jobs]
+            "jobs": [
+                serialize_job_summary(
+                    job,
+                    include_progress=True,
+                    log_save_policy=log_save_policy,
+                )
+                for job in jobs
+            ]
         }
     except HTTPException:
         raise
@@ -6031,7 +6077,11 @@ async def get_prune_job_status(
             job_id,
             not_found_key="backend.errors.repo.pruneJobNotFound",
         )
-        return serialize_job_status(job, include_logs=True)
+        return serialize_job_status(
+            job,
+            include_logs=True,
+            log_save_policy=get_log_save_policy(db),
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -6051,8 +6101,16 @@ async def get_repository_prune_jobs(
     """Get recent prune jobs for a repository"""
     try:
         jobs = get_repository_jobs(db, current_user, repo_id, PruneJob, limit=limit)
+        log_save_policy = get_log_save_policy(db)
         return {
-            "jobs": [serialize_job_summary(job, include_has_logs=True) for job in jobs]
+            "jobs": [
+                serialize_job_summary(
+                    job,
+                    include_has_logs=True,
+                    log_save_policy=log_save_policy,
+                )
+                for job in jobs
+            ]
         }
     except HTTPException:
         raise

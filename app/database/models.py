@@ -475,10 +475,45 @@ class RcloneRemote(Base):
     last_tested_at = Column(DateTime, nullable=True)
     last_test_status = Column(String, default="unknown", nullable=False)
     last_error = Column(Text, nullable=True)
+    storage_total = Column(BigInteger, nullable=True)
+    storage_used = Column(BigInteger, nullable=True)
+    storage_available = Column(BigInteger, nullable=True)
+    storage_percent_used = Column(Float, nullable=True)
+    last_storage_check = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=utc_now, nullable=False)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
 
     storages = relationship("RepositoryStorage", back_populates="rclone_remote")
+
+
+class RcloneOAuthProviderCredential(Base):
+    __tablename__ = "rclone_oauth_provider_credentials"
+
+    id = Column(Integer, primary_key=True, index=True)
+    provider = Column(String, unique=True, index=True, nullable=False)
+    client_id = Column(String, nullable=True)
+    client_secret_encrypted = Column(String, nullable=True)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+
+class RemoteBackendClient(Base):
+    __tablename__ = "remote_backend_clients"
+
+    id = Column(String, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    api_base_url = Column(String, nullable=False)
+    web_base_url = Column(String, nullable=False)
+    health_status = Column(String, default="unknown", nullable=False)
+    health_checked_at = Column(DateTime, nullable=True)
+    app_version = Column(String, nullable=True)
+    borg_version = Column(String, nullable=True)
+    borg2_version = Column(String, nullable=True)
+    health_error = Column(Text, nullable=True)
+    compatibility = Column(String, default="unknown", nullable=False)
+    compatibility_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
 
 
 class RepositoryStorage(Base):
@@ -616,7 +651,45 @@ class BackupJob(Base):
     remote_process_pid = Column(Integer, nullable=True)  # PID on remote host
     remote_hostname = Column(String, nullable=True)  # Remote hostname for reference
 
+    # Retry lineage metadata. Original attempts default to attempt 1; retry
+    # attempts point at the original and immediate source rows.
+    retry_original_job_id = Column(
+        Integer, ForeignKey("backup_jobs.id", ondelete="SET NULL"), nullable=True
+    )
+    retry_source_job_id = Column(
+        Integer, ForeignKey("backup_jobs.id", ondelete="SET NULL"), nullable=True
+    )
+    retry_attempt = Column(Integer, default=1, nullable=False)
+    retry_requested_by_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    retry_requested_at = Column(DateTime, nullable=True)
+
     created_at = Column(DateTime, default=utc_now)
+
+
+class BackupJobRetryLineage(Base):
+    __tablename__ = "backup_job_retry_lineage"
+    __table_args__ = (
+        UniqueConstraint("created_job_id", name="uq_backup_job_retry_created_job"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    original_job_id = Column(
+        Integer, ForeignKey("backup_jobs.id", ondelete="SET NULL"), nullable=True
+    )
+    retry_source_job_id = Column(
+        Integer, ForeignKey("backup_jobs.id", ondelete="SET NULL"), nullable=True
+    )
+    attempt_number = Column(Integer, nullable=False)
+    requested_by_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    requested_at = Column(DateTime, default=utc_now, nullable=False)
+    created_job_id = Column(
+        Integer, ForeignKey("backup_jobs.id", ondelete="SET NULL"), nullable=True
+    )
+    request_snapshot = Column(JSON, nullable=False)
 
 
 class RestoreJob(Base):
@@ -936,6 +1009,18 @@ class BackupPlanRun(Base):
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime, default=utc_now, nullable=False)
 
+    retry_original_run_id = Column(
+        Integer, ForeignKey("backup_plan_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    retry_source_run_id = Column(
+        Integer, ForeignKey("backup_plan_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    retry_attempt = Column(Integer, default=1, nullable=False)
+    retry_requested_by_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    retry_requested_at = Column(DateTime, nullable=True)
+
     repositories = relationship(
         "BackupPlanRunRepository",
         back_populates="backup_plan_run",
@@ -945,6 +1030,30 @@ class BackupPlanRun(Base):
         "ScriptExecution",
         back_populates="backup_plan_run",
     )
+
+
+class BackupPlanRunRetryLineage(Base):
+    __tablename__ = "backup_plan_run_retry_lineage"
+    __table_args__ = (
+        UniqueConstraint("created_run_id", name="uq_backup_plan_run_retry_created"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    original_run_id = Column(
+        Integer, ForeignKey("backup_plan_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    retry_source_run_id = Column(
+        Integer, ForeignKey("backup_plan_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    attempt_number = Column(Integer, nullable=False)
+    requested_by_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    requested_at = Column(DateTime, default=utc_now, nullable=False)
+    created_run_id = Column(
+        Integer, ForeignKey("backup_plan_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    request_snapshot = Column(JSON, nullable=False)
 
 
 class BackupPlanRunRepository(Base):
@@ -1291,6 +1400,9 @@ class SystemSettings(Base):
     bypass_lock_on_list = Column(
         Boolean, default=False, nullable=False
     )  # Use --bypass-lock for all borg list commands (beta fix for concurrent operation lock issues)
+    lock_breaking_enabled = Column(
+        Boolean, default=True, nullable=False
+    )  # Allow user-initiated repository lock breaking
     show_restore_tab = Column(
         Boolean, default=False, nullable=False
     )  # Show legacy Restore tab in navigation (beta feature)

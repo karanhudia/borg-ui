@@ -205,6 +205,7 @@ class SystemSettingsUpdate(BaseModel):
     bypass_lock_on_list: Optional[bool] = (
         None  # Use --bypass-lock for all borg list commands (beta)
     )
+    lock_breaking_enabled: Optional[bool] = None
     show_restore_tab: Optional[bool] = (
         None  # Show legacy Restore tab in navigation (beta)
     )
@@ -420,6 +421,7 @@ async def get_system_settings(
                 "use_new_wizard": settings.use_new_wizard,
                 "bypass_lock_on_info": settings.bypass_lock_on_info,
                 "bypass_lock_on_list": settings.bypass_lock_on_list,
+                "lock_breaking_enabled": settings.lock_breaking_enabled,
                 "show_restore_tab": settings.show_restore_tab,
                 "borg2_fast_browse_beta_enabled": settings.borg2_fast_browse_beta_enabled,
                 "stats_refresh_interval_minutes": settings.stats_refresh_interval_minutes
@@ -817,6 +819,8 @@ async def update_system_settings(
             settings.bypass_lock_on_info = settings_update.bypass_lock_on_info
         if settings_update.bypass_lock_on_list is not None:
             settings.bypass_lock_on_list = settings_update.bypass_lock_on_list
+        if settings_update.lock_breaking_enabled is not None:
+            settings.lock_breaking_enabled = settings_update.lock_breaking_enabled
         if settings_update.show_restore_tab is not None:
             settings.show_restore_tab = settings_update.show_restore_tab
         if settings_update.borg2_fast_browse_beta_enabled is not None:

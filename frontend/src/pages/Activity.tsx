@@ -3,9 +3,10 @@ import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { Box, IconButton, MenuItem, Select, Typography } from '@mui/material'
 import { History, Info, RefreshCw } from 'lucide-react'
-import { activityAPI } from '../services/api'
+import { activityAPI, repositoriesAPI } from '../services/api'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { useAuth } from '../hooks/useAuth'
+import { useLockBreakPermissions } from '../hooks/useLockBreakPermissions'
 import BackupJobsTable from '../components/BackupJobsTable'
 import LogViewerDialog from '../components/LogViewerDialog'
 import RunningCloudStorageJobsSection from '../components/RunningCloudStorageJobsSection'
@@ -18,6 +19,7 @@ interface ActivityItem {
   completed_at: string | null
   error_message: string | null
   repository: string | null
+  repository_id?: number | null
   log_file_path: string | null
   archive_name: string | null
   package_name: string | null
@@ -56,6 +58,18 @@ const Activity: React.FC = () => {
       return response.data
     },
     refetchInterval: 3000, // Refresh every 3 seconds
+  })
+
+  const { data: repositoriesData } = useQuery({
+    queryKey: ['repositories'],
+    queryFn: repositoriesAPI.getRepositories,
+  })
+  const repositories = React.useMemo(
+    () => repositoriesData?.data?.repositories ?? [],
+    [repositoriesData?.data?.repositories]
+  )
+  const { canBreakLock: canBreakLockForActivity, lockBreakingEnabled } = useLockBreakPermissions({
+    repositories,
   })
 
   const handleTypeFilterChange = (value: string) => {
@@ -177,7 +191,8 @@ const Activity: React.FC = () => {
             breakLock: true,
             delete: true,
           }}
-          canBreakLocks={canManageActivityJobs}
+          canBreakLocks={canBreakLockForActivity}
+          lockBreakingEnabled={lockBreakingEnabled}
           canDeleteJobs={canManageActivityJobs}
           getRowKey={(activity) => `${activity.type}-${activity.id}`}
           headerBgColor="background.default"
@@ -197,7 +212,8 @@ const Activity: React.FC = () => {
             breakLock: true,
             delete: true,
           }}
-          canBreakLocks={canManageActivityJobs}
+          canBreakLocks={canBreakLockForActivity}
+          lockBreakingEnabled={lockBreakingEnabled}
           canDeleteJobs={canManageActivityJobs}
           getRowKey={(activity) => `${activity.type}-${activity.id}`}
           headerBgColor="background.default"

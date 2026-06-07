@@ -109,6 +109,7 @@
     "items": {
       "dashboard": "Dashboard",
       "activity": "Attività",
+      "remoteClients": "Client remoti",
       "remoteMachines": "Macchine Remote",
       "managedAgents": "Agenti gestiti",
       "cloudStorage": "Archiviazione cloud",
@@ -159,6 +160,96 @@
     "logout": "Esci",
     "yourPlan": "Your Plan"
   },
+  "remoteClients": {
+    "title": "Client remoti",
+    "description": "Registra server client Borg UI su altre macchine, controllane lo stato e usa questo browser con il server selezionato.",
+    "addButton": "Aggiungi client remoto",
+    "planGate": {
+      "message": "Il passaggio ai client remoti è disponibile nei piani Pro ed Enterprise. Esegui l'upgrade per aggiungere o passare a server Borg UI remoti."
+    },
+    "status": {
+      "incompatible": "Incompatibile",
+      "online": "Online",
+      "offline": "Offline",
+      "checking": "Controllo in corso",
+      "unknown": "Sconosciuto"
+    },
+    "labels": {
+      "activeTarget": "Destinazione attiva",
+      "local": "Locale",
+      "remoteClient": "Client remoto",
+      "requiresAdmin": "Solo admin",
+      "requiresPlan": "Richiede Pro o Enterprise"
+    },
+    "switcher": {
+      "title": "Destinazioni server",
+      "description": "Scegli se questo browser usa questo server o un client remoto.",
+      "menuLabel": "Destinazioni server",
+      "ariaLabel": "Destinazione server {{name}}",
+      "selectLabel": "Server",
+      "noClients": "Nessun client remoto trovato",
+      "localName": "Questo server",
+      "localHelper": "Server Borg UI corrente",
+      "localCompatibility": "Questo browser è connesso a questo server Borg UI.",
+      "remoteHelper": "Server del client remoto",
+      "remoteUnavailable": "Client remoto non disponibile",
+      "remoteAdminUnavailable": "Il cambio di client remoto richiede accesso amministratore.",
+      "remotePlanUnavailable": "Il passaggio ai client remoti richiede Pro o Enterprise.",
+      "versionMismatch": "Conflitto di versione",
+      "versionHelper": "Borg UI {{version}}",
+      "manage": "Gestisci client remoti",
+      "manageRequiresAdmin": "I client remoti richiedono accesso amministratore",
+      "manageRequiresPlan": "I client remoti richiedono Pro o Enterprise"
+    },
+    "localBackend": {
+      "title": "Questo server",
+      "active": "Destinazione attiva",
+      "fallback": "Disponibile come fallback locale"
+    },
+    "empty": {
+      "title": "Nessun client remoto",
+      "description": "Aggiungi l'URL di un server Borg UI per controllarne lo stato e spostare questo browser su quel server."
+    },
+    "lastChecked": "Ultimo controllo: {{value}}",
+    "version": "Borg UI {{version}}",
+    "actions": {
+      "check": "Controlla",
+      "use": "Usa",
+      "edit": "Modifica client remoto",
+      "delete": "Elimina client remoto",
+      "checkAria": "Controlla {{name}}",
+      "useAria": "Usa {{name}}",
+      "useLocalAria": "Usa questo server",
+      "editAria": "Modifica {{name}}",
+      "deleteAria": "Elimina {{name}}"
+    },
+    "dialog": {
+      "addTitle": "Aggiungi client remoto",
+      "editTitle": "Modifica client remoto",
+      "description": "Usa l'URL del server Borg UI. Sono accettati nomi DNS, IP LAN, URL localhost e percorsi `/api`.",
+      "nameLabel": "Nome client",
+      "urlLabel": "URL server",
+      "save": "Salva client"
+    },
+    "toasts": {
+      "added": "Client remoto aggiunto.",
+      "updated": "Client remoto aggiornato.",
+      "deleted": "Client remoto eliminato.",
+      "online": "{{name}} è online.",
+      "unavailable": "{{name}} non è disponibile.",
+      "checkFailed": "Controllo di {{name}} non riuscito: {{error}}",
+      "using": "{{name}} in uso."
+    },
+    "deleteDialog": {
+      "title": "Eliminare il client remoto?",
+      "description": "Rimuovere \"{{name}}\" da questo browser? Puoi aggiungerlo di nuovo più tardi con l'URL del server.",
+      "confirm": "Elimina client"
+    },
+    "errors": {
+      "saveFailed": "Impossibile salvare il client remoto.",
+      "remoteUnavailable": "Il server del client remoto non è disponibile."
+    }
+  },
   "cloudStorage": {
     "title": "Archiviazione cloud",
     "subtitle": "Gestisci remoti rclone riutilizzabili per mirror dei repository.",
@@ -177,6 +268,11 @@
     "remoteProviderLabel": "Provider",
     "remoteStatusLabel": "Stato",
     "remoteUsageLabel": "Usato da",
+    "storageUsed": "Usato",
+    "storageFree": "Libero",
+    "storageTotal": "Totale {{value}}",
+    "storagePercentUsed": "{{value}}% usato",
+    "noStorageInfo": "Nessuna info storage",
     "configSourceLabel": "Configurazione",
     "managedConfig": "rclone.conf gestito dal server",
     "editRemote": "Modifica remoto",
@@ -328,6 +424,41 @@
     "upcomingBackups": {
       "title": "Backup imminenti"
     },
+    "launchpad": {
+      "title": "Launchpad operativo",
+      "openAction": "Apri {{title}}: {{value}}, {{status}}",
+      "backupPlans": {
+        "title": "Piani di backup",
+        "value_one": "{{count}} piano",
+        "value_other": "{{count}} piani",
+        "active_one": "{{count}} attivo",
+        "active_other": "{{count}} attivi",
+        "empty": "Crea il primo",
+        "action": "Apri piani"
+      },
+      "cloudStorage": {
+        "title": "Storage cloud",
+        "value_one": "{{count}} remoto",
+        "value_other": "{{count}} remoti",
+        "active": "Configurato",
+        "empty": "Nessun remoto"
+      },
+      "remoteClients": {
+        "title": "Client remoti",
+        "value_one": "{{count}} client",
+        "value_other": "{{count}} client",
+        "active": "Disponibile",
+        "empty": "Questo server"
+      },
+      "restoreVerification": {
+        "title": "Verifica ripristino",
+        "value": "{{configured}}/{{total}} coperti",
+        "noRepositories": "Nessun repo",
+        "complete": "Coperto",
+        "partial": "Da configurare",
+        "action": "Pianifica check"
+      }
+    },
     "scheduleBadge": {
       "noSchedule": "Nessuna pianificazione automatica",
       "manual": "manuale",
@@ -474,6 +605,8 @@
       "startFailed": "Impossibile avviare il backup",
       "cancelled": "Backup annullato con successo!",
       "cancelFailed": "Impossibile annullare il backup",
+      "retryStarted": "Ritentativo di backup avviato",
+      "retryFailed": "Impossibile ritentare il backup",
       "selectRepository": "Seleziona prima un repository"
     }
   },
@@ -770,6 +903,8 @@
       "startFailed": "Impossibile avviare il piano di backup",
       "cancelled": "Esecuzione del piano annullata",
       "cancelFailed": "Impossibile annullare l'esecuzione del piano",
+      "retryStarted": "Ritentativo del piano di backup avviato",
+      "retryFailed": "Impossibile ritentare l'esecuzione del piano",
       "repositoryCreated": "Repository creato",
       "repositoryCreateFailed": "Impossibile creare il repository",
       "multiRepositoryRequiresPro": "Più repository in un piano di backup richiedono Pro",
@@ -814,6 +949,7 @@
       "removeSourceGroup": "Remove source group",
       "backToTypes": "Back to source types",
       "applyPaths": "Use these paths",
+      "applyContainers": "Usa questi container",
       "selectPaths": "Select paths",
       "currentPath": "Current path",
       "agentBrowseTitle": "Browse {{agent}}",
@@ -854,6 +990,47 @@
       "databaseLivePath": "Live database path",
       "databaseDumpPath": "Dump path",
       "databaseBackupPaths": "Final Borg paths",
+      "containerTitle": "Container Docker",
+      "containerBackupTitle": "Aggiungi backup di container Docker",
+      "containerName": "Nome o ID del container",
+      "containerImage": "Immagine (opzionale)",
+      "containerExportPath": "Percorso di staging dell'esportazione",
+      "containerExportsTo": "Esporta in",
+      "containerExportHint": "Borg UI esporta il filesystem del container in un percorso di staging prima che Borg lo legga. Questo non esegue il backup dell'immagine Docker, dei bind mount o dei volumi con nome.",
+      "addContainerManually": "Aggiungi per nome",
+      "addContainerManuallyHelp": "Se il tuo container non è nell'elenco sopra, aggiungilo qui.",
+      "containerSourceMachine": "Host Docker",
+      "containerBackupPath": "Percorso di staging dell'esportazione",
+      "containerModeExport": "docker export",
+      "scanContainers": "Scansiona container",
+      "rescanContainers": "Scansiona di nuovo i container",
+      "scanContainersHint": "Scansiona l'host Docker selezionato.",
+      "detectedContainers": "Container rilevati",
+      "containerBackupCoverageTitle": "Cosa esegue il backup questa sorgente",
+      "containerFilesystemIncluded": "Incluso: esportazione del filesystem del container in {{path}}",
+      "containerMountsNotIncluded": "Non incluso: dati montati",
+      "containerMountsNotIncludedHelp": "Aggiungi questi percorsi di mount come sorgenti File se contengono dati necessari.",
+      "containerMountNotIncluded": "Non incluso in docker export",
+      "containerMountsOptional": "Dati montati opzionali",
+      "containerMountsOptionalHelp": "Seleziona i mount per aggiungerli come sorgenti File in questo piano.",
+      "includeContainerMountAria": "Includi dati montati {{path}} come sorgente File",
+      "containerMountDestination": "Montato in {{path}}",
+      "containerMountSizeAvailable": "{{size}}",
+      "containerMountSizeUnavailable": "Dimensione non disponibile",
+      "containerMountSizePermissionDenied": "Permesso negato",
+      "containerMountSizeTimeout": "Timeout dimensione",
+      "containerImageMetadata": "L'immagine {{image}} identifica questo container; Borg UI non esegue il backup dell'immagine.",
+      "addDetectedContainer": "Aggiungi container rilevato",
+      "addDetectedContainerShort": "Aggiungi",
+      "removeDetectedContainer": "Rimuovi container rilevato",
+      "containerAdded": "Aggiunto",
+      "noContainersFoundTitle": "Nessun container trovato",
+      "noContainersFoundBody": "Verifica l'accesso a Docker su questo host o inserisci un container manualmente.",
+      "containerScanUnsupportedForAgents": "La scansione dei container Docker è disponibile per il server Borg UI e le sorgenti SSH. Inserisci manualmente i container degli agent gestiti.",
+      "containerScanFailedBody": "La scansione dei container Docker non ha restituito dati. Verifica l'accesso a Docker su questo host e riprova.",
+      "addContainer": "Aggiungi container",
+      "selectedContainers": "Container selezionati",
+      "containerScriptsAssigned": "Script di esportazione assegnati",
       "sourcePaths": "Source paths",
       "notesLabel": "Notes",
       "pathCount_one": "{{count}} path",
@@ -1154,6 +1331,17 @@
       },
       "repositoryProgress": "{{completed}}/{{total}} repository completati",
       "cancelRun": "Annulla esecuzione",
+      "retryRun": "Ritenta esecuzione piano di backup",
+      "retryConfirm": "Ritentare l'esecuzione del piano di backup #{{id}}?",
+      "retryTooltips": {
+        "ready": "Ritenta esecuzione piano di backup",
+        "retrying": "Ritentativo dell'esecuzione del piano in corso...",
+        "onlyFailed": "Solo le esecuzioni del piano fallite possono essere ritentate.",
+        "missingPlan": "Questa esecuzione non è più collegata a un piano di backup.",
+        "activeRun": "Attendi che l'esecuzione del piano in corso termini prima di ritentare.",
+        "noFailedRepositories": "Questa esecuzione non ha repository falliti da ritentare.",
+        "requiresPermission": "È richiesto l'accesso operatore per ogni repository fallito in questa esecuzione."
+      },
       "noRepositories": "Nessuna esecuzione repository registrata."
     }
   },
@@ -1236,6 +1424,10 @@
       "deleted": "Repository eliminato con successo",
       "deleteFailed": "Impossibile eliminare il repository",
       "checkStarted": "Operazione di controllo avviata",
+      "checkCompleted": "Controllo completato",
+      "checkCompletedWithWarnings": "Controllo completato con avvisi",
+      "checkRunFailed": "Controllo non riuscito",
+      "checkFailedWithMessage": "Controllo non riuscito: {{message}}",
       "checkFailed": "Impossibile avviare il controllo",
       "compactStarted": "Operazione di compattazione avviata",
       "compactFailed": "Impossibile avviare la compattazione",
@@ -1721,6 +1913,23 @@
     },
     "deployDialog": {
       "title": "Distribuisci Chiave SSH su Server",
+      "setupPreset": "Preset di configurazione",
+      "setupPresetHint": "Scegli una configurazione documentata per precompilare i valori predefiniti. Puoi modificare ogni campo prima della distribuzione.",
+      "presetCustom": "Configurazione personalizzata",
+      "presetCustomDescription": "Parti dai valori SSH standard.",
+      "presetCustomDefaults": "Porta 22, distribuzione SFTP attiva",
+      "presetLinux": "Server Linux",
+      "presetLinuxDescription": "Server headless o VM con accesso SSH normale.",
+      "presetLinuxDefaults": "Utente root, porta 22",
+      "presetBorgBase": "BorgBase",
+      "presetBorgBaseDescription": "Repository Borg ospitato con formato percorso /./repo.",
+      "presetBorgBaseDefaults": "Porta 22, distribuzione SFTP disattivata, percorso predefinito /./repo",
+      "presetHetzner": "Hetzner Storage Box",
+      "presetHetznerDescription": "Repository Storage Box tramite il servizio SSH esteso di Hetzner.",
+      "presetHetznerDefaults": "Porta 23, distribuzione SFTP attiva, percorso predefinito /./borg-repository",
+      "presetNas": "NAS",
+      "presetNasDescription": "Synology, Unraid o NAS simile con mappatura dei percorsi SSH.",
+      "presetNasDefaults": "Porta 22, distribuzione SFTP disattivata, prefisso percorso SSH /volume1",
       "host": "Host",
       "hostPlaceholder": "192.168.1.100 o example.com",
       "username": "Nome utente",
@@ -1734,6 +1943,8 @@
       "useSudoHint": "Antepone sudo a borg sull'host remoto. Richiede sudo senza password per l'utente SSH. Si applica solo alla modalità di backup SSH remoto.",
       "defaultPath": "Percorso Predefinito (Opzionale)",
       "defaultPathHelper": "Directory iniziale per esplorare file via SSH (ad es. /home per Hetzner Storage Box)",
+      "sshPathPrefix": "Prefisso Percorso SSH (Opzionale)",
+      "sshPathPrefixHelper": "Prefisso aggiunto quando Borg necessita di un percorso SSH diverso da quello di esplorazione, per esempio /volume1 su Synology.",
       "mountPoint": "Punto di Mount (Opzionale)",
       "mountPointPlaceholder": "hetzner o homeserver",
       "mountPointHelper": "Nome descrittivo per questa macchina remota (ad es. hetzner, backup-server)",
@@ -1788,6 +1999,49 @@
       "passwordPlaceholder": "Inserisci la password SSH",
       "passwordHelper": "La password viene usata per distribuire la chiave pubblica in authorized_keys"
     },
+    "diagnostics": {
+      "title": "Diagnostica macchina remota",
+      "description": "Verifica la sessione SSH, la raggiungibilità TCP remota opzionale e la velocità limitata del trasporto SSH.",
+      "noConnection": "Nessuna connessione selezionata",
+      "targetHost": "Host di destinazione",
+      "targetHostHelper": "Destinazione TCP remota opzionale",
+      "targetPort": "Porta",
+      "targetTimeout": "Timeout destinazione",
+      "advancedTargetSummary": "Avanzate: testa un altro servizio",
+      "advancedTargetDescription": "Verifica se questa macchina remota può raggiungere un servizio separato. Lascia vuoto per la diagnostica normale.",
+      "serviceHost": "Host del servizio",
+      "serviceHostPlaceholder": "postgres.internal",
+      "serviceHostHelper": "Servizio opzionale da testare da questa macchina remota",
+      "servicePort": "Porta del servizio",
+      "servicePortPlaceholder": "5432",
+      "servicePortRangeShort": "1-65535",
+      "serviceTimeoutRangeShort": "0,5-15 secondi",
+      "sshTimeout": "Timeout SSH",
+      "speedProbeSize": "Dimensione test velocità",
+      "speedProbeHelper": "Byte da leggere via SSH, da 65536 a 5242880.",
+      "seconds": "Secondi",
+      "latency": "Latenza",
+      "runCheck": "Esegui controllo",
+      "running": "Diagnostica in corso",
+      "transferredIn": "{{bytes}} in {{elapsed}}",
+      "notReported": "Non riportato",
+      "noThroughputResult": "Nessun risultato di throughput",
+      "sessionHealthy": "Sessione SSH integra",
+      "sessionTimedOut": "Timeout SSH",
+      "sessionFailed": "SSH non riuscito",
+      "tcpReachable": "TCP raggiungibile",
+      "tcpTimedOut": "Timeout TCP",
+      "tcpFailed": "TCP non riuscito",
+      "speedComplete": "Test velocità completato",
+      "speedTimedOut": "Timeout test velocità",
+      "speedFailed": "Test velocità non riuscito",
+      "errors": {
+        "targetPortRange": "Inserisci una porta TCP tra 1 e 65535.",
+        "targetTimeoutRange": "Inserisci un timeout della destinazione tra 0,5 e 15 secondi.",
+        "sshTimeoutRange": "Inserisci un timeout SSH tra 1 e 30 secondi.",
+        "speedProbeRange": "Inserisci una dimensione del test velocità tra 65536 e 5242880 byte."
+      }
+    },
     "remoteConnections": {
       "title": "Connessioni remote",
       "configured_one": "{{count}} macchina configurata",
@@ -1814,7 +2068,9 @@
       "storageRefreshFailed": "Impossibile aggiornare lo storage",
       "keyDeleted": "Chiave SSH di sistema eliminata con successo!",
       "keyDeleteFailed": "Impossibile eliminare la chiave SSH",
-      "publicKeyCopied": "Chiave pubblica copiata negli appunti!"
+      "publicKeyCopied": "Chiave pubblica copiata negli appunti!",
+      "diagnosticsComplete": "Diagnostica completata",
+      "diagnosticsFailed": "Impossibile eseguire la diagnostica"
     }
   },
   "scripts": {
@@ -2054,6 +2310,11 @@
       "beforeBreakingCheck3": "Questo romperà sia i blocchi del repository che della cache",
       "adminRequired": "Privilegi di amministratore richiesti:",
       "adminRequiredDetail": "Solo gli amministratori possono rompere i blocchi del repository. Contatta il tuo amministratore per assistenza.",
+      "maintenanceRequired": "Accesso di manutenzione al repository richiesto:",
+      "maintenanceRequiredDetail": "Serve accesso di manutenzione a questo repository per romperne il blocco. Contatta il tuo amministratore per assistenza.",
+      "lockBreakingDisabled": "Rottura blocchi disabilitata:",
+      "lockBreakingDisabledDetail": "Un amministratore ha disabilitato la rottura manuale dei blocchi per questa installazione.",
+      "breakLockUnavailable": "La rottura dei blocchi non è disponibile per questo repository",
       "failedToBreakLock": "Impossibile rompere il blocco del repository"
     },
     "errorDetails": {
@@ -2230,7 +2491,22 @@
       "errorDetails": "Dettagli Errore",
       "cancel": "Annulla",
       "cancelJob": "Annulla Job",
-      "breakLock": "Rompi Blocco"
+      "breakLock": "Rompi Blocco",
+      "retry": "Ritenta job di backup"
+    },
+    "confirmations": {
+      "retryJob": "Ritentare il job di backup #{{id}}?"
+    },
+    "retryTooltips": {
+      "ready": "Ritenta job di backup",
+      "retrying": "Ritentativo del job di backup in corso...",
+      "onlyTerminal": "Solo i job di backup falliti o annullati possono essere ritentati.",
+      "destructiveType": "Questo job di tipo {{type}} non è sicuro da ritentare da questa tabella.",
+      "unsupportedType": "Questo job di tipo {{type}} non può essere ritentato da questa tabella.",
+      "backupPlanJob": "Ritenta questo job dalla sua esecuzione del piano di backup.",
+      "scheduledJob": "I job di backup pianificati devono essere riavviati dalla pianificazione o dal piano.",
+      "missingRepository": "Questo job non può essere ritentato perché il repository sorgente manca.",
+      "requiresPermission": "È richiesto l'accesso operatore per ritentare questo job di backup."
     },
     "never": "Mai",
     "empty": "Nessun job di backup trovato",
@@ -2764,6 +3040,9 @@
     "bypassLocksListTitle": "Ignora Blocchi per Comandi List",
     "enableBypassLocksList": "Abilita bypass-lock per tutti i comandi borg list",
     "bypassLocksListDescription": "Aggiunge --bypass-lock a tutti i comandi borg list. Questo previene la contesa di blocco quando più operazioni di lettura (es., info + list) vengono eseguite simultaneamente. Abilita se vedi errori \"Failed to acquire lock\". Nota: Potrebbe mostrare dati obsoleti se un backup è attivamente in esecuzione.",
+    "lockBreakingTitle": "Rottura manuale dei blocchi",
+    "enableLockBreaking": "Consenti rottura manuale dei blocchi repository",
+    "lockBreakingDescription": "Consente agli utenti con accesso di manutenzione di rompere blocchi repository obsoleti da Borg UI. Disabilitalo quando altri servizi possono mantenere blocchi transitori normali.",
     "showLegacyRestoreTabTitle": "Mostra Scheda Ripristino Legacy",
     "showLegacyRestoreTabLabel": "Mostra la scheda Ripristino dedicata nella navigazione",
     "showLegacyRestoreTabDescription": "Abilita questa opzione per accedere alla scheda Ripristino legacy. La funzionalità di ripristino è ora integrata nella pagina Archivi, ma questa opzione ti permette di usare la vecchia interfaccia se preferisci.",
@@ -3877,7 +4156,8 @@
     }
   },
   "protectedRoute": {
-    "unavailable": "Questa funzionalità non è attualmente disponibile"
+    "unavailable": "Questa funzionalità non è attualmente disponibile",
+    "permissionDenied": "Non hai il permesso di aprire questa pagina"
   },
   "repositoryCell": {
     "noPath": "Nessuna informazione sul percorso"
@@ -4115,13 +4395,30 @@
     "defaultPath": "Percorso Predefinito",
     "actions": {
       "testConnection": "Test Connessione",
-      "refreshStorage": "Aggiorna Archiviazione"
+      "refreshStorage": "Aggiorna Archiviazione",
+      "runDiagnostics": "Esegui diagnostica"
     }
   },
   "repositoryInfoDialog": {
     "failedToDownloadKeyfile": "Impossibile scaricare il file chiave",
     "noArchivesDescription": "Questo repository è stato inizializzato ma non contiene archivi. Le statistiche di archiviazione appariranno qui dopo aver creato il primo backup.",
-    "failedToLoad": "Impossibile caricare le informazioni del repository. Assicurati che il repository sia accessibile e inizializzato correttamente."
+    "failedToLoad": "Impossibile caricare le informazioni del repository. Assicurati che il repository sia accessibile e inizializzato correttamente.",
+    "recovery": {
+      "title": "Comandi di recupero",
+      "description": "Usa questi modelli di comando quando devi diagnosticare, riparare o ricreare questo repository fuori da Borg UI.",
+      "checkCommand": "Controlla repository",
+      "repairCommand": "Controllo con riparazione",
+      "initCommand": "Inizializza repository",
+      "guidedCheckTitle": "Esegui un controllo diagnostico in Borg UI",
+      "guidedCheckDescription": "Apre la conferma di controllo esistente e il flusso dei log del job. Riparazione e inizializzazione restano manuali.",
+      "guidedCheckUnavailable": "Serve l'accesso alla manutenzione per eseguire controlli in Borg UI.",
+      "guidedCheckButton": "Esegui controllo guidato",
+      "guidedCheckStarting": "Avvio controllo",
+      "copyCommand": "Copia comando {{label}}",
+      "copiedCommand": "Comando {{label}} copiato",
+      "commandCopied": "Comando copiato",
+      "copyFailed": "Impossibile copiare il comando"
+    }
   },
   "analyticsBanner": {
     "viewDashboardLink": "Visualizza la nostra dashboard di analisi pubblica",
@@ -4166,6 +4463,14 @@
   "layout": {
     "systemInformation": "Informazioni di Sistema",
     "logoAlt": "Logo Borg UI"
+  },
+  "sidebar": {
+    "update": {
+      "title": "Aggiornamento disponibile",
+      "dismiss": "Ignora",
+      "releaseNotes": "Cosa c'è di nuovo",
+      "ariaLabel": "Aggiornamento software disponibile"
+    }
   },
   "logViewer": {
     "title": "Log {{label}} - Job #{{jobId}}",
@@ -4400,11 +4705,15 @@
         "failedGetBackupJobs": "Impossibile ottenere i job di backup",
         "failedGetBackupStatus": "Impossibile ottenere lo stato del backup",
         "failedCancelBackup": "Impossibile annullare il backup",
-        "cannotDownloadLogsForRunningBackup": "Impossibile scaricare i log per un backup in esecuzione"
+        "cannotDownloadLogsForRunningBackup": "Impossibile scaricare i log per un backup in esecuzione",
+        "retryOnlyTerminalFailedCancelled": "Solo i job di backup falliti o annullati possono essere ritentati.",
+        "retryUnsupportedJobType": "Questo tipo di job di backup non può essere ritentato.",
+        "retryRequestNotReconstructable": "Questo job di backup non può più essere ricostruito per il ritentativo."
       },
       "backupPlans": {
         "nameRequired": "Il nome del piano di backup è obbligatorio.",
-        "clearLegacyRepositoryNotSelected": "Impossibile cancellare le impostazioni sorgente legacy per un repository non selezionato in questo piano di backup."
+        "clearLegacyRepositoryNotSelected": "Impossibile cancellare le impostazioni sorgente legacy per un repository non selezionato in questo piano di backup.",
+        "retryUnsupported": "Questa esecuzione del piano di backup non può essere ritentata."
       },
       "restore": {
         "cancelledByUser": "Ripristino annullato dall'utente",

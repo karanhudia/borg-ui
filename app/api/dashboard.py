@@ -22,6 +22,7 @@ from app.database.models import (
     SystemSettings,
 )
 from app.core.security import get_current_user
+from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.schedule_time import (
     DEFAULT_SCHEDULE_TIMEZONE,
@@ -507,6 +508,7 @@ def get_scheduled_jobs(db: Session) -> List[ScheduledJobInfo]:
 def get_recent_jobs(db: Session, limit: int = 10) -> List[Dict[str, Any]]:
     """Get recent backup jobs"""
     try:
+        log_save_policy = get_log_save_policy(db)
         jobs = (
             db.query(BackupJob).order_by(BackupJob.started_at.desc()).limit(limit).all()
         )
@@ -527,7 +529,12 @@ def get_recent_jobs(db: Session, limit: int = 10) -> List[Dict[str, Any]]:
                     "error_message": job.error_message,
                     "triggered_by": triggered_by,
                     "schedule_id": job.scheduled_job_id,
-                    "has_logs": bool(job.log_file_path or job.logs),
+                    "has_logs": job_has_logs_by_policy(
+                        job,
+                        log_save_policy,
+                        output_text=[job.logs, job.error_message],
+                        file_path=job.log_file_path,
+                    ),
                 }
             )
 

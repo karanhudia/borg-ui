@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { Box } from '@mui/material'
 import WizardStepLocation from './WizardStepLocation'
+import { fullFeatureSystemInfo } from './WizardStepLocation.storyFixtures'
 
 const sshConnections = [
   {
@@ -38,6 +39,7 @@ const meta = {
   component: WizardStepLocation,
   parameters: {
     layout: 'centered',
+    systemInfo: fullFeatureSystemInfo,
   },
 } satisfies Meta<typeof WizardStepLocation>
 

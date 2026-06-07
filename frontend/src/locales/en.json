@@ -109,6 +109,7 @@
     "items": {
       "dashboard": "Dashboard",
       "activity": "Activity",
+      "remoteClients": "Remote Clients",
       "remoteMachines": "Remote Machines",
       "managedAgents": "Managed Agents",
       "cloudStorage": "Cloud Storage",
@@ -159,6 +160,96 @@
     "logout": "Logout",
     "yourPlan": "Your Plan"
   },
+  "remoteClients": {
+    "title": "Remote Clients",
+    "description": "Register Borg UI client servers on other machines, check their health, and use this browser against the selected server.",
+    "addButton": "Add remote client",
+    "planGate": {
+      "message": "Remote client switching is available on Pro and Enterprise plans. Upgrade to add or switch to remote Borg UI servers."
+    },
+    "status": {
+      "incompatible": "Incompatible",
+      "online": "Online",
+      "offline": "Offline",
+      "checking": "Checking",
+      "unknown": "Unknown"
+    },
+    "labels": {
+      "activeTarget": "Active target",
+      "local": "Local",
+      "remoteClient": "Remote client",
+      "requiresAdmin": "Admin only",
+      "requiresPlan": "Requires Pro or Enterprise"
+    },
+    "switcher": {
+      "title": "Server targets",
+      "description": "Choose whether this browser uses this server or a remote client.",
+      "menuLabel": "Server targets",
+      "ariaLabel": "Server target {{name}}",
+      "selectLabel": "Server",
+      "noClients": "No remote clients found",
+      "localName": "This server",
+      "localHelper": "Current Borg UI server",
+      "localCompatibility": "This browser is connected to this Borg UI server.",
+      "remoteHelper": "Remote client server",
+      "remoteUnavailable": "Remote client unavailable",
+      "remoteAdminUnavailable": "Remote client switching requires admin access.",
+      "remotePlanUnavailable": "Remote client switching requires Pro or Enterprise.",
+      "versionMismatch": "Version mismatch",
+      "versionHelper": "Borg UI {{version}}",
+      "manage": "Manage remote clients",
+      "manageRequiresAdmin": "Remote Clients require admin access",
+      "manageRequiresPlan": "Remote Clients require Pro or Enterprise"
+    },
+    "localBackend": {
+      "title": "This server",
+      "active": "Active target",
+      "fallback": "Available as the local fallback"
+    },
+    "empty": {
+      "title": "No remote clients yet",
+      "description": "Add a Borg UI server URL to check its health and switch this browser to it."
+    },
+    "lastChecked": "Last checked: {{value}}",
+    "version": "Borg UI {{version}}",
+    "actions": {
+      "check": "Check",
+      "use": "Use",
+      "edit": "Edit remote client",
+      "delete": "Delete remote client",
+      "checkAria": "Check {{name}}",
+      "useAria": "Use {{name}}",
+      "useLocalAria": "Use this server",
+      "editAria": "Edit {{name}}",
+      "deleteAria": "Delete {{name}}"
+    },
+    "dialog": {
+      "addTitle": "Add remote client",
+      "editTitle": "Edit remote client",
+      "description": "Use the Borg UI server URL. DNS names, LAN IPs, localhost URLs, and `/api` paths are accepted.",
+      "nameLabel": "Client name",
+      "urlLabel": "Server URL",
+      "save": "Save client"
+    },
+    "toasts": {
+      "added": "Remote client added.",
+      "updated": "Remote client updated.",
+      "deleted": "Remote client deleted.",
+      "online": "{{name}} is online.",
+      "unavailable": "{{name}} is unavailable.",
+      "checkFailed": "{{name}} check failed: {{error}}",
+      "using": "Using {{name}}."
+    },
+    "deleteDialog": {
+      "title": "Delete remote client?",
+      "description": "Remove \"{{name}}\" from this browser? You can add it again later with its server URL.",
+      "confirm": "Delete client"
+    },
+    "errors": {
+      "saveFailed": "Failed to save remote client.",
+      "remoteUnavailable": "Remote client server is unavailable."
+    }
+  },
   "cloudStorage": {
     "title": "Cloud Storage",
     "subtitle": "Manage reusable rclone remotes for repository mirrors.",
@@ -177,6 +268,11 @@
     "remoteProviderLabel": "Provider",
     "remoteStatusLabel": "Status",
     "remoteUsageLabel": "Used by",
+    "storageUsed": "Used",
+    "storageFree": "Free",
+    "storageTotal": "Total {{value}}",
+    "storagePercentUsed": "{{value}}% used",
+    "noStorageInfo": "No storage info",
     "configSourceLabel": "Config",
     "managedConfig": "Server-managed rclone.conf",
     "editRemote": "Edit remote",
@@ -328,6 +424,41 @@
     "upcomingBackups": {
       "title": "Upcoming backups"
     },
+    "launchpad": {
+      "title": "Operations launchpad",
+      "openAction": "Open {{title}}: {{value}}, {{status}}",
+      "backupPlans": {
+        "title": "Backup plans",
+        "value_one": "{{count}} plan",
+        "value_other": "{{count}} plans",
+        "active_one": "{{count}} active",
+        "active_other": "{{count}} active",
+        "empty": "Create first",
+        "action": "Open plans"
+      },
+      "cloudStorage": {
+        "title": "Cloud storage",
+        "value_one": "{{count}} remote",
+        "value_other": "{{count}} remotes",
+        "active": "Configured",
+        "empty": "No remotes"
+      },
+      "remoteClients": {
+        "title": "Remote clients",
+        "value_one": "{{count}} client",
+        "value_other": "{{count}} clients",
+        "active": "Available",
+        "empty": "This server"
+      },
+      "restoreVerification": {
+        "title": "Restore verification",
+        "value": "{{configured}}/{{total}} covered",
+        "noRepositories": "No repos",
+        "complete": "Covered",
+        "partial": "Needs setup",
+        "action": "Schedule checks"
+      }
+    },
     "scheduleBadge": {
       "noSchedule": "No automated schedule",
       "manual": "manual",
@@ -474,6 +605,8 @@
       "startFailed": "Failed to start backup",
       "cancelled": "Backup cancelled successfully!",
       "cancelFailed": "Failed to cancel backup",
+      "retryStarted": "Backup retry started",
+      "retryFailed": "Failed to retry backup",
       "selectRepository": "Please select a repository first"
     }
   },
@@ -770,6 +903,8 @@
       "startFailed": "Failed to start backup plan",
       "cancelled": "Backup plan run cancelled",
       "cancelFailed": "Failed to cancel backup plan run",
+      "retryStarted": "Backup plan retry started",
+      "retryFailed": "Failed to retry backup plan run",
       "repositoryCreated": "Repository created",
       "repositoryCreateFailed": "Failed to create repository",
       "multiRepositoryRequiresPro": "Multiple repositories in one backup plan require Pro",
@@ -814,6 +949,7 @@
       "removeSourceGroup": "Remove source group",
       "backToTypes": "Back to source types",
       "applyPaths": "Use these paths",
+      "applyContainers": "Use these containers",
       "selectPaths": "Select paths",
       "currentPath": "Current path",
       "agentBrowseTitle": "Browse {{agent}}",
@@ -854,6 +990,47 @@
       "databaseLivePath": "Live database path",
       "databaseDumpPath": "Dump path",
       "databaseBackupPaths": "Final Borg paths",
+      "containerTitle": "Docker container",
+      "containerBackupTitle": "Add Docker container backup",
+      "containerName": "Container name or ID",
+      "containerImage": "Image (optional)",
+      "containerExportPath": "Export staging path",
+      "containerExportsTo": "Exports to",
+      "containerExportHint": "Borg UI exports the container filesystem to a staging path before Borg reads it. This does not back up the Docker image, bind mounts, or named volumes.",
+      "addContainerManually": "Add by name",
+      "addContainerManuallyHelp": "If your container isn't listed above, add it here.",
+      "containerSourceMachine": "Docker host",
+      "containerBackupPath": "Export staging path",
+      "containerModeExport": "docker export",
+      "scanContainers": "Scan containers",
+      "rescanContainers": "Re-scan containers",
+      "scanContainersHint": "Scan selected Docker host.",
+      "detectedContainers": "Detected containers",
+      "containerBackupCoverageTitle": "What this source backs up",
+      "containerFilesystemIncluded": "Included: container filesystem export at {{path}}",
+      "containerMountsNotIncluded": "Not included: mounted data",
+      "containerMountsNotIncludedHelp": "Add these mount paths as Files sources if they contain data you need.",
+      "containerMountNotIncluded": "Not included in docker export",
+      "containerMountsOptional": "Optional mounted data",
+      "containerMountsOptionalHelp": "Select mounts to add them as Files sources in this plan.",
+      "includeContainerMountAria": "Include mounted data {{path}} as a Files source",
+      "containerMountDestination": "Mounted at {{path}}",
+      "containerMountSizeAvailable": "{{size}}",
+      "containerMountSizeUnavailable": "Size unavailable",
+      "containerMountSizePermissionDenied": "Permission denied",
+      "containerMountSizeTimeout": "Size timed out",
+      "containerImageMetadata": "Image {{image}} identifies this container; Borg UI does not back up the image.",
+      "addDetectedContainer": "Add detected container",
+      "addDetectedContainerShort": "Add",
+      "removeDetectedContainer": "Remove detected container",
+      "containerAdded": "Added",
+      "noContainersFoundTitle": "No containers found",
+      "noContainersFoundBody": "Check Docker access on this host, or enter a container manually.",
+      "containerScanUnsupportedForAgents": "Docker container scanning is available for the Borg UI server and SSH sources. Enter managed-agent containers manually.",
+      "containerScanFailedBody": "Docker container scan did not return data. Check Docker access on this host and try again.",
+      "addContainer": "Add container",
+      "selectedContainers": "Selected containers",
+      "containerScriptsAssigned": "Export scripts assigned",
       "sourcePaths": "Source paths",
       "notesLabel": "Notes",
       "pathCount_one": "{{count}} path",
@@ -1154,6 +1331,17 @@
       },
       "repositoryProgress": "{{completed}}/{{total}} repositories finished",
       "cancelRun": "Cancel Run",
+      "retryRun": "Retry backup plan run",
+      "retryConfirm": "Retry backup plan run #{{id}}?",
+      "retryTooltips": {
+        "ready": "Retry backup plan run",
+        "retrying": "Retrying backup plan run...",
+        "onlyFailed": "Only failed backup plan runs can be retried.",
+        "missingPlan": "This run is no longer linked to a backup plan.",
+        "activeRun": "Wait for the running backup plan run to finish before retrying.",
+        "noFailedRepositories": "This run has no failed repositories to retry.",
+        "requiresPermission": "Operator access is required for every failed repository in this run."
+      },
       "noRepositories": "No repository runs recorded yet."
     }
   },
@@ -1236,6 +1424,10 @@
       "deleted": "Repository deleted successfully",
       "deleteFailed": "Failed to delete repository",
       "checkStarted": "Check operation started",
+      "checkCompleted": "Check completed",
+      "checkCompletedWithWarnings": "Check completed with warnings",
+      "checkRunFailed": "Check failed",
+      "checkFailedWithMessage": "Check failed: {{message}}",
       "checkFailed": "Failed to start check",
       "compactStarted": "Compact operation started",
       "compactFailed": "Failed to start compact",
@@ -1721,6 +1913,23 @@
     },
     "deployDialog": {
       "title": "Deploy SSH Key to Server",
+      "setupPreset": "Setup preset",
+      "setupPresetHint": "Pick a documented setup to prefill defaults. You can edit every field before deploying.",
+      "presetCustom": "Custom setup",
+      "presetCustomDescription": "Start from the standard SSH defaults.",
+      "presetCustomDefaults": "Port 22, SFTP deployment enabled",
+      "presetLinux": "Linux server",
+      "presetLinuxDescription": "Headless server or VM with normal SSH access.",
+      "presetLinuxDefaults": "root user, port 22",
+      "presetBorgBase": "BorgBase",
+      "presetBorgBaseDescription": "Hosted Borg repository using the /./repo path shape.",
+      "presetBorgBaseDefaults": "Port 22, SFTP deployment off, default path /./repo",
+      "presetHetzner": "Hetzner Storage Box",
+      "presetHetznerDescription": "Storage Box repository over Hetzner's extended SSH service.",
+      "presetHetznerDefaults": "Port 23, SFTP deployment on, default path /./borg-repository",
+      "presetNas": "NAS",
+      "presetNasDescription": "Synology, Unraid, or similar NAS with SSH path mapping.",
+      "presetNasDefaults": "Port 22, SFTP deployment off, SSH path prefix /volume1",
       "host": "Host",
       "hostPlaceholder": "192.168.1.100 or example.com",
       "username": "Username",
@@ -1734,6 +1943,8 @@
       "useSudoHint": "Prefix borg with sudo on the remote host. Requires passwordless sudo for the SSH user. Only applies to remote SSH backup mode.",
       "defaultPath": "Default Path (Optional)",
       "defaultPathHelper": "Starting directory for SSH file browsing (e.g., /home for Hetzner Storage Box)",
+      "sshPathPrefix": "SSH Path Prefix (Optional)",
+      "sshPathPrefixHelper": "Prefix added when Borg needs a different SSH path than the browsing path, for example /volume1 on Synology.",
       "mountPoint": "Mount Point (Optional)",
       "mountPointPlaceholder": "hetzner or homeserver",
       "mountPointHelper": "Friendly name for this remote machine (e.g., hetzner, backup-server)",
@@ -1788,6 +1999,49 @@
       "passwordPlaceholder": "Enter SSH password",
       "passwordHelper": "Password is used to deploy the public key to authorized_keys"
     },
+    "diagnostics": {
+      "title": "Remote machine diagnostics",
+      "description": "Verify the SSH session, optional remote TCP reachability, and bounded SSH transport speed.",
+      "noConnection": "No connection selected",
+      "targetHost": "Target host",
+      "targetHostHelper": "Optional remote TCP target",
+      "targetPort": "Port",
+      "targetTimeout": "Target timeout",
+      "advancedTargetSummary": "Advanced: test another service",
+      "advancedTargetDescription": "Checks whether this remote machine can reach a separate service. Leave blank for normal diagnostics.",
+      "serviceHost": "Service host",
+      "serviceHostPlaceholder": "postgres.internal",
+      "serviceHostHelper": "Optional service to test from this remote machine",
+      "servicePort": "Service port",
+      "servicePortPlaceholder": "5432",
+      "servicePortRangeShort": "1-65535",
+      "serviceTimeoutRangeShort": "0.5-15 seconds",
+      "sshTimeout": "SSH timeout",
+      "speedProbeSize": "Speed probe size",
+      "speedProbeHelper": "Bytes to read over SSH, 65536 to 5242880.",
+      "seconds": "Seconds",
+      "latency": "Latency",
+      "runCheck": "Run check",
+      "running": "Running diagnostics",
+      "transferredIn": "{{bytes}} in {{elapsed}}",
+      "notReported": "Not reported",
+      "noThroughputResult": "No throughput result",
+      "sessionHealthy": "SSH session healthy",
+      "sessionTimedOut": "SSH timed out",
+      "sessionFailed": "SSH failed",
+      "tcpReachable": "TCP reachable",
+      "tcpTimedOut": "TCP timed out",
+      "tcpFailed": "TCP failed",
+      "speedComplete": "Speed probe complete",
+      "speedTimedOut": "Speed probe timed out",
+      "speedFailed": "Speed probe failed",
+      "errors": {
+        "targetPortRange": "Enter a TCP port between 1 and 65535.",
+        "targetTimeoutRange": "Enter a target timeout between 0.5 and 15 seconds.",
+        "sshTimeoutRange": "Enter an SSH timeout between 1 and 30 seconds.",
+        "speedProbeRange": "Enter a speed probe size between 65536 and 5242880 bytes."
+      }
+    },
     "remoteConnections": {
       "title": "Remote Connections",
       "configured_one": "{{count}} machine configured",
@@ -1814,7 +2068,9 @@
       "storageRefreshFailed": "Failed to refresh storage",
       "keyDeleted": "System SSH key deleted successfully!",
       "keyDeleteFailed": "Failed to delete SSH key",
-      "publicKeyCopied": "Public key copied to clipboard!"
+      "publicKeyCopied": "Public key copied to clipboard!",
+      "diagnosticsComplete": "Diagnostics complete",
+      "diagnosticsFailed": "Failed to run diagnostics"
     }
   },
   "scripts": {
@@ -2054,6 +2310,11 @@
       "beforeBreakingCheck3": "This will break both repository and cache locks",
       "adminRequired": "Admin privileges required:",
       "adminRequiredDetail": "Only administrators can break repository locks. Please contact your admin for assistance.",
+      "maintenanceRequired": "Repository maintenance access required:",
+      "maintenanceRequiredDetail": "You need maintenance access to this repository to break its lock. Please contact your admin for assistance.",
+      "lockBreakingDisabled": "Lock breaking disabled:",
+      "lockBreakingDisabledDetail": "An administrator has disabled manual lock breaking for this deployment.",
+      "breakLockUnavailable": "Lock breaking is not available for this repository",
       "failedToBreakLock": "Failed to break repository lock"
     },
     "errorDetails": {
@@ -2230,7 +2491,22 @@
       "errorDetails": "Error Details",
       "cancel": "Cancel",
       "cancelJob": "Cancel Job",
-      "breakLock": "Break Lock"
+      "breakLock": "Break Lock",
+      "retry": "Retry backup job"
+    },
+    "confirmations": {
+      "retryJob": "Retry backup job #{{id}}?"
+    },
+    "retryTooltips": {
+      "ready": "Retry backup job",
+      "retrying": "Retrying backup job...",
+      "onlyTerminal": "Only failed or cancelled backup jobs can be retried.",
+      "destructiveType": "{{type}} jobs are not safe to retry from this table.",
+      "unsupportedType": "{{type}} jobs cannot be retried from this table.",
+      "backupPlanJob": "Retry this job from its backup plan run.",
+      "scheduledJob": "Scheduled backup jobs should be rerun from the schedule or plan.",
+      "missingRepository": "This job cannot be retried because its source repository is missing.",
+      "requiresPermission": "Operator access is required to retry this backup job."
     },
     "never": "Never",
     "empty": "No backup jobs found",
@@ -2764,6 +3040,9 @@
     "bypassLocksListTitle": "Bypass Locks for List Commands",
     "enableBypassLocksList": "Enable bypass-lock for all borg list commands",
     "bypassLocksListDescription": "Adds --bypass-lock to all borg list commands. This prevents lock contention when multiple read operations (like info + list) run simultaneously. Enable if you see \"Failed to acquire lock\" errors. Note: May show stale data if a backup is actively running.",
+    "lockBreakingTitle": "Manual Lock Breaking",
+    "enableLockBreaking": "Allow manual repository lock breaking",
+    "lockBreakingDescription": "Allows users with maintenance access to break stale repository locks from Borg UI. Disable this when other services may hold normal transient locks.",
     "showLegacyRestoreTabTitle": "Show Legacy Restore Tab",
     "showLegacyRestoreTabLabel": "Show the dedicated Restore tab in navigation",
     "showLegacyRestoreTabDescription": "Enable this to access the legacy Restore tab. Restore functionality is now integrated into the Archives page, but this option allows you to use the old interface if preferred.",
@@ -3877,7 +4156,8 @@
     }
   },
   "protectedRoute": {
-    "unavailable": "This feature is currently unavailable"
+    "unavailable": "This feature is currently unavailable",
+    "permissionDenied": "You do not have permission to open this page"
   },
   "repositoryCell": {
     "noPath": "No path information"
@@ -4115,13 +4395,30 @@
     "defaultPath": "Default Path",
     "actions": {
       "testConnection": "Test Connection",
-      "refreshStorage": "Refresh Storage"
+      "refreshStorage": "Refresh Storage",
+      "runDiagnostics": "Run diagnostics"
     }
   },
   "repositoryInfoDialog": {
     "failedToDownloadKeyfile": "Failed to download keyfile",
     "noArchivesDescription": "This repository has been initialized but contains no archives. Storage statistics will appear here after you create your first backup.",
-    "failedToLoad": "Failed to load repository information. Make sure the repository is accessible and properly initialized."
+    "failedToLoad": "Failed to load repository information. Make sure the repository is accessible and properly initialized.",
+    "recovery": {
+      "title": "Recovery commands",
+      "description": "Use these command templates when you need to diagnose, repair, or recreate this repository outside Borg UI.",
+      "checkCommand": "Check repository",
+      "repairCommand": "Repair check",
+      "initCommand": "Initialize repository",
+      "guidedCheckTitle": "Run a diagnostic check in Borg UI",
+      "guidedCheckDescription": "Opens the existing check confirmation and job log flow. Repair and initialize stay manual.",
+      "guidedCheckUnavailable": "Maintenance access is required to run checks in Borg UI.",
+      "guidedCheckButton": "Run guided check",
+      "guidedCheckStarting": "Starting check",
+      "copyCommand": "Copy {{label}} command",
+      "copiedCommand": "Copied {{label}} command",
+      "commandCopied": "Command copied",
+      "copyFailed": "Failed to copy command"
+    }
   },
   "analyticsBanner": {
     "viewDashboardLink": "View our public analytics dashboard",
@@ -4166,6 +4463,14 @@
   "layout": {
     "systemInformation": "System Information",
     "logoAlt": "Borg UI Logo"
+  },
+  "sidebar": {
+    "update": {
+      "title": "Update available",
+      "dismiss": "Dismiss",
+      "releaseNotes": "See what's new",
+      "ariaLabel": "Software update available"
+    }
   },
   "logViewer": {
     "title": "{{label}} Logs - Job #{{jobId}}",
@@ -4400,11 +4705,15 @@
         "failedGetBackupJobs": "Failed to get backup jobs",
         "failedGetBackupStatus": "Failed to get backup status",
         "failedCancelBackup": "Failed to cancel backup",
-        "cannotDownloadLogsForRunningBackup": "Cannot download logs for running backup"
+        "cannotDownloadLogsForRunningBackup": "Cannot download logs for running backup",
+        "retryOnlyTerminalFailedCancelled": "Only failed or cancelled backup jobs can be retried.",
+        "retryUnsupportedJobType": "This backup job type cannot be retried.",
+        "retryRequestNotReconstructable": "This backup job can no longer be reconstructed for retry."
       },
       "backupPlans": {
         "nameRequired": "Backup plan name is required.",
-        "clearLegacyRepositoryNotSelected": "Cannot clear legacy source settings for a repository that is not selected in this backup plan."
+        "clearLegacyRepositoryNotSelected": "Cannot clear legacy source settings for a repository that is not selected in this backup plan.",
+        "retryUnsupported": "This backup plan run cannot be retried."
       },
       "restore": {
         "cancelledByUser": "Restore cancelled by user",

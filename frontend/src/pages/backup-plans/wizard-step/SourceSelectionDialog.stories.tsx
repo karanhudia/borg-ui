@@ -257,6 +257,72 @@ const nothingFoundScanResponse = {
   detections: [],
 }
 
+const detectedContainerScanResponse = {
+  scan_target: {
+    source_type: 'local',
+    source_ssh_connection_id: null,
+    label: 'This Borg UI server',
+  },
+  containers: [
+    {
+      id: '5ad07b8f01d2',
+      name: 'postgres',
+      image: 'postgres:17',
+      status: 'running',
+      state: 'running',
+      export_path: '/var/tmp/borg-ui/container-exports/postgres',
+      backup_mode: 'export',
+      notes: [
+        'docker export captures the container filesystem.',
+        'Bind mounts and Docker named volumes are not included by docker export.',
+      ],
+      mounts: [
+        {
+          type: 'volume',
+          name: 'postgres-data',
+          source: '/var/lib/docker/volumes/postgres-data/_data',
+          destination: '/var/lib/postgresql/data',
+          backed_up: false,
+          reason: 'Not included in docker export; add this path separately from Files if needed.',
+          size_bytes: 1073741824,
+          size_status: 'available',
+        },
+        {
+          type: 'bind',
+          name: null,
+          source: '/srv/postgres/conf',
+          destination: '/etc/postgresql/conf.d',
+          backed_up: false,
+          reason: 'Not included in docker export; add this path separately from Files if needed.',
+          size_bytes: null,
+          size_status: 'permission_denied',
+        },
+        {
+          type: 'bind',
+          name: null,
+          source: '/srv/postgres/archive',
+          destination: '/var/lib/postgresql/archive',
+          backed_up: false,
+          reason: 'Not included in docker export; add this path separately from Files if needed.',
+          size_bytes: null,
+          size_status: 'unavailable',
+        },
+        {
+          type: 'volume',
+          name: 'postgres-wal',
+          source: '/var/lib/docker/volumes/postgres-wal/_data',
+          destination: '/var/lib/postgresql/wal',
+          backed_up: false,
+          reason: 'Not included in docker export; add this path separately from Files if needed.',
+          size_bytes: null,
+          size_status: 'timeout',
+        },
+      ],
+    },
+  ],
+  warnings: [],
+}
+
 interface MockOptions {
   scanStatus?:
     | 'detected'
@@ -277,6 +343,7 @@ function useMockedDiscovery({ scanStatus = 'detected', legacyTemplates = true }:
       mock.onGet('/source-discovery/databases').reply(200, legacyDiscoveryResponse)
     }
     mock.onGet('/source-discovery/filesystem-snapshots').reply(200, filesystemSnapshotCapabilities)
+    mock.onPost('/source-discovery/containers/scan').reply(200, detectedContainerScanResponse)
 
     if (scanStatus === 'detected') {
       mock.onPost('/source-discovery/databases/scan').reply(200, detectedScanResponse)
@@ -534,6 +601,39 @@ const databaseMultiSqliteQueuedState: WizardState = {
   databaseTemplateId: 'sqlite',
 }
 
+const databaseSingleSqliteQueuedState: WizardState = {
+  ...databaseMultiSqliteQueuedState,
+  sourceDirectories: ['/var/tmp/borg-ui/database-dumps/sqlite/state'],
+  sourceLocations: databaseMultiSqliteQueuedState.sourceLocations?.slice(0, 1) || [],
+}
+
+const containerQueuedState: WizardState = {
+  ...createInitialState(),
+  sourceType: 'local',
+  sourceDirectories: ['/var/tmp/borg-ui/container-exports/postgres'],
+  sourceLocations: [
+    {
+      source_type: 'local',
+      source_ssh_connection_id: null,
+      agent_machine_id: null,
+      paths: ['/var/tmp/borg-ui/container-exports/postgres'],
+      container: {
+        container_name: 'postgres',
+        display_name: 'postgres',
+        image: 'postgres:17',
+        backup_mode: 'export',
+        export_path: '/var/tmp/borg-ui/container-exports/postgres',
+        script_execution_target: 'source',
+        pre_backup_script_id: 301,
+        post_backup_script_id: 302,
+        pre_backup_script_parameters: {},
+        post_backup_script_parameters: {},
+        script_execution_order: 1,
+      },
+    },
+  ],
+}
+
 const translations: Record<string, string> = {
   'backupPlans.sourceChooser.title': 'Choose backup source',
   'backupPlans.sourceChooser.where': 'Where are the files?',
@@ -586,6 +686,55 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.databaseLivePath': 'Live database path',
   'backupPlans.sourceChooser.databaseDumpPath': 'Dump path',
   'backupPlans.sourceChooser.databaseBackupPaths': 'Final Borg paths',
+  'backupPlans.sourceChooser.containerBackupTitle': 'Add Docker container backup',
+  'backupPlans.sourceChooser.containerName': 'Container name or ID',
+  'backupPlans.sourceChooser.containerImage': 'Image (optional)',
+  'backupPlans.sourceChooser.containerExportPath': 'Export staging path',
+  'backupPlans.sourceChooser.containerExportHint':
+    'Borg UI exports the container filesystem to a staging path before Borg reads it. This does not back up the Docker image, bind mounts, or named volumes.',
+  'backupPlans.sourceChooser.containerExportsTo': 'Exports to',
+  'backupPlans.sourceChooser.addContainerManually': 'Add by name',
+  'backupPlans.sourceChooser.addContainerManuallyHelp':
+    "If your container isn't listed above, add it here.",
+  'backupPlans.sourceChooser.containerSourceMachine': 'Docker host',
+  'backupPlans.sourceChooser.containerModeExport': 'docker export',
+  'backupPlans.sourceChooser.scanContainers': 'Scan containers',
+  'backupPlans.sourceChooser.rescanContainers': 'Re-scan containers',
+  'backupPlans.sourceChooser.scanContainersHint': 'Scan selected Docker host.',
+  'backupPlans.sourceChooser.detectedContainers': 'Detected containers',
+  'backupPlans.sourceChooser.containerBackupCoverageTitle': 'What this source backs up',
+  'backupPlans.sourceChooser.containerFilesystemIncluded':
+    'Included: container filesystem export at {{path}}',
+  'backupPlans.sourceChooser.containerMountsNotIncluded': 'Not included: mounted data',
+  'backupPlans.sourceChooser.containerMountsNotIncludedHelp':
+    'Add these mount paths as Files sources if they contain data you need.',
+  'backupPlans.sourceChooser.containerMountNotIncluded': 'Not included in docker export',
+  'backupPlans.sourceChooser.containerMountsOptional': 'Optional mounted data',
+  'backupPlans.sourceChooser.containerMountsOptionalHelp':
+    'Select mounts to add them as Files sources in this plan.',
+  'backupPlans.sourceChooser.includeContainerMountAria':
+    'Include mounted data {{path}} as a Files source',
+  'backupPlans.sourceChooser.containerMountDestination': 'Mounted at {{path}}',
+  'backupPlans.sourceChooser.containerMountSizeAvailable': '{{size}}',
+  'backupPlans.sourceChooser.containerMountSizeUnavailable': 'Size unavailable',
+  'backupPlans.sourceChooser.containerMountSizePermissionDenied': 'Permission denied',
+  'backupPlans.sourceChooser.containerMountSizeTimeout': 'Size timed out',
+  'backupPlans.sourceChooser.containerImageMetadata':
+    'Image {{image}} identifies this container; Borg UI does not back up the image.',
+  'backupPlans.sourceChooser.addDetectedContainer': 'Add detected container',
+  'backupPlans.sourceChooser.addDetectedContainerShort': 'Add',
+  'backupPlans.sourceChooser.removeDetectedContainer': 'Remove detected container',
+  'backupPlans.sourceChooser.containerAdded': 'Added',
+  'backupPlans.sourceChooser.noContainersFoundTitle': 'No containers found',
+  'backupPlans.sourceChooser.noContainersFoundBody':
+    'Check Docker access on this host, or enter a container manually.',
+  'backupPlans.sourceChooser.containerScanUnsupportedForAgents':
+    'Docker container scanning is available for the Borg UI server and SSH sources. Enter managed-agent containers manually.',
+  'backupPlans.sourceChooser.containerScanFailedBody':
+    'Docker container scan did not return data. Check Docker access on this host and try again.',
+  'backupPlans.sourceChooser.addContainer': 'Add container',
+  'backupPlans.sourceChooser.selectedContainers': 'Selected containers',
+  'backupPlans.sourceChooser.containerScriptsAssigned': 'Export scripts assigned',
   'backupPlans.sourceChooser.discoveredAtHint':
     'Live data directory. The pre-backup script targets this instance; Borg does not read these files directly.',
   'backupPlans.sourceChooser.borgWillBackUpHint':
@@ -633,6 +782,7 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.removePath': 'Remove path',
   'backupPlans.sourceChooser.removeSourceGroup': 'Remove source group',
   'backupPlans.sourceChooser.applyPaths': 'Use these paths',
+  'backupPlans.sourceChooser.applyContainers': 'Use these containers',
   'backupPlans.sourceChooser.selectPaths': 'Select paths',
   'backupPlans.sourceChooser.currentPath': 'Current path',
   'backupPlans.sourceChooser.agentBrowseTitle': 'Browse {{agent}}',
@@ -675,12 +825,14 @@ const t = (key: string, options?: Record<string, unknown>) => {
   return (translations[key] || key)
     .replace('{{command}}', String(options?.command ?? ''))
     .replace('{{provider}}', String(options?.provider ?? ''))
+    .replace('{{path}}', String(options?.path ?? ''))
+    .replace('{{size}}', String(options?.size ?? ''))
 }
 
 interface DialogStoryArgs {
   wizardState: WizardState
   mockOptions: MockOptions
-  initialView?: 'paths' | 'database' | 'database-detail'
+  initialView?: 'paths' | 'database' | 'database-detail' | 'container'
   initialScanTarget?: { type: 'local' | 'remote'; sshId: number | '' }
   initialCaptureModeExpanded?: boolean
   initialSelectedDatabase?: SourceDiscoveryDatabase
@@ -688,6 +840,7 @@ interface DialogStoryArgs {
   canUseManagedAgents?: boolean
   canUseMixedSourceTypes?: boolean
   scrollToText?: string
+  autoClickText?: string
 }
 
 function DialogStory({
@@ -701,6 +854,7 @@ function DialogStory({
   canUseManagedAgents = true,
   canUseMixedSourceTypes = true,
   scrollToText,
+  autoClickText,
 }: DialogStoryArgs) {
   useMockedDiscovery(mockOptions)
   const stableState = useMemo(() => wizardState, [wizardState])
@@ -733,6 +887,35 @@ function DialogStory({
       if (timeout) window.clearTimeout(timeout)
     }
   }, [scrollToText])
+
+  useEffect(() => {
+    if (!autoClickText) return undefined
+
+    let timeout: number | undefined
+    let attempts = 0
+
+    const clickMatch = () => {
+      const match = Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find(
+        (element) => element.textContent?.includes(autoClickText)
+      )
+
+      if (match) {
+        match.click()
+        return
+      }
+
+      attempts += 1
+      if (attempts < 60) {
+        timeout = window.setTimeout(clickMatch, 50)
+      }
+    }
+
+    timeout = window.setTimeout(clickMatch, 50)
+
+    return () => {
+      if (timeout) window.clearTimeout(timeout)
+    }
+  }, [autoClickText])
 
   return (
     <Box sx={{ width: 1, height: '100vh', position: 'relative' }}>
@@ -781,6 +964,62 @@ export const PathPickerWithLocalSelections: Story = {
   render: () => (
     <DialogStory wizardState={localPathsState} mockOptions={{ scanStatus: 'detected' }} />
   ),
+}
+
+export const ContainerPickerEmpty: Story = {
+  render: () => (
+    <DialogStory
+      wizardState={emptyWizardState}
+      mockOptions={{ scanStatus: 'detected' }}
+      initialView="container"
+    />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Docker container source picker with host selection, generated export staging path, and queued source scripts.',
+      },
+    },
+  },
+}
+
+export const ContainerPickerQueuedEditMode: Story = {
+  render: () => (
+    <DialogStory
+      wizardState={containerQueuedState}
+      mockOptions={{ scanStatus: 'detected' }}
+      initialView="container"
+    />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Docker container source picker reopened with an existing selected container. The selected container appears before the compact scan prompt.',
+      },
+    },
+  },
+}
+
+export const ContainerPickerDetected: Story = {
+  render: () => (
+    <DialogStory
+      wizardState={emptyWizardState}
+      mockOptions={{ scanStatus: 'detected' }}
+      initialView="container"
+      autoClickText="Scan containers"
+      scrollToText="Mounts not included"
+    />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Docker container source picker after a scan returns a detected container, including the exact export path and optional mounted data selection for Files backup.',
+      },
+    },
+  },
 }
 
 export const PathPickerCaptureModeExpanded: Story = {
@@ -900,6 +1139,26 @@ export const DatabaseScanMultipleSqliteDetected: Story = {
       description: {
         story:
           'Scan sub-dialog with multiple same-type SQLite detections visible in the results grid.',
+      },
+    },
+  },
+}
+
+export const DatabaseScanReturnedAfterAdd: Story = {
+  render: () => (
+    <DialogStory
+      wizardState={databaseSingleSqliteQueuedState}
+      mockOptions={{ scanStatus: 'multiple-sqlite' }}
+      initialView="database"
+      initialScanDialogOpen
+      scrollToText="/srv/app/cache.sqlite3"
+    />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Post-add scan state: one detected SQLite database is already queued, and the scan sub-dialog remains open with the same scan paths and detected results so another database can be configured without rescanning.',
       },
     },
   },

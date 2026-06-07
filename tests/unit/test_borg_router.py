@@ -639,6 +639,8 @@ def test_build_restore_extract_command_adds_strip_components_for_v1():
         "extract",
         "--progress",
         "--log-json",
+        "--umask",
+        "0022",
         "--remote-path",
         "/usr/bin/borg",
         "--bypass-lock",

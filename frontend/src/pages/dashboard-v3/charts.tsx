@@ -212,13 +212,13 @@ export function ArcGauge({
   sub?: string
 }) {
   const T = useT()
-  const size = 52,
-    sw = 5,
+  const size = 44,
+    sw = 4.5,
     r = (size - sw) / 2
   const circ = 2 * Math.PI * r
   const filled = (Math.min(value, 100) / 100) * circ
   return (
-    <Box sx={{ textAlign: 'center' }}>
+    <Box sx={{ textAlign: 'center', width: '100%', minWidth: 0 }}>
       <Box sx={{ position: 'relative', width: size, height: size, mx: 'auto' }}>
         <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
           <circle
@@ -251,17 +251,32 @@ export function ArcGauge({
           }}
         >
           <Typography
-            sx={{ fontFamily: T.mono, fontSize: '0.75rem', fontWeight: 700, color: T.textPrimary }}
+            sx={{
+              fontFamily: T.mono,
+              fontSize: '0.6875rem',
+              fontWeight: 700,
+              color: T.textPrimary,
+            }}
           >
             {value.toFixed(0)}%
           </Typography>
         </Box>
       </Box>
-      <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: T.textMuted, mt: 0.5 }}>
+      <Typography sx={{ fontSize: '0.6875rem', fontWeight: 600, color: T.textMuted, mt: 0.5 }}>
         {label}
       </Typography>
       {sub && (
-        <Typography sx={{ fontSize: '0.75rem', color: T.textMuted, mt: 0.25 }}>{sub}</Typography>
+        <Typography
+          sx={{
+            fontSize: '0.6875rem',
+            color: T.textMuted,
+            mt: 0.125,
+            overflowWrap: 'anywhere',
+            lineHeight: 1.2,
+          }}
+        >
+          {sub}
+        </Typography>
       )}
     </Box>
   )

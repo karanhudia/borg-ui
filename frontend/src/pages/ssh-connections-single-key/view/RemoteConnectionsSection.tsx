@@ -18,6 +18,7 @@ interface RemoteConnectionsSectionProps {
   onRefreshStorage: (connectionId: number) => void
   onTestConnection: (connection: SSHConnection) => void
   onDeployKeyToConnection: (connection: SSHConnection) => void
+  onRunDiagnostics: (connection: SSHConnection) => void
 }
 
 export function RemoteConnectionsSection({
@@ -33,6 +34,7 @@ export function RemoteConnectionsSection({
   onRefreshStorage,
   onTestConnection,
   onDeployKeyToConnection,
+  onRunDiagnostics,
 }: RemoteConnectionsSectionProps) {
   return (
     <Box>
@@ -146,6 +148,7 @@ export function RemoteConnectionsSection({
                 onRefreshStorage={(machine) => onRefreshStorage(machine.id)}
                 onTestConnection={onTestConnection}
                 onDeployKey={onDeployKeyToConnection}
+                onRunDiagnostics={onRunDiagnostics}
                 canManageConnections={canManageSsh}
               />
             </Box>

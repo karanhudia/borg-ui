@@ -1,3 +1,5 @@
+import ipaddress
+import re
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
@@ -25,10 +27,23 @@ from app.services.agent_job_dispatcher import (
 )
 from app.services.agent_filesystem_service import browse_agent_filesystem
 from app.services.agent_connection_manager import agent_connection_manager
+from app.services.agent_connection_manager import (
+    AgentCommandError,
+    AgentCommandTimeout,
+    AgentConnectionUnavailable,
+)
+from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/api/managed-machines", tags=["managed-machines"])
+
+AGENT_DIAGNOSTICS_TIMEOUT_SECONDS = 5.0
+_DIAGNOSTIC_HOST_RE = re.compile(
+    r"^(?=.{1,253}\.?$)"
+    r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)*"
+    r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.?$"
+)
 
 
 def require_managed_agents_admin_user(
@@ -152,6 +167,16 @@ class AgentSessionLogEntryResponse(BaseModel):
     created_at: str
 
 
+class AgentDiagnosticTarget(BaseModel):
+    host: str
+    port: int = Field(ge=1, le=65535)
+    timeout_seconds: float = Field(default=3.0, ge=0.5, le=10.0)
+
+
+class AgentDiagnosticsRequest(BaseModel):
+    target: Optional[AgentDiagnosticTarget] = None
+
+
 class AgentBackupJobCreate(BaseModel):
     repository_path: str
     archive_name: str
@@ -181,6 +206,90 @@ def _optional_trimmed(value: Optional[str]) -> Optional[str]:
         return None
     stripped = value.strip()
     return stripped or None
+
+
+def _validate_diagnostic_host(host: str) -> str:
+    stripped = host.strip()
+    if not stripped:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"key": "backend.errors.agents.diagnosticsTargetHostRequired"},
+        )
+
+    try:
+        ipaddress.ip_address(stripped)
+        return stripped
+    except ValueError:
+        pass
+
+    if not _DIAGNOSTIC_HOST_RE.fullmatch(stripped):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"key": "backend.errors.agents.diagnosticsTargetHostInvalid"},
+        )
+    return stripped
+
+
+def _diagnostic_agent_metadata(agent: AgentMachine) -> dict[str, Any]:
+    return {
+        "id": agent.id,
+        "name": agent.name,
+        "agent_id": agent.agent_id,
+        "hostname": agent.hostname,
+        "status": agent.status,
+        "last_seen_at": (
+            serialize_datetime(agent.last_seen_at) if agent.last_seen_at else None
+        ),
+        "agent_version": agent.agent_version,
+        "borg_versions": agent.borg_versions or [],
+        "capabilities": agent.capabilities or [],
+        "last_error": agent.last_error,
+    }
+
+
+def _diagnostics_error_response(
+    agent: AgentMachine,
+    *,
+    session_status: str,
+    error: str,
+    message: str,
+) -> dict[str, Any]:
+    return {
+        "agent": _diagnostic_agent_metadata(agent),
+        "session": {
+            "status": session_status,
+            "elapsed_ms": None,
+            "error": error,
+            "message": message,
+        },
+        "tcp": None,
+    }
+
+
+def _normalize_diagnostics_result(
+    agent: AgentMachine,
+    result: dict[str, Any],
+) -> dict[str, Any]:
+    session_result = (
+        result.get("session") if isinstance(result.get("session"), dict) else {}
+    )
+    normalized: dict[str, Any] = {
+        "agent": _diagnostic_agent_metadata(agent),
+        "session": {
+            "status": str(session_result.get("status") or "success"),
+        },
+        "tcp": None,
+    }
+    if "elapsed_ms" in session_result:
+        normalized["session"]["elapsed_ms"] = session_result.get("elapsed_ms")
+    for key in ("error", "message"):
+        if session_result.get(key):
+            normalized["session"][key] = session_result[key]
+
+    tcp_result = result.get("tcp")
+    if isinstance(tcp_result, dict):
+        normalized["tcp"] = tcp_result
+    return normalized
 
 
 def _build_backup_job_payload(payload: AgentBackupJobCreate) -> dict[str, Any]:
@@ -435,6 +544,61 @@ async def browse_agent_machine_filesystem(
     )
 
 
+@router.post("/agents/{agent_machine_id}/diagnostics")
+async def run_agent_machine_diagnostics(
+    agent_machine_id: int,
+    payload: AgentDiagnosticsRequest,
+    _: User = Depends(require_managed_agents_admin_user),
+    db: Session = Depends(get_db),
+):
+    agent = db.query(AgentMachine).filter(AgentMachine.id == agent_machine_id).first()
+    if not agent:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"key": "backend.errors.agents.agentNotFound"},
+        )
+
+    command_payload: dict[str, Any] = {}
+    if payload.target is not None:
+        command_payload["target"] = {
+            "host": _validate_diagnostic_host(payload.target.host),
+            "port": payload.target.port,
+            "timeout_seconds": float(payload.target.timeout_seconds),
+        }
+
+    try:
+        result = await agent_connection_manager.send_command(
+            agent.id,
+            command="diagnostics.run",
+            payload=command_payload,
+            timeout_seconds=AGENT_DIAGNOSTICS_TIMEOUT_SECONDS,
+            wait_for_result=True,
+        )
+    except AgentConnectionUnavailable as exc:
+        return _diagnostics_error_response(
+            agent,
+            session_status="offline",
+            error="agent_offline",
+            message=str(exc),
+        )
+    except AgentCommandTimeout:
+        return _diagnostics_error_response(
+            agent,
+            session_status="timeout",
+            error="agent_timeout",
+            message="Agent did not return diagnostics before the timeout",
+        )
+    except AgentCommandError as exc:
+        return _diagnostics_error_response(
+            agent,
+            session_status="failed",
+            error=str(exc.payload.get("code") or "agent_command_failed"),
+            message=str(exc),
+        )
+
+    return _normalize_diagnostics_result(agent, result)
+
+
 @router.get(
     "/agents/{agent_machine_id}/logs",
     response_model=list[AgentSessionLogEntryResponse],
@@ -529,12 +693,20 @@ async def list_agent_job_logs(
             detail={"key": "backend.errors.agents.jobNotFound"},
         )
 
-    return (
+    logs = (
         db.query(AgentJobLog)
         .filter(AgentJobLog.agent_job_id == job.id)
         .order_by(AgentJobLog.sequence.asc(), AgentJobLog.id.asc())
         .all()
     )
+    if not job_has_logs_by_policy(
+        job,
+        get_log_save_policy(db),
+        output_text=[*(log.message for log in logs), job.error_message],
+    ):
+        return []
+
+    return logs
 
 
 @router.post(

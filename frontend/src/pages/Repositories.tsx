@@ -9,6 +9,7 @@ import { backupPlansAPI, repositoriesAPI, RepositoryData } from '../services/api
 import { BorgApiClient } from '../services/borgApi'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { useAuth } from '../hooks/useAuth'
+import { useLockBreakPermissions } from '../hooks/useLockBreakPermissions'
 import { usePlan } from '../hooks/usePlan'
 import { usePermissions } from '../hooks/usePermissions'
 import { useAppState } from '../context/AppContext'
@@ -47,6 +48,14 @@ const TERMINAL_WIPE_STATUSES = new Set([
   'cancelled',
 ])
 type RcloneRepositoryAction = 'sync' | 'hydrate'
+
+interface MaintenanceJobSummary {
+  id: number
+  status?: string | null
+  started_at?: string | null
+  completed_at?: string | null
+  error_message?: string | null
+}
 
 function parseBackupPlanFilterId(value: string | null): number | null {
   if (!value) return null
@@ -121,6 +130,8 @@ export default function Repositories() {
     queryKey: ['repositories'],
     queryFn: repositoriesAPI.getRepositories,
   })
+
+  const { canBreakLock, lockBreakingEnabled } = useLockBreakPermissions()
 
   const { data: backupPlansData, isLoading: loadingBackupPlanFilter } = useQuery({
     queryKey: ['backup-plans'],
@@ -506,6 +517,7 @@ export default function Repositories() {
     const tracked = maintenanceTrackingRef.current.get(repositoryId)
     if (tracked) {
       const repository = repositories.find((repo: Repository) => repo.id === repositoryId)
+      let toastShown = false
       try {
         const response =
           tracked.operation === 'Check'
@@ -513,9 +525,25 @@ export default function Repositories() {
             : tracked.operation === 'Compact'
               ? await repositoriesAPI.getRepositoryCompactJobs(repositoryId, 1)
               : await repositoriesAPI.getRepositoryPruneJobs(repositoryId, 1)
-        const latestJob = response.data?.jobs?.[0]
+        const latestJob = response.data?.jobs?.[0] as MaintenanceJobSummary | undefined
 
         if (latestJob?.status) {
+          if (tracked.operation === 'Check') {
+            if (latestJob.status === 'completed') {
+              toast.success(t('repositories.toasts.checkCompleted'))
+              toastShown = true
+            } else if (latestJob.status === 'completed_with_warnings') {
+              toast(t('repositories.toasts.checkCompletedWithWarnings'), { icon: '!' })
+              toastShown = true
+            } else {
+              const message = latestJob.error_message
+                ? translateBackendKey(latestJob.error_message) || latestJob.error_message
+                : t('repositories.toasts.checkRunFailed')
+              toast.error(t('repositories.toasts.checkFailedWithMessage', { message }))
+              toastShown = true
+            }
+          }
+
           const action =
             latestJob.status === 'completed' || latestJob.status === 'completed_with_warnings'
               ? EventAction.COMPLETE
@@ -526,8 +554,14 @@ export default function Repositories() {
             duration_seconds: getJobDurationSeconds(latestJob.started_at, latestJob.completed_at),
             error_present: !!latestJob.error_message,
           })
+        } else if (tracked.operation === 'Check') {
+          toast.success(t('repositories.toasts.checkCompleted'))
+          toastShown = true
         }
       } catch {
+        if (tracked.operation === 'Check' && !toastShown) {
+          toast.success(t('repositories.toasts.checkCompleted'))
+        }
         // Best-effort analytics should not affect maintenance UX.
       }
       maintenanceTrackingRef.current.delete(repositoryId)
@@ -886,6 +920,11 @@ export default function Repositories() {
         repositoryInfo={repositoryInfo?.data?.info || null}
         isLoading={loadingInfo}
         onClose={() => setViewingInfoRepository(null)}
+        onRunRecoveryCheck={(repository) => handleCheckRepository(repository as Repository)}
+        canRunRecoveryCheck={
+          viewingInfoRepository ? permissions.canDo(viewingInfoRepository.id, 'maintenance') : false
+        }
+        isRecoveryCheckStarting={checkRepositoryMutation.isPending}
       />
 
       {/* Prune Repository Dialog */}
@@ -920,7 +959,8 @@ export default function Repositories() {
           repositoryId={lockError.repositoryId}
           repositoryName={lockError.repositoryName}
           borgVersion={lockError.borgVersion}
-          canBreakLock={canManageRepositoriesGlobally}
+          canBreakLock={canBreakLock({ repository_id: lockError.repositoryId })}
+          lockBreakingEnabled={lockBreakingEnabled}
           onLockBroken={() => {
             queryClient.invalidateQueries({ queryKey: ['repository-info', lockError.repositoryId] })
           }}

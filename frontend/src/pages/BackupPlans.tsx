@@ -13,6 +13,7 @@ import WizardDialog from '../components/shared/WizardDialog'
 import LogViewerDialog from '../components/LogViewerDialog'
 import FileExplorerDialog from '../components/FileExplorerDialog'
 import { type BackupPlanRunLogJob } from '../components/BackupPlanRunsPanel'
+import { canRetryBackupPlanRunForPermissions } from '../components/backupPlanRunRetry'
 import {
   backupPlansAPI,
   managedAgentsAPI,
@@ -24,7 +25,9 @@ import {
 } from '../services/api'
 import { BorgApiClient } from '../services/borgApi'
 import { usePlan } from '../hooks/usePlan'
+import { usePermissions } from '../hooks/usePermissions'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { useFeatureAnalytics } from '../hooks/useFeatureAnalytics'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { buildBackupPlanPayload } from '../utils/backupPlanPayload'
 import { getCheckFlagDurationConflict } from '../utils/checkFlagConflicts'
@@ -92,7 +95,9 @@ export default function BackupPlans() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { t } = useTranslation()
   const { track, EventCategory, EventAction } = useAnalytics()
+  const { trackFeatureUsed, trackFeatureBlocked } = useFeatureAnalytics()
   const { can } = usePlan()
+  const permissions = usePermissions()
   const canUseMultiRepository = can('backup_plan_multi_repository')
   const canUseMixedSourceTypes = can('backup_plan_mixed_sources')
   const canUseManagedAgents = can('managed_agents')
@@ -126,18 +131,42 @@ export default function BackupPlans() {
   )
   const handledInitialRepositoryRef = useRef(false)
   const trackBackupPlanSubmit = (action: string, data: BackupPlanData) => {
+    const operation = action === EventAction.CREATE ? 'create_plan' : 'update_plan'
     track(EventCategory.BACKUP, action, {
       entity: 'backup_plan',
       section: BACKUP_PLANS_ANALYTICS_SECTION,
-      operation: action === EventAction.CREATE ? 'create_plan' : 'update_plan',
+      operation,
       source_type: data.source_type,
       repository_count: data.repositories.length,
+      repository_run_mode: data.repository_run_mode,
       schedule_enabled: data.schedule_enabled,
       run_repository_scripts: data.run_repository_scripts,
       run_prune_after: data.run_prune_after,
       run_compact_after: data.run_compact_after,
       run_check_after: data.run_check_after,
     })
+    if (data.repositories.length > 1 || data.repository_run_mode === 'parallel') {
+      trackFeatureUsed('backup_plan_multi_repository', {
+        surface: BACKUP_PLANS_ANALYTICS_SECTION,
+        operation,
+        repository_count: data.repositories.length,
+        repository_run_mode: data.repository_run_mode,
+      })
+    }
+    if (data.source_type === 'mixed') {
+      trackFeatureUsed('backup_plan_mixed_sources', {
+        surface: BACKUP_PLANS_ANALYTICS_SECTION,
+        operation,
+        source_type: data.source_type,
+      })
+    }
+    if (data.source_locations?.some((location) => location.source_type === 'agent')) {
+      trackFeatureUsed('managed_agents', {
+        surface: BACKUP_PLANS_ANALYTICS_SECTION,
+        operation,
+        usage: 'backup_plan_source',
+      })
+    }
   }
   const selectedRepositoryFilterId = useMemo(
     () => parseRepositoryFilterId(searchParams.get('repositoryId')),
@@ -156,6 +185,17 @@ export default function BackupPlans() {
     refetchInterval: 2000,
   })
   const backupPlanRuns: BackupPlanRun[] = useMemo(() => runsData?.data?.runs || [], [runsData])
+  const canRetryBackupPlanRun = (run: BackupPlanRun) =>
+    canRetryBackupPlanRunForPermissions(run, (repositoryId) =>
+      permissions.canDo(repositoryId, 'backup')
+    )
+  const hasActiveRunForPlan = (run: BackupPlanRun) =>
+    backupPlanRuns.some(
+      (candidate) =>
+        candidate.id !== run.id &&
+        candidate.backup_plan_id === run.backup_plan_id &&
+        isActiveRun(candidate.status)
+    )
   const latestRunByPlan = useMemo(() => {
     const latest = new Map<number, BackupPlanRun>()
     backupPlanRuns.forEach((run) => {
@@ -402,6 +442,25 @@ export default function BackupPlans() {
     },
   })
 
+  const retryRunMutation = useMutation({
+    mutationFn: (id: number) => backupPlansAPI.retryRun(id),
+    onSuccess: (_response, runId) => {
+      toast.success(t('backupPlans.toasts.retryStarted'))
+      if (historyPlanId !== null) setHistoryPlanId(null)
+      queryClient.invalidateQueries({ queryKey: ['backup-plan-runs'] })
+      queryClient.invalidateQueries({ queryKey: ['backup-plans'] })
+      track(EventCategory.BACKUP, EventAction.START, {
+        entity: 'backup_plan_run',
+        section: BACKUP_PLANS_ANALYTICS_SECTION,
+        operation: 'retry_run',
+        backup_plan_run_id: runId,
+      })
+    },
+    onError: (error: unknown) => {
+      toast.error(errorMessage(error, t('backupPlans.toasts.retryFailed')))
+    },
+  })
+
   const toggleMutation = useMutation({
     mutationFn: (id: number) => backupPlansAPI.toggle(id),
     onSuccess: () => {
@@ -427,6 +486,11 @@ export default function BackupPlans() {
           const nextSelection = applyRepositorySelectionLimit(nextIds, canUseMultiRepository)
           if (nextSelection.limited) {
             toast.error(t('backupPlans.toasts.multiRepositoryRequiresPro'))
+            trackFeatureBlocked('backup_plan_multi_repository', {
+              surface: BACKUP_PLANS_ANALYTICS_SECTION,
+              operation: 'select_multiple_repositories',
+              repository_count: nextIds.length,
+            })
           }
 
           return {
@@ -558,6 +622,11 @@ export default function BackupPlans() {
     const nextSelection = applyRepositorySelectionLimit(ids, canUseMultiRepository)
     if (nextSelection.limited) {
       toast.error(t('backupPlans.toasts.multiRepositoryRequiresPro'))
+      trackFeatureBlocked('backup_plan_multi_repository', {
+        surface: BACKUP_PLANS_ANALYTICS_SECTION,
+        operation: 'select_multiple_repositories',
+        repository_count: ids.length,
+      })
     }
 
     setWizardState((prev) => ({
@@ -642,6 +711,12 @@ export default function BackupPlans() {
   const submitPlan = () => {
     if (isRepositorySelectionOverLimit(wizardState.repositoryIds, canUseMultiRepository)) {
       toast.error(t('backupPlans.toasts.multiRepositoryRequiresPro'))
+      trackFeatureBlocked('backup_plan_multi_repository', {
+        surface: BACKUP_PLANS_ANALYTICS_SECTION,
+        operation: 'submit_plan',
+        repository_count: wizardState.repositoryIds.length,
+        repository_run_mode: wizardState.repositoryRunMode,
+      })
       return
     }
     const sourceLocations = wizardState.sourceLocations || []
@@ -650,6 +725,11 @@ export default function BackupPlans() {
       sourceLocations.some((location) => location.source_type === 'agent')
     ) {
       toast.error(t('backupPlans.sourceChooser.managedAgentRequiresPro'))
+      trackFeatureBlocked('managed_agents', {
+        surface: BACKUP_PLANS_ANALYTICS_SECTION,
+        operation: 'submit_plan',
+        usage: 'backup_plan_source',
+      })
       return
     }
     if (
@@ -657,6 +737,11 @@ export default function BackupPlans() {
       new Set(sourceLocations.map((location) => location.source_type)).size > 1
     ) {
       toast.error(t('backupPlans.sourceChooser.mixedSourceTypesRequiresPro'))
+      trackFeatureBlocked('backup_plan_mixed_sources', {
+        surface: BACKUP_PLANS_ANALYTICS_SECTION,
+        operation: 'submit_plan',
+        source_type: wizardState.sourceType,
+      })
       return
     }
     const selectedRepositories = wizardState.repositoryIds
@@ -731,10 +816,12 @@ export default function BackupPlans() {
   // directly so the callbacks are actually stable.
   const runMutate = runMutation.mutate
   const cancelRunMutate = cancelRunMutation.mutate
+  const retryRunMutate = retryRunMutation.mutate
   const toggleMutate = toggleMutation.mutate
   const deleteMutate = deleteMutation.mutate
   const handleRunPlan = useCallback((planId: number) => runMutate(planId), [runMutate])
   const handleCancelRun = useCallback((runId: number) => cancelRunMutate(runId), [cancelRunMutate])
+  const handleRetryRun = useCallback((runId: number) => retryRunMutate(runId), [retryRunMutate])
   const handleTogglePlan = useCallback((planId: number) => toggleMutate(planId), [toggleMutate])
   const handleDeletePlan = useCallback((planId: number) => deleteMutate(planId), [deleteMutate])
   const handleViewRepositories = useCallback(
@@ -931,6 +1018,10 @@ export default function BackupPlans() {
         onClose={() => setHistoryPlanId(null)}
         onViewLogs={(job) => setLogJob(job)}
         onCancel={(runId) => cancelRunMutation.mutate(runId)}
+        onRetry={handleRetryRun}
+        retryingRunId={retryRunMutation.isPending ? Number(retryRunMutation.variables) : null}
+        canRetryRun={canRetryBackupPlanRun}
+        hasActiveRunForPlan={hasActiveRunForPlan}
         t={t}
       />
     </Box>

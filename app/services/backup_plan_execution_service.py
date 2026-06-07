@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 import structlog
+from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.maintenance_jobs import create_started_maintenance_job
@@ -24,6 +25,7 @@ from app.database.models import (
     BackupPlanRepository,
     BackupPlanScript,
     BackupPlanRun,
+    BackupPlanRunRetryLineage,
     BackupPlanRunRepository,
     CheckJob,
     CompactJob,
@@ -165,6 +167,29 @@ def _database_source_locations(
     ]
 
 
+def _container_source_location(
+    source_locations: list[dict[str, Any]],
+) -> Optional[dict[str, Any]]:
+    return next(
+        (
+            location
+            for location in source_locations
+            if isinstance(location.get("container"), dict)
+        ),
+        None,
+    )
+
+
+def _container_source_locations(
+    source_locations: list[dict[str, Any]],
+) -> list[tuple[int, dict[str, Any]]]:
+    return [
+        (index, location)
+        for index, location in enumerate(source_locations, start=1)
+        if isinstance(location.get("container"), dict)
+    ]
+
+
 def _database_script_env_for_location(
     location: Optional[dict[str, Any]], source_index: Optional[int] = None
 ) -> dict[str, str]:
@@ -202,6 +227,41 @@ def _database_script_env(source_locations: list[dict[str, Any]]) -> dict[str, st
     return _database_script_env_for_location(location)
 
 
+def _container_script_env_for_location(
+    location: Optional[dict[str, Any]], source_index: Optional[int] = None
+) -> dict[str, str]:
+    if not location:
+        return {}
+
+    container = location.get("container") or {}
+    backup_paths = location.get("paths") or []
+    if not isinstance(backup_paths, list):
+        backup_paths = []
+    export_path = container.get("export_path") or ""
+    if not export_path and backup_paths:
+        export_path = str(backup_paths[0])
+
+    return {
+        "BORG_UI_CONTAINER_NAME": str(container.get("container_name") or ""),
+        "BORG_UI_CONTAINER_DISPLAY_NAME": str(
+            container.get("display_name") or container.get("container_name") or ""
+        ),
+        "BORG_UI_CONTAINER_IMAGE": str(container.get("image") or ""),
+        "BORG_UI_CONTAINER_BACKUP_MODE": str(container.get("backup_mode") or "export"),
+        "BORG_UI_CONTAINER_EXPORT_DIR": str(export_path or ""),
+        "BORG_UI_CONTAINER_BACKUP_PATHS": json.dumps(backup_paths),
+        "BORG_UI_CONTAINER_SCRIPT_EXECUTION_TARGET": str(
+            container.get("script_execution_target") or "source"
+        ),
+        "BORG_UI_CONTAINER_SOURCE_INDEX": str(source_index or ""),
+    }
+
+
+def _container_script_env(source_locations: list[dict[str, Any]]) -> dict[str, str]:
+    location = _container_source_location(source_locations)
+    return _container_script_env_for_location(location)
+
+
 def _database_remote_source_connection_id_for_location(
     location: Optional[dict[str, Any]],
 ) -> Optional[int]:
@@ -221,6 +281,27 @@ def _database_remote_source_connection_id(
 ) -> Optional[int]:
     location = _database_source_location(source_locations)
     return _database_remote_source_connection_id_for_location(location)
+
+
+def _container_remote_source_connection_id_for_location(
+    location: Optional[dict[str, Any]],
+) -> Optional[int]:
+    if not location:
+        return None
+    container = location.get("container") or {}
+    if container.get("script_execution_target") != "source":
+        return None
+    if location.get("source_type") != "remote":
+        return None
+    connection_id = location.get("source_ssh_connection_id")
+    return int(connection_id) if connection_id not in (None, "") else None
+
+
+def _container_remote_source_connection_id(
+    source_locations: list[dict[str, Any]],
+) -> Optional[int]:
+    location = _container_source_location(source_locations)
+    return _container_remote_source_connection_id_for_location(location)
 
 
 def _database_source_script_assignments(
@@ -268,6 +349,71 @@ def _database_source_script_assignments(
         key=lambda assignment: (
             assignment["execution_order"],
             assignment["source_index"],
+        ),
+    )
+
+
+def _container_source_script_assignments(
+    source_locations: list[dict[str, Any]], hook_type: str
+) -> list[dict[str, Any]]:
+    script_id_key = (
+        "pre_backup_script_id"
+        if hook_type == "source-pre-backup"
+        else "post_backup_script_id"
+    )
+    parameters_key = (
+        "pre_backup_script_parameters"
+        if hook_type == "source-pre-backup"
+        else "post_backup_script_parameters"
+    )
+    assignments: list[dict[str, Any]] = []
+    for source_index, location in _container_source_locations(source_locations):
+        container = location.get("container") or {}
+        script_id = container.get(script_id_key)
+        if script_id in (None, ""):
+            continue
+        try:
+            script_id_int = int(script_id)
+        except (TypeError, ValueError):
+            continue
+        if script_id_int <= 0:
+            continue
+        execution_order = container.get("script_execution_order") or source_index
+        try:
+            execution_order_int = int(execution_order)
+        except (TypeError, ValueError):
+            execution_order_int = source_index
+        assignments.append(
+            {
+                "source_index": source_index,
+                "execution_order": execution_order_int,
+                "location": location,
+                "script_id": script_id_int,
+                "parameters": container.get(parameters_key) or {},
+            }
+        )
+
+    return sorted(
+        assignments,
+        key=lambda assignment: (
+            assignment["execution_order"],
+            assignment["source_index"],
+        ),
+    )
+
+
+def _source_script_assignments(
+    source_locations: list[dict[str, Any]], hook_type: str
+) -> list[dict[str, Any]]:
+    return sorted(
+        [
+            *_database_source_script_assignments(source_locations, hook_type),
+            *_container_source_script_assignments(source_locations, hook_type),
+        ],
+        key=lambda assignment: (
+            assignment["execution_order"],
+            assignment["source_index"],
+            assignment["script_id"],
         ),
     )
 
@@ -620,6 +766,122 @@ class BackupPlanExecutionService:
         asyncio.create_task(self.execute_run(run.id))
         return run.id
 
+    def retry_failed_run(
+        self,
+        db: Session,
+        source_run: BackupPlanRun,
+        *,
+        requested_by_user_id: Optional[int],
+    ) -> int:
+        if source_run.status != "failed":
+            raise ValueError("Only failed backup plan runs can be retried")
+        if not source_run.backup_plan_id:
+            raise ValueError("Backup plan run no longer references a plan")
+
+        plan = (
+            db.query(BackupPlan)
+            .options(
+                joinedload(BackupPlan.repositories).joinedload(
+                    BackupPlanRepository.repository
+                )
+            )
+            .filter(BackupPlan.id == source_run.backup_plan_id)
+            .first()
+        )
+        if not plan:
+            raise ValueError("Backup plan no longer exists")
+        if self.has_active_run(db, plan.id):
+            raise HTTPException(
+                status_code=409,
+                detail={"key": "backend.errors.backupPlans.runAlreadyActive"},
+            )
+
+        enabled_repository_ids = [
+            link.repository_id
+            for link in sorted(plan.repositories, key=lambda item: item.execution_order)
+            if link.enabled and link.repository
+        ]
+        enabled_repository_id_set = set(enabled_repository_ids)
+        failed_repository_ids: list[int] = []
+        skipped_repository_ids: list[int] = []
+
+        source_children = sorted(
+            source_run.repositories,
+            key=lambda item: (
+                item.repository_id is None,
+                item.repository_id or 0,
+                item.id,
+            ),
+        )
+        for child in source_children:
+            backup_status = child.backup_job.status if child.backup_job else None
+            failed = child.status == "failed" or backup_status == "failed"
+            if not failed or child.repository_id is None:
+                continue
+            if child.repository_id in enabled_repository_id_set:
+                if child.repository_id not in failed_repository_ids:
+                    failed_repository_ids.append(child.repository_id)
+            else:
+                skipped_repository_ids.append(child.repository_id)
+
+        if not failed_repository_ids:
+            raise ValueError("Backup plan run has no retryable failed repositories")
+
+        selected_repository_ids = [
+            repo_id
+            for repo_id in enabled_repository_ids
+            if repo_id in failed_repository_ids
+        ]
+        attempt_number = (source_run.retry_attempt or 1) + 1
+        original_run_id = source_run.retry_original_run_id or source_run.id
+        requested_at = datetime.utcnow()
+        retry_run = BackupPlanRun(
+            backup_plan_id=plan.id,
+            trigger="retry",
+            status="pending",
+            retry_original_run_id=original_run_id,
+            retry_source_run_id=source_run.id,
+            retry_attempt=attempt_number,
+            retry_requested_by_user_id=requested_by_user_id,
+            retry_requested_at=requested_at,
+            created_at=requested_at,
+        )
+        db.add(retry_run)
+        db.flush()
+
+        for repository_id in selected_repository_ids:
+            db.add(
+                BackupPlanRunRepository(
+                    backup_plan_run_id=retry_run.id,
+                    repository_id=repository_id,
+                    status="pending",
+                )
+            )
+
+        db.add(
+            BackupPlanRunRetryLineage(
+                original_run_id=original_run_id,
+                retry_source_run_id=source_run.id,
+                attempt_number=attempt_number,
+                requested_by_user_id=requested_by_user_id,
+                requested_at=requested_at,
+                created_run_id=retry_run.id,
+                request_snapshot={
+                    "kind": "backup_plan_run_retry",
+                    "mode": "failed_only",
+                    "source_run_id": source_run.id,
+                    "source_run_status": source_run.status,
+                    "backup_plan_id": plan.id,
+                    "selected_repository_ids": selected_repository_ids,
+                    "skipped_repository_ids": skipped_repository_ids,
+                    "uses_current_plan_configuration": True,
+                },
+            )
+        )
+        db.commit()
+        asyncio.create_task(self.execute_run(retry_run.id))
+        return retry_run.id
+
     async def execute_run(self, run_id: int) -> None:
         try:
             context, repositories = self._prepare_run(run_id)
@@ -705,6 +967,15 @@ class BackupPlanExecutionService:
             run = db.query(BackupPlanRun).filter(BackupPlanRun.id == run_id).first()
             if not run:
                 raise ValueError(f"Backup plan run {run_id} not found")
+            retry_repository_ids = (
+                {
+                    child.repository_id
+                    for child in run.repositories
+                    if child.repository_id is not None
+                }
+                if run.trigger == "retry"
+                else None
+            )
 
             plan = (
                 db.query(BackupPlan)
@@ -733,6 +1004,12 @@ class BackupPlanExecutionService:
                 )
                 if link.enabled and link.repository
             ]
+            if retry_repository_ids is not None:
+                enabled_links = [
+                    link
+                    for link in enabled_links
+                    if link.repository_id in retry_repository_ids
+                ]
             if not enabled_links:
                 raise ValueError("Backup plan has no enabled repositories")
 
@@ -876,7 +1153,7 @@ class BackupPlanExecutionService:
         hook_type: str,
         backup_result: Optional[str] = None,
     ) -> tuple[bool, Optional[str]]:
-        for assignment in _database_source_script_assignments(
+        for assignment in _source_script_assignments(
             context.source_locations, hook_type
         ):
             ok, error = await self._execute_plan_script(
@@ -1005,10 +1282,19 @@ class BackupPlanExecutionService:
                 if source_location is not None
                 else _database_remote_source_connection_id(context.source_locations)
             )
-            source_connection_id = database_remote_connection_id or (
-                context.source_ssh_connection_id
-                if context.source_type == "remote"
-                else None
+            container_remote_connection_id = (
+                _container_remote_source_connection_id_for_location(source_location)
+                if source_location is not None
+                else _container_remote_source_connection_id(context.source_locations)
+            )
+            source_connection_id = (
+                database_remote_connection_id
+                or container_remote_connection_id
+                or (
+                    context.source_ssh_connection_id
+                    if context.source_type == "remote"
+                    else None
+                )
             )
             if source_connection_id:
                 source_connection = (
@@ -1047,6 +1333,11 @@ class BackupPlanExecutionService:
                 if source_location is not None
                 else _database_script_env(context.source_locations)
             )
+            script_env.update(
+                _container_script_env_for_location(source_location, source_index)
+                if source_location is not None
+                else _container_script_env(context.source_locations)
+            )
             if source_connection:
                 script_env.update(
                     {
@@ -1064,7 +1355,9 @@ class BackupPlanExecutionService:
             )
             if source_location is not None:
                 execution_context = f"{execution_context}:source:{source_index or ''}"
-            if database_remote_connection_id and source_connection:
+            if (
+                database_remote_connection_id or container_remote_connection_id
+            ) and source_connection:
                 result = await self._execute_remote_source_script(
                     source_connection=source_connection,
                     script=script_content,

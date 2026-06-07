@@ -1,18 +1,7 @@
-import {
-  Alert,
-  type AlertColor,
-  Chip,
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Select,
-  type SxProps,
-  type Theme,
-  Typography,
-} from '@mui/material'
+import { Alert, type AlertColor, Chip, type SxProps, type Theme } from '@mui/material'
 import { CalendarCheck } from 'lucide-react'
 import type { SourceType } from '../../types'
-import RichSelectRow from './RichSelectRow'
+import RichSelect, { type RichSelectOption } from './RichSelect'
 
 export interface BackupPlanSummary {
   id: number
@@ -45,8 +34,6 @@ interface BackupPlanSelectProps {
   getIndicatorLabel?: (plan: BackupPlanSummary) => string | undefined
 }
 
-let autoIdCounter = 0
-
 export default function BackupPlanSelect({
   value,
   onChange,
@@ -68,88 +55,38 @@ export default function BackupPlanSelect({
     return <Alert severity={emptySeverity}>{emptyMessage}</Alert>
   }
 
-  const resolvedLabelId = labelId ?? `backup-plan-select-${++autoIdCounter}`
-  const selectedValue = value === '' ? '' : String(value)
+  const options: RichSelectOption[] = plans.map((plan) => {
+    const indicatorLabel = getIndicatorLabel(plan)
+
+    return {
+      value: String(plan.id),
+      icon: <CalendarCheck size={16} />,
+      primary: plan.name,
+      secondary: formatSecondary(plan),
+      indicator: indicatorLabel ? (
+        <Chip
+          size="small"
+          label={indicatorLabel}
+          variant="outlined"
+          sx={{ height: 20, fontSize: '0.65rem', flexShrink: 0 }}
+        />
+      ) : undefined,
+    }
+  })
 
   return (
-    <FormControl fullWidth disabled={disabled} sx={sx}>
-      <InputLabel id={resolvedLabelId} shrink={Boolean(placeholder) || undefined}>
-        {label}
-      </InputLabel>
-      <Select
-        labelId={resolvedLabelId}
-        id={selectId}
-        value={selectedValue}
-        label={label}
-        displayEmpty={Boolean(placeholder)}
-        onChange={(event) => {
-          const next = event.target.value
-          if (next) onChange(Number(next))
-        }}
-        renderValue={(selected) => {
-          if (selected === '' && placeholder) {
-            return (
-              <Typography variant="body2" color="text.secondary" noWrap>
-                {placeholder}
-              </Typography>
-            )
-          }
-
-          const plan = plans.find((item) => String(item.id) === selected)
-          if (!plan) return null
-          return renderBackupPlanRow(plan, formatSecondary, getIndicatorLabel)
-        }}
-        // Match the fixed rich-select trigger height used by SSH connections,
-        // managed agents, rclone remotes, and repository destinations.
-        sx={{
-          height: 56,
-          '& .MuiSelect-select': {
-            height: 56,
-            boxSizing: 'border-box',
-            display: 'flex',
-            alignItems: 'center',
-          },
-        }}
-      >
-        {placeholder && (
-          <MenuItem value="" disabled>
-            <Typography variant="body2" color="text.secondary">
-              {placeholder}
-            </Typography>
-          </MenuItem>
-        )}
-        {plans.map((plan) => (
-          <MenuItem key={plan.id} value={String(plan.id)} sx={{ py: 1 }}>
-            {renderBackupPlanRow(plan, formatSecondary, getIndicatorLabel)}
-          </MenuItem>
-        ))}
-      </Select>
-    </FormControl>
-  )
-}
-
-function renderBackupPlanRow(
-  plan: BackupPlanSummary,
-  formatSecondary: (plan: BackupPlanSummary) => string,
-  getIndicatorLabel: (plan: BackupPlanSummary) => string | undefined
-) {
-  const indicatorLabel = getIndicatorLabel(plan)
-
-  return (
-    <RichSelectRow
-      icon={<CalendarCheck size={16} />}
-      primary={plan.name}
-      secondary={formatSecondary(plan)}
-      indicator={
-        indicatorLabel ? (
-          <Chip
-            size="small"
-            label={indicatorLabel}
-            variant="outlined"
-            sx={{ height: 20, fontSize: '0.65rem', flexShrink: 0 }}
-          />
-        ) : undefined
-      }
+    <RichSelect
+      value={value === '' ? '' : String(value)}
+      onChange={(next) => {
+        if (next) onChange(Number(next))
+      }}
+      options={options}
+      label={label}
+      labelId={labelId}
+      selectId={selectId}
+      disabled={disabled}
+      placeholder={placeholder}
+      sx={sx}
     />
   )
 }

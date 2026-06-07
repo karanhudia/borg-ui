@@ -773,6 +773,7 @@ describe('BackupPlans payload', () => {
         post_backup_script_id: 12,
         pre_backup_script_parameters: {
           SQLITE_DATABASE_PATH: '/home/app/state.sqlite',
+          EMPTY_VALUE: '',
         },
         post_backup_script_parameters: {
           CLEAN_TARGET: '/var/tmp/borg-ui/database-dumps/sqlite',
@@ -780,6 +781,160 @@ describe('BackupPlans payload', () => {
         script_execution_order: 3,
       })
     )
+  })
+
+  it('preserves Docker container source metadata', () => {
+    const invalidScriptTarget = 'sidecar' as unknown as 'source'
+    const payload = buildBackupPlanPayload({
+      name: 'Docker Sources',
+      description: '',
+      enabled: true,
+      sourceType: 'local',
+      sourceSshConnectionId: '',
+      sourceDirectories: ['/var/tmp/borg-ui/container-exports/postgres'],
+      sourceLocations: [
+        {
+          source_type: 'local',
+          source_ssh_connection_id: null,
+          agent_machine_id: null,
+          paths: ['/var/tmp/borg-ui/container-exports/postgres'],
+          container: {
+            container_name: ' postgres ',
+            display_name: ' Postgres service ',
+            image: ' postgres:16 ',
+            backup_mode: 'export',
+            export_path: ' /var/tmp/borg-ui/container-exports/postgres ',
+            script_execution_target: invalidScriptTarget,
+            pre_backup_script_id: 11,
+            post_backup_script_id: 12,
+            pre_backup_script_parameters: {
+              CONTAINER_EXPORT_FORMAT: ' tar ',
+              EMPTY_VALUE: '   ',
+            },
+            post_backup_script_parameters: {
+              CLEAN_EXPORT: ' yes ',
+            },
+            script_execution_order: 2,
+          },
+        },
+      ],
+      excludePatterns: [],
+      repositoryIds: [10],
+      compression: 'lz4',
+      archiveNameTemplate: '{plan_name}-{repo_name}-{now}',
+      customFlags: '',
+      uploadRatelimitMb: '',
+      repositoryRunMode: 'series',
+      maxParallelRepositories: 1,
+      failureBehavior: 'continue',
+      scheduleEnabled: false,
+      cronExpression: '0 21 * * *',
+      timezone: 'UTC',
+      preBackupScriptId: 99,
+      postBackupScriptId: null,
+      preBackupScriptParameters: { PLAN_ONLY: 'yes' },
+      postBackupScriptParameters: {},
+      runRepositoryScripts: true,
+      runPruneAfter: false,
+      runCompactAfter: false,
+      runCheckAfter: false,
+      checkMaxDuration: 3600,
+      checkExtraFlags: '',
+      pruneKeepHourly: 0,
+      pruneKeepDaily: 7,
+      pruneKeepWeekly: 4,
+      pruneKeepMonthly: 6,
+      pruneKeepQuarterly: 0,
+      pruneKeepYearly: 1,
+    })
+
+    expect(payload.pre_backup_script_id).toBe(99)
+    expect(payload.pre_backup_script_parameters).toEqual({ PLAN_ONLY: 'yes' })
+    expect(payload.source_locations?.[0].container).toEqual({
+      container_name: 'postgres',
+      display_name: 'Postgres service',
+      image: 'postgres:16',
+      backup_mode: 'export',
+      export_path: '/var/tmp/borg-ui/container-exports/postgres',
+      script_execution_target: 'source',
+      pre_backup_script_id: 11,
+      post_backup_script_id: 12,
+      pre_backup_script_parameters: {
+        CONTAINER_EXPORT_FORMAT: 'tar',
+        EMPTY_VALUE: '',
+      },
+      post_backup_script_parameters: {
+        CLEAN_EXPORT: 'yes',
+      },
+      script_execution_order: 2,
+    })
+  })
+
+  it('hydrates Docker container source metadata with safe script defaults', () => {
+    const invalidScriptTarget = 'sidecar' as unknown as 'source'
+
+    const state = planToState({
+      id: 3,
+      name: 'Docker Plan',
+      enabled: true,
+      source_type: 'local',
+      source_directories: ['/var/tmp/borg-ui/container-exports/postgres'],
+      source_locations: [
+        {
+          source_type: 'local',
+          source_ssh_connection_id: null,
+          agent_machine_id: null,
+          paths: ['/var/tmp/borg-ui/container-exports/postgres'],
+          container: {
+            container_name: ' postgres ',
+            display_name: ' Postgres service ',
+            image: ' postgres:16 ',
+            backup_mode: 'export',
+            export_path: ' /var/tmp/borg-ui/container-exports/postgres ',
+            script_execution_target: invalidScriptTarget,
+            pre_backup_script_id: 11,
+            post_backup_script_id: 12,
+            pre_backup_script_parameters: {
+              CONTAINER_EXPORT_FORMAT: ' tar ',
+              EMPTY_VALUE: '   ',
+            },
+            post_backup_script_parameters: {
+              CLEAN_EXPORT: ' yes ',
+            },
+            script_execution_order: 2,
+          },
+        },
+      ],
+      exclude_patterns: [],
+      archive_name_template: '{plan_name}-{repo_name}-{now}',
+      compression: 'lz4',
+      repository_run_mode: 'series',
+      max_parallel_repositories: 1,
+      failure_behavior: 'continue',
+      schedule_enabled: false,
+      timezone: 'UTC',
+      repository_count: 1,
+      repositories: [],
+    })
+
+    expect(state.sourceLocations?.[0].container).toEqual({
+      container_name: 'postgres',
+      display_name: 'Postgres service',
+      image: 'postgres:16',
+      backup_mode: 'export',
+      export_path: '/var/tmp/borg-ui/container-exports/postgres',
+      script_execution_target: 'source',
+      pre_backup_script_id: 11,
+      post_backup_script_id: 12,
+      pre_backup_script_parameters: {
+        CONTAINER_EXPORT_FORMAT: 'tar',
+        EMPTY_VALUE: '',
+      },
+      post_backup_script_parameters: {
+        CLEAN_EXPORT: 'yes',
+      },
+      script_execution_order: 2,
+    })
   })
 })
 

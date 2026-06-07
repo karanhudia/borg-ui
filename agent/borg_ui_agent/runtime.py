@@ -23,6 +23,7 @@ DEFAULT_CAPABILITIES = [
     "logs.stream",
     "backup.create",
     "backup.cancel",
+    "diagnostics.run",
     "filesystem.browse",
     "repository.init",
     "repository.info",

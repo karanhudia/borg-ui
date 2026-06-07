@@ -33,10 +33,11 @@ import ActiveBackupPlanRunCard from '../components/ActiveBackupPlanRunCard'
 import LogViewerDialog from '../components/LogViewerDialog'
 import ScheduleByPlanTab from '../components/ScheduleByPlanTab'
 import { type BackupPlanRunLogJob } from '../components/BackupPlanRunsPanel'
-import { type BackupPlan, type BackupPlanRun, Repository } from '../types'
+import { type BackupJob, type BackupPlan, type BackupPlanRun, Repository } from '../types'
 import { useTrackedJobOutcomes } from '../hooks/useTrackedJobOutcomes'
 import { getJobDurationSeconds } from '../utils/analyticsProperties'
 import { buildScheduleDeepLink, parseScheduleDeepLink } from '../utils/scheduleDeepLink'
+import { useLockBreakPermissions } from '../hooks/useLockBreakPermissions'
 
 interface ScheduledJob {
   id: number
@@ -66,29 +67,6 @@ interface ScheduledJob {
   prune_keep_yearly: number
   last_prune: string | null
   last_compact: string | null
-}
-
-interface BackupJob {
-  id: string
-  repository: string
-  status: 'running' | 'completed' | 'failed' | 'cancelled' | 'completed_with_warnings'
-  started_at: string
-  completed_at?: string
-  error_message?: string
-  has_logs?: boolean
-  maintenance_status?: string | null
-  scheduled_job_id?: number | null
-  progress_details?: {
-    original_size: number
-    compressed_size: number
-    deduplicated_size: number
-    nfiles: number
-    current_file: string
-    progress_percent: number
-    backup_speed: number
-    total_expected_size: number
-    estimated_time_remaining: number
-  }
 }
 
 const SCHEDULE_TAB_PATHS = [
@@ -214,6 +192,9 @@ const Schedule: React.FC = () => {
   const manageableRepositories = repositories.filter((repo: Repository) =>
     canDo(repo.id, 'maintenance')
   )
+  const { canBreakLock: canBreakLockForBackupJob, lockBreakingEnabled } = useLockBreakPermissions({
+    repositories,
+  })
 
   // Backup job history — fetch all jobs (not just scheduled) so orphaned/manual
   // history remains visible after a legacy schedule is deleted.
@@ -700,7 +681,8 @@ const Schedule: React.FC = () => {
             backupPlans={backupPlans}
             repositories={repositories}
             isLoading={loadingBackupJobs}
-            canBreakLocks={canManageRepositoriesGlobally}
+            canBreakLocks={canBreakLockForBackupJob}
+            lockBreakingEnabled={lockBreakingEnabled}
             canDeleteJobs={canManageRepositoriesGlobally}
             filterSchedule={filterSchedule}
             filterRepository={filterRepository}

@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Borg UI documentation
+    url: https://docs.borgui.com
+    about: Read setup, usage, and development documentation.
+  - name: Borg UI Discord community
+    url: https://discord.gg/5KfVa5QkdQ
+    about: Ask questions and discuss usage with the community.

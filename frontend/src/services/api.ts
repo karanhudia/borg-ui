@@ -1,8 +1,15 @@
 import axios from 'axios'
 import { toast } from 'react-hot-toast'
 import { BASE_PATH } from '@/utils/basePath'
-import { API_BASE_URL, buildDownloadUrl } from '@/utils/downloadUrl'
-import { attachAccessTokenHeader } from './authHeaders'
+import { API_BASE_URL, buildApiUrl, buildDownloadUrl } from './remoteBackends/gateway'
+import { getActiveBackendTarget } from './remoteBackends/storage'
+import {
+  attachAccessTokenHeader,
+  BACKEND_TARGET_ID_CONFIG_KEY,
+  clearAccessToken,
+  type BackendTargetRequestConfig,
+} from './authHeaders'
+import type { InternalAxiosRequestConfig } from 'axios'
 import type { RestoreLayout, RestorePathMetadata } from '@/utils/restorePaths'
 import type {
   BackupPlan,
@@ -30,7 +37,13 @@ const api = axios.create({
 })
 
 // Request interceptor to add auth token
-api.interceptors.request.use(attachAccessTokenHeader)
+api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  const target = getActiveBackendTarget()
+  const targetConfig = config as BackendTargetRequestConfig
+  targetConfig.baseURL = target.apiBaseUrl
+  targetConfig[BACKEND_TARGET_ID_CONFIG_KEY] = target.id
+  return attachAccessTokenHeader(targetConfig, target.id)
+})
 
 // Response interceptor to handle auth errors
 api.interceptors.response.use(
@@ -52,7 +65,10 @@ api.interceptors.response.use(
       error.config?.url !== '/auth/config' &&
       authTransportMode === 'jwt'
     ) {
-      localStorage.removeItem('access_token')
+      const requestTargetId = (error.config as BackendTargetRequestConfig | undefined)?.[
+        BACKEND_TARGET_ID_CONFIG_KEY
+      ]
+      clearAccessToken(requestTargetId)
       window.location.href = `${BASE_PATH}/login`
     }
     return Promise.reject(error)
@@ -181,6 +197,17 @@ export interface RcloneOAuthSession {
   error?: string | null
 }
 
+export interface RcloneRemoteStorage {
+  total: number
+  total_formatted: string
+  used: number
+  used_formatted: string
+  available: number
+  available_formatted: string
+  percent_used: number
+  last_check?: string | null
+}
+
 export interface RcloneRemote {
   id: number
   name: string
@@ -192,6 +219,7 @@ export interface RcloneRemote {
   last_test_status?: string | null
   last_error?: string | null
   oauth_token?: RcloneOAuthTokenStatus | null
+  storage?: RcloneRemoteStorage | null
 }
 
 export type { RcloneStorage } from '../types'
@@ -225,6 +253,7 @@ export interface SystemSettings {
   dashboard_observe_freshness_critical_days?: number
   bypass_lock_on_info?: boolean
   bypass_lock_on_list?: boolean
+  lock_breaking_enabled?: boolean
   metrics_enabled?: boolean
   metrics_require_auth?: boolean
   metrics_token?: string
@@ -436,6 +465,47 @@ export interface DatabaseScanResponse {
   warnings: DatabaseScanWarning[]
 }
 
+export interface ContainerScanRequest {
+  source_type: 'local' | 'remote'
+  source_ssh_connection_id: number | null
+  include_stopped?: boolean
+  timeout_seconds?: number
+}
+
+export interface SourceDiscoveryContainerMount {
+  type: string | null
+  name: string | null
+  source: string | null
+  backup_source?: string | null
+  destination: string | null
+  backed_up: boolean
+  reason: string
+  size_bytes?: number | null
+  size_status?: 'available' | 'unavailable' | 'permission_denied' | 'timeout' | string | null
+}
+
+export interface SourceDiscoveryContainer {
+  id: string
+  name: string
+  image: string | null
+  status: string | null
+  state: string | null
+  export_path: string
+  backup_mode: 'export'
+  notes: string[]
+  mounts: SourceDiscoveryContainerMount[]
+}
+
+export interface ContainerScanResponse {
+  scan_target: {
+    source_type: 'local' | 'remote'
+    source_ssh_connection_id: number | null
+    label: string
+  }
+  containers: SourceDiscoveryContainer[]
+  warnings: DatabaseScanWarning[]
+}
+
 export interface FilesystemSnapshotProviderCapability {
   id: 'btrfs' | 'zfs'
   label: string
@@ -454,20 +524,10 @@ export interface FilesystemSnapshotCapabilitiesResponse {
 export const authAPI = {
   getAuthConfig: () => api.get<AuthConfigResponse>('/auth/config'),
   getOidcLoginUrl: (returnTo?: string) => {
-    const params = new URLSearchParams()
-    if (returnTo) {
-      params.set('return_to', returnTo)
-    }
-    const suffix = params.toString()
-    return `${API_BASE_URL}/auth/oidc/login${suffix ? `?${suffix}` : ''}`
+    return buildApiUrl('/auth/oidc/login', { return_to: returnTo })
   },
   getOidcLinkUrl: (returnTo?: string) => {
-    const params = new URLSearchParams()
-    if (returnTo) {
-      params.set('return_to', returnTo)
-    }
-    const suffix = params.toString()
-    return `${API_BASE_URL}/auth/oidc/link${suffix ? `?${suffix}` : ''}`
+    return buildApiUrl('/auth/oidc/link', { return_to: returnTo })
   },
   beginOidcLink: (returnTo?: string) =>
     api.post<OidcLinkStartResponse>('/auth/oidc/link', { return_to: returnTo }),
@@ -557,6 +617,7 @@ export const backupAPI = {
     }),
   getScheduledJobs: () => api.get('/backup/jobs?scheduled_only=true'),
   cancelJob: (jobId: string) => api.post(`/backup/cancel/${jobId}`),
+  retryJob: (jobId: string | number) => api.post(`/backup/jobs/${jobId}/retry`),
   // Download logs as file (only for failed/cancelled backups)
   downloadLogs: (jobId: string) =>
     window.open(buildDownloadUrl(`/backup/logs/${jobId}/download`), '_blank'),
@@ -870,7 +931,62 @@ export const backupPlansAPI = {
   listRuns: () => api.get('/backup-plans/runs'),
   getRun: (id: number) => api.get(`/backup-plans/runs/${id}`),
   cancelRun: (id: number) => api.post(`/backup-plans/runs/${id}/cancel`),
+  retryRun: (id: number) => api.post(`/backup-plans/runs/${id}/retry`),
   listRunsForPlan: (id: number) => api.get(`/backup-plans/${id}/runs`),
+}
+
+export interface SSHConnectionDiagnosticsTargetRequest {
+  host: string
+  port: number
+  timeout_seconds?: number
+}
+
+export interface SSHConnectionDiagnosticsRequest {
+  target?: SSHConnectionDiagnosticsTargetRequest
+  timeout_seconds?: number
+  speed_probe_bytes?: number
+}
+
+export interface SSHConnectionDiagnosticsMetadata {
+  id: number
+  host: string
+  username: string
+  port: number
+  status: string
+  last_test?: string | null
+  last_success?: string | null
+  error_message?: string | null
+}
+
+export interface SSHConnectionDiagnosticsProbeResult {
+  status: 'success' | 'failed' | 'timeout' | string
+  elapsed_ms?: number | null
+  error?: string | null
+  message?: string | null
+  output?: string | null
+}
+
+export interface SSHConnectionDiagnosticsTcpResult extends SSHConnectionDiagnosticsProbeResult {
+  target: {
+    host: string
+    port: number
+    timeout_seconds?: number
+  }
+}
+
+export interface SSHConnectionDiagnosticsThroughputResult extends SSHConnectionDiagnosticsProbeResult {
+  direction: 'download' | string
+  probe_size_bytes: number
+  bytes_transferred?: number | null
+  mbps?: number | null
+}
+
+export interface SSHConnectionDiagnosticsResponse {
+  connection: SSHConnectionDiagnosticsMetadata
+  session: SSHConnectionDiagnosticsProbeResult
+  latency: SSHConnectionDiagnosticsProbeResult
+  tcp?: SSHConnectionDiagnosticsTcpResult | null
+  throughput?: SSHConnectionDiagnosticsThroughputResult | null
 }
 
 // SSH Keys API
@@ -900,6 +1016,11 @@ export const sshKeysAPI = {
     api.delete(`/ssh-keys/connections/${connectionId}`),
   refreshConnectionStorage: (connectionId: number) =>
     api.post(`/ssh-keys/connections/${connectionId}/refresh-storage`),
+  runConnectionDiagnostics: (connectionId: number, data: SSHConnectionDiagnosticsRequest) =>
+    api.post<SSHConnectionDiagnosticsResponse>(
+      `/ssh-keys/connections/${connectionId}/diagnostics`,
+      data
+    ),
   redeployKeyToConnection: (connectionId: number, password: string) =>
     api.post(`/ssh-keys/connections/${connectionId}/redeploy`, { password }),
   importSSHKey: (data: ApiData) => api.post('/ssh-keys/import', data),
@@ -1010,6 +1131,54 @@ export interface AgentFilesystemBrowseResponse {
   items_truncated?: boolean
 }
 
+export interface AgentDiagnosticsTargetRequest {
+  host: string
+  port: number
+  timeout_seconds?: number
+}
+
+export interface AgentDiagnosticsRequest {
+  target?: AgentDiagnosticsTargetRequest
+}
+
+export interface AgentDiagnosticsMetadata {
+  id: number
+  name: string
+  agent_id: string
+  hostname?: string | null
+  status: string
+  last_seen_at?: string | null
+  agent_version?: string | null
+  borg_versions?: Array<Record<string, unknown>> | null
+  capabilities?: string[] | null
+  last_error?: string | null
+}
+
+export interface AgentDiagnosticsSessionResult {
+  status: 'success' | 'offline' | 'timeout' | 'failed' | string
+  elapsed_ms?: number | null
+  error?: string | null
+  message?: string | null
+}
+
+export interface AgentDiagnosticsTcpResult {
+  target: {
+    host: string
+    port: number
+    timeout_seconds?: number
+  }
+  status: 'success' | 'failed' | string
+  elapsed_ms?: number | null
+  error?: string | null
+  message?: string | null
+}
+
+export interface AgentDiagnosticsResponse {
+  agent: AgentDiagnosticsMetadata
+  session: AgentDiagnosticsSessionResult
+  tcp?: AgentDiagnosticsTcpResult | null
+}
+
 export interface AgentEnrollmentTokenCreate {
   name: string
   default_path?: string | null
@@ -1043,6 +1212,8 @@ export const managedAgentsAPI = {
       `/managed-machines/agents/${agentId}/filesystem/browse`,
       { params: { path, include_hidden: includeHidden } }
     ),
+  runDiagnostics: (agentId: number, data: AgentDiagnosticsRequest) =>
+    api.post<AgentDiagnosticsResponse>(`/managed-machines/agents/${agentId}/diagnostics`, data),
 }
 
 // Schedule API
@@ -1136,6 +1307,8 @@ export const sourceDiscoveryAPI = {
   databases: () => api.get<SourceDiscoveryResponse>('/source-discovery/databases'),
   scanDatabases: (body: DatabaseScanRequest) =>
     api.post<DatabaseScanResponse>('/source-discovery/databases/scan', body),
+  scanContainers: (body: ContainerScanRequest) =>
+    api.post<ContainerScanResponse>('/source-discovery/containers/scan', body),
   filesystemSnapshots: () =>
     api.get<FilesystemSnapshotCapabilitiesResponse>('/source-discovery/filesystem-snapshots'),
 }

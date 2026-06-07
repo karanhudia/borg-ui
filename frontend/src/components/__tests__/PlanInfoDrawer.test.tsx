@@ -115,7 +115,7 @@ const { usePlanContentMock } = vi.hoisted(() => ({
         plan: 'pro',
         label: 'Backup reports',
         description: 'Generate daily, weekly, monthly, or custom backup reports.',
-        availability: 'coming_soon',
+        availability: 'included',
       },
       {
         id: 'rclone_support',
@@ -144,6 +144,21 @@ const { usePlanContentMock } = vi.hoisted(() => ({
         label: 'Alerts and monitoring',
         description:
           'Create backup alerts and rules, for example when Downloads has not been backed up for 3 days.',
+        availability: 'included',
+      },
+      {
+        id: 'database_discovery',
+        plan: 'pro',
+        label: 'Automatic database scanning and setup',
+        description:
+          'Detect supported databases and generate guided backup configs with safe stop-backup-start workflows.',
+        availability: 'included',
+      },
+      {
+        id: 'container_backups',
+        plan: 'pro',
+        label: 'Automatic Docker container backup',
+        description: 'Detect running containers and help generate backup configs from them.',
         availability: 'coming_soon',
       },
       {
@@ -324,6 +339,9 @@ describe('PlanInfoDrawer', () => {
     expect(screen.getByText('Multi-source backup')).toBeInTheDocument()
     expect(screen.getByText('Cloud storage with rclone')).toBeInTheDocument()
     expect(screen.getByText('Managed agents')).toBeInTheDocument()
+    expect(screen.getByText('Backup reports')).toBeInTheDocument()
+    expect(screen.getByText('Alerts and monitoring')).toBeInTheDocument()
+    expect(screen.getByText('Automatic database scanning and setup')).toBeInTheDocument()
     expect(screen.queryByText('backup_plan_multi_repository')).not.toBeInTheDocument()
     expect(screen.queryByText('backup_plan_mixed_sources')).not.toBeInTheDocument()
     expect(screen.queryByText('rclone')).not.toBeInTheDocument()

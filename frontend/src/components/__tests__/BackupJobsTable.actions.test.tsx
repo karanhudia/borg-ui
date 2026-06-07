@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { within } from '@testing-library/react'
 import { renderWithProviders, screen, userEvent, waitFor } from '../../test/test-utils'
 import BackupJobsTable from '../BackupJobsTable'
 import { QueryClient } from '@tanstack/react-query'
@@ -36,6 +37,8 @@ vi.mock('../DataTable', () => ({
       label: string
       onClick: (row: Record<string, unknown>) => void
       show?: (row: Record<string, unknown>) => boolean
+      disabled?: (row: Record<string, unknown>) => boolean
+      tooltip?: string | ((row: Record<string, unknown>) => string)
     }>
   }) => (
     <div>
@@ -44,11 +47,23 @@ vi.mock('../DataTable', () => ({
           <span>{String(row.id)}</span>
           {actions
             ?.filter((action) => (action.show ? action.show(row) : true))
-            .map((action) => (
-              <button key={`${row.id}-${action.label}`} onClick={() => action.onClick(row)}>
-                {action.label}
-              </button>
-            ))}
+            .map((action) => {
+              const tooltip =
+                typeof action.tooltip === 'function'
+                  ? action.tooltip(row)
+                  : action.tooltip || action.label
+              return (
+                <button
+                  key={`${row.id}-${action.label}`}
+                  aria-label={action.label}
+                  title={tooltip}
+                  disabled={action.disabled?.(row) ?? false}
+                  onClick={() => action.onClick(row)}
+                >
+                  {action.label}
+                </button>
+              )
+            })}
         </div>
       ))}
     </div>
@@ -251,6 +266,120 @@ describe('BackupJobsTable action internals', () => {
     await user.click(await screen.findByRole('button', { name: /download file/i }))
 
     expect(borgDownloadFileMock).toHaveBeenCalledWith('archive-77', '/srv/notes.txt')
+  })
+
+  it('confirms and calls retry for failed manual backup jobs', async () => {
+    const user = userEvent.setup()
+    const onRetryJob = vi.fn()
+
+    renderWithProviders(
+      <BackupJobsTable
+        jobs={[
+          {
+            id: 12,
+            repository: '/backup/retryable',
+            repository_path: '/backup/retryable',
+            repository_id: 12,
+            type: 'backup',
+            status: 'failed',
+            started_at: '2026-04-01T10:00:00Z',
+            completed_at: '2026-04-01T10:05:00Z',
+          },
+        ]}
+        actions={{ retry: true }}
+        canRetryJob={() => true}
+        onRetryJob={onRetryJob}
+      />
+    )
+
+    await user.click(screen.getByRole('button', { name: /retry backup job/i }))
+
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByText('Retry backup job #12?')).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: /retry backup job/i }))
+
+    expect(onRetryJob).toHaveBeenCalledWith(expect.objectContaining({ id: 12 }))
+  })
+
+  it('does not show retry for active backup jobs', () => {
+    renderWithProviders(
+      <BackupJobsTable
+        jobs={[
+          {
+            id: 13,
+            repository: '/backup/running',
+            repository_path: '/backup/running',
+            repository_id: 13,
+            type: 'backup',
+            status: 'running',
+            started_at: '2026-04-01T10:00:00Z',
+          },
+        ]}
+        actions={{ retry: true }}
+        canRetryJob={() => true}
+        onRetryJob={vi.fn()}
+      />
+    )
+
+    expect(screen.queryByRole('button', { name: /retry/i })).not.toBeInTheDocument()
+  })
+
+  it('disables retry for destructive terminal jobs with a clear tooltip', () => {
+    renderWithProviders(
+      <BackupJobsTable
+        jobs={[
+          {
+            id: 14,
+            repository: '/backup/prune',
+            repository_path: '/backup/prune',
+            repository_id: 14,
+            type: 'prune',
+            status: 'failed',
+            started_at: '2026-04-01T10:00:00Z',
+            completed_at: '2026-04-01T10:05:00Z',
+          },
+        ]}
+        actions={{ retry: true }}
+        canRetryJob={() => true}
+        onRetryJob={vi.fn()}
+      />
+    )
+
+    const retryButton = screen.getByRole('button', { name: /retry backup job/i })
+    expect(retryButton).toBeDisabled()
+    expect(retryButton).toHaveAttribute(
+      'title',
+      'Prune jobs are not safe to retry from this table.'
+    )
+  })
+
+  it('disables retry for terminal backup jobs without operator permission', () => {
+    renderWithProviders(
+      <BackupJobsTable
+        jobs={[
+          {
+            id: 15,
+            repository: '/backup/no-permission',
+            repository_path: '/backup/no-permission',
+            repository_id: 15,
+            type: 'backup',
+            status: 'cancelled',
+            started_at: '2026-04-01T10:00:00Z',
+            completed_at: '2026-04-01T10:05:00Z',
+          },
+        ]}
+        actions={{ retry: true }}
+        canRetryJob={() => false}
+        onRetryJob={vi.fn()}
+      />
+    )
+
+    const retryButton = screen.getByRole('button', { name: /retry backup job/i })
+    expect(retryButton).toBeDisabled()
+    expect(retryButton).toHaveAttribute(
+      'title',
+      'Operator access is required to retry this backup job.'
+    )
   })
 
   it('cancels running jobs through the activity API when using the built-in handler', async () => {

@@ -14,6 +14,7 @@ import {
   DialogContentText,
   DialogTitle,
   IconButton,
+  LinearProgress,
   Paper,
   Skeleton,
   Stack,
@@ -22,6 +23,7 @@ import {
   alpha,
   useTheme,
 } from '@mui/material'
+import type { Theme } from '@mui/material/styles'
 import {
   AlertTriangle,
   CheckCircle,
@@ -56,6 +58,7 @@ import StorageBrowserDialog, { type StorageBrowserItem } from '../components/Sto
 import RcloneProviderIcon, { RcloneProviderGlyph } from '../components/shared/RcloneProviderIcon'
 import { joinBrowserPath, normalizeBrowserPath } from '../utils/storageBrowserPaths'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { useFeatureAnalytics } from '../hooks/useFeatureAnalytics'
 
 const CLOUD_STORAGE_ANALYTICS_SECTION = 'cloud_storage'
 
@@ -164,6 +167,12 @@ const statusColor = (
   }
 }
 
+const getStorageBarColor = (pct: number, theme: Theme) => {
+  if (pct > 90) return theme.palette.error.main
+  if (pct > 75) return theme.palette.warning.main
+  return theme.palette.success.main
+}
+
 const oauthTokenColor = (
   status?: RcloneOAuthTokenStatus['status'] | null
 ): 'default' | 'success' | 'error' | 'warning' | 'info' => {
@@ -219,6 +228,7 @@ function CloudStorageRemoteCard({
   const usageCount = remote.usage_count ?? 0
   const deleteDisabled = usageCount > 0
   const oauthToken = remote.oauth_token
+  const storage = remote.storage ?? null
   const oauthColorKey = oauthTokenColor(oauthToken?.status)
   const oauthColor =
     oauthColorKey === 'default'
@@ -348,6 +358,139 @@ function CloudStorageRemoteCard({
             {remote.config_path || t('cloudStorage.managedConfig')}
           </Typography>
         </Box>
+
+        {storage ? (
+          <Box
+            sx={{
+              borderRadius: 1.5,
+              border: '1px solid',
+              borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.07),
+              overflow: 'hidden',
+              mb: 1.5,
+              bgcolor: isDark ? alpha('#fff', 0.025) : alpha('#000', 0.018),
+            }}
+          >
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+              {[
+                {
+                  label: t('cloudStorage.storageUsed'),
+                  value: storage.used_formatted,
+                  color: theme.palette.warning.main,
+                },
+                {
+                  label: t('cloudStorage.storageFree'),
+                  value: storage.available_formatted,
+                  color: theme.palette.success.main,
+                },
+              ].map((col, index) => (
+                <Box
+                  key={col.label}
+                  sx={{
+                    px: 1.5,
+                    py: 1,
+                    minWidth: 0,
+                    borderRight: index === 0 ? '1px solid' : 0,
+                    borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.07),
+                  }}
+                >
+                  <Typography
+                    noWrap
+                    sx={{
+                      fontSize: '0.58rem',
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                      color: alpha(col.color, 0.75),
+                      lineHeight: 1,
+                      mb: 0.5,
+                    }}
+                  >
+                    {col.label}
+                  </Typography>
+                  <Typography
+                    noWrap
+                    sx={{
+                      fontSize: '0.85rem',
+                      fontWeight: 600,
+                      fontVariantNumeric: 'tabular-nums',
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    {col.value}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+            <Box
+              sx={{
+                px: 1.5,
+                pt: 0.75,
+                pb: 1,
+                borderTop: '1px solid',
+                borderColor: isDark ? alpha('#fff', 0.05) : alpha('#000', 0.06),
+              }}
+            >
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 1,
+                  mb: 0.5,
+                }}
+              >
+                <Typography sx={{ fontSize: '0.58rem', color: 'text.disabled', lineHeight: 1 }}>
+                  {t('cloudStorage.storagePercentUsed', {
+                    value: storage.percent_used.toFixed(1),
+                  })}
+                </Typography>
+                <Typography
+                  sx={{
+                    fontSize: '0.58rem',
+                    color: 'text.disabled',
+                    lineHeight: 1,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  {t('cloudStorage.storageTotal', { value: storage.total_formatted })}
+                </Typography>
+              </Box>
+              <LinearProgress
+                variant="determinate"
+                value={Math.min(100, Math.max(0, storage.percent_used))}
+                sx={{
+                  height: 5,
+                  borderRadius: 1,
+                  bgcolor: isDark ? alpha('#fff', 0.08) : alpha('#000', 0.08),
+                  '& .MuiLinearProgress-bar': {
+                    bgcolor: getStorageBarColor(storage.percent_used, theme),
+                    borderRadius: 1,
+                  },
+                }}
+              />
+            </Box>
+          </Box>
+        ) : (
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.75,
+              px: 1.25,
+              py: 0.875,
+              mb: 1.5,
+              borderRadius: 1.5,
+              border: '1px solid',
+              borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.07),
+              bgcolor: isDark ? alpha('#fff', 0.025) : alpha('#000', 0.018),
+            }}
+          >
+            <HardDrive size={14} style={{ opacity: 0.4, flexShrink: 0 }} />
+            <Typography noWrap sx={{ fontSize: '0.75rem', color: 'text.disabled', flex: 1 }}>
+              {t('cloudStorage.noStorageInfo')}
+            </Typography>
+          </Box>
+        )}
 
         <Box
           sx={{
@@ -1064,12 +1207,20 @@ export function CloudStorageContent({
 export default function CloudStorage() {
   const { t } = useTranslation()
   const { trackSystem, EventAction } = useAnalytics()
+  const { trackFeatureUsed } = useFeatureAnalytics()
   const queryClient = useQueryClient()
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [editingRemote, setEditingRemote] = useState<RcloneRemote | null>(null)
   const [deleteRemote, setDeleteRemote] = useState<RcloneRemote | null>(null)
   const [testingRemoteId, setTestingRemoteId] = useState<number | null>(null)
   const [browseState, setBrowseState] = useState<BrowseState | null>(null)
+  const trackRcloneFeatureUsed = (operation: string, data: Record<string, unknown> = {}) => {
+    trackFeatureUsed('rclone', {
+      surface: CLOUD_STORAGE_ANALYTICS_SECTION,
+      operation,
+      ...data,
+    })
+  }
 
   const statusQuery = useQuery({
     queryKey: ['rclone-status'],
@@ -1168,6 +1319,10 @@ export default function CloudStorage() {
         provider: remote.provider,
         status: response.data?.status || 'unknown',
       })
+      trackRcloneFeatureUsed('test_remote', {
+        provider: remote.provider,
+        status: response.data?.status || 'unknown',
+      })
       queryClient.invalidateQueries({ queryKey: ['rclone-remotes'] })
     },
     onError: (error: unknown) => {
@@ -1194,6 +1349,11 @@ export default function CloudStorage() {
       trackSystem(EventAction.VIEW, {
         section: CLOUD_STORAGE_ANALYTICS_SECTION,
         operation: 'browse_remote_complete',
+        provider: remote.provider,
+        path_depth: normalizedPath.split('/').filter(Boolean).length,
+        item_count: entries.length,
+      })
+      trackRcloneFeatureUsed('browse_remote', {
         provider: remote.provider,
         path_depth: normalizedPath.split('/').filter(Boolean).length,
         item_count: entries.length,
@@ -1275,12 +1435,21 @@ export default function CloudStorage() {
           provider: data.provider,
           config_source: data.config_source,
         })
+        trackRcloneFeatureUsed('create_remote', {
+          provider: data.provider,
+          config_source: data.config_source,
+        })
       }}
       onStartOAuth={async (data) => {
         const response = await rcloneAPI.startOAuthSession(data)
         trackSystem(EventAction.START, {
           section: CLOUD_STORAGE_ANALYTICS_SECTION,
           operation: 'start_oauth',
+          provider: data.provider,
+          mode: data.mode || 'auto',
+          status: response.data.status,
+        })
+        trackRcloneFeatureUsed('start_oauth', {
           provider: data.provider,
           mode: data.mode || 'auto',
           status: response.data.status,
@@ -1296,6 +1465,11 @@ export default function CloudStorage() {
         trackSystem(EventAction.EDIT, {
           section: CLOUD_STORAGE_ANALYTICS_SECTION,
           operation: 'save_oauth_credentials',
+          provider,
+          has_client_id: Boolean(data.client_id),
+          has_client_secret: Boolean(data.client_secret),
+        })
+        trackRcloneFeatureUsed('save_oauth_credentials', {
           provider,
           has_client_id: Boolean(data.client_id),
           has_client_secret: Boolean(data.client_secret),
@@ -1317,6 +1491,10 @@ export default function CloudStorage() {
           provider: data.provider,
           config_source: data.config_source,
         })
+        trackRcloneFeatureUsed('update_remote', {
+          provider: data.provider,
+          config_source: data.config_source,
+        })
       }}
       onRequestDeleteRemote={(remote) => {
         deleteRemoteMutation.reset()
@@ -1327,7 +1505,13 @@ export default function CloudStorage() {
         deleteRemoteMutation.reset()
       }}
       onConfirmDeleteRemote={async () => {
+        const provider = deleteRemote?.provider
+        const usageCount = deleteRemote?.usage_count ?? 0
         await deleteRemoteMutation.mutateAsync()
+        trackRcloneFeatureUsed('delete_remote', {
+          provider,
+          usage_count: usageCount,
+        })
       }}
       onTestRemote={(remote) => testRemoteMutation.mutate(remote)}
       onBrowseRemote={(remote, path = '') => browseRemoteMutation.mutate({ remote, path })}

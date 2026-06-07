@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTabEnablement, useAppState } from '../context/AppContext'
 import { toast } from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
+import { useAuth } from '../hooks/useAuth'
 
 interface ProtectedRouteProps {
   children: ReactElement
@@ -17,20 +18,29 @@ interface ProtectedRouteProps {
     | 'restore'
     | 'schedule'
     | 'settings'
+  requiredPermission?: string
 }
 
-export default function ProtectedRoute({ children, requiredTab }: ProtectedRouteProps) {
+export default function ProtectedRoute({
+  children,
+  requiredTab,
+  requiredPermission,
+}: ProtectedRouteProps) {
   const { t } = useTranslation()
+  const { hasGlobalPermission } = useAuth()
   const { tabEnablement, getTabDisabledReason } = useTabEnablement()
   const appState = useAppState()
   const navigate = useNavigate()
-  const isEnabled = tabEnablement[requiredTab]
+  const hasPermission = requiredPermission ? hasGlobalPermission(requiredPermission) : true
+  const isEnabled = tabEnablement[requiredTab] && hasPermission
   const hasShownToast = useRef(false)
 
   useEffect(() => {
     // Only check after initial loading is complete
     if (!appState.isLoading && !isEnabled && !hasShownToast.current) {
-      const reason = getTabDisabledReason(requiredTab)
+      const reason = hasPermission
+        ? getTabDisabledReason(requiredTab)
+        : t('protectedRoute.permissionDenied')
 
       // Show toast notification only once
       toast.error(reason || t('protectedRoute.unavailable'), {
@@ -46,7 +56,7 @@ export default function ProtectedRoute({ children, requiredTab }: ProtectedRoute
     if (isEnabled) {
       hasShownToast.current = false
     }
-  }, [isEnabled, requiredTab, navigate, appState.isLoading, getTabDisabledReason, t])
+  }, [isEnabled, requiredTab, navigate, appState.isLoading, getTabDisabledReason, t, hasPermission])
 
   // If tab is disabled, return null while redirect happens
   if (!isEnabled) {

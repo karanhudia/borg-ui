@@ -5,8 +5,17 @@ Comprehensive unit tests for restore API endpoints
 import pytest
 from unittest.mock import ANY, patch, AsyncMock
 from fastapi.testclient import TestClient
-from app.database.models import Repository, RestoreJob
+from app.database.models import Repository, RestoreJob, SystemSettings
 from tests.unit.helpers import assert_auth_required
+
+
+def _set_log_save_policy(test_db, policy: str) -> None:
+    settings = test_db.query(SystemSettings).first()
+    if settings is None:
+        settings = SystemSettings()
+        test_db.add(settings)
+    settings.log_save_policy = policy
+    test_db.flush()
 
 
 @pytest.mark.unit
@@ -764,6 +773,7 @@ class TestRestoreJobLogs:
         from app.database.models import RestoreJob
         from datetime import datetime, timezone
 
+        _set_log_save_policy(test_db, "all_jobs")
         job = RestoreJob(
             repository="/test/repo",
             archive="test-archive",
@@ -797,6 +807,7 @@ class TestRestoreJobLogs:
         from app.database.models import RestoreJob
         from datetime import datetime, timezone
 
+        _set_log_save_policy(test_db, "all_jobs")
         job = RestoreJob(
             repository="/test/repo",
             archive="test-archive",
@@ -818,6 +829,38 @@ class TestRestoreJobLogs:
         data = response.json()
         assert "logs" in data
         assert data["logs"] == job.logs
+
+    def test_restore_logs_follow_log_save_policy(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        from datetime import datetime, timezone
+
+        _set_log_save_policy(test_db, "failed_only")
+        job = RestoreJob(
+            repository="/test/repo",
+            archive="test-archive",
+            destination="/test/dest",
+            status="completed",
+            started_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc),
+            logs="successful restore log",
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        jobs_response = test_client.get("/api/restore/jobs", headers=admin_headers)
+        assert jobs_response.status_code == 200
+        listed_job = next(
+            item for item in jobs_response.json()["jobs"] if item["id"] == job.id
+        )
+        assert listed_job["logs"] is None
+
+        status_response = test_client.get(
+            f"/api/restore/status/{job.id}", headers=admin_headers
+        )
+        assert status_response.status_code == 200
+        assert status_response.json()["logs"] is None
 
     def test_restore_jobs_with_null_logs(
         self, test_client: TestClient, admin_headers, test_db
@@ -853,6 +896,7 @@ class TestRestoreJobLogs:
         from app.database.models import RestoreJob
         from datetime import datetime, timezone
 
+        _set_log_save_policy(test_db, "all_jobs")
         job = RestoreJob(
             repository="/test/repo",
             archive="test-archive",
@@ -882,6 +926,7 @@ class TestRestoreJobLogs:
         from app.database.models import RestoreJob
         from datetime import datetime, timezone
 
+        _set_log_save_policy(test_db, "all_jobs")
         multiline_logs = """Starting restore operation
 Repository: /test/repo
 Archive: test-archive

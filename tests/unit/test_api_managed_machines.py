@@ -11,8 +11,18 @@ from app.core.agent_constants import (
 )
 from app.core.agent_auth import AGENT_AUTH_HEADER
 from app.core.security import get_password_hash
-from app.database.models import AgentJob, AgentJobLog, AgentMachine, LicensingState
-from app.services.agent_connection_manager import agent_connection_manager
+from app.database.models import (
+    AgentJob,
+    AgentJobLog,
+    AgentMachine,
+    LicensingState,
+    SystemSettings,
+)
+from app.services.agent_connection_manager import (
+    AgentCommandTimeout,
+    AgentConnectionUnavailable,
+    agent_connection_manager,
+)
 
 
 def _set_plan(test_db, plan: str) -> None:
@@ -23,6 +33,15 @@ def _set_plan(test_db, plan: str) -> None:
     state.plan = plan
     state.status = "active"
     test_db.commit()
+
+
+def _set_log_save_policy(test_db, policy: str) -> None:
+    settings = test_db.query(SystemSettings).first()
+    if settings is None:
+        settings = SystemSettings()
+        test_db.add(settings)
+    settings.log_save_policy = policy
+    test_db.flush()
 
 
 @pytest.fixture(autouse=True)
@@ -408,6 +427,255 @@ def test_agent_filesystem_browse_truncates_oversized_session_result(
     assert response.json()["items_truncated"] is True
 
 
+def test_agent_diagnostics_uses_live_session_without_agent_job(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    seen_commands = []
+    agent = _agent(
+        test_db,
+        hostname="nas.local",
+        agent_id="agt_diagnostics",
+        agent_version="0.4.0",
+        borg_versions=[{"major": 1, "version": "1.2.8", "path": "/usr/bin/borg"}],
+        last_seen_at=datetime(2026, 6, 3, 14, 0, tzinfo=timezone.utc),
+        capabilities=["session.commands", "diagnostics.run"],
+    )
+
+    async def fake_send_command(
+        agent_machine_id,
+        *,
+        command,
+        payload,
+        timeout_seconds,
+        job_id=None,
+        wait_for_result=True,
+    ):
+        seen_commands.append(
+            {
+                "agent_machine_id": agent_machine_id,
+                "command": command,
+                "payload": payload,
+                "timeout_seconds": timeout_seconds,
+                "job_id": job_id,
+                "wait_for_result": wait_for_result,
+            }
+        )
+        return {
+            "success": True,
+            "session": {"status": "success", "elapsed_ms": 12},
+        }
+
+    monkeypatch.setattr(agent_connection_manager, "send_command", fake_send_command)
+
+    response = test_client.post(
+        f"/api/managed-machines/agents/{agent.id}/diagnostics",
+        json={},
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["agent"] == {
+        "id": agent.id,
+        "name": "Agent",
+        "agent_id": "agt_diagnostics",
+        "hostname": "nas.local",
+        "status": "online",
+        "last_seen_at": data["agent"]["last_seen_at"],
+        "agent_version": "0.4.0",
+        "borg_versions": [{"major": 1, "version": "1.2.8", "path": "/usr/bin/borg"}],
+        "capabilities": ["session.commands", "diagnostics.run"],
+        "last_error": None,
+    }
+    assert data["agent"]["last_seen_at"] == "2026-06-03T14:00:00+00:00"
+    assert data["session"] == {"status": "success", "elapsed_ms": 12}
+    assert data["tcp"] is None
+    assert seen_commands == [
+        {
+            "agent_machine_id": agent.id,
+            "command": "diagnostics.run",
+            "payload": {},
+            "timeout_seconds": 5.0,
+            "job_id": None,
+            "wait_for_result": True,
+        }
+    ]
+    assert (
+        test_db.query(AgentJob).filter(AgentJob.agent_machine_id == agent.id).count()
+        == 0
+    )
+
+
+def test_agent_diagnostics_returns_failed_tcp_result(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    seen_payloads = []
+    agent = _agent(
+        test_db,
+        hostname="nas.local",
+        agent_id="agt_diagnostics_tcp",
+        capabilities=["session.commands", "diagnostics.run"],
+    )
+
+    async def fake_send_command(
+        agent_machine_id,
+        *,
+        command,
+        payload,
+        timeout_seconds,
+        job_id=None,
+        wait_for_result=True,
+    ):
+        seen_payloads.append(payload)
+        return {
+            "success": True,
+            "session": {"status": "success", "elapsed_ms": 10},
+            "tcp": {
+                "target": {
+                    "host": "postgres.internal",
+                    "port": 5432,
+                    "timeout_seconds": 3.0,
+                },
+                "status": "failed",
+                "elapsed_ms": 4,
+                "error": "connection_refused",
+                "message": "Connection refused",
+            },
+        }
+
+    monkeypatch.setattr(agent_connection_manager, "send_command", fake_send_command)
+
+    response = test_client.post(
+        f"/api/managed-machines/agents/{agent.id}/diagnostics",
+        json={
+            "target": {
+                "host": "postgres.internal",
+                "port": 5432,
+                "timeout_seconds": 3,
+            }
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["session"]["status"] == "success"
+    assert seen_payloads == [
+        {
+            "target": {
+                "host": "postgres.internal",
+                "port": 5432,
+                "timeout_seconds": 3.0,
+            }
+        }
+    ]
+    assert data["tcp"] == {
+        "target": {
+            "host": "postgres.internal",
+            "port": 5432,
+            "timeout_seconds": 3.0,
+        },
+        "status": "failed",
+        "elapsed_ms": 4,
+        "error": "connection_refused",
+        "message": "Connection refused",
+    }
+
+
+def test_agent_diagnostics_reports_offline_agent(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    agent = _agent(
+        test_db,
+        hostname="nas.local",
+        agent_id="agt_diagnostics_offline",
+        status="offline",
+        capabilities=["session.commands", "diagnostics.run"],
+    )
+
+    async def fake_send_command(*args, **kwargs):
+        raise AgentConnectionUnavailable("Agent does not have an active session")
+
+    monkeypatch.setattr(agent_connection_manager, "send_command", fake_send_command)
+
+    response = test_client.post(
+        f"/api/managed-machines/agents/{agent.id}/diagnostics",
+        json={},
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["agent"]["status"] == "offline"
+    assert data["session"] == {
+        "status": "offline",
+        "elapsed_ms": None,
+        "error": "agent_offline",
+        "message": "Agent does not have an active session",
+    }
+    assert data["tcp"] is None
+
+
+def test_agent_diagnostics_reports_session_timeout(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    agent = _agent(
+        test_db,
+        hostname="nas.local",
+        agent_id="agt_diagnostics_timeout",
+        capabilities=["session.commands", "diagnostics.run"],
+    )
+
+    async def fake_send_command(*args, **kwargs):
+        raise AgentCommandTimeout("diagnostics.run")
+
+    monkeypatch.setattr(agent_connection_manager, "send_command", fake_send_command)
+
+    response = test_client.post(
+        f"/api/managed-machines/agents/{agent.id}/diagnostics",
+        json={},
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["session"] == {
+        "status": "timeout",
+        "elapsed_ms": None,
+        "error": "agent_timeout",
+        "message": "Agent did not return diagnostics before the timeout",
+    }
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"target": {"host": "", "port": 5432, "timeout_seconds": 3}},
+        {"target": {"host": "bad host", "port": 5432, "timeout_seconds": 3}},
+        {"target": {"host": "bad-.internal", "port": 5432, "timeout_seconds": 3}},
+        {"target": {"host": "postgres.internal", "port": 0, "timeout_seconds": 3}},
+        {"target": {"host": "postgres.internal", "port": 65536, "timeout_seconds": 3}},
+        {"target": {"host": "postgres.internal", "port": 5432, "timeout_seconds": 0}},
+    ],
+)
+def test_agent_diagnostics_rejects_invalid_tcp_target(
+    test_client: TestClient, admin_headers, test_db, payload
+):
+    agent = _agent(
+        test_db,
+        hostname="nas.local",
+        agent_id="agt_diagnostics_invalid",
+        capabilities=["session.commands", "diagnostics.run"],
+    )
+
+    response = test_client.post(
+        f"/api/managed-machines/agents/{agent.id}/diagnostics",
+        json=payload,
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 422
+
+
 def test_list_agent_logs_returns_recent_session_entries(
     test_client: TestClient, admin_headers, test_db
 ):
@@ -439,6 +707,7 @@ def test_delete_agent_hides_it_from_list_and_keeps_job_logs(
 ):
     agent = _agent(test_db)
     job = _agent_job(test_db, agent)
+    job.status = "failed"
     now = datetime.now(timezone.utc)
     test_db.add(
         AgentJobLog(
@@ -472,3 +741,61 @@ def test_delete_agent_hides_it_from_list_and_keeps_job_logs(
     )
     assert logs.status_code == 200
     assert logs.json()[0]["message"] == "still readable"
+
+
+def test_agent_job_logs_apply_log_save_policy(
+    test_client: TestClient, admin_headers, test_db
+):
+    _set_log_save_policy(test_db, "failed_only")
+    agent = _agent(test_db)
+    job = _agent_job(test_db, agent)
+    job.status = "completed"
+    now = datetime.now(timezone.utc)
+    test_db.add(
+        AgentJobLog(
+            agent_job_id=job.id,
+            sequence=1,
+            stream="stdout",
+            message="successful agent log",
+            created_at=now,
+            received_at=now,
+        )
+    )
+    test_db.commit()
+
+    response = test_client.get(
+        f"/api/managed-machines/agent-jobs/{job.id}/logs",
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_agent_job_logs_keep_running_logs_visible(
+    test_client: TestClient, admin_headers, test_db
+):
+    _set_log_save_policy(test_db, "failed_only")
+    agent = _agent(test_db)
+    job = _agent_job(test_db, agent)
+    job.status = "running"
+    now = datetime.now(timezone.utc)
+    test_db.add(
+        AgentJobLog(
+            agent_job_id=job.id,
+            sequence=1,
+            stream="stdout",
+            message="live agent log",
+            created_at=now,
+            received_at=now,
+        )
+    )
+    test_db.commit()
+
+    response = test_client.get(
+        f"/api/managed-machines/agent-jobs/{job.id}/logs",
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()[0]["message"] == "live agent log"

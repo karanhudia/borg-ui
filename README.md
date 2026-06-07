@@ -45,15 +45,6 @@
 - Support for BorgBackup 1.x and BorgBackup 2 beta workflows
 - Multi-architecture containers for `amd64`, `arm64`, and `armv7`
 
-> [!NOTE]
-> Borg UI is developed with modern AI tooling as part of the workflow. Architecture, security, and release decisions are reviewed before merge.
-
-## Release Readiness
-
-- Current generated line coverage reports: backend `58.82%`, frontend `81.66%`, combined `64.36%`
-- Release confidence is built on multiple test lanes: backend unit coverage, backend API integration, frontend unit coverage, frontend build validation, and core, extended, and SSH smoke suites against a built app
-- Docker Hub publishes the user-facing app image `ainullcode/borg-ui`; the separate `borg-ui-runtime-base` image is an internal CI artifact and should remain private
-
 ## Interface
 
 ### Operations Overview
@@ -129,8 +120,8 @@ For setup details, see the [installation guide](https://docs.borgui.com/installa
 ## Documentation
 
 - [Full documentation](https://docs.borgui.com)
-- [Development guide](https://docs.borgui.com/development)
-- [Testing guide](https://docs.borgui.com/testing)
+- [Installation guide](https://docs.borgui.com/installation)
+- [Usage guide](https://docs.borgui.com/usage-guide)
 
 ## Enterprise
 

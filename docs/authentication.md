@@ -70,7 +70,14 @@ Requirements:
 
 - the account must have a local password
 - the browser and device must support WebAuthn
-- the public Borg UI URL must be stable; passkeys are bound to the site origin
+- passkey registration and login must happen from HTTPS for non-localhost deployments
+- the public Borg UI URL must be stable; passkeys are bound to the browser origin, including scheme, host, and port
+
+For production, put Borg UI behind a reverse proxy or orchestrator that serves a
+stable HTTPS URL such as `https://backups.example.com`. `http://localhost` is
+acceptable for local development, but non-localhost HTTP origins are not
+passkey-ready. See [Reverse Proxy](reverse-proxy) for the supported deployment
+path.
 
 ## Built-in OIDC SSO
 
