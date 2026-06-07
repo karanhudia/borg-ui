@@ -75,9 +75,8 @@ async def run_due_scheduled_restore_checks(
                 repo,
                 RestoreCheckJob,
                 error_key="backend.errors.repo.restoreCheckAlreadyRunning",
-                dispatcher=lambda job,
-                repo_id=repo.id: restore_check_service.execute_restore_check(
-                    job.id, repo_id
+                dispatcher=lambda job, repo_id=repo.id: (
+                    restore_check_service.execute_restore_check(job.id, repo_id)
                 ),
                 extra_fields={
                     "probe_paths": repo.restore_check_paths,
