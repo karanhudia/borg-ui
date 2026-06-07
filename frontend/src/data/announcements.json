@@ -1,7 +1,145 @@
 {
   "version": 1,
-  "generated_at": "2026-06-02T06:58:07Z",
+  "generated_at": "2026-06-07T08:04:30Z",
   "announcements": [
+    {
+      "id": "update-2.2.2-available",
+      "type": "update_available",
+      "priority": 150,
+      "title": "Borg UI 2.2.2 is available",
+      "title_localized": {
+        "es": "Borg UI 2.2.2 ya esta disponible",
+        "de": "Borg UI 2.2.2 ist verfugbar",
+        "it": "Borg UI 2.2.2 e disponibile"
+      },
+      "message": "Update to Borg UI 2.2.2 for Docker container backups, Remote Clients for server/client setups, clearer cloud storage details, repository setup fixes, and 15 extra days of full Borg UI access.",
+      "message_localized": {
+        "es": "Actualiza a Borg UI 2.2.2 para copias de contenedores Docker, Remote Clients para configuraciones servidor/cliente, detalles de cloud storage mas claros, correcciones de configuracion de repositorios y 15 dias extra de acceso completo a Borg UI.",
+        "de": "Aktualisieren Sie auf Borg UI 2.2.2 fur Docker-Container-Backups, Remote Clients fur Server/Client-Setups, klarere Cloud-Speicher-Details, Korrekturen bei der Repository-Einrichtung und 15 zusatzliche Tage vollen Borg-UI-Zugriff.",
+        "it": "Aggiorna a Borg UI 2.2.2 per backup dei container Docker, Remote Clients per configurazioni server/client, dettagli cloud storage piu chiari, correzioni nella configurazione dei repository e 15 giorni extra di accesso completo a Borg UI."
+      },
+      "highlights": [
+        "Scan Docker containers and add them as Backup Plan sources without typing every container name by hand",
+        "Back up container filesystems with the same review flow used for files, databases, SSH sources, and managed agents",
+        "Save other Borg UI servers as Remote Clients and switch the active backend from the sidebar for server/client setups",
+        "See clearer Cloud Storage capacity and used-space details for supported rclone remotes",
+        "Create and import Borg 2 SSH repositories more reliably, including Storage Box-style paths",
+        "Repository setup errors now show friendlier guidance instead of raw Borg tracebacks",
+        "Upgrade to this release and receive 15 extra days of full Borg UI access"
+      ],
+      "highlights_localized": {
+        "es": [
+          "Escanea contenedores Docker y agregalos como origenes de Backup Plans sin escribir cada nombre a mano",
+          "Haz copias del sistema de archivos de contenedores con el mismo flujo de revision usado para archivos, bases de datos, SSH y agentes gestionados",
+          "Guarda otros servidores Borg UI como Remote Clients y cambia el backend activo desde la barra lateral para configuraciones servidor/cliente",
+          "Consulta detalles mas claros de capacidad y espacio usado en Cloud Storage para remotos rclone compatibles",
+          "Crea e importa repositorios Borg 2 por SSH de forma mas fiable, incluidas rutas tipo Storage Box",
+          "Los errores de configuracion de repositorios ahora muestran guias mas amigables en lugar de trazas Borg sin procesar",
+          "Actualiza a esta version y recibe 15 dias extra de acceso completo a Borg UI"
+        ],
+        "de": [
+          "Docker-Container scannen und als Backup-Plan-Quellen hinzufugen, ohne jeden Containernamen manuell einzugeben",
+          "Container-Dateisysteme mit demselben Review-Ablauf sichern wie Dateien, Datenbanken, SSH-Quellen und Managed Agents",
+          "Andere Borg-UI-Server als Remote Clients speichern und das aktive Backend fur Server/Client-Setups uber die Seitenleiste wechseln",
+          "Klarere Cloud-Storage-Details zu Kapazitat und belegtem Speicher fur unterstutzte rclone-Remotes anzeigen",
+          "Borg-2-SSH-Repositories zuverlassiger erstellen und importieren, einschliesslich Storage-Box-artiger Pfade",
+          "Repository-Einrichtungsfehler zeigen jetzt freundlichere Hinweise statt roher Borg-Tracebacks",
+          "Aktualisieren Sie auf diese Version und erhalten Sie 15 zusatzliche Tage vollen Borg-UI-Zugriff"
+        ],
+        "it": [
+          "Scansiona container Docker e aggiungili come sorgenti dei Backup Plans senza inserire ogni nome a mano",
+          "Esegui backup dei filesystem dei container con lo stesso flusso di revisione usato per file, database, SSH e agent gestiti",
+          "Salva altri server Borg UI come Remote Clients e cambia il backend attivo dalla barra laterale per configurazioni server/client",
+          "Visualizza dettagli piu chiari su capacita e spazio usato in Cloud Storage per i remoti rclone supportati",
+          "Crea e importa repository Borg 2 via SSH in modo piu affidabile, incluse le rotte tipo Storage Box",
+          "Gli errori di configurazione dei repository ora mostrano indicazioni piu amichevoli invece di traceback Borg grezzi",
+          "Aggiorna a questa versione e ricevi 15 giorni extra di accesso completo a Borg UI"
+        ]
+      },
+      "cta_label": "Upgrade details",
+      "cta_label_localized": {
+        "es": "Detalles de la actualizacion",
+        "de": "Upgrade-Details",
+        "it": "Dettagli dell'aggiornamento"
+      },
+      "cta_url": "https://github.com/karanhudia/borg-ui/releases/tag/v2.2.2",
+      "dismissible": true,
+      "snooze_days": 7,
+      "starts_at": "2026-06-07T00:00:00Z",
+      "ends_at": "2027-06-07T00:00:00Z",
+      "min_app_version": "2.0.0",
+      "max_app_version": "2.2.2-rc.999",
+      "target_plans": ["community", "pro", "enterprise"]
+    },
+    {
+      "id": "release-2.2.2-whats-new",
+      "type": "release_highlight",
+      "priority": 120,
+      "title": "What's new in 2.2.2",
+      "title_localized": {
+        "es": "Novedades de la version 2.2.2",
+        "de": "Neu in Version 2.2.2",
+        "it": "Novita della versione 2.2.2"
+      },
+      "message": "Borg UI 2.2.2 adds Docker container scanning and backup sources, Remote Clients for server/client mode, clearer cloud storage status, repository setup fixes, and 15 extra days of full Borg UI access for users who upgrade.",
+      "message_localized": {
+        "es": "Borg UI 2.2.2 agrega escaneo y origenes de backup para contenedores Docker, Remote Clients para modo servidor/cliente, estado de cloud storage mas claro, correcciones de configuracion de repositorios y 15 dias extra de acceso completo a Borg UI para quienes actualizan.",
+        "de": "Borg UI 2.2.2 erganzt Docker-Container-Scanning und Backup-Quellen, Remote Clients fur den Server/Client-Modus, klareren Cloud-Speicher-Status, Korrekturen bei der Repository-Einrichtung und 15 zusatzliche Tage vollen Borg-UI-Zugriff fur Nutzer, die aktualisieren.",
+        "it": "Borg UI 2.2.2 aggiunge scansione e sorgenti backup per container Docker, Remote Clients per modalita server/client, stato cloud storage piu chiaro, correzioni nella configurazione dei repository e 15 giorni extra di accesso completo a Borg UI per chi aggiorna."
+      },
+      "highlights": [
+        "Scan Docker containers and add them as Backup Plan sources without typing every container name by hand",
+        "Back up container filesystems with the same review flow used for files, databases, SSH sources, and managed agents",
+        "Save other Borg UI servers as Remote Clients and switch the active backend from the sidebar for server/client setups",
+        "See clearer Cloud Storage capacity and used-space details for supported rclone remotes",
+        "Create and import Borg 2 SSH repositories more reliably, including Storage Box-style paths",
+        "Repository setup errors now show friendlier guidance instead of raw Borg tracebacks",
+        "Upgrade to this release and receive 15 extra days of full Borg UI access"
+      ],
+      "highlights_localized": {
+        "es": [
+          "Escanea contenedores Docker y agregalos como origenes de Backup Plans sin escribir cada nombre a mano",
+          "Haz copias del sistema de archivos de contenedores con el mismo flujo de revision usado para archivos, bases de datos, SSH y agentes gestionados",
+          "Guarda otros servidores Borg UI como Remote Clients y cambia el backend activo desde la barra lateral para configuraciones servidor/cliente",
+          "Consulta detalles mas claros de capacidad y espacio usado en Cloud Storage para remotos rclone compatibles",
+          "Crea e importa repositorios Borg 2 por SSH de forma mas fiable, incluidas rutas tipo Storage Box",
+          "Los errores de configuracion de repositorios ahora muestran guias mas amigables en lugar de trazas Borg sin procesar",
+          "Actualiza a esta version y recibe 15 dias extra de acceso completo a Borg UI"
+        ],
+        "de": [
+          "Docker-Container scannen und als Backup-Plan-Quellen hinzufugen, ohne jeden Containernamen manuell einzugeben",
+          "Container-Dateisysteme mit demselben Review-Ablauf sichern wie Dateien, Datenbanken, SSH-Quellen und Managed Agents",
+          "Andere Borg-UI-Server als Remote Clients speichern und das aktive Backend fur Server/Client-Setups uber die Seitenleiste wechseln",
+          "Klarere Cloud-Storage-Details zu Kapazitat und belegtem Speicher fur unterstutzte rclone-Remotes anzeigen",
+          "Borg-2-SSH-Repositories zuverlassiger erstellen und importieren, einschliesslich Storage-Box-artiger Pfade",
+          "Repository-Einrichtungsfehler zeigen jetzt freundlichere Hinweise statt roher Borg-Tracebacks",
+          "Aktualisieren Sie auf diese Version und erhalten Sie 15 zusatzliche Tage vollen Borg-UI-Zugriff"
+        ],
+        "it": [
+          "Scansiona container Docker e aggiungili come sorgenti dei Backup Plans senza inserire ogni nome a mano",
+          "Esegui backup dei filesystem dei container con lo stesso flusso di revisione usato per file, database, SSH e agent gestiti",
+          "Salva altri server Borg UI come Remote Clients e cambia il backend attivo dalla barra laterale per configurazioni server/client",
+          "Visualizza dettagli piu chiari su capacita e spazio usato in Cloud Storage per i remoti rclone supportati",
+          "Crea e importa repository Borg 2 via SSH in modo piu affidabile, incluse le rotte tipo Storage Box",
+          "Gli errori di configurazione dei repository ora mostrano indicazioni piu amichevoli invece di traceback Borg grezzi",
+          "Aggiorna a questa versione e ricevi 15 giorni extra di accesso completo a Borg UI"
+        ]
+      },
+      "cta_label": "View release notes",
+      "cta_label_localized": {
+        "es": "Ver notas de la version",
+        "de": "Release Notes ansehen",
+        "it": "Vedi note di rilascio"
+      },
+      "cta_url": "https://github.com/karanhudia/borg-ui/releases/tag/v2.2.2",
+      "dismissible": true,
+      "snooze_days": 7,
+      "starts_at": "2026-06-07T00:00:00Z",
+      "ends_at": "2027-06-07T00:00:00Z",
+      "min_app_version": "2.2.2",
+      "max_app_version": "2.2.2",
+      "target_plans": ["community", "pro", "enterprise"]
+    },
     {
       "id": "update-2.2.0-available",
       "type": "update_available",

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-06-02T06:42:02Z",
+  "generated_at": "2026-06-07T07:54:08Z",
   "features": [
     {
       "id": "unlimited_repos",
@@ -292,6 +292,23 @@
       "availability": "included"
     },
     {
+      "id": "remote_clients",
+      "plan": "pro",
+      "label": "Remote Clients",
+      "label_localized": {
+        "es": "Clientes remotos",
+        "de": "Remote Clients",
+        "it": "Client remoti"
+      },
+      "description": "Save trusted Borg UI servers, check compatibility, and switch the active backend from the sidebar.",
+      "description_localized": {
+        "es": "Guarda servidores Borg UI de confianza, comprueba la compatibilidad y cambia el backend activo desde la barra lateral.",
+        "de": "Speichern Sie vertrauenswürdige Borg-UI-Server, prüfen Sie die Kompatibilität und wechseln Sie das aktive Backend über die Seitenleiste.",
+        "it": "Salva server Borg UI attendibili, verifica la compatibilità e cambia il backend attivo dalla barra laterale."
+      },
+      "availability": "included"
+    },
+    {
       "id": "backup_reports",
       "plan": "pro",
       "label": "Backup reports",
@@ -351,13 +368,13 @@
         "de": "Automatisches Docker-Container-Backup",
         "it": "Backup automatico dei container Docker"
       },
-      "description": "Detect running containers and help generate backup configs from them.",
+      "description": "Scan Docker containers and add container filesystem backups to Backup Plans.",
       "description_localized": {
-        "es": "Detecta contenedores en ejecución y ayuda a generar configuraciones de backup a partir de ellos.",
-        "de": "Erkennt laufende Container und hilft beim Erstellen von Backup-Konfigurationen daraus.",
-        "it": "Rileva i container in esecuzione e aiuta a generare configurazioni di backup a partire da essi."
+        "es": "Escanea contenedores Docker y agrega copias del sistema de archivos de contenedores a Backup Plans.",
+        "de": "Scannt Docker-Container und fugt Container-Dateisystem-Backups zu Backup Plans hinzu.",
+        "it": "Scansiona container Docker e aggiunge backup del filesystem dei container ai Backup Plans."
       },
-      "availability": "coming_soon"
+      "availability": "included"
     },
     {
       "id": "rbac",
@@ -425,7 +442,7 @@
         "de": "Überwachen, steuern und starten Sie Backups über mehrere Borg-UI-Instanzen hinweg von einer einzigen Weboberfläche aus, ohne Repository-Passphrasen auf Backup-Servern zu speichern.",
         "it": "Monitora, controlla ed esegui backup su più istanze Borg UI da un'unica interfaccia web senza archiviare le passphrase dei repository sui server di backup."
       },
-      "availability": "coming_soon"
+      "availability": "included"
     },
     {
       "id": "audit_exports",

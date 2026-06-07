@@ -14,7 +14,15 @@ describe('planContent', () => {
 
   it('merges bundled feature copy into a stale hosted manifest', async () => {
     const staleRemoteFeatures = DEFAULT_PLAN_CONTENT_MANIFEST.features.filter(
-      (feature) => !['backup_plan_mixed_sources', 'rclone', 'managed_agents'].includes(feature.id)
+      (feature) =>
+        ![
+          'backup_plan_mixed_sources',
+          'rclone',
+          'managed_agents',
+          'remote_clients',
+          'container_backups',
+          'centralized_management',
+        ].includes(feature.id)
     )
 
     vi.stubGlobal(
@@ -35,6 +43,9 @@ describe('planContent', () => {
     expect(featureIds).toContain('backup_plan_mixed_sources')
     expect(featureIds).toContain('rclone')
     expect(featureIds).toContain('managed_agents')
+    expect(featureIds).toContain('remote_clients')
+    expect(featureIds).toContain('container_backups')
+    expect(featureIds).toContain('centralized_management')
   })
 
   it('keeps hosted copy when a feature exists in both manifests', () => {
@@ -59,7 +70,14 @@ describe('planContent', () => {
       .map((feature) => feature.id)
 
     expect(includedFeatureIds).toEqual(
-      expect.arrayContaining(['backup_reports', 'alerting_monitoring', 'database_discovery'])
+      expect.arrayContaining([
+        'backup_reports',
+        'alerting_monitoring',
+        'database_discovery',
+        'remote_clients',
+        'container_backups',
+        'centralized_management',
+      ])
     )
   })
 })
