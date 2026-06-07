@@ -197,6 +197,17 @@ export interface RcloneOAuthSession {
   error?: string | null
 }
 
+export interface RcloneRemoteStorage {
+  total: number
+  total_formatted: string
+  used: number
+  used_formatted: string
+  available: number
+  available_formatted: string
+  percent_used: number
+  last_check?: string | null
+}
+
 export interface RcloneRemote {
   id: number
   name: string
@@ -208,6 +219,7 @@ export interface RcloneRemote {
   last_test_status?: string | null
   last_error?: string | null
   oauth_token?: RcloneOAuthTokenStatus | null
+  storage?: RcloneRemoteStorage | null
 }
 
 export type { RcloneStorage } from '../types'

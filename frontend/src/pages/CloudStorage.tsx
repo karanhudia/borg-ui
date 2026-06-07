@@ -14,6 +14,7 @@ import {
   DialogContentText,
   DialogTitle,
   IconButton,
+  LinearProgress,
   Paper,
   Skeleton,
   Stack,
@@ -22,6 +23,7 @@ import {
   alpha,
   useTheme,
 } from '@mui/material'
+import type { Theme } from '@mui/material/styles'
 import {
   AlertTriangle,
   CheckCircle,
@@ -165,6 +167,12 @@ const statusColor = (
   }
 }
 
+const getStorageBarColor = (pct: number, theme: Theme) => {
+  if (pct > 90) return theme.palette.error.main
+  if (pct > 75) return theme.palette.warning.main
+  return theme.palette.success.main
+}
+
 const oauthTokenColor = (
   status?: RcloneOAuthTokenStatus['status'] | null
 ): 'default' | 'success' | 'error' | 'warning' | 'info' => {
@@ -220,6 +228,7 @@ function CloudStorageRemoteCard({
   const usageCount = remote.usage_count ?? 0
   const deleteDisabled = usageCount > 0
   const oauthToken = remote.oauth_token
+  const storage = remote.storage ?? null
   const oauthColorKey = oauthTokenColor(oauthToken?.status)
   const oauthColor =
     oauthColorKey === 'default'
@@ -349,6 +358,139 @@ function CloudStorageRemoteCard({
             {remote.config_path || t('cloudStorage.managedConfig')}
           </Typography>
         </Box>
+
+        {storage ? (
+          <Box
+            sx={{
+              borderRadius: 1.5,
+              border: '1px solid',
+              borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.07),
+              overflow: 'hidden',
+              mb: 1.5,
+              bgcolor: isDark ? alpha('#fff', 0.025) : alpha('#000', 0.018),
+            }}
+          >
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+              {[
+                {
+                  label: t('cloudStorage.storageUsed'),
+                  value: storage.used_formatted,
+                  color: theme.palette.warning.main,
+                },
+                {
+                  label: t('cloudStorage.storageFree'),
+                  value: storage.available_formatted,
+                  color: theme.palette.success.main,
+                },
+              ].map((col, index) => (
+                <Box
+                  key={col.label}
+                  sx={{
+                    px: 1.5,
+                    py: 1,
+                    minWidth: 0,
+                    borderRight: index === 0 ? '1px solid' : 0,
+                    borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.07),
+                  }}
+                >
+                  <Typography
+                    noWrap
+                    sx={{
+                      fontSize: '0.58rem',
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                      color: alpha(col.color, 0.75),
+                      lineHeight: 1,
+                      mb: 0.5,
+                    }}
+                  >
+                    {col.label}
+                  </Typography>
+                  <Typography
+                    noWrap
+                    sx={{
+                      fontSize: '0.85rem',
+                      fontWeight: 600,
+                      fontVariantNumeric: 'tabular-nums',
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    {col.value}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+            <Box
+              sx={{
+                px: 1.5,
+                pt: 0.75,
+                pb: 1,
+                borderTop: '1px solid',
+                borderColor: isDark ? alpha('#fff', 0.05) : alpha('#000', 0.06),
+              }}
+            >
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 1,
+                  mb: 0.5,
+                }}
+              >
+                <Typography sx={{ fontSize: '0.58rem', color: 'text.disabled', lineHeight: 1 }}>
+                  {t('cloudStorage.storagePercentUsed', {
+                    value: storage.percent_used.toFixed(1),
+                  })}
+                </Typography>
+                <Typography
+                  sx={{
+                    fontSize: '0.58rem',
+                    color: 'text.disabled',
+                    lineHeight: 1,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  {t('cloudStorage.storageTotal', { value: storage.total_formatted })}
+                </Typography>
+              </Box>
+              <LinearProgress
+                variant="determinate"
+                value={Math.min(100, Math.max(0, storage.percent_used))}
+                sx={{
+                  height: 5,
+                  borderRadius: 1,
+                  bgcolor: isDark ? alpha('#fff', 0.08) : alpha('#000', 0.08),
+                  '& .MuiLinearProgress-bar': {
+                    bgcolor: getStorageBarColor(storage.percent_used, theme),
+                    borderRadius: 1,
+                  },
+                }}
+              />
+            </Box>
+          </Box>
+        ) : (
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.75,
+              px: 1.25,
+              py: 0.875,
+              mb: 1.5,
+              borderRadius: 1.5,
+              border: '1px solid',
+              borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.07),
+              bgcolor: isDark ? alpha('#fff', 0.025) : alpha('#000', 0.018),
+            }}
+          >
+            <HardDrive size={14} style={{ opacity: 0.4, flexShrink: 0 }} />
+            <Typography noWrap sx={{ fontSize: '0.75rem', color: 'text.disabled', flex: 1 }}>
+              {t('cloudStorage.noStorageInfo')}
+            </Typography>
+          </Box>
+        )}
 
         <Box
           sx={{
