@@ -123,5 +123,6 @@ describe('MonitoringReportsTab', () => {
     expect(screen.getByRole('button', { name: /Run check now/i })).toBeDisabled()
     expect(screen.getByRole('switch', { name: /Enable backup reports/i })).toBeDisabled()
     expect(screen.getByRole('button', { name: /Send report now/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /Save/i })).toBeDisabled()
   }, 30000)
 })

@@ -1046,7 +1046,12 @@ class TestBackupPlanRoutes:
         )
 
         assert response.status_code == 403
-        assert response.json()["detail"]["feature"] == "database_discovery"
+        assert response.json()["detail"] == {
+            "key": "backend.errors.plan.featureNotAvailable",
+            "feature": "database_discovery",
+            "required": "pro",
+            "current": "community",
+        }
 
     def test_community_plan_rejects_container_source_metadata(
         self, test_client: TestClient, admin_headers, test_db
@@ -1080,7 +1085,12 @@ class TestBackupPlanRoutes:
         )
 
         assert response.status_code == 403
-        assert response.json()["detail"]["feature"] == "container_backups"
+        assert response.json()["detail"] == {
+            "key": "backend.errors.plan.featureNotAvailable",
+            "feature": "container_backups",
+            "required": "pro",
+            "current": "community",
+        }
 
     def test_create_plan_supports_agent_source_for_same_agent_repo(
         self, test_client: TestClient, admin_headers, test_db
