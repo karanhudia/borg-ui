@@ -585,6 +585,14 @@ export default function Repositories() {
     setWipeJob(null)
   }
 
+  const handleBreakLockRepository = (repository: Repository) => {
+    setLockError({
+      repositoryId: repository.id,
+      repositoryName: repository.name,
+      borgVersion: repository.borg_version,
+    })
+  }
+
   const handleRcloneSync = (repository: Repository) => {
     rcloneRepositoryMutation.mutate({ repository, action: 'sync' })
   }
@@ -861,6 +869,7 @@ export default function Repositories() {
         searchQuery={searchQuery}
         canManageRepositoriesGlobally={canManageRepositoriesGlobally}
         canDo={permissions.canDo}
+        canBreakLock={(repository) => canBreakLock({ repository_id: repository.id })}
         onSearchChange={setSearchQuery}
         onOpenWizard={openWizard}
         onViewInfo={setViewingInfoRepository}
@@ -868,6 +877,7 @@ export default function Repositories() {
         onCompact={handleCompactRepository}
         onPrune={handlePruneRepository}
         onWipeContents={handleWipeRepository}
+        onBreakLock={handleBreakLockRepository}
         onEdit={openEditModal}
         onDelete={handleDeleteRepository}
         onBackupNow={handleBackupNow}

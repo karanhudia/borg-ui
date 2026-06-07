@@ -2182,6 +2182,7 @@
       "backupPlanRequired": "Crea un plan de copia para definir fuentes",
       "viewArchives": "Ver archivos",
       "viewBackupPlans": "Ver planes de copia vinculados",
+      "breakLock": "Forzar desbloqueo",
       "wipeContents": "Wipe contents",
       "delete": "Eliminar",
       "createBackupPlan": "Crear plan de copia",

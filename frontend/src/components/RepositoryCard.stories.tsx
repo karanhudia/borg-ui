@@ -74,6 +74,7 @@ const defaultArgs = {
   onCompact: noop,
   onPrune: noop,
   onWipeContents: noop,
+  onBreakLock: noop,
   onEdit: noop,
   onDelete: noop,
   onBackupNow: noop,
@@ -82,6 +83,7 @@ const defaultArgs = {
   onCreateBackupPlan: noop,
   getCompressionLabel: (compression: string) => compression.toUpperCase(),
   canManageRepository: true,
+  canBreakLock: true,
   canDo,
 }
 
@@ -99,6 +101,18 @@ type Story = StoryObj<typeof meta>
 
 export const Default: Story = {
   args: defaultArgs,
+  render: (args) => (
+    <Box sx={{ width: 620, maxWidth: 'calc(100vw - 32px)' }}>
+      <RepositoryCard {...args} />
+    </Box>
+  ),
+}
+
+export const WithoutBreakLockAccess: Story = {
+  args: {
+    ...defaultArgs,
+    canBreakLock: false,
+  },
   render: (args) => (
     <Box sx={{ width: 620, maxWidth: 'calc(100vw - 32px)' }}>
       <RepositoryCard {...args} />

@@ -82,6 +82,13 @@ vi.mock('../../hooks/usePermissions', () => ({
   }),
 }))
 
+vi.mock('../../hooks/useLockBreakPermissions', () => ({
+  useLockBreakPermissions: () => ({
+    canBreakLock: () => true,
+    lockBreakingEnabled: true,
+  }),
+}))
+
 vi.mock('../../context/AppContext', () => ({
   useAppState: () => ({
     refetch: vi.fn(),
@@ -198,13 +205,17 @@ vi.mock('../repositories-page/RepositoriesToolbar', () => ({
 vi.mock('../repositories-page/RepositoryGroups', () => ({
   RepositoryGroups: ({
     repositories,
+    canBreakLock,
     onCheck,
     onViewInfo,
+    onBreakLock,
     onJobCompleted,
   }: {
     repositories: Array<typeof mockRepository>
+    canBreakLock: (repository: typeof mockRepository) => boolean
     onCheck: (repository: typeof mockRepository) => void
     onViewInfo: (repository: typeof mockRepository) => void
+    onBreakLock: (repository: typeof mockRepository) => void
     onJobCompleted: (repositoryId: number) => void
   }) => {
     if (repositories.length === 0) {
@@ -219,6 +230,11 @@ vi.mock('../repositories-page/RepositoryGroups', () => ({
         <button type="button" onClick={() => onViewInfo(repositories[0])}>
           view info
         </button>
+        {canBreakLock(repositories[0]) ? (
+          <button type="button" onClick={() => onBreakLock(repositories[0])}>
+            break lock
+          </button>
+        ) : null}
         <button type="button" onClick={() => onJobCompleted(1)}>
           complete check
         </button>
@@ -315,5 +331,16 @@ describe('Repositories', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Run guided check' }))
 
     expect(screen.getByRole('button', { name: 'confirm check' })).toBeInTheDocument()
+  })
+
+  it('opens the lock dialog from the repository break lock action', async () => {
+    renderWithProviders(<Repositories />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'break lock' }))
+
+    expect(await screen.findByRole('heading', { name: 'Repository Locked' })).toBeInTheDocument()
+    expect(
+      screen.getByText('Broken Repo is locked by another process or has a stale lock.')
+    ).toBeInTheDocument()
   })
 })
