@@ -390,7 +390,7 @@ describe('RemoteBackendProvider', () => {
     })
     const user = userEvent.setup()
     renderWithProviders(
-      <RemoteBackendProvider frontendVersion="2.2.2-alpha.1" fetchImpl={fetchMock}>
+      <RemoteBackendProvider frontendVersion="2.2.2" fetchImpl={fetchMock}>
         <RemoteBackendProbe />
       </RemoteBackendProvider>
     )
@@ -435,7 +435,7 @@ describe('RemoteBackendProvider', () => {
     })
     const user = userEvent.setup()
     renderWithProviders(
-      <RemoteBackendProvider frontendVersion="2.2.2-alpha.1" fetchImpl={fetchMock}>
+      <RemoteBackendProvider frontendVersion="2.2.2" fetchImpl={fetchMock}>
         <RemoteBackendProbe />
       </RemoteBackendProvider>
     )
@@ -540,7 +540,7 @@ describe('RemoteBackendProvider', () => {
     })
     const user = userEvent.setup()
     renderWithProviders(
-      <RemoteBackendProvider frontendVersion="2.2.2-alpha.1" fetchImpl={fetchMock}>
+      <RemoteBackendProvider frontendVersion="2.2.2" fetchImpl={fetchMock}>
         <RemoteBackendProbe />
       </RemoteBackendProvider>
     )

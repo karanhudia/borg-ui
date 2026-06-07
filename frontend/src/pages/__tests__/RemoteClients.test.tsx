@@ -229,7 +229,7 @@ function createRemoteClientsPageFetch(
 
 function renderPage(fetchImpl: typeof fetch = createRemoteClientsPageFetch()) {
   return renderWithProviders(
-    <RemoteBackendProvider frontendVersion="2.2.2-alpha.1" fetchImpl={fetchImpl}>
+    <RemoteBackendProvider frontendVersion="2.2.2" fetchImpl={fetchImpl}>
       <RemoteClients />
     </RemoteBackendProvider>,
     { initialRoute: '/remote-clients' }

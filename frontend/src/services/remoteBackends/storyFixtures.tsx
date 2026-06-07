@@ -121,7 +121,7 @@ const storyFetch: typeof fetch = async (input, init) => {
   if (url.endsWith('/system/info')) {
     return new Response(
       JSON.stringify({
-        app_version: '2.2.2-alpha.1',
+        app_version: '2.2.2',
         borg_version: '1.4.1',
         borg2_version: '2.0.0b19',
       }),
@@ -143,7 +143,7 @@ function seedRemoteBackends(state: RemoteBackendStoryState): void {
   updateRemoteBackendHealth(online.id, {
     status: 'online',
     checkedAt: '2026-06-05T06:30:00.000Z',
-    appVersion: '2.2.2-alpha.1',
+    appVersion: '2.2.2',
     borgVersion: '1.4.1',
     borg2Version: '2.0.0b19',
     compatibility: 'compatible',
@@ -171,7 +171,7 @@ function seedRemoteBackends(state: RemoteBackendStoryState): void {
     checkedAt: '2026-06-05T04:50:00.000Z',
     appVersion: '1.9.0',
     compatibility: 'incompatible',
-    compatibilityMessage: 'Borg UI 1.9.0 is not compatible with frontend version 2.2.2-alpha.1.',
+    compatibilityMessage: 'Borg UI 1.9.0 is not compatible with frontend version 2.2.2.',
   })
 
   if (state === 'activeRemote') {

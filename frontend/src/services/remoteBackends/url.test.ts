@@ -49,21 +49,21 @@ describe('remote server URL normalization', () => {
 
 describe('server version compatibility', () => {
   it('treats matching major versions as compatible', () => {
-    expect(compareBackendVersions('2.2.2-alpha.1', '2.1.0')).toEqual({
+    expect(compareBackendVersions('2.2.2', '2.1.0')).toEqual({
       status: 'compatible',
       message: 'Borg UI 2.1.0 is compatible with this frontend.',
     })
   })
 
   it('blocks mismatched major versions', () => {
-    expect(compareBackendVersions('2.2.2-alpha.1', '3.0.0')).toEqual({
+    expect(compareBackendVersions('2.2.2', '3.0.0')).toEqual({
       status: 'incompatible',
       message: 'Borg UI 3.0.0 uses a different major version than this frontend.',
     })
   })
 
   it('marks missing or unparsable versions as unknown', () => {
-    expect(compareBackendVersions('2.2.2-alpha.1', null)).toEqual({
+    expect(compareBackendVersions('2.2.2', null)).toEqual({
       status: 'unknown',
       message: 'Remote client server version is unavailable.',
     })
@@ -71,7 +71,7 @@ describe('server version compatibility', () => {
       status: 'unknown',
       message: 'Remote client server version could not be compared.',
     })
-    expect(compareBackendVersions('2.2.2-alpha.1', '2abc')).toEqual({
+    expect(compareBackendVersions('2.2.2', '2abc')).toEqual({
       status: 'unknown',
       message: 'Remote client server version could not be compared.',
     })
