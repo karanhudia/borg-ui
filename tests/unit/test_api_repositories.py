@@ -432,6 +432,42 @@ class TestRepositoriesCreate:
 
         assert response.status_code == 200
 
+    def test_create_repository_init_failure_includes_borg_error(
+        self, test_client: TestClient, admin_headers, tmp_path
+    ):
+        """Test initialization failures expose the underlying Borg error."""
+        with patch(
+            "app.api.repositories.initialize_borg_repository",
+            new=AsyncMock(
+                return_value={
+                    "success": False,
+                    "return_code": 127,
+                    "stdout": "",
+                    "stderr": "remote: borg: command not found",
+                }
+            ),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Init Failure Repo",
+                    "path": str(tmp_path / "repo"),
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "repository_type": "local",
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 500
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.repo.failedToInitializeRepository"
+        )
+        assert response.json()["detail"]["params"]["error"] == (
+            "remote: borg: command not found"
+        )
+
     def test_create_agent_repository_queues_init_and_waits_before_success(
         self, test_client: TestClient, admin_headers, test_db
     ):

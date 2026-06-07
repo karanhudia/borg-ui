@@ -98,6 +98,7 @@ from app.utils.schedule_time import (
 )
 from app.utils.archive_job_metadata import enrich_archives_with_backup_metadata
 from app.utils.ssh_paths import apply_ssh_command_prefix
+from app.utils.repository_paths import build_ssh_repository_path, strip_ssh_url_path
 from app.utils.source_locations import (
     decode_source_locations,
     legacy_source_fields,
@@ -836,6 +837,27 @@ def _normalize_repository_source_payload(
 def format_datetime(dt):
     """Format datetime to ISO8601 with UTC timezone indicator"""
     return serialize_datetime(dt)
+
+
+def _borg_result_error(result: Dict[str, Any]) -> Optional[str]:
+    for key in ("error", "stderr", "stdout"):
+        value = result.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+
+    return_code = result.get("return_code")
+    if return_code is not None:
+        return f"Borg command exited with status {return_code}"
+
+    return None
+
+
+def _repository_init_failure_detail(result: Dict[str, Any]) -> Dict[str, Any]:
+    detail: Dict[str, Any] = {"key": "backend.errors.repo.failedToInitializeRepository"}
+    error = _borg_result_error(result)
+    if error:
+        detail["params"] = {"error": error}
+    return detail
 
 
 # Pydantic models
@@ -1819,30 +1841,14 @@ def _normalize_repository_executor(
 
 
 def _strip_ssh_url_path(path: str) -> str:
-    if not path.startswith("ssh://"):
-        return path
-
-    import re
-
-    match = re.match(r"ssh://[^/]+(/.*)", path)
-    if match:
-        return match.group(1)
-    return path.split("/", 3)[-1] if "/" in path else path
+    return strip_ssh_url_path(path)
 
 
 def _build_repository_path_from_connection(
     raw_path: str, connection_id: int, db: Session
 ) -> str:
     connection_details = get_connection_details(connection_id, db)
-    repo_path = _strip_ssh_url_path(raw_path)
-    ssh_path_prefix = connection_details.get("ssh_path_prefix")
-    if ssh_path_prefix:
-        repo_path = apply_ssh_command_prefix(repo_path, ssh_path_prefix)
-    return (
-        f"ssh://{connection_details['username']}@"
-        f"{connection_details['host']}:{connection_details['port']}/"
-        f"{repo_path.lstrip('/')}"
-    )
+    return build_ssh_repository_path(raw_path, connection_details)
 
 
 def _require_queueable_agent(
@@ -2201,7 +2207,7 @@ async def _create_rclone_repository_record(
         if not init_result["success"]:
             raise HTTPException(
                 status_code=500,
-                detail={"key": "backend.errors.repo.failedToInitializeRepository"},
+                detail=_repository_init_failure_detail(init_result),
             )
         db.commit()
         db.refresh(repository)
@@ -2287,7 +2293,7 @@ async def _create_direct_rclone_repository_record(
     if not init_result["success"]:
         raise HTTPException(
             status_code=500,
-            detail={"key": "backend.errors.repo.failedToInitializeRepository"},
+            detail=_repository_init_failure_detail(init_result),
         )
 
     (
@@ -2986,7 +2992,7 @@ async def create_repository(
         if not init_result["success"]:
             raise HTTPException(
                 status_code=500,
-                detail={"key": "backend.errors.repo.failedToInitializeRepository"},
+                detail=_repository_init_failure_detail(init_result),
             )
 
         (
@@ -4373,9 +4379,7 @@ async def update_repository(
                         if not init_result["success"]:
                             raise HTTPException(
                                 status_code=500,
-                                detail={
-                                    "key": "backend.errors.repo.failedToInitializeRepository"
-                                },
+                                detail=_repository_init_failure_detail(init_result),
                             )
 
                         logger.info(
@@ -4399,9 +4403,7 @@ async def update_repository(
                     if not init_result["success"]:
                         raise HTTPException(
                             status_code=500,
-                            detail={
-                                "key": "backend.errors.repo.failedToInitializeRepository"
-                            },
+                            detail=_repository_init_failure_detail(init_result),
                         )
 
                     logger.info(

@@ -297,6 +297,56 @@ class TestV2RepositoryRoutes:
         assert env["BORG_RSH"].startswith("ssh ")
         assert "-i" in env["BORG_RSH"]
 
+    def test_create_repository_with_ssh_connection_reconstructs_storage_box_path(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _enable_borg_v2(test_db)
+        connection = SSHConnection(
+            host="u123456.your-storagebox.de",
+            username="u123456",
+            port=23,
+            status="connected",
+        )
+        test_db.add(connection)
+        test_db.commit()
+        test_db.refresh(connection)
+
+        with patch(
+            "app.api.v2.repositories._rcreate",
+            new=AsyncMock(
+                return_value={
+                    "success": True,
+                    "already_existed": False,
+                    "stdout": "",
+                    "stderr": "",
+                }
+            ),
+        ) as mock_rcreate:
+            response = test_client.post(
+                "/api/v2/repositories/",
+                json={
+                    "name": "Storage Box Borg 2 Repo",
+                    "path": "/./borg-repository",
+                    "encryption": "none",
+                    "connection_id": connection.id,
+                },
+                headers=admin_headers,
+            )
+
+        expected_path = "ssh://u123456@u123456.your-storagebox.de:23/./borg-repository"
+        assert response.status_code == 201
+        assert response.json()["path"] == expected_path
+        repo = (
+            test_db.query(Repository)
+            .filter(Repository.name == "Storage Box Borg 2 Repo")
+            .first()
+        )
+        assert repo is not None
+        assert repo.path == expected_path
+        assert repo.repository_type == "ssh"
+        mock_rcreate.assert_awaited_once()
+        assert mock_rcreate.await_args.kwargs["path"] == expected_path
+
     def test_create_repository_reports_init_failure(
         self, test_client: TestClient, admin_headers, test_db
     ):
@@ -325,6 +375,40 @@ class TestV2RepositoryRoutes:
 
         assert response.status_code == 500
         assert response.json()["detail"]["key"] == "backend.errors.repo.initFailed"
+
+    def test_create_repository_reports_friendly_borg2_remote_protocol_mismatch(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _enable_borg_v2(test_db)
+
+        with patch(
+            "app.api.v2.repositories._rcreate",
+            new=AsyncMock(
+                return_value={
+                    "success": False,
+                    "already_existed": False,
+                    "stdout": "",
+                    "stderr": (
+                        "borg.remote.InvalidRPCMethod: RPC method close is not valid\n"
+                        "RPC method close is not valid\n"
+                    ),
+                }
+            ),
+        ):
+            response = test_client.post(
+                "/api/v2/repositories/",
+                json={
+                    "name": "Protocol Mismatch Repo",
+                    "path": "/tmp/v2-protocol-mismatch",
+                    "encryption": "none",
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 500
+        detail = response.json()["detail"]
+        assert detail["key"] == "backend.errors.repo.remoteBorg2Incompatible"
+        assert "params" not in detail
 
     def test_create_repository_rejects_duplicate_name(
         self, test_client: TestClient, admin_headers, test_db
@@ -411,6 +495,55 @@ class TestV2RepositoryRoutes:
         assert repo.custom_flags == "--stats"
         assert repo.pre_backup_script == "echo pre"
         assert repo.post_backup_script == "echo post"
+
+    def test_import_repository_with_ssh_connection_reconstructs_storage_box_path(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _enable_borg_v2(test_db)
+        connection = SSHConnection(
+            host="u123456.your-storagebox.de",
+            username="u123456",
+            port=23,
+            status="connected",
+        )
+        test_db.add(connection)
+        test_db.commit()
+        test_db.refresh(connection)
+
+        with patch(
+            "app.api.v2.repositories._rinfo",
+            new=AsyncMock(
+                return_value={
+                    "success": True,
+                    "stdout": json.dumps({"repository": {"id": 1}}),
+                    "stderr": "",
+                }
+            ),
+        ) as mock_rinfo:
+            response = test_client.post(
+                "/api/v2/repositories/import",
+                json={
+                    "name": "Imported Storage Box Borg 2 Repo",
+                    "path": "/./borg-repository",
+                    "encryption": "none",
+                    "connection_id": connection.id,
+                },
+                headers=admin_headers,
+            )
+
+        expected_path = "ssh://u123456@u123456.your-storagebox.de:23/./borg-repository"
+        assert response.status_code == 201
+        assert response.json()["path"] == expected_path
+        repo = (
+            test_db.query(Repository)
+            .filter(Repository.name == "Imported Storage Box Borg 2 Repo")
+            .first()
+        )
+        assert repo is not None
+        assert repo.path == expected_path
+        assert repo.repository_type == "ssh"
+        mock_rinfo.assert_awaited_once()
+        assert mock_rinfo.await_args.kwargs["path"] == expected_path
 
     def test_import_repository_writes_keyfile_content_for_verification(
         self, test_client: TestClient, admin_headers, test_db, tmp_path
@@ -623,6 +756,31 @@ class TestV2RepositoryRoutes:
 
         assert response.status_code == 500
         assert response.json()["detail"]["key"] == "backend.errors.repo.infoFailed"
+
+    def test_get_repository_info_reports_friendly_borg2_remote_protocol_mismatch(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db, path="/tmp/v2-info-protocol-mismatch")
+
+        with patch(
+            "app.api.v2.repositories.borg2.info_repo",
+            new=AsyncMock(
+                return_value={
+                    "success": False,
+                    "stdout": "",
+                    "stderr": "RPC method close is not valid",
+                }
+            ),
+        ):
+            response = test_client.get(
+                f"/api/v2/repositories/{repo.id}/info", headers=admin_headers
+            )
+
+        assert response.status_code == 500
+        detail = response.json()["detail"]
+        assert detail["key"] == "backend.errors.repo.remoteBorg2Incompatible"
+        assert "params" not in detail
 
     def test_get_repository_info_retries_with_bypass_lock_on_lock_like_failure(
         self, test_client: TestClient, admin_headers, test_db
