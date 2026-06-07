@@ -14,11 +14,13 @@ import {
 import type { RemoteBackendClient } from '../../services/remoteBackends/types'
 
 const navigateMock = vi.fn()
-const { mockHasGlobalPermission, mockPlanCan, mockPlanIsLoading } = vi.hoisted(() => ({
-  mockHasGlobalPermission: vi.fn((_permission: string) => true),
-  mockPlanCan: vi.fn((_feature: string) => true),
-  mockPlanIsLoading: vi.fn(() => false),
-}))
+const { mockHasGlobalPermission, mockPlanCan, mockPlanIsLoading, mockTrackRemoteClient } =
+  vi.hoisted(() => ({
+    mockHasGlobalPermission: vi.fn((_permission: string) => true),
+    mockPlanCan: vi.fn((_feature: string) => true),
+    mockPlanIsLoading: vi.fn(() => false),
+    mockTrackRemoteClient: vi.fn(),
+  }))
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
@@ -38,6 +40,15 @@ vi.mock('../../hooks/usePlan', () => ({
 vi.mock('../../hooks/useAuth', () => ({
   useAuth: () => ({
     hasGlobalPermission: mockHasGlobalPermission,
+  }),
+}))
+
+vi.mock('../../hooks/useAnalytics', () => ({
+  useAnalytics: () => ({
+    trackRemoteClient: mockTrackRemoteClient,
+    EventAction: {
+      SWITCH: 'Switch',
+    },
   }),
 }))
 
@@ -89,6 +100,7 @@ describe('BackendTargetSwitcher', () => {
     mockHasGlobalPermission.mockReturnValue(true)
     mockPlanCan.mockReturnValue(true)
     mockPlanIsLoading.mockReturnValue(false)
+    mockTrackRemoteClient.mockClear()
   })
 
   it('shows this server as the default target', () => {
@@ -121,6 +133,14 @@ describe('BackendTargetSwitcher', () => {
       expect(screen.getByRole('button', { name: /server target studio nas/i })).toBeInTheDocument()
       expect(screen.getByText('Remote client')).toBeInTheDocument()
     })
+    expect(mockTrackRemoteClient).toHaveBeenCalledWith(
+      'Switch',
+      expect.objectContaining({ name: 'Studio NAS' }),
+      {
+        surface: 'target_switcher',
+        target_kind: 'remote',
+      }
+    )
   })
 
   it('keeps the selected remote client active while plan access is loading', () => {

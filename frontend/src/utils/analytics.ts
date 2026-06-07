@@ -415,6 +415,7 @@ export const EventCategory = {
   NAVIGATION: 'Navigation',
   PLAN: 'Plan',
   ANNOUNCEMENT: 'Announcement',
+  REMOTE_CLIENT: 'Remote Client',
 } as const
 
 // Pre-defined event actions
@@ -437,6 +438,7 @@ export const EventAction = {
   SEARCH: 'Search',
   FILTER: 'Filter',
   EXPORT: 'Export',
+  SWITCH: 'Switch',
   FEATURE_USED: 'FeatureUsed',
   FEATURE_BLOCKED: 'FeatureBlocked',
 } as const

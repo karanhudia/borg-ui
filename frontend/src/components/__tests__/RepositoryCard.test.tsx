@@ -76,6 +76,7 @@ describe('RepositoryCard', () => {
     trackPackage: vi.fn(),
     trackNavigation: vi.fn(),
     trackPlan: vi.fn(),
+    trackRemoteClient: vi.fn(),
     trackAnnouncement: vi.fn(),
     trackAuth: vi.fn(),
     buildEntityData: vi.fn(),
@@ -95,6 +96,7 @@ describe('RepositoryCard', () => {
       NAVIGATION: 'Navigation',
       PLAN: 'Plan',
       ANNOUNCEMENT: 'Announcement',
+      REMOTE_CLIENT: 'Remote Client',
     } as const,
     EventAction: {
       CREATE: 'Create',
@@ -113,6 +115,7 @@ describe('RepositoryCard', () => {
       SEARCH: 'Search',
       FILTER: 'Filter',
       EXPORT: 'Export',
+      SWITCH: 'Switch',
       COMPLETE: 'Complete',
       FAIL: 'Fail',
       FEATURE_USED: 'FeatureUsed',

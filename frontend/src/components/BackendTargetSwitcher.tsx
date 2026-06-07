@@ -17,6 +17,7 @@ import { useRemoteBackends } from '@/services/remoteBackends/context'
 import { LOCAL_BACKEND_ID } from '@/services/remoteBackends/storage'
 import type { BackendTarget } from '@/services/remoteBackends/types'
 import { useAuth } from '@/hooks/useAuth'
+import { useAnalytics } from '@/hooks/useAnalytics'
 import { usePlan } from '@/hooks/usePlan'
 import {
   buildBackendTargets,
@@ -35,6 +36,7 @@ export default function BackendTargetSwitcher({ compact = false }: BackendTarget
   const navigate = useNavigate()
   const { activeTarget, clients, switchTarget } = useRemoteBackends()
   const { hasGlobalPermission } = useAuth()
+  const { trackRemoteClient, EventAction } = useAnalytics()
   const { can, isLoading: isPlanLoading } = usePlan()
   const canManageRemoteClients = hasGlobalPermission('settings.ssh.manage')
   const canUseRemoteClients = canManageRemoteClients && can('remote_clients')
@@ -66,6 +68,10 @@ export default function BackendTargetSwitcher({ compact = false }: BackendTarget
     }
 
     switchTarget(target.id)
+    trackRemoteClient(EventAction.SWITCH, target.kind === 'remote' ? target : undefined, {
+      surface: 'target_switcher',
+      target_kind: target.kind,
+    })
     closeMenu()
   }
 

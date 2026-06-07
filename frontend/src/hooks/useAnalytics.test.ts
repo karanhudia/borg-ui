@@ -25,11 +25,13 @@ vi.mock('../utils/analytics', () => ({
     NAVIGATION: 'Navigation',
     PLAN: 'Plan',
     ANNOUNCEMENT: 'Announcement',
+    REMOTE_CLIENT: 'Remote Client',
   },
   EventAction: {
     VIEW: 'View',
     START: 'Start',
     EDIT: 'Edit',
+    SWITCH: 'Switch',
   },
 }))
 
@@ -117,6 +119,27 @@ describe('useAnalytics', () => {
     expect(trackEventMock).toHaveBeenCalledWith('Announcement', 'Acknowledge', {
       announcement_id: 'update-1',
       announcement_type: 'update_available',
+    })
+  })
+
+  it('tracks remote client events with anonymized client names', async () => {
+    const { useAnalytics } = await import('./useAnalytics')
+    const { result } = renderHook(() => useAnalytics())
+
+    result.current.trackRemoteClient(
+      'Switch',
+      { name: 'Studio NAS' },
+      {
+        surface: 'target_switcher',
+        target_kind: 'remote',
+      }
+    )
+
+    expect(anonymizeEntityNameMock).toHaveBeenCalledWith('Studio NAS')
+    expect(trackEventMock).toHaveBeenCalledWith('Remote Client', 'Switch', {
+      surface: 'target_switcher',
+      target_kind: 'remote',
+      name: 'hash:Studio NAS',
     })
   })
 })

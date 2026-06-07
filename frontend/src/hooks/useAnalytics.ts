@@ -194,6 +194,13 @@ export const useAnalytics = () => {
     trackEvent(EventCategory.PLAN, action, data)
   }, [])
 
+  const trackRemoteClient = useCallback(
+    (action: string, client?: AnalyticsEntity, data?: Record<string, unknown>) => {
+      trackEvent(EventCategory.REMOTE_CLIENT, action, buildEntityData(client, data))
+    },
+    [buildEntityData]
+  )
+
   const trackAnnouncement = useCallback((action: string, data?: Record<string, unknown>) => {
     trackEvent(EventCategory.ANNOUNCEMENT, action, data)
   }, [])
@@ -219,6 +226,7 @@ export const useAnalytics = () => {
     trackPackage,
     trackNavigation,
     trackPlan,
+    trackRemoteClient,
     trackAnnouncement,
     trackAuth,
     buildEntityData,

@@ -9,9 +9,10 @@ import type {
   RemoteBackendStatus,
 } from '../../services/remoteBackends/types'
 
-const { mockHasGlobalPermission, mockPlanCan } = vi.hoisted(() => ({
+const { mockHasGlobalPermission, mockPlanCan, mockTrackRemoteClient } = vi.hoisted(() => ({
   mockHasGlobalPermission: vi.fn(() => true),
   mockPlanCan: vi.fn((_feature: string) => true),
+  mockTrackRemoteClient: vi.fn(),
 }))
 
 vi.mock('../../hooks/useAuth', () => ({
@@ -27,6 +28,19 @@ vi.mock('../../hooks/usePlan', () => ({
     entitlement: undefined,
     isLoading: false,
     can: mockPlanCan,
+  }),
+}))
+
+vi.mock('../../hooks/useAnalytics', () => ({
+  useAnalytics: () => ({
+    trackRemoteClient: mockTrackRemoteClient,
+    EventAction: {
+      CREATE: 'Create',
+      EDIT: 'Edit',
+      DELETE: 'Delete',
+      SWITCH: 'Switch',
+      TEST: 'Test',
+    },
   }),
 }))
 
@@ -151,6 +165,25 @@ function createRemoteClientsPageFetch(
       return jsonResponse(client, 201)
     }
 
+    if (url.includes('/api/remote-clients/') && method === 'PUT') {
+      const markerIndex = url.lastIndexOf('/api/remote-clients/')
+      const id = decodeURIComponent(url.slice(markerIndex + '/api/remote-clients/'.length))
+      const index = clients.findIndex((client) => client.id === id)
+      if (index === -1) return jsonResponse({ detail: 'Not found' }, 404)
+      const body = JSON.parse(String(init?.body ?? '{}')) as {
+        name?: string
+        backend_url?: string
+      }
+      const urls = deriveClientUrls(body.backend_url ?? clients[index].api_base_url)
+      clients[index] = {
+        ...clients[index],
+        name: body.name ?? clients[index].name,
+        api_base_url: urls.apiBaseUrl,
+        web_base_url: urls.webBaseUrl,
+      }
+      return jsonResponse(clients[index])
+    }
+
     if (url.includes('/api/remote-clients/') && method === 'PATCH') {
       const markerIndex = url.lastIndexOf('/api/remote-clients/')
       const id = decodeURIComponent(
@@ -214,6 +247,7 @@ describe('RemoteClients', () => {
     vi.mocked(toast.error).mockClear()
     mockHasGlobalPermission.mockReturnValue(true)
     mockPlanCan.mockReturnValue(true)
+    mockTrackRemoteClient.mockClear()
   })
 
   it('redirects when the user lacks SSH management permission', async () => {
@@ -243,6 +277,33 @@ describe('RemoteClients', () => {
     expect(await screen.findByText('Studio NAS')).toBeInTheDocument()
     expect(screen.getByText('http://nas.local:9000/api')).toBeInTheDocument()
     expect(screen.getByText('Unknown')).toBeInTheDocument()
+    expect(mockTrackRemoteClient).toHaveBeenCalledWith(
+      'Create',
+      expect.objectContaining({ name: 'Studio NAS' }),
+      { surface: 'remote_clients' }
+    )
+  })
+
+  it('tracks successful remote client edits', async () => {
+    const user = userEvent.setup()
+    renderPage(
+      createRemoteClientsPageFetch({
+        clients: [makeDbClient({ id: 'db-client-1', name: 'Studio NAS' })],
+      })
+    )
+
+    expect(await screen.findByText('Studio NAS')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /edit studio nas/i }))
+    await user.clear(screen.getByLabelText('Client name'))
+    await user.type(screen.getByLabelText('Client name'), 'Studio NAS 2')
+    await user.click(screen.getByRole('button', { name: 'Save client' }))
+
+    expect(await screen.findByText('Studio NAS 2')).toBeInTheDocument()
+    expect(mockTrackRemoteClient).toHaveBeenCalledWith(
+      'Edit',
+      expect.objectContaining({ name: 'Studio NAS 2' }),
+      { surface: 'remote_clients' }
+    )
   })
 
   it('prevents duplicate create requests while save is in flight', async () => {
@@ -313,10 +374,27 @@ describe('RemoteClients', () => {
       expect(screen.getByText('Online')).toBeInTheDocument()
       expect(screen.getByText(/Borg UI 2\.2\.1/)).toBeInTheDocument()
     })
+    expect(mockTrackRemoteClient).toHaveBeenCalledWith(
+      'Test',
+      expect.objectContaining({ name: 'Studio NAS' }),
+      {
+        surface: 'remote_clients',
+        status: 'online',
+        compatibility: 'compatible',
+      }
+    )
 
     await user.click(screen.getByRole('button', { name: /use studio nas/i }))
 
     expect(screen.getByText('Active target')).toBeInTheDocument()
+    expect(mockTrackRemoteClient).toHaveBeenCalledWith(
+      'Switch',
+      expect.objectContaining({ name: 'Studio NAS' }),
+      {
+        surface: 'remote_clients',
+        target_kind: 'remote',
+      }
+    )
   })
 
   it('shows validation errors for invalid server URLs', async () => {
@@ -363,6 +441,11 @@ describe('RemoteClients', () => {
     await waitFor(() => {
       expect(screen.queryByText('Studio NAS')).not.toBeInTheDocument()
     })
+    expect(mockTrackRemoteClient).toHaveBeenCalledWith(
+      'Delete',
+      expect.objectContaining({ name: 'Studio NAS' }),
+      { surface: 'remote_clients' }
+    )
 
     const deleteCalls = fetchMock.mock.calls.filter(([input, init]) => {
       return String(input).includes('/api/remote-clients/') && (init?.method ?? 'GET') === 'DELETE'

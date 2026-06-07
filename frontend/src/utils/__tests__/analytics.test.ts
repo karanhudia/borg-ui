@@ -406,6 +406,7 @@ describe('analytics (umami)', () => {
       expect(EventCategory.AUTH).toBe('Authentication')
       expect(EventCategory.NAVIGATION).toBe('Navigation')
       expect(EventCategory.PLAN).toBe('Plan')
+      expect(EventCategory.REMOTE_CLIENT).toBe('Remote Client')
     })
   })
 
@@ -427,6 +428,7 @@ describe('analytics (umami)', () => {
       expect(EventAction.SEARCH).toBe('Search')
       expect(EventAction.FILTER).toBe('Filter')
       expect(EventAction.EXPORT).toBe('Export')
+      expect(EventAction.SWITCH).toBe('Switch')
     })
   })
 })

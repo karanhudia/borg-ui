@@ -11,6 +11,7 @@ import EmptyStateCard from '../components/EmptyStateCard'
 import LocalServerCard from '../components/LocalServerCard'
 import RemoteClientCard from '../components/RemoteClientCard'
 import { useAuth } from '../hooks/useAuth'
+import { useAnalytics } from '../hooks/useAnalytics'
 import { useRemoteBackends } from '../services/remoteBackends/context'
 import { LOCAL_BACKEND_ID } from '../services/remoteBackends/storage'
 import type { RemoteBackendClient } from '../services/remoteBackends/types'
@@ -34,6 +35,7 @@ export function RemoteClientsContent() {
     switchTarget,
     checkClient,
   } = useRemoteBackends()
+  const { trackRemoteClient, EventAction } = useAnalytics()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingClient, setEditingClient] = useState<RemoteBackendClient | null>(null)
   const [form, setForm] = useState<ClientFormState>(emptyForm)
@@ -72,11 +74,13 @@ export function RemoteClientsContent() {
     let saved = false
     try {
       if (editingClient) {
-        await updateClient(editingClient.id, form)
+        const updated = await updateClient(editingClient.id, form)
         toast.success(t('remoteClients.toasts.updated'))
+        trackRemoteClient(EventAction.EDIT, updated, { surface: 'remote_clients' })
       } else {
-        await createClient(form)
+        const created = await createClient(form)
         toast.success(t('remoteClients.toasts.added'))
+        trackRemoteClient(EventAction.CREATE, created, { surface: 'remote_clients' })
       }
       saved = true
     } catch (error) {
@@ -101,6 +105,11 @@ export function RemoteClientsContent() {
           updated.health.error || t('remoteClients.toasts.unavailable', { name: client.name })
         )
       }
+      trackRemoteClient(EventAction.TEST, updated, {
+        surface: 'remote_clients',
+        status: updated.health.status,
+        compatibility: updated.health.compatibility,
+      })
     } catch (error) {
       const message = error instanceof Error ? error.message : t('common.errors.unexpectedError')
       toast.error(t('remoteClients.toasts.checkFailed', { name: client.name, error: message }))
@@ -109,10 +118,19 @@ export function RemoteClientsContent() {
     }
   }
 
-  const handleSwitchTarget = (targetId: string, name: string) => {
+  const handleSwitchTarget = (
+    targetId: string,
+    name: string,
+    targetKind: 'local' | 'remote',
+    client?: RemoteBackendClient
+  ) => {
     try {
       switchTarget(targetId)
       toast.success(t('remoteClients.toasts.using', { name }))
+      trackRemoteClient(EventAction.SWITCH, client, {
+        surface: 'remote_clients',
+        target_kind: targetKind,
+      })
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : t('remoteClients.errors.remoteUnavailable')
@@ -121,11 +139,11 @@ export function RemoteClientsContent() {
   }
 
   const handleSwitch = (client: RemoteBackendClient) => {
-    handleSwitchTarget(client.id, client.name)
+    handleSwitchTarget(client.id, client.name, 'remote', client)
   }
 
   const handleSwitchLocal = () => {
-    handleSwitchTarget(LOCAL_BACKEND_ID, t('remoteClients.localBackend.title'))
+    handleSwitchTarget(LOCAL_BACKEND_ID, t('remoteClients.localBackend.title'), 'local')
   }
 
   const closeDeleteDialog = () => {
@@ -141,6 +159,7 @@ export function RemoteClientsContent() {
     try {
       await deleteClient(deletingClient.id)
       toast.success(t('remoteClients.toasts.deleted'))
+      trackRemoteClient(EventAction.DELETE, deletingClient, { surface: 'remote_clients' })
       setDeletingClient(null)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t('common.errors.unexpectedError'))
