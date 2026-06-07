@@ -156,7 +156,7 @@ describe('AppSidebar', () => {
         'href',
         '/remote-clients'
       )
-      expect(screen.getAllByRole('link', { name: /manual backup/i }).length).toBeGreaterThan(0)
+      expect(screen.getAllByRole('link', { name: /^manual$/i }).length).toBeGreaterThan(0)
       expect(screen.getAllByRole('link', { name: /managed agents/i }).length).toBeGreaterThan(0)
     })
   })

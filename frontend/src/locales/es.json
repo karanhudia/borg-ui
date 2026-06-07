@@ -115,7 +115,7 @@
       "cloudStorage": "Almacenamiento cloud",
       "backupPlans": "Planes",
       "repositories": "Repositorios",
-      "backup": "Respaldo manual",
+      "backup": "Manual",
       "archives": "Archivos",
       "restore": "Restaurar",
       "integrity": "Integridad",
@@ -559,7 +559,7 @@
       }
     },
     "manualBackup": {
-      "title": "Copia de seguridad manual",
+      "title": "Manual",
       "subtitle": "Selecciona un repositorio e inicia un trabajo de copia de seguridad",
       "repository": "Repositorio",
       "loadingRepositories": "Cargando repositorios...",

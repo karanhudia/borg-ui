@@ -115,7 +115,7 @@
       "cloudStorage": "Cloud Storage",
       "backupPlans": "Plans",
       "repositories": "Repositories",
-      "backup": "Manual Backup",
+      "backup": "Manual",
       "archives": "Archives",
       "restore": "Restore",
       "integrity": "Integrity",
@@ -559,7 +559,7 @@
       }
     },
     "manualBackup": {
-      "title": "Manual Backup",
+      "title": "Manual",
       "subtitle": "Select a repository and start a backup job",
       "repository": "Repository",
       "loadingRepositories": "Loading repositories...",
