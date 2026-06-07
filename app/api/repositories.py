@@ -4851,11 +4851,9 @@ async def check_repository(
             repository,
             CheckJob,
             error_key="backend.errors.repo.checkAlreadyRunning",
-            dispatcher=lambda job,
-            router_repo=SimpleNamespace(
-                id=repository.id,
-                borg_version=repository.borg_version,
-            ): BorgRouter(router_repo).check(job.id),
+            dispatcher=lambda job, router_repo=SimpleNamespace(id=repository.id, borg_version=repository.borg_version): (
+                BorgRouter(router_repo).check(job.id)
+            ),
             extra_fields={
                 "max_duration": max_duration,
                 "extra_flags": check_extra_flags,
@@ -5004,11 +5002,9 @@ async def compact_repository(
             repository,
             CompactJob,
             error_key="backend.errors.repo.compactAlreadyRunning",
-            dispatcher=lambda job,
-            router_repo=SimpleNamespace(
-                id=repository.id,
-                borg_version=repository.borg_version,
-            ): BorgRouter(router_repo).compact(job.id),
+            dispatcher=lambda job, router_repo=SimpleNamespace(id=repository.id, borg_version=repository.borg_version): (
+                BorgRouter(router_repo).compact(job.id)
+            ),
             extra_fields={"scheduled_compact": False},
         )
 
@@ -5122,19 +5118,17 @@ async def prune_repository(
                 repository,
                 PruneJob,
                 error_key="backend.errors.repo.pruneAlreadyRunning",
-                dispatcher=lambda job,
-                router_repo=SimpleNamespace(
-                    id=repository.id,
-                    borg_version=repository.borg_version,
-                ): BorgRouter(router_repo).prune(
-                    job.id,
-                    keep_hourly,
-                    keep_daily,
-                    keep_weekly,
-                    keep_monthly,
-                    keep_quarterly,
-                    keep_yearly,
-                    False,
+                dispatcher=lambda job, router_repo=SimpleNamespace(id=repository.id, borg_version=repository.borg_version): (
+                    BorgRouter(router_repo).prune(
+                        job.id,
+                        keep_hourly,
+                        keep_daily,
+                        keep_weekly,
+                        keep_monthly,
+                        keep_quarterly,
+                        keep_yearly,
+                        False,
+                    )
                 ),
                 extra_fields={"scheduled_prune": False},
             )

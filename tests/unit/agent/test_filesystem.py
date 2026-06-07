@@ -35,7 +35,7 @@ def test_browse_filesystem_can_include_hidden_items(tmp_path: Path):
     "path_factory,code",
     [
         (lambda tmp_path: tmp_path / "missing", "missing"),
-        (lambda tmp_path: (tmp_path / "file.txt"), "not_directory"),
+        (lambda tmp_path: tmp_path / "file.txt", "not_directory"),
     ],
 )
 def test_browse_filesystem_structured_failures(tmp_path: Path, path_factory, code):

@@ -166,11 +166,9 @@ async def run_due_scheduled_checks(db: Session, now: Optional[datetime] = None) 
                 repo,
                 CheckJob,
                 error_key="backend.errors.repo.checkAlreadyRunning",
-                dispatcher=lambda job,
-                router_repo=SimpleNamespace(
-                    id=repo.id,
-                    borg_version=repo.borg_version,
-                ): BorgRouter(router_repo).check(job.id),
+                dispatcher=lambda job, router_repo=SimpleNamespace(id=repo.id, borg_version=repo.borg_version): (
+                    BorgRouter(router_repo).check(job.id)
+                ),
                 extra_fields={
                     "max_duration": (
                         repo.check_max_duration
