@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { RemoteBackendProvider } from './context'
 import {
   createRemoteBackendClient,
@@ -183,13 +183,26 @@ export function RemoteBackendStoryProvider({
   children,
   state = 'mixed',
 }: RemoteBackendStoryProviderProps) {
-  const seededRef = useRef(false)
+  return (
+    <SeededRemoteBackendStoryProvider key={state} state={state}>
+      {children}
+    </SeededRemoteBackendStoryProvider>
+  )
+}
 
-  useEffect(() => {
-    if (seededRef.current) return
-    seededRef.current = true
+function SeededRemoteBackendStoryProvider({
+  children,
+  state,
+}: Required<RemoteBackendStoryProviderProps>) {
+  const [seededState] = useState(() => {
+    // Storybook fixtures must exist before RemoteBackendProvider reads its initial snapshot.
     seedRemoteBackends(state)
-  }, [state])
+    return state
+  })
 
-  return <RemoteBackendProvider fetchImpl={storyFetch}>{children}</RemoteBackendProvider>
+  return (
+    <RemoteBackendProvider key={seededState} fetchImpl={storyFetch}>
+      {children}
+    </RemoteBackendProvider>
+  )
 }
