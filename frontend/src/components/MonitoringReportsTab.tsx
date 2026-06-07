@@ -24,7 +24,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { settingsAPI } from '../services/api'
 import type { SystemSettings } from '../services/api'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { usePlan } from '../hooks/usePlan'
 import { translateBackendKey } from '../utils/translateBackendKey'
+import PlanGate from './shared/PlanGate'
 import SchedulePicker from './shared/SchedulePicker'
 import { getBrowserTimeZone } from '../utils/dateUtils'
 
@@ -46,6 +48,9 @@ const MonitoringReportsTab: React.FC = () => {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { trackSystem, EventAction } = useAnalytics()
+  const { can } = usePlan()
+  const canUseAlertingMonitoring = can('alerting_monitoring')
+  const canUseBackupReports = can('backup_reports')
 
   const [monitoringEnabled, setMonitoringEnabled] = useState(false)
   const [staleAfterDays, setStaleAfterDays] = useState(3)
@@ -123,6 +128,7 @@ const MonitoringReportsTab: React.FC = () => {
     cooldownHours < 0 ||
     !reportCronExpression.trim() ||
     !reportTimezone.trim()
+  const saveBlockedByPlan = !canUseAlertingMonitoring || !canUseBackupReports
 
   const saveMutation = useMutation({
     mutationFn: () => settingsAPI.updateSystemSettings(payload),
@@ -214,7 +220,7 @@ const MonitoringReportsTab: React.FC = () => {
             variant="contained"
             startIcon={saveMutation.isPending ? <CircularProgress size={16} /> : <Save size={16} />}
             onClick={() => saveMutation.mutate()}
-            disabled={saveMutation.isPending || validationError}
+            disabled={saveMutation.isPending || validationError || saveBlockedByPlan}
           >
             {saveMutation.isPending ? t('monitoringReports.saving') : t('systemSettings.save')}
           </Button>
@@ -235,9 +241,17 @@ const MonitoringReportsTab: React.FC = () => {
             </Box>
 
             <FormControlLabel
+              disabled={!canUseAlertingMonitoring}
               control={
                 <Switch
                   checked={monitoringEnabled}
+                  disabled={!canUseAlertingMonitoring}
+                  slotProps={{
+                    input: {
+                      role: 'switch',
+                      'aria-label': t('monitoringReports.enableMonitoring'),
+                    },
+                  }}
                   onChange={(event) => setMonitoringEnabled(event.target.checked)}
                 />
               }
@@ -256,6 +270,7 @@ const MonitoringReportsTab: React.FC = () => {
                 type="number"
                 value={staleAfterDays}
                 onChange={(event) => setStaleAfterDays(Number(event.target.value))}
+                disabled={!canUseAlertingMonitoring}
                 inputProps={{ min: 1, max: 3650, step: 1 }}
                 error={staleAfterDays < 1}
                 helperText={t('monitoringReports.staleAfterHelper')}
@@ -265,6 +280,7 @@ const MonitoringReportsTab: React.FC = () => {
                 type="number"
                 value={intervalHours}
                 onChange={(event) => setIntervalHours(Number(event.target.value))}
+                disabled={!canUseAlertingMonitoring}
                 inputProps={{ min: 1, max: 720, step: 1 }}
                 error={intervalHours < 1}
                 helperText={t('monitoringReports.checkIntervalHelper')}
@@ -274,6 +290,7 @@ const MonitoringReportsTab: React.FC = () => {
                 type="number"
                 value={cooldownHours}
                 onChange={(event) => setCooldownHours(Number(event.target.value))}
+                disabled={!canUseAlertingMonitoring}
                 inputProps={{ min: 0, max: 720, step: 1 }}
                 error={cooldownHours < 0}
                 helperText={t('monitoringReports.cooldownHelper')}
@@ -281,30 +298,39 @@ const MonitoringReportsTab: React.FC = () => {
             </Box>
 
             <FormControlLabel
+              disabled={!canUseAlertingMonitoring}
               control={
                 <Switch
                   checked={includeObserveRepos}
+                  disabled={!canUseAlertingMonitoring}
                   onChange={(event) => setIncludeObserveRepos(event.target.checked)}
                 />
               }
               label={t('monitoringReports.includeObserveRepos')}
             />
 
-            <Button
-              variant="outlined"
-              startIcon={
-                runMonitoringMutation.isPending ? (
-                  <CircularProgress size={16} />
-                ) : (
-                  <SearchCheck size={16} />
-                )
-              }
-              onClick={() => runMonitoringMutation.mutate()}
-              disabled={runMonitoringMutation.isPending}
-              sx={{ alignSelf: 'flex-start' }}
+            <PlanGate
+              feature="alerting_monitoring"
+              disabled
+              surface="monitoring_reports"
+              operation="run_check"
             >
-              {t('monitoringReports.runCheckNow')}
-            </Button>
+              <Button
+                variant="outlined"
+                startIcon={
+                  runMonitoringMutation.isPending ? (
+                    <CircularProgress size={16} />
+                  ) : (
+                    <SearchCheck size={16} />
+                  )
+                }
+                onClick={() => runMonitoringMutation.mutate()}
+                disabled={runMonitoringMutation.isPending || !canUseAlertingMonitoring}
+                sx={{ alignSelf: 'flex-start' }}
+              >
+                {t('monitoringReports.runCheckNow')}
+              </Button>
+            </PlanGate>
 
             {(settings?.backup_monitoring_last_checked_at ||
               settings?.backup_monitoring_last_alert_sent_at) && (
@@ -337,9 +363,17 @@ const MonitoringReportsTab: React.FC = () => {
             </Box>
 
             <FormControlLabel
+              disabled={!canUseBackupReports}
               control={
                 <Switch
                   checked={reportsEnabled}
+                  disabled={!canUseBackupReports}
+                  slotProps={{
+                    input: {
+                      role: 'switch',
+                      'aria-label': t('monitoringReports.enableReports'),
+                    },
+                  }}
                   onChange={(event) => setReportsEnabled(event.target.checked)}
                 />
               }
@@ -347,7 +381,7 @@ const MonitoringReportsTab: React.FC = () => {
             />
 
             <Stack spacing={2}>
-              <FormControl fullWidth>
+              <FormControl fullWidth disabled={!canUseBackupReports}>
                 <InputLabel id="backup-report-frequency-label">
                   {t('monitoringReports.cadence')}
                 </InputLabel>
@@ -370,6 +404,7 @@ const MonitoringReportsTab: React.FC = () => {
               <SchedulePicker
                 cronExpression={reportCronExpression}
                 timezone={reportTimezone}
+                disabled={!canUseBackupReports}
                 onChange={(updates) => {
                   if (updates.cronExpression !== undefined) {
                     setReportCronExpression(updates.cronExpression)
@@ -391,27 +426,33 @@ const MonitoringReportsTab: React.FC = () => {
                 {t('monitoringReports.reportContent')}
               </Typography>
               <FormControlLabel
+                disabled={!canUseBackupReports}
                 control={
                   <Switch
                     checked={includeSummary}
+                    disabled={!canUseBackupReports}
                     onChange={(event) => setIncludeSummary(event.target.checked)}
                   />
                 }
                 label={t('monitoringReports.summary')}
               />
               <FormControlLabel
+                disabled={!canUseBackupReports}
                 control={
                   <Switch
                     checked={includeStaleRepositories}
+                    disabled={!canUseBackupReports}
                     onChange={(event) => setIncludeStaleRepositories(event.target.checked)}
                   />
                 }
                 label={t('monitoringReports.staleRepositories')}
               />
               <FormControlLabel
+                disabled={!canUseBackupReports}
                 control={
                   <Switch
                     checked={includeRecentActivity}
+                    disabled={!canUseBackupReports}
                     onChange={(event) => setIncludeRecentActivity(event.target.checked)}
                   />
                 }
@@ -419,17 +460,24 @@ const MonitoringReportsTab: React.FC = () => {
               />
             </Stack>
 
-            <Button
-              variant="outlined"
-              startIcon={
-                sendReportMutation.isPending ? <CircularProgress size={16} /> : <Send size={16} />
-              }
-              onClick={() => sendReportMutation.mutate()}
-              disabled={sendReportMutation.isPending}
-              sx={{ alignSelf: 'flex-start' }}
+            <PlanGate
+              feature="backup_reports"
+              disabled
+              surface="monitoring_reports"
+              operation="send_report"
             >
-              {t('monitoringReports.sendReportNow')}
-            </Button>
+              <Button
+                variant="outlined"
+                startIcon={
+                  sendReportMutation.isPending ? <CircularProgress size={16} /> : <Send size={16} />
+                }
+                onClick={() => sendReportMutation.mutate()}
+                disabled={sendReportMutation.isPending || !canUseBackupReports}
+                sx={{ alignSelf: 'flex-start' }}
+              >
+                {t('monitoringReports.sendReportNow')}
+              </Button>
+            </PlanGate>
 
             {settings?.backup_reports_last_sent_at && (
               <Alert severity="info">

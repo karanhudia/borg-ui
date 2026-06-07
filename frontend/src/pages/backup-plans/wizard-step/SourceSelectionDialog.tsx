@@ -217,6 +217,8 @@ interface SourceSelectionDialogProps {
   initialScanDialogOpen?: boolean
   canUseManagedAgents?: boolean
   canUseMixedSourceTypes?: boolean
+  canUseDatabaseDiscovery?: boolean
+  canUseContainerBackups?: boolean
 }
 
 function scriptPayload(draft: SourceDiscoveryScriptDraft, name: string): SourceScriptCreateInput {
@@ -790,6 +792,8 @@ export function SourceSelectionDialog({
   initialScanDialogOpen = false,
   canUseManagedAgents = true,
   canUseMixedSourceTypes = true,
+  canUseDatabaseDiscovery = true,
+  canUseContainerBackups = true,
 }: SourceSelectionDialogProps) {
   const { trackFeatureBlocked } = useFeatureAnalytics()
   const [view, setView] = useState<SourceChoiceView>(initialView)
@@ -859,13 +863,19 @@ export function SourceSelectionDialog({
     const containerLocation = nextLocations.find((location) => location.container)
     const hydratedTemplateId =
       wizardState.databaseTemplateId ?? databaseLocation?.database?.template_id ?? null
+    const gatedInitialView: SourceChoiceView =
+      ((initialView === 'database' || initialView === 'database-detail') &&
+        !canUseDatabaseDiscovery) ||
+      (initialView === 'container' && !canUseContainerBackups)
+        ? 'paths'
+        : initialView
     const initialDetailDatabase =
-      initialView === 'database-detail' ? initialSelectedDatabase || null : null
+      gatedInitialView === 'database-detail' ? initialSelectedDatabase || null : null
     const initialViewWithDb: SourceChoiceView = initialDetailDatabase
       ? 'database-detail'
-      : hydratedTemplateId
+      : hydratedTemplateId && canUseDatabaseDiscovery
         ? 'database'
-        : initialView
+        : gatedInitialView
     setView(initialViewWithDb)
     const nextSnapshotDrafts = snapshotDraftsFromLocations(nextLocations)
     const defaultAgentKey = selectedAgentRepositoryKey(wizardState, fullRepositories)
@@ -929,10 +939,25 @@ export function SourceSelectionDialog({
     initialScanDialogOpen,
     sshConnections,
     fullRepositories,
+    canUseDatabaseDiscovery,
+    canUseContainerBackups,
   ])
 
   useEffect(() => {
+    if ((view === 'database' || view === 'database-detail') && !canUseDatabaseDiscovery) {
+      setView('paths')
+    }
+    if (view === 'container' && !canUseContainerBackups) {
+      setView('paths')
+    }
+  }, [view, canUseDatabaseDiscovery, canUseContainerBackups])
+
+  useEffect(() => {
     if (!open) return
+    if (!canUseDatabaseDiscovery) {
+      setFallbackTemplates([])
+      return
+    }
     let active = true
     sourceDiscoveryAPI
       .databases()
@@ -945,7 +970,7 @@ export function SourceSelectionDialog({
     return () => {
       active = false
     }
-  }, [open])
+  }, [open, canUseDatabaseDiscovery])
 
   // When a story or direct entry opens the dialog on a database detail, enrich
   // the initial selection from the fetched template list as soon as it lands.
@@ -1032,6 +1057,7 @@ export function SourceSelectionDialog({
     database: SourceDiscoveryDatabase,
     options: { fromScan?: boolean } = {}
   ) => {
+    if (!canUseDatabaseDiscovery) return
     setSelectedDatabase(database)
     setSelectedDatabaseFromScan(Boolean(options.fromScan))
     setPreScriptName(database.script_drafts.pre_backup.name)
@@ -1050,6 +1076,7 @@ export function SourceSelectionDialog({
   }
 
   const handleOpenScanDialog = () => {
+    if (!canUseDatabaseDiscovery) return
     setRestoreScanDialogOnOpen(false)
     setScanDialogOpen(true)
   }
@@ -1060,6 +1087,7 @@ export function SourceSelectionDialog({
   }
 
   const applyDatabase = async () => {
+    if (!canUseDatabaseDiscovery) return
     if (!selectedDatabase) return
 
     const shouldReturnToScan = selectedDatabaseFromScan
@@ -1216,6 +1244,7 @@ export function SourceSelectionDialog({
       preserveMountSelection?: boolean
     }
   ) => {
+    if (!canUseContainerBackups) return
     const nextContainerName = (detectedContainer?.name ?? containerName).trim()
     const requestedExportPath =
       detectedContainer?.export_path?.trim() ||
@@ -2893,6 +2922,7 @@ export function SourceSelectionDialog({
     ]
 
     const scanContainers = async () => {
+      if (!canUseContainerBackups) return
       if (sourceKind === 'agent') {
         setContainerScanResults([])
         setSelectedContainerMountKeys({})
@@ -3737,6 +3767,10 @@ export function SourceSelectionDialog({
             <SourceKindPivot
               view={view}
               onChange={(next) => setView(next)}
+              disabled={{
+                database: !canUseDatabaseDiscovery,
+                container: !canUseContainerBackups,
+              }}
               counts={{
                 files: draftSourceLocations
                   .filter((location) => !location.database && !location.container)
@@ -3772,10 +3806,11 @@ interface SourceKindPivotProps {
   view: SourceChoiceView
   onChange: (next: SourceChoiceView) => void
   counts: SourceKindCounts
+  disabled?: Partial<Record<'database' | 'container', boolean>>
   t: TFunction
 }
 
-function SourceKindPivot({ view, onChange, counts, t }: SourceKindPivotProps) {
+function SourceKindPivot({ view, onChange, counts, disabled = {}, t }: SourceKindPivotProps) {
   const segments: {
     key: 'files' | 'database' | 'container'
     target: SourceChoiceView
@@ -3824,12 +3859,16 @@ function SourceKindPivot({ view, onChange, counts, t }: SourceKindPivotProps) {
     >
       {segments.map((segment) => {
         const selected = activeKey === segment.key
+        const segmentDisabled = Boolean(disabled[segment.key as 'database' | 'container'])
+        const Icon = segmentDisabled ? Lock : segment.Icon
         return (
           <ButtonBase
             key={segment.key}
             role="tab"
             aria-selected={selected}
+            aria-disabled={segmentDisabled ? 'true' : undefined}
             onClick={() => {
+              if (segmentDisabled) return
               if (segment.target !== view) onChange(segment.target)
             }}
             sx={{
@@ -3845,12 +3884,18 @@ function SourceKindPivot({ view, onChange, counts, t }: SourceKindPivotProps) {
               fontWeight: selected ? 600 : 500,
               fontSize: '0.8125rem',
               color: selected ? 'text.primary' : 'text.secondary',
-              cursor: 'pointer',
+              cursor: segmentDisabled ? 'not-allowed' : 'pointer',
+              opacity: segmentDisabled ? 0.55 : 1,
               transition: 'all 0.15s ease',
-              '&:hover': selected ? undefined : { color: 'text.primary' },
+              '&:hover':
+                selected || segmentDisabled
+                  ? undefined
+                  : {
+                      color: 'text.primary',
+                    },
             }}
           >
-            <segment.Icon size={14} />
+            <Icon size={14} />
             {t(segment.labelKey)}
             {/* Count chip surfaces "this tab has N items queued" so the user
                 knows where things landed without switching tabs to check. */}

@@ -16,6 +16,8 @@ if TYPE_CHECKING:
 
 BACKUP_PLAN_ADVANCED_FEATURE = "backup_plan_multi_repository"
 BACKUP_PLAN_MIXED_SOURCES_FEATURE = "backup_plan_mixed_sources"
+CONTAINER_BACKUPS_FEATURE = "container_backups"
+DATABASE_DISCOVERY_FEATURE = "database_discovery"
 MANAGED_AGENTS_FEATURE = "managed_agents"
 
 
@@ -39,6 +41,10 @@ def _source_type_feature_requirement(
     # Agent sources require managed-agents access even when mixed with other types.
     if "agent" in source_types:
         return MANAGED_AGENTS_FEATURE, "agent_source"
+    if any(location.get("database") for location in source_locations or []):
+        return DATABASE_DISCOVERY_FEATURE, "database_source"
+    if any(location.get("container") for location in source_locations or []):
+        return CONTAINER_BACKUPS_FEATURE, "container_source"
     if len(source_types) > 1:
         return BACKUP_PLAN_MIXED_SOURCES_FEATURE, "mixed_source_types"
     return None, None

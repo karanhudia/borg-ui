@@ -3,6 +3,7 @@ import { Box } from '@mui/material'
 import MonitoringReportsTab from './MonitoringReportsTab'
 import { settingsAPI } from '../services/api'
 import type { SystemSettings } from '../services/api'
+import { communitySystemInfo, proSystemInfo } from '../services/remoteBackends/planStoryFixtures'
 
 const sampleSettings: SystemSettings = {
   backup_monitoring_enabled: true,
@@ -74,6 +75,20 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const Configured: Story = {
+  parameters: {
+    systemInfo: proSystemInfo,
+  },
+  render: () => (
+    <Box sx={{ maxWidth: 1040, mx: 'auto', p: 3 }}>
+      <MonitoringReportsTab />
+    </Box>
+  ),
+}
+
+export const CommunityLocked: Story = {
+  parameters: {
+    systemInfo: communitySystemInfo,
+  },
   render: () => (
     <Box sx={{ maxWidth: 1040, mx: 'auto', p: 3 }}>
       <MonitoringReportsTab />

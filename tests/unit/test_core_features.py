@@ -33,6 +33,21 @@ class TestPlanIncludes:
         assert plan_includes(Plan.ENTERPRISE, FEATURES["remote_clients"]) is True
         assert plan_includes(Plan.COMMUNITY, FEATURES["remote_clients"]) is False
 
+    @pytest.mark.parametrize(
+        "feature",
+        [
+            "database_discovery",
+            "container_backups",
+            "backup_reports",
+            "alerting_monitoring",
+        ],
+    )
+    def test_plan_content_runtime_features_are_pro_features(self, feature):
+        assert FEATURES[feature] == Plan.PRO
+        assert plan_includes(Plan.PRO, FEATURES[feature]) is True
+        assert plan_includes(Plan.ENTERPRISE, FEATURES[feature]) is True
+        assert plan_includes(Plan.COMMUNITY, FEATURES[feature]) is False
+
 
 @pytest.mark.unit
 class TestCurrentPlan:

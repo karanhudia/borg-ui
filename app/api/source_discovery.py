@@ -17,6 +17,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.core.features import require_feature_access
 from app.core.security import get_current_user
 from app.database.database import get_db
 from app.database.models import SSHConnection, SSHKey, User
@@ -2035,6 +2036,7 @@ async def scan_databases(
     db: Session = Depends(get_db),
 ) -> DatabaseScanResponse | JSONResponse:
     del current_user
+    require_feature_access(db, "database_discovery")
     paths = _validate_database_scan_request(request)
 
     # Validation already normalised these to safe values; assert for type
@@ -2072,6 +2074,7 @@ async def scan_containers(
     db: Session = Depends(get_db),
 ) -> ContainerScanResponse | JSONResponse:
     del current_user
+    require_feature_access(db, "container_backups")
     _validate_container_scan_request(request)
 
     if request.source_type == "remote":
@@ -2082,8 +2085,10 @@ async def scan_containers(
 @router.get("/databases", response_model=DatabaseDiscoveryResponse)
 async def discover_databases(
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> DatabaseDiscoveryResponse:
     del current_user
+    require_feature_access(db, "database_discovery")
     templates = _templates()
     detections = [
         detection for template in templates if (detection := _detect_template(template))

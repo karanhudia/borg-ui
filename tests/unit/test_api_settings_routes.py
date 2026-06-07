@@ -7,6 +7,17 @@ from app.api import settings as settings_api
 from app.database.models import LicensingState, Repository, SystemSettings, User
 
 
+def _set_plan(test_db, plan: str) -> None:
+    state = test_db.query(LicensingState).first()
+    if state is None:
+        state = LicensingState(instance_id="test-instance-settings-plan")
+        test_db.add(state)
+    state.plan = plan
+    state.status = "active"
+    state.is_trial = False
+    test_db.commit()
+
+
 @pytest.mark.unit
 class TestSystemSettingsContracts:
     def test_get_effective_timeout_prefers_saved_value_over_env(self):
@@ -144,6 +155,7 @@ class TestSystemSettingsContracts:
     def test_update_system_settings_persists_backup_monitoring_and_reports(
         self, test_client: TestClient, admin_headers, test_db
     ):
+        _set_plan(test_db, "pro")
         with (
             patch("app.services.mqtt_service.mqtt_service.configure"),
             patch(
@@ -198,6 +210,44 @@ class TestSystemSettingsContracts:
         assert payload["backup_reports_cron_expression"] == "30 18 * * *"
         assert payload["backup_reports_timezone"] == "Asia/Kolkata"
         assert payload["backup_reports_include_recent_activity"] is False
+
+    def test_update_system_settings_rejects_community_backup_monitoring_enable(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _set_plan(test_db, "community")
+
+        response = test_client.put(
+            "/api/settings/system",
+            json={"backup_monitoring_enabled": True},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 403
+        assert response.json()["detail"] == {
+            "key": "backend.errors.plan.featureNotAvailable",
+            "feature": "alerting_monitoring",
+            "required": "pro",
+            "current": "community",
+        }
+
+    def test_update_system_settings_rejects_community_backup_reports_enable(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _set_plan(test_db, "community")
+
+        response = test_client.put(
+            "/api/settings/system",
+            json={"backup_reports_enabled": True},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 403
+        assert response.json()["detail"] == {
+            "key": "backend.errors.plan.featureNotAvailable",
+            "feature": "backup_reports",
+            "required": "pro",
+            "current": "community",
+        }
 
     def test_update_system_settings_rejects_invalid_backup_monitoring_values(
         self, test_client: TestClient, admin_headers
@@ -260,8 +310,9 @@ class TestSystemSettingsContracts:
         )
 
     def test_run_backup_monitoring_endpoint_returns_service_result(
-        self, test_client: TestClient, admin_headers
+        self, test_client: TestClient, admin_headers, test_db
     ):
+        _set_plan(test_db, "pro")
         with patch(
             "app.api.settings.backup_monitoring_service.run_backup_monitoring",
             new=AsyncMock(return_value={"stale_count": 2, "alert_sent": True}),
@@ -274,9 +325,27 @@ class TestSystemSettingsContracts:
         assert response.json() == {"stale_count": 2, "alert_sent": True}
         mock_run.assert_awaited_once()
 
-    def test_send_backup_report_endpoint_returns_service_result(
-        self, test_client: TestClient, admin_headers
+    def test_run_backup_monitoring_endpoint_requires_pro(
+        self, test_client: TestClient, admin_headers, test_db
     ):
+        _set_plan(test_db, "community")
+
+        response = test_client.post(
+            "/api/settings/backup-monitoring/run", headers=admin_headers
+        )
+
+        assert response.status_code == 403
+        assert response.json()["detail"] == {
+            "key": "backend.errors.plan.featureNotAvailable",
+            "feature": "alerting_monitoring",
+            "required": "pro",
+            "current": "community",
+        }
+
+    def test_send_backup_report_endpoint_returns_service_result(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _set_plan(test_db, "pro")
         with patch(
             "app.api.settings.backup_monitoring_service.send_backup_report_now",
             new=AsyncMock(return_value={"sent": True, "repository_count": 3}),
@@ -288,6 +357,23 @@ class TestSystemSettingsContracts:
         assert response.status_code == 200
         assert response.json() == {"sent": True, "repository_count": 3}
         mock_send.assert_awaited_once()
+
+    def test_send_backup_report_endpoint_requires_pro(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _set_plan(test_db, "community")
+
+        response = test_client.post(
+            "/api/settings/backup-reports/send", headers=admin_headers
+        )
+
+        assert response.status_code == 403
+        assert response.json()["detail"] == {
+            "key": "backend.errors.plan.featureNotAvailable",
+            "feature": "backup_reports",
+            "required": "pro",
+            "current": "community",
+        }
 
     def test_update_system_settings_returns_warning_when_new_log_limit_is_below_current_usage(
         self, test_client: TestClient, admin_headers

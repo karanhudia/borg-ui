@@ -101,6 +101,8 @@ export default function BackupPlans() {
   const canUseMultiRepository = can('backup_plan_multi_repository')
   const canUseMixedSourceTypes = can('backup_plan_mixed_sources')
   const canUseManagedAgents = can('managed_agents')
+  const canUseDatabaseDiscovery = can('database_discovery')
+  const canUseContainerBackups = can('container_backups')
   const canUseRclone = can('rclone')
   const canUseBorg2 = can('borg_v2')
   const [wizardOpen, setWizardOpen] = useState(false)
@@ -790,6 +792,8 @@ export default function BackupPlans() {
       canUseBorg2={canUseBorg2}
       canUseManagedAgents={canUseManagedAgents}
       canUseMixedSourceTypes={canUseMixedSourceTypes}
+      canUseDatabaseDiscovery={canUseDatabaseDiscovery}
+      canUseContainerBackups={canUseContainerBackups}
       repositoryCreatePending={repositoryCreateMutation.isPending}
       updateState={updateState}
       onCreateScript={createSourceScript}

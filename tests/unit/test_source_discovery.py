@@ -5,17 +5,123 @@ import sqlite3
 import subprocess
 import sys
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
 from app.api import source_discovery
 from app.core.security import encrypt_secret
-from app.database.models import SSHConnection, SSHKey
+from app.database.models import LicensingState, SSHConnection, SSHKey
 from app.utils.script_params import parse_script_parameters
+
+
+def _set_plan(test_db, plan: str) -> None:
+    state = test_db.query(LicensingState).first()
+    if state is None:
+        state = LicensingState(instance_id="test-instance-source-discovery")
+        test_db.add(state)
+    state.plan = plan
+    state.status = "active"
+    state.is_trial = False
+    test_db.commit()
+
+
+@pytest.fixture(autouse=True)
+def _enable_paid_source_discovery_features(test_db):
+    _set_plan(test_db, "pro")
 
 
 @pytest.mark.unit
 class TestSourceDiscovery:
+    def test_database_discovery_requires_pro(self, test_client, admin_headers, test_db):
+        _set_plan(test_db, "community")
+
+        response = test_client.get(
+            "/api/source-discovery/databases", headers=admin_headers
+        )
+
+        assert response.status_code == 403
+        assert response.json()["detail"] == {
+            "key": "backend.errors.plan.featureNotAvailable",
+            "feature": "database_discovery",
+            "required": "pro",
+            "current": "community",
+        }
+
+    def test_database_scan_requires_pro(
+        self, test_client, admin_headers, test_db, monkeypatch
+    ):
+        _set_plan(test_db, "community")
+        monkeypatch.setattr(
+            source_discovery,
+            "_scan_local_database_paths_with_timeout",
+            AsyncMock(
+                return_value=source_discovery.DatabaseScanResponse(
+                    scan_target=source_discovery.DatabaseScanTarget(
+                        source_type="local",
+                        source_ssh_connection_id=None,
+                        label="This Borg UI server",
+                    ),
+                    scanned_paths=["/var/lib/postgresql"],
+                    detections=[],
+                    templates=[],
+                    warnings=[],
+                )
+            ),
+        )
+
+        response = test_client.post(
+            "/api/source-discovery/databases/scan",
+            json={
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "paths": ["/var/lib/postgresql"],
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 403
+        assert response.json()["detail"] == {
+            "key": "backend.errors.plan.featureNotAvailable",
+            "feature": "database_discovery",
+            "required": "pro",
+            "current": "community",
+        }
+
+    def test_container_scan_requires_pro(
+        self, test_client, admin_headers, test_db, monkeypatch
+    ):
+        _set_plan(test_db, "community")
+        monkeypatch.setattr(
+            source_discovery,
+            "_scan_local_containers",
+            AsyncMock(
+                return_value=source_discovery.ContainerScanResponse(
+                    scan_target=source_discovery.DatabaseScanTarget(
+                        source_type="local",
+                        source_ssh_connection_id=None,
+                        label="This Borg UI server",
+                    ),
+                    containers=[],
+                    warnings=[],
+                )
+            ),
+        )
+
+        response = test_client.post(
+            "/api/source-discovery/containers/scan",
+            json={"source_type": "local", "source_ssh_connection_id": None},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 403
+        assert response.json()["detail"] == {
+            "key": "backend.errors.plan.featureNotAvailable",
+            "feature": "container_backups",
+            "required": "pro",
+            "current": "community",
+        }
+
     def test_database_discovery_returns_extensible_source_types(
         self, test_client, admin_headers
     ):
