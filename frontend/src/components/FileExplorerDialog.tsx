@@ -147,6 +147,7 @@ export default function FileExplorerDialog({
   const [selectedPaths, setSelectedPaths] = useState<string[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [sshConnections, setSshConnections] = useState<SSHConnection[]>([])
+  const [shouldFocusSearchInput, setShouldFocusSearchInput] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   // Track current browsing mode (can switch from local to ssh when clicking mount points)
@@ -352,27 +353,16 @@ export default function FileExplorerDialog({
     browseCache.current.clear()
   }, [agentId, connectionType, agentDefaultPath, rcloneRemoteId])
 
-  const handleItemClick = (item: FileSystemItem) => {
-    if (item.is_mount_point && item.ssh_connection) {
-      // Switch to SSH browsing mode for this mount point
-      const sshCfg = {
-        ssh_key_id: item.ssh_connection.ssh_key_id,
-        host: item.ssh_connection.host,
-        username: item.ssh_connection.username,
-        port: item.ssh_connection.port,
-      }
-      const startPath = item.ssh_connection.default_path || '/'
-      loadDirectory(startPath, 'ssh', sshCfg)
-      // Clear search and focus input
-      setSearchTerm('')
-      setTimeout(() => searchInputRef.current?.focus(), 100)
-    } else if (item.is_directory) {
-      loadDirectory(item.path)
-      // Clear search and focus input
-      setSearchTerm('')
-      setTimeout(() => searchInputRef.current?.focus(), 100)
-    }
-  }
+  useEffect(() => {
+    if (!shouldFocusSearchInput) return
+
+    const timeoutId = window.setTimeout(() => {
+      searchInputRef.current?.focus()
+      setShouldFocusSearchInput(false)
+    }, 100)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [shouldFocusSearchInput])
 
   const handleItemSelect = (item: FileSystemItem) => {
     // Check if item type matches selectMode
@@ -787,11 +777,30 @@ export default function FileExplorerDialog({
                         }
                       >
                         <ListItemButton
-                          onClick={() =>
-                            item.is_directory
-                              ? handleItemClick(item)
-                              : isSelectable && handleItemSelect(item)
-                          }
+                          onClick={() => {
+                            if (item.is_directory) {
+                              if (item.is_mount_point && item.ssh_connection) {
+                                const sshCfg = {
+                                  ssh_key_id: item.ssh_connection.ssh_key_id,
+                                  host: item.ssh_connection.host,
+                                  username: item.ssh_connection.username,
+                                  port: item.ssh_connection.port,
+                                }
+                                const startPath = item.ssh_connection.default_path || '/'
+                                loadDirectory(startPath, 'ssh', sshCfg)
+                              } else {
+                                loadDirectory(item.path)
+                              }
+
+                              setSearchTerm('')
+                              setShouldFocusSearchInput(true)
+                              return
+                            }
+
+                            if (isSelectable) {
+                              handleItemSelect(item)
+                            }
+                          }}
                           selected={isSelected && !multiSelect}
                           sx={{
                             py: 0.5,
