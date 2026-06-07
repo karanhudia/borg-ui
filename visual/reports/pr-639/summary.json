@@ -1,21 +1,57 @@
 {
-  "generatedAt": "2026-06-07T00:00:38.029Z",
+  "generatedAt": "2026-06-07T06:34:38.891Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #639 visual report",
-    "commitSha": "66a9d61c0c05",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/27077379725"
+    "commitSha": "ffa2c1b08c34",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/27084960999"
   },
   "totals": {
     "baseline": 384,
     "actual": 386,
     "compared": 384,
-    "changed": 12,
+    "changed": 10,
     "added": 2,
     "removed": 0,
-    "unchanged": 372
+    "unchanged": 374
   },
   "changed": [
+    {
+      "fileName": "components-backendtargetselect--remote-selected--mobile.png",
+      "baselinePath": "images/baseline/components-backendtargetselect--remote-selected--mobile.png",
+      "actualPath": "images/actual/components-backendtargetselect--remote-selected--mobile.png",
+      "diffPath": "images/diff/components-backendtargetselect--remote-selected--mobile.png",
+      "diffPixels": 2593,
+      "totalPixels": 329160,
+      "diffRatio": 0.007877627901324584,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-backendtargetselect--remote-selected.png",
+      "baselinePath": "images/baseline/components-backendtargetselect--remote-selected.png",
+      "actualPath": "images/actual/components-backendtargetselect--remote-selected.png",
+      "diffPath": "images/diff/components-backendtargetselect--remote-selected.png",
+      "diffPixels": 2593,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0025322265625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
     {
       "fileName": "components-backendtargetswitcher--compact--mobile.png",
       "baselinePath": "images/baseline/components-backendtargetswitcher--compact--mobile.png",
@@ -125,42 +161,6 @@
       }
     },
     {
-      "fileName": "pages-remoteclients--active-remote--mobile.png",
-      "baselinePath": "images/baseline/pages-remoteclients--active-remote--mobile.png",
-      "actualPath": "images/actual/pages-remoteclients--active-remote--mobile.png",
-      "diffPath": "images/diff/pages-remoteclients--active-remote--mobile.png",
-      "diffPixels": 152883,
-      "totalPixels": 329160,
-      "diffRatio": 0.4644640904119577,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "pages-remoteclients--active-remote.png",
-      "baselinePath": "images/baseline/pages-remoteclients--active-remote.png",
-      "actualPath": "images/actual/pages-remoteclients--active-remote.png",
-      "diffPath": "images/diff/pages-remoteclients--active-remote.png",
-      "diffPixels": 456631,
-      "totalPixels": 1024000,
-      "diffRatio": 0.4459287109375,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
       "fileName": "pages-remoteclients--empty--mobile.png",
       "baselinePath": "images/baseline/pages-remoteclients--empty--mobile.png",
       "actualPath": "images/actual/pages-remoteclients--empty--mobile.png",
@@ -186,42 +186,6 @@
       "diffPixels": 456631,
       "totalPixels": 1024000,
       "diffRatio": 0.4459287109375,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "pages-remoteclients--overview--mobile.png",
-      "baselinePath": "images/baseline/pages-remoteclients--overview--mobile.png",
-      "actualPath": "images/actual/pages-remoteclients--overview--mobile.png",
-      "diffPath": "images/diff/pages-remoteclients--overview--mobile.png",
-      "diffPixels": 92453,
-      "totalPixels": 329160,
-      "diffRatio": 0.2808755620366995,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "pages-remoteclients--overview.png",
-      "baselinePath": "images/baseline/pages-remoteclients--overview.png",
-      "actualPath": "images/actual/pages-remoteclients--overview.png",
-      "diffPath": "images/diff/pages-remoteclients--overview.png",
-      "diffPixels": 324425,
-      "totalPixels": 1024000,
-      "diffRatio": 0.3168212890625,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -520,12 +484,6 @@
     },
     {
       "fileName": "components-backendtargetselect--login-form-selector.png"
-    },
-    {
-      "fileName": "components-backendtargetselect--remote-selected--mobile.png"
-    },
-    {
-      "fileName": "components-backendtargetselect--remote-selected.png"
     },
     {
       "fileName": "components-backendtargetswitcher--remote-selected--mobile.png"
@@ -1302,10 +1260,22 @@
       "fileName": "pages-managedagents--setup-help-details.png"
     },
     {
+      "fileName": "pages-remoteclients--active-remote--mobile.png"
+    },
+    {
+      "fileName": "pages-remoteclients--active-remote.png"
+    },
+    {
       "fileName": "pages-remoteclients--locked-community--mobile.png"
     },
     {
       "fileName": "pages-remoteclients--locked-community.png"
+    },
+    {
+      "fileName": "pages-remoteclients--overview--mobile.png"
+    },
+    {
+      "fileName": "pages-remoteclients--overview.png"
     },
     {
       "fileName": "remote-machines-connectiondiagnosticsdialog--partial-tcp-failure--mobile.png"
