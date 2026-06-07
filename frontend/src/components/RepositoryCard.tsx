@@ -24,6 +24,7 @@ import {
   Bot,
   CalendarClock,
   ListChecks,
+  Unlock,
 } from 'lucide-react'
 import { useMaintenanceJobs } from '../hooks/useMaintenanceJobs'
 import BorgVersionChip from './BorgVersionChip'
@@ -43,6 +44,7 @@ interface RepositoryCardProps {
   onCompact: () => void
   onPrune: () => void
   onWipeContents: () => void
+  onBreakLock: () => void
   onEdit: () => void
   onDelete: () => void
   onBackupNow: () => void
@@ -53,6 +55,7 @@ interface RepositoryCardProps {
   onRcloneHydrate?: () => void
   getCompressionLabel: (compression: string) => string
   canManageRepository?: boolean
+  canBreakLock?: boolean
   canDo: (action: RepoAction) => boolean
   onJobCompleted?: (repositoryId: number) => void
 }
@@ -77,6 +80,7 @@ export default function RepositoryCard({
   onCompact,
   onPrune,
   onWipeContents,
+  onBreakLock,
   onEdit,
   onDelete,
   onBackupNow,
@@ -87,6 +91,7 @@ export default function RepositoryCard({
   onRcloneHydrate,
   getCompressionLabel,
   canManageRepository = false,
+  canBreakLock = false,
   canDo,
   onJobCompleted,
 }: RepositoryCardProps) {
@@ -142,6 +147,8 @@ export default function RepositoryCard({
     Boolean(rcloneStorage) &&
     rcloneStorage?.sync_direction !== 'agent_to_remote' &&
     rcloneStorage?.sync_direction !== 'sshfs_to_remote'
+  const canShowDestructiveActions = canManageRepository && capabilities.canDeleteRepository
+  const hasSeparatedRepositoryActions = canBreakLock || canShowDestructiveActions
 
   const [elapsedTime, setElapsedTime] = useState('')
 
@@ -1057,8 +1064,8 @@ export default function RepositoryCard({
               </>
             )}
 
-            {/* Destructive repository actions — separated with a vertical rule */}
-            {canManageRepository && capabilities.canDeleteRepository && (
+            {/* Separated repository actions */}
+            {hasSeparatedRepositoryActions && (
               <>
                 <Box
                   sx={{
@@ -1069,41 +1076,60 @@ export default function RepositoryCard({
                     flexShrink: 0,
                   }}
                 />
-                <Tooltip title={t('repositoryCard.buttons.wipeContents')} arrow>
-                  <IconButton
-                    size="small"
-                    onClick={onWipeContents}
-                    aria-label={t('repositoryCard.buttons.wipeContents')}
-                    disabled={isMaintenanceRunning}
-                    sx={{
-                      ...iconBtnSx,
-                      color: alpha(theme.palette.error.main, 0.56),
-                      '&:hover': {
-                        color: theme.palette.error.main,
-                        bgcolor: alpha(theme.palette.error.main, 0.09),
-                      },
-                    }}
-                  >
-                    <Eraser size={16} />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title={t('repositoryCard.buttons.delete')} arrow>
-                  <IconButton
-                    size="small"
-                    onClick={onDelete}
-                    aria-label={t('repositoryCard.buttons.delete')}
-                    sx={{
-                      ...iconBtnSx,
-                      color: alpha(theme.palette.error.main, 0.6),
-                      '&:hover': {
-                        color: theme.palette.error.main,
-                        bgcolor: alpha(theme.palette.error.main, 0.1),
-                      },
-                    }}
-                  >
-                    <Trash2 size={16} />
-                  </IconButton>
-                </Tooltip>
+                {canBreakLock && (
+                  <Tooltip title={t('repositoryCard.buttons.breakLock')} arrow>
+                    <span>
+                      <IconButton
+                        size="small"
+                        onClick={onBreakLock}
+                        aria-label={t('repositoryCard.buttons.breakLock')}
+                        disabled={isMaintenanceRunning}
+                        sx={coloredIconBtnSx('warning')}
+                      >
+                        <Unlock size={16} />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                )}
+                {canShowDestructiveActions && (
+                  <>
+                    <Tooltip title={t('repositoryCard.buttons.wipeContents')} arrow>
+                      <IconButton
+                        size="small"
+                        onClick={onWipeContents}
+                        aria-label={t('repositoryCard.buttons.wipeContents')}
+                        disabled={isMaintenanceRunning}
+                        sx={{
+                          ...iconBtnSx,
+                          color: alpha(theme.palette.error.main, 0.56),
+                          '&:hover': {
+                            color: theme.palette.error.main,
+                            bgcolor: alpha(theme.palette.error.main, 0.09),
+                          },
+                        }}
+                      >
+                        <Eraser size={16} />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title={t('repositoryCard.buttons.delete')} arrow>
+                      <IconButton
+                        size="small"
+                        onClick={onDelete}
+                        aria-label={t('repositoryCard.buttons.delete')}
+                        sx={{
+                          ...iconBtnSx,
+                          color: alpha(theme.palette.error.main, 0.6),
+                          '&:hover': {
+                            color: theme.palette.error.main,
+                            bgcolor: alpha(theme.palette.error.main, 0.1),
+                          },
+                        }}
+                      >
+                        <Trash2 size={16} />
+                      </IconButton>
+                    </Tooltip>
+                  </>
+                )}
               </>
             )}
           </Box>

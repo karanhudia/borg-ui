@@ -2182,6 +2182,7 @@
       "backupPlanRequired": "Erstelle einen Backup-Plan, um Quellen zu definieren",
       "viewArchives": "Archive anzeigen",
       "viewBackupPlans": "Verknüpfte Backup-Pläne anzeigen",
+      "breakLock": "Sperre aufheben",
       "wipeContents": "Wipe contents",
       "delete": "Löschen",
       "createBackupPlan": "Backup-Plan erstellen",

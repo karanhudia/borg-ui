@@ -18,6 +18,7 @@ interface RepositoryGroupsProps {
   searchQuery: string
   canManageRepositoriesGlobally: boolean
   canDo: (repositoryId: number, action: RepoAction) => boolean
+  canBreakLock: (repository: Repository) => boolean
   onSearchChange: (value: string) => void
   onOpenWizard: (mode: 'create' | 'edit' | 'import', repository?: Repository) => void
   onViewInfo: (repository: Repository) => void
@@ -25,6 +26,7 @@ interface RepositoryGroupsProps {
   onCompact: (repository: Repository) => void
   onPrune: (repository: Repository) => void
   onWipeContents: (repository: Repository) => void
+  onBreakLock: (repository: Repository) => void
   onEdit: (repository: Repository) => void
   onDelete: (repository: Repository) => void
   onBackupNow: (repository: Repository) => void
@@ -45,6 +47,7 @@ export function RepositoryGroups({
   searchQuery,
   canManageRepositoriesGlobally,
   canDo,
+  canBreakLock,
   onSearchChange,
   onOpenWizard,
   onViewInfo,
@@ -52,6 +55,7 @@ export function RepositoryGroups({
   onCompact,
   onPrune,
   onWipeContents,
+  onBreakLock,
   onEdit,
   onDelete,
   onBackupNow,
@@ -173,6 +177,7 @@ export function RepositoryGroups({
                 onCompact={() => onCompact(repository)}
                 onPrune={() => onPrune(repository)}
                 onWipeContents={() => onWipeContents(repository)}
+                onBreakLock={() => onBreakLock(repository)}
                 onEdit={() => onEdit(repository)}
                 onDelete={() => onDelete(repository)}
                 onBackupNow={() => onBackupNow(repository)}
@@ -183,6 +188,7 @@ export function RepositoryGroups({
                 onRcloneHydrate={() => onRcloneHydrate(repository)}
                 getCompressionLabel={getCompressionLabel}
                 canManageRepository={canManageRepositoriesGlobally}
+                canBreakLock={canBreakLock(repository)}
                 canDo={(action) => canDo(repository.id, action)}
                 onJobCompleted={onJobCompleted}
               />

@@ -2182,6 +2182,7 @@
       "backupPlanRequired": "Create a Backup Plan to define sources",
       "viewArchives": "View Archives",
       "viewBackupPlans": "View linked backup plans",
+      "breakLock": "Break Lock",
       "wipeContents": "Wipe contents",
       "delete": "Delete",
       "createBackupPlan": "Create Backup Plan",

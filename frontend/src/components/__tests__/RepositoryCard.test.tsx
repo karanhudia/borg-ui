@@ -39,6 +39,7 @@ describe('RepositoryCard', () => {
     onCompact: vi.fn(),
     onPrune: vi.fn(),
     onWipeContents: vi.fn(),
+    onBreakLock: vi.fn(),
     onEdit: vi.fn(),
     onDelete: vi.fn(),
     onBackupNow: vi.fn(),
@@ -504,12 +505,13 @@ describe('RepositoryCard', () => {
       expect(screen.getByRole('button', { name: /Delete/i })).toBeInTheDocument()
     })
 
-    it('shows Compact, Prune, and Delete buttons for full mode', () => {
+    it('shows maintenance and destructive buttons for full mode', () => {
       renderWithProviders(
         <RepositoryCard
           repository={mockRepository}
           isInJobsSet={false}
           canManageRepository={true}
+          canBreakLock={true}
           getCompressionLabel={mockGetCompressionLabel}
           {...mockCallbacks}
         />
@@ -517,6 +519,7 @@ describe('RepositoryCard', () => {
 
       expect(screen.getByRole('button', { name: /Compact/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Prune/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Break Lock/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Wipe contents/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Delete/i })).toBeInTheDocument()
     })
@@ -583,6 +586,7 @@ describe('RepositoryCard', () => {
       expect(screen.queryByRole('button', { name: /Info/i })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /Check/i })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /Compact/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /Break Lock/i })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /Wipe contents/i })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /Delete/i })).not.toBeInTheDocument()
     })
@@ -678,6 +682,22 @@ describe('RepositoryCard', () => {
 
       fireEvent.click(screen.getByRole('button', { name: /Wipe contents/i }))
       expect(mockCallbacks.onWipeContents).toHaveBeenCalledTimes(1)
+    })
+
+    it('calls onBreakLock when Break Lock button is clicked', () => {
+      renderWithProviders(
+        <RepositoryCard
+          repository={mockRepository}
+          isInJobsSet={false}
+          canManageRepository={true}
+          canBreakLock={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: /Break Lock/i }))
+      expect(mockCallbacks.onBreakLock).toHaveBeenCalledTimes(1)
     })
 
     it('calls onBackupNow and tracks event when Legacy Backup button is clicked', () => {

@@ -2182,6 +2182,7 @@
       "backupPlanRequired": "Crea un piano di backup per definire le sorgenti",
       "viewArchives": "Visualizza Archivi",
       "viewBackupPlans": "Visualizza piani di backup collegati",
+      "breakLock": "Rompi Blocco",
       "wipeContents": "Wipe contents",
       "delete": "Elimina",
       "createBackupPlan": "Crea piano di backup",
