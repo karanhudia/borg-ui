@@ -839,6 +839,8 @@ interface DialogStoryArgs {
   initialScanDialogOpen?: boolean
   canUseManagedAgents?: boolean
   canUseMixedSourceTypes?: boolean
+  canUseDatabaseDiscovery?: boolean
+  canUseContainerBackups?: boolean
   scrollToText?: string
   autoClickText?: string
 }
@@ -853,6 +855,8 @@ function DialogStory({
   initialScanDialogOpen,
   canUseManagedAgents = true,
   canUseMixedSourceTypes = true,
+  canUseDatabaseDiscovery = true,
+  canUseContainerBackups = true,
   scrollToText,
   autoClickText,
 }: DialogStoryArgs) {
@@ -938,6 +942,8 @@ function DialogStory({
         initialScanDialogOpen={initialScanDialogOpen}
         canUseManagedAgents={canUseManagedAgents}
         canUseMixedSourceTypes={canUseMixedSourceTypes}
+        canUseDatabaseDiscovery={canUseDatabaseDiscovery}
+        canUseContainerBackups={canUseContainerBackups}
       />
     </Box>
   )
@@ -1100,6 +1106,25 @@ export const CommunityMixedSourcesLocked: Story = {
       description: {
         story:
           'Community plan lock state: managed-agent source is disabled and mixed local + SSH source groups cannot be applied.',
+      },
+    },
+  },
+}
+
+export const CommunityProSourceKindsLocked: Story = {
+  render: () => (
+    <DialogStory
+      wizardState={emptyWizardState}
+      mockOptions={{ scanStatus: 'detected' }}
+      canUseDatabaseDiscovery={false}
+      canUseContainerBackups={false}
+    />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Community plan lock state for Pro source kinds: Database and Docker container tabs stay visible but cannot be selected.',
       },
     },
   },

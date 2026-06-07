@@ -6,6 +6,10 @@ import MonitoringReportsTab from '../MonitoringReportsTab'
 import { settingsAPI } from '../../services/api'
 import { renderWithProviders } from '../../test/test-utils'
 
+const { usePlanMock } = vi.hoisted(() => ({
+  usePlanMock: vi.fn(),
+}))
+
 vi.mock('../../services/api', () => ({
   settingsAPI: {
     getSystemSettings: vi.fn(),
@@ -25,6 +29,10 @@ vi.mock('react-hot-toast', async () => {
     },
   }
 })
+
+vi.mock('../../hooks/usePlan', () => ({
+  usePlan: usePlanMock,
+}))
 
 const systemSettings = {
   backup_monitoring_enabled: true,
@@ -56,6 +64,12 @@ const response = (settings = systemSettings): AxiosResponse =>
 describe('MonitoringReportsTab', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    usePlanMock.mockReturnValue({
+      plan: 'pro',
+      features: {},
+      isLoading: false,
+      can: () => true,
+    })
     vi.mocked(settingsAPI.getSystemSettings).mockResolvedValue(response())
     vi.mocked(settingsAPI.updateSystemSettings).mockResolvedValue(response())
     vi.mocked(settingsAPI.runBackupMonitoring).mockResolvedValue({
@@ -91,5 +105,24 @@ describe('MonitoringReportsTab', () => {
         })
       )
     })
-  })
+  }, 30000)
+
+  it('gates monitoring and report actions when Pro features are unavailable', async () => {
+    usePlanMock.mockReturnValue({
+      plan: 'community',
+      features: {},
+      isLoading: false,
+      can: (feature: string) =>
+        feature !== 'alerting_monitoring' && feature !== 'backup_reports',
+    })
+
+    renderWithProviders(<MonitoringReportsTab />)
+
+    expect(
+      await screen.findByRole('switch', { name: /Enable stale-backup monitoring/i })
+    ).toBeDisabled()
+    expect(screen.getByRole('button', { name: /Run check now/i })).toBeDisabled()
+    expect(screen.getByRole('switch', { name: /Enable backup reports/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /Send report now/i })).toBeDisabled()
+  }, 30000)
 })

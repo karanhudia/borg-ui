@@ -24,6 +24,8 @@ export function BackupPlanWizardStep({
   canUseBorg2,
   canUseManagedAgents,
   canUseMixedSourceTypes,
+  canUseDatabaseDiscovery,
+  canUseContainerBackups,
   repositoryCreatePending,
   updateState,
   onCreateScript,
@@ -50,6 +52,8 @@ export function BackupPlanWizardStep({
         loadingScripts={loadingScripts}
         canUseManagedAgents={canUseManagedAgents}
         canUseMixedSourceTypes={canUseMixedSourceTypes}
+        canUseDatabaseDiscovery={canUseDatabaseDiscovery}
+        canUseContainerBackups={canUseContainerBackups}
         updateState={updateState}
         onCreateScript={onCreateScript}
         openExcludeExplorer={openExcludeExplorer}

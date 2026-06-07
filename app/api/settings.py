@@ -17,7 +17,7 @@ from app.core.security import (
     verify_password,
 )
 from app.core.user_deletion import detach_user_delete_references
-from app.core.features import get_current_plan, USER_LIMITS
+from app.core.features import get_current_plan, require_feature_access, USER_LIMITS
 from app.core.permissions import (
     GLOBAL_ROLE_RANK,
     REPOSITORY_ROLE_RANK,
@@ -68,6 +68,25 @@ MAX_BACKUP_MONITORING_INTERVAL_HOURS = 24 * 30
 MAX_BACKUP_REPORT_HOUR_UTC = 23
 MAX_BACKUP_REPORT_MONTHDAY = 28
 VALID_BACKUP_REPORT_FREQUENCIES = {"daily", "weekly", "monthly"}
+BACKUP_MONITORING_FEATURE_FIELDS = {
+    "backup_monitoring_enabled",
+    "backup_monitoring_stale_after_days",
+    "backup_monitoring_interval_hours",
+    "backup_monitoring_alert_cooldown_hours",
+    "backup_monitoring_include_observe_repos",
+}
+BACKUP_REPORT_FEATURE_FIELDS = {
+    "backup_reports_enabled",
+    "backup_reports_frequency",
+    "backup_reports_cron_expression",
+    "backup_reports_timezone",
+    "backup_reports_hour_utc",
+    "backup_reports_weekday",
+    "backup_reports_monthday",
+    "backup_reports_include_summary",
+    "backup_reports_include_stale_repositories",
+    "backup_reports_include_recent_activity",
+}
 DEFAULT_BACKUP_REPORT_CRON_EXPRESSION = "0 8 * * 1"
 DASHBOARD_HEALTH_THRESHOLD_PAIRS = (
     ("dashboard_backup_warning_days", "dashboard_backup_critical_days"),
@@ -706,6 +725,17 @@ async def update_system_settings(
                 },
             )
 
+        if any(
+            getattr(settings_update, field_name) is not None
+            for field_name in BACKUP_MONITORING_FEATURE_FIELDS
+        ):
+            require_feature_access(db, "alerting_monitoring")
+        if any(
+            getattr(settings_update, field_name) is not None
+            for field_name in BACKUP_REPORT_FEATURE_FIELDS
+        ):
+            require_feature_access(db, "backup_reports")
+
         settings = db.query(SystemSettings).first()
         if not settings:
             settings = SystemSettings()
@@ -1264,6 +1294,8 @@ async def run_backup_monitoring_now(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Manually run backup freshness monitoring."""
+    del current_user
+    require_feature_access(db, "alerting_monitoring")
     try:
         return await backup_monitoring_service.run_backup_monitoring(
             db, datetime.now(timezone.utc), force=True
@@ -1284,6 +1316,8 @@ async def send_backup_report_now(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Manually send a backup health report."""
+    del current_user
+    require_feature_access(db, "backup_reports")
     try:
         return await backup_monitoring_service.send_backup_report_now(
             db, datetime.now(timezone.utc)

@@ -34,6 +34,8 @@ type SourceStepProps = Pick<
 > & {
   canUseManagedAgents?: boolean
   canUseMixedSourceTypes?: boolean
+  canUseDatabaseDiscovery?: boolean
+  canUseContainerBackups?: boolean
 }
 
 export function SourceStep({
@@ -45,6 +47,8 @@ export function SourceStep({
   loadingScripts,
   canUseManagedAgents = true,
   canUseMixedSourceTypes = true,
+  canUseDatabaseDiscovery = true,
+  canUseContainerBackups = true,
   updateState,
   openExcludeExplorer,
   onCreateScript,
@@ -386,6 +390,8 @@ export function SourceStep({
         loadingScripts={loadingScripts}
         canUseManagedAgents={canUseManagedAgents}
         canUseMixedSourceTypes={canUseMixedSourceTypes}
+        canUseDatabaseDiscovery={canUseDatabaseDiscovery}
+        canUseContainerBackups={canUseContainerBackups}
         updateState={updateState}
         onCreateScript={onCreateScript}
         onClose={() => setSourceDialogOpen(false)}

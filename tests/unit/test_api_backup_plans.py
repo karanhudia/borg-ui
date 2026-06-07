@@ -938,6 +938,7 @@ class TestBackupPlanRoutes:
     def test_create_plan_preserves_container_source_metadata(
         self, test_client: TestClient, admin_headers, test_db
     ):
+        _set_plan(test_db, "pro")
         repo = _create_repo(test_db, "Primary", "/repos/primary")
         pre_script = _create_script(test_db, "Export Docker container")
         post_script = _create_script(test_db, "Clean Docker export")
@@ -1012,6 +1013,74 @@ class TestBackupPlanRoutes:
 
         plan = test_db.query(BackupPlan).filter(BackupPlan.id == body["id"]).one()
         assert json.loads(plan.source_locations) == body["source_locations"]
+
+    def test_community_plan_rejects_database_source_metadata(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _set_plan(test_db, "community")
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        source_locations = [
+            {
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "agent_machine_id": None,
+                "paths": ["/var/tmp/borg-ui/database-dumps/postgresql"],
+                "database": {
+                    "template_id": "postgresql",
+                    "engine": "PostgreSQL",
+                    "display_name": "PostgreSQL database",
+                    "backup_strategy": "logical_dump",
+                    "dump_path": "/var/tmp/borg-ui/database-dumps/postgresql",
+                },
+            }
+        ]
+
+        response = test_client.post(
+            "/api/backup-plans/",
+            json=_payload(
+                [repo.id],
+                source_directories=["/var/tmp/borg-ui/database-dumps/postgresql"],
+                source_locations=source_locations,
+            ),
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 403
+        assert response.json()["detail"]["feature"] == "database_discovery"
+
+    def test_community_plan_rejects_container_source_metadata(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _set_plan(test_db, "community")
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        source_locations = [
+            {
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "agent_machine_id": None,
+                "paths": ["/var/tmp/borg-ui/container-exports/postgres"],
+                "container": {
+                    "container_name": "postgres",
+                    "display_name": "Postgres service",
+                    "image": "postgres:16",
+                    "backup_mode": "export",
+                    "export_path": "/var/tmp/borg-ui/container-exports/postgres",
+                },
+            }
+        ]
+
+        response = test_client.post(
+            "/api/backup-plans/",
+            json=_payload(
+                [repo.id],
+                source_directories=["/var/tmp/borg-ui/container-exports/postgres"],
+                source_locations=source_locations,
+            ),
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 403
+        assert response.json()["detail"]["feature"] == "container_backups"
 
     def test_create_plan_supports_agent_source_for_same_agent_repo(
         self, test_client: TestClient, admin_headers, test_db
@@ -1509,6 +1578,62 @@ class TestBackupPlanRoutes:
         assert decision.allowed is False
         assert decision.feature == "backup_plan_mixed_sources"
         assert decision.reason == "mixed_source_types"
+
+    def test_backup_plan_policy_denies_community_database_source_metadata(
+        self, test_db
+    ):
+        from app.services.backup_plan_policy import (
+            evaluate_backup_plan_feature_access,
+        )
+
+        _set_plan(test_db, "community")
+
+        decision = evaluate_backup_plan_feature_access(
+            test_db,
+            enabled_repository_count=1,
+            repository_run_mode="series",
+            source_locations=[
+                {
+                    "source_type": "local",
+                    "source_ssh_connection_id": None,
+                    "agent_machine_id": None,
+                    "paths": ["/var/tmp/borg-ui/database-dumps/postgresql"],
+                    "database": {"template_id": "postgresql"},
+                }
+            ],
+        )
+
+        assert decision.allowed is False
+        assert decision.feature == "database_discovery"
+        assert decision.reason == "database_source"
+
+    def test_backup_plan_policy_denies_community_container_source_metadata(
+        self, test_db
+    ):
+        from app.services.backup_plan_policy import (
+            evaluate_backup_plan_feature_access,
+        )
+
+        _set_plan(test_db, "community")
+
+        decision = evaluate_backup_plan_feature_access(
+            test_db,
+            enabled_repository_count=1,
+            repository_run_mode="series",
+            source_locations=[
+                {
+                    "source_type": "local",
+                    "source_ssh_connection_id": None,
+                    "agent_machine_id": None,
+                    "paths": ["/var/tmp/borg-ui/container-exports/postgres"],
+                    "container": {"container_name": "postgres"},
+                }
+            ],
+        )
+
+        assert decision.allowed is False
+        assert decision.feature == "container_backups"
+        assert decision.reason == "container_source"
 
     def test_backup_plan_policy_allows_community_same_source_type_locations(
         self, test_db
