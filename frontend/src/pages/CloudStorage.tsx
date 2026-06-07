@@ -261,26 +261,64 @@ function CloudStorageRemoteCard({
     }
   }
 
-  const statItems = [
+  type StatColorKey = 'primary' | 'success' | 'warning' | 'info' | 'error'
+  type StatItem = {
+    icon: React.ReactNode
+    label: string
+    value: string
+    colorKey: StatColorKey
+    accentColor?: string
+    tooltip?: React.ReactNode
+  }
+
+  const statItems: StatItem[] = [
     {
       icon: <RcloneProviderGlyph provider={remote.provider} size={12} />,
       label: t('cloudStorage.remoteProviderLabel'),
       value: remote.provider,
-      colorKey: 'primary' as const,
+      colorKey: 'primary',
     },
     {
       icon: <CheckCircle size={11} />,
       label: t('cloudStorage.remoteStatusLabel'),
       value: status,
-      colorKey: statusThemeColor === 'error' ? ('warning' as const) : ('success' as const),
+      colorKey: statusThemeColor === 'error' ? 'warning' : 'success',
     },
     {
       icon: <HardDrive size={11} />,
       label: t('cloudStorage.remoteUsageLabel'),
       value: t('cloudStorage.usageCount', { count: usageCount }),
-      colorKey: 'info' as const,
+      colorKey: 'info',
     },
   ]
+
+  if (oauthToken) {
+    const oauthStatusLabel = t(`cloudStorage.oauthToken.status.${oauthToken.status}`, {
+      defaultValue: oauthToken.status,
+    })
+    const expiryLine = formattedExpiry
+      ? t('cloudStorage.oauthToken.validUntil', { expiresAt: formattedExpiry })
+      : t('cloudStorage.oauthToken.noExpiry')
+    const refreshLine = oauthToken.refresh_available
+      ? t('cloudStorage.oauthToken.refreshStored')
+      : t('cloudStorage.oauthToken.refreshMissing')
+
+    statItems.push({
+      icon: <KeyRound size={11} />,
+      label: t('cloudStorage.oauthToken.title'),
+      value: oauthStatusLabel,
+      colorKey: oauthColorKey === 'default' ? 'info' : oauthColorKey,
+      accentColor: oauthColor,
+      tooltip: (
+        <Stack spacing={0.5}>
+          <Typography variant="caption" sx={{ fontWeight: 600 }}>
+            {expiryLine}
+          </Typography>
+          <Typography variant="caption">{refreshLine}</Typography>
+        </Stack>
+      ),
+    })
+  }
 
   return (
     <OperationalCard dataTestId={`cloud-storage-remote-${remote.name}`}>
@@ -495,7 +533,10 @@ function CloudStorageRemoteCard({
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' },
+            gridTemplateColumns: {
+              xs: '1fr',
+              sm: `repeat(${statItems.length}, 1fr)`,
+            },
             borderRadius: 1.5,
             border: '1px solid',
             borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.07),
@@ -505,16 +546,18 @@ function CloudStorageRemoteCard({
           }}
         >
           {statItems.map((stat, index) => {
-            const statColor = (theme.palette[stat.colorKey] as { main: string }).main
-            return (
+            const statColor =
+              stat.accentColor ?? (theme.palette[stat.colorKey] as { main: string }).main
+            const cell = (
               <Box
-                key={stat.label}
                 sx={{
                   px: 1.5,
                   py: 1.1,
                   borderRight: { sm: index === statItems.length - 1 ? 0 : '1px solid' },
                   borderBottom: { xs: index === statItems.length - 1 ? 0 : '1px solid', sm: 0 },
                   borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.07),
+                  cursor: stat.tooltip ? 'help' : 'default',
+                  height: '100%',
                 }}
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.35 }}>
@@ -546,6 +589,15 @@ function CloudStorageRemoteCard({
                 </Typography>
               </Box>
             )
+            return stat.tooltip ? (
+              <Tooltip key={stat.label} title={stat.tooltip} arrow placement="top">
+                {cell}
+              </Tooltip>
+            ) : (
+              <Box key={stat.label} sx={{ display: 'contents' }}>
+                {cell}
+              </Box>
+            )
           })}
         </Box>
 
@@ -561,54 +613,6 @@ function CloudStorageRemoteCard({
             </Typography>
           </Box>
         </Box>
-
-        {oauthToken ? (
-          <Box
-            sx={{
-              mb: 1.5,
-              px: 1.25,
-              py: 1,
-              borderRadius: 1,
-              border: '1px solid',
-              borderColor: alpha(oauthColor, isDark ? 0.32 : 0.2),
-              bgcolor: alpha(oauthColor, isDark ? 0.13 : 0.07),
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
-              <Box sx={{ color: oauthColor, display: 'flex' }}>
-                <KeyRound size={14} />
-              </Box>
-              <Typography variant="caption" fontWeight={700} sx={{ color: 'text.primary' }}>
-                {t('cloudStorage.oauthToken.title')}
-              </Typography>
-              <Chip
-                size="small"
-                color={oauthColorKey}
-                variant="outlined"
-                label={t(`cloudStorage.oauthToken.status.${oauthToken.status}`, {
-                  defaultValue: oauthToken.status,
-                })}
-                sx={{ height: 20, fontSize: '0.64rem', fontWeight: 700 }}
-              />
-            </Box>
-            <Stack spacing={0.25} sx={{ mt: 0.75 }}>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ overflowWrap: 'anywhere' }}
-              >
-                {formattedExpiry
-                  ? t('cloudStorage.oauthToken.validUntil', { expiresAt: formattedExpiry })
-                  : t('cloudStorage.oauthToken.noExpiry')}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                {oauthToken.refresh_available
-                  ? t('cloudStorage.oauthToken.refreshStored')
-                  : t('cloudStorage.oauthToken.refreshMissing')}
-              </Typography>
-            </Stack>
-          </Box>
-        ) : null}
 
         {remote.last_error ? (
           <Box

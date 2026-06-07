@@ -656,12 +656,17 @@ describe('CloudStorage', () => {
       },
     } as AxiosResponse)
 
+    const user = userEvent.setup()
     renderWithProviders(<CloudStorage />, { initialRoute: '/cloud-storage' })
 
     const card = await screen.findByTestId('cloud-storage-remote-gdrive-prod')
-    expect(within(card).getByText(/OAuth token/i)).toBeInTheDocument()
-    expect(within(card).getByText(/Valid until/i)).toBeInTheDocument()
-    expect(within(card).getByText(/Refresh token stored/i)).toBeInTheDocument()
+    const oauthLabel = within(card).getByText(/OAuth token/i)
+    expect(oauthLabel).toBeInTheDocument()
+    expect(within(card).getByText('Valid')).toBeInTheDocument()
+
+    await user.hover(oauthLabel)
+    expect(await screen.findByText(/Valid until/i)).toBeInTheDocument()
+    expect(screen.getByText(/Refresh token stored/i)).toBeInTheDocument()
   })
 
   it('clears Borg UI OAuth metadata when loopback authorization replaces it', async () => {
