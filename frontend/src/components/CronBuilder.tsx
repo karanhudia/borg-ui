@@ -25,6 +25,7 @@ interface CronBuilderProps {
 }
 
 type Frequency = 'minute' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'custom'
+type Period = 'AM' | 'PM'
 
 interface CronState {
   frequency: Frequency
@@ -36,6 +37,15 @@ interface CronState {
   selectedDays: boolean[]
   dayOfMonth: number
   customCron: string
+}
+
+interface TimeInputProps {
+  hour12: number
+  minute: number
+  ampm: Period
+  amLabel: string
+  pmLabel: string
+  onTimeChange: (hour12: number, minute: number, ampm: Period) => void
 }
 
 const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
@@ -221,6 +231,63 @@ const generatePreview = (
   }
 }
 
+function TimeInput({ hour12, minute, ampm, amLabel, pmLabel, onTimeChange }: TimeInputProps) {
+  return (
+    <Stack direction="row" spacing={0.5} alignItems="center">
+      <TextField
+        type="number"
+        value={hour12}
+        onChange={(e) => {
+          const newHour12 = Math.max(1, Math.min(12, parseInt(e.target.value) || 1))
+          onTimeChange(newHour12, minute, ampm)
+        }}
+        inputProps={{ min: 1, max: 12 }}
+        variant="outlined"
+        size="small"
+        sx={{
+          width: 50,
+          '& .MuiInputBase-input': { p: '6px', textAlign: 'center', fontSize: '0.875rem' },
+        }}
+      />
+      <Typography variant="body2" color="text.secondary" fontWeight={500}>
+        :
+      </Typography>
+      <TextField
+        type="number"
+        value={minute.toString().padStart(2, '0')}
+        onChange={(e) => {
+          const newMinute = Math.max(0, Math.min(59, parseInt(e.target.value) || 0))
+          onTimeChange(hour12, newMinute, ampm)
+        }}
+        inputProps={{ min: 0, max: 59 }}
+        variant="outlined"
+        size="small"
+        sx={{
+          width: 50,
+          '& .MuiInputBase-input': { p: '6px', textAlign: 'center', fontSize: '0.875rem' },
+        }}
+      />
+      <Select
+        value={ampm}
+        onChange={(e) => onTimeChange(hour12, minute, e.target.value as Period)}
+        variant="outlined"
+        size="small"
+        sx={{
+          width: 65,
+          '& .MuiSelect-select': { p: '6px 24px 6px 8px !important', fontSize: '0.875rem' },
+        }}
+      >
+        <MenuItem value="AM" sx={{ fontSize: '0.875rem' }}>
+          {amLabel}
+        </MenuItem>
+        <MenuItem value="PM" sx={{ fontSize: '0.875rem' }}>
+          {pmLabel}
+        </MenuItem>
+      </Select>
+    </Stack>
+  )
+}
+
 export default function CronBuilder({ value, onChange, label, helperText }: CronBuilderProps) {
   const { t } = useTranslation()
   const [state, setState] = useState<CronState>(parseCron(value))
@@ -239,7 +306,7 @@ export default function CronBuilder({ value, onChange, label, helperText }: Cron
   const hour12 = state.hour === 0 ? 12 : state.hour > 12 ? state.hour - 12 : state.hour
   const ampm = state.hour >= 12 ? 'PM' : 'AM'
 
-  const handleTimeChange = (hour12: number, minute: number, ampm: 'AM' | 'PM') => {
+  const handleTimeChange = (hour12: number, minute: number, ampm: Period) => {
     let hour24 = hour12
     if (ampm === 'AM' && hour12 === 12) hour24 = 0
     else if (ampm === 'PM' && hour12 !== 12) hour24 = hour12 + 12
@@ -255,60 +322,15 @@ export default function CronBuilder({ value, onChange, label, helperText }: Cron
     }
   }
 
-  // Common time input component
-  const TimeInput = () => (
-    <Stack direction="row" spacing={0.5} alignItems="center">
-      <TextField
-        type="number"
-        value={hour12}
-        onChange={(e) => {
-          const newHour12 = Math.max(1, Math.min(12, parseInt(e.target.value) || 1))
-          handleTimeChange(newHour12, state.minute, ampm)
-        }}
-        inputProps={{ min: 1, max: 12 }}
-        variant="outlined"
-        size="small"
-        sx={{
-          width: 50,
-          '& .MuiInputBase-input': { p: '6px', textAlign: 'center', fontSize: '0.875rem' },
-        }}
-      />
-      <Typography variant="body2" color="text.secondary" fontWeight={500}>
-        :
-      </Typography>
-      <TextField
-        type="number"
-        value={state.minute.toString().padStart(2, '0')}
-        onChange={(e) => {
-          const newMinute = Math.max(0, Math.min(59, parseInt(e.target.value) || 0))
-          handleTimeChange(hour12, newMinute, ampm)
-        }}
-        inputProps={{ min: 0, max: 59 }}
-        variant="outlined"
-        size="small"
-        sx={{
-          width: 50,
-          '& .MuiInputBase-input': { p: '6px', textAlign: 'center', fontSize: '0.875rem' },
-        }}
-      />
-      <Select
-        value={ampm}
-        onChange={(e) => handleTimeChange(hour12, state.minute, e.target.value as 'AM' | 'PM')}
-        variant="outlined"
-        size="small"
-        sx={{
-          width: 65,
-          '& .MuiSelect-select': { p: '6px 24px 6px 8px !important', fontSize: '0.875rem' },
-        }}
-      >
-        <MenuItem value="AM" sx={{ fontSize: '0.875rem' }}>
-          {t('cronBuilder.am')}
-        </MenuItem>
-        <MenuItem value="PM" sx={{ fontSize: '0.875rem' }}>
-          {t('cronBuilder.pm')}
-        </MenuItem>
-      </Select>
-    </Stack>
+  const timeInput = (
+    <TimeInput
+      hour12={hour12}
+      minute={state.minute}
+      ampm={ampm}
+      amLabel={t('cronBuilder.am')}
+      pmLabel={t('cronBuilder.pm')}
+      onTimeChange={handleTimeChange}
+    />
   )
 
   return (
@@ -454,7 +476,7 @@ export default function CronBuilder({ value, onChange, label, helperText }: Cron
           {state.frequency === 'daily' && (
             <Stack direction="row" spacing={1} alignItems="center">
               <Typography variant="body2">{t('cronBuilderComponent.runDailyAt')}</Typography>
-              <TimeInput />
+              {timeInput}
             </Stack>
           )}
 
@@ -503,7 +525,7 @@ export default function CronBuilder({ value, onChange, label, helperText }: Cron
               </Stack>
               <Stack direction="row" spacing={1} alignItems="center">
                 <Typography variant="body2">{t('cronBuilderComponent.at')}</Typography>
-                <TimeInput />
+                {timeInput}
               </Stack>
             </Stack>
           )}
@@ -534,7 +556,7 @@ export default function CronBuilder({ value, onChange, label, helperText }: Cron
                 ))}
               </Select>
               <Typography variant="body2">{t('cronBuilderComponent.at')}</Typography>
-              <TimeInput />
+              {timeInput}
             </Stack>
           )}
 
