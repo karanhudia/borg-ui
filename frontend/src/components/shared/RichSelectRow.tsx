@@ -1,4 +1,4 @@
-import { Box, Stack, Tooltip, Typography } from '@mui/material'
+import { Box, Tooltip, Typography } from '@mui/material'
 import type { ReactNode } from 'react'
 
 interface RichSelectRowProps {
@@ -36,20 +36,11 @@ export default function RichSelectRow({
         </Box>
       )}
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Stack direction="row" alignItems="center" spacing={0.75} sx={{ minWidth: 0 }}>
-          <Tooltip title={primary} placement="top" enterDelay={500}>
-            <Typography
-              variant="body2"
-              fontWeight={600}
-              lineHeight={1.3}
-              noWrap
-              sx={{ minWidth: 0, flex: '1 1 auto' }}
-            >
-              {primary}
-            </Typography>
-          </Tooltip>
-          {indicator}
-        </Stack>
+        <Tooltip title={primary} placement="top" enterDelay={500}>
+          <Typography variant="body2" fontWeight={600} lineHeight={1.3} noWrap sx={{ minWidth: 0 }}>
+            {primary}
+          </Typography>
+        </Tooltip>
         {secondary && (
           <Tooltip title={secondary} placement="top" enterDelay={500}>
             <Typography
@@ -64,6 +55,9 @@ export default function RichSelectRow({
           </Tooltip>
         )}
       </Box>
+      {indicator && (
+        <Box sx={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>{indicator}</Box>
+      )}
     </Box>
   )
 }

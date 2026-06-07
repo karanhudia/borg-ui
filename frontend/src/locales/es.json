@@ -212,6 +212,10 @@
     },
     "lastChecked": "Última comprobación: {{value}}",
     "version": "Borg UI {{version}}",
+    "card": {
+      "lastCheck": "Última comprobación",
+      "version": "Versión"
+    },
     "actions": {
       "check": "Comprobar",
       "use": "Usar",

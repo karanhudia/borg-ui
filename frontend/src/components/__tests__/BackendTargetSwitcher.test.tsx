@@ -4,6 +4,7 @@ import BackendTargetSwitcher from '../BackendTargetSwitcher'
 import { RemoteBackendProvider } from '../../services/remoteBackends/context'
 import {
   createRemoteBackendClient,
+  getActiveBackendTarget,
   listRemoteBackendClients,
   resetRemoteBackendStateForTests,
   setActiveBackendTarget,
@@ -12,9 +13,10 @@ import {
 import type { RemoteBackendClient } from '../../services/remoteBackends/types'
 
 const navigateMock = vi.fn()
-const { mockHasGlobalPermission, mockPlanCan } = vi.hoisted(() => ({
+const { mockHasGlobalPermission, mockPlanCan, mockPlanIsLoading } = vi.hoisted(() => ({
   mockHasGlobalPermission: vi.fn((_permission: string) => true),
   mockPlanCan: vi.fn((_feature: string) => true),
+  mockPlanIsLoading: vi.fn(() => false),
 }))
 
 vi.mock('react-router-dom', async () => {
@@ -27,7 +29,7 @@ vi.mock('../../hooks/usePlan', () => ({
     plan: 'community',
     features: {},
     entitlement: undefined,
-    isLoading: false,
+    isLoading: mockPlanIsLoading(),
     can: mockPlanCan,
   }),
 }))
@@ -85,6 +87,7 @@ describe('BackendTargetSwitcher', () => {
     resetRemoteBackendStateForTests()
     mockHasGlobalPermission.mockReturnValue(true)
     mockPlanCan.mockReturnValue(true)
+    mockPlanIsLoading.mockReturnValue(false)
   })
 
   it('shows this server as the default target', () => {
@@ -117,6 +120,31 @@ describe('BackendTargetSwitcher', () => {
       expect(screen.getByRole('button', { name: /server target studio nas/i })).toBeInTheDocument()
       expect(screen.getByText('Remote client')).toBeInTheDocument()
     })
+  })
+
+  it('keeps the selected remote client active while plan access is loading', () => {
+    mockPlanCan.mockImplementation((feature) => feature !== 'remote_clients')
+    mockPlanIsLoading.mockReturnValue(true)
+    const remote = createRemoteBackendClient({
+      name: 'Studio NAS',
+      backendUrl: 'nas.local:9000',
+    })
+    updateRemoteBackendHealth(remote.id, {
+      status: 'online',
+      checkedAt: '2026-06-05T00:00:00.000Z',
+      appVersion: '2.2.1',
+      compatibility: 'compatible',
+      compatibilityMessage: 'Compatible',
+    })
+    setActiveBackendTarget(remote.id)
+
+    renderSwitcher()
+
+    expect(screen.getByRole('button', { name: /server target studio nas/i })).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /server target this server/i })
+    ).not.toBeInTheDocument()
+    expect(getActiveBackendTarget().id).toBe(remote.id)
   })
 
   it('keeps the local server available but blocks remote switching when the plan lacks access', async () => {

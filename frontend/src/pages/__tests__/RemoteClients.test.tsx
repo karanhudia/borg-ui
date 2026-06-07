@@ -234,7 +234,6 @@ describe('RemoteClients', () => {
 
     expect(screen.getByRole('heading', { name: 'Remote Clients' })).toBeInTheDocument()
     expect(screen.getByText('No remote clients yet')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /use this server/i })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /add remote client/i }))
     fireEvent.change(screen.getByLabelText('Client name'), { target: { value: 'Studio NAS' } })
@@ -278,14 +277,14 @@ describe('RemoteClients', () => {
     expect(screen.queryByText('No remote clients yet')).not.toBeInTheDocument()
   })
 
-  it('vertically centers the local server status and use action', () => {
+  it('renders the local server card with the active status indicator', () => {
     renderPage()
 
-    const useLocalButton = screen.getByRole('button', { name: /use this server/i })
-    const actionGroup = useLocalButton.parentElement
-
-    expect(actionGroup).not.toBeNull()
-    expect(getComputedStyle(actionGroup!).alignItems).toBe('center')
+    expect(screen.getByText('This server')).toBeInTheDocument()
+    expect(screen.getByText('Active target')).toBeInTheDocument()
+    // When local is the active target the Use button is hidden;
+    // the active badge alone conveys the state.
+    expect(screen.queryByRole('button', { name: /use this server/i })).not.toBeInTheDocument()
   })
 
   it('checks health and switches to an online compatible remote client', async () => {

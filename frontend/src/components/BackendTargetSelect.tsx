@@ -27,15 +27,15 @@ export default function BackendTargetSelect({
 }: BackendTargetSelectProps) {
   const { t } = useTranslation()
   const { activeTarget, clients, switchTarget } = useRemoteBackends()
-  const { can } = usePlan()
+  const { can, isLoading: isPlanLoading } = usePlan()
   const canUseRemoteClients = can('remote_clients')
   const targets = useMemo(() => buildBackendTargets(clients, t), [clients, t])
 
   useEffect(() => {
-    if (!canUseRemoteClients && activeTarget.kind === 'remote') {
+    if (!isPlanLoading && !canUseRemoteClients && activeTarget.kind === 'remote') {
       switchTarget(LOCAL_BACKEND_ID)
     }
-  }, [activeTarget.kind, canUseRemoteClients, switchTarget])
+  }, [activeTarget.kind, canUseRemoteClients, isPlanLoading, switchTarget])
 
   const options = useMemo<RichSelectOption[]>(
     () =>

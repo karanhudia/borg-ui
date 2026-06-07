@@ -2,33 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { toast } from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
 import { Navigate } from 'react-router-dom'
-import {
-  Alert,
-  Box,
-  Button,
-  Chip,
-  IconButton,
-  Paper,
-  Stack,
-  TextField,
-  Tooltip,
-  Typography,
-} from '@mui/material'
+import { Alert, Box, Button, Paper, Stack, TextField, Typography } from '@mui/material'
 import { alpha, useTheme } from '@mui/material/styles'
-import {
-  CheckCircle2,
-  CircleAlert,
-  Edit,
-  Monitor,
-  Plus,
-  RefreshCw,
-  Server,
-  Trash2,
-  WifiOff,
-} from 'lucide-react'
+import { Plus, Server } from 'lucide-react'
 import ResponsiveDialog from '../components/shared/ResponsiveDialog'
 import PlanGate from '../components/shared/PlanGate'
 import EmptyStateCard from '../components/EmptyStateCard'
+import LocalServerCard from '../components/LocalServerCard'
+import RemoteClientCard from '../components/RemoteClientCard'
 import { useAuth } from '../hooks/useAuth'
 import { useRemoteBackends } from '../services/remoteBackends/context'
 import { LOCAL_BACKEND_ID } from '../services/remoteBackends/storage'
@@ -40,53 +21,6 @@ interface ClientFormState {
 }
 
 const emptyForm: ClientFormState = { name: '', backendUrl: '' }
-
-function formatDate(value: string | null | undefined, fallback: string): string {
-  if (!value) return fallback
-  const date = new Date(value)
-  if (Number.isNaN(date.valueOf())) return fallback
-
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(date)
-}
-
-function getStatus(client: RemoteBackendClient, t: (key: string) => string) {
-  if (client.health.compatibility === 'incompatible') {
-    return {
-      label: t('remoteClients.status.incompatible'),
-      color: 'warning' as const,
-      icon: <CircleAlert size={16} />,
-    }
-  }
-  if (client.health.status === 'online') {
-    return {
-      label: t('remoteClients.status.online'),
-      color: 'success' as const,
-      icon: <CheckCircle2 size={16} />,
-    }
-  }
-  if (client.health.status === 'offline') {
-    return {
-      label: t('remoteClients.status.offline'),
-      color: 'error' as const,
-      icon: <WifiOff size={16} />,
-    }
-  }
-  if (client.health.status === 'checking') {
-    return {
-      label: t('remoteClients.status.checking'),
-      color: 'info' as const,
-      icon: <RefreshCw size={16} />,
-    }
-  }
-  return {
-    label: t('remoteClients.status.unknown'),
-    color: 'default' as const,
-    icon: <Server size={16} />,
-  }
-}
 
 export function RemoteClientsContent() {
   const { t } = useTranslation()
@@ -240,58 +174,32 @@ export function RemoteClientsContent() {
         </Button>
       </Box>
 
-      <Paper
-        variant="outlined"
-        sx={{
-          p: 2,
-          borderRadius: 2,
-          bgcolor: alpha(muiTheme.palette.background.paper, 0.78),
-        }}
-      >
-        <Stack
-          direction={{ xs: 'column', sm: 'row' }}
-          spacing={1.25}
-          alignItems={{ xs: 'stretch', sm: 'center' }}
-        >
-          <Stack direction="row" spacing={1.25} alignItems="center" sx={{ minWidth: 0, flex: 1 }}>
-            <Monitor size={18} />
-            <Box sx={{ minWidth: 0, flex: 1 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
-                {t('remoteClients.localBackend.title')}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {activeTarget.kind === 'local'
-                  ? t('remoteClients.localBackend.active')
-                  : t('remoteClients.localBackend.fallback')}
-              </Typography>
-            </Box>
-          </Stack>
-          <Stack
-            direction="row"
-            spacing={1}
-            alignItems="center"
-            justifyContent={{ xs: 'flex-start', sm: 'flex-end' }}
-          >
-            <Chip
-              label={
-                activeTarget.kind === 'local'
-                  ? t('remoteClients.labels.activeTarget')
-                  : t('remoteClients.labels.local')
-              }
-            />
-            <Button
-              variant={activeTarget.kind === 'local' ? 'contained' : 'outlined'}
-              size="small"
-              onClick={handleSwitchLocal}
-              aria-label={t('remoteClients.actions.useLocalAria')}
-            >
-              {t('remoteClients.actions.use')}
-            </Button>
-          </Stack>
-        </Stack>
-      </Paper>
+      <LocalServerCard active={activeTarget.kind === 'local'} onUse={handleSwitchLocal} />
 
-      {clients.length === 0 ? (
+      {clients.length > 0 && (
+        <Box
+          sx={{
+            display: 'grid',
+            gap: 2,
+            gridTemplateColumns: { xs: '1fr', md: 'repeat(auto-fit, minmax(320px, 1fr))' },
+          }}
+        >
+          {clients.map((client) => (
+            <RemoteClientCard
+              key={client.id}
+              client={client}
+              active={activeTarget.id === client.id}
+              checking={checkingId === client.id}
+              onCheck={(c) => void handleCheck(c)}
+              onUse={handleSwitch}
+              onEdit={openEditDialog}
+              onDelete={setDeletingClient}
+            />
+          ))}
+        </Box>
+      )}
+
+      {clients.length === 0 && (
         <Paper
           variant="outlined"
           sx={{
@@ -308,135 +216,6 @@ export function RemoteClientsContent() {
             description={t('remoteClients.empty.description')}
           />
         </Paper>
-      ) : (
-        <Stack spacing={1.5}>
-          {clients.map((client) => {
-            const status = getStatus(client, t)
-            const active = activeTarget.id === client.id
-            const canUse = client.health.compatibility !== 'incompatible'
-            return (
-              <Paper
-                key={client.id}
-                variant="outlined"
-                sx={{
-                  p: 2,
-                  borderRadius: 2,
-                  bgcolor: active
-                    ? alpha(
-                        muiTheme.palette.primary.main,
-                        muiTheme.palette.mode === 'dark' ? 0.18 : 0.08
-                      )
-                    : alpha(muiTheme.palette.background.paper, 0.78),
-                }}
-              >
-                <Stack
-                  direction={{ xs: 'column', md: 'row' }}
-                  spacing={1.5}
-                  alignItems={{ xs: 'stretch', md: 'center' }}
-                >
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: 1.25,
-                      flex: 1,
-                      minWidth: 0,
-                    }}
-                  >
-                    <Box sx={{ color: 'text.secondary', pt: 0.35 }}>{status.icon}</Box>
-                    <Box sx={{ minWidth: 0 }}>
-                      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
-                        <Typography variant="subtitle1" noWrap sx={{ fontWeight: 800 }}>
-                          {client.name}
-                        </Typography>
-                        {active && (
-                          <Chip
-                            size="small"
-                            label={t('remoteClients.labels.activeTarget')}
-                            color="primary"
-                          />
-                        )}
-                        <Chip size="small" label={status.label} color={status.color} />
-                      </Stack>
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        sx={{ wordBreak: 'break-all' }}
-                      >
-                        {client.apiBaseUrl}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {t('remoteClients.lastChecked', {
-                          value: formatDate(client.health.checkedAt, t('common.never')),
-                        })}
-                        {client.health.appVersion
-                          ? ` · ${t('remoteClients.version', {
-                              version: client.health.appVersion,
-                            })}`
-                          : ''}
-                      </Typography>
-                      {client.health.error && (
-                        <Alert severity="error" sx={{ mt: 1 }} role="status">
-                          {client.health.error}
-                        </Alert>
-                      )}
-                      {client.health.compatibility === 'incompatible' && (
-                        <Alert severity="warning" sx={{ mt: 1 }} role="status">
-                          {client.health.compatibilityMessage}
-                        </Alert>
-                      )}
-                    </Box>
-                  </Box>
-
-                  <Stack
-                    direction="row"
-                    spacing={1}
-                    justifyContent={{ xs: 'flex-start', md: 'flex-end' }}
-                  >
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      startIcon={<RefreshCw size={15} />}
-                      onClick={() => void handleCheck(client)}
-                      disabled={checkingId === client.id}
-                      aria-label={t('remoteClients.actions.checkAria', { name: client.name })}
-                    >
-                      {t('remoteClients.actions.check')}
-                    </Button>
-                    <Button
-                      variant={active ? 'contained' : 'outlined'}
-                      size="small"
-                      disabled={!canUse}
-                      onClick={() => handleSwitch(client)}
-                      aria-label={t('remoteClients.actions.useAria', { name: client.name })}
-                    >
-                      {t('remoteClients.actions.use')}
-                    </Button>
-                    <Tooltip title={t('remoteClients.actions.edit')}>
-                      <IconButton
-                        size="small"
-                        onClick={() => openEditDialog(client)}
-                        aria-label={t('remoteClients.actions.editAria', { name: client.name })}
-                      >
-                        <Edit size={16} />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title={t('remoteClients.actions.delete')}>
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={() => setDeletingClient(client)}
-                        aria-label={t('remoteClients.actions.deleteAria', { name: client.name })}
-                      >
-                        <Trash2 size={16} />
-                      </IconButton>
-                    </Tooltip>
-                  </Stack>
-                </Stack>
-              </Paper>
-            )
-          })}
-        </Stack>
       )}
 
       {dialogOpen && (

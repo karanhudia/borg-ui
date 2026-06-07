@@ -1,7 +1,16 @@
 import { type MouseEvent, useEffect, useState } from 'react'
-import { Box, Button, Chip, Divider, MenuItem, MenuList, Popover, Typography } from '@mui/material'
+import {
+  Box,
+  ButtonBase,
+  Chip,
+  Divider,
+  MenuItem,
+  MenuList,
+  Popover,
+  Typography,
+} from '@mui/material'
 import { alpha, useTheme } from '@mui/material/styles'
-import { Lock, Settings } from 'lucide-react'
+import { ChevronDown, Lock, Settings } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { useRemoteBackends } from '@/services/remoteBackends/context'
@@ -26,7 +35,7 @@ export default function BackendTargetSwitcher({ compact = false }: BackendTarget
   const navigate = useNavigate()
   const { activeTarget, clients, switchTarget } = useRemoteBackends()
   const { hasGlobalPermission } = useAuth()
-  const { can } = usePlan()
+  const { can, isLoading: isPlanLoading } = usePlan()
   const canManageRemoteClients = hasGlobalPermission('settings.ssh.manage')
   const canUseRemoteClients = canManageRemoteClients && can('remote_clients')
   const remoteClientsUnavailableReason = canManageRemoteClients ? 'plan' : 'permission'
@@ -40,10 +49,10 @@ export default function BackendTargetSwitcher({ compact = false }: BackendTarget
   const activeName = getBackendTargetName(activeTarget, t)
 
   useEffect(() => {
-    if (!canUseRemoteClients && activeTarget.kind === 'remote') {
+    if (!isPlanLoading && !canUseRemoteClients && activeTarget.kind === 'remote') {
       switchTarget(LOCAL_BACKEND_ID)
     }
-  }, [activeTarget.kind, canUseRemoteClients, switchTarget])
+  }, [activeTarget.kind, canUseRemoteClients, isPlanLoading, switchTarget])
 
   const closeMenu = () => setAnchorEl(null)
 
@@ -60,51 +69,107 @@ export default function BackendTargetSwitcher({ compact = false }: BackendTarget
     closeMenu()
   }
 
+  const isDark = muiTheme.palette.mode === 'dark'
+  const kindLabel =
+    activeTarget.kind === 'local'
+      ? t('remoteClients.labels.local')
+      : t('remoteClients.labels.remoteClient')
+  const kindColor =
+    activeTarget.kind === 'local'
+      ? alpha(muiTheme.palette.text.secondary, 0.85)
+      : muiTheme.palette.primary.main
+
   return (
     <>
-      <Button
+      <ButtonBase
         type="button"
-        variant="outlined"
-        size="small"
-        startIcon={activeStatus.icon}
         onClick={handleOpen}
         aria-label={t('remoteClients.switcher.ariaLabel', { name: activeName })}
         aria-haspopup="menu"
         aria-expanded={open}
         sx={{
-          minWidth: compact ? 0 : { xs: 42, sm: 210 },
-          maxWidth: { xs: 180, sm: 260 },
-          px: compact ? 1 : 1.25,
-          justifyContent: 'flex-start',
-          borderColor: alpha(muiTheme.palette.divider, 0.75),
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 0.875,
+          minWidth: compact ? 0 : { xs: 42, sm: 180 },
+          maxWidth: { xs: 200, sm: 280 },
+          px: compact ? 0.875 : 1.25,
+          py: 0.75,
+          borderRadius: '999px',
           color: 'text.primary',
-          bgcolor: alpha(muiTheme.palette.background.paper, 0.7),
-          '& .MuiButton-startIcon': { mr: compact ? 0 : 0.75 },
+          bgcolor: open
+            ? isDark
+              ? 'rgba(255,255,255,0.08)'
+              : 'rgba(15,23,42,0.05)'
+            : 'transparent',
+          transition: 'background-color 150ms',
+          '&:hover': {
+            bgcolor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.04)',
+          },
+          '&:focus-visible': {
+            outline: `2px solid ${alpha(muiTheme.palette.primary.main, 0.5)}`,
+            outlineOffset: 2,
+          },
         }}
       >
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            color: 'text.secondary',
+            flexShrink: 0,
+          }}
+        >
+          {activeStatus.icon}
+        </Box>
         {!compact && (
-          <Box sx={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 0.75 }}>
+          <Box
+            sx={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 0.75,
+              minWidth: 0,
+            }}
+          >
             <Typography
               component="span"
-              variant="caption"
               noWrap
-              sx={{ maxWidth: 130, fontWeight: 700, textTransform: 'none' }}
+              sx={{
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                maxWidth: 130,
+                lineHeight: 1.2,
+              }}
             >
               {activeName}
             </Typography>
-            <Chip
-              size="small"
-              label={
-                activeTarget.kind === 'local'
-                  ? t('remoteClients.labels.local')
-                  : t('remoteClients.labels.remoteClient')
-              }
-              color={activeTarget.kind === 'local' ? 'default' : 'primary'}
-              sx={{ height: 20, '& .MuiChip-label': { px: 0.75, fontSize: '0.65rem' } }}
-            />
+            <Typography
+              component="span"
+              noWrap
+              sx={{
+                fontSize: '0.6rem',
+                fontWeight: 700,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                color: kindColor,
+                flexShrink: 0,
+                lineHeight: 1,
+              }}
+            >
+              {kindLabel}
+            </Typography>
           </Box>
         )}
-      </Button>
+        <ChevronDown
+          size={15}
+          style={{
+            opacity: 0.5,
+            flexShrink: 0,
+            transition: 'transform 150ms',
+            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+          }}
+        />
+      </ButtonBase>
 
       <Popover
         open={open}
@@ -115,27 +180,30 @@ export default function BackendTargetSwitcher({ compact = false }: BackendTarget
         slotProps={{
           paper: {
             sx: {
-              mt: 1,
-              width: 340,
-              border: `1px solid ${alpha(muiTheme.palette.divider, 0.45)}`,
-              borderRadius: 2,
-              boxShadow:
-                muiTheme.palette.mode === 'dark'
-                  ? '0 18px 48px rgba(0,0,0,0.5)'
-                  : '0 18px 48px rgba(15,23,42,0.16)',
+              mt: 1.5,
+              width: 320,
+              borderRadius: 3,
+              border: `1px solid ${alpha(muiTheme.palette.divider, isDark ? 0.4 : 0.2)}`,
+              boxShadow: isDark
+                ? '0 16px 48px rgba(0,0,0,0.55)'
+                : '0 16px 48px rgba(15,23,42,0.14)',
+              overflow: 'hidden',
             },
           },
         }}
       >
-        <Box sx={{ px: 1.5, py: 1.25 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+        <Box sx={{ px: 1.75, py: 1.5 }}>
+          <Typography sx={{ fontSize: '0.875rem', fontWeight: 700, lineHeight: 1.25 }}>
             {t('remoteClients.switcher.title')}
           </Typography>
-          <Typography variant="caption" color="text.secondary">
+          <Typography
+            variant="caption"
+            sx={{ color: 'text.secondary', display: 'block', mt: 0.25 }}
+          >
             {t('remoteClients.switcher.description')}
           </Typography>
         </Box>
-        <Divider />
+        <Divider sx={{ borderColor: alpha(muiTheme.palette.divider, 0.06) }} />
         <MenuList
           role="menu"
           aria-label={t('remoteClients.switcher.menuLabel')}
@@ -160,37 +228,71 @@ export default function BackendTargetSwitcher({ compact = false }: BackendTarget
                 disabled={disabled}
                 onClick={() => handleSwitch(target)}
                 sx={{
-                  alignItems: 'flex-start',
+                  alignItems: 'center',
                   gap: 1.25,
                   mx: 0.75,
-                  my: 0.25,
-                  borderRadius: 1,
+                  my: 0.125,
+                  px: 1,
+                  py: 0.875,
+                  borderRadius: 2,
                   whiteSpace: 'normal',
+                  transition: 'background-color 150ms',
+                  '&.Mui-selected': {
+                    bgcolor: alpha(muiTheme.palette.primary.main, isDark ? 0.16 : 0.08),
+                  },
+                  '&:hover': {
+                    bgcolor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.03)',
+                  },
                 }}
               >
-                <Box sx={{ pt: 0.25, color: selected ? 'primary.main' : 'text.secondary' }}>
+                <Box
+                  sx={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 2,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    bgcolor: selected
+                      ? alpha(muiTheme.palette.primary.main, isDark ? 0.22 : 0.12)
+                      : isDark
+                        ? 'rgba(255,255,255,0.05)'
+                        : 'rgba(15,23,42,0.04)',
+                    color: selected ? 'primary.main' : 'text.secondary',
+                  }}
+                >
                   {status.icon}
                 </Box>
                 <Box sx={{ minWidth: 0, flex: 1 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
-                    <Typography variant="body2" noWrap sx={{ fontWeight: 700, flex: 1 }}>
-                      {getBackendTargetName(target, t)}
-                    </Typography>
-                    <Chip
-                      size="small"
-                      color={status.color}
-                      label={status.label}
-                      sx={{ height: 20, '& .MuiChip-label': { px: 0.75, fontSize: '0.65rem' } }}
-                    />
-                  </Box>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography noWrap sx={{ fontSize: '0.77rem', fontWeight: 600, lineHeight: 1.2 }}>
+                    {getBackendTargetName(target, t)}
+                  </Typography>
+                  <Typography
+                    sx={{
+                      fontSize: '0.65rem',
+                      color: 'text.secondary',
+                      mt: 0.25,
+                      lineHeight: 1.35,
+                    }}
+                  >
                     {status.helper}
                   </Typography>
                 </Box>
+                <Chip
+                  size="small"
+                  color={status.color}
+                  label={status.label}
+                  sx={{
+                    height: 18,
+                    flexShrink: 0,
+                    '& .MuiChip-label': { px: 0.75, fontSize: '0.6rem' },
+                  }}
+                />
               </MenuItem>
             )
           })}
-          <Divider sx={{ my: 0.75 }} />
+          <Divider sx={{ my: 0.5, borderColor: alpha(muiTheme.palette.divider, 0.06) }} />
           {canUseRemoteClients ? (
             <MenuItem
               role="menuitem"
@@ -198,10 +300,35 @@ export default function BackendTargetSwitcher({ compact = false }: BackendTarget
                 closeMenu()
                 navigate('/remote-clients')
               }}
-              sx={{ mx: 0.75, borderRadius: 1, gap: 1.25 }}
+              sx={{
+                mx: 0.75,
+                my: 0.125,
+                px: 1,
+                py: 0.875,
+                borderRadius: 2,
+                gap: 1.25,
+                transition: 'background-color 150ms',
+                '&:hover': {
+                  bgcolor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.03)',
+                },
+              }}
             >
-              <Settings size={14} />
-              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+              <Box
+                sx={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 2,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  bgcolor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.04)',
+                  color: 'text.secondary',
+                }}
+              >
+                <Settings size={14} />
+              </Box>
+              <Typography sx={{ fontSize: '0.77rem', fontWeight: 600 }}>
                 {t('remoteClients.switcher.manage')}
               </Typography>
             </MenuItem>
@@ -209,18 +336,42 @@ export default function BackendTargetSwitcher({ compact = false }: BackendTarget
             <MenuItem
               role="menuitem"
               disabled
-              sx={{ mx: 0.75, borderRadius: 1, gap: 1.25, alignItems: 'flex-start' }}
+              sx={{
+                mx: 0.75,
+                my: 0.125,
+                px: 1,
+                py: 0.875,
+                borderRadius: 2,
+                gap: 1.25,
+                alignItems: 'flex-start',
+              }}
             >
-              <Lock size={14} />
-              <Box>
-                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+              <Box
+                sx={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 2,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  bgcolor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.04)',
+                  color: 'text.secondary',
+                }}
+              >
+                <Lock size={14} />
+              </Box>
+              <Box sx={{ minWidth: 0, flex: 1 }}>
+                <Typography sx={{ fontSize: '0.77rem', fontWeight: 600, lineHeight: 1.2 }}>
                   {t(
                     canManageRemoteClients
                       ? 'remoteClients.switcher.manageRequiresPlan'
                       : 'remoteClients.switcher.manageRequiresAdmin'
                   )}
                 </Typography>
-                <Typography variant="caption" color="text.secondary">
+                <Typography
+                  sx={{ fontSize: '0.65rem', color: 'text.secondary', mt: 0.25, lineHeight: 1.35 }}
+                >
                   {t(
                     canManageRemoteClients
                       ? 'remoteClients.switcher.remotePlanUnavailable'
