@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: RepositoryCard Red/Green Coverage
+## Task 1: RepositoryCard Red/Green Coverage
 
 **Files:**
 
@@ -94,7 +94,7 @@ cd frontend && npm test -- --run src/components/__tests__/RepositoryCard.test.ts
 
 Expected: PASS.
 
-### Task 2: Repositories Page Wiring
+## Task 2: Repositories Page Wiring
 
 **Files:**
 
@@ -146,7 +146,7 @@ Pass `onBreakLock={handleBreakLockRepository}` and `canBreakLock={(repository) =
 
 Run the same targeted frontend test command from Step 2 plus the `RepositoryCard` command.
 
-### Task 3: Validation And Handoff
+## Task 3: Validation And Handoff
 
 **Files:**
 
