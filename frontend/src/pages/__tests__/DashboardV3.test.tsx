@@ -3,12 +3,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import Dashboard from '../DashboardV3'
 import { formatDateTimeFull } from '../../utils/dateUtils'
+import {
+  createRemoteBackendClient,
+  resetRemoteBackendStateForTests,
+} from '../../services/remoteBackends/storage'
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
 const mockNavigate = vi.fn()
-const { getOverviewMock } = vi.hoisted(() => ({
+const { getOverviewMock, listRemotesMock } = vi.hoisted(() => ({
   getOverviewMock: vi.fn(),
+  listRemotesMock: vi.fn(),
 }))
 
 vi.mock('react-router-dom', () => ({
@@ -26,6 +31,9 @@ vi.mock('../../utils/basePath', () => ({
 vi.mock('../../services/api', () => ({
   dashboardAPI: {
     getOverview: getOverviewMock,
+  },
+  rcloneAPI: {
+    listRemotes: listRemotesMock,
   },
 }))
 
@@ -178,8 +186,14 @@ function makeOverview(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks()
   getOverviewMock.mockResolvedValue({ data: makeOverview() })
+  listRemotesMock.mockResolvedValue({ data: { remotes: [] } })
   // Default: suppress localStorage access
-  vi.stubGlobal('localStorage', { getItem: () => 'test-token' })
+  vi.stubGlobal('localStorage', {
+    getItem: () => 'test-token',
+    removeItem: vi.fn(),
+    setItem: vi.fn(),
+  })
+  resetRemoteBackendStateForTests()
 })
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -304,6 +318,21 @@ describe('DashboardV3', () => {
     })
   })
 
+  describe('resources card', () => {
+    it('keeps peer resource gauges in one stable three-column row', async () => {
+      mockFetchSuccess(makeOverview())
+      renderDashboard()
+
+      await waitFor(() => expect(screen.getByText('Resources')).toBeInTheDocument())
+
+      expect(screen.getByTestId('dashboard-resource-gauge-grid')).toHaveStyle({
+        gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+      })
+      expect(screen.getByText('3.6/8.0G')).toBeInTheDocument()
+      expect(screen.getByText('68/100G')).toBeInTheDocument()
+    })
+  })
+
   describe('repository health grid', () => {
     it('renders a card for each repository', async () => {
       mockFetchSuccess(makeOverview())
@@ -312,6 +341,66 @@ describe('DashboardV3', () => {
       await waitFor(() => {
         expect(screen.getAllByText('my-server').length).toBeGreaterThan(0)
         expect(screen.getAllByText('backup-nas').length).toBeGreaterThan(0)
+      })
+    })
+
+    it('uses two-column dense packing for mixed warning and healthy repositories', async () => {
+      const [firstRepo] = makeOverview().repository_health
+      const healthyDimensions = {
+        backup: 'healthy' as const,
+        check: 'healthy' as const,
+        compact: 'healthy' as const,
+        restore: 'healthy' as const,
+      }
+      const repositoryHealth = [
+        {
+          ...firstRepo,
+          id: 1,
+          name: 'Immich Onsite',
+          health_status: 'warning' as const,
+          dimension_health: {
+            ...firstRepo.dimension_health,
+            check: 'warning' as const,
+            restore: 'warning' as const,
+          },
+        },
+        {
+          ...firstRepo,
+          id: 2,
+          name: 'Databases Backup',
+          health_status: 'healthy' as const,
+          archive_count: 1,
+          total_size: '20.97 MB',
+          dimension_health: healthyDimensions,
+        },
+        {
+          ...firstRepo,
+          id: 3,
+          name: 'Immich Backup',
+          type: 'ssh' as const,
+          health_status: 'healthy' as const,
+          archive_count: 4,
+          total_size: '821.73 GB',
+          dimension_health: healthyDimensions,
+        },
+      ]
+
+      mockFetchSuccess(makeOverview({ repository_health: repositoryHealth }))
+      renderDashboard()
+
+      await waitFor(() => expect(screen.getByText('Repository Health')).toBeInTheDocument())
+
+      const grid = screen.getByTestId('dashboard-repository-health-grid')
+      expect(grid).toHaveAttribute('data-layout', 'two-column-dense')
+      expect(grid).toHaveStyle('--repository-health-grid-columns: minmax(0, 1fr) minmax(0, 1fr)')
+      expect(screen.getByTestId('dashboard-repository-health-card-1')).toHaveStyle({
+        gridRow: 'span 2',
+      })
+      expect(screen.getByTestId('dashboard-repository-health-card-2')).toHaveStyle({
+        gridRow: 'span 1',
+      })
+      expect(screen.getByTestId('dashboard-repository-health-card-3')).toHaveStyle({
+        gridRow: 'span 1',
       })
     })
 
@@ -617,6 +706,53 @@ describe('DashboardV3', () => {
       expect(screen.getByText('Backup Plan')).toBeInTheDocument()
       expect(screen.getAllByText('Nightly Documents').length).toBeGreaterThan(0)
       expect(screen.getByText('2 repositories')).toBeInTheDocument()
+    })
+  })
+
+  describe('operations launchpad', () => {
+    it('summarizes newer Borg UI capabilities and routes actions to existing workflows', async () => {
+      listRemotesMock.mockResolvedValueOnce({
+        data: {
+          remotes: [
+            { id: 10, name: 'prod-s3', provider: 's3' },
+            { id: 11, name: 'archive-b2', provider: 'b2' },
+          ],
+        },
+      })
+      vi.stubGlobal('localStorage', {
+        getItem: (key: string) => {
+          return key === 'borg_ui_active_backend_target' ? null : 'test-token'
+        },
+      })
+      createRemoteBackendClient({
+        name: 'Offsite client',
+        backendUrl: 'https://offsite.example.com',
+      })
+      mockFetchSuccess(makeOverview())
+      renderDashboard()
+
+      await waitFor(() => screen.getAllByText('my-server'))
+      expect(screen.getByText('Operations launchpad')).toBeInTheDocument()
+      expect(screen.getByText('Backup plans')).toBeInTheDocument()
+      expect(screen.getByText('2 plans')).toBeInTheDocument()
+      await waitFor(() => expect(screen.getByText('Cloud storage')).toBeInTheDocument())
+      expect(screen.getByText('2 remotes')).toBeInTheDocument()
+      expect(screen.getByText('Remote clients')).toBeInTheDocument()
+      expect(screen.getByText('1 client')).toBeInTheDocument()
+      expect(screen.getByText('Restore verification')).toBeInTheDocument()
+      expect(screen.getByText('1/2 covered')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: /open backup plans/i }))
+      expect(mockNavigate).toHaveBeenCalledWith('/backup-plans')
+
+      fireEvent.click(screen.getByRole('button', { name: /open cloud storage/i }))
+      expect(mockNavigate).toHaveBeenCalledWith('/cloud-storage')
+
+      fireEvent.click(screen.getByRole('button', { name: /open remote clients/i }))
+      expect(mockNavigate).toHaveBeenCalledWith('/remote-clients')
+
+      fireEvent.click(screen.getByRole('button', { name: /open restore verification/i }))
+      expect(mockNavigate).toHaveBeenCalledWith('/schedule/restore-checks')
     })
   })
 

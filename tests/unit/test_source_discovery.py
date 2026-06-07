@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import sqlite3
@@ -30,8 +31,8 @@ class TestSourceDiscovery:
         }
         assert source_types["paths"]["status"] == "enabled"
         assert source_types["database"]["status"] == "enabled"
-        assert source_types["container"]["status"] == "planned"
-        assert source_types["container"]["disabled"] is True
+        assert source_types["container"]["status"] == "enabled"
+        assert source_types["container"]["disabled"] is False
 
     def test_database_discovery_returns_supported_templates(
         self, test_client, admin_headers
@@ -53,6 +54,476 @@ class TestSourceDiscovery:
         ]
         assert postgresql["backup_strategy"] == "logical_dump"
         assert postgresql["documentation_url"].startswith("https://www.postgresql.org/")
+
+    def test_container_scan_detects_local_containers_with_mount_coverage(
+        self, test_client, admin_headers, monkeypatch
+    ):
+        du_outputs = {
+            "/var/lib/docker/volumes/postgres-data/_data": SimpleNamespace(
+                returncode=0,
+                stdout="8192\t/var/lib/docker/volumes/postgres-data/_data\n",
+                stderr="",
+            ),
+            "/srv/postgres/conf": SimpleNamespace(
+                returncode=0,
+                stdout="4096\t/srv/postgres/conf\n",
+                stderr="",
+            ),
+        }
+
+        def fake_local_container_scan(**kwargs):
+            del kwargs
+            return SimpleNamespace(
+                returncode=0,
+                stdout=json.dumps(
+                    {
+                        "Id": (
+                            "5ad07b8f01d2f9fef1b6ee4e8cc2d7ce"
+                            "2b6f0fc3f3ef024a23f1e3a0d5f0c3c1"
+                        ),
+                        "Name": "/postgres",
+                        "Config": {"Image": "postgres:17"},
+                        "State": {"Status": "running"},
+                        "Mounts": [
+                            {
+                                "Type": "volume",
+                                "Name": "postgres-data",
+                                "Source": "/var/lib/docker/volumes/postgres-data/_data",
+                                "Destination": "/var/lib/postgresql/data",
+                            },
+                            {
+                                "Type": "bind",
+                                "Source": "/srv/postgres/conf",
+                                "Destination": "/etc/postgresql/conf.d",
+                            },
+                        ],
+                    }
+                )
+                + "\n",
+                stderr="",
+            )
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            assert cmd[:3] == ["du", "-s", "-B1"]
+            return du_outputs[cmd[-1]]
+
+        monkeypatch.setattr(
+            source_discovery,
+            "_run_local_container_scan",
+            fake_local_container_scan,
+            raising=False,
+        )
+        monkeypatch.setattr(source_discovery.subprocess, "run", fake_run)
+
+        response = test_client.post(
+            "/api/source-discovery/containers/scan",
+            json={"source_type": "local", "source_ssh_connection_id": None},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["scan_target"] == {
+            "source_type": "local",
+            "source_ssh_connection_id": None,
+            "label": "This Borg UI server",
+        }
+        assert body["warnings"] == []
+        assert len(body["containers"]) == 1
+
+        container = body["containers"][0]
+        assert (
+            container["id"]
+            == "5ad07b8f01d2f9fef1b6ee4e8cc2d7ce2b6f0fc3f3ef024a23f1e3a0d5f0c3c1"
+        )
+        assert container["name"] == "postgres"
+        assert container["image"] == "postgres:17"
+        assert container["status"] == "running"
+        assert container["backup_mode"] == "export"
+        assert container["export_path"] == "/var/tmp/borg-ui/container-exports/postgres"
+        assert any("container filesystem" in note for note in container["notes"])
+        assert any("not included" in note for note in container["notes"])
+        assert container["mounts"] == [
+            {
+                "type": "volume",
+                "name": "postgres-data",
+                "source": "/var/lib/docker/volumes/postgres-data/_data",
+                "backup_source": "/var/lib/docker/volumes/postgres-data/_data",
+                "destination": "/var/lib/postgresql/data",
+                "backed_up": False,
+                "reason": "Not included in docker export; add this path separately from Files if needed.",
+                "size_bytes": 8192,
+                "size_status": "available",
+            },
+            {
+                "type": "bind",
+                "name": None,
+                "source": "/srv/postgres/conf",
+                "backup_source": "/srv/postgres/conf",
+                "destination": "/etc/postgresql/conf.d",
+                "backed_up": False,
+                "reason": "Not included in docker export; add this path separately from Files if needed.",
+                "size_bytes": 4096,
+                "size_status": "available",
+            },
+        ]
+
+    def test_container_scan_uses_local_mount_prefix_for_host_mount_size(
+        self, test_client, admin_headers, monkeypatch
+    ):
+        def fake_local_container_scan(**kwargs):
+            del kwargs
+            return SimpleNamespace(
+                returncode=0,
+                stdout=json.dumps(
+                    {
+                        "Id": "8f2d6d67b2e2",
+                        "Name": "/postgres",
+                        "Config": {"Image": "postgres:17"},
+                        "State": {"Status": "running"},
+                        "Mounts": [
+                            {
+                                "Type": "volume",
+                                "Name": "postgres-data",
+                                "Source": "/var/lib/docker/volumes/postgres-data/_data",
+                                "Destination": "/var/lib/postgresql/data",
+                            }
+                        ],
+                    }
+                )
+                + "\n",
+                stderr="",
+            )
+
+        probed_paths: list[str] = []
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            path = cmd[-1]
+            probed_paths.append(path)
+            if path == "/var/lib/docker/volumes/postgres-data/_data":
+                return SimpleNamespace(
+                    returncode=1,
+                    stdout="",
+                    stderr="du: cannot access '/var/lib/docker/volumes/postgres-data/_data': No such file or directory",
+                )
+            if path == "/local/var/lib/docker/volumes/postgres-data/_data":
+                return SimpleNamespace(
+                    returncode=0,
+                    stdout="16384\t/local/var/lib/docker/volumes/postgres-data/_data\n",
+                    stderr="",
+                )
+            raise AssertionError(f"Unexpected size probe for {path}")
+
+        monkeypatch.setattr(
+            source_discovery,
+            "_run_local_container_scan",
+            fake_local_container_scan,
+            raising=False,
+        )
+        monkeypatch.setattr(source_discovery.subprocess, "run", fake_run)
+        monkeypatch.setattr(
+            source_discovery.settings.__class__,
+            "get_local_mount_points",
+            lambda self: ["/local"],
+        )
+        monkeypatch.setattr(
+            source_discovery.os.path,
+            "lexists",
+            lambda path: path == "/local/var/lib/docker/volumes/postgres-data/_data",
+        )
+
+        response = test_client.post(
+            "/api/source-discovery/containers/scan",
+            json={"source_type": "local", "source_ssh_connection_id": None},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        mount = response.json()["containers"][0]["mounts"][0]
+        assert mount["source"] == "/var/lib/docker/volumes/postgres-data/_data"
+        assert mount["backup_source"] == (
+            "/local/var/lib/docker/volumes/postgres-data/_data"
+        )
+        assert mount["size_bytes"] == 16384
+        assert mount["size_status"] == "available"
+        assert probed_paths == [
+            "/var/lib/docker/volumes/postgres-data/_data",
+            "/local/var/lib/docker/volumes/postgres-data/_data",
+        ]
+
+    def test_container_scan_reports_per_mount_size_failures(
+        self, test_client, admin_headers, monkeypatch
+    ):
+        def fake_local_container_scan(**kwargs):
+            del kwargs
+            return SimpleNamespace(
+                returncode=0,
+                stdout=json.dumps(
+                    {
+                        "Id": "93b3f8a1c2d4",
+                        "Name": "/files",
+                        "Config": {"Image": "busybox:latest"},
+                        "State": {"Status": "running"},
+                        "Mounts": [
+                            {
+                                "Type": "bind",
+                                "Source": "/srv/private",
+                                "Destination": "/private",
+                            },
+                            {
+                                "Type": "bind",
+                                "Source": "/srv/missing",
+                                "Destination": "/missing",
+                            },
+                            {
+                                "Type": "volume",
+                                "Name": "anonymous-volume",
+                                "Destination": "/anonymous",
+                            },
+                            {
+                                "Type": "bind",
+                                "Source": "/srv/slow",
+                                "Destination": "/slow",
+                            },
+                        ],
+                    }
+                )
+                + "\n",
+                stderr="",
+            )
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            path = cmd[-1]
+            if path == "/srv/private":
+                return SimpleNamespace(
+                    returncode=1,
+                    stdout="",
+                    stderr="du: cannot read directory '/srv/private': Permission denied",
+                )
+            if path == "/srv/missing":
+                return SimpleNamespace(
+                    returncode=1,
+                    stdout="",
+                    stderr="du: cannot access '/srv/missing': No such file or directory",
+                )
+            if path == "/local/srv/missing":
+                return SimpleNamespace(
+                    returncode=1,
+                    stdout="",
+                    stderr="du: cannot access '/local/srv/missing': No such file or directory",
+                )
+            if path == "/srv/slow":
+                raise subprocess.TimeoutExpired(cmd, timeout=2)
+            raise AssertionError(f"Unexpected size probe for {path}")
+
+        monkeypatch.setattr(
+            source_discovery,
+            "_run_local_container_scan",
+            fake_local_container_scan,
+            raising=False,
+        )
+        monkeypatch.setattr(source_discovery.subprocess, "run", fake_run)
+
+        response = test_client.post(
+            "/api/source-discovery/containers/scan",
+            json={"source_type": "local", "source_ssh_connection_id": None},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        mounts = response.json()["containers"][0]["mounts"]
+        assert [
+            (mount["source"], mount["size_bytes"], mount["size_status"])
+            for mount in mounts
+        ] == [
+            ("/srv/private", None, "permission_denied"),
+            ("/srv/missing", None, "unavailable"),
+            (None, None, "unavailable"),
+            ("/srv/slow", None, "timeout"),
+        ]
+
+    def test_container_scan_detects_remote_containers(
+        self, test_client, admin_headers, test_db, monkeypatch
+    ):
+        ssh_key = SSHKey(
+            name="container-scan-key",
+            public_key="ssh-ed25519 AAAATEST container-scan-key",
+            private_key=encrypt_secret("fake private key"),
+            key_type="ed25519",
+        )
+        test_db.add(ssh_key)
+        test_db.commit()
+        test_db.refresh(ssh_key)
+        connection = SSHConnection(
+            ssh_key_id=ssh_key.id,
+            host="docker-host.test",
+            username="backup",
+            port=2222,
+            is_backup_source=True,
+        )
+        test_db.add(connection)
+        test_db.commit()
+        test_db.refresh(connection)
+
+        def fake_remote_container_scan(**kwargs):
+            assert kwargs["connection"].id == connection.id
+            return SimpleNamespace(
+                returncode=0,
+                stdout=json.dumps(
+                    {
+                        "Id": "93b3f8a1c2d4",
+                        "Name": "/nginx",
+                        "Config": {"Image": "nginx:1.27"},
+                        "State": {"Status": "running"},
+                        "Mounts": [
+                            {
+                                "Type": "bind",
+                                "Source": "/srv/nginx/html",
+                                "Destination": "/usr/share/nginx/html",
+                            }
+                        ],
+                    }
+                )
+                + "\n",
+                stderr="",
+            )
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            assert cmd[0] == "ssh"
+            assert "StrictHostKeyChecking=accept-new" in cmd
+            assert "du -s -B1 /srv/nginx/html" in cmd[-1]
+            return SimpleNamespace(
+                returncode=0,
+                stdout="16384\t/srv/nginx/html\n",
+                stderr="",
+            )
+
+        monkeypatch.setattr(
+            source_discovery,
+            "_run_remote_container_scan",
+            fake_remote_container_scan,
+            raising=False,
+        )
+        monkeypatch.setattr(source_discovery.subprocess, "run", fake_run)
+
+        response = test_client.post(
+            "/api/source-discovery/containers/scan",
+            json={
+                "source_type": "remote",
+                "source_ssh_connection_id": connection.id,
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["scan_target"] == {
+            "source_type": "remote",
+            "source_ssh_connection_id": connection.id,
+            "label": "backup@docker-host.test",
+        }
+        assert body["warnings"] == []
+        assert body["containers"][0]["name"] == "nginx"
+        assert body["containers"][0]["image"] == "nginx:1.27"
+        assert body["containers"][0]["mounts"][0]["size_bytes"] == 16384
+        assert body["containers"][0]["mounts"][0]["size_status"] == "available"
+
+    def test_remote_container_scan_preserves_ssh_host_key_verification(
+        self, monkeypatch
+    ):
+        captured: dict[str, list[str]] = {}
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            captured["cmd"] = cmd
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(source_discovery.subprocess, "run", fake_run)
+
+        source_discovery._run_remote_container_scan(
+            connection=SimpleNamespace(
+                host="docker-host.test",
+                username="backup",
+                port=2222,
+            ),
+            key_file_path="/tmp/borg-ui-test-key",
+            include_stopped=True,
+            timeout_seconds=15,
+        )
+
+        assert "StrictHostKeyChecking=accept-new" in captured["cmd"]
+        assert "StrictHostKeyChecking=no" not in captured["cmd"]
+        assert "UserKnownHostsFile=/dev/null" not in captured["cmd"]
+
+    def test_container_scan_reports_missing_docker_with_install_guidance(
+        self, test_client, admin_headers, monkeypatch
+    ):
+        def fake_local_container_scan(**kwargs):
+            del kwargs
+            return SimpleNamespace(
+                returncode=127,
+                stdout="",
+                stderr="sh: 2: docker: not found",
+            )
+
+        monkeypatch.setattr(
+            source_discovery,
+            "_run_local_container_scan",
+            fake_local_container_scan,
+            raising=False,
+        )
+
+        response = test_client.post(
+            "/api/source-discovery/containers/scan",
+            json={"source_type": "local", "source_ssh_connection_id": None},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        warning = response.json()["warnings"][0]
+        assert warning["code"] == "DOCKER_CLI_MISSING"
+        assert "Docker is not installed" in warning["message"]
+        assert "docker.io" in warning["message"]
+        assert "https://docs.docker.com/engine/install/" in warning["message"]
+        assert "sh: 2" not in warning["message"]
+
+    def test_container_scan_reports_docker_socket_permission_guidance(
+        self, test_client, admin_headers, monkeypatch
+    ):
+        def fake_local_container_scan(**kwargs):
+            del kwargs
+            return SimpleNamespace(
+                returncode=1,
+                stdout="",
+                stderr=(
+                    "Got permission denied while trying to connect to the Docker "
+                    "daemon socket at unix:///var/run/docker.sock"
+                ),
+            )
+
+        monkeypatch.setattr(
+            source_discovery,
+            "_run_local_container_scan",
+            fake_local_container_scan,
+            raising=False,
+        )
+
+        response = test_client.post(
+            "/api/source-discovery/containers/scan",
+            json={"source_type": "local", "source_ssh_connection_id": None},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        warning = response.json()["warnings"][0]
+        assert warning["code"] == "DOCKER_PERMISSION_DENIED"
+        assert "Docker socket" in warning["message"]
+        assert "/var/run/docker.sock" in warning["message"]
+        assert "Got permission denied" not in warning["message"]
 
     def test_sqlite_template_stages_backup_with_parameters(
         self, test_client, admin_headers

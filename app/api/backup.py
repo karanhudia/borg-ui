@@ -35,6 +35,7 @@ from app.services.job_admission import (
     ensure_manual_backup_capacity,
     ensure_repository_admission,
 )
+from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.services.repository_executor import (
     cancel_agent_backup_job,
     get_agent_job_for_backup,
@@ -152,20 +153,67 @@ def _agent_job_logs_response(db: Session, backup_job: BackupJob, offset: int) ->
     }
 
 
-def _backup_job_has_logs(db: Session, job: BackupJob) -> bool:
-    if bool(job.logs):
-        return True
-    if job.execution_mode != "agent":
-        return False
-    agent_job = get_agent_job_for_backup(db, job.id)
-    if not agent_job:
-        return False
+def _empty_backup_log_response(job: BackupJob) -> dict[str, Any]:
+    return {
+        "job_id": job.id,
+        "status": job.status,
+        "lines": [],
+        "total_lines": 0,
+        "has_more": False,
+    }
+
+
+def _get_agent_log_messages(db: Session, agent_job_id: int) -> list[str]:
+    logs = (
+        db.query(AgentJobLog)
+        .filter(AgentJobLog.agent_job_id == agent_job_id)
+        .order_by(AgentJobLog.sequence.asc(), AgentJobLog.id.asc())
+        .all()
+    )
+    return [log.message for log in logs]
+
+
+def _agent_log_rows_exist(db: Session, agent_job_id: int) -> bool:
     return (
         db.query(AgentJobLog.id)
-        .filter(AgentJobLog.agent_job_id == agent_job.id)
+        .filter(AgentJobLog.agent_job_id == agent_job_id)
         .first()
         is not None
     )
+
+
+def _backup_job_has_logs(
+    db: Session, job: BackupJob, *, log_save_policy: str | None = None
+) -> bool:
+    policy = log_save_policy or get_log_save_policy(db)
+    output_text: list[Any] = [job.logs, job.error_message]
+    agent_job = None
+    if job.execution_mode == "agent":
+        agent_job = get_agent_job_for_backup(db, job.id)
+        if agent_job:
+            output_text.append(agent_job.error_message)
+
+    if job_has_logs_by_policy(
+        job,
+        policy,
+        output_text=output_text,
+        file_path=job.log_file_path,
+    ):
+        return True
+
+    if (
+        policy == "failed_and_warnings"
+        and agent_job is not None
+        and _agent_log_rows_exist(db, agent_job.id)
+    ):
+        return job_has_logs_by_policy(
+            job,
+            policy,
+            output_text=[*output_text, *_get_agent_log_messages(db, agent_job.id)],
+            file_path=job.log_file_path,
+        )
+
+    return False
 
 
 def _get_backup_plan_name(db: Session, backup_plan_id: Optional[int]) -> Optional[str]:
@@ -596,6 +644,7 @@ async def get_all_backup_jobs(
             except HTTPException:
                 continue
 
+        log_save_policy = get_log_save_policy(db)
         return {
             "jobs": [
                 {
@@ -606,7 +655,9 @@ async def get_all_backup_jobs(
                     "completed_at": serialize_datetime(job.completed_at),
                     "progress": job.progress,
                     "error_message": job.error_message,
-                    "has_logs": _backup_job_has_logs(db, job),
+                    "has_logs": _backup_job_has_logs(
+                        db, job, log_save_policy=log_save_policy
+                    ),
                     "maintenance_status": job.maintenance_status,
                     "scheduled_job_id": job.scheduled_job_id,  # Include for filtering by schedule
                     "backup_plan_id": job.backup_plan_id,
@@ -656,6 +707,7 @@ async def get_backup_status(
         repo = _get_job_repository(db, job.repository)
         if repo:
             check_repo_access(db, current_user, repo, "viewer")
+        has_logs = _backup_job_has_logs(db, job)
 
         return {
             "id": job.id,
@@ -665,7 +717,7 @@ async def get_backup_status(
             "completed_at": serialize_datetime(job.completed_at),
             "progress": job.progress,
             "error_message": job.error_message,
-            "logs": job.logs,
+            "logs": job.logs if has_logs else None,
             "maintenance_status": job.maintenance_status,
             "backup_plan_id": job.backup_plan_id,
             "backup_plan_run_id": job.backup_plan_run_id,
@@ -785,6 +837,12 @@ async def download_backup_logs(
                 },
             )
 
+        if not _backup_job_has_logs(db, job):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"key": "backend.errors.backup.noLogsAvailable"},
+            )
+
         if job.execution_mode == "agent":
             agent_job = get_agent_job_for_backup(db, job.id)
             if not agent_job:
@@ -888,6 +946,9 @@ async def stream_backup_logs(
         repo = _get_job_repository(db, job.repository)
         if repo:
             check_repo_access(db, current_user, repo, "viewer")
+
+        if not _backup_job_has_logs(db, job):
+            return _empty_backup_log_response(job)
 
         if job.execution_mode == "agent":
             return _agent_job_logs_response(db, job, offset)

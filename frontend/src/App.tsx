@@ -14,6 +14,7 @@ import Repositories from './pages/Repositories'
 import CloudStorage from './pages/CloudStorage'
 import SSHConnectionsSingleKey from './pages/SSHConnectionsSingleKey'
 import ManagedAgents from './pages/ManagedAgents'
+import RemoteClients from './pages/RemoteClients'
 import Activity from './pages/Activity'
 import Settings from './pages/Settings'
 import AuthLayout from './components/AuthLayout'
@@ -199,6 +200,14 @@ function App() {
           element={
             <ProtectedRoute requiredTab="repositories">
               <CloudStorage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/remote-clients"
+          element={
+            <ProtectedRoute requiredTab="connections" requiredPermission="settings.ssh.manage">
+              <RemoteClients />
             </ProtectedRoute>
           }
         />

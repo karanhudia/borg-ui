@@ -34,6 +34,7 @@ from app.api import (
     metrics,
     tokens,
     permissions,
+    remote_clients,
     agent_installer,
     managed_machines,
     agents,
@@ -168,7 +169,7 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="Borg Web UI",
     description="A lightweight web interface for Borg backup management",
-    version="2.2.1",
+    version="2.2.2-alpha.1",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     root_path=BASE_PATH if BASE_PATH else None,
@@ -227,6 +228,9 @@ app.include_router(mounts.router)  # Mount management API
 
 app.include_router(tokens.router, prefix="/api")
 app.include_router(permissions.router, prefix="/api")
+app.include_router(
+    remote_clients.router, prefix="/api/remote-clients", tags=["Remote Clients"]
+)
 app.include_router(agent_installer.router)
 app.include_router(managed_machines.router)
 app.include_router(agents.router)

@@ -6,12 +6,14 @@ const {
   navigateMock,
   toastErrorMock,
   getTabDisabledReasonMock,
+  hasGlobalPermissionMock,
   useAppStateMock,
   useTabEnablementMock,
 } = vi.hoisted(() => ({
   navigateMock: vi.fn(),
   toastErrorMock: vi.fn(),
   getTabDisabledReasonMock: vi.fn(),
+  hasGlobalPermissionMock: vi.fn(() => true),
   useAppStateMock: vi.fn(),
   useTabEnablementMock: vi.fn(),
 }))
@@ -29,6 +31,12 @@ vi.mock('../../context/AppContext', () => ({
   useTabEnablement: () => useTabEnablementMock(),
 }))
 
+vi.mock('../../hooks/useAuth', () => ({
+  useAuth: () => ({
+    hasGlobalPermission: hasGlobalPermissionMock,
+  }),
+}))
+
 vi.mock('react-hot-toast', async () => {
   const actual = await vi.importActual<typeof import('react-hot-toast')>('react-hot-toast')
   return {
@@ -42,6 +50,7 @@ vi.mock('react-hot-toast', async () => {
 describe('ProtectedRoute', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    hasGlobalPermissionMock.mockReturnValue(true)
     useAppStateMock.mockReturnValue({ isLoading: false })
     getTabDisabledReasonMock.mockReturnValue('Please create a repository first')
     useTabEnablementMock.mockReturnValue({
@@ -159,5 +168,23 @@ describe('ProtectedRoute', () => {
         duration: 4000,
       })
     })
+  })
+
+  it('redirects when the required permission is missing', async () => {
+    hasGlobalPermissionMock.mockReturnValue(false)
+
+    renderWithProviders(
+      <ProtectedRoute requiredTab="connections" requiredPermission="settings.ssh.manage">
+        <div>Remote Clients Page</div>
+      </ProtectedRoute>
+    )
+
+    await waitFor(() => {
+      expect(toastErrorMock).toHaveBeenCalledWith('You do not have permission to open this page', {
+        duration: 4000,
+      })
+      expect(navigateMock).toHaveBeenCalledWith('/dashboard', { replace: true })
+    })
+    expect(screen.queryByText('Remote Clients Page')).not.toBeInTheDocument()
   })
 })

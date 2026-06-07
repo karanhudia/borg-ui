@@ -109,6 +109,7 @@
     "items": {
       "dashboard": "Dashboard",
       "activity": "Activity",
+      "remoteClients": "Remote Clients",
       "remoteMachines": "Remote Machines",
       "managedAgents": "Managed Agents",
       "cloudStorage": "Cloud Storage",
@@ -159,6 +160,96 @@
     "logout": "Logout",
     "yourPlan": "Your Plan"
   },
+  "remoteClients": {
+    "title": "Remote Clients",
+    "description": "Register Borg UI client servers on other machines, check their health, and use this browser against the selected server.",
+    "addButton": "Add remote client",
+    "planGate": {
+      "message": "Remote client switching is available on Pro and Enterprise plans. Upgrade to add or switch to remote Borg UI servers."
+    },
+    "status": {
+      "incompatible": "Incompatible",
+      "online": "Online",
+      "offline": "Offline",
+      "checking": "Checking",
+      "unknown": "Unknown"
+    },
+    "labels": {
+      "activeTarget": "Active target",
+      "local": "Local",
+      "remoteClient": "Remote client",
+      "requiresAdmin": "Admin only",
+      "requiresPlan": "Requires Pro or Enterprise"
+    },
+    "switcher": {
+      "title": "Server targets",
+      "description": "Choose whether this browser uses this server or a remote client.",
+      "menuLabel": "Server targets",
+      "ariaLabel": "Server target {{name}}",
+      "selectLabel": "Server",
+      "noClients": "No remote clients found",
+      "localName": "This server",
+      "localHelper": "Current Borg UI server",
+      "localCompatibility": "This browser is connected to this Borg UI server.",
+      "remoteHelper": "Remote client server",
+      "remoteUnavailable": "Remote client unavailable",
+      "remoteAdminUnavailable": "Remote client switching requires admin access.",
+      "remotePlanUnavailable": "Remote client switching requires Pro or Enterprise.",
+      "versionMismatch": "Version mismatch",
+      "versionHelper": "Borg UI {{version}}",
+      "manage": "Manage remote clients",
+      "manageRequiresAdmin": "Remote Clients require admin access",
+      "manageRequiresPlan": "Remote Clients require Pro or Enterprise"
+    },
+    "localBackend": {
+      "title": "This server",
+      "active": "Active target",
+      "fallback": "Available as the local fallback"
+    },
+    "empty": {
+      "title": "No remote clients yet",
+      "description": "Add a Borg UI server URL to check its health and switch this browser to it."
+    },
+    "lastChecked": "Last checked: {{value}}",
+    "version": "Borg UI {{version}}",
+    "actions": {
+      "check": "Check",
+      "use": "Use",
+      "edit": "Edit remote client",
+      "delete": "Delete remote client",
+      "checkAria": "Check {{name}}",
+      "useAria": "Use {{name}}",
+      "useLocalAria": "Use this server",
+      "editAria": "Edit {{name}}",
+      "deleteAria": "Delete {{name}}"
+    },
+    "dialog": {
+      "addTitle": "Add remote client",
+      "editTitle": "Edit remote client",
+      "description": "Use the Borg UI server URL. DNS names, LAN IPs, localhost URLs, and `/api` paths are accepted.",
+      "nameLabel": "Client name",
+      "urlLabel": "Server URL",
+      "save": "Save client"
+    },
+    "toasts": {
+      "added": "Remote client added.",
+      "updated": "Remote client updated.",
+      "deleted": "Remote client deleted.",
+      "online": "{{name}} is online.",
+      "unavailable": "{{name}} is unavailable.",
+      "checkFailed": "{{name}} check failed: {{error}}",
+      "using": "Using {{name}}."
+    },
+    "deleteDialog": {
+      "title": "Delete remote client?",
+      "description": "Remove \"{{name}}\" from this browser? You can add it again later with its server URL.",
+      "confirm": "Delete client"
+    },
+    "errors": {
+      "saveFailed": "Failed to save remote client.",
+      "remoteUnavailable": "Remote client server is unavailable."
+    }
+  },
   "cloudStorage": {
     "title": "Cloud Storage",
     "subtitle": "Manage reusable rclone remotes for repository mirrors.",
@@ -177,6 +268,11 @@
     "remoteProviderLabel": "Provider",
     "remoteStatusLabel": "Status",
     "remoteUsageLabel": "Used by",
+    "storageUsed": "Used",
+    "storageFree": "Free",
+    "storageTotal": "Total {{value}}",
+    "storagePercentUsed": "{{value}}% used",
+    "noStorageInfo": "No storage info",
     "configSourceLabel": "Config",
     "managedConfig": "Server-managed rclone.conf",
     "editRemote": "Edit remote",
@@ -327,6 +423,41 @@
     },
     "upcomingBackups": {
       "title": "Upcoming backups"
+    },
+    "launchpad": {
+      "title": "Operations launchpad",
+      "openAction": "Open {{title}}: {{value}}, {{status}}",
+      "backupPlans": {
+        "title": "Backup plans",
+        "value_one": "{{count}} plan",
+        "value_other": "{{count}} plans",
+        "active_one": "{{count}} active",
+        "active_other": "{{count}} active",
+        "empty": "Create first",
+        "action": "Open plans"
+      },
+      "cloudStorage": {
+        "title": "Cloud storage",
+        "value_one": "{{count}} remote",
+        "value_other": "{{count}} remotes",
+        "active": "Configured",
+        "empty": "No remotes"
+      },
+      "remoteClients": {
+        "title": "Remote clients",
+        "value_one": "{{count}} client",
+        "value_other": "{{count}} clients",
+        "active": "Available",
+        "empty": "This server"
+      },
+      "restoreVerification": {
+        "title": "Restore verification",
+        "value": "{{configured}}/{{total}} covered",
+        "noRepositories": "No repos",
+        "complete": "Covered",
+        "partial": "Needs setup",
+        "action": "Schedule checks"
+      }
     },
     "scheduleBadge": {
       "noSchedule": "No automated schedule",
@@ -818,6 +949,7 @@
       "removeSourceGroup": "Remove source group",
       "backToTypes": "Back to source types",
       "applyPaths": "Use these paths",
+      "applyContainers": "Use these containers",
       "selectPaths": "Select paths",
       "currentPath": "Current path",
       "agentBrowseTitle": "Browse {{agent}}",
@@ -858,6 +990,47 @@
       "databaseLivePath": "Live database path",
       "databaseDumpPath": "Dump path",
       "databaseBackupPaths": "Final Borg paths",
+      "containerTitle": "Docker container",
+      "containerBackupTitle": "Add Docker container backup",
+      "containerName": "Container name or ID",
+      "containerImage": "Image (optional)",
+      "containerExportPath": "Export staging path",
+      "containerExportsTo": "Exports to",
+      "containerExportHint": "Borg UI exports the container filesystem to a staging path before Borg reads it. This does not back up the Docker image, bind mounts, or named volumes.",
+      "addContainerManually": "Add by name",
+      "addContainerManuallyHelp": "If your container isn't listed above, add it here.",
+      "containerSourceMachine": "Docker host",
+      "containerBackupPath": "Export staging path",
+      "containerModeExport": "docker export",
+      "scanContainers": "Scan containers",
+      "rescanContainers": "Re-scan containers",
+      "scanContainersHint": "Scan selected Docker host.",
+      "detectedContainers": "Detected containers",
+      "containerBackupCoverageTitle": "What this source backs up",
+      "containerFilesystemIncluded": "Included: container filesystem export at {{path}}",
+      "containerMountsNotIncluded": "Not included: mounted data",
+      "containerMountsNotIncludedHelp": "Add these mount paths as Files sources if they contain data you need.",
+      "containerMountNotIncluded": "Not included in docker export",
+      "containerMountsOptional": "Optional mounted data",
+      "containerMountsOptionalHelp": "Select mounts to add them as Files sources in this plan.",
+      "includeContainerMountAria": "Include mounted data {{path}} as a Files source",
+      "containerMountDestination": "Mounted at {{path}}",
+      "containerMountSizeAvailable": "{{size}}",
+      "containerMountSizeUnavailable": "Size unavailable",
+      "containerMountSizePermissionDenied": "Permission denied",
+      "containerMountSizeTimeout": "Size timed out",
+      "containerImageMetadata": "Image {{image}} identifies this container; Borg UI does not back up the image.",
+      "addDetectedContainer": "Add detected container",
+      "addDetectedContainerShort": "Add",
+      "removeDetectedContainer": "Remove detected container",
+      "containerAdded": "Added",
+      "noContainersFoundTitle": "No containers found",
+      "noContainersFoundBody": "Check Docker access on this host, or enter a container manually.",
+      "containerScanUnsupportedForAgents": "Docker container scanning is available for the Borg UI server and SSH sources. Enter managed-agent containers manually.",
+      "containerScanFailedBody": "Docker container scan did not return data. Check Docker access on this host and try again.",
+      "addContainer": "Add container",
+      "selectedContainers": "Selected containers",
+      "containerScriptsAssigned": "Export scripts assigned",
       "sourcePaths": "Source paths",
       "notesLabel": "Notes",
       "pathCount_one": "{{count}} path",
@@ -1740,6 +1913,23 @@
     },
     "deployDialog": {
       "title": "Deploy SSH Key to Server",
+      "setupPreset": "Setup preset",
+      "setupPresetHint": "Pick a documented setup to prefill defaults. You can edit every field before deploying.",
+      "presetCustom": "Custom setup",
+      "presetCustomDescription": "Start from the standard SSH defaults.",
+      "presetCustomDefaults": "Port 22, SFTP deployment enabled",
+      "presetLinux": "Linux server",
+      "presetLinuxDescription": "Headless server or VM with normal SSH access.",
+      "presetLinuxDefaults": "root user, port 22",
+      "presetBorgBase": "BorgBase",
+      "presetBorgBaseDescription": "Hosted Borg repository using the /./repo path shape.",
+      "presetBorgBaseDefaults": "Port 22, SFTP deployment off, default path /./repo",
+      "presetHetzner": "Hetzner Storage Box",
+      "presetHetznerDescription": "Storage Box repository over Hetzner's extended SSH service.",
+      "presetHetznerDefaults": "Port 23, SFTP deployment on, default path /./borg-repository",
+      "presetNas": "NAS",
+      "presetNasDescription": "Synology, Unraid, or similar NAS with SSH path mapping.",
+      "presetNasDefaults": "Port 22, SFTP deployment off, SSH path prefix /volume1",
       "host": "Host",
       "hostPlaceholder": "192.168.1.100 or example.com",
       "username": "Username",
@@ -1753,6 +1943,8 @@
       "useSudoHint": "Prefix borg with sudo on the remote host. Requires passwordless sudo for the SSH user. Only applies to remote SSH backup mode.",
       "defaultPath": "Default Path (Optional)",
       "defaultPathHelper": "Starting directory for SSH file browsing (e.g., /home for Hetzner Storage Box)",
+      "sshPathPrefix": "SSH Path Prefix (Optional)",
+      "sshPathPrefixHelper": "Prefix added when Borg needs a different SSH path than the browsing path, for example /volume1 on Synology.",
       "mountPoint": "Mount Point (Optional)",
       "mountPointPlaceholder": "hetzner or homeserver",
       "mountPointHelper": "Friendly name for this remote machine (e.g., hetzner, backup-server)",
@@ -1815,6 +2007,15 @@
       "targetHostHelper": "Optional remote TCP target",
       "targetPort": "Port",
       "targetTimeout": "Target timeout",
+      "advancedTargetSummary": "Advanced: test another service",
+      "advancedTargetDescription": "Checks whether this remote machine can reach a separate service. Leave blank for normal diagnostics.",
+      "serviceHost": "Service host",
+      "serviceHostPlaceholder": "postgres.internal",
+      "serviceHostHelper": "Optional service to test from this remote machine",
+      "servicePort": "Service port",
+      "servicePortPlaceholder": "5432",
+      "servicePortRangeShort": "1-65535",
+      "serviceTimeoutRangeShort": "0.5-15 seconds",
       "sshTimeout": "SSH timeout",
       "speedProbeSize": "Speed probe size",
       "speedProbeHelper": "Bytes to read over SSH, 65536 to 5242880.",
@@ -3955,7 +4156,8 @@
     }
   },
   "protectedRoute": {
-    "unavailable": "This feature is currently unavailable"
+    "unavailable": "This feature is currently unavailable",
+    "permissionDenied": "You do not have permission to open this page"
   },
   "repositoryCell": {
     "noPath": "No path information"
@@ -4261,6 +4463,14 @@
   "layout": {
     "systemInformation": "System Information",
     "logoAlt": "Borg UI Logo"
+  },
+  "sidebar": {
+    "update": {
+      "title": "Update available",
+      "dismiss": "Dismiss",
+      "releaseNotes": "See what's new",
+      "ariaLabel": "Software update available"
+    }
   },
   "logViewer": {
     "title": "{{label}} Logs - Job #{{jobId}}",

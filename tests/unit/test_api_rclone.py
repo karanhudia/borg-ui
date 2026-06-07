@@ -18,6 +18,7 @@ from app.database.models import (
     LicensingState,
     Repository,
     RepositoryStorage,
+    RcloneOAuthProviderCredential,
     RcloneSyncJob,
     RcloneRemote,
     SSHConnection,
@@ -69,6 +70,19 @@ def _store_oauth_credentials(
         )
     else:
         raise AssertionError(f"Unsupported OAuth provider in test: {provider}")
+    test_db.commit()
+
+
+def _store_generic_oauth_credentials(
+    test_db, provider: str, client_id: str, client_secret: str
+) -> None:
+    test_db.add(
+        RcloneOAuthProviderCredential(
+            provider=provider,
+            client_id=client_id,
+            client_secret_encrypted=encrypt_secret(client_secret),
+        )
+    )
     test_db.commit()
 
 
@@ -169,6 +183,93 @@ def test_list_rclone_providers_includes_popular_guided_sources(
 
 
 @pytest.mark.unit
+def test_list_rclone_providers_merges_generated_rclone_backends(
+    test_client: TestClient, admin_headers, monkeypatch
+):
+    async def fake_execute(command, *, timeout):
+        assert command == ["rclone", "config", "providers"]
+        return RcloneCommandResult(
+            success=True,
+            return_code=0,
+            stdout=json.dumps(
+                [
+                    {
+                        "Name": "pcloud",
+                        "Prefix": "pcloud",
+                        "Description": "Pcloud",
+                        "Options": [
+                            {
+                                "Name": "client_id",
+                                "Help": "OAuth Client Id.",
+                                "Required": False,
+                                "Advanced": False,
+                                "Sensitive": True,
+                                "Type": "string",
+                            },
+                            {
+                                "Name": "client_secret",
+                                "Help": "OAuth Client Secret.",
+                                "Required": False,
+                                "Advanced": False,
+                                "Sensitive": True,
+                                "Type": "string",
+                            },
+                            {
+                                "Name": "token",
+                                "Help": "OAuth Access Token as a JSON blob.",
+                                "Required": False,
+                                "Advanced": True,
+                                "Sensitive": True,
+                                "Type": "string",
+                            },
+                        ],
+                    },
+                    {
+                        "Name": "fichier",
+                        "Prefix": "fichier",
+                        "Description": "1Fichier",
+                        "Options": [
+                            {
+                                "Name": "api_key",
+                                "Help": "Your API key.",
+                                "Required": True,
+                                "Advanced": False,
+                                "Sensitive": True,
+                                "Type": "string",
+                            }
+                        ],
+                    },
+                ]
+            ),
+            stderr="",
+            command=command,
+            redacted_command="rclone config providers",
+        )
+
+    monkeypatch.setattr("app.api.rclone.rclone_service.execute", fake_execute)
+
+    response = test_client.get("/api/rclone/providers", headers=admin_headers)
+
+    assert response.status_code == 200
+    providers = {
+        provider["type"]: provider for provider in response.json()["providers"]
+    }
+    assert providers["pcloud"]["label"] == "Pcloud"
+    assert providers["pcloud"]["auth_type"] == "oauth_token"
+    assert providers["pcloud"]["config_template"] == {
+        "type": "pcloud",
+        "token": "",
+    }
+    assert providers["pcloud"]["oauth_mode"] == "borg_ui"
+    assert any(field["name"] == "token" for field in providers["pcloud"]["fields"])
+    assert providers["fichier"]["auth_type"] == "access_key"
+    assert providers["fichier"]["config_template"] == {
+        "type": "fichier",
+        "api_key": "",
+    }
+
+
+@pytest.mark.unit
 def test_rclone_provider_metadata_reports_borg_ui_oauth_callbacks_without_secrets(
     test_client: TestClient, admin_headers, test_db, monkeypatch
 ):
@@ -201,12 +302,173 @@ def test_rclone_provider_metadata_reports_borg_ui_oauth_callbacks_without_secret
         providers["onedrive"]["oauth_callback_url"]
         == "https://backups.example.com/borg-ui/api/rclone/oauth/callback/onedrive"
     )
-    assert providers["dropbox"]["oauth_mode"] == "rclone_loopback"
+    assert providers["dropbox"]["oauth_mode"] == "borg_ui"
+    assert providers["dropbox"]["oauth_configured"] is False
+    assert (
+        providers["dropbox"]["oauth_setup_key"]
+        == "backend.errors.rclone.oauthProviderCredentialsRequired"
+    )
     serialized = json.dumps(response.json())
     assert "google-client-id" not in serialized
     assert "google-client-secret" not in serialized
     assert "onedrive-client-id" not in serialized
     assert "onedrive-client-secret" not in serialized
+
+
+@pytest.mark.unit
+def test_rclone_provider_metadata_reports_generic_oauth_callbacks_without_secrets(
+    test_client: TestClient, admin_headers, monkeypatch
+):
+    async def fake_execute(command, *, timeout):
+        assert command == ["rclone", "config", "providers"]
+        return RcloneCommandResult(
+            success=True,
+            return_code=0,
+            stdout=json.dumps(
+                [
+                    {
+                        "Name": "pcloud",
+                        "Prefix": "pcloud",
+                        "Description": "Pcloud",
+                        "Options": [
+                            {
+                                "Name": "token",
+                                "Help": "OAuth Access Token as a JSON blob.",
+                                "Required": False,
+                                "Advanced": True,
+                                "Sensitive": True,
+                                "Type": "string",
+                            },
+                        ],
+                    },
+                ]
+            ),
+            stderr="",
+            command=command,
+            redacted_command="rclone config providers",
+        )
+
+    monkeypatch.setattr(
+        "app.api.rclone.settings.public_base_url",
+        "https://backups.example.com",
+    )
+    monkeypatch.setattr("app.api.rclone.rclone_service.execute", fake_execute)
+
+    update_response = test_client.put(
+        "/api/rclone/oauth/credentials/pcloud",
+        headers=admin_headers,
+        json={"client_id": "pcloud-client-id", "client_secret": "pcloud-secret"},
+    )
+    assert update_response.status_code == 200
+
+    response = test_client.get("/api/rclone/providers", headers=admin_headers)
+
+    assert response.status_code == 200
+    providers = {
+        provider["type"]: provider for provider in response.json()["providers"]
+    }
+    assert providers["pcloud"]["oauth_mode"] == "borg_ui"
+    assert providers["pcloud"]["oauth_configured"] is True
+    assert (
+        providers["pcloud"]["oauth_callback_url"]
+        == "https://backups.example.com/api/rclone/oauth/callback/pcloud"
+    )
+    serialized = json.dumps(response.json())
+    assert "pcloud-client-id" not in serialized
+    assert "pcloud-secret" not in serialized
+
+
+@pytest.mark.unit
+def test_non_browser_oauth_providers_are_not_advertised_as_browser_oauth(
+    test_client: TestClient, admin_headers, monkeypatch
+):
+    async def fake_execute(command, *, timeout):
+        assert command == ["rclone", "config", "providers"]
+        return RcloneCommandResult(
+            success=True,
+            return_code=0,
+            stdout=json.dumps(
+                [
+                    {
+                        "Name": "jottacloud",
+                        "Prefix": "jottacloud",
+                        "Description": "Jottacloud",
+                        "Options": [
+                            {"Name": "client_id", "Sensitive": True, "Type": "string"},
+                            {
+                                "Name": "client_secret",
+                                "Sensitive": True,
+                                "Type": "string",
+                            },
+                            {"Name": "token", "Sensitive": True, "Type": "string"},
+                        ],
+                    },
+                    {
+                        "Name": "mailru",
+                        "Prefix": "mailru",
+                        "Description": "Mail.ru Cloud",
+                        "Options": [
+                            {
+                                "Name": "user",
+                                "Required": True,
+                                "Sensitive": True,
+                                "Type": "string",
+                            },
+                            {
+                                "Name": "pass",
+                                "Required": True,
+                                "IsPassword": True,
+                                "Type": "string",
+                            },
+                            {"Name": "token", "Sensitive": True, "Type": "string"},
+                        ],
+                    },
+                ]
+            ),
+            stderr="",
+            command=command,
+            redacted_command="rclone config providers",
+        )
+
+    monkeypatch.setattr("app.api.rclone.rclone_service.execute", fake_execute)
+
+    response = test_client.get("/api/rclone/providers", headers=admin_headers)
+
+    assert response.status_code == 200
+    providers = {
+        provider["type"]: provider for provider in response.json()["providers"]
+    }
+    assert providers["jottacloud"]["auth_type"] == "manual"
+    assert providers["jottacloud"]["oauth_mode"] == "manual"
+    assert providers["mailru"]["auth_type"] == "basic"
+    assert providers["mailru"]["oauth_mode"] == "manual"
+
+
+@pytest.mark.unit
+def test_borg_ui_oauth_adapter_registry_covers_standard_callback_providers():
+    from app.api import rclone as rclone_api
+
+    standard_callback_providers = {
+        "box",
+        "drive",
+        "dropbox",
+        "gcs",
+        "gphotos",
+        "hidrive",
+        "huaweidrive",
+        "onedrive",
+        "pcloud",
+        "premiumizeme",
+        "putio",
+        "sharefile",
+        "yandex",
+        "zoho",
+    }
+
+    assert standard_callback_providers <= set(rclone_api.BORG_UI_OAUTH_ADAPTERS)
+    assert rclone_api.RCLONE_OAUTH_PROVIDER_TYPES - set(
+        rclone_api.BORG_UI_OAUTH_ADAPTERS
+    ) == {"jottacloud", "mailru"}
 
 
 @pytest.mark.unit
@@ -280,6 +542,45 @@ def test_update_rclone_oauth_credentials_persists_secret_encrypted_and_redacts(
     assert providers["drive"]["oauth_credentials_source"] == "database"
     assert providers["drive"]["oauth_client_secret_set"] is True
     assert "drive-secret" not in json.dumps(providers_response.json())
+
+
+@pytest.mark.unit
+def test_update_rclone_oauth_credentials_persists_generic_provider_secret(
+    test_client: TestClient, admin_headers, monkeypatch
+):
+    monkeypatch.setattr(
+        "app.api.rclone.settings.public_base_url",
+        "https://backups.example.com",
+    )
+
+    response = test_client.put(
+        "/api/rclone/oauth/credentials/dropbox",
+        headers=admin_headers,
+        json={"client_id": "dropbox-client-id", "client_secret": "dropbox-secret"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["provider"] == "dropbox"
+    assert body["configured"] is True
+    assert body["credential_source"] == "database"
+    assert body["client_id"] == "dropbox-client-id"
+    assert body["client_secret_set"] is True
+    assert (
+        body["callback_url"]
+        == "https://backups.example.com/api/rclone/oauth/callback/dropbox"
+    )
+    assert "dropbox-secret" not in json.dumps(body)
+
+    list_response = test_client.get(
+        "/api/rclone/oauth/credentials", headers=admin_headers
+    )
+    listed = {
+        provider["provider"]: provider for provider in list_response.json()["providers"]
+    }
+    assert listed["dropbox"]["configured"] is True
+    assert listed["dropbox"]["credential_source"] == "database"
+    assert "dropbox-secret" not in json.dumps(list_response.json())
 
 
 @pytest.mark.unit
@@ -437,6 +738,40 @@ def test_start_borg_ui_oauth_session_returns_backend_authorize_url_not_loopback(
 
 
 @pytest.mark.unit
+def test_start_standard_borg_ui_oauth_session_uses_provider_adapter_url(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    from app.api import rclone as rclone_api
+
+    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+    monkeypatch.setattr(
+        "app.api.rclone.settings.public_base_url",
+        "https://backups.example.com",
+    )
+    _store_generic_oauth_credentials(
+        test_db, "yandex", "yandex-client-id", "yandex-client-secret"
+    )
+
+    response = test_client.post(
+        "/api/rclone/oauth/sessions",
+        headers=admin_headers,
+        json={"provider": "yandex", "mode": "borg_ui"},
+    )
+
+    assert response.status_code == 201
+    session = rclone_api.RCLONE_OAUTH_SESSIONS[response.json()["session_id"]]
+    provider_url = session["provider_authorization_url"]
+    assert provider_url.startswith("https://oauth.yandex.com/authorize?")
+    assert "client_id=yandex-client-id" in provider_url
+    assert (
+        "redirect_uri=https%3A%2F%2Fbackups.example.com%2Fapi%2Frclone%2Foauth%2Fcallback%2Fyandex"
+        in provider_url
+    )
+    assert "127.0.0.1:53682" not in provider_url
+    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+
+
+@pytest.mark.unit
 def test_borg_ui_oauth_callback_validates_state_and_exchanges_code(
     test_client: TestClient, admin_headers, test_db, monkeypatch
 ):
@@ -451,7 +786,9 @@ def test_borg_ui_oauth_callback_validates_state_and_exchanges_code(
         test_db, "drive", "google-client-id", "google-client-secret"
     )
 
-    async def fake_exchange(provider: str, code: str, redirect_uri: str, db=None):
+    async def fake_exchange(
+        provider: str, code: str, redirect_uri: str, db=None, **_kwargs
+    ):
         assert provider == "drive"
         assert code == "provider-code"
         assert (
@@ -509,6 +846,134 @@ def test_borg_ui_oauth_callback_validates_state_and_exchanges_code(
     assert "real-access" not in serialized
     assert "real-refresh" not in serialized
     assert "google-client-secret" not in serialized
+    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+
+
+@pytest.mark.unit
+def test_sharefile_oauth_callback_stores_discovered_endpoint(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    from app.api import rclone as rclone_api
+
+    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+    monkeypatch.setattr(
+        "app.api.rclone.settings.public_base_url",
+        "https://backups.example.com",
+    )
+    _store_generic_oauth_credentials(
+        test_db, "sharefile", "sharefile-client-id", "sharefile-client-secret"
+    )
+
+    async def fake_exchange(
+        provider: str,
+        code: str,
+        redirect_uri: str,
+        db=None,
+        *,
+        callback_params=None,
+    ):
+        assert provider == "sharefile"
+        assert code == "provider-code"
+        assert (
+            redirect_uri
+            == "https://backups.example.com/api/rclone/oauth/callback/sharefile"
+        )
+        assert callback_params["subdomain"] == "acme"
+        assert callback_params["apicp"] == "sharefile.com"
+        return {
+            "access_token": "sharefile-access",
+            "refresh_token": "sharefile-refresh",
+            "token_type": "Bearer",
+            "expires_in": 3600,
+        }
+
+    monkeypatch.setattr(
+        rclone_api, "_exchange_borg_ui_oauth_code", fake_exchange, raising=False
+    )
+
+    start_response = test_client.post(
+        "/api/rclone/oauth/sessions",
+        headers=admin_headers,
+        json={"provider": "sharefile", "mode": "borg_ui"},
+    )
+    session_id = start_response.json()["session_id"]
+    state = rclone_api.RCLONE_OAUTH_SESSIONS[session_id]["state"]
+
+    callback_response = test_client.get(
+        "/api/rclone/oauth/callback/sharefile",
+        params={
+            "state": state,
+            "code": "provider-code",
+            "subdomain": "acme",
+            "apicp": "sharefile.com",
+        },
+    )
+
+    assert callback_response.status_code == 200
+    poll_response = test_client.get(
+        f"/api/rclone/oauth/sessions/{session_id}",
+        headers=admin_headers,
+    )
+    polled = poll_response.json()
+    assert polled["status"] == "authorized"
+    assert polled["config"]["endpoint"] == "https://acme.sharefile.com"
+    assert polled["config"]["_borg_ui_oauth_provider"] == "sharefile"
+    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+
+
+@pytest.mark.unit
+def test_zoho_oauth_callback_preserves_region_and_rclone_token_type(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    from app.api import rclone as rclone_api
+
+    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+    monkeypatch.setattr(
+        "app.api.rclone.settings.public_base_url",
+        "https://backups.example.com",
+    )
+    _store_generic_oauth_credentials(
+        test_db, "zoho", "zoho-client-id", "zoho-client-secret"
+    )
+
+    async def fake_exchange(
+        provider: str, code: str, redirect_uri: str, db=None, **_kwargs
+    ):
+        assert provider == "zoho"
+        assert code == "provider-code"
+        return {
+            "access_token": "zoho-access",
+            "refresh_token": "zoho-refresh",
+            "token_type": "Bearer",
+            "expires_in": 3600,
+        }
+
+    monkeypatch.setattr(
+        rclone_api, "_exchange_borg_ui_oauth_code", fake_exchange, raising=False
+    )
+
+    start_response = test_client.post(
+        "/api/rclone/oauth/sessions",
+        headers=admin_headers,
+        json={"provider": "zoho", "mode": "borg_ui", "config": {"region": "eu"}},
+    )
+    session_id = start_response.json()["session_id"]
+    session = rclone_api.RCLONE_OAUTH_SESSIONS[session_id]
+    assert session["provider_authorization_url"].startswith(
+        "https://accounts.zoho.eu/oauth/v2/auth?"
+    )
+    state = session["state"]
+
+    callback_response = test_client.get(
+        "/api/rclone/oauth/callback/zoho",
+        params={"state": state, "code": "provider-code"},
+    )
+
+    assert callback_response.status_code == 200
+    stored_config = rclone_api.RCLONE_OAUTH_SESSIONS[session_id]["config"]
+    token = json.loads(stored_config["token"])
+    assert stored_config["region"] == "eu"
+    assert token["token_type"] == "Zoho-oauthtoken"
     rclone_api.RCLONE_OAUTH_SESSIONS.clear()
 
 
@@ -996,6 +1461,114 @@ async def test_exchange_borg_ui_oauth_code_maps_malformed_json_to_exchange_error
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_exchange_borg_ui_oauth_code_uses_standard_adapter_token_url(
+    test_db,
+    monkeypatch,
+):
+    from app.api import rclone as rclone_api
+
+    _store_generic_oauth_credentials(
+        test_db, "putio", "putio-client-id", "putio-client-secret"
+    )
+    captured = {}
+
+    class TokenResponse:
+        status_code = 200
+
+        def json(self):
+            return {
+                "access_token": "putio-access",
+                "refresh_token": "putio-refresh",
+                "token_type": "Bearer",
+                "expires_in": 3600,
+            }
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return False
+
+        async def post(self, url, *, data):
+            captured["url"] = url
+            captured["data"] = data
+            return TokenResponse()
+
+    monkeypatch.setattr(rclone_api.httpx, "AsyncClient", FakeAsyncClient)
+
+    response = await rclone_api._exchange_borg_ui_oauth_code(
+        "putio",
+        "provider-code",
+        "https://backups.example.com/api/rclone/oauth/callback/putio",
+        db=test_db,
+    )
+
+    assert response["access_token"] == "putio-access"
+    assert captured["url"] == "https://api.put.io/v2/oauth2/access_token"
+    assert captured["data"]["client_id"] == "putio-client-id"
+    assert captured["data"]["client_secret"] == "putio-client-secret"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_sharefile_oauth_exchange_uses_callback_token_host(
+    test_db,
+    monkeypatch,
+):
+    from app.api import rclone as rclone_api
+
+    _store_generic_oauth_credentials(
+        test_db, "sharefile", "sharefile-client-id", "sharefile-client-secret"
+    )
+    captured = {}
+
+    class TokenResponse:
+        status_code = 200
+
+        def json(self):
+            return {
+                "access_token": "sharefile-access",
+                "refresh_token": "sharefile-refresh",
+                "token_type": "Bearer",
+                "expires_in": 3600,
+            }
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return False
+
+        async def post(self, url, *, data):
+            captured["url"] = url
+            captured["data"] = data
+            return TokenResponse()
+
+    monkeypatch.setattr(rclone_api.httpx, "AsyncClient", FakeAsyncClient)
+
+    response = await rclone_api._exchange_borg_ui_oauth_code(
+        "sharefile",
+        "provider-code",
+        "https://backups.example.com/api/rclone/oauth/callback/sharefile",
+        db=test_db,
+        callback_params={"subdomain": "acme", "apicp": "sharefile.com"},
+    )
+
+    assert response["access_token"] == "sharefile-access"
+    assert captured["url"] == "https://acme.sharefile.com/oauth/token"
+    assert captured["data"]["redirect_uri"].endswith("/callback/sharefile")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_fetch_onedrive_default_drive_maps_malformed_json_to_exchange_error(
     monkeypatch,
 ):
@@ -1128,6 +1701,22 @@ def test_start_rclone_oauth_session_rejects_non_oauth_provider(
         "/api/rclone/oauth/sessions",
         headers=admin_headers,
         json={"provider": "s3"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == {
+        "key": "backend.errors.rclone.oauthUnsupported"
+    }
+
+
+@pytest.mark.unit
+def test_start_rclone_oauth_session_rejects_non_browser_oauth_provider(
+    test_client: TestClient, admin_headers
+):
+    response = test_client.post(
+        "/api/rclone/oauth/sessions",
+        headers=admin_headers,
+        json={"provider": "jottacloud"},
     )
 
     assert response.status_code == 400
@@ -1277,6 +1866,40 @@ def test_list_rclone_remotes_includes_repository_usage_count(
     remotes = {remote["name"]: remote for remote in response.json()["remotes"]}
     assert remotes["prod-s3"]["usage_count"] == 2
     assert remotes["archive-b2"]["usage_count"] == 0
+
+
+@pytest.mark.unit
+def test_list_rclone_remotes_includes_storage_snapshot(
+    test_client: TestClient, admin_headers, test_db
+):
+    checked_at = datetime(2026, 6, 6, 12, 30, tzinfo=timezone.utc)
+    remote = RcloneRemote(
+        name="prod-s3",
+        provider="s3",
+        config_source="managed",
+        storage_total=10 * 1024**3,
+        storage_used=4 * 1024**3,
+        storage_available=6 * 1024**3,
+        storage_percent_used=40.0,
+        last_storage_check=checked_at,
+    )
+    test_db.add(remote)
+    test_db.commit()
+
+    response = test_client.get("/api/rclone/remotes", headers=admin_headers)
+
+    assert response.status_code == 200
+    listed = response.json()["remotes"][0]
+    assert listed["storage"] == {
+        "total": 10 * 1024**3,
+        "total_formatted": "10.00 GB",
+        "used": 4 * 1024**3,
+        "used_formatted": "4.00 GB",
+        "available": 6 * 1024**3,
+        "available_formatted": "6.00 GB",
+        "percent_used": 40.0,
+        "last_check": "2026-06-06T12:30:00+00:00",
+    }
 
 
 @pytest.mark.unit
@@ -1644,6 +2267,91 @@ def test_test_remote_updates_status(
 
 
 @pytest.mark.unit
+def test_test_remote_updates_storage_snapshot_from_about_output(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    test_db.add(remote)
+    test_db.commit()
+    test_db.refresh(remote)
+
+    monkeypatch.setattr(
+        "app.api.rclone.rclone_service.about",
+        AsyncMock(
+            return_value={
+                "success": True,
+                "stdout": "Total: 10 GiB\nUsed: 4 GiB\nFree: 6 GiB\n",
+                "stderr": "",
+            }
+        ),
+    )
+
+    response = test_client.post(
+        f"/api/rclone/remotes/{remote.id}/test", headers=admin_headers
+    )
+
+    assert response.status_code == 200
+    storage = response.json()["remote"]["storage"]
+    assert storage["total"] == 10 * 1024**3
+    assert storage["used"] == 4 * 1024**3
+    assert storage["available"] == 6 * 1024**3
+    assert storage["total_formatted"] == "10.00 GB"
+    assert storage["used_formatted"] == "4.00 GB"
+    assert storage["available_formatted"] == "6.00 GB"
+    assert storage["percent_used"] == 40.0
+    assert storage["last_check"] is not None
+    test_db.refresh(remote)
+    assert remote.storage_total == 10 * 1024**3
+    assert remote.storage_used == 4 * 1024**3
+    assert remote.storage_available == 6 * 1024**3
+    assert remote.storage_percent_used == 40.0
+    assert remote.last_storage_check is not None
+
+
+@pytest.mark.unit
+def test_test_remote_clears_storage_snapshot_when_about_has_no_size(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    remote = RcloneRemote(
+        name="prod-s3",
+        provider="s3",
+        config_source="managed",
+        storage_total=10 * 1024**3,
+        storage_used=4 * 1024**3,
+        storage_available=6 * 1024**3,
+        storage_percent_used=40.0,
+        last_storage_check=datetime(2026, 6, 6, 12, 30, tzinfo=timezone.utc),
+    )
+    test_db.add(remote)
+    test_db.commit()
+    test_db.refresh(remote)
+
+    monkeypatch.setattr(
+        "app.api.rclone.rclone_service.about",
+        AsyncMock(
+            return_value={
+                "success": True,
+                "stdout": "Remote does not report quota information\n",
+                "stderr": "",
+            }
+        ),
+    )
+
+    response = test_client.post(
+        f"/api/rclone/remotes/{remote.id}/test", headers=admin_headers
+    )
+
+    assert response.status_code == 200
+    assert response.json()["remote"]["storage"] is None
+    test_db.refresh(remote)
+    assert remote.storage_total is None
+    assert remote.storage_used is None
+    assert remote.storage_available is None
+    assert remote.storage_percent_used is None
+    assert remote.last_storage_check is None
+
+
+@pytest.mark.unit
 def test_browse_remote_returns_redacted_entries(
     test_client: TestClient, admin_headers, test_db, monkeypatch
 ):
@@ -1754,6 +2462,52 @@ def test_repository_rclone_status_endpoint(
     assert response.status_code == 200
     assert response.json()["rclone_target"] == "prod-s3:borg-ui/repositories/app"
     assert response.json()["sync_status"] == "pending"
+
+
+@pytest.mark.unit
+def test_repository_rclone_status_applies_log_save_policy_to_latest_sync_job(
+    test_client: TestClient, admin_headers, test_db
+):
+    settings = test_db.query(SystemSettings).first()
+    if settings is None:
+        settings = SystemSettings()
+        test_db.add(settings)
+    settings.log_save_policy = "failed_only"
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    repository = Repository(
+        name="App",
+        path="/cache/repositories/1",
+        encryption="none",
+        repository_type="rclone",
+    )
+    test_db.add_all([remote, repository])
+    test_db.flush()
+    storage = RepositoryStorage(
+        repository_id=repository.id,
+        backend="rclone",
+        rclone_remote_id=remote.id,
+        rclone_remote_path="borg-ui/repositories/app",
+        cache_path="/cache/repositories/1",
+        sync_policy="after_success",
+        sync_status="synced",
+    )
+    sync_job = RcloneSyncJob(
+        repository_id=repository.id,
+        direction="primary_to_remote",
+        operation="sync",
+        status="completed",
+        triggered_by="manual",
+        log_text="successful sync output",
+    )
+    test_db.add_all([storage, sync_job])
+    test_db.commit()
+
+    response = test_client.get(
+        f"/api/repositories/{repository.id}/rclone/status", headers=admin_headers
+    )
+
+    assert response.status_code == 200
+    assert response.json()["latest_sync_job"]["has_log"] is False
 
 
 @pytest.mark.unit
@@ -4642,6 +5396,35 @@ def test_rclone_storage_migration_uses_postgresql_identity_columns():
         "id INTEGER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY"
     )
     assert migration._timestamp_type(FakeDb()) == "TIMESTAMP"
+
+
+@pytest.mark.unit
+def test_rclone_oauth_provider_credentials_table_migration_runs_with_connection():
+    migration = importlib.import_module(
+        "app.database.migrations.121_add_rclone_oauth_provider_credentials_table"
+    )
+    engine = create_engine("sqlite:///:memory:")
+
+    with engine.connect() as connection:
+        migration.upgrade(connection)
+        inspector = inspect(engine)
+        assert inspector.has_table("rclone_oauth_provider_credentials")
+        columns = {
+            column["name"]
+            for column in inspector.get_columns("rclone_oauth_provider_credentials")
+        }
+        assert {
+            "id",
+            "provider",
+            "client_id",
+            "client_secret_encrypted",
+            "created_at",
+            "updated_at",
+        } <= columns
+
+        migration.downgrade(connection)
+        inspector = inspect(engine)
+        assert not inspector.has_table("rclone_oauth_provider_credentials")
 
 
 @pytest.mark.unit

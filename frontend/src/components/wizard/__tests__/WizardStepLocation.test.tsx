@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import WizardStepLocation from '../WizardStepLocation'
+import { fullFeatureSystemInfo } from '../WizardStepLocation.storyFixtures'
 
 vi.mock('../../../hooks/usePlan', () => ({
   usePlan: () => ({ plan: 'community', features: {}, isLoading: false, can: () => true }),
@@ -58,6 +59,10 @@ const openDestinationSelect = async (user: ReturnType<typeof userEvent.setup>) =
 }
 
 describe('WizardStepLocation', () => {
+  it('seeds Storybook with Borg v2 access so visual snapshots keep the version selector', () => {
+    expect(fullFeatureSystemInfo.feature_access.borg_v2).toBe(true)
+  })
+
   describe('Create Mode', () => {
     it('renders Repository Name input', () => {
       render(

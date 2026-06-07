@@ -196,8 +196,8 @@ class TestMaintenanceJobsHelpers:
         )
         legacy_job = CheckJob(repository_id=repo.id, logs="legacy only")
 
-        assert read_job_logs(file_job) == "from file\n"
-        assert read_job_logs(legacy_job) == "legacy only"
+        assert read_job_logs(file_job, log_save_policy="all_jobs") == "from file\n"
+        assert read_job_logs(legacy_job, log_save_policy="all_jobs") == "legacy only"
 
     def test_serialize_job_helpers_include_requested_fields(self, test_db):
         repo = _create_repo(test_db)
@@ -218,11 +218,13 @@ class TestMaintenanceJobsHelpers:
             include_progress=True,
             include_logs=True,
             include_has_logs=True,
+            log_save_policy="all_jobs",
         )
         summary_payload = serialize_job_summary(
             job,
             include_progress=True,
             include_has_logs=True,
+            log_save_policy="all_jobs",
         )
 
         assert status_payload["progress"] == 100
@@ -231,3 +233,50 @@ class TestMaintenanceJobsHelpers:
         assert status_payload["has_logs"] is True
         assert summary_payload["progress"] == 100
         assert summary_payload["has_logs"] is True
+
+    def test_serialize_job_helpers_apply_log_save_policy(self, test_db):
+        repo = _create_repo(test_db)
+        job = CheckJob(
+            repository_id=repo.id,
+            status="completed",
+            started_at=datetime(2026, 1, 1, 12, 0, 0),
+            completed_at=datetime(2026, 1, 1, 12, 5, 0),
+            logs="successful check output",
+            has_logs=True,
+        )
+
+        status_payload = serialize_job_status(
+            job,
+            include_logs=True,
+            include_has_logs=True,
+            log_save_policy="failed_only",
+        )
+        summary_payload = serialize_job_summary(
+            job,
+            include_has_logs=True,
+            log_save_policy="failed_only",
+        )
+
+        assert status_payload["logs"] == ""
+        assert status_payload["has_logs"] is False
+        assert summary_payload["has_logs"] is False
+
+    def test_serialize_job_helpers_keep_running_logs_visible(self, test_db):
+        repo = _create_repo(test_db)
+        job = CheckJob(
+            repository_id=repo.id,
+            status="running",
+            started_at=datetime(2026, 1, 1, 12, 0, 0),
+            logs="live check output",
+            has_logs=True,
+        )
+
+        status_payload = serialize_job_status(
+            job,
+            include_logs=True,
+            include_has_logs=True,
+            log_save_policy="failed_only",
+        )
+
+        assert status_payload["logs"] == "live check output"
+        assert status_payload["has_logs"] is True

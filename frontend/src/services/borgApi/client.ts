@@ -13,8 +13,15 @@ import axios from 'axios'
 import { BASE_PATH } from '@/utils/basePath'
 import type { Repository } from '@/types'
 import { isV2Repo } from '@/utils/repoCapabilities'
-import { buildDownloadUrl } from '@/utils/downloadUrl'
-import { attachAccessTokenHeader } from '../authHeaders'
+import { buildDownloadUrl } from '../remoteBackends/gateway'
+import { getActiveBackendTarget } from '../remoteBackends/storage'
+import {
+  attachAccessTokenHeader,
+  BACKEND_TARGET_ID_CONFIG_KEY,
+  clearAccessToken,
+  type BackendTargetRequestConfig,
+} from '../authHeaders'
+import type { InternalAxiosRequestConfig } from 'axios'
 
 export const httpClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL || `${BASE_PATH}/api`,
@@ -22,7 +29,13 @@ export const httpClient = axios.create({
 })
 
 // Mirror the shared auth interceptor so this client also attaches tokens.
-httpClient.interceptors.request.use(attachAccessTokenHeader)
+httpClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  const target = getActiveBackendTarget()
+  const targetConfig = config as BackendTargetRequestConfig
+  targetConfig.baseURL = target.apiBaseUrl
+  targetConfig[BACKEND_TARGET_ID_CONFIG_KEY] = target.id
+  return attachAccessTokenHeader(targetConfig, target.id)
+})
 
 httpClient.interceptors.response.use(
   (response) => response,
@@ -32,7 +45,10 @@ httpClient.interceptors.response.use(
       error.config?.url !== '/auth/login' &&
       error.config?.url !== '/auth/config'
     ) {
-      localStorage.removeItem('access_token')
+      const requestTargetId = (error.config as BackendTargetRequestConfig | undefined)?.[
+        BACKEND_TARGET_ID_CONFIG_KEY
+      ]
+      clearAccessToken(requestTargetId)
       window.location.href = `${BASE_PATH}/login`
     }
     return Promise.reject(error)

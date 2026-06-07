@@ -106,6 +106,7 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.mixedSources': 'Multiple sources',
   'backupPlans.sourceChooser.databaseLivePath': 'Live database path',
   'backupPlans.sourceChooser.databaseBackupPaths': 'Final Borg paths',
+  'backupPlans.sourceChooser.containerBackupPath': 'Export staging path',
   'backupPlans.wizard.review.sources': 'Sources',
   'backupPlans.wizard.review.repositories': 'Repositories',
   'backupPlans.wizard.review.compression': 'Compression',
@@ -219,6 +220,37 @@ export const DatabaseSourceToServerRepo: Story = {
         ),
         name: 'SQLite database backup',
         databaseTemplateId: 'sqlite',
+      },
+      [serverRepo]
+    ),
+}
+
+export const DockerContainerSourceToServerRepo: Story = {
+  render: () =>
+    renderReview(
+      {
+        ...stateWith(
+          [serverRepo.id],
+          [
+            {
+              source_type: 'local',
+              source_ssh_connection_id: null,
+              paths: ['/var/tmp/borg-ui/container-exports/postgres'],
+              container: {
+                container_name: 'postgres',
+                display_name: 'postgres',
+                image: 'postgres:17',
+                backup_mode: 'export',
+                export_path: '/var/tmp/borg-ui/container-exports/postgres',
+                script_execution_target: 'source',
+                pre_backup_script_id: 201,
+                post_backup_script_id: 202,
+                script_execution_order: 1,
+              },
+            },
+          ]
+        ),
+        name: 'Postgres container export',
       },
       [serverRepo]
     ),

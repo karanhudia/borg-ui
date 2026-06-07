@@ -10,7 +10,9 @@ import { useAnalytics } from '../hooks/useAnalytics'
 import { getApiErrorDetail } from '../utils/apiErrors'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { authAPI } from '../services/api'
+import { setAccessToken } from '../services/authHeaders'
 import { BASE_PATH } from '../utils/basePath'
+import BackendTargetSelect from '../components/BackendTargetSelect'
 
 interface LoginForm {
   username: string
@@ -19,6 +21,52 @@ interface LoginForm {
 
 function hasErrorName(error: unknown, name: string) {
   return typeof error === 'object' && error !== null && 'name' in error && error.name === name
+}
+
+const authServerSelectRootSx = {
+  '& .MuiInputLabel-root': {
+    color: '#94a3b8',
+    fontSize: 13,
+    fontWeight: 500,
+  },
+  '& .MuiInputLabel-root.Mui-focused': {
+    color: '#86efac',
+  },
+}
+
+const authServerSelectSx = {
+  height: 56,
+  color: '#e2e8f0',
+  borderRadius: 1,
+  backgroundColor: 'rgba(255,255,255,0.04)',
+  '& .MuiOutlinedInput-notchedOutline': {
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  '&:hover .MuiOutlinedInput-notchedOutline': {
+    borderColor: 'rgba(148,163,184,0.35)',
+  },
+  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+    borderColor: 'rgba(0,221,0,0.5)',
+    boxShadow: '0 0 0 3px rgba(0,221,0,0.08)',
+  },
+  '& .MuiSelect-icon': {
+    color: '#94a3b8',
+  },
+}
+
+const authServerMenuSx = {
+  backgroundColor: '#101510',
+  color: '#e2e8f0',
+  border: '1px solid rgba(255,255,255,0.1)',
+  '& .MuiListSubheader-root': {
+    backgroundColor: '#101510',
+  },
+  '& .MuiMenuItem-root.Mui-selected': {
+    backgroundColor: 'rgba(0,221,0,0.12)',
+  },
+  '& .MuiMenuItem-root.Mui-selected:hover': {
+    backgroundColor: 'rgba(0,221,0,0.18)',
+  },
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -101,7 +149,7 @@ export default function Login() {
         if (!access_token) {
           throw new Error('Missing access token')
         }
-        localStorage.setItem('access_token', access_token)
+        setAccessToken(access_token)
         handleSuccessfulLogin(null, must_change_password || false, 'passkey_autofill')
       } catch (error: unknown) {
         if (hasErrorName(error, 'AbortError') || cancelled) {
@@ -398,6 +446,11 @@ export default function Login() {
                   {t('login.localAuthDisabledHint')}
                 </p>
               )}
+              <BackendTargetSelect
+                sx={authServerSelectRootSx}
+                selectSx={authServerSelectSx}
+                menuPaperSx={authServerMenuSx}
+              />
             </>
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>

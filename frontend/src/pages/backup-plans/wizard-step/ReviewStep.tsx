@@ -2,6 +2,7 @@ import { Alert, Box, Stack, Typography } from '@mui/material'
 import {
   CalendarClock,
   Code,
+  Container as ContainerIcon,
   Database,
   HardDrive,
   Laptop,
@@ -75,13 +76,23 @@ export function ReviewStep({
   )
   const sourceLocations = wizardState.sourceLocations || []
   const databaseSourceLocations = sourceLocations.filter((location) => Boolean(location.database))
+  const containerSourceLocations = sourceLocations.filter((location) => Boolean(location.container))
   const hasDatabaseSourceLocations = databaseSourceLocations.length > 0
-  const fileSourceDirectories = hasDatabaseSourceLocations
-    ? sourceLocations.filter((location) => !location.database).flatMap((location) => location.paths)
+  const hasContainerSourceLocations = containerSourceLocations.length > 0
+  const hasStructuredSourceLocations = hasDatabaseSourceLocations || hasContainerSourceLocations
+  const fileSourceDirectories = hasStructuredSourceLocations
+    ? sourceLocations
+        .filter((location) => !location.database && !location.container)
+        .flatMap((location) => location.paths)
     : wizardState.sourceDirectories
   const visibleDatabaseSourceLocations = databaseSourceLocations.slice(0, 4)
+  const visibleContainerSourceLocations = containerSourceLocations.slice(0, 4)
   const hiddenDatabaseSourceCount = Math.max(
     databaseSourceLocations.length - visibleDatabaseSourceLocations.length,
+    0
+  )
+  const hiddenContainerSourceCount = Math.max(
+    containerSourceLocations.length - visibleContainerSourceLocations.length,
     0
   )
   const visibleSourceDirectories = fileSourceDirectories.slice(0, 6)
@@ -194,7 +205,7 @@ export function ReviewStep({
                 minWidth: 0,
               }}
             >
-              {hasDatabaseSourceLocations ? (
+              {hasStructuredSourceLocations ? (
                 <Stack spacing={0.75} sx={{ width: '100%', minWidth: 0 }}>
                   {visibleDatabaseSourceLocations.map((location, index) => (
                     <DatabaseSourceReviewItem
@@ -206,6 +217,18 @@ export function ReviewStep({
                   {hiddenDatabaseSourceCount > 0 && (
                     <ReviewCount>
                       {t('repositories.moreCount', { count: hiddenDatabaseSourceCount })}
+                    </ReviewCount>
+                  )}
+                  {visibleContainerSourceLocations.map((location, index) => (
+                    <ContainerSourceReviewItem
+                      key={`${location.source_type}:${location.source_ssh_connection_id || 'local'}:${location.container?.container_name || index}`}
+                      location={location}
+                      t={t}
+                    />
+                  ))}
+                  {hiddenContainerSourceCount > 0 && (
+                    <ReviewCount>
+                      {t('repositories.moreCount', { count: hiddenContainerSourceCount })}
                     </ReviewCount>
                   )}
                   {visibleSourceDirectories.length > 0 && (
@@ -575,6 +598,84 @@ function DatabaseSourceReviewItem({
       <ReviewDatabasePath
         label={t('backupPlans.sourceChooser.databaseBackupPaths')}
         value={backupPathLabel}
+      />
+    </Box>
+  )
+}
+
+function ContainerSourceReviewItem({
+  location,
+  t,
+}: {
+  location: SourceLocation
+  t: ReviewStepProps['t']
+}) {
+  const container = location.container
+  if (!container) return null
+
+  return (
+    <Box
+      sx={{
+        border: '1px solid',
+        borderColor: 'divider',
+        borderRadius: 1,
+        bgcolor: 'background.paper',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 0.6,
+        minWidth: 0,
+        px: 1,
+        py: 0.85,
+      }}
+    >
+      <Stack direction="row" spacing={0.75} alignItems="center" sx={{ minWidth: 0 }}>
+        <ContainerIcon size={12} style={{ opacity: 0.7, flexShrink: 0 }} />
+        <Typography
+          variant="caption"
+          sx={{
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 0.75,
+            color: 'text.secondary',
+            flexShrink: 0,
+            fontSize: '0.68rem',
+            fontWeight: 700,
+            lineHeight: 1.35,
+            px: 0.55,
+            py: 0.1,
+          }}
+        >
+          {t('backupPlans.sourceChooser.containerTitle')}
+        </Typography>
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.primary',
+            fontSize: '0.78rem',
+            fontWeight: 700,
+            lineHeight: 1.35,
+            minWidth: 0,
+          }}
+          noWrap
+          title={container.display_name}
+        >
+          {container.display_name}
+        </Typography>
+        {container.image && (
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            noWrap
+            title={container.image}
+            sx={{ minWidth: 0 }}
+          >
+            {container.image}
+          </Typography>
+        )}
+      </Stack>
+      <ReviewDatabasePath
+        label={t('backupPlans.sourceChooser.containerBackupPath')}
+        value={container.export_path || location.paths.join(', ')}
       />
     </Box>
   )

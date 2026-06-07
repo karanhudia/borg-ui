@@ -126,6 +126,39 @@ const databaseDumpState: WizardState = {
   databaseTemplateId: 'postgresql',
 }
 
+const dockerContainerState: WizardState = {
+  ...createInitialState(),
+  name: 'Postgres container export',
+  description: 'Docker export of the app database container.',
+  sourceType: 'local',
+  sourceDirectories: ['/var/tmp/borg-ui/container-exports/postgres'],
+  sourceLocations: [
+    {
+      source_type: 'local',
+      source_ssh_connection_id: null,
+      paths: ['/var/tmp/borg-ui/container-exports/postgres'],
+      container: {
+        container_name: 'postgres',
+        display_name: 'postgres',
+        image: 'postgres:17',
+        backup_mode: 'export',
+        export_path: '/var/tmp/borg-ui/container-exports/postgres',
+        script_execution_target: 'source',
+        pre_backup_script_id: 201,
+        post_backup_script_id: 202,
+        pre_backup_script_parameters: {
+          BORG_UI_CONTAINER_NAME: 'postgres',
+          BORG_UI_CONTAINER_EXPORT_DIR: '/var/tmp/borg-ui/container-exports/postgres',
+        },
+        post_backup_script_parameters: {
+          BORG_UI_CONTAINER_EXPORT_DIR: '/var/tmp/borg-ui/container-exports/postgres',
+        },
+        script_execution_order: 1,
+      },
+    },
+  ],
+}
+
 const btrfsSnapshotState: WizardState = {
   ...createInitialState(),
   name: 'Btrfs app snapshot',
@@ -158,6 +191,9 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.edit': 'Edit',
   'backupPlans.sourceChooser.databaseTitle': 'Database scan',
   'backupPlans.sourceChooser.filesTitle': 'Files and folders',
+  'backupPlans.sourceChooser.containerTitle': 'Docker container',
+  'backupPlans.sourceChooser.containerImage': 'Image (optional)',
+  'backupPlans.sourceChooser.containerBackupPath': 'Export staging path',
   'backupPlans.sourceChooser.localSource': 'Local source',
   'backupPlans.sourceChooser.borgUiServer': 'Borg UI server',
   'backupPlans.sourceChooser.agentFallback': 'Agent #{{id}}',
@@ -252,6 +288,10 @@ export const CommunityMixedSourcesLocked: Story = {
 
 export const DatabaseDumpSource: Story = {
   render: () => renderStep({ wizardState: databaseDumpState }),
+}
+
+export const DockerContainerSource: Story = {
+  render: () => renderStep({ wizardState: dockerContainerState }),
 }
 
 export const BtrfsSnapshotSource: Story = {

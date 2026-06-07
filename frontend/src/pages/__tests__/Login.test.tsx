@@ -2,6 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders, screen, userEvent, waitFor } from '../../test/test-utils'
 import Login from '../Login'
 import { toast } from 'react-hot-toast'
+import { RemoteBackendProvider } from '../../services/remoteBackends/context'
+import {
+  createRemoteBackendClient,
+  resetRemoteBackendStateForTests,
+  updateRemoteBackendHealth,
+} from '../../services/remoteBackends/storage'
 
 const { loginMock, verifyTotpLoginMock, loginWithPasskeyMock, navigateMock, trackAuthMock } =
   vi.hoisted(() => ({
@@ -59,13 +65,22 @@ describe('Login page', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
+    resetRemoteBackendStateForTests()
   })
+
+  function renderLogin() {
+    return renderWithProviders(
+      <RemoteBackendProvider>
+        <Login />
+      </RemoteBackendProvider>
+    )
+  }
 
   it('submits credentials, tracks login, and redirects to the dashboard by default', async () => {
     const user = userEvent.setup()
     loginMock.mockResolvedValue({ totpRequired: false, mustChangePassword: false })
 
-    renderWithProviders(<Login />)
+    renderLogin()
 
     await user.type(screen.getByLabelText(/username/i), 'admin')
     await user.type(screen.getByLabelText(/^password$/i), 'secret')
@@ -86,7 +101,7 @@ describe('Login page', () => {
     const user = userEvent.setup()
     loginMock.mockResolvedValue({ totpRequired: false, mustChangePassword: true })
 
-    renderWithProviders(<Login />)
+    renderLogin()
 
     await user.type(screen.getByLabelText(/username/i), 'admin')
     await user.type(screen.getByLabelText(/^password$/i), 'secret')
@@ -109,7 +124,7 @@ describe('Login page', () => {
       },
     })
 
-    renderWithProviders(<Login />)
+    renderLogin()
 
     await user.type(screen.getByLabelText(/username/i), 'admin')
     await user.type(screen.getByLabelText(/^password$/i), 'wrong-secret')
@@ -131,7 +146,7 @@ describe('Login page', () => {
     })
     verifyTotpLoginMock.mockResolvedValue({ mustChangePassword: false })
 
-    renderWithProviders(<Login />)
+    renderLogin()
 
     await user.type(screen.getByLabelText(/username/i), 'admin')
     await user.type(screen.getByLabelText(/^password$/i), 'secret')
@@ -156,7 +171,7 @@ describe('Login page', () => {
     const user = userEvent.setup()
     loginWithPasskeyMock.mockResolvedValue({ mustChangePassword: false })
 
-    renderWithProviders(<Login />)
+    renderLogin()
 
     await user.click(screen.getByRole('button', { name: /sign in with passkey/i }))
 
@@ -169,5 +184,36 @@ describe('Login page', () => {
         requires_password_setup: false,
       })
     })
+  })
+
+  it('shows a server selector below credentials without a manage action', async () => {
+    const remote = createRemoteBackendClient({
+      name: 'Studio NAS',
+      backendUrl: 'nas.local:9000',
+    })
+    updateRemoteBackendHealth(remote.id, {
+      status: 'online',
+      checkedAt: '2026-06-05T00:00:00.000Z',
+      appVersion: '2.2.1',
+      compatibility: 'compatible',
+      compatibilityMessage: 'Compatible',
+    })
+    const user = userEvent.setup()
+
+    renderLogin()
+
+    const passwordInput = screen.getByLabelText(/^password$/i)
+    const serverSelect = screen.getByLabelText(/^server$/i)
+    expect(
+      passwordInput.compareDocumentPosition(serverSelect) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
+
+    await user.click(serverSelect)
+    expect(await screen.findByRole('option', { name: /studio nas/i })).toBeInTheDocument()
+    expect(screen.queryByText(/manage remote clients/i)).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('option', { name: /studio nas/i }))
+
+    expect(screen.getByLabelText(/^server$/i)).toHaveTextContent('Studio NAS')
   })
 })

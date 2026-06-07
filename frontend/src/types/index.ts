@@ -30,6 +30,20 @@ export interface SourceDatabaseSelection {
   script_execution_order?: number
 }
 
+export interface SourceContainerSelection {
+  container_name: string
+  display_name: string
+  image?: string | null
+  backup_mode: 'export'
+  export_path: string
+  script_execution_target: 'source' | 'server'
+  pre_backup_script_id?: number | null
+  post_backup_script_id?: number | null
+  pre_backup_script_parameters?: Record<string, string> | null
+  post_backup_script_parameters?: Record<string, string> | null
+  script_execution_order?: number
+}
+
 export interface SourceLocation {
   source_type: SourceLocationKind
   source_ssh_connection_id?: number | null
@@ -37,6 +51,7 @@ export interface SourceLocation {
   paths: string[]
   snapshot?: SourceSnapshotConfig
   database?: SourceDatabaseSelection
+  container?: SourceContainerSelection
 }
 
 export interface Repository {

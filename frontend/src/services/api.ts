@@ -1,8 +1,15 @@
 import axios from 'axios'
 import { toast } from 'react-hot-toast'
 import { BASE_PATH } from '@/utils/basePath'
-import { API_BASE_URL, buildDownloadUrl } from '@/utils/downloadUrl'
-import { attachAccessTokenHeader } from './authHeaders'
+import { API_BASE_URL, buildApiUrl, buildDownloadUrl } from './remoteBackends/gateway'
+import { getActiveBackendTarget } from './remoteBackends/storage'
+import {
+  attachAccessTokenHeader,
+  BACKEND_TARGET_ID_CONFIG_KEY,
+  clearAccessToken,
+  type BackendTargetRequestConfig,
+} from './authHeaders'
+import type { InternalAxiosRequestConfig } from 'axios'
 import type { RestoreLayout, RestorePathMetadata } from '@/utils/restorePaths'
 import type {
   BackupPlan,
@@ -30,7 +37,13 @@ const api = axios.create({
 })
 
 // Request interceptor to add auth token
-api.interceptors.request.use(attachAccessTokenHeader)
+api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  const target = getActiveBackendTarget()
+  const targetConfig = config as BackendTargetRequestConfig
+  targetConfig.baseURL = target.apiBaseUrl
+  targetConfig[BACKEND_TARGET_ID_CONFIG_KEY] = target.id
+  return attachAccessTokenHeader(targetConfig, target.id)
+})
 
 // Response interceptor to handle auth errors
 api.interceptors.response.use(
@@ -52,7 +65,10 @@ api.interceptors.response.use(
       error.config?.url !== '/auth/config' &&
       authTransportMode === 'jwt'
     ) {
-      localStorage.removeItem('access_token')
+      const requestTargetId = (error.config as BackendTargetRequestConfig | undefined)?.[
+        BACKEND_TARGET_ID_CONFIG_KEY
+      ]
+      clearAccessToken(requestTargetId)
       window.location.href = `${BASE_PATH}/login`
     }
     return Promise.reject(error)
@@ -181,6 +197,17 @@ export interface RcloneOAuthSession {
   error?: string | null
 }
 
+export interface RcloneRemoteStorage {
+  total: number
+  total_formatted: string
+  used: number
+  used_formatted: string
+  available: number
+  available_formatted: string
+  percent_used: number
+  last_check?: string | null
+}
+
 export interface RcloneRemote {
   id: number
   name: string
@@ -192,6 +219,7 @@ export interface RcloneRemote {
   last_test_status?: string | null
   last_error?: string | null
   oauth_token?: RcloneOAuthTokenStatus | null
+  storage?: RcloneRemoteStorage | null
 }
 
 export type { RcloneStorage } from '../types'
@@ -437,6 +465,47 @@ export interface DatabaseScanResponse {
   warnings: DatabaseScanWarning[]
 }
 
+export interface ContainerScanRequest {
+  source_type: 'local' | 'remote'
+  source_ssh_connection_id: number | null
+  include_stopped?: boolean
+  timeout_seconds?: number
+}
+
+export interface SourceDiscoveryContainerMount {
+  type: string | null
+  name: string | null
+  source: string | null
+  backup_source?: string | null
+  destination: string | null
+  backed_up: boolean
+  reason: string
+  size_bytes?: number | null
+  size_status?: 'available' | 'unavailable' | 'permission_denied' | 'timeout' | string | null
+}
+
+export interface SourceDiscoveryContainer {
+  id: string
+  name: string
+  image: string | null
+  status: string | null
+  state: string | null
+  export_path: string
+  backup_mode: 'export'
+  notes: string[]
+  mounts: SourceDiscoveryContainerMount[]
+}
+
+export interface ContainerScanResponse {
+  scan_target: {
+    source_type: 'local' | 'remote'
+    source_ssh_connection_id: number | null
+    label: string
+  }
+  containers: SourceDiscoveryContainer[]
+  warnings: DatabaseScanWarning[]
+}
+
 export interface FilesystemSnapshotProviderCapability {
   id: 'btrfs' | 'zfs'
   label: string
@@ -455,20 +524,10 @@ export interface FilesystemSnapshotCapabilitiesResponse {
 export const authAPI = {
   getAuthConfig: () => api.get<AuthConfigResponse>('/auth/config'),
   getOidcLoginUrl: (returnTo?: string) => {
-    const params = new URLSearchParams()
-    if (returnTo) {
-      params.set('return_to', returnTo)
-    }
-    const suffix = params.toString()
-    return `${API_BASE_URL}/auth/oidc/login${suffix ? `?${suffix}` : ''}`
+    return buildApiUrl('/auth/oidc/login', { return_to: returnTo })
   },
   getOidcLinkUrl: (returnTo?: string) => {
-    const params = new URLSearchParams()
-    if (returnTo) {
-      params.set('return_to', returnTo)
-    }
-    const suffix = params.toString()
-    return `${API_BASE_URL}/auth/oidc/link${suffix ? `?${suffix}` : ''}`
+    return buildApiUrl('/auth/oidc/link', { return_to: returnTo })
   },
   beginOidcLink: (returnTo?: string) =>
     api.post<OidcLinkStartResponse>('/auth/oidc/link', { return_to: returnTo }),
@@ -1248,6 +1307,8 @@ export const sourceDiscoveryAPI = {
   databases: () => api.get<SourceDiscoveryResponse>('/source-discovery/databases'),
   scanDatabases: (body: DatabaseScanRequest) =>
     api.post<DatabaseScanResponse>('/source-discovery/databases/scan', body),
+  scanContainers: (body: ContainerScanRequest) =>
+    api.post<ContainerScanResponse>('/source-discovery/containers/scan', body),
   filesystemSnapshots: () =>
     api.get<FilesystemSnapshotCapabilitiesResponse>('/source-discovery/filesystem-snapshots'),
 }

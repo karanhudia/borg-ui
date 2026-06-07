@@ -28,6 +28,7 @@ from app.database.models import (
     ScheduledJob,
     ScheduledJobRepository,
     SSHConnection,
+    SystemSettings,
     UserRepositoryPermission,
 )
 from app.core.security import get_password_hash
@@ -85,6 +86,15 @@ def _create_script(test_db, name: str, **kwargs) -> Script:
     test_db.commit()
     test_db.refresh(script)
     return script
+
+
+def _set_log_save_policy(test_db, policy: str) -> None:
+    settings_row = test_db.query(SystemSettings).first()
+    if settings_row is None:
+        settings_row = SystemSettings()
+        test_db.add(settings_row)
+    settings_row.log_save_policy = policy
+    test_db.commit()
 
 
 def _set_plan(test_db, plan: str) -> None:
@@ -738,6 +748,108 @@ class TestBackupPlanRoutes:
         assert row["started_at"]
         assert row["completed_at"]
 
+    def test_run_response_hides_quiet_backup_logs_under_failed_only(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _set_log_save_policy(test_db, "failed_only")
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        _plan, run = _create_execution_plan(test_db, [repo])
+        backup_job = BackupJob(
+            repository=repo.path,
+            repository_id=repo.id,
+            backup_plan_run_id=run.id,
+            status="completed",
+            started_at=datetime.utcnow(),
+            completed_at=datetime.utcnow(),
+            logs="quiet successful transcript",
+        )
+        test_db.add(backup_job)
+        test_db.flush()
+        run_repo = (
+            test_db.query(BackupPlanRunRepository)
+            .filter_by(backup_plan_run_id=run.id, repository_id=repo.id)
+            .one()
+        )
+        run_repo.status = "completed"
+        run_repo.backup_job_id = backup_job.id
+        test_db.commit()
+
+        response = test_client.get(
+            f"/api/backup-plans/runs/{run.id}", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        backup_row = response.json()["repositories"][0]["backup_job"]
+        assert backup_row["id"] == backup_job.id
+        assert backup_row["has_logs"] is False
+
+    def test_run_response_applies_log_policy_to_quiet_script_execution(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _set_log_save_policy(test_db, "failed_and_warnings")
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        script = _create_script(test_db, "Quiet Source Prepare")
+        plan, run = _create_execution_plan(test_db, [repo])
+        execution = ScriptExecution(
+            script_id=script.id,
+            backup_plan_id=plan.id,
+            backup_plan_run_id=run.id,
+            hook_type="pre-backup",
+            status="completed",
+            started_at=datetime.utcnow(),
+            completed_at=datetime.utcnow(),
+            execution_time=1.25,
+            exit_code=0,
+            stdout="completed successfully",
+            stderr="",
+            triggered_by="backup_plan",
+        )
+        test_db.add(execution)
+        test_db.commit()
+
+        response = test_client.get(
+            f"/api/backup-plans/runs/{run.id}", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        row = response.json()["script_executions"][0]
+        assert row["id"] == execution.id
+        assert row["has_logs"] is False
+
+    def test_run_response_uses_log_policy_for_quiet_script_executions(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _set_log_save_policy(test_db, "failed_only")
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        script = _create_script(test_db, "Clean Docker export")
+        plan, run = _create_execution_plan(test_db, [repo])
+        execution = ScriptExecution(
+            script_id=script.id,
+            backup_plan_id=plan.id,
+            backup_plan_run_id=run.id,
+            hook_type="source-post-backup",
+            status="completed",
+            started_at=datetime.utcnow(),
+            completed_at=datetime.utcnow(),
+            execution_time=0.1,
+            exit_code=0,
+            stdout="",
+            stderr="",
+            triggered_by="backup_plan",
+        )
+        test_db.add(execution)
+        test_db.commit()
+
+        response = test_client.get(
+            f"/api/backup-plans/runs/{run.id}", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        script_executions = response.json()["script_executions"]
+        assert len(script_executions) == 1
+        assert script_executions[0]["id"] == execution.id
+        assert script_executions[0]["has_logs"] is False
+
     def test_create_plan_supports_remote_source(
         self, test_client: TestClient, admin_headers, test_db
     ):
@@ -822,6 +934,84 @@ class TestBackupPlanRoutes:
 
         plan = test_db.query(BackupPlan).filter(BackupPlan.id == body["id"]).one()
         assert json.loads(plan.source_locations) == source_locations
+
+    def test_create_plan_preserves_container_source_metadata(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        pre_script = _create_script(test_db, "Export Docker container")
+        post_script = _create_script(test_db, "Clean Docker export")
+        source_locations = [
+            {
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "agent_machine_id": None,
+                "paths": [" /var/tmp/borg-ui/container-exports/postgres "],
+                "container": {
+                    "container_name": " postgres ",
+                    "display_name": " Postgres service ",
+                    "image": " postgres:16 ",
+                    "backup_mode": "export",
+                    "export_path": " /var/tmp/borg-ui/container-exports/postgres ",
+                    "script_execution_target": "source",
+                    "pre_backup_script_id": pre_script.id,
+                    "post_backup_script_id": post_script.id,
+                    "pre_backup_script_parameters": {
+                        "BORG_UI_CONTAINER_NAME": " postgres ",
+                        "EMPTY_VALUE": "   ",
+                    },
+                    "post_backup_script_parameters": {
+                        "BORG_UI_CONTAINER_EXPORT_DIR": " /var/tmp/borg-ui/container-exports/postgres ",
+                    },
+                    "script_execution_order": 4,
+                },
+            }
+        ]
+
+        response = test_client.post(
+            "/api/backup-plans/",
+            json=_payload(
+                [repo.id],
+                source_directories=["/var/tmp/borg-ui/container-exports/postgres"],
+                source_locations=source_locations,
+            ),
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 201
+        body = response.json()
+        assert body["source_directories"] == [
+            "/var/tmp/borg-ui/container-exports/postgres"
+        ]
+        assert body["source_locations"] == [
+            {
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "agent_machine_id": None,
+                "paths": ["/var/tmp/borg-ui/container-exports/postgres"],
+                "container": {
+                    "container_name": "postgres",
+                    "display_name": "Postgres service",
+                    "image": "postgres:16",
+                    "backup_mode": "export",
+                    "export_path": "/var/tmp/borg-ui/container-exports/postgres",
+                    "script_execution_target": "source",
+                    "pre_backup_script_id": pre_script.id,
+                    "post_backup_script_id": post_script.id,
+                    "pre_backup_script_parameters": {
+                        "BORG_UI_CONTAINER_NAME": "postgres",
+                        "EMPTY_VALUE": "",
+                    },
+                    "post_backup_script_parameters": {
+                        "BORG_UI_CONTAINER_EXPORT_DIR": "/var/tmp/borg-ui/container-exports/postgres",
+                    },
+                    "script_execution_order": 4,
+                },
+            }
+        ]
+
+        plan = test_db.query(BackupPlan).filter(BackupPlan.id == body["id"]).one()
+        assert json.loads(plan.source_locations) == body["source_locations"]
 
     def test_create_plan_supports_agent_source_for_same_agent_repo(
         self, test_client: TestClient, admin_headers, test_db
@@ -3338,6 +3528,167 @@ class TestBackupPlanRoutes:
         )
         assert [execution.hook_type for execution in executions] == [
             "source-pre-backup",
+            "source-pre-backup",
+            "source-post-backup",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_container_source_scripts_run_per_source_with_parameters(
+        self, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        pre_script = _create_script(
+            test_db,
+            "Export Docker container",
+            parameters=json.dumps(
+                [
+                    {
+                        "name": "CONTAINER_EXPORT_FORMAT",
+                        "type": "text",
+                        "default": "",
+                        "description": "",
+                        "required": True,
+                    }
+                ]
+            ),
+        )
+        post_script = _create_script(
+            test_db,
+            "Clean Docker export",
+            parameters=json.dumps(
+                [
+                    {
+                        "name": "CLEAN_EXPORT",
+                        "type": "text",
+                        "default": "",
+                        "description": "",
+                        "required": True,
+                    }
+                ]
+            ),
+        )
+        source_locations = [
+            {
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "agent_machine_id": None,
+                "paths": ["/var/tmp/borg-ui/container-exports/postgres"],
+                "container": {
+                    "container_name": "postgres",
+                    "display_name": "Postgres service",
+                    "image": "postgres:16",
+                    "backup_mode": "export",
+                    "export_path": "/var/tmp/borg-ui/container-exports/postgres",
+                    "script_execution_target": "source",
+                    "pre_backup_script_id": pre_script.id,
+                    "post_backup_script_id": post_script.id,
+                    "pre_backup_script_parameters": {
+                        "CONTAINER_EXPORT_FORMAT": "tar",
+                    },
+                    "post_backup_script_parameters": {
+                        "CLEAN_EXPORT": "yes",
+                    },
+                    "script_execution_order": 1,
+                },
+            }
+        ]
+        _plan, run = _create_execution_plan(
+            test_db,
+            [repo],
+            source_directories=json.dumps(
+                ["/var/tmp/borg-ui/container-exports/postgres"]
+            ),
+            source_locations=json.dumps(source_locations),
+        )
+        for script in (pre_script, post_script):
+            script_path = Path(settings.data_dir) / "scripts" / script.file_path
+            script_path.parent.mkdir(parents=True, exist_ok=True)
+            script_path.write_text("echo container source script\n")
+        calls = []
+
+        async def fake_execute_script(script, timeout, env, context):
+            calls.append(
+                (
+                    "script",
+                    context,
+                    env.get("BORG_UI_CONTAINER_NAME"),
+                    env.get("BORG_UI_CONTAINER_DISPLAY_NAME"),
+                    env.get("BORG_UI_CONTAINER_IMAGE"),
+                    env.get("BORG_UI_CONTAINER_EXPORT_DIR"),
+                    env.get("BORG_UI_CONTAINER_BACKUP_MODE"),
+                    env.get("BORG_UI_CONTAINER_BACKUP_PATHS"),
+                    env.get("BORG_UI_CONTAINER_SCRIPT_EXECUTION_TARGET"),
+                    env.get("BORG_UI_CONTAINER_SOURCE_INDEX"),
+                    env.get("CONTAINER_EXPORT_FORMAT"),
+                    env.get("CLEAN_EXPORT"),
+                )
+            )
+            return {
+                "success": True,
+                "exit_code": 0,
+                "stdout": "container source script",
+                "stderr": "",
+                "execution_time": 0.01,
+            }
+
+        async def fake_execute_backup(job_id, repository, db, **kwargs):
+            calls.append(("backup", repository))
+            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job.status = "completed"
+            job.completed_at = datetime.utcnow()
+            db.commit()
+
+        with (
+            patch(
+                "app.services.backup_plan_execution_service.execute_script",
+                side_effect=fake_execute_script,
+            ),
+            patch(
+                "app.services.backup_plan_execution_service.backup_service.execute_backup",
+                side_effect=fake_execute_backup,
+            ),
+        ):
+            await backup_plan_execution_service.execute_run(run.id)
+
+        assert calls == [
+            (
+                "script",
+                f"backup-plan:{_plan.id}:source-pre-backup:script:{pre_script.id}:source:1",
+                "postgres",
+                "Postgres service",
+                "postgres:16",
+                "/var/tmp/borg-ui/container-exports/postgres",
+                "export",
+                json.dumps(["/var/tmp/borg-ui/container-exports/postgres"]),
+                "source",
+                "1",
+                "tar",
+                None,
+            ),
+            ("backup", repo.path),
+            (
+                "script",
+                f"backup-plan:{_plan.id}:source-post-backup:script:{post_script.id}:source:1",
+                "postgres",
+                "Postgres service",
+                "postgres:16",
+                "/var/tmp/borg-ui/container-exports/postgres",
+                "export",
+                json.dumps(["/var/tmp/borg-ui/container-exports/postgres"]),
+                "source",
+                "1",
+                None,
+                "yes",
+            ),
+        ]
+        test_db.expire_all()
+        executions = (
+            test_db.query(ScriptExecution)
+            .filter(ScriptExecution.backup_plan_run_id == run.id)
+            .order_by(ScriptExecution.id.asc())
+            .all()
+        )
+        assert [execution.hook_type for execution in executions] == [
             "source-pre-backup",
             "source-post-backup",
         ]

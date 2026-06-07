@@ -17,12 +17,18 @@ Integration tests (test_api_archives_integration.py) handle:
 import asyncio
 import base64
 import os
+from datetime import datetime
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 from app.core.security import get_password_hash
-from app.database.models import AgentMachine, Repository
+from app.database.models import (
+    AgentMachine,
+    DeleteArchiveJob,
+    Repository,
+    SystemSettings,
+)
 
 
 def _create_agent(test_db, *capabilities: str) -> AgentMachine:
@@ -160,6 +166,47 @@ class TestArchivesResourceValidation:
 
         asyncio.run(created["coro"])
         fake_router.delete_archive.assert_awaited_once()
+
+    def test_delete_job_status_applies_log_save_policy(
+        self, test_client: TestClient, admin_headers, test_db, tmp_path
+    ):
+        settings = test_db.query(SystemSettings).first()
+        if settings is None:
+            settings = SystemSettings()
+            test_db.add(settings)
+        settings.log_save_policy = "failed_only"
+        repo = Repository(
+            name="Archive Repo",
+            path="/tmp/archive-repo",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.flush()
+        log_file = tmp_path / "delete.log"
+        log_file.write_text("archive deleted", encoding="utf-8")
+        job = DeleteArchiveJob(
+            repository_id=repo.id,
+            repository_path=repo.path,
+            archive_name="archive-1",
+            status="completed",
+            started_at=datetime(2026, 4, 27, 3, 0, 6),
+            completed_at=datetime(2026, 4, 27, 3, 5, 6),
+            log_file_path=str(log_file),
+            has_logs=True,
+        )
+        test_db.add(job)
+        test_db.commit()
+
+        response = test_client.get(
+            f"/api/archives/delete-jobs/{job.id}",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["logs"] is None
+        assert body["has_logs"] is False
 
 
 @pytest.mark.unit

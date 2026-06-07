@@ -16,6 +16,7 @@ from app.core.security import (
     check_repo_access,
     require_repository_access_by_path,
 )
+from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.services.restore_service import restore_service
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.borg_env import (
@@ -37,6 +38,14 @@ def _get_restore_job_repository(
     if not repository_path:
         return None
     return db.query(Repository).filter(Repository.path == repository_path).first()
+
+
+def _restore_job_logs_visible(job: RestoreJob, log_save_policy: str) -> bool:
+    return job_has_logs_by_policy(
+        job,
+        log_save_policy,
+        output_text=[job.logs, job.error_message],
+    )
 
 
 def _build_repo_env(repo: Repository, db: Session):
@@ -261,6 +270,7 @@ async def get_restore_jobs(
             except HTTPException:
                 continue
 
+        log_save_policy = get_log_save_policy(db)
         return {
             "jobs": [
                 {
@@ -273,7 +283,11 @@ async def get_restore_jobs(
                     "completed_at": serialize_datetime(job.completed_at),
                     "progress": job.progress,
                     "error_message": job.error_message,
-                    "logs": job.logs,
+                    "logs": (
+                        job.logs
+                        if _restore_job_logs_visible(job, log_save_policy)
+                        else None
+                    ),
                     "progress_details": {
                         "nfiles": job.nfiles or 0,
                         "current_file": job.current_file or "",
@@ -310,6 +324,7 @@ async def get_restore_status(
         repo = _get_restore_job_repository(db, job.repository)
         if repo:
             check_repo_access(db, current_user, repo, "operator")
+        log_save_policy = get_log_save_policy(db)
 
         return {
             "id": job.id,
@@ -321,7 +336,9 @@ async def get_restore_status(
             "completed_at": serialize_datetime(job.completed_at),
             "progress": job.progress,
             "error_message": job.error_message,
-            "logs": job.logs,
+            "logs": job.logs
+            if _restore_job_logs_visible(job, log_save_policy)
+            else None,
             "progress_details": {
                 "nfiles": job.nfiles or 0,
                 "current_file": job.current_file or "",

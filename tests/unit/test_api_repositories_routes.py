@@ -33,6 +33,15 @@ def _create_repo(test_db, name: str, path: str, **kwargs) -> Repository:
     return repo
 
 
+def _set_log_save_policy(test_db, policy: str) -> None:
+    settings = test_db.query(SystemSettings).first()
+    if settings is None:
+        settings = SystemSettings()
+        test_db.add(settings)
+    settings.log_save_policy = policy
+    test_db.flush()
+
+
 @pytest.mark.unit
 class TestRepositoryRouteContracts:
     def test_repositories_register_single_canonical_break_lock_route(self):
@@ -171,6 +180,7 @@ class TestRepositoryRouteContracts:
     def test_get_check_job_status_reads_log_file(
         self, test_client: TestClient, admin_headers, test_db, tmp_path
     ):
+        _set_log_save_policy(test_db, "all_jobs")
         repo = _create_repo(test_db, "Repo", "/repos/main")
         log_path = tmp_path / "check.log"
         log_path.write_text("first line\nsecond line\n", encoding="utf-8")
@@ -194,6 +204,7 @@ class TestRepositoryRouteContracts:
     def test_get_compact_job_status_reads_log_file(
         self, test_client: TestClient, admin_headers, test_db, tmp_path
     ):
+        _set_log_save_policy(test_db, "all_jobs")
         repo = _create_repo(test_db, "Repo", "/repos/main")
         log_path = tmp_path / "compact.log"
         log_path.write_text("compact output\n", encoding="utf-8")
@@ -217,6 +228,7 @@ class TestRepositoryRouteContracts:
     def test_get_prune_job_status_reads_log_file(
         self, test_client: TestClient, admin_headers, test_db, tmp_path
     ):
+        _set_log_save_policy(test_db, "all_jobs")
         repo = _create_repo(test_db, "Repo", "/repos/main")
         log_path = tmp_path / "prune.log"
         log_path.write_text("prune output\n", encoding="utf-8")

@@ -468,6 +468,8 @@ class TestDashboardHelpers:
 
     def test_get_recent_jobs_normalizes_trigger_state_and_logs(self):
         now = datetime.now(timezone.utc)
+        settings_query = MagicMock()
+        settings_query.first.return_value = SystemSettings(log_save_policy="all_jobs")
         jobs = [
             BackupJob(
                 id=1,
@@ -500,7 +502,7 @@ class TestDashboardHelpers:
         query = MagicMock()
         query.order_by.return_value = order_query
         db = MagicMock()
-        db.query.return_value = query
+        db.query.side_effect = [settings_query, query]
 
         result = get_recent_jobs(db, limit=2)
 
@@ -509,6 +511,39 @@ class TestDashboardHelpers:
         assert result[0]["has_logs"] is True
         assert result[1]["triggered_by"] == "manual"
         assert result[1]["error_message"] == "boom"
+
+    def test_get_recent_jobs_applies_log_save_policy(self, test_db):
+        settings = test_db.query(SystemSettings).first()
+        if settings is None:
+            settings = SystemSettings()
+            test_db.add(settings)
+        settings.log_save_policy = "failed_only"
+        now = datetime.now(timezone.utc)
+        success_job = BackupJob(
+            repository="/srv/backups/success",
+            status="completed",
+            started_at=now,
+            completed_at=now,
+            progress=100,
+            logs="successful log",
+        )
+        failed_job = BackupJob(
+            repository="/srv/backups/failed",
+            status="failed",
+            started_at=now - timedelta(minutes=5),
+            completed_at=now - timedelta(minutes=1),
+            progress=10,
+            error_message="failed",
+            logs="failed log",
+        )
+        test_db.add_all([success_job, failed_job])
+        test_db.commit()
+
+        result = get_recent_jobs(test_db, limit=2)
+
+        by_id = {job["id"]: job for job in result}
+        assert by_id[success_job.id]["has_logs"] is False
+        assert by_id[failed_job.id]["has_logs"] is True
 
     def test_get_recent_jobs_returns_empty_on_query_error(self):
         db = MagicMock()

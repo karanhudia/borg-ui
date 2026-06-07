@@ -475,10 +475,45 @@ class RcloneRemote(Base):
     last_tested_at = Column(DateTime, nullable=True)
     last_test_status = Column(String, default="unknown", nullable=False)
     last_error = Column(Text, nullable=True)
+    storage_total = Column(BigInteger, nullable=True)
+    storage_used = Column(BigInteger, nullable=True)
+    storage_available = Column(BigInteger, nullable=True)
+    storage_percent_used = Column(Float, nullable=True)
+    last_storage_check = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=utc_now, nullable=False)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
 
     storages = relationship("RepositoryStorage", back_populates="rclone_remote")
+
+
+class RcloneOAuthProviderCredential(Base):
+    __tablename__ = "rclone_oauth_provider_credentials"
+
+    id = Column(Integer, primary_key=True, index=True)
+    provider = Column(String, unique=True, index=True, nullable=False)
+    client_id = Column(String, nullable=True)
+    client_secret_encrypted = Column(String, nullable=True)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+
+class RemoteBackendClient(Base):
+    __tablename__ = "remote_backend_clients"
+
+    id = Column(String, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    api_base_url = Column(String, nullable=False)
+    web_base_url = Column(String, nullable=False)
+    health_status = Column(String, default="unknown", nullable=False)
+    health_checked_at = Column(DateTime, nullable=True)
+    app_version = Column(String, nullable=True)
+    borg_version = Column(String, nullable=True)
+    borg2_version = Column(String, nullable=True)
+    health_error = Column(Text, nullable=True)
+    compatibility = Column(String, default="unknown", nullable=False)
+    compatibility_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
 
 
 class RepositoryStorage(Base):

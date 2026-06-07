@@ -35,9 +35,21 @@ vi.mock('../components/UmamiTracker', () => ({
   UmamiTracker: () => <div>Umami Tracker</div>,
 }))
 
+vi.mock('../components/BackendTargetSwitcher', () => ({
+  default: () => <div>Backend Target Switcher</div>,
+}))
+
 vi.mock('../components/ProtectedRoute', () => ({
-  default: ({ children, requiredTab }: { children: ReactNode; requiredTab: string }) => {
-    protectedRouteMock(requiredTab)
+  default: ({
+    children,
+    requiredTab,
+    requiredPermission,
+  }: {
+    children: ReactNode
+    requiredTab: string
+    requiredPermission?: string
+  }) => {
+    protectedRouteMock(requiredTab, requiredPermission ?? null)
     return (
       <div>
         <span>Protected:{requiredTab}</span>
@@ -73,6 +85,9 @@ vi.mock('../pages/SSHConnectionsSingleKey', () => ({
 }))
 vi.mock('../pages/ManagedAgents', () => ({
   default: () => <div>Managed Agents Page</div>,
+}))
+vi.mock('../pages/RemoteClients', () => ({
+  default: () => <div>Remote Clients Page</div>,
 }))
 vi.mock('../pages/Activity', () => ({
   default: () => <div>Activity Page</div>,
@@ -206,7 +221,7 @@ describe('App', () => {
 
     expect(await screen.findByText('Backup Page')).toBeInTheDocument()
     expect(screen.getByText('Protected:backups')).toBeInTheDocument()
-    expect(protectedRouteMock).toHaveBeenCalledWith('backups')
+    expect(protectedRouteMock).toHaveBeenCalledWith('backups', null)
   })
 
   it('redirects legacy scripts route to settings/scripts', async () => {
@@ -223,7 +238,15 @@ describe('App', () => {
 
     expect(await screen.findByText('Managed Agents Page')).toBeInTheDocument()
     expect(screen.getByText('Protected:connections')).toBeInTheDocument()
-    expect(protectedRouteMock).toHaveBeenCalledWith('connections')
+    expect(protectedRouteMock).toHaveBeenCalledWith('connections', null)
+  })
+
+  it('renders remote clients under the connections tab with SSH management permission', async () => {
+    renderWithProviders(<App />, { initialRoute: '/remote-clients' })
+
+    expect(await screen.findByText('Remote Clients Page')).toBeInTheDocument()
+    expect(screen.getByText('Protected:connections')).toBeInTheDocument()
+    expect(protectedRouteMock).toHaveBeenCalledWith('connections', 'settings.ssh.manage')
   })
 
   it('renders cloud storage under the repositories tab', async () => {
@@ -231,7 +254,7 @@ describe('App', () => {
 
     expect(await screen.findByText('Cloud Storage Page')).toBeInTheDocument()
     expect(screen.getByText('Protected:repositories')).toBeInTheDocument()
-    expect(protectedRouteMock).toHaveBeenCalledWith('repositories')
+    expect(protectedRouteMock).toHaveBeenCalledWith('repositories', null)
   })
 
   it('loads analytics preferences and initializes analytics on mount', async () => {

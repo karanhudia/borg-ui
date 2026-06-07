@@ -292,6 +292,47 @@ describe('CloudStorage', () => {
     expect(within(card).getByRole('button', { name: /Delete remote/i })).toBeDisabled()
   })
 
+  it('renders cloud storage capacity when the remote has a storage snapshot', async () => {
+    vi.mocked(rcloneAPI.listRemotes).mockResolvedValue({
+      data: {
+        remotes: [
+          {
+            ...remote,
+            storage: {
+              total: 10 * 1024 ** 3,
+              total_formatted: '10.00 GB',
+              used: 4 * 1024 ** 3,
+              used_formatted: '4.00 GB',
+              available: 6 * 1024 ** 3,
+              available_formatted: '6.00 GB',
+              percent_used: 40.0,
+              last_check: '2026-06-06T12:30:00+00:00',
+            },
+          },
+        ],
+      },
+    } as AxiosResponse)
+
+    renderWithProviders(<CloudStorage />, { initialRoute: '/cloud-storage' })
+
+    expect(await screen.findByText('prod-s3')).toBeInTheDocument()
+    const card = screen.getByTestId('cloud-storage-remote-prod-s3')
+    expect(within(card).getByText('Used')).toBeInTheDocument()
+    expect(within(card).getByText('4.00 GB')).toBeInTheDocument()
+    expect(within(card).getByText('Free')).toBeInTheDocument()
+    expect(within(card).getByText('6.00 GB')).toBeInTheDocument()
+    expect(within(card).getByText('40.0% used')).toBeInTheDocument()
+    expect(within(card).getByText('Total 10.00 GB')).toBeInTheDocument()
+  })
+
+  it('renders a graceful missing storage state when no cloud storage size is available', async () => {
+    renderWithProviders(<CloudStorage />, { initialRoute: '/cloud-storage' })
+
+    expect(await screen.findByText('prod-s3')).toBeInTheDocument()
+    const card = screen.getByTestId('cloud-storage-remote-prod-s3')
+    expect(within(card).getByText('No storage info')).toBeInTheDocument()
+  })
+
   it('adds a managed rclone remote from the page action', async () => {
     renderWithProviders(<CloudStorage />, { initialRoute: '/cloud-storage' })
 

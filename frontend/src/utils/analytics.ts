@@ -437,4 +437,6 @@ export const EventAction = {
   SEARCH: 'Search',
   FILTER: 'Filter',
   EXPORT: 'Export',
+  FEATURE_USED: 'FeatureUsed',
+  FEATURE_BLOCKED: 'FeatureBlocked',
 } as const

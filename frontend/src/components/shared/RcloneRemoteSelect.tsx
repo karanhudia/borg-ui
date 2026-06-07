@@ -1,14 +1,6 @@
-import {
-  Alert,
-  type AlertColor,
-  Chip,
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Select,
-} from '@mui/material'
+import { Alert, type AlertColor, Chip } from '@mui/material'
 import { Cloud } from 'lucide-react'
-import RichSelectRow from './RichSelectRow'
+import RichSelect, { type RichSelectOption } from './RichSelect'
 
 export interface RcloneRemoteSummary {
   id: number
@@ -35,8 +27,6 @@ interface RcloneRemoteSelectProps {
   emptySeverity?: AlertColor
 }
 
-let autoIdCounter = 0
-
 export default function RcloneRemoteSelect({
   value,
   onChange,
@@ -54,61 +44,32 @@ export default function RcloneRemoteSelect({
     return <Alert severity={emptySeverity}>{emptyMessage}</Alert>
   }
 
-  const resolvedLabelId = labelId ?? `rclone-remote-select-${++autoIdCounter}`
+  const options: RichSelectOption[] = remotes.map((remote) => ({
+    value: String(remote.id),
+    icon: <Cloud size={16} />,
+    primary: remote.name,
+    secondary: remote.last_test_status || undefined,
+    indicator: (
+      <Chip
+        size="small"
+        label={remote.provider}
+        variant="outlined"
+        sx={{ height: 20, fontSize: '0.65rem', flexShrink: 0 }}
+      />
+    ),
+  }))
 
   return (
-    <FormControl fullWidth disabled={disabled}>
-      <InputLabel id={resolvedLabelId}>{label}</InputLabel>
-      <Select
-        labelId={resolvedLabelId}
-        id={selectId}
-        value={value === '' ? '' : String(value)}
-        label={label}
-        onChange={(event) => {
-          const next = event.target.value
-          if (next) onChange(Number(next))
-        }}
-        renderValue={(selected) => {
-          const remote = remotes.find((item) => String(item.id) === selected)
-          if (!remote) return null
-          return renderRcloneRemoteRow(remote)
-        }}
-        // Match the rich dropdown controls used by SSH connections, managed
-        // agents, and repository destinations.
-        sx={{
-          height: 56,
-          '& .MuiSelect-select': {
-            height: 56,
-            boxSizing: 'border-box',
-            display: 'flex',
-            alignItems: 'center',
-          },
-        }}
-      >
-        {remotes.map((remote) => (
-          <MenuItem key={remote.id} value={String(remote.id)} sx={{ py: 1 }}>
-            {renderRcloneRemoteRow(remote)}
-          </MenuItem>
-        ))}
-      </Select>
-    </FormControl>
-  )
-}
-
-function renderRcloneRemoteRow(remote: RcloneRemoteSummary) {
-  return (
-    <RichSelectRow
-      icon={<Cloud size={16} />}
-      primary={remote.name}
-      secondary={remote.last_test_status || undefined}
-      indicator={
-        <Chip
-          size="small"
-          label={remote.provider}
-          variant="outlined"
-          sx={{ height: 20, fontSize: '0.65rem', flexShrink: 0 }}
-        />
-      }
+    <RichSelect
+      value={value === '' ? '' : String(value)}
+      onChange={(next) => {
+        if (next) onChange(Number(next))
+      }}
+      options={options}
+      label={label}
+      labelId={labelId}
+      selectId={selectId}
+      disabled={disabled}
     />
   )
 }

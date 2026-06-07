@@ -25,7 +25,6 @@ import {
   TableCell,
   TableHead,
   TableRow,
-  TextField,
   Tooltip,
   Typography,
   useTheme,
@@ -63,6 +62,7 @@ import PageHeader from '../components/PageHeader'
 import PlanGate from '../components/shared/PlanGate'
 import LogViewerDialog, { type LogViewerFetchLogs } from '../components/shared/LogViewerDialog'
 import ResponsiveDialog from '../components/shared/ResponsiveDialog'
+import DiagnosticsTcpTargetFields from '../components/shared/DiagnosticsTcpTargetFields'
 import AddAgentDialog from './managed-agents/AddAgentDialog'
 import { resolveAgentServerUrl } from './managed-agents/agentServerUrl'
 import {
@@ -74,6 +74,7 @@ import {
   agentSessionLogsToViewerResult,
 } from './managed-agents/logViewerAdapters'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { useFeatureAnalytics } from '../hooks/useFeatureAnalytics'
 
 type PageTab = 'agents' | 'jobs' | 'tokens'
 
@@ -212,6 +213,7 @@ export default function ManagedAgents() {
   const queryClient = useQueryClient()
   const { hasGlobalPermission } = useAuth()
   const { trackSystem, EventAction } = useAnalytics()
+  const { trackFeatureUsed } = useFeatureAnalytics()
   const { can } = usePlan()
   const canManageAgents = hasGlobalPermission('settings.ssh.manage')
   const [activeTab, setActiveTab] = useState<PageTab>('agents')
@@ -286,6 +288,12 @@ export default function ManagedAgents() {
         has_default_path: Boolean(payload.default_path),
         expires_never: Boolean(payload.expires_never),
       })
+      trackFeatureUsed('managed_agents', {
+        surface: MANAGED_AGENTS_ANALYTICS_SECTION,
+        operation: 'create_enrollment_token',
+        has_default_path: Boolean(payload.default_path),
+        expires_never: Boolean(payload.expires_never),
+      })
       toast.success('Enrollment token created')
     },
     onError: (error: unknown) => {
@@ -299,6 +307,10 @@ export default function ManagedAgents() {
       queryClient.invalidateQueries({ queryKey: ['managed-agent-enrollment-tokens'] })
       trackSystem(EventAction.DELETE, {
         section: MANAGED_AGENTS_ANALYTICS_SECTION,
+        operation: 'revoke_enrollment_token',
+      })
+      trackFeatureUsed('managed_agents', {
+        surface: MANAGED_AGENTS_ANALYTICS_SECTION,
         operation: 'revoke_enrollment_token',
       })
       toast.success('Enrollment token revoked')
@@ -316,6 +328,10 @@ export default function ManagedAgents() {
         section: MANAGED_AGENTS_ANALYTICS_SECTION,
         operation: 'revoke_agent',
       })
+      trackFeatureUsed('managed_agents', {
+        surface: MANAGED_AGENTS_ANALYTICS_SECTION,
+        operation: 'revoke_agent',
+      })
       toast.success('Agent revoked')
     },
     onError: (error: unknown) => {
@@ -331,6 +347,10 @@ export default function ManagedAgents() {
         section: MANAGED_AGENTS_ANALYTICS_SECTION,
         operation: 'delete_agent',
       })
+      trackFeatureUsed('managed_agents', {
+        surface: MANAGED_AGENTS_ANALYTICS_SECTION,
+        operation: 'delete_agent',
+      })
       toast.success('Agent deleted')
     },
     onError: (error: unknown) => {
@@ -344,6 +364,11 @@ export default function ManagedAgents() {
       queryClient.invalidateQueries({ queryKey: ['managed-agent-jobs'] })
       trackSystem(EventAction.STOP, {
         section: MANAGED_AGENTS_ANALYTICS_SECTION,
+        operation: 'cancel_job',
+        job_id_present: Boolean(jobId),
+      })
+      trackFeatureUsed('managed_agents', {
+        surface: MANAGED_AGENTS_ANALYTICS_SECTION,
         operation: 'cancel_job',
         job_id_present: Boolean(jobId),
       })
@@ -365,7 +390,11 @@ export default function ManagedAgents() {
           title="Managed Agents"
           subtitle="Lightweight machines connected to this Borg UI server"
         />
-        <PlanGate feature="managed_agents">
+        <PlanGate
+          feature="managed_agents"
+          surface={MANAGED_AGENTS_ANALYTICS_SECTION}
+          operation="view_page_gate"
+        >
           <Box />
         </PlanGate>
       </Box>
@@ -376,6 +405,11 @@ export default function ManagedAgents() {
     await navigator.clipboard.writeText(value)
     trackSystem(EventAction.VIEW, {
       section: MANAGED_AGENTS_ANALYTICS_SECTION,
+      operation: 'copy_command',
+      source,
+    })
+    trackFeatureUsed('managed_agents', {
+      surface: MANAGED_AGENTS_ANALYTICS_SECTION,
       operation: 'copy_command',
       source,
     })
@@ -411,6 +445,10 @@ export default function ManagedAgents() {
               onClick={() => {
                 trackSystem(EventAction.VIEW, {
                   section: MANAGED_AGENTS_ANALYTICS_SECTION,
+                  operation: 'open_add_agent_dialog',
+                })
+                trackFeatureUsed('managed_agents', {
+                  surface: MANAGED_AGENTS_ANALYTICS_SECTION,
                   operation: 'open_add_agent_dialog',
                 })
                 setAddAgentDialogOpen(true)
@@ -462,11 +500,22 @@ export default function ManagedAgents() {
               operation: 'view_agent_logs',
               status: agent.status,
             })
+            trackFeatureUsed('managed_agents', {
+              surface: MANAGED_AGENTS_ANALYTICS_SECTION,
+              operation: 'view_agent_logs',
+              status: agent.status,
+            })
             setLogsAgent(agent)
           }}
           onRunDiagnostics={async (agent, payload) => {
             trackSystem(EventAction.START, {
               section: MANAGED_AGENTS_ANALYTICS_SECTION,
+              operation: 'run_agent_diagnostics',
+              status: agent.status,
+              has_target: Boolean(payload.target),
+            })
+            trackFeatureUsed('managed_agents', {
+              surface: MANAGED_AGENTS_ANALYTICS_SECTION,
               operation: 'run_agent_diagnostics',
               status: agent.status,
               has_target: Boolean(payload.target),
@@ -487,6 +536,12 @@ export default function ManagedAgents() {
           onViewLogs={(job) => {
             trackSystem(EventAction.VIEW, {
               section: MANAGED_AGENTS_ANALYTICS_SECTION,
+              operation: 'view_job_logs',
+              job_type: getJobKind(job),
+              status: job.status,
+            })
+            trackFeatureUsed('managed_agents', {
+              surface: MANAGED_AGENTS_ANALYTICS_SECTION,
               operation: 'view_job_logs',
               job_type: getJobKind(job),
               status: job.status,
@@ -850,45 +905,32 @@ export function AgentDiagnosticsDialog({
             </Typography>
           </Box>
 
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 1fr) 120px 140px' },
-              gap: 1.25,
+          <DiagnosticsTcpTargetFields
+            targetHost={targetHost}
+            targetPort={targetPort}
+            targetTimeout={targetTimeout}
+            onTargetHostChange={setTargetHost}
+            onTargetPortChange={setTargetPort}
+            onTargetTimeoutChange={setTargetTimeout}
+            hasTarget={hasTarget}
+            portInvalid={portInvalid}
+            timeoutInvalid={timeoutInvalid}
+            timeoutInputProps={{ min: 0.5, max: 10, step: 0.5 }}
+            labels={{
+              summary: 'Advanced: test another service',
+              description:
+                'Checks whether this agent can reach a separate service. Leave blank for normal diagnostics.',
+              host: 'Service host',
+              hostPlaceholder: 'postgres.internal',
+              hostHelper: 'Optional service to test from this agent',
+              port: 'Service port',
+              portPlaceholder: '5432',
+              portError: '1-65535',
+              timeout: 'Timeout',
+              timeoutHelper: 'Seconds',
+              timeoutError: '0.5-10 seconds',
             }}
-          >
-            <TextField
-              label="Target host"
-              value={targetHost}
-              onChange={(event) => setTargetHost(event.target.value)}
-              placeholder="postgres.internal"
-              size="small"
-              helperText="Optional TCP target"
-            />
-            <TextField
-              label="Port"
-              value={targetPort}
-              onChange={(event) => setTargetPort(event.target.value)}
-              placeholder="5432"
-              size="small"
-              type="number"
-              inputProps={{ min: 1, max: 65535 }}
-              required={hasTarget}
-              error={portInvalid}
-              helperText={portInvalid ? '1-65535' : undefined}
-            />
-            <TextField
-              label="Timeout"
-              value={targetTimeout}
-              onChange={(event) => setTargetTimeout(event.target.value)}
-              size="small"
-              type="number"
-              inputProps={{ min: 0.5, max: 10, step: 0.5 }}
-              required={hasTarget}
-              error={timeoutInvalid}
-              helperText={timeoutInvalid ? '0.5-10 seconds' : 'Seconds'}
-            />
-          </Box>
+          />
 
           {targetError && (
             <Alert severity="warning" role="alert" sx={{ borderRadius: 1.5 }}>

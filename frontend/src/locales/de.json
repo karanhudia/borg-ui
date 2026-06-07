@@ -109,6 +109,7 @@
     "items": {
       "dashboard": "Dashboard",
       "activity": "Aktivität",
+      "remoteClients": "Remote-Clients",
       "remoteMachines": "Remote-Maschinen",
       "managedAgents": "Managed Agents",
       "cloudStorage": "Cloud-Speicher",
@@ -159,6 +160,96 @@
     "logout": "Abmelden",
     "yourPlan": "Your Plan"
   },
+  "remoteClients": {
+    "title": "Remote-Clients",
+    "description": "Registriere Borg-UI-Client-Server auf anderen Maschinen, prüfe ihre Verfügbarkeit und nutze diesen Browser mit dem ausgewählten Server.",
+    "addButton": "Remote-Client hinzufügen",
+    "planGate": {
+      "message": "Remote-Client-Wechsel ist in Pro- und Enterprise-Plänen verfügbar. Führe ein Upgrade durch, um entfernte Borg UI-Server hinzuzufügen oder zu ihnen zu wechseln."
+    },
+    "status": {
+      "incompatible": "Inkompatibel",
+      "online": "Online",
+      "offline": "Offline",
+      "checking": "Wird geprüft",
+      "unknown": "Unbekannt"
+    },
+    "labels": {
+      "activeTarget": "Aktives Ziel",
+      "local": "Lokal",
+      "remoteClient": "Remote-Client",
+      "requiresAdmin": "Nur Admin",
+      "requiresPlan": "Pro oder Enterprise erforderlich"
+    },
+    "switcher": {
+      "title": "Serverziele",
+      "description": "Wähle, ob dieser Browser diesen Server oder einen Remote-Client nutzt.",
+      "menuLabel": "Serverziele",
+      "ariaLabel": "Serverziel {{name}}",
+      "selectLabel": "Server",
+      "noClients": "Keine Remote-Clients gefunden",
+      "localName": "Dieser Server",
+      "localHelper": "Aktueller Borg-UI-Server",
+      "localCompatibility": "Dieser Browser ist mit diesem Borg-UI-Server verbunden.",
+      "remoteHelper": "Remote-Client-Server",
+      "remoteUnavailable": "Remote-Client nicht verfügbar",
+      "remoteAdminUnavailable": "Remote-Client-Wechsel erfordert Admin-Zugriff.",
+      "remotePlanUnavailable": "Remote-Client-Wechsel erfordert Pro oder Enterprise.",
+      "versionMismatch": "Versionskonflikt",
+      "versionHelper": "Borg UI {{version}}",
+      "manage": "Remote-Clients verwalten",
+      "manageRequiresAdmin": "Remote-Clients erfordern Admin-Zugriff",
+      "manageRequiresPlan": "Remote-Clients erfordern Pro oder Enterprise"
+    },
+    "localBackend": {
+      "title": "Dieser Server",
+      "active": "Aktives Ziel",
+      "fallback": "Als lokaler Fallback verfügbar"
+    },
+    "empty": {
+      "title": "Noch keine Remote-Clients",
+      "description": "Füge eine Borg-UI-Server-URL hinzu, um die Verfügbarkeit zu prüfen und diesen Browser dorthin umzuschalten."
+    },
+    "lastChecked": "Zuletzt geprüft: {{value}}",
+    "version": "Borg UI {{version}}",
+    "actions": {
+      "check": "Prüfen",
+      "use": "Nutzen",
+      "edit": "Remote-Client bearbeiten",
+      "delete": "Remote-Client löschen",
+      "checkAria": "{{name}} prüfen",
+      "useAria": "{{name}} nutzen",
+      "useLocalAria": "Diesen Server nutzen",
+      "editAria": "{{name}} bearbeiten",
+      "deleteAria": "{{name}} löschen"
+    },
+    "dialog": {
+      "addTitle": "Remote-Client hinzufügen",
+      "editTitle": "Remote-Client bearbeiten",
+      "description": "Verwende die Borg-UI-Server-URL. DNS-Namen, LAN-IPs, localhost-URLs und `/api`-Pfade werden akzeptiert.",
+      "nameLabel": "Client-Name",
+      "urlLabel": "Server-URL",
+      "save": "Client speichern"
+    },
+    "toasts": {
+      "added": "Remote-Client hinzugefügt.",
+      "updated": "Remote-Client aktualisiert.",
+      "deleted": "Remote-Client gelöscht.",
+      "online": "{{name}} ist online.",
+      "unavailable": "{{name}} ist nicht verfügbar.",
+      "checkFailed": "Prüfung von {{name}} fehlgeschlagen: {{error}}",
+      "using": "{{name}} wird verwendet."
+    },
+    "deleteDialog": {
+      "title": "Remote-Client löschen?",
+      "description": "\"{{name}}\" aus diesem Browser entfernen? Du kannst ihn später mit seiner Server-URL erneut hinzufügen.",
+      "confirm": "Client löschen"
+    },
+    "errors": {
+      "saveFailed": "Remote-Client konnte nicht gespeichert werden.",
+      "remoteUnavailable": "Remote-Client-Server ist nicht verfügbar."
+    }
+  },
   "cloudStorage": {
     "title": "Cloud-Speicher",
     "subtitle": "Verwalte wiederverwendbare rclone-Remotes für Repository-Spiegel.",
@@ -177,6 +268,11 @@
     "remoteProviderLabel": "Provider",
     "remoteStatusLabel": "Status",
     "remoteUsageLabel": "Verwendet von",
+    "storageUsed": "Belegt",
+    "storageFree": "Frei",
+    "storageTotal": "Gesamt {{value}}",
+    "storagePercentUsed": "{{value}}% belegt",
+    "noStorageInfo": "Keine Speicherinfo",
     "configSourceLabel": "Konfiguration",
     "managedConfig": "Serververwaltete rclone.conf",
     "editRemote": "Remote bearbeiten",
@@ -327,6 +423,41 @@
     },
     "upcomingBackups": {
       "title": "Anstehende Backups"
+    },
+    "launchpad": {
+      "title": "Operations-Launchpad",
+      "openAction": "{{title}} öffnen: {{value}}, {{status}}",
+      "backupPlans": {
+        "title": "Backup-Pläne",
+        "value_one": "{{count}} Plan",
+        "value_other": "{{count}} Pläne",
+        "active_one": "{{count}} aktiv",
+        "active_other": "{{count}} aktiv",
+        "empty": "Ersten erstellen",
+        "action": "Pläne öffnen"
+      },
+      "cloudStorage": {
+        "title": "Cloud-Speicher",
+        "value_one": "{{count}} Remote",
+        "value_other": "{{count}} Remotes",
+        "active": "Konfiguriert",
+        "empty": "Keine Remotes"
+      },
+      "remoteClients": {
+        "title": "Remote-Clients",
+        "value_one": "{{count}} Client",
+        "value_other": "{{count}} Clients",
+        "active": "Verfügbar",
+        "empty": "Dieser Server"
+      },
+      "restoreVerification": {
+        "title": "Restore-Verifizierung",
+        "value": "{{configured}}/{{total}} abgedeckt",
+        "noRepositories": "Keine Repos",
+        "complete": "Abgedeckt",
+        "partial": "Einrichtung nötig",
+        "action": "Checks planen"
+      }
     },
     "scheduleBadge": {
       "noSchedule": "Kein automatischer Zeitplan",
@@ -818,6 +949,7 @@
       "removeSourceGroup": "Remove source group",
       "backToTypes": "Back to source types",
       "applyPaths": "Use these paths",
+      "applyContainers": "Diese Container verwenden",
       "selectPaths": "Select paths",
       "currentPath": "Current path",
       "agentBrowseTitle": "Browse {{agent}}",
@@ -858,6 +990,47 @@
       "databaseLivePath": "Live database path",
       "databaseDumpPath": "Dump path",
       "databaseBackupPaths": "Final Borg paths",
+      "containerTitle": "Docker-Container",
+      "containerBackupTitle": "Docker-Container-Backup hinzufügen",
+      "containerName": "Containername oder ID",
+      "containerImage": "Image (optional)",
+      "containerExportPath": "Export-Zwischenpfad",
+      "containerExportsTo": "Exportiert nach",
+      "containerExportHint": "Borg UI exportiert das Container-Dateisystem in einen Zwischenpfad, bevor Borg es liest. Das Docker-Image, Bind-Mounts und Named Volumes werden dabei nicht gesichert.",
+      "addContainerManually": "Nach Name hinzufügen",
+      "addContainerManuallyHelp": "Wenn dein Container oben nicht aufgeführt ist, füge ihn hier hinzu.",
+      "containerSourceMachine": "Docker-Host",
+      "containerBackupPath": "Export-Zwischenpfad",
+      "containerModeExport": "docker export",
+      "scanContainers": "Container scannen",
+      "rescanContainers": "Container erneut scannen",
+      "scanContainersHint": "Ausgewählten Docker-Host scannen.",
+      "detectedContainers": "Erkannte Container",
+      "containerBackupCoverageTitle": "Was diese Quelle sichert",
+      "containerFilesystemIncluded": "Enthalten: Container-Dateisystem-Export unter {{path}}",
+      "containerMountsNotIncluded": "Nicht enthalten: gemountete Daten",
+      "containerMountsNotIncludedHelp": "Füge diese Mount-Pfade als Datei-Quellen hinzu, wenn sie wichtige Daten enthalten.",
+      "containerMountNotIncluded": "Nicht in docker export enthalten",
+      "containerMountsOptional": "Optionale gemountete Daten",
+      "containerMountsOptionalHelp": "Wähle Mounts aus, um sie in diesem Plan als Datei-Quellen hinzuzufügen.",
+      "includeContainerMountAria": "Gemountete Daten {{path}} als Datei-Quelle hinzufügen",
+      "containerMountDestination": "Gemountet unter {{path}}",
+      "containerMountSizeAvailable": "{{size}}",
+      "containerMountSizeUnavailable": "Größe nicht verfügbar",
+      "containerMountSizePermissionDenied": "Zugriff verweigert",
+      "containerMountSizeTimeout": "Größenermittlung abgelaufen",
+      "containerImageMetadata": "Image {{image}} identifiziert diesen Container; Borg UI sichert das Image selbst nicht.",
+      "addDetectedContainer": "Erkannten Container hinzufügen",
+      "addDetectedContainerShort": "Hinzufügen",
+      "removeDetectedContainer": "Erkannten Container entfernen",
+      "containerAdded": "Hinzugefügt",
+      "noContainersFoundTitle": "Keine Container gefunden",
+      "noContainersFoundBody": "Prüfe den Docker-Zugriff auf diesem Host oder gib einen Container manuell ein.",
+      "containerScanUnsupportedForAgents": "Docker-Container-Scans sind für den Borg-UI-Server und SSH-Quellen verfügbar. Container auf verwalteten Agents manuell eingeben.",
+      "containerScanFailedBody": "Der Docker-Container-Scan hat keine Daten zurückgegeben. Prüfe den Docker-Zugriff auf diesem Host und versuche es erneut.",
+      "addContainer": "Container hinzufügen",
+      "selectedContainers": "Ausgewählte Container",
+      "containerScriptsAssigned": "Export-Skripte zugewiesen",
       "sourcePaths": "Source paths",
       "notesLabel": "Notes",
       "pathCount_one": "{{count}} path",
@@ -1740,6 +1913,23 @@
     },
     "deployDialog": {
       "title": "SSH-Schlüssel auf Server bereitstellen",
+      "setupPreset": "Einrichtungsvorlage",
+      "setupPresetHint": "Wähle eine dokumentierte Einrichtung, um Standardwerte vorzufüllen. Du kannst jedes Feld vor der Bereitstellung bearbeiten.",
+      "presetCustom": "Benutzerdefinierte Einrichtung",
+      "presetCustomDescription": "Beginnt mit den normalen SSH-Standardwerten.",
+      "presetCustomDefaults": "Port 22, SFTP-Bereitstellung aktiviert",
+      "presetLinux": "Linux-Server",
+      "presetLinuxDescription": "Headless-Server oder VM mit normalem SSH-Zugriff.",
+      "presetLinuxDefaults": "root-Benutzer, Port 22",
+      "presetBorgBase": "BorgBase",
+      "presetBorgBaseDescription": "Gehostetes Borg-Repository mit dem Pfadmuster /./repo.",
+      "presetBorgBaseDefaults": "Port 22, SFTP-Bereitstellung aus, Standardpfad /./repo",
+      "presetHetzner": "Hetzner Storage Box",
+      "presetHetznerDescription": "Storage-Box-Repository über Hetzners erweiterten SSH-Dienst.",
+      "presetHetznerDefaults": "Port 23, SFTP-Bereitstellung an, Standardpfad /./borg-repository",
+      "presetNas": "NAS",
+      "presetNasDescription": "Synology, Unraid oder ähnliches NAS mit SSH-Pfadzuordnung.",
+      "presetNasDefaults": "Port 22, SFTP-Bereitstellung aus, SSH-Pfadpräfix /volume1",
       "host": "Host",
       "hostPlaceholder": "192.168.1.100 oder example.com",
       "username": "Benutzername",
@@ -1753,6 +1943,8 @@
       "useSudoHint": "Stellt borg auf dem entfernten Host sudo voran. Erfordert passwortloses sudo für den SSH-Benutzer. Gilt nur für den Remote-SSH-Backup-Modus.",
       "defaultPath": "Standardpfad (Optional)",
       "defaultPathHelper": "Startverzeichnis für das Durchsuchen von SSH-Dateien (z. B. /home für Hetzner Storage Box)",
+      "sshPathPrefix": "SSH-Pfadpräfix (Optional)",
+      "sshPathPrefixHelper": "Präfix, das ergänzt wird, wenn Borg einen anderen SSH-Pfad als den Browsing-Pfad benötigt, zum Beispiel /volume1 auf Synology.",
       "mountPoint": "Einhängepunkt (Optional)",
       "mountPointPlaceholder": "hetzner oder homeserver",
       "mountPointHelper": "Freundlicher Name für diese Remote-Maschine (z. B. hetzner, backup-server)",
@@ -1815,6 +2007,15 @@
       "targetHostHelper": "Optionales Remote-TCP-Ziel",
       "targetPort": "Port",
       "targetTimeout": "Ziel-Timeout",
+      "advancedTargetSummary": "Erweitert: anderen Dienst testen",
+      "advancedTargetDescription": "Prüft, ob diese Remote-Maschine einen separaten Dienst erreichen kann. Für normale Diagnosen leer lassen.",
+      "serviceHost": "Diensthost",
+      "serviceHostPlaceholder": "postgres.internal",
+      "serviceHostHelper": "Optionaler Dienst, der von dieser Remote-Maschine getestet wird",
+      "servicePort": "Dienstport",
+      "servicePortPlaceholder": "5432",
+      "servicePortRangeShort": "1-65535",
+      "serviceTimeoutRangeShort": "0,5-15 Sekunden",
       "sshTimeout": "SSH-Timeout",
       "speedProbeSize": "Speed-Probe-Größe",
       "speedProbeHelper": "Bytes, die über SSH gelesen werden, 65536 bis 5242880.",
@@ -3955,7 +4156,8 @@
     }
   },
   "protectedRoute": {
-    "unavailable": "Diese Funktion ist derzeit nicht verfügbar"
+    "unavailable": "Diese Funktion ist derzeit nicht verfügbar",
+    "permissionDenied": "Du hast keine Berechtigung, diese Seite zu öffnen"
   },
   "repositoryCell": {
     "noPath": "Keine Pfadinformationen"
@@ -4261,6 +4463,14 @@
   "layout": {
     "systemInformation": "Systeminformationen",
     "logoAlt": "Borg UI Logo"
+  },
+  "sidebar": {
+    "update": {
+      "title": "Aktualisierung verfügbar",
+      "dismiss": "Schließen",
+      "releaseNotes": "Was ist neu",
+      "ariaLabel": "Software-Aktualisierung verfügbar"
+    }
   },
   "logViewer": {
     "title": "{{label}} Protokolle - Aufgabe #{{jobId}}",

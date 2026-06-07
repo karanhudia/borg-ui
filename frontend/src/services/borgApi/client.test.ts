@@ -21,6 +21,28 @@ describe('BorgApiClient', () => {
     mock.restore()
   })
 
+  it('uses the active remote backend API base on httpClient requests', async () => {
+    const { createRemoteBackendClient, setActiveBackendTarget, resetRemoteBackendStateForTests } =
+      await import('../remoteBackends/storage')
+    resetRemoteBackendStateForTests()
+    const remote = createRemoteBackendClient({
+      name: 'Remote',
+      backendUrl: 'https://remote.example.com',
+    })
+    setActiveBackendTarget(remote.id)
+
+    const clientModule = await import('./client')
+    const mock = new MockAdapter(clientModule.httpClient)
+
+    mock.onGet('/test').reply((config) => {
+      expect(config.baseURL).toBe('https://remote.example.com/api')
+      return [200, { success: true }]
+    })
+
+    await clientModule.httpClient.get('/test')
+    mock.restore()
+  })
+
   it('downloads files in the same tab', async () => {
     const assignMock = vi.fn()
     vi.spyOn(window.location, 'assign').mockImplementation(assignMock)

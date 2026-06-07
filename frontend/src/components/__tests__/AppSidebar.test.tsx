@@ -7,6 +7,7 @@ const {
   mockApiGet,
   mockGetSystemSettings,
   mockListBackupPlans,
+  mockPlanCan,
   mockSetAppVersion,
   mockTabEnablement,
   mockGetTabDisabledReason,
@@ -14,6 +15,7 @@ const {
   mockApiGet: vi.fn().mockResolvedValue({ data: {} }),
   mockGetSystemSettings: vi.fn().mockResolvedValue({ data: { settings: {} } }),
   mockListBackupPlans: vi.fn().mockResolvedValue({ data: { backup_plans: [] } }),
+  mockPlanCan: vi.fn((_feature: string) => true),
   mockSetAppVersion: vi.fn(),
   mockTabEnablement: {
     dashboard: true,
@@ -74,6 +76,16 @@ vi.mock('../../hooks/useAuth', () => ({
   }),
 }))
 
+vi.mock('../../hooks/usePlan', () => ({
+  usePlan: () => ({
+    plan: 'pro',
+    features: {},
+    entitlement: undefined,
+    isLoading: false,
+    can: mockPlanCan,
+  }),
+}))
+
 function renderSidebar({
   initialRoute,
   systemSettings = {},
@@ -110,6 +122,7 @@ describe('AppSidebar', () => {
     mockGetTabDisabledReason.mockReturnValue(null)
     mockGetSystemSettings.mockResolvedValue({ data: { settings: {} } })
     mockListBackupPlans.mockResolvedValue({ data: { backup_plans: [] } })
+    mockPlanCan.mockReturnValue(true)
     mockApiGet.mockResolvedValue({
       data: { app_version: '1.78.0', borg_version: 'borg 1.4.0', borg2_version: 'borg2 2.0.0' },
     })
@@ -139,6 +152,10 @@ describe('AppSidebar', () => {
         'href',
         '/cloud-storage'
       )
+      expect(screen.getAllByRole('link', { name: /remote clients/i })[0]).toHaveAttribute(
+        'href',
+        '/remote-clients'
+      )
       expect(screen.getAllByRole('link', { name: /manual backup/i }).length).toBeGreaterThan(0)
       expect(screen.getAllByRole('link', { name: /managed agents/i }).length).toBeGreaterThan(0)
     })
@@ -151,6 +168,21 @@ describe('AppSidebar', () => {
 
     const managedAgentLinks = screen.getAllByRole('link', { name: /managed agents/i })
     expect(managedAgentLinks[0]).toHaveAttribute('href', '/managed-agents')
+  })
+
+  it('hides Remote Clients navigation when the plan lacks remote client access', async () => {
+    mockPlanCan.mockImplementation((feature) => feature !== 'remote_clients')
+
+    renderSidebar()
+
+    await waitFor(() => {
+      expect(screen.queryAllByRole('link', { name: /remote clients/i })).toHaveLength(0)
+      expect(screen.queryByText('Remote Clients')).not.toBeInTheDocument()
+    })
+    expect(screen.getAllByRole('link', { name: /remote machines/i })[0]).toHaveAttribute(
+      'href',
+      '/ssh-connections'
+    )
   })
 
   it('renders the version info section', async () => {

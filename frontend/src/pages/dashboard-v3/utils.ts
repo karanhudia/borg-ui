@@ -7,3 +7,8 @@ export function gaugeColor(pct: number, T: Tokens) {
 export function toGB(b: number) {
   return (b / 1024 / 1024 / 1024).toFixed(1)
 }
+
+export function toCompactGB(b: number) {
+  const gb = b / 1024 / 1024 / 1024
+  return gb >= 10 ? gb.toFixed(0) : gb.toFixed(1)
+}

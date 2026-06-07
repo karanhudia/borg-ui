@@ -52,7 +52,7 @@ const { usePlanContentMock } = vi.hoisted(() => ({
         plan: 'pro',
         label: 'Backup reports',
         description: 'Generate daily, weekly, monthly, or custom backup reports.',
-        availability: 'coming_soon',
+        availability: 'included',
       },
       {
         id: 'rbac',
@@ -145,13 +145,14 @@ describe('SidebarVersionInfo', () => {
     expect(screen.queryByText('B2')).not.toBeInTheDocument()
   })
 
-  it('opens the plan drawer and shows upcoming features', () => {
+  it('opens the plan drawer and shows included plan features', () => {
     renderWithProviders(<SidebarVersionInfo systemInfo={fullSystemInfo} />)
 
     fireEvent.click(screen.getByText('Community'))
 
-    expect(screen.getByText('Upcoming for Pro')).toBeInTheDocument()
+    expect(screen.getByText('Pro features')).toBeInTheDocument()
     expect(screen.getByText('Backup reports')).toBeInTheDocument()
+    expect(screen.queryByText('Upcoming for Pro')).not.toBeInTheDocument()
     expect(screen.queryByText('Included in upcoming releases for Pro')).not.toBeInTheDocument()
   })
 

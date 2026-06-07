@@ -109,6 +109,7 @@
     "items": {
       "dashboard": "Dashboard",
       "activity": "Attività",
+      "remoteClients": "Client remoti",
       "remoteMachines": "Macchine Remote",
       "managedAgents": "Agenti gestiti",
       "cloudStorage": "Archiviazione cloud",
@@ -159,6 +160,96 @@
     "logout": "Esci",
     "yourPlan": "Your Plan"
   },
+  "remoteClients": {
+    "title": "Client remoti",
+    "description": "Registra server client Borg UI su altre macchine, controllane lo stato e usa questo browser con il server selezionato.",
+    "addButton": "Aggiungi client remoto",
+    "planGate": {
+      "message": "Il passaggio ai client remoti è disponibile nei piani Pro ed Enterprise. Esegui l'upgrade per aggiungere o passare a server Borg UI remoti."
+    },
+    "status": {
+      "incompatible": "Incompatibile",
+      "online": "Online",
+      "offline": "Offline",
+      "checking": "Controllo in corso",
+      "unknown": "Sconosciuto"
+    },
+    "labels": {
+      "activeTarget": "Destinazione attiva",
+      "local": "Locale",
+      "remoteClient": "Client remoto",
+      "requiresAdmin": "Solo admin",
+      "requiresPlan": "Richiede Pro o Enterprise"
+    },
+    "switcher": {
+      "title": "Destinazioni server",
+      "description": "Scegli se questo browser usa questo server o un client remoto.",
+      "menuLabel": "Destinazioni server",
+      "ariaLabel": "Destinazione server {{name}}",
+      "selectLabel": "Server",
+      "noClients": "Nessun client remoto trovato",
+      "localName": "Questo server",
+      "localHelper": "Server Borg UI corrente",
+      "localCompatibility": "Questo browser è connesso a questo server Borg UI.",
+      "remoteHelper": "Server del client remoto",
+      "remoteUnavailable": "Client remoto non disponibile",
+      "remoteAdminUnavailable": "Il cambio di client remoto richiede accesso amministratore.",
+      "remotePlanUnavailable": "Il passaggio ai client remoti richiede Pro o Enterprise.",
+      "versionMismatch": "Conflitto di versione",
+      "versionHelper": "Borg UI {{version}}",
+      "manage": "Gestisci client remoti",
+      "manageRequiresAdmin": "I client remoti richiedono accesso amministratore",
+      "manageRequiresPlan": "I client remoti richiedono Pro o Enterprise"
+    },
+    "localBackend": {
+      "title": "Questo server",
+      "active": "Destinazione attiva",
+      "fallback": "Disponibile come fallback locale"
+    },
+    "empty": {
+      "title": "Nessun client remoto",
+      "description": "Aggiungi l'URL di un server Borg UI per controllarne lo stato e spostare questo browser su quel server."
+    },
+    "lastChecked": "Ultimo controllo: {{value}}",
+    "version": "Borg UI {{version}}",
+    "actions": {
+      "check": "Controlla",
+      "use": "Usa",
+      "edit": "Modifica client remoto",
+      "delete": "Elimina client remoto",
+      "checkAria": "Controlla {{name}}",
+      "useAria": "Usa {{name}}",
+      "useLocalAria": "Usa questo server",
+      "editAria": "Modifica {{name}}",
+      "deleteAria": "Elimina {{name}}"
+    },
+    "dialog": {
+      "addTitle": "Aggiungi client remoto",
+      "editTitle": "Modifica client remoto",
+      "description": "Usa l'URL del server Borg UI. Sono accettati nomi DNS, IP LAN, URL localhost e percorsi `/api`.",
+      "nameLabel": "Nome client",
+      "urlLabel": "URL server",
+      "save": "Salva client"
+    },
+    "toasts": {
+      "added": "Client remoto aggiunto.",
+      "updated": "Client remoto aggiornato.",
+      "deleted": "Client remoto eliminato.",
+      "online": "{{name}} è online.",
+      "unavailable": "{{name}} non è disponibile.",
+      "checkFailed": "Controllo di {{name}} non riuscito: {{error}}",
+      "using": "{{name}} in uso."
+    },
+    "deleteDialog": {
+      "title": "Eliminare il client remoto?",
+      "description": "Rimuovere \"{{name}}\" da questo browser? Puoi aggiungerlo di nuovo più tardi con l'URL del server.",
+      "confirm": "Elimina client"
+    },
+    "errors": {
+      "saveFailed": "Impossibile salvare il client remoto.",
+      "remoteUnavailable": "Il server del client remoto non è disponibile."
+    }
+  },
   "cloudStorage": {
     "title": "Archiviazione cloud",
     "subtitle": "Gestisci remoti rclone riutilizzabili per mirror dei repository.",
@@ -177,6 +268,11 @@
     "remoteProviderLabel": "Provider",
     "remoteStatusLabel": "Stato",
     "remoteUsageLabel": "Usato da",
+    "storageUsed": "Usato",
+    "storageFree": "Libero",
+    "storageTotal": "Totale {{value}}",
+    "storagePercentUsed": "{{value}}% usato",
+    "noStorageInfo": "Nessuna info storage",
     "configSourceLabel": "Configurazione",
     "managedConfig": "rclone.conf gestito dal server",
     "editRemote": "Modifica remoto",
@@ -327,6 +423,41 @@
     },
     "upcomingBackups": {
       "title": "Backup imminenti"
+    },
+    "launchpad": {
+      "title": "Launchpad operativo",
+      "openAction": "Apri {{title}}: {{value}}, {{status}}",
+      "backupPlans": {
+        "title": "Piani di backup",
+        "value_one": "{{count}} piano",
+        "value_other": "{{count}} piani",
+        "active_one": "{{count}} attivo",
+        "active_other": "{{count}} attivi",
+        "empty": "Crea il primo",
+        "action": "Apri piani"
+      },
+      "cloudStorage": {
+        "title": "Storage cloud",
+        "value_one": "{{count}} remoto",
+        "value_other": "{{count}} remoti",
+        "active": "Configurato",
+        "empty": "Nessun remoto"
+      },
+      "remoteClients": {
+        "title": "Client remoti",
+        "value_one": "{{count}} client",
+        "value_other": "{{count}} client",
+        "active": "Disponibile",
+        "empty": "Questo server"
+      },
+      "restoreVerification": {
+        "title": "Verifica ripristino",
+        "value": "{{configured}}/{{total}} coperti",
+        "noRepositories": "Nessun repo",
+        "complete": "Coperto",
+        "partial": "Da configurare",
+        "action": "Pianifica check"
+      }
     },
     "scheduleBadge": {
       "noSchedule": "Nessuna pianificazione automatica",
@@ -818,6 +949,7 @@
       "removeSourceGroup": "Remove source group",
       "backToTypes": "Back to source types",
       "applyPaths": "Use these paths",
+      "applyContainers": "Usa questi container",
       "selectPaths": "Select paths",
       "currentPath": "Current path",
       "agentBrowseTitle": "Browse {{agent}}",
@@ -858,6 +990,47 @@
       "databaseLivePath": "Live database path",
       "databaseDumpPath": "Dump path",
       "databaseBackupPaths": "Final Borg paths",
+      "containerTitle": "Container Docker",
+      "containerBackupTitle": "Aggiungi backup di container Docker",
+      "containerName": "Nome o ID del container",
+      "containerImage": "Immagine (opzionale)",
+      "containerExportPath": "Percorso di staging dell'esportazione",
+      "containerExportsTo": "Esporta in",
+      "containerExportHint": "Borg UI esporta il filesystem del container in un percorso di staging prima che Borg lo legga. Questo non esegue il backup dell'immagine Docker, dei bind mount o dei volumi con nome.",
+      "addContainerManually": "Aggiungi per nome",
+      "addContainerManuallyHelp": "Se il tuo container non è nell'elenco sopra, aggiungilo qui.",
+      "containerSourceMachine": "Host Docker",
+      "containerBackupPath": "Percorso di staging dell'esportazione",
+      "containerModeExport": "docker export",
+      "scanContainers": "Scansiona container",
+      "rescanContainers": "Scansiona di nuovo i container",
+      "scanContainersHint": "Scansiona l'host Docker selezionato.",
+      "detectedContainers": "Container rilevati",
+      "containerBackupCoverageTitle": "Cosa esegue il backup questa sorgente",
+      "containerFilesystemIncluded": "Incluso: esportazione del filesystem del container in {{path}}",
+      "containerMountsNotIncluded": "Non incluso: dati montati",
+      "containerMountsNotIncludedHelp": "Aggiungi questi percorsi di mount come sorgenti File se contengono dati necessari.",
+      "containerMountNotIncluded": "Non incluso in docker export",
+      "containerMountsOptional": "Dati montati opzionali",
+      "containerMountsOptionalHelp": "Seleziona i mount per aggiungerli come sorgenti File in questo piano.",
+      "includeContainerMountAria": "Includi dati montati {{path}} come sorgente File",
+      "containerMountDestination": "Montato in {{path}}",
+      "containerMountSizeAvailable": "{{size}}",
+      "containerMountSizeUnavailable": "Dimensione non disponibile",
+      "containerMountSizePermissionDenied": "Permesso negato",
+      "containerMountSizeTimeout": "Timeout dimensione",
+      "containerImageMetadata": "L'immagine {{image}} identifica questo container; Borg UI non esegue il backup dell'immagine.",
+      "addDetectedContainer": "Aggiungi container rilevato",
+      "addDetectedContainerShort": "Aggiungi",
+      "removeDetectedContainer": "Rimuovi container rilevato",
+      "containerAdded": "Aggiunto",
+      "noContainersFoundTitle": "Nessun container trovato",
+      "noContainersFoundBody": "Verifica l'accesso a Docker su questo host o inserisci un container manualmente.",
+      "containerScanUnsupportedForAgents": "La scansione dei container Docker è disponibile per il server Borg UI e le sorgenti SSH. Inserisci manualmente i container degli agent gestiti.",
+      "containerScanFailedBody": "La scansione dei container Docker non ha restituito dati. Verifica l'accesso a Docker su questo host e riprova.",
+      "addContainer": "Aggiungi container",
+      "selectedContainers": "Container selezionati",
+      "containerScriptsAssigned": "Script di esportazione assegnati",
       "sourcePaths": "Source paths",
       "notesLabel": "Notes",
       "pathCount_one": "{{count}} path",
@@ -1740,6 +1913,23 @@
     },
     "deployDialog": {
       "title": "Distribuisci Chiave SSH su Server",
+      "setupPreset": "Preset di configurazione",
+      "setupPresetHint": "Scegli una configurazione documentata per precompilare i valori predefiniti. Puoi modificare ogni campo prima della distribuzione.",
+      "presetCustom": "Configurazione personalizzata",
+      "presetCustomDescription": "Parti dai valori SSH standard.",
+      "presetCustomDefaults": "Porta 22, distribuzione SFTP attiva",
+      "presetLinux": "Server Linux",
+      "presetLinuxDescription": "Server headless o VM con accesso SSH normale.",
+      "presetLinuxDefaults": "Utente root, porta 22",
+      "presetBorgBase": "BorgBase",
+      "presetBorgBaseDescription": "Repository Borg ospitato con formato percorso /./repo.",
+      "presetBorgBaseDefaults": "Porta 22, distribuzione SFTP disattivata, percorso predefinito /./repo",
+      "presetHetzner": "Hetzner Storage Box",
+      "presetHetznerDescription": "Repository Storage Box tramite il servizio SSH esteso di Hetzner.",
+      "presetHetznerDefaults": "Porta 23, distribuzione SFTP attiva, percorso predefinito /./borg-repository",
+      "presetNas": "NAS",
+      "presetNasDescription": "Synology, Unraid o NAS simile con mappatura dei percorsi SSH.",
+      "presetNasDefaults": "Porta 22, distribuzione SFTP disattivata, prefisso percorso SSH /volume1",
       "host": "Host",
       "hostPlaceholder": "192.168.1.100 o example.com",
       "username": "Nome utente",
@@ -1753,6 +1943,8 @@
       "useSudoHint": "Antepone sudo a borg sull'host remoto. Richiede sudo senza password per l'utente SSH. Si applica solo alla modalità di backup SSH remoto.",
       "defaultPath": "Percorso Predefinito (Opzionale)",
       "defaultPathHelper": "Directory iniziale per esplorare file via SSH (ad es. /home per Hetzner Storage Box)",
+      "sshPathPrefix": "Prefisso Percorso SSH (Opzionale)",
+      "sshPathPrefixHelper": "Prefisso aggiunto quando Borg necessita di un percorso SSH diverso da quello di esplorazione, per esempio /volume1 su Synology.",
       "mountPoint": "Punto di Mount (Opzionale)",
       "mountPointPlaceholder": "hetzner o homeserver",
       "mountPointHelper": "Nome descrittivo per questa macchina remota (ad es. hetzner, backup-server)",
@@ -1815,6 +2007,15 @@
       "targetHostHelper": "Destinazione TCP remota opzionale",
       "targetPort": "Porta",
       "targetTimeout": "Timeout destinazione",
+      "advancedTargetSummary": "Avanzate: testa un altro servizio",
+      "advancedTargetDescription": "Verifica se questa macchina remota può raggiungere un servizio separato. Lascia vuoto per la diagnostica normale.",
+      "serviceHost": "Host del servizio",
+      "serviceHostPlaceholder": "postgres.internal",
+      "serviceHostHelper": "Servizio opzionale da testare da questa macchina remota",
+      "servicePort": "Porta del servizio",
+      "servicePortPlaceholder": "5432",
+      "servicePortRangeShort": "1-65535",
+      "serviceTimeoutRangeShort": "0,5-15 secondi",
       "sshTimeout": "Timeout SSH",
       "speedProbeSize": "Dimensione test velocità",
       "speedProbeHelper": "Byte da leggere via SSH, da 65536 a 5242880.",
@@ -3955,7 +4156,8 @@
     }
   },
   "protectedRoute": {
-    "unavailable": "Questa funzionalità non è attualmente disponibile"
+    "unavailable": "Questa funzionalità non è attualmente disponibile",
+    "permissionDenied": "Non hai il permesso di aprire questa pagina"
   },
   "repositoryCell": {
     "noPath": "Nessuna informazione sul percorso"
@@ -4261,6 +4463,14 @@
   "layout": {
     "systemInformation": "Informazioni di Sistema",
     "logoAlt": "Logo Borg UI"
+  },
+  "sidebar": {
+    "update": {
+      "title": "Aggiornamento disponibile",
+      "dismiss": "Ignora",
+      "releaseNotes": "Cosa c'è di nuovo",
+      "ariaLabel": "Aggiornamento software disponibile"
+    }
   },
   "logViewer": {
     "title": "Log {{label}} - Job #{{jobId}}",
