@@ -19,6 +19,8 @@ from app.api.dashboard import (
 )
 from app.database.models import (
     BackupJob,
+    BackupPlan,
+    BackupPlanRepository,
     CheckJob,
     CompactJob,
     Repository,
@@ -745,6 +747,44 @@ class TestDashboardScheduleAndOverview:
         test_db.refresh(far_schedule)
         test_db.refresh(ssh_connection)
 
+        stale_plan_next_run = now - timedelta(hours=1)
+        enabled_plan = BackupPlan(
+            name="Z Scheduled Documents",
+            enabled=True,
+            source_directories='["/srv/data"]',
+            schedule_enabled=True,
+            cron_expression="0 3 * * *",
+            next_run=stale_plan_next_run,
+        )
+        disabled_plan = BackupPlan(
+            name="A Paused Media",
+            enabled=False,
+            source_directories='["/srv/media"]',
+            schedule_enabled=False,
+        )
+        test_db.add_all([enabled_plan, disabled_plan])
+        test_db.commit()
+        test_db.refresh(enabled_plan)
+        test_db.refresh(disabled_plan)
+
+        test_db.add_all(
+            [
+                BackupPlanRepository(
+                    backup_plan_id=enabled_plan.id,
+                    repository_id=full_repo.id,
+                    enabled=True,
+                    execution_order=1,
+                ),
+                BackupPlanRepository(
+                    backup_plan_id=disabled_plan.id,
+                    repository_id=full_repo.id,
+                    enabled=True,
+                    execution_order=2,
+                ),
+            ]
+        )
+        test_db.commit()
+
         test_db.add_all(
             [
                 BackupJob(
@@ -813,6 +853,10 @@ class TestDashboardScheduleAndOverview:
             "ssh_repositories": 1,
             "active_schedules": 2,
             "total_schedules": 2,
+            "active_backup_plans": 1,
+            "total_backup_plans": 2,
+            "active_automations": 3,
+            "total_automations": 4,
             "ssh_connections_active": 1,
             "ssh_connections_total": 1,
             "success_rate_30d": 50.0,
@@ -826,6 +870,17 @@ class TestDashboardScheduleAndOverview:
         repo_health = {item["name"]: item for item in data["repository_health"]}
         assert repo_health["Full Repo"]["health_status"] == "critical"
         assert repo_health["Full Repo"]["schedule_name"] == "Nightly Full Repo"
+        assert repo_health["Full Repo"]["backup_plan_count"] == 2
+        assert repo_health["Full Repo"]["backup_plan_scheduled_count"] == 1
+        assert repo_health["Full Repo"]["backup_plan_names"] == [
+            "Z Scheduled Documents",
+            "A Paused Media",
+        ]
+        backup_plan_next_run = datetime.fromisoformat(
+            repo_health["Full Repo"]["backup_plan_next_run"]
+        )
+        assert backup_plan_next_run > now
+        assert backup_plan_next_run != stale_plan_next_run
         assert repo_health["Full Repo"]["dimension_health"]["restore"] == "critical"
         assert repo_health["Full Repo"]["latest_restore_check_status"] == "failed"
         assert (

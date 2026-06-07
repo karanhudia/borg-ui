@@ -12,6 +12,8 @@ from app.database.database import get_db
 from app.database.models import (
     User,
     BackupJob,
+    BackupPlan,
+    BackupPlanRepository,
     Repository,
     ScheduledJob,
     ScheduledJobRepository,
@@ -85,6 +87,24 @@ def resolve_schedule_next_run(
             schedule.cron_expression,
             now_utc,
             schedule.timezone or DEFAULT_SCHEDULE_TIMEZONE,
+        )
+    except Exception:
+        return None
+
+
+def resolve_backup_plan_next_run(plan: BackupPlan, now: datetime) -> Optional[datetime]:
+    """Resolve the next due time for a backup plan, preferring stored future values."""
+    now_utc = to_utc_naive(now)
+    if plan.next_run and to_utc_naive(plan.next_run) > now_utc:
+        return to_utc_naive(plan.next_run)
+    if not plan.cron_expression:
+        return None
+
+    try:
+        return calculate_next_cron_run(
+            plan.cron_expression,
+            now_utc,
+            plan.timezone or DEFAULT_SCHEDULE_TIMEZONE,
         )
     except Exception:
         return None
@@ -441,6 +461,24 @@ def build_observe_repository_health(
     }
 
 
+def build_backup_plan_summary(plans: list[BackupPlan], now: datetime) -> Dict[str, Any]:
+    """Build repository-level backup plan counts and next scheduled run metadata."""
+    scheduled_plans = [plan for plan in plans if plan.enabled and plan.schedule_enabled]
+    scheduled_next_runs = [
+        next_run
+        for plan in scheduled_plans
+        if (next_run := resolve_backup_plan_next_run(plan, now)) is not None
+    ]
+    return {
+        "backup_plan_count": len(plans),
+        "backup_plan_scheduled_count": len(scheduled_plans),
+        "backup_plan_names": [plan.name for plan in plans],
+        "backup_plan_next_run": serialize_datetime(
+            min(scheduled_next_runs) if scheduled_next_runs else None
+        ),
+    }
+
+
 def get_system_metrics() -> SystemMetrics:
     """Get system resource metrics"""
     try:
@@ -665,6 +703,26 @@ async def get_dashboard_overview(
 
         # Get all schedules
         schedules = db.query(ScheduledJob).all()
+        active_schedules = [s for s in schedules if s.enabled]
+
+        # Get all backup plans so the dashboard can report the plan-native
+        # automation counts separately from legacy schedules.
+        backup_plans = db.query(BackupPlan).all()
+        active_backup_plans = [p for p in backup_plans if p.enabled]
+        backup_plan_links = (
+            db.query(BackupPlanRepository, BackupPlan)
+            .join(BackupPlan, BackupPlan.id == BackupPlanRepository.backup_plan_id)
+            .filter(BackupPlanRepository.enabled.is_(True))
+            .order_by(
+                BackupPlanRepository.repository_id.asc(),
+                BackupPlanRepository.execution_order.asc(),
+                BackupPlan.name.asc(),
+            )
+            .all()
+        )
+        backup_plans_by_repo: dict[int, list[BackupPlan]] = {}
+        for link, plan in backup_plan_links:
+            backup_plans_by_repo.setdefault(link.repository_id, []).append(plan)
 
         # Get SSH connections
         ssh_connections = db.query(SSHConnection).all()
@@ -737,6 +795,7 @@ async def get_dashboard_overview(
                         fallback_schedule = schedule  # keep first disabled as fallback
             if repo_schedule is None:
                 repo_schedule = fallback_schedule
+            repo_backup_plans = backup_plans_by_repo.get(repo.id, [])
 
             # Calculate dedup ratio (if we have the data)
             dedup_ratio = None
@@ -785,6 +844,7 @@ async def get_dashboard_overview(
                         and repo_schedule.next_run
                     )
                     else None,
+                    **build_backup_plan_summary(repo_backup_plans, now),
                     "dimension_health": health["dimension_health"],
                 }
             )
@@ -795,6 +855,7 @@ async def get_dashboard_overview(
             health = build_observe_repository_health(
                 repo, now, latest_restore_check, health_thresholds
             )
+            repo_backup_plans = backup_plans_by_repo.get(repo.id, [])
 
             repo_health.append(
                 {
@@ -823,6 +884,7 @@ async def get_dashboard_overview(
                     "schedule_enabled": False,
                     "schedule_name": None,
                     "next_run": None,
+                    **build_backup_plan_summary(repo_backup_plans, now),
                     "dimension_health": health["dimension_health"],
                 }
             )
@@ -864,7 +926,6 @@ async def get_dashboard_overview(
 
         # Get upcoming schedules (next 24 hours)
         end_time = now + timedelta(hours=24)
-        active_schedules = [s for s in schedules if s.enabled]
         upcoming_tasks = []
         for schedule in active_schedules:
             next_run_dt = resolve_schedule_next_run(schedule, now)
@@ -1151,8 +1212,12 @@ async def get_dashboard_overview(
                 "ssh_repositories": len(
                     [r for r in repositories if r.repository_type == "ssh"]
                 ),
-                "active_schedules": len([s for s in schedules if s.enabled]),
+                "active_schedules": len(active_schedules),
                 "total_schedules": len(schedules),
+                "active_backup_plans": len(active_backup_plans),
+                "total_backup_plans": len(backup_plans),
+                "active_automations": len(active_schedules) + len(active_backup_plans),
+                "total_automations": len(schedules) + len(backup_plans),
                 "ssh_connections_active": ssh_active,
                 "ssh_connections_total": ssh_total,
                 "success_rate_30d": round(success_rate, 1),
