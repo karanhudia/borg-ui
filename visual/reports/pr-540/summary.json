@@ -1,22 +1,112 @@
 {
-  "generatedAt": "2026-06-07T07:54:20.686Z",
+  "generatedAt": "2026-06-07T08:51:22.867Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #540 visual report",
-    "commitSha": "a8627969d04b",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/27086572120"
+    "commitSha": "eb73d1ff48d6",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/27087755114"
   },
   "totals": {
     "baseline": 386,
-    "actual": 386,
+    "actual": 390,
     "compared": 386,
-    "changed": 0,
-    "added": 0,
+    "changed": 4,
+    "added": 4,
     "removed": 0,
-    "unchanged": 386
+    "unchanged": 382
   },
-  "changed": [],
-  "added": [],
+  "changed": [
+    {
+      "fileName": "components-planinfodrawer--community-upgrade-drawer--mobile.png",
+      "baselinePath": "images/baseline/components-planinfodrawer--community-upgrade-drawer--mobile.png",
+      "actualPath": "images/actual/components-planinfodrawer--community-upgrade-drawer--mobile.png",
+      "diffPath": "images/diff/components-planinfodrawer--community-upgrade-drawer--mobile.png",
+      "diffPixels": 3418,
+      "totalPixels": 329160,
+      "diffRatio": 0.010384007777372707,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-planinfodrawer--community-upgrade-drawer.png",
+      "baselinePath": "images/baseline/components-planinfodrawer--community-upgrade-drawer.png",
+      "actualPath": "images/actual/components-planinfodrawer--community-upgrade-drawer.png",
+      "diffPath": "images/diff/components-planinfodrawer--community-upgrade-drawer.png",
+      "diffPixels": 3125,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0030517578125,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-planinfodrawer--dark-community-upgrade-drawer--mobile.png",
+      "baselinePath": "images/baseline/components-planinfodrawer--dark-community-upgrade-drawer--mobile.png",
+      "actualPath": "images/actual/components-planinfodrawer--dark-community-upgrade-drawer--mobile.png",
+      "diffPath": "images/diff/components-planinfodrawer--dark-community-upgrade-drawer--mobile.png",
+      "diffPixels": 3387,
+      "totalPixels": 329160,
+      "diffRatio": 0.010289828654757565,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-planinfodrawer--dark-community-upgrade-drawer.png",
+      "baselinePath": "images/baseline/components-planinfodrawer--dark-community-upgrade-drawer.png",
+      "actualPath": "images/actual/components-planinfodrawer--dark-community-upgrade-drawer.png",
+      "diffPath": "images/diff/components-planinfodrawer--dark-community-upgrade-drawer.png",
+      "diffPixels": 3095,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0030224609375,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    }
+  ],
+  "added": [
+    {
+      "fileName": "components-cronbuilder--daily--mobile.png",
+      "actualPath": "images/actual/components-cronbuilder--daily--mobile.png"
+    },
+    {
+      "fileName": "components-cronbuilder--daily.png",
+      "actualPath": "images/actual/components-cronbuilder--daily.png"
+    },
+    {
+      "fileName": "components-cronbuilder--weekly--mobile.png",
+      "actualPath": "images/actual/components-cronbuilder--weekly--mobile.png"
+    },
+    {
+      "fileName": "components-cronbuilder--weekly.png",
+      "actualPath": "images/actual/components-cronbuilder--weekly.png"
+    }
+  ],
   "removed": [],
   "unchanged": [
     {
@@ -558,18 +648,6 @@
     },
     {
       "fileName": "components-plangate--with-message.png"
-    },
-    {
-      "fileName": "components-planinfodrawer--community-upgrade-drawer--mobile.png"
-    },
-    {
-      "fileName": "components-planinfodrawer--community-upgrade-drawer.png"
-    },
-    {
-      "fileName": "components-planinfodrawer--dark-community-upgrade-drawer--mobile.png"
-    },
-    {
-      "fileName": "components-planinfodrawer--dark-community-upgrade-drawer.png"
     },
     {
       "fileName": "components-prunerepositorydialog--retention-preview--mobile.png"
