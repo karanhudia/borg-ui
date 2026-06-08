@@ -76,6 +76,32 @@ describe('PlanGate', () => {
     expect(screen.queryByText('pro content')).not.toBeInTheDocument()
   })
 
+  it('renders a dimmed preview behind the upgrade prompt without mounting children', () => {
+    vi.mocked(usePlan).mockReturnValue({
+      plan: 'community',
+      features: {},
+      isLoading: false,
+      can: () => false,
+    })
+    const childSpy = vi.fn()
+    const GatedChild = () => {
+      childSpy()
+      return <div>live pro content</div>
+    }
+
+    renderWithProviders(
+      <PlanGate feature="remote_clients" preview={<div>preview content</div>}>
+        <GatedChild />
+      </PlanGate>
+    )
+
+    expect(screen.getByText('preview content')).toBeInTheDocument()
+    expect(screen.getByText('preview content').closest('[inert]')).toBeInTheDocument()
+    expect(screen.getByText(/Pro feature/i)).toBeInTheDocument()
+    expect(screen.queryByText('live pro content')).not.toBeInTheDocument()
+    expect(childSpy).not.toHaveBeenCalled()
+  })
+
   it('tracks blocked gated renders once with feature metadata', async () => {
     vi.mocked(usePlan).mockReturnValue({
       plan: 'community',

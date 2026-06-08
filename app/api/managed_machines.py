@@ -416,7 +416,7 @@ async def create_enrollment_token(
 
 @router.get("/enrollment-tokens", response_model=list[AgentEnrollmentTokenSummary])
 async def list_enrollment_tokens(
-    _: User = Depends(require_managed_agents_admin_user),
+    _: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     return (
@@ -457,7 +457,7 @@ async def revoke_enrollment_token(
 
 @router.get("/agents", response_model=list[AgentMachineResponse])
 async def list_agent_machines(
-    _: User = Depends(require_managed_agents_admin_user),
+    _: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     agents = (
@@ -671,7 +671,7 @@ async def delete_agent_machine(
 
 @router.get("/agent-jobs", response_model=list[AgentJobResponse])
 async def list_agent_jobs(
-    _: User = Depends(require_managed_agents_admin_user),
+    _: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
     return db.query(AgentJob).order_by(AgentJob.created_at.desc()).all()

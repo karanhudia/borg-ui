@@ -16,6 +16,7 @@ import {
   AgentDeleteConfirmationDialog,
   AgentJobLogsDialog,
   AgentList,
+  ManagedAgentsPlanGate,
   AgentReinstallDialog,
   AgentSessionLogsDialog,
   AgentSetupGuide,
@@ -23,6 +24,7 @@ import {
   JobsTable,
   TokensTable,
 } from './ManagedAgents'
+import { communitySystemInfo } from '../services/remoteBackends/planStoryFixtures'
 
 const agents: AgentMachineResponse[] = [
   {
@@ -323,6 +325,22 @@ export const FleetOverview: Story = {
           <TokensTable tokens={tokens} onRevoke={() => {}} isRevoking={false} />
         </Box>
       </Stack>
+    </Box>
+  ),
+}
+
+export const LockedCommunity: Story = {
+  parameters: {
+    systemInfo: communitySystemInfo,
+  },
+  render: () => (
+    <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>
+      <ManagedAgentsPlanGate
+        defaultAgentServerUrl="https://borg-ui.example.com"
+        agents={agents}
+        tokens={tokens}
+        jobs={jobs}
+      />
     </Box>
   ),
 }

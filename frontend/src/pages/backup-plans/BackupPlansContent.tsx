@@ -38,6 +38,9 @@ interface BackupPlansContentProps {
   startingPlanId: number | null
   highlightedPlanId: number | null
   canUseMultiRepository: boolean
+  canUseManagedAgents: boolean
+  canUseDatabaseDiscovery: boolean
+  canUseContainerBackups: boolean
   cancellingRunId: number | null
   runPending: boolean
   togglePending: boolean
@@ -53,6 +56,86 @@ interface BackupPlansContentProps {
   onViewRepositories: (planId: number) => void
   formatStatusLabel: (status?: string) => string
   t: TFunction
+}
+
+function planUsesDatabaseFeature(plan: BackupPlan) {
+  return (
+    Boolean(plan.database_template_id) ||
+    Boolean(plan.source_locations?.some((location) => Boolean(location.database)))
+  )
+}
+
+function planUsesContainerFeature(plan: BackupPlan) {
+  return Boolean(plan.source_locations?.some((location) => Boolean(location.container)))
+}
+
+function planUsesManagedAgentFeature(plan: BackupPlan) {
+  return (
+    plan.source_type === 'agent' ||
+    Boolean(
+      plan.source_locations?.some(
+        (location) => location.source_type === 'agent' || location.agent_machine_id != null
+      )
+    )
+  )
+}
+
+function getBackupPlanSourceTypeLabel(
+  plan: BackupPlan,
+  usesDatabaseFeature: boolean,
+  usesContainerFeature: boolean,
+  t: TFunction
+) {
+  if (plan.source_type === 'mixed') return t('backupPlans.sourceChooser.mixedSources')
+  if (usesDatabaseFeature) return t('backupPlans.sourceChooser.databaseTitle')
+  if (usesContainerFeature) return t('backupPlans.sourceChooser.kindContainer')
+  if (plan.source_type === 'remote') return t('backupPlans.status.remoteSource')
+  if (plan.source_type === 'agent') return t('backupPlans.sourceChooser.managedAgent')
+  return t('backupPlans.status.localSource')
+}
+
+function getPlanRunProTooltip({
+  usesMultiRepositoryFeature,
+  usesManagedAgentFeature,
+  usesDatabaseFeature,
+  usesContainerFeature,
+  canUseMultiRepository,
+  canUseManagedAgents,
+  canUseDatabaseDiscovery,
+  canUseContainerBackups,
+  t,
+}: {
+  usesMultiRepositoryFeature: boolean
+  usesManagedAgentFeature: boolean
+  usesDatabaseFeature: boolean
+  usesContainerFeature: boolean
+  canUseMultiRepository: boolean
+  canUseManagedAgents: boolean
+  canUseDatabaseDiscovery: boolean
+  canUseContainerBackups: boolean
+  t: TFunction
+}) {
+  const blockedFeatures: string[] = []
+
+  if (usesMultiRepositoryFeature && !canUseMultiRepository) {
+    blockedFeatures.push(t('backupPlans.proFeatureLabels.multiRepository'))
+  }
+  if (usesManagedAgentFeature && !canUseManagedAgents) {
+    blockedFeatures.push(t('backupPlans.proFeatureLabels.managedAgent'))
+  }
+  if (usesDatabaseFeature && !canUseDatabaseDiscovery) {
+    blockedFeatures.push(t('backupPlans.proFeatureLabels.database'))
+  }
+  if (usesContainerFeature && !canUseContainerBackups) {
+    blockedFeatures.push(t('backupPlans.proFeatureLabels.container'))
+  }
+
+  if (blockedFeatures.length === 0) return ''
+  if (blockedFeatures.length === 1) {
+    return t('backupPlans.runTooltipProFeature', { feature: blockedFeatures[0] })
+  }
+
+  return t('backupPlans.runTooltipProFeatures', { features: blockedFeatures.join(', ') })
 }
 
 function BackupPlansContentImpl({
@@ -72,6 +155,9 @@ function BackupPlansContentImpl({
   startingPlanId,
   highlightedPlanId,
   canUseMultiRepository,
+  canUseManagedAgents,
+  canUseDatabaseDiscovery,
+  canUseContainerBackups,
   cancellingRunId,
   runPending,
   togglePending,
@@ -441,20 +527,42 @@ function BackupPlansContentImpl({
                   const planIsRunning = isActiveRun(latestRun?.status)
                   const planIsStarting = startingPlanId === plan.id && runPending
                   const isHighlighted = highlightedPlanId === plan.id
-                  const planUsesProFeatures =
+                  const usesMultiRepositoryFeature =
                     plan.repository_count > 1 || plan.repository_run_mode === 'parallel'
-                  const planBlockedByLicense = planUsesProFeatures && !canUseMultiRepository
+                  const usesManagedAgentFeature = planUsesManagedAgentFeature(plan)
+                  const usesDatabaseFeature = planUsesDatabaseFeature(plan)
+                  const usesContainerFeature = planUsesContainerFeature(plan)
+                  const planUsesProFeatures =
+                    usesMultiRepositoryFeature ||
+                    usesManagedAgentFeature ||
+                    usesDatabaseFeature ||
+                    usesContainerFeature
+                  const planBlockedByLicense =
+                    (usesMultiRepositoryFeature && !canUseMultiRepository) ||
+                    (usesManagedAgentFeature && !canUseManagedAgents) ||
+                    (usesDatabaseFeature && !canUseDatabaseDiscovery) ||
+                    (usesContainerFeature && !canUseContainerBackups)
                   const runDisabled =
                     planIsStarting || planIsRunning || !plan.enabled || planBlockedByLicense
-                  const runTooltip = planBlockedByLicense ? t('backupPlans.runTooltipPro') : ''
-                  const sourceTypeLabel =
-                    plan.source_type === 'remote'
-                      ? t('backupPlans.status.remoteSource')
-                      : plan.source_type === 'agent'
-                        ? t('backupPlans.sourceChooser.managedAgent')
-                        : plan.source_type === 'mixed'
-                          ? t('backupPlans.sourceChooser.mixedSources')
-                          : t('backupPlans.status.localSource')
+                  const runTooltip = planBlockedByLicense
+                    ? getPlanRunProTooltip({
+                        usesMultiRepositoryFeature,
+                        usesManagedAgentFeature,
+                        usesDatabaseFeature,
+                        usesContainerFeature,
+                        canUseMultiRepository,
+                        canUseManagedAgents,
+                        canUseDatabaseDiscovery,
+                        canUseContainerBackups,
+                        t,
+                      })
+                    : ''
+                  const sourceTypeLabel = getBackupPlanSourceTypeLabel(
+                    plan,
+                    usesDatabaseFeature,
+                    usesContainerFeature,
+                    t
+                  )
 
                   return (
                     <BackupPlanIdleCard

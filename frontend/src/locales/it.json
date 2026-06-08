@@ -162,7 +162,7 @@
   },
   "remoteClients": {
     "title": "Client remoti",
-    "description": "Registra server client Borg UI su altre macchine, controllane lo stato e usa questo browser con il server selezionato.",
+    "description": "Registra server client Borg UI su altre macchine, controllane lo stato da questo server e instrada da qui le richieste al server selezionato.",
     "addButton": "Aggiungi client remoto",
     "planGate": {
       "message": "Il passaggio ai client remoti è disponibile nei piani Pro ed Enterprise. Esegui l'upgrade per aggiungere o passare a server Borg UI remoti."
@@ -183,7 +183,7 @@
     },
     "switcher": {
       "title": "Destinazioni server",
-      "description": "Scegli se questo browser usa questo server o un client remoto.",
+      "description": "Scegli se le richieste vanno a questo server o passano da qui verso un client remoto.",
       "menuLabel": "Destinazioni server",
       "ariaLabel": "Destinazione server {{name}}",
       "selectLabel": "Server",
@@ -254,9 +254,17 @@
       "remoteUnavailable": "Il server del client remoto non è disponibile."
     }
   },
+  "managedAgents": {
+    "planGate": {
+      "message": "Gli agenti gestiti richiedono Pro o Enterprise. Effettua l'upgrade per registrare macchine remote ed eseguire job con agenti."
+    }
+  },
   "cloudStorage": {
     "title": "Archiviazione cloud",
     "subtitle": "Gestisci remoti rclone riutilizzabili per mirror dei repository.",
+    "planGate": {
+      "message": "L'archiviazione cloud con rclone è disponibile nei piani Pro ed Enterprise. Esegui l'upgrade per aggiungere remoti riutilizzabili per mirror dei repository."
+    },
     "addRemote": "Aggiungi remoto",
     "rcloneAvailability": "Disponibilità rclone",
     "statusAvailable": "Disponibile",
@@ -806,6 +814,14 @@
     "subtitle": "Definisci sorgenti, impostazioni, pianificazioni e i repository in cui ogni backup scrive.",
     "loading": "Caricamento piani di backup...",
     "runTooltipPro": "Questo piano usa più repository o esecuzione parallela. Modificalo o passa a Pro per eseguirlo.",
+    "runTooltipProFeature": "Questo piano usa {{feature}}, che richiede Pro. Modificalo o passa a Pro per eseguirlo.",
+    "runTooltipProFeatures": "Questo piano usa funzioni solo Pro: {{features}}. Modificalo o passa a Pro per eseguirlo.",
+    "proFeatureLabels": {
+      "multiRepository": "più repository o esecuzione parallela",
+      "managedAgent": "backup con agenti gestiti",
+      "database": "backup di database",
+      "container": "backup di container"
+    },
     "empty": {
       "title": "Nessun piano di backup",
       "description": "Crea un piano per collegare sorgenti, impostazioni, pianificazione e repository."
@@ -4559,6 +4575,9 @@
         "oidcEmailAlreadyInUse": "Questa email single sign-on è già utilizzata da un altro account Borg UI.",
         "oidcPendingApproval": "Il tuo account single sign-on è in attesa dell'approvazione di un amministratore",
         "oidcTemplateUserNotFound": "L'utente modello configurato per il single sign-on non è stato trovato"
+      },
+      "plan": {
+        "featureNotAvailable": "Questa funzionalità non è disponibile nel tuo piano attuale."
       },
       "agents": {
         "agentDisabled": "Questo agente è disattivato",

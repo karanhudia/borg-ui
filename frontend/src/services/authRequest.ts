@@ -1,5 +1,6 @@
 import { getApiBaseUrl } from './remoteBackends/gateway'
-import { getAccessTokenHeader } from './authHeaders'
+import { getActiveBackendTarget } from './remoteBackends/storage'
+import { getBackendTargetAccessHeaderValues } from './authHeaders'
 import type { AuthTransportMode } from './api'
 
 let authTransportMode: AuthTransportMode = 'jwt'
@@ -13,7 +14,7 @@ export const fetchWithAuth = (
   init: RequestInit = {}
 ): Promise<Response> => {
   const headers = new Headers(init.headers)
-  const authHeader = getAccessTokenHeader()
+  const authHeader = getBackendTargetAccessHeaderValues(getActiveBackendTarget().id)
 
   if (authHeader) {
     for (const [key, value] of Object.entries(authHeader)) {

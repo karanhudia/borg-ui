@@ -22,7 +22,8 @@ import {
 import type { AxiosResponse } from 'axios'
 import { buildAgentReinstallCommand } from '../managed-agents/agentInstallCommandText'
 
-const { mockTrackSystem } = vi.hoisted(() => ({
+const { mockPlanCan, mockTrackSystem } = vi.hoisted(() => ({
+  mockPlanCan: vi.fn((_feature: string) => true),
   mockTrackSystem: vi.fn(),
 }))
 
@@ -61,6 +62,16 @@ vi.mock('../../hooks/useAnalytics', () => ({
 vi.mock('../../hooks/useAuth', () => ({
   useAuth: () => ({
     hasGlobalPermission: (permission: string) => permission === 'settings.ssh.manage',
+  }),
+}))
+
+vi.mock('../../hooks/usePlan', () => ({
+  usePlan: () => ({
+    plan: 'community',
+    features: {},
+    entitlement: undefined,
+    isLoading: false,
+    can: mockPlanCan,
   }),
 }))
 
@@ -121,6 +132,7 @@ function buildDiagnosticsResult(
 describe('ManagedAgents', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockPlanCan.mockImplementation((_feature: string) => true)
     vi.mocked(managedAgentsAPI.listAgents).mockResolvedValue({ data: [] } as AxiosResponse)
     vi.mocked(managedAgentsAPI.listEnrollmentTokens).mockResolvedValue({
       data: [],
@@ -197,6 +209,24 @@ describe('ManagedAgents', () => {
     expect(await screen.findByText('Managed Agents')).toBeInTheDocument()
     expect(window.location.pathname).toBe('/managed-agents')
     expect(managedAgentsAPI.listAgents).toHaveBeenCalled()
+  })
+
+  it('shows the plan gate over a read-only page preview when managed agents are unavailable', async () => {
+    vi.mocked(managedAgentsAPI.listAgents).mockResolvedValue({
+      data: [buildAgent({ name: 'edge-pi', hostname: 'edge-pi.local' })],
+    } as AxiosResponse)
+    mockPlanCan.mockImplementation((feature) => feature !== 'managed_agents')
+
+    renderWithProviders(<ManagedAgents />, { initialRoute: '/managed-agents' })
+
+    expect(await screen.findByText(/managed agents need pro or enterprise/i)).toBeInTheDocument()
+    expect(screen.getByText(/Run this on a remote machine to register it/i)).toBeInTheDocument()
+    expect(await screen.findByText('edge-pi.local')).toBeInTheDocument()
+    expect(screen.queryByText('No agents enrolled.')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /add agent/i })).not.toBeInTheDocument()
+    expect(managedAgentsAPI.listAgents).toHaveBeenCalled()
+    expect(managedAgentsAPI.listEnrollmentTokens).toHaveBeenCalled()
+    expect(managedAgentsAPI.listJobs).toHaveBeenCalled()
   })
 
   it('manually refreshes managed-agent status with visible feedback', async () => {

@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { Box } from '@mui/material'
-import { RemoteClientsContent } from './RemoteClients'
-import PlanGate from '../components/shared/PlanGate'
+import { RemoteClientsContent, RemoteClientsPlanGate } from './RemoteClients'
 import { RemoteBackendStoryProvider } from '../services/remoteBackends/storyFixtures'
 import { communitySystemInfo } from '../services/remoteBackends/planStoryFixtures'
 
@@ -31,14 +30,7 @@ function renderLockedPage() {
   return (
     <RemoteBackendStoryProvider state="mixed">
       <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', p: 3 }}>
-        <PlanGate
-          feature="remote_clients"
-          message="Remote client switching is available on Pro and Enterprise plans. Upgrade to add or switch to remote Borg UI servers."
-          surface="remote_clients_story"
-          operation="view_locked_story"
-        >
-          <RemoteClientsContent />
-        </PlanGate>
+        <RemoteClientsPlanGate />
       </Box>
     </RemoteBackendStoryProvider>
   )

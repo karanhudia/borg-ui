@@ -43,9 +43,11 @@ from app.services.rclone_service import RcloneUnavailable, rclone_service
 
 logger = logging.getLogger(__name__)
 
+RCLONE_FEATURE_DEPENDENCY = require_feature("rclone")
+
 router = APIRouter(
     tags=["rclone"],
-    dependencies=[Depends(authorize_request), require_feature("rclone")],
+    dependencies=[Depends(authorize_request)],
 )
 public_router = APIRouter(tags=["rclone"])
 
@@ -2336,7 +2338,7 @@ def _serialize_oauth_credential_status(provider: str, db: Session) -> dict[str, 
     }
 
 
-@router.get("/oauth/credentials")
+@router.get("/oauth/credentials", dependencies=[RCLONE_FEATURE_DEPENDENCY])
 async def list_oauth_credentials(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
@@ -2349,7 +2351,7 @@ async def list_oauth_credentials(
     }
 
 
-@router.put("/oauth/credentials/{provider}")
+@router.put("/oauth/credentials/{provider}", dependencies=[RCLONE_FEATURE_DEPENDENCY])
 async def update_oauth_credentials(
     provider: str,
     payload: RcloneOAuthCredentialUpdate,
@@ -2402,7 +2404,11 @@ async def update_oauth_credentials(
     return _serialize_oauth_credential_status(provider, db)
 
 
-@router.post("/oauth/sessions", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/oauth/sessions",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[RCLONE_FEATURE_DEPENDENCY],
+)
 async def start_oauth_session(
     payload: RcloneOAuthStart,
     current_user: User = Depends(get_current_user),
@@ -2482,7 +2488,7 @@ async def start_oauth_session(
     return _oauth_session_response(session_id)
 
 
-@router.get("/oauth/sessions/{session_id}")
+@router.get("/oauth/sessions/{session_id}", dependencies=[RCLONE_FEATURE_DEPENDENCY])
 async def get_oauth_session(
     session_id: str,
     current_user: User = Depends(get_current_user),
@@ -2496,7 +2502,10 @@ async def get_oauth_session(
     return _oauth_session_response(session_id)
 
 
-@router.get("/oauth/sessions/{session_id}/authorize")
+@router.get(
+    "/oauth/sessions/{session_id}/authorize",
+    dependencies=[RCLONE_FEATURE_DEPENDENCY],
+)
 async def open_oauth_authorization(
     session_id: str,
     current_user: User = Depends(get_current_download_user),
@@ -2623,7 +2632,11 @@ async def complete_borg_ui_oauth_callback(
     )
 
 
-@router.delete("/oauth/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/oauth/sessions/{session_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[RCLONE_FEATURE_DEPENDENCY],
+)
 async def cancel_oauth_session(
     session_id: str,
     current_user: User = Depends(get_current_user),
@@ -2645,7 +2658,11 @@ async def list_remotes(
     return {"remotes": [_serialize_remote(remote) for remote in remotes]}
 
 
-@router.post("/remotes", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/remotes",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[RCLONE_FEATURE_DEPENDENCY],
+)
 async def create_remote(
     payload: RcloneRemoteCreate,
     current_user: User = Depends(get_current_user),
@@ -2705,7 +2722,7 @@ async def create_remote(
     return _serialize_remote(remote)
 
 
-@router.put("/remotes/{remote_id}")
+@router.put("/remotes/{remote_id}", dependencies=[RCLONE_FEATURE_DEPENDENCY])
 async def update_remote(
     remote_id: int,
     payload: RcloneRemoteUpdate,
@@ -2812,7 +2829,11 @@ async def update_remote(
     return _serialize_remote(remote)
 
 
-@router.delete("/remotes/{remote_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/remotes/{remote_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[RCLONE_FEATURE_DEPENDENCY],
+)
 async def delete_remote(
     remote_id: int,
     current_user: User = Depends(get_current_user),
@@ -2852,7 +2873,7 @@ async def delete_remote(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/remotes/{remote_id}/test")
+@router.post("/remotes/{remote_id}/test", dependencies=[RCLONE_FEATURE_DEPENDENCY])
 async def test_remote(
     remote_id: int,
     current_user: User = Depends(get_current_user),
@@ -2880,7 +2901,7 @@ async def test_remote(
     return {"status": remote.last_test_status, "remote": _serialize_remote(remote)}
 
 
-@router.get("/remotes/{remote_id}/browse")
+@router.get("/remotes/{remote_id}/browse", dependencies=[RCLONE_FEATURE_DEPENDENCY])
 async def browse_remote(
     remote_id: int,
     path: str = "",

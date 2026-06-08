@@ -117,7 +117,7 @@ export const WithRemoteClients: Story = {
   render: () => renderSidebar(proSystemInfo),
 }
 
-export const WithoutRemoteClients: Story = {
+export const CommunityPlan: Story = {
   parameters: {
     systemInfo: communitySystemInfo,
   },

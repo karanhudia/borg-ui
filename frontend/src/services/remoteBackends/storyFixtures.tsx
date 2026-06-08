@@ -71,6 +71,24 @@ const storyFetch: typeof fetch = async (input, init) => {
       })
     }
 
+    if (tail.endsWith('/check') && method === 'POST') {
+      const id = decodeURIComponent(tail.replace(/^\//, '').replace(/\/check$/, ''))
+      const client = updateRemoteBackendHealth(id, {
+        status: 'online',
+        checkedAt: new Date().toISOString(),
+        appVersion: '2.2.2',
+        borgVersion: '1.4.1',
+        borg2Version: '2.0.0b19',
+        error: null,
+        compatibility: 'compatible',
+        compatibilityMessage: 'Borg UI 2.2.2 is compatible with this frontend.',
+      })
+      return new Response(JSON.stringify(storyClientResponse(client)), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
     const id = decodeURIComponent(tail.replace(/^\//, '').replace(/\/health$/, ''))
     if (id && method === 'PUT') {
       const body = JSON.parse(String(init?.body ?? '{}')) as {

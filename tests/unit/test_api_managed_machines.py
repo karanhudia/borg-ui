@@ -12,6 +12,7 @@ from app.core.agent_constants import (
 from app.core.agent_auth import AGENT_AUTH_HEADER
 from app.core.security import get_password_hash
 from app.database.models import (
+    AgentEnrollmentToken,
     AgentJob,
     AgentJobLog,
     AgentMachine,
@@ -101,12 +102,50 @@ def _agent_job(test_db, agent: AgentMachine) -> AgentJob:
     return job
 
 
-def test_managed_machine_admin_api_requires_pro_plan(
+def test_managed_machine_admin_list_api_remains_readable_without_pro_plan(
+    test_client: TestClient, admin_headers, test_db
+):
+    agent = _agent(test_db, name="Edge Pi", hostname="edge-pi.local")
+    job = _agent_job(test_db, agent)
+    token = AgentEnrollmentToken(
+        name="existing token",
+        token_hash=get_password_hash("borgui_enroll_existing"),
+        token_prefix="borgui_enroll_existing"[:20],
+        created_at=datetime.now(timezone.utc),
+    )
+    test_db.add(token)
+    test_db.commit()
+    _set_plan(test_db, "community")
+
+    agents_response = test_client.get(
+        "/api/managed-machines/agents", headers=admin_headers
+    )
+    tokens_response = test_client.get(
+        "/api/managed-machines/enrollment-tokens", headers=admin_headers
+    )
+    jobs_response = test_client.get(
+        "/api/managed-machines/agent-jobs", headers=admin_headers
+    )
+
+    assert agents_response.status_code == 200
+    assert agents_response.json()[0]["id"] == agent.id
+    assert agents_response.json()[0]["hostname"] == "edge-pi.local"
+    assert tokens_response.status_code == 200
+    assert tokens_response.json()[0]["id"] == token.id
+    assert jobs_response.status_code == 200
+    assert jobs_response.json()[0]["id"] == job.id
+
+
+def test_managed_machine_admin_write_api_requires_pro_plan(
     test_client: TestClient, admin_headers, test_db
 ):
     _set_plan(test_db, "community")
 
-    response = test_client.get("/api/managed-machines/agents", headers=admin_headers)
+    response = test_client.post(
+        "/api/managed-machines/enrollment-tokens",
+        json={"name": "pi setup", "expires_in_days": 7},
+        headers=admin_headers,
+    )
 
     assert response.status_code == 403
     assert response.json()["detail"]["feature"] == "managed_agents"

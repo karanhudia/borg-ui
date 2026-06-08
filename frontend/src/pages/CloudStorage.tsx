@@ -55,10 +55,12 @@ import OperationalCard from '../components/OperationalCard'
 import PageHeader from '../components/PageHeader'
 import ListToolbar from '../components/ListToolbar'
 import StorageBrowserDialog, { type StorageBrowserItem } from '../components/StorageBrowserDialog'
+import PlanGate from '../components/shared/PlanGate'
 import RcloneProviderIcon, { RcloneProviderGlyph } from '../components/shared/RcloneProviderIcon'
 import { joinBrowserPath, normalizeBrowserPath } from '../utils/storageBrowserPaths'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { useFeatureAnalytics } from '../hooks/useFeatureAnalytics'
+import { usePlan } from '../hooks/usePlan'
 
 const CLOUD_STORAGE_ANALYTICS_SECTION = 'cloud_storage'
 
@@ -1208,10 +1210,47 @@ export function CloudStorageContent({
   )
 }
 
+export function CloudStoragePlanGate({
+  status,
+  remotes = [],
+  providers,
+  isLoading = false,
+  loadError = null,
+}: {
+  status?: RcloneStatus | null
+  remotes?: RcloneRemote[]
+  providers?: RcloneProvider[]
+  isLoading?: boolean
+  loadError?: string | null
+}) {
+  const { t } = useTranslation()
+
+  return (
+    <PlanGate
+      feature="rclone"
+      message={t('cloudStorage.planGate.message')}
+      surface={CLOUD_STORAGE_ANALYTICS_SECTION}
+      operation="view_page_gate"
+      preview={
+        <CloudStorageContent
+          status={status}
+          remotes={remotes}
+          providers={providers}
+          isLoading={isLoading}
+          loadError={loadError}
+        />
+      }
+    >
+      <Box />
+    </PlanGate>
+  )
+}
+
 export default function CloudStorage() {
   const { t } = useTranslation()
   const { trackSystem, EventAction } = useAnalytics()
   const { trackFeatureUsed } = useFeatureAnalytics()
+  const { can, isLoading: isPlanLoading } = usePlan()
   const queryClient = useQueryClient()
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [editingRemote, setEditingRemote] = useState<RcloneRemote | null>(null)
@@ -1225,6 +1264,8 @@ export default function CloudStorage() {
       ...data,
     })
   }
+  const hasCloudStoragePlan = can('rclone')
+  const canReadCloudStorage = !isPlanLoading
 
   const statusQuery = useQuery({
     queryKey: ['rclone-status'],
@@ -1232,6 +1273,7 @@ export default function CloudStorage() {
       const response = await rcloneAPI.getStatus()
       return response.data
     },
+    enabled: canReadCloudStorage,
   })
 
   const remotesQuery = useQuery({
@@ -1240,6 +1282,7 @@ export default function CloudStorage() {
       const response = await rcloneAPI.listRemotes()
       return response.data.remotes
     },
+    enabled: canReadCloudStorage,
   })
 
   const providersQuery = useQuery({
@@ -1248,6 +1291,7 @@ export default function CloudStorage() {
       const response = await rcloneAPI.getProviders()
       return response.data.providers
     },
+    enabled: canReadCloudStorage,
   })
 
   const createRemoteMutation = useMutation({
@@ -1397,6 +1441,18 @@ export default function CloudStorage() {
     }
     return null
   }, [providersQuery.error, remotesQuery.error, statusQuery.error, t])
+
+  if (!hasCloudStoragePlan) {
+    return (
+      <CloudStoragePlanGate
+        status={statusQuery.data}
+        remotes={remotesQuery.data || []}
+        providers={providersQuery.data}
+        isLoading={statusQuery.isLoading || remotesQuery.isLoading || providersQuery.isLoading}
+        loadError={loadError}
+      />
+    )
+  }
 
   return (
     <CloudStorageContent
