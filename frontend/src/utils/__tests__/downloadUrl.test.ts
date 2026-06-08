@@ -31,7 +31,7 @@ describe('buildDownloadUrl', () => {
     expect(url).toContain('/api/backup/logs/1/download?token=jwt-token')
   })
 
-  it('uses the active remote backend API base and token', async () => {
+  it('uses the active remote backend proxy URL and tokens', async () => {
     const {
       createRemoteBackendClient,
       setActiveBackendTarget,
@@ -39,18 +39,20 @@ describe('buildDownloadUrl', () => {
       resetRemoteBackendStateForTests,
     } = await import('../../services/remoteBackends/storage')
     resetRemoteBackendStateForTests()
+    localStorage.setItem('access_token', 'local-token')
     const remote = createRemoteBackendClient({
       name: 'Remote NAS',
       backendUrl: 'https://nas.example.com/borg',
     })
     setActiveBackendTarget(remote.id)
-    setBackendAccessToken('remote-token')
+    setBackendAccessToken('remote-token', remote.id)
     const { buildDownloadUrl } = await import('../downloadUrl')
 
     const url = buildDownloadUrl('/archives/download', { repository: 7 })
 
-    expect(url).toBe(
-      'https://nas.example.com/borg/api/archives/download?repository=7&token=remote-token'
-    )
+    expect(url).toContain(`/api/remote-clients/${remote.id}/proxy/api/archives/download?`)
+    expect(url).toContain('repository=7')
+    expect(url).toContain('token=local-token')
+    expect(url).toContain('target_token=remote-token')
   })
 })

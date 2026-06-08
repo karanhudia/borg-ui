@@ -12,12 +12,12 @@ import type {
   BackendTarget,
   RemoteBackendClient,
   RemoteBackendClientInput,
-  RemoteBackendHealth,
   RemoteBackendStatus,
   RemoteBackendCompatibility,
   RemoteBackendState,
 } from './types'
 import {
+  LOCAL_BACKEND_ID,
   clearLegacyRemoteBackendClients,
   deleteRemoteBackendClient,
   getActiveBackendTarget,
@@ -30,10 +30,10 @@ import {
   subscribeRemoteBackendStorage,
   updateRemoteBackendHealth,
 } from './storage'
-import { compareBackendVersions, normalizeRemoteBackendUrl } from './url'
-import { AUTH_TOKEN_HEADER } from '../authHeaders'
+import { normalizeRemoteBackendUrl } from './url'
+import { getApiBaseUrl } from './gateway'
+import { AUTH_TOKEN_HEADER, REMOTE_TARGET_AUTH_HEADER } from '../authHeaders'
 
-const FRONTEND_APP_VERSION = __APP_VERSION__
 const REMOTE_BACKEND_CHECK_TIMEOUT_MS = 10000
 
 interface RemoteBackendContextValue {
@@ -75,10 +75,6 @@ function extractErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Remote client server could not be reached.'
 }
 
-async function readJsonResponse(response: Response): Promise<Record<string, unknown>> {
-  return (await response.json().catch(() => ({}))) as Record<string, unknown>
-}
-
 interface RemoteClientApiHealth {
   status: RemoteBackendStatus
   checked_at?: string | null
@@ -98,11 +94,6 @@ interface RemoteClientApiResponse {
   created_at: string
   updated_at: string
   health: RemoteClientApiHealth
-}
-
-type PersistableRemoteBackendHealth = Partial<RemoteBackendHealth> & {
-  status: RemoteBackendStatus
-  compatibility: RemoteBackendCompatibility
 }
 
 function mapApiClient(client: RemoteClientApiResponse): RemoteBackendClient {
@@ -128,7 +119,7 @@ function mapApiClient(client: RemoteClientApiResponse): RemoteBackendClient {
 }
 
 function buildRemoteClientsUrl(target: BackendTarget, path = ''): string {
-  return `${target.apiBaseUrl}/remote-clients${path}`
+  return `${getApiBaseUrl(target)}/remote-clients${path}`
 }
 
 function buildRemoteClientsHeaders(target: BackendTarget, includeJson = false): Headers {
@@ -136,9 +127,22 @@ function buildRemoteClientsHeaders(target: BackendTarget, includeJson = false): 
   if (includeJson) {
     headers.set('Content-Type', 'application/json')
   }
-  const token = getBackendAccessToken(target.id)
-  if (token) {
-    headers.set(AUTH_TOKEN_HEADER, `Bearer ${token}`)
+
+  if (target.kind === 'remote') {
+    const localToken = getBackendAccessToken(LOCAL_BACKEND_ID)
+    if (localToken) {
+      headers.set(AUTH_TOKEN_HEADER, `Bearer ${localToken}`)
+    }
+
+    const remoteToken = getBackendAccessToken(target.id)
+    if (remoteToken) {
+      headers.set(REMOTE_TARGET_AUTH_HEADER, `Bearer ${remoteToken}`)
+    }
+  } else {
+    const token = getBackendAccessToken(target.id)
+    if (token) {
+      headers.set(AUTH_TOKEN_HEADER, `Bearer ${token}`)
+    }
   }
   return headers
 }
@@ -184,34 +188,6 @@ async function readRemoteClientApiResponse(response: Response): Promise<RemoteBa
   return mapApiClient((await response.json()) as RemoteClientApiResponse)
 }
 
-async function persistRemoteBackendHealth(
-  fetchImpl: typeof fetch,
-  id: string,
-  health: PersistableRemoteBackendHealth
-): Promise<RemoteBackendClient | null> {
-  try {
-    const response = await sendRemoteClientApiRequest(fetchImpl, `/${id}/health`, {
-      method: 'PATCH',
-      body: JSON.stringify({
-        status: health.status,
-        checked_at: health.checkedAt ?? null,
-        app_version: health.appVersion ?? null,
-        borg_version: health.borgVersion ?? null,
-        borg2_version: health.borg2Version ?? null,
-        error: health.error ?? null,
-        compatibility: health.compatibility,
-        compatibility_message: health.compatibilityMessage ?? null,
-      }),
-    })
-    if (!response.ok) {
-      return null
-    }
-    return readRemoteClientApiResponse(response)
-  } catch {
-    return null
-  }
-}
-
 function upsertRemoteBackendClient(client: RemoteBackendClient): void {
   replaceRemoteBackendClients([
     ...listRemoteBackendClients().filter((item) => item.id !== client.id),
@@ -219,11 +195,7 @@ function upsertRemoteBackendClient(client: RemoteBackendClient): void {
   ])
 }
 
-export function RemoteBackendProvider({
-  children,
-  frontendVersion = FRONTEND_APP_VERSION,
-  fetchImpl = fetch,
-}: RemoteBackendProviderProps) {
+export function RemoteBackendProvider({ children, fetchImpl = fetch }: RemoteBackendProviderProps) {
   const [snapshot, setSnapshot] = useState(readSnapshot)
   const pendingChecksRef = useRef(new Map<string, AbortController>())
   const refreshSeqRef = useRef(0)
@@ -410,73 +382,27 @@ export function RemoteBackendProvider({
       const readCurrentClient = () => listRemoteBackendClients().find((item) => item.id === id)
 
       try {
-        const healthResponse = await fetchImpl(`${client.webBaseUrl}/health`, {
-          headers: { Accept: 'application/json' },
+        const response = await sendRemoteClientApiRequest(fetchImpl, `/${id}/check`, {
+          method: 'POST',
           signal: controller.signal,
         })
         if (!isLatestCheck()) return readCurrentClient() ?? client
-        if (!healthResponse.ok) {
-          throw new Error(`Health check failed with HTTP ${healthResponse.status}.`)
-        }
-
-        const headers = new Headers({ Accept: 'application/json' })
-        const token = getBackendAccessToken(client.id)
-        if (token) {
-          headers.set(AUTH_TOKEN_HEADER, `Bearer ${token}`)
-        }
-
-        const systemInfoResponse = await fetchImpl(`${client.apiBaseUrl}/system/info`, {
-          headers,
-          signal: controller.signal,
-        })
+        const checked = await readRemoteClientApiResponse(response)
         if (!isLatestCheck()) return readCurrentClient() ?? client
-        if (!systemInfoResponse.ok) {
-          throw new Error(`Version check failed with HTTP ${systemInfoResponse.status}.`)
-        }
-
-        const systemInfo = await readJsonResponse(systemInfoResponse)
-        const appVersion =
-          typeof systemInfo.app_version === 'string' ? systemInfo.app_version : null
-        const compatibility = compareBackendVersions(frontendVersion, appVersion)
-        const health: RemoteBackendHealth = {
-          status: 'online',
-          checkedAt: new Date().toISOString(),
-          appVersion,
-          borgVersion: typeof systemInfo.borg_version === 'string' ? systemInfo.borg_version : null,
-          borg2Version:
-            typeof systemInfo.borg2_version === 'string' ? systemInfo.borg2_version : null,
-          error: null,
-          compatibility: compatibility.status,
-          compatibilityMessage: compatibility.message,
-        }
-
-        if (!isLatestCheck()) return readCurrentClient() ?? client
-        updateRemoteBackendHealth(id, health)
+        upsertRemoteBackendClient(checked)
         refresh()
-        const persisted = await persistRemoteBackendHealth(fetchImpl, id, health)
-        if (persisted) {
-          upsertRemoteBackendClient(persisted)
-          refresh()
-          return persisted
-        }
-        return readCurrentClient() ?? client
+        return checked
       } catch (error) {
         if (!isLatestCheck()) return readCurrentClient() ?? client
-        const offlineHealth: PersistableRemoteBackendHealth = {
+        const offlineHealth = {
           status: 'offline',
           checkedAt: new Date().toISOString(),
           error: extractErrorMessage(error),
           compatibility: 'unknown',
           compatibilityMessage: 'Remote client server compatibility could not be checked.',
-        }
+        } satisfies Partial<RemoteBackendClient['health']>
         updateRemoteBackendHealth(id, offlineHealth)
         refresh()
-        const persisted = await persistRemoteBackendHealth(fetchImpl, id, offlineHealth)
-        if (persisted) {
-          upsertRemoteBackendClient(persisted)
-          refresh()
-          return persisted
-        }
         return readCurrentClient() ?? client
       } finally {
         window.clearTimeout(timeoutId)
@@ -485,7 +411,7 @@ export function RemoteBackendProvider({
         }
       }
     },
-    [fetchImpl, frontendVersion, refresh]
+    [fetchImpl, refresh]
   )
 
   const value = useMemo<RemoteBackendContextValue>(

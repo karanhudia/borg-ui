@@ -6,10 +6,14 @@ import { useFeatureAnalytics } from '../../hooks/useFeatureAnalytics'
 import { usePlan } from '../../hooks/usePlan'
 import UpgradePrompt from '../UpgradePrompt'
 
+const inertPreviewProps = { inert: 'true' } as Record<string, string>
+
 interface PlanGateProps {
   feature: Feature
   children: ReactNode
   fallback?: ReactNode
+  /** Optional safe read-only preview to show behind the upgrade prompt while locked */
+  preview?: ReactNode
   /** Only apply the gate when this condition is true; renders children unconditionally when false */
   when?: boolean
   /** Show children disabled instead of replacing them with an upgrade prompt */
@@ -28,6 +32,7 @@ export default function PlanGate({
   feature,
   children,
   fallback,
+  preview,
   when = true,
   disabled,
   surface = 'plan_gate',
@@ -40,7 +45,13 @@ export default function PlanGate({
   const { trackFeatureBlocked } = useFeatureAnalytics()
   const lastTrackedBlockedKey = useRef<string | null>(null)
   const allowed = !when || can(feature)
-  const gateMode = disabled ? 'disabled' : fallback !== undefined ? 'fallback' : 'upgrade_prompt'
+  const gateMode = disabled
+    ? 'disabled'
+    : fallback !== undefined
+      ? 'fallback'
+      : preview !== undefined
+        ? 'preview'
+        : 'upgrade_prompt'
 
   useEffect(() => {
     if (isLoading || allowed) return
@@ -80,5 +91,38 @@ export default function PlanGate({
     )
   }
   if (fallback !== undefined) return <>{fallback}</>
+  if (preview !== undefined) {
+    return (
+      <Box sx={{ position: 'relative', minHeight: 220 }}>
+        <Box
+          aria-hidden="true"
+          {...inertPreviewProps}
+          sx={{
+            opacity: 0.32,
+            filter: 'saturate(0.7)',
+            pointerEvents: 'none',
+            userSelect: 'none',
+          }}
+        >
+          {preview}
+        </Box>
+        <Box
+          sx={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'center',
+            p: { xs: 1.5, sm: 3 },
+            pt: { xs: 2, sm: 4 },
+          }}
+        >
+          <Box sx={{ width: 'min(100%, 460px)' }}>
+            <UpgradePrompt requiredPlan={FEATURES[feature]} message={message} />
+          </Box>
+        </Box>
+      </Box>
+    )
+  }
   return <UpgradePrompt requiredPlan={FEATURES[feature]} message={message} />
 }

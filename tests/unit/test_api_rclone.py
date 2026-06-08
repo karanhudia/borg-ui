@@ -141,15 +141,28 @@ def test_rclone_status_reports_unavailable_binary(
 
 
 @pytest.mark.unit
-def test_rclone_management_requires_pro_plan(
-    test_client: TestClient, admin_headers, test_db
+def test_rclone_preview_reads_remain_available_without_pro_plan(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
 ):
+    async def fake_status():
+        return {"available": True, "version": "rclone v1.66.0"}
+
+    monkeypatch.setattr("app.api.rclone.rclone_service.status", fake_status)
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    test_db.add(remote)
+    test_db.commit()
     _set_plan(test_db, "community")
 
-    response = test_client.get("/api/rclone/status", headers=admin_headers)
+    status_response = test_client.get("/api/rclone/status", headers=admin_headers)
+    providers_response = test_client.get("/api/rclone/providers", headers=admin_headers)
+    remotes_response = test_client.get("/api/rclone/remotes", headers=admin_headers)
 
-    assert response.status_code == 403
-    assert response.json()["detail"]["feature"] == "rclone"
+    assert status_response.status_code == 200
+    assert status_response.json()["version"] == "rclone v1.66.0"
+    assert providers_response.status_code == 200
+    assert providers_response.json()["providers"]
+    assert remotes_response.status_code == 200
+    assert remotes_response.json()["remotes"][0]["name"] == "prod-s3"
 
 
 @pytest.mark.unit

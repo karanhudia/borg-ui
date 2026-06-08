@@ -1,5 +1,7 @@
+import httpx
 import pytest
 from fastapi.testclient import TestClient
+from typing import Optional
 
 
 @pytest.mark.unit
@@ -82,6 +84,148 @@ class TestRemoteClientsApi:
         assert final_list.status_code == 200
         assert final_list.json() == []
 
+    def test_admin_checks_remote_client_from_server(
+        self, test_client: TestClient, admin_headers, monkeypatch
+    ):
+        create_response = test_client.post(
+            "/api/remote-clients",
+            json={
+                "id": "studio-nas",
+                "name": "Studio NAS",
+                "backend_url": "nas.local:9000",
+            },
+            headers=admin_headers,
+        )
+        assert create_response.status_code == 201
+
+        calls: list[tuple[str, dict[str, str]]] = []
+
+        class FakeAsyncClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def get(self, url, headers=None):
+                calls.append((str(url), dict(headers or {})))
+                if str(url) == "http://nas.local:9000/health":
+                    return httpx.Response(200, json={"status": "healthy"})
+                if str(url) == "http://nas.local:9000/api/system/info":
+                    return httpx.Response(
+                        200,
+                        json={
+                            "app_version": "2.1.0",
+                            "borg_version": "borg 1.4.0",
+                            "borg2_version": "borg2 2.0.0",
+                        },
+                    )
+                raise AssertionError(f"Unexpected remote URL: {url}")
+
+        monkeypatch.setattr(httpx, "AsyncClient", FakeAsyncClient)
+
+        check_response = test_client.post(
+            "/api/remote-clients/studio-nas/check",
+            headers={
+                **admin_headers,
+                "X-Borg-Remote-Authorization": "Bearer remote-token",
+            },
+        )
+
+        assert check_response.status_code == 200
+        checked = check_response.json()
+        assert checked["health"]["status"] == "online"
+        assert checked["health"]["app_version"] == "2.1.0"
+        assert checked["health"]["borg_version"] == "borg 1.4.0"
+        assert checked["health"]["borg2_version"] == "borg2 2.0.0"
+        assert checked["health"]["compatibility"] == "compatible"
+        assert calls == [
+            (
+                "http://nas.local:9000/health",
+                {"Accept": "application/json"},
+            ),
+            (
+                "http://nas.local:9000/api/system/info",
+                {
+                    "Accept": "application/json",
+                    "X-Borg-Authorization": "Bearer remote-token",
+                },
+            ),
+        ]
+
+    def test_proxy_remote_client_request_from_server(
+        self, test_client: TestClient, admin_headers, monkeypatch
+    ):
+        create_response = test_client.post(
+            "/api/remote-clients",
+            json={
+                "id": "studio-nas",
+                "name": "Studio NAS",
+                "backend_url": "nas.local:9000",
+            },
+            headers=admin_headers,
+        )
+        assert create_response.status_code == 201
+
+        calls: list[dict] = []
+
+        class FakeAsyncClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def request(
+                self, method, url, params=None, content=None, headers=None
+            ):
+                calls.append(
+                    {
+                        "method": method,
+                        "url": str(url),
+                        "params": list(params or []),
+                        "content": content,
+                        "headers": dict(headers or {}),
+                    }
+                )
+                return httpx.Response(
+                    200,
+                    json={"ok": True},
+                    headers={
+                        "Content-Type": "application/json",
+                        "X-Internal": "ignored",
+                    },
+                )
+
+        monkeypatch.setattr(httpx, "AsyncClient", FakeAsyncClient)
+
+        response = test_client.get(
+            "/api/remote-clients/studio-nas/proxy/api/repositories"
+            "?token=local-token&target_token=remote-token&limit=5",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"ok": True}
+        assert calls == [
+            {
+                "method": "GET",
+                "url": "http://nas.local:9000/api/repositories",
+                "params": [("limit", "5")],
+                "content": None,
+                "headers": {
+                    "accept": "*/*",
+                    "X-Borg-Authorization": "Bearer remote-token",
+                },
+            }
+        ]
+
     @pytest.mark.parametrize(
         ("method", "path", "json"),
         [
@@ -101,6 +245,8 @@ class TestRemoteClientsApi:
                 "/api/remote-clients/client-1/health",
                 {"status": "offline", "compatibility": "unknown"},
             ),
+            ("post", "/api/remote-clients/client-1/check", None),
+            ("get", "/api/remote-clients/client-1/proxy/api/system/info", None),
             ("delete", "/api/remote-clients/client-1", None),
         ],
     )
@@ -110,7 +256,7 @@ class TestRemoteClientsApi:
         auth_headers,
         method: str,
         path: str,
-        json: dict | None,
+        json: Optional[dict],
     ):
         request = getattr(test_client, method)
         if json is None:

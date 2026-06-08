@@ -1,10 +1,15 @@
 import axios from 'axios'
 import { toast } from 'react-hot-toast'
 import { BASE_PATH } from '@/utils/basePath'
-import { API_BASE_URL, buildApiUrl, buildDownloadUrl } from './remoteBackends/gateway'
+import {
+  API_BASE_URL,
+  buildApiUrl,
+  buildDownloadUrl,
+  getApiBaseUrl,
+} from './remoteBackends/gateway'
 import { getActiveBackendTarget } from './remoteBackends/storage'
 import {
-  attachAccessTokenHeader,
+  attachBackendTargetAccessHeaders,
   BACKEND_TARGET_ID_CONFIG_KEY,
   clearAccessToken,
   type BackendTargetRequestConfig,
@@ -41,13 +46,45 @@ function isOnLoginRoute(): boolean {
   return window.location.pathname === loginPath || window.location.pathname === `${loginPath}/`
 }
 
+function getBackendErrorKey(detail: unknown): string | null {
+  if (typeof detail === 'string') {
+    if (!detail.startsWith('{')) {
+      return detail
+    }
+
+    try {
+      const parsed = JSON.parse(detail)
+      return typeof parsed?.key === 'string' ? parsed.key : null
+    } catch {
+      return null
+    }
+  }
+
+  if (
+    typeof detail === 'object' &&
+    detail !== null &&
+    'key' in detail &&
+    typeof detail.key === 'string'
+  ) {
+    return detail.key
+  }
+
+  return null
+}
+
+function isPlanGatedError(error: unknown): boolean {
+  if (!axios.isAxiosError(error)) return false
+  const key = getBackendErrorKey(error.response?.data?.detail)
+  return key?.startsWith('backend.errors.plan.') ?? false
+}
+
 // Request interceptor to add auth token
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const target = getActiveBackendTarget()
   const targetConfig = config as BackendTargetRequestConfig
-  targetConfig.baseURL = target.apiBaseUrl
+  targetConfig.baseURL = getApiBaseUrl(target)
   targetConfig[BACKEND_TARGET_ID_CONFIG_KEY] = target.id
-  return attachAccessTokenHeader(targetConfig, target.id)
+  return attachBackendTargetAccessHeaders(targetConfig, target.id)
 })
 
 // Response interceptor to handle auth errors
@@ -59,7 +96,7 @@ api.interceptors.response.use(
     // 1. We're trying to login
     // 2. We're checking auth config
     // 3. We're in proxy auth mode (backend handles auth via proxy headers)
-    if (error.response?.status === 403) {
+    if (error.response?.status === 403 && !isPlanGatedError(error)) {
       toast.error("You don't have permission to perform this action")
     }
     if (

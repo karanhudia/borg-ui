@@ -13,10 +13,10 @@ import axios from 'axios'
 import { BASE_PATH } from '@/utils/basePath'
 import type { Repository } from '@/types'
 import { isV2Repo } from '@/utils/repoCapabilities'
-import { buildDownloadUrl } from '../remoteBackends/gateway'
+import { buildDownloadUrl, getApiBaseUrl } from '../remoteBackends/gateway'
 import { getActiveBackendTarget } from '../remoteBackends/storage'
 import {
-  attachAccessTokenHeader,
+  attachBackendTargetAccessHeaders,
   BACKEND_TARGET_ID_CONFIG_KEY,
   clearAccessToken,
   type BackendTargetRequestConfig,
@@ -37,9 +37,9 @@ function isOnLoginRoute(): boolean {
 httpClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const target = getActiveBackendTarget()
   const targetConfig = config as BackendTargetRequestConfig
-  targetConfig.baseURL = target.apiBaseUrl
+  targetConfig.baseURL = getApiBaseUrl(target)
   targetConfig[BACKEND_TARGET_ID_CONFIG_KEY] = target.id
-  return attachAccessTokenHeader(targetConfig, target.id)
+  return attachBackendTargetAccessHeaders(targetConfig, target.id)
 })
 
 httpClient.interceptors.response.use(

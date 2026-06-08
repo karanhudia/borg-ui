@@ -6,11 +6,17 @@ from typing import Literal, Optional
 from urllib.parse import urlsplit
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.core.security import get_current_admin_user
+from app.config import get_runtime_app_version
+from app.core.security import (
+    get_current_admin_user,
+    get_current_download_user,
+    require_any_role,
+)
 from app.database.database import get_db
 from app.database.models import RemoteBackendClient, User
 from app.utils.datetime_utils import serialize_datetime
@@ -19,6 +25,19 @@ router = APIRouter(tags=["Remote Clients"])
 
 RemoteBackendStatus = Literal["unknown", "checking", "online", "offline"]
 RemoteBackendCompatibility = Literal["compatible", "incompatible", "unknown"]
+REMOTE_CLIENT_CHECK_TIMEOUT_SECONDS = 10.0
+REMOTE_CLIENT_PROXY_TIMEOUT_SECONDS = 300.0
+REMOTE_TARGET_AUTH_HEADER = "X-Borg-Remote-Authorization"
+REMOTE_TARGET_AUTH_QUERY_PARAM = "target_token"
+AUTH_TOKEN_HEADER = "X-Borg-Authorization"
+FORWARDED_REQUEST_HEADERS = {"accept", "content-type"}
+FORWARDED_RESPONSE_HEADERS = {
+    "cache-control",
+    "content-disposition",
+    "content-type",
+    "etag",
+    "last-modified",
+}
 
 
 class RemoteClientCreate(BaseModel):
@@ -181,6 +200,139 @@ def _normalize_or_422(backend_url: str) -> tuple[str, str]:
         ) from exc
 
 
+def _parse_major_version(version: Optional[str]) -> Optional[int]:
+    if not version:
+        return None
+    match = re.match(r"^v?(\d+)(?:\.|$)", version, re.IGNORECASE)
+    return int(match.group(1)) if match else None
+
+
+def _compare_backend_versions(
+    frontend_version: Optional[str], backend_version: Optional[str]
+) -> tuple[RemoteBackendCompatibility, str]:
+    if not backend_version:
+        return "unknown", "Remote client server version is unavailable."
+
+    frontend_major = _parse_major_version(frontend_version)
+    backend_major = _parse_major_version(backend_version)
+    if frontend_major is None or backend_major is None:
+        return "unknown", "Remote client server version could not be compared."
+
+    if frontend_major != backend_major:
+        return (
+            "incompatible",
+            f"Borg UI {backend_version} uses a different major version than this frontend.",
+        )
+
+    return "compatible", f"Borg UI {backend_version} is compatible with this frontend."
+
+
+def _extract_remote_target_auth(request: Request) -> Optional[str]:
+    header_value = request.headers.get(REMOTE_TARGET_AUTH_HEADER)
+    if header_value:
+        return header_value
+
+    token = request.query_params.get(REMOTE_TARGET_AUTH_QUERY_PARAM)
+    if not token:
+        return None
+    return token if token.startswith("Bearer ") else f"Bearer {token}"
+
+
+def _remote_check_error_message(error: Exception) -> str:
+    if isinstance(error, httpx.TimeoutException):
+        return "Remote client health check timed out."
+    return str(error) or "Remote client server could not be reached."
+
+
+def _apply_client_health(
+    client: RemoteBackendClient,
+    *,
+    status_value: RemoteBackendStatus,
+    checked_at: datetime,
+    app_version: Optional[str] = None,
+    borg_version: Optional[str] = None,
+    borg2_version: Optional[str] = None,
+    error: Optional[str] = None,
+    compatibility: RemoteBackendCompatibility,
+    compatibility_message: Optional[str] = None,
+) -> None:
+    client.health_status = status_value
+    client.health_checked_at = checked_at
+    client.app_version = app_version
+    client.borg_version = borg_version
+    client.borg2_version = borg2_version
+    client.health_error = error
+    client.compatibility = compatibility
+    client.compatibility_message = compatibility_message
+    client.updated_at = datetime.now(timezone.utc)
+
+
+async def _fetch_remote_system_info(
+    client: RemoteBackendClient, remote_auth: Optional[str]
+) -> dict:
+    async with httpx.AsyncClient(timeout=REMOTE_CLIENT_CHECK_TIMEOUT_SECONDS) as http:
+        health_response = await http.get(
+            f"{client.web_base_url.rstrip('/')}/health",
+            headers={"Accept": "application/json"},
+        )
+        if health_response.status_code >= 400:
+            raise RuntimeError(
+                f"Health check failed with HTTP {health_response.status_code}."
+            )
+
+        headers = {"Accept": "application/json"}
+        if remote_auth:
+            headers[AUTH_TOKEN_HEADER] = remote_auth
+
+        system_info_response = await http.get(
+            f"{client.api_base_url.rstrip('/')}/system/info",
+            headers=headers,
+        )
+        if system_info_response.status_code >= 400:
+            raise RuntimeError(
+                f"Version check failed with HTTP {system_info_response.status_code}."
+            )
+
+        try:
+            body = system_info_response.json()
+        except ValueError as exc:
+            raise RuntimeError(
+                "Remote client returned invalid system info JSON."
+            ) from exc
+
+        return body if isinstance(body, dict) else {}
+
+
+def _build_proxy_request_headers(
+    request: Request, remote_auth: Optional[str]
+) -> dict[str, str]:
+    headers: dict[str, str] = {}
+    for key, value in request.headers.items():
+        normalized = key.lower()
+        if normalized in FORWARDED_REQUEST_HEADERS:
+            headers[key] = value
+
+    if remote_auth:
+        headers[AUTH_TOKEN_HEADER] = remote_auth
+    return headers
+
+
+def _build_proxy_response_headers(response: httpx.Response) -> dict[str, str]:
+    return {
+        key: value
+        for key, value in response.headers.items()
+        if key.lower() in FORWARDED_RESPONSE_HEADERS
+    }
+
+
+def _proxy_query_params(request: Request) -> list[tuple[str, str]]:
+    return [
+        (key, value)
+        for key, value in request.query_params.multi_items()
+        if key not in {"token", REMOTE_TARGET_AUTH_QUERY_PARAM}
+    ]
+
+
 @router.get("", response_model=list[RemoteClientResponse])
 async def list_remote_clients(
     _: User = Depends(get_current_admin_user),
@@ -272,6 +424,99 @@ async def update_remote_client_health(
     db.commit()
     db.refresh(client)
     return _serialize_client(client)
+
+
+@router.post("/{client_id}/check", response_model=RemoteClientResponse)
+async def check_remote_client(
+    client_id: str,
+    request: Request,
+    _: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    client = _get_client_or_404(db, client_id)
+    checked_at = datetime.now(timezone.utc)
+    remote_auth = _extract_remote_target_auth(request)
+
+    try:
+        system_info = await _fetch_remote_system_info(client, remote_auth)
+        app_version = system_info.get("app_version")
+        app_version = app_version if isinstance(app_version, str) else None
+        borg_version = system_info.get("borg_version")
+        borg_version = borg_version if isinstance(borg_version, str) else None
+        borg2_version = system_info.get("borg2_version")
+        borg2_version = borg2_version if isinstance(borg2_version, str) else None
+        compatibility, compatibility_message = _compare_backend_versions(
+            get_runtime_app_version(), app_version
+        )
+
+        _apply_client_health(
+            client,
+            status_value="online",
+            checked_at=checked_at,
+            app_version=app_version,
+            borg_version=borg_version,
+            borg2_version=borg2_version,
+            error=None,
+            compatibility=compatibility,
+            compatibility_message=compatibility_message,
+        )
+    except Exception as exc:
+        _apply_client_health(
+            client,
+            status_value="offline",
+            checked_at=checked_at,
+            error=_remote_check_error_message(exc),
+            compatibility="unknown",
+            compatibility_message="Remote client server compatibility could not be checked.",
+        )
+
+    db.commit()
+    db.refresh(client)
+    return _serialize_client(client)
+
+
+@router.api_route(
+    "/{client_id}/proxy/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+)
+async def proxy_remote_client_request(
+    client_id: str,
+    path: str,
+    request: Request,
+    current_user: User = Depends(get_current_download_user),
+    db: Session = Depends(get_db),
+):
+    require_any_role(current_user, "admin")
+    client = _get_client_or_404(db, client_id)
+    target_url = f"{client.web_base_url.rstrip('/')}/{path.lstrip('/')}"
+    remote_auth = _extract_remote_target_auth(request)
+    body = await request.body()
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=REMOTE_CLIENT_PROXY_TIMEOUT_SECONDS
+        ) as http:
+            remote_response = await http.request(
+                request.method,
+                target_url,
+                params=_proxy_query_params(request),
+                content=body if body else None,
+                headers=_build_proxy_request_headers(request, remote_auth),
+            )
+    except httpx.RequestError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={
+                "key": "backend.errors.remoteClients.proxyUnavailable",
+                "params": {"error": str(exc)},
+            },
+        ) from exc
+
+    return Response(
+        content=remote_response.content,
+        status_code=remote_response.status_code,
+        headers=_build_proxy_response_headers(remote_response),
+    )
 
 
 @router.delete("/{client_id}", status_code=status.HTTP_204_NO_CONTENT)

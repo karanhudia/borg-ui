@@ -1,8 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import type { ReactNode } from 'react'
 import { Box } from '@mui/material'
-import { CloudStorageContent } from './CloudStorage'
+import { CloudStorageContent, CloudStoragePlanGate } from './CloudStorage'
 import type { RcloneProvider, RcloneRemote } from '../services/api'
+import { communitySystemInfo } from '../services/remoteBackends/planStoryFixtures'
 
 const providers: RcloneProvider[] = [
   {
@@ -215,6 +216,20 @@ export const Overview: Story = {
 
 export const Empty: Story = {
   render: () => renderPage(<CloudStorageContent {...commonProps} remotes={[]} />),
+}
+
+export const LockedCommunity: Story = {
+  parameters: {
+    systemInfo: communitySystemInfo,
+  },
+  render: () =>
+    renderPage(
+      <CloudStoragePlanGate
+        status={{ available: true, version: 'rclone v1.66.0' }}
+        remotes={remotes}
+        providers={providers}
+      />
+    ),
 }
 
 export const Unavailable: Story = {

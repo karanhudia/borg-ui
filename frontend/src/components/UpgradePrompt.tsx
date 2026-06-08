@@ -33,6 +33,8 @@ export default function UpgradePrompt({ requiredPlan, message }: UpgradePromptPr
           border: '1px dashed',
           borderColor: 'divider',
           borderRadius: 2,
+          bgcolor: 'background.paper',
+          boxShadow: (theme) => `0 10px 30px ${alpha(theme.palette.common.black, 0.12)}`,
           textAlign: 'center',
         }}
       >

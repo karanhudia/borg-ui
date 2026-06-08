@@ -31,7 +31,14 @@ const theme = createTheme()
 
 const t = ((
   key: string,
-  options?: { defaultValue?: string; count?: number; id?: number; name?: string }
+  options?: {
+    defaultValue?: string
+    count?: number
+    id?: number
+    name?: string
+    feature?: string
+    features?: string
+  }
 ) => {
   const translations: Record<string, string> = {
     'backupPlans.title': 'Backup Plans',
@@ -61,7 +68,23 @@ const t = ((
     'backupPlans.status.manualOnly': 'Manual only',
     'backupPlans.status.localSource': 'Local source',
     'backupPlans.status.remoteSource': 'Remote source',
+    'backupPlans.status.pro': 'Pro',
+    'backupPlans.status.proRequired': 'Pro required',
     'backupPlans.sourceChooser.managedAgent': 'Managed agent',
+    'backupPlans.sourceChooser.databaseTitle': 'Database scan',
+    'backupPlans.sourceChooser.kindContainer': 'Container',
+    'backupPlans.runTooltipPro':
+      'This plan uses a Pro-only feature. Edit it or upgrade to Pro to run it.',
+    'backupPlans.runTooltipProFeature': `This plan uses ${
+      options?.feature ?? 'a Pro-only feature'
+    }, which requires Pro. Edit it or upgrade to Pro to run it.`,
+    'backupPlans.runTooltipProFeatures': `This plan uses Pro-only features: ${
+      options?.features ?? 'advanced backup features'
+    }. Edit it or upgrade to Pro to run it.`,
+    'backupPlans.proFeatureLabels.multiRepository': 'multiple repositories or parallel execution',
+    'backupPlans.proFeatureLabels.managedAgent': 'managed-agent backups',
+    'backupPlans.proFeatureLabels.database': 'database backups',
+    'backupPlans.proFeatureLabels.container': 'container backups',
     'backupPlans.status.enabled': 'Enabled',
     'backupPlans.status.disabled': 'Disabled',
     'backupPlans.status.clickToEnable': 'Click to enable',
@@ -151,6 +174,9 @@ function renderContent(overrides: Partial<React.ComponentProps<typeof BackupPlan
     startingPlanId: null,
     highlightedPlanId: null,
     canUseMultiRepository: true,
+    canUseManagedAgents: true,
+    canUseDatabaseDiscovery: true,
+    canUseContainerBackups: true,
     cancellingRunId: null,
     runPending: false,
     togglePending: false,
@@ -287,5 +313,103 @@ describe('BackupPlansContent', () => {
     })
 
     expect(screen.getByText('Managed agent')).toBeInTheDocument()
+  })
+
+  it('disables managed-agent backup plan runs behind the Pro chip when unavailable', () => {
+    const agentPlan: BackupPlan = {
+      ...basePlan,
+      source_type: 'agent',
+      source_locations: [
+        {
+          source_type: 'agent',
+          agent_machine_id: 42,
+          paths: ['/home/borg/app-data'],
+        },
+      ],
+    }
+    const onRunPlan = vi.fn()
+
+    renderContent({
+      backupPlans: [agentPlan],
+      processedPlans: { groups: [{ name: null, plans: [agentPlan] }] },
+      canUseManagedAgents: false,
+      onRunPlan,
+    })
+
+    expect(screen.getByText('Pro required')).toBeInTheDocument()
+    expect(screen.getByText('Managed agent')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Run' })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }))
+
+    expect(onRunPlan).not.toHaveBeenCalled()
+  })
+
+  it('disables database backup plan runs behind the Pro chip when unavailable', () => {
+    const databasePlan: BackupPlan = {
+      ...basePlan,
+      database_template_id: 'postgres',
+      source_locations: [
+        {
+          source_type: 'local',
+          paths: ['/var/lib/postgresql/data'],
+          database: {
+            template_id: 'postgres',
+            engine: 'PostgreSQL',
+            display_name: 'Postgres',
+            backup_strategy: 'pg_dump',
+            capture_mode: 'dump',
+            backup_paths: ['/tmp/postgres.sql'],
+            script_execution_target: 'source',
+          },
+        },
+      ],
+    }
+    const onRunPlan = vi.fn()
+
+    renderContent({
+      backupPlans: [databasePlan],
+      processedPlans: { groups: [{ name: null, plans: [databasePlan] }] },
+      canUseDatabaseDiscovery: false,
+      onRunPlan,
+    })
+
+    expect(screen.getByText('Pro required')).toBeInTheDocument()
+    expect(screen.getByText('Database scan')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Run' })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }))
+
+    expect(onRunPlan).not.toHaveBeenCalled()
+  })
+
+  it('disables container backup plan runs behind the Pro chip when unavailable', () => {
+    const containerPlan: BackupPlan = {
+      ...basePlan,
+      source_locations: [
+        {
+          source_type: 'local',
+          paths: ['/tmp/borg-ui/container-exports/redis.tar'],
+          container: {
+            container_name: 'redis',
+            display_name: 'Redis',
+            image: 'redis:7',
+            backup_mode: 'export',
+            export_path: '/tmp/borg-ui/container-exports/redis.tar',
+            script_execution_target: 'source',
+          },
+        },
+      ],
+    }
+
+    renderContent({
+      backupPlans: [containerPlan],
+      processedPlans: { groups: [{ name: null, plans: [containerPlan] }] },
+      canUseContainerBackups: false,
+    })
+
+    expect(screen.getByText('Pro required')).toBeInTheDocument()
+    expect(screen.getByText('Container')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Run' })).toBeDisabled()
   })
 })

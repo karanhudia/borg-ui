@@ -12,8 +12,9 @@ import {
 import CloudStorage from '../CloudStorage'
 import { rcloneAPI } from '../../services/api'
 
-const { mockTrackSystem } = vi.hoisted(() => ({
+const { mockTrackSystem, mockPlanCan } = vi.hoisted(() => ({
   mockTrackSystem: vi.fn(),
+  mockPlanCan: vi.fn((_feature: string) => true),
 }))
 
 vi.mock('../../hooks/useAnalytics', () => ({
@@ -29,6 +30,16 @@ vi.mock('../../hooks/useAnalytics', () => ({
       SEARCH: 'Search',
       FILTER: 'Filter',
     },
+  }),
+}))
+
+vi.mock('../../hooks/usePlan', () => ({
+  usePlan: () => ({
+    plan: 'community',
+    features: {},
+    entitlement: undefined,
+    isLoading: false,
+    can: mockPlanCan,
   }),
 }))
 
@@ -191,6 +202,7 @@ const openSpy = vi.fn()
 describe('CloudStorage', () => {
   beforeEach(() => {
     vi.resetAllMocks()
+    mockPlanCan.mockImplementation((_feature: string) => true)
     setDesktopViewport()
     Object.defineProperty(window, 'open', {
       configurable: true,
@@ -290,6 +302,26 @@ describe('CloudStorage', () => {
     expect(within(card).getByRole('button', { name: /Browse remote/i })).toBeInTheDocument()
     expect(within(card).getByRole('button', { name: /Edit remote/i })).toBeInTheDocument()
     expect(within(card).getByRole('button', { name: /Delete remote/i })).toBeDisabled()
+  })
+
+  it('shows the plan gate over existing cloud storage remotes for community users', async () => {
+    vi.mocked(rcloneAPI.listRemotes).mockResolvedValue({
+      data: { remotes: [remote] },
+    } as AxiosResponse)
+    mockPlanCan.mockImplementation((feature) => feature !== 'rclone')
+
+    renderWithProviders(<CloudStorage />, { initialRoute: '/cloud-storage' })
+
+    expect(
+      await screen.findByText(/cloud storage with rclone is available on pro and enterprise plans/i)
+    ).toBeInTheDocument()
+    expect(await screen.findByText('prod-s3')).toBeInTheDocument()
+    expect(screen.queryByText('No cloud storage remotes yet')).not.toBeInTheDocument()
+    expect(screen.queryByText('backend.errors.plan.featureNotAvailable')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Add remote/i })).not.toBeInTheDocument()
+    expect(rcloneAPI.getStatus).toHaveBeenCalled()
+    expect(rcloneAPI.listRemotes).toHaveBeenCalled()
+    expect(rcloneAPI.getProviders).toHaveBeenCalled()
   })
 
   it('renders cloud storage capacity when the remote has a storage snapshot', async () => {

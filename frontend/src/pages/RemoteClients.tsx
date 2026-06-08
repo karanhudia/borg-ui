@@ -7,14 +7,17 @@ import { alpha, useTheme } from '@mui/material/styles'
 import { Plus, Server } from 'lucide-react'
 import ResponsiveDialog from '../components/shared/ResponsiveDialog'
 import PlanGate from '../components/shared/PlanGate'
+import TabContentLayout from '../components/shared/TabContentLayout'
 import EmptyStateCard from '../components/EmptyStateCard'
 import LocalServerCard from '../components/LocalServerCard'
+import PageHeader from '../components/PageHeader'
 import RemoteClientCard from '../components/RemoteClientCard'
 import { useAuth } from '../hooks/useAuth'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { usePlan } from '../hooks/usePlan'
 import { useRemoteBackends } from '../services/remoteBackends/context'
 import { LOCAL_BACKEND_ID } from '../services/remoteBackends/storage'
-import type { RemoteBackendClient } from '../services/remoteBackends/types'
+import type { BackendTarget, RemoteBackendClient } from '../services/remoteBackends/types'
 
 interface ClientFormState {
   name: string
@@ -23,9 +26,118 @@ interface ClientFormState {
 
 const emptyForm: ClientFormState = { name: '', backendUrl: '' }
 
-export function RemoteClientsContent() {
+function RemoteClientsHeader({ onAddClient }: { onAddClient?: () => void }) {
+  const { t } = useTranslation()
+
+  return (
+    <PageHeader
+      title={t('remoteClients.title')}
+      subtitle={t('remoteClients.description')}
+      actions={
+        onAddClient ? (
+          <Button variant="contained" startIcon={<Plus size={18} />} onClick={onAddClient}>
+            {t('remoteClients.addButton')}
+          </Button>
+        ) : undefined
+      }
+    />
+  )
+}
+
+function RemoteClientsBody({
+  activeTarget,
+  clients,
+  checkingId,
+  onSwitchLocal,
+  onCheck,
+  onUse,
+  onEdit,
+  onDelete,
+}: {
+  activeTarget: BackendTarget
+  clients: RemoteBackendClient[]
+  checkingId?: string | null
+  onSwitchLocal: () => void
+  onCheck: (client: RemoteBackendClient) => void
+  onUse: (client: RemoteBackendClient) => void
+  onEdit: (client: RemoteBackendClient) => void
+  onDelete: (client: RemoteBackendClient) => void
+}) {
   const { t } = useTranslation()
   const muiTheme = useTheme()
+
+  return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+      <LocalServerCard active={activeTarget.kind === 'local'} onUse={onSwitchLocal} />
+
+      {clients.length > 0 && (
+        <Box
+          sx={{
+            display: 'grid',
+            gap: 2,
+            gridTemplateColumns: { xs: '1fr', md: 'repeat(auto-fit, minmax(320px, 1fr))' },
+          }}
+        >
+          {clients.map((client) => (
+            <RemoteClientCard
+              key={client.id}
+              client={client}
+              active={activeTarget.id === client.id}
+              checking={checkingId === client.id}
+              onCheck={onCheck}
+              onUse={onUse}
+              onEdit={onEdit}
+              onDelete={onDelete}
+            />
+          ))}
+        </Box>
+      )}
+
+      {clients.length === 0 && (
+        <Paper
+          variant="outlined"
+          sx={{
+            p: 4,
+            borderRadius: 2,
+            textAlign: 'center',
+            bgcolor: alpha(muiTheme.palette.background.paper, 0.72),
+          }}
+        >
+          <EmptyStateCard
+            inline
+            icon={<Server size={32} />}
+            title={t('remoteClients.empty.title')}
+            description={t('remoteClients.empty.description')}
+          />
+        </Paper>
+      )}
+    </Box>
+  )
+}
+
+function RemoteClientsPreviewBody({
+  activeTarget,
+  clients,
+}: {
+  activeTarget: BackendTarget
+  clients: RemoteBackendClient[]
+}) {
+  return (
+    <RemoteClientsBody
+      activeTarget={activeTarget}
+      clients={clients}
+      checkingId={null}
+      onSwitchLocal={() => {}}
+      onCheck={() => {}}
+      onUse={() => {}}
+      onEdit={() => {}}
+      onDelete={() => {}}
+    />
+  )
+}
+
+export function RemoteClientsContent() {
+  const { t } = useTranslation()
   const {
     activeTarget,
     clients,
@@ -170,72 +282,17 @@ export function RemoteClientsContent() {
   }
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: { xs: 'stretch', sm: 'center' },
-          gap: 2,
-          flexDirection: { xs: 'column', sm: 'row' },
-        }}
-      >
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 800 }}>
-            {t('remoteClients.title')}
-          </Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.5, maxWidth: 760 }}>
-            {t('remoteClients.description')}
-          </Typography>
-        </Box>
-        <Button variant="contained" startIcon={<Plus size={18} />} onClick={openCreateDialog}>
-          {t('remoteClients.addButton')}
-        </Button>
-      </Box>
-
-      <LocalServerCard active={activeTarget.kind === 'local'} onUse={handleSwitchLocal} />
-
-      {clients.length > 0 && (
-        <Box
-          sx={{
-            display: 'grid',
-            gap: 2,
-            gridTemplateColumns: { xs: '1fr', md: 'repeat(auto-fit, minmax(320px, 1fr))' },
-          }}
-        >
-          {clients.map((client) => (
-            <RemoteClientCard
-              key={client.id}
-              client={client}
-              active={activeTarget.id === client.id}
-              checking={checkingId === client.id}
-              onCheck={(c) => void handleCheck(c)}
-              onUse={handleSwitch}
-              onEdit={openEditDialog}
-              onDelete={setDeletingClient}
-            />
-          ))}
-        </Box>
-      )}
-
-      {clients.length === 0 && (
-        <Paper
-          variant="outlined"
-          sx={{
-            p: 4,
-            borderRadius: 2,
-            textAlign: 'center',
-            bgcolor: alpha(muiTheme.palette.background.paper, 0.72),
-          }}
-        >
-          <EmptyStateCard
-            inline
-            icon={<Server size={32} />}
-            title={t('remoteClients.empty.title')}
-            description={t('remoteClients.empty.description')}
-          />
-        </Paper>
-      )}
+    <TabContentLayout header={<RemoteClientsHeader onAddClient={openCreateDialog} />} spacing={0}>
+      <RemoteClientsBody
+        activeTarget={activeTarget}
+        clients={clients}
+        checkingId={checkingId}
+        onSwitchLocal={handleSwitchLocal}
+        onCheck={(client) => void handleCheck(client)}
+        onUse={handleSwitch}
+        onEdit={openEditDialog}
+        onDelete={setDeletingClient}
+      />
 
       {dialogOpen && (
         <ResponsiveDialog open={dialogOpen} onClose={closeDialog} maxWidth="sm" fullWidth>
@@ -314,7 +371,43 @@ export function RemoteClientsContent() {
           </Box>
         </ResponsiveDialog>
       )}
-    </Box>
+    </TabContentLayout>
+  )
+}
+
+export function RemoteClientsPreview({
+  activeTarget,
+  clients,
+}: {
+  activeTarget: BackendTarget
+  clients: RemoteBackendClient[]
+}) {
+  return (
+    <TabContentLayout header={<RemoteClientsHeader />} spacing={0}>
+      <RemoteClientsPreviewBody activeTarget={activeTarget} clients={clients} />
+    </TabContentLayout>
+  )
+}
+
+export function RemoteClientsPlanGate() {
+  const { t } = useTranslation()
+  const { can, isLoading } = usePlan()
+  const { activeTarget, clients } = useRemoteBackends()
+
+  if (!isLoading && can('remote_clients')) {
+    return <RemoteClientsContent />
+  }
+
+  return (
+    <PlanGate
+      feature="remote_clients"
+      message={t('remoteClients.planGate.message')}
+      surface="remote_clients"
+      operation="view_management"
+      preview={<RemoteClientsPreview activeTarget={activeTarget} clients={clients} />}
+    >
+      <Box />
+    </PlanGate>
   )
 }
 
@@ -338,14 +431,5 @@ export default function RemoteClients() {
     return <Navigate to="/dashboard" replace />
   }
 
-  return (
-    <PlanGate
-      feature="remote_clients"
-      message={t('remoteClients.planGate.message')}
-      surface="remote_clients"
-      operation="view_management"
-    >
-      <RemoteClientsContent />
-    </PlanGate>
-  )
+  return <RemoteClientsPlanGate />
 }
