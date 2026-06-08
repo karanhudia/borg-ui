@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'react-hot-toast'
+import { useTranslation } from 'react-i18next'
 import {
   Alert,
   alpha,
@@ -209,6 +210,132 @@ function tcpStatusLabel(status: string): string {
   return status === 'success' ? 'TCP reachable' : 'TCP failed'
 }
 
+export function ManagedAgentsPreview({
+  defaultAgentServerUrl,
+  activeTab = 'agents',
+  agents = EMPTY_AGENTS,
+  tokens = EMPTY_TOKENS,
+  jobs = EMPTY_JOBS,
+  isLoading = false,
+}: {
+  defaultAgentServerUrl: string
+  activeTab?: PageTab
+  agents?: AgentMachineResponse[]
+  tokens?: AgentEnrollmentTokenSummary[]
+  jobs?: AgentJobResponse[]
+  isLoading?: boolean
+}) {
+  const setupCommand = buildAgentInstallCommand(
+    defaultAgentServerUrl,
+    '<enrollment-token>',
+    '<machine-name>'
+  )
+  const agentsById = useMemo(() => {
+    return new Map(agents.map((agent) => [agent.id, agent]))
+  }, [agents])
+
+  return (
+    <Box>
+      <PageHeader
+        title="Managed Agents"
+        subtitle="Lightweight machines connected to this Borg UI server"
+        actions={
+          <>
+            <IconButton aria-label="Refresh" title="Refresh">
+              <RefreshCw size={20} />
+            </IconButton>
+            <Button variant="contained" startIcon={<Plus size={18} />}>
+              Add Agent
+            </Button>
+          </>
+        }
+      />
+
+      <AgentSetupGuide command={setupCommand} onCopy={() => {}} />
+
+      <PageTabs value={activeTab} onChange={() => {}}>
+        <Tab label="Agents" value="agents" />
+        <Tab label="Jobs" value="jobs" />
+        <Tab label="Enrollment Tokens" value="tokens" />
+      </PageTabs>
+
+      {isLoading ? (
+        <Stack spacing={2}>
+          {[0, 1, 2].map((index) => (
+            <Skeleton key={index} variant="rounded" height={96} sx={{ borderRadius: 2 }} />
+          ))}
+        </Stack>
+      ) : null}
+
+      {!isLoading && activeTab === 'agents' ? (
+        <AgentList
+          agents={agents}
+          serverUrl={defaultAgentServerUrl}
+          onCopy={() => {}}
+          onRevoke={() => {}}
+          onDelete={() => {}}
+          onViewLogs={() => {}}
+          isRevoking={false}
+          isDeleting={false}
+        />
+      ) : null}
+
+      {!isLoading && activeTab === 'jobs' ? (
+        <JobsTable
+          jobs={jobs}
+          agentsById={agentsById}
+          onCancel={() => {}}
+          onViewLogs={() => {}}
+          isCanceling={false}
+        />
+      ) : null}
+
+      {!isLoading && activeTab === 'tokens' ? (
+        <TokensTable tokens={tokens} onRevoke={() => {}} isRevoking={false} />
+      ) : null}
+    </Box>
+  )
+}
+
+export function ManagedAgentsPlanGate({
+  defaultAgentServerUrl,
+  activeTab = 'agents',
+  agents = EMPTY_AGENTS,
+  tokens = EMPTY_TOKENS,
+  jobs = EMPTY_JOBS,
+  isLoading = false,
+}: {
+  defaultAgentServerUrl: string
+  activeTab?: PageTab
+  agents?: AgentMachineResponse[]
+  tokens?: AgentEnrollmentTokenSummary[]
+  jobs?: AgentJobResponse[]
+  isLoading?: boolean
+}) {
+  const { t } = useTranslation()
+
+  return (
+    <PlanGate
+      feature="managed_agents"
+      message={t('managedAgents.planGate.message')}
+      surface={MANAGED_AGENTS_ANALYTICS_SECTION}
+      operation="view_page_gate"
+      preview={
+        <ManagedAgentsPreview
+          defaultAgentServerUrl={defaultAgentServerUrl}
+          activeTab={activeTab}
+          agents={agents}
+          tokens={tokens}
+          jobs={jobs}
+          isLoading={isLoading}
+        />
+      }
+    >
+      <Box />
+    </PlanGate>
+  )
+}
+
 export default function ManagedAgents() {
   const queryClient = useQueryClient()
   const { hasGlobalPermission } = useAuth()
@@ -226,25 +353,25 @@ export default function ManagedAgents() {
   )
 
   const hasManagedAgentsPlan = can('managed_agents')
-  const canUseManagedAgents = canManageAgents && hasManagedAgentsPlan
+  const canReadManagedAgents = canManageAgents
 
   const agentsQuery = useQuery({
     queryKey: ['managed-agents'],
     queryFn: managedAgentsAPI.listAgents,
-    enabled: canUseManagedAgents,
+    enabled: canReadManagedAgents,
     refetchInterval: 15000,
   })
 
   const tokensQuery = useQuery({
     queryKey: ['managed-agent-enrollment-tokens'],
     queryFn: managedAgentsAPI.listEnrollmentTokens,
-    enabled: canUseManagedAgents,
+    enabled: canReadManagedAgents,
   })
 
   const jobsQuery = useQuery({
     queryKey: ['managed-agent-jobs'],
     queryFn: managedAgentsAPI.listJobs,
-    enabled: canUseManagedAgents,
+    enabled: canReadManagedAgents,
     refetchInterval: 5000,
   })
 
@@ -263,6 +390,7 @@ export default function ManagedAgents() {
   const agentsById = useMemo(() => {
     return new Map(agents.map((agent) => [agent.id, agent]))
   }, [agents])
+  const isLoading = agentsQuery.isLoading || tokensQuery.isLoading || jobsQuery.isLoading
 
   const [manualRefreshInFlight, setManualRefreshInFlight] = useState(false)
   const refreshAll = async () => {
@@ -385,19 +513,14 @@ export default function ManagedAgents() {
 
   if (!hasManagedAgentsPlan) {
     return (
-      <Box>
-        <PageHeader
-          title="Managed Agents"
-          subtitle="Lightweight machines connected to this Borg UI server"
-        />
-        <PlanGate
-          feature="managed_agents"
-          surface={MANAGED_AGENTS_ANALYTICS_SECTION}
-          operation="view_page_gate"
-        >
-          <Box />
-        </PlanGate>
-      </Box>
+      <ManagedAgentsPlanGate
+        defaultAgentServerUrl={defaultAgentServerUrl}
+        activeTab={activeTab}
+        agents={agents}
+        tokens={tokens}
+        jobs={jobs}
+        isLoading={isLoading}
+      />
     )
   }
 
@@ -421,8 +544,6 @@ export default function ManagedAgents() {
     '<enrollment-token>',
     '<machine-name>'
   )
-
-  const isLoading = agentsQuery.isLoading || tokensQuery.isLoading || jobsQuery.isLoading
 
   return (
     <Box>

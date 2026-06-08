@@ -161,6 +161,27 @@ describe('AppSidebar', () => {
     })
   })
 
+  it('orders Remote Machines before Remote Clients in infrastructure navigation', async () => {
+    renderSidebar()
+
+    await waitFor(() => {
+      expect(screen.getAllByRole('link', { name: /remote machines/i }).length).toBeGreaterThan(0)
+      expect(screen.getAllByRole('link', { name: /remote clients/i }).length).toBeGreaterThan(0)
+    })
+
+    const links = screen.getAllByRole('link')
+    const remoteMachinesIndex = links.findIndex(
+      (link) => link.getAttribute('href') === '/ssh-connections'
+    )
+    const remoteClientsIndex = links.findIndex(
+      (link) => link.getAttribute('href') === '/remote-clients'
+    )
+
+    expect(remoteMachinesIndex).toBeGreaterThanOrEqual(0)
+    expect(remoteClientsIndex).toBeGreaterThanOrEqual(0)
+    expect(remoteMachinesIndex).toBeLessThan(remoteClientsIndex)
+  })
+
   it('shows Managed Agents navigation without requiring its former beta flag', async () => {
     renderSidebar({
       systemSettings: { managed_agents_beta_enabled: false },
@@ -170,14 +191,16 @@ describe('AppSidebar', () => {
     expect(managedAgentLinks[0]).toHaveAttribute('href', '/managed-agents')
   })
 
-  it('hides Remote Clients navigation when the plan lacks remote client access', async () => {
+  it('keeps Remote Clients navigation visible when the plan lacks remote client access', async () => {
     mockPlanCan.mockImplementation((feature) => feature !== 'remote_clients')
 
     renderSidebar()
 
     await waitFor(() => {
-      expect(screen.queryAllByRole('link', { name: /remote clients/i })).toHaveLength(0)
-      expect(screen.queryByText('Remote Clients')).not.toBeInTheDocument()
+      expect(screen.getAllByRole('link', { name: /remote clients/i })[0]).toHaveAttribute(
+        'href',
+        '/remote-clients'
+      )
     })
     expect(screen.getAllByRole('link', { name: /remote machines/i })[0]).toHaveAttribute(
       'href',

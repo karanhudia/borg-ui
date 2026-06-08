@@ -162,7 +162,7 @@
   },
   "remoteClients": {
     "title": "Remote Clients",
-    "description": "Register Borg UI client servers on other machines, check their health, and use this browser against the selected server.",
+    "description": "Register Borg UI client servers on other machines, check their health from this server, and route selected-server requests through it.",
     "addButton": "Add remote client",
     "planGate": {
       "message": "Remote client switching is available on Pro and Enterprise plans. Upgrade to add or switch to remote Borg UI servers."
@@ -183,7 +183,7 @@
     },
     "switcher": {
       "title": "Server targets",
-      "description": "Choose whether this browser uses this server or a remote client.",
+      "description": "Choose whether requests go to this server or route through it to a remote client.",
       "menuLabel": "Server targets",
       "ariaLabel": "Server target {{name}}",
       "selectLabel": "Server",
@@ -254,9 +254,17 @@
       "remoteUnavailable": "Remote client server is unavailable."
     }
   },
+  "managedAgents": {
+    "planGate": {
+      "message": "Managed Agents need Pro or Enterprise. Upgrade to enroll remote machines and run agent-backed jobs."
+    }
+  },
   "cloudStorage": {
     "title": "Cloud Storage",
     "subtitle": "Manage reusable rclone remotes for repository mirrors.",
+    "planGate": {
+      "message": "Cloud storage with rclone is available on Pro and Enterprise plans. Upgrade to add reusable remotes for repository mirrors."
+    },
     "addRemote": "Add remote",
     "rcloneAvailability": "rclone availability",
     "statusAvailable": "Available",
@@ -806,6 +814,14 @@
     "subtitle": "Define sources, settings, schedules, and the repositories each backup writes to.",
     "loading": "Loading backup plans...",
     "runTooltipPro": "This plan uses multiple repositories or parallel execution. Edit it or upgrade to Pro to run it.",
+    "runTooltipProFeature": "This plan uses {{feature}}, which requires Pro. Edit it or upgrade to Pro to run it.",
+    "runTooltipProFeatures": "This plan uses Pro-only features: {{features}}. Edit it or upgrade to Pro to run it.",
+    "proFeatureLabels": {
+      "multiRepository": "multiple repositories or parallel execution",
+      "managedAgent": "managed-agent backups",
+      "database": "database backups",
+      "container": "container backups"
+    },
     "empty": {
       "title": "No backup plans yet",
       "description": "Create a plan to connect sources, settings, schedule, and repositories."
@@ -4571,6 +4587,9 @@
         "oidcEmailAlreadyInUse": "This single sign-on email is already used by another Borg UI account.",
         "oidcPendingApproval": "Your single sign-on account is waiting for administrator approval",
         "oidcTemplateUserNotFound": "The configured single sign-on template user was not found"
+      },
+      "plan": {
+        "featureNotAvailable": "This feature is not available on your current plan."
       },
       "agents": {
         "agentDisabled": "This agent is disabled",

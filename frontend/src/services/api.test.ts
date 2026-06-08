@@ -78,17 +78,21 @@ describe('API Request Interceptor', () => {
   })
 
   it('uses the active remote backend API base for requests', async () => {
-    const { createRemoteBackendClient, setActiveBackendTarget } =
+    const { createRemoteBackendClient, setActiveBackendTarget, setBackendAccessToken } =
       await import('./remoteBackends/storage')
+    localStorageMock['access_token'] = 'local-token'
     const remote = createRemoteBackendClient({
       name: 'Remote',
       backendUrl: 'https://remote.example.com/borg',
     })
     setActiveBackendTarget(remote.id)
+    setBackendAccessToken('remote-token', remote.id)
     const mock = new MockAdapter(api)
 
     mock.onGet('/test').reply((config) => {
-      expect(config.baseURL).toBe('https://remote.example.com/borg/api')
+      expect(config.baseURL).toBe(`/api/remote-clients/${remote.id}/proxy/api`)
+      expect(config.headers?.['X-Borg-Authorization']).toBe('Bearer local-token')
+      expect(config.headers?.['X-Borg-Remote-Authorization']).toBe('Bearer remote-token')
       return [200, { success: true }]
     })
 
@@ -106,9 +110,11 @@ describe('API Request Interceptor', () => {
     setActiveBackendTarget(remote.id)
 
     expect(authAPI.getOidcLoginUrl('https://app.example.com/login')).toBe(
-      'https://remote.example.com/borg/api/auth/oidc/login?return_to=https%3A%2F%2Fapp.example.com%2Flogin'
+      `/api/remote-clients/${remote.id}/proxy/api/auth/oidc/login?return_to=https%3A%2F%2Fapp.example.com%2Flogin`
     )
-    expect(authAPI.getOidcLinkUrl()).toBe('https://remote.example.com/borg/api/auth/oidc/link')
+    expect(authAPI.getOidcLinkUrl()).toBe(
+      `/api/remote-clients/${remote.id}/proxy/api/auth/oidc/link`
+    )
   })
 })
 
