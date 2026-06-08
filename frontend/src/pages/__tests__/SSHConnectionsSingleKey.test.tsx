@@ -481,9 +481,9 @@ describe('SSHConnectionsSingleKey', () => {
     )
 
     const hetznerDialog = await screen.findByRole('dialog', { name: /deploy ssh key to server/i })
-    expect(within(hetznerDialog).getByRole('combobox', { name: /setup preset/i })).toHaveTextContent(
-      /hetzner storage box/i
-    )
+    expect(
+      within(hetznerDialog).getByRole('combobox', { name: /setup preset/i })
+    ).toHaveTextContent(/hetzner storage box/i)
 
     unmount()
     renderWithProviders(<DeployDialogHarness initialForm={createConnectionForm()} />)
