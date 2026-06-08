@@ -1,4 +1,5 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { renderWithProviders } from '../../test/test-utils'
 import Repositories from '../Repositories'
@@ -114,6 +115,7 @@ vi.mock('../../services/api', () => ({
   repositoriesAPI: {
     getRepositories: vi.fn(),
     getRepositoryCheckJobs: vi.fn(),
+    permanentlyDeleteRepository: vi.fn(),
   },
   backupPlansAPI: {
     list: vi.fn(),
@@ -209,13 +211,17 @@ vi.mock('../repositories-page/RepositoryGroups', () => ({
     onCheck,
     onViewInfo,
     onBreakLock,
+    onPermanentDelete,
+    canPermanentDeleteRepository,
     onJobCompleted,
   }: {
     repositories: Array<typeof mockRepository>
     canBreakLock: (repository: typeof mockRepository) => boolean
+    canPermanentDeleteRepository: (repository: typeof mockRepository) => boolean
     onCheck: (repository: typeof mockRepository) => void
     onViewInfo: (repository: typeof mockRepository) => void
     onBreakLock: (repository: typeof mockRepository) => void
+    onPermanentDelete: (repository: typeof mockRepository) => void
     onJobCompleted: (repositoryId: number) => void
   }) => {
     if (repositories.length === 0) {
@@ -224,6 +230,7 @@ vi.mock('../repositories-page/RepositoryGroups', () => ({
 
     return (
       <>
+        <span>{repositories[0].name}</span>
         <button type="button" onClick={() => onCheck(repositories[0])}>
           start check
         </button>
@@ -233,6 +240,11 @@ vi.mock('../repositories-page/RepositoryGroups', () => ({
         {canBreakLock(repositories[0]) ? (
           <button type="button" onClick={() => onBreakLock(repositories[0])}>
             break lock
+          </button>
+        ) : null}
+        {canPermanentDeleteRepository(repositories[0]) ? (
+          <button type="button" onClick={() => onPermanentDelete(repositories[0])}>
+            permanent delete
           </button>
         ) : null}
         <button type="button" onClick={() => onJobCompleted(1)}>
@@ -254,6 +266,9 @@ describe('Repositories', () => {
     } as Awaited<ReturnType<typeof backupPlansAPI.list>>)
     mockLatestCheckJob(buildCheckJob())
     mockCheckRepository.mockResolvedValue({ data: { job_id: 23 } })
+    vi.mocked(repositoriesAPI.permanentlyDeleteRepository).mockResolvedValue({
+      data: { success: true },
+    } as Awaited<ReturnType<typeof repositoriesAPI.permanentlyDeleteRepository>>)
   })
 
   async function runManualCheckToCompletion() {
@@ -342,5 +357,57 @@ describe('Repositories', () => {
     expect(
       screen.getByText('Broken Repo is locked by another process or has a stale lock.')
     ).toBeInTheDocument()
+  })
+
+  it('permanently deletes a repository after typed confirmation and removes it from the list', async () => {
+    const user = userEvent.setup()
+    vi.mocked(repositoriesAPI.getRepositories)
+      .mockResolvedValueOnce({
+        data: { repositories: [mockRepository] },
+      } as Awaited<ReturnType<typeof repositoriesAPI.getRepositories>>)
+      .mockResolvedValue({
+        data: { repositories: [] },
+      } as Awaited<ReturnType<typeof repositoriesAPI.getRepositories>>)
+    renderWithProviders(<Repositories />)
+
+    expect(await screen.findByText('Broken Repo')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'permanent delete' }))
+
+    expect(
+      await screen.findByRole('heading', { name: 'Permanently delete repository files' })
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Permanently delete files' })).toBeDisabled()
+
+    await user.type(screen.getByLabelText('Type repository name to confirm'), 'Broken Repo')
+    await user.click(screen.getByRole('button', { name: 'Permanently delete files' }))
+
+    await waitFor(() => {
+      expect(repositoriesAPI.permanentlyDeleteRepository).toHaveBeenCalledWith(1, {
+        confirmation_phrase: 'Broken Repo',
+        understood: true,
+      })
+    })
+    await waitFor(() => {
+      expect(screen.queryByText('Broken Repo')).not.toBeInTheDocument()
+    })
+    expect(toast.success).toHaveBeenCalledWith('Repository permanently deleted')
+  })
+
+  it('keeps the repository visible when permanent deletion fails', async () => {
+    const user = userEvent.setup()
+    vi.mocked(repositoriesAPI.permanentlyDeleteRepository).mockRejectedValue({
+      response: { data: { detail: 'permission denied' } },
+    })
+    renderWithProviders(<Repositories />)
+
+    expect(await screen.findByText('Broken Repo')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'permanent delete' }))
+    await user.type(screen.getByLabelText('Type repository name to confirm'), 'Broken Repo')
+    await user.click(screen.getByRole('button', { name: 'Permanently delete files' }))
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('permission denied')
+    })
+    expect(screen.getByText('Broken Repo')).toBeInTheDocument()
   })
 })

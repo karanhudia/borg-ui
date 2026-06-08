@@ -42,6 +42,7 @@ describe('RepositoryCard', () => {
     onBreakLock: vi.fn(),
     onEdit: vi.fn(),
     onDelete: vi.fn(),
+    onPermanentDelete: vi.fn(),
     onBackupNow: vi.fn(),
     onViewArchives: vi.fn(),
     onViewBackupPlans: vi.fn(),
@@ -785,6 +786,40 @@ describe('RepositoryCard', () => {
       // The last Delete button is the main delete action (first one is Prune button icon)
       fireEvent.click(deleteButtons[deleteButtons.length - 1])
       expect(mockCallbacks.onDelete).toHaveBeenCalledTimes(1)
+    })
+
+    it('calls onPermanentDelete when the permanent delete files button is clicked', () => {
+      renderWithProviders(
+        <RepositoryCard
+          repository={mockRepository}
+          isInJobsSet={false}
+          canManageRepository={true}
+          canPermanentDeleteRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: /Permanently delete files/i }))
+      expect(mockCallbacks.onPermanentDelete).toHaveBeenCalledTimes(1)
+    })
+
+    it('hides the permanent delete files button when permanent deletion is unavailable', () => {
+      renderWithProviders(
+        <RepositoryCard
+          repository={mockRepository}
+          isInJobsSet={false}
+          canManageRepository={true}
+          canPermanentDeleteRepository={false}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(
+        screen.queryByRole('button', { name: /Permanently delete files/i })
+      ).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /^Delete$/i })).toBeInTheDocument()
     })
   })
 

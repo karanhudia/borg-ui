@@ -17,6 +17,7 @@ Integration tests (test_api_repositories_integration.py) handle:
 import pytest
 import json
 import os
+from pathlib import Path
 from datetime import datetime
 from unittest.mock import AsyncMock, patch
 from fastapi import HTTPException
@@ -80,6 +81,12 @@ def _base_repository_payload(**overrides):
     }
     payload.update(overrides)
     return payload
+
+
+def _create_borg_like_repository_dir(path: Path) -> None:
+    path.mkdir(parents=True)
+    (path / "config").write_text("[repository]\nversion = 1\n")
+    (path / "data").mkdir()
 
 
 @pytest.mark.unit
@@ -1938,6 +1945,102 @@ class TestRepositoriesDelete:
         )
 
         assert response.status_code == 200
+
+    def test_permanent_delete_repository_removes_local_files_and_record(
+        self, test_client: TestClient, admin_headers, test_db, tmp_path
+    ):
+        """Permanent deletion removes the local repository directory and DB record."""
+        repo_path = tmp_path / "delete-repo-files"
+        _create_borg_like_repository_dir(repo_path)
+        repo = Repository(
+            name="Delete Files",
+            path=str(repo_path),
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+            execution_target="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+        repo_id = repo.id
+
+        response = test_client.post(
+            f"/api/repositories/{repo_id}/permanent-delete",
+            json={"confirmation_phrase": "Delete Files", "understood": True},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        assert not repo_path.exists()
+        assert (
+            test_db.query(Repository).filter(Repository.id == repo_id).first() is None
+        )
+
+    def test_permanent_delete_keeps_record_when_filesystem_removal_fails(
+        self, test_client: TestClient, admin_headers, test_db, tmp_path
+    ):
+        """Filesystem delete failures leave the repository visible in Borg UI."""
+        repo_path = tmp_path / "delete-failure-repo"
+        _create_borg_like_repository_dir(repo_path)
+        repo = Repository(
+            name="Keep On Failure",
+            path=str(repo_path),
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+            execution_target="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+        repo_id = repo.id
+
+        with patch(
+            "app.api.repositories.shutil.rmtree",
+            side_effect=OSError("permission denied"),
+        ):
+            response = test_client.post(
+                f"/api/repositories/{repo_id}/permanent-delete",
+                json={"confirmation_phrase": "Keep On Failure", "understood": True},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 500
+        assert repo_path.exists()
+        assert (
+            test_db.query(Repository).filter(Repository.id == repo_id).first()
+            is not None
+        )
+
+    def test_permanent_delete_rejects_non_local_repositories(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Permanent filesystem deletion is only available for local repositories."""
+        repo = Repository(
+            name="Remote Repo",
+            path="ssh://borg@example.com:22/backups/repo",
+            encryption="none",
+            compression="lz4",
+            repository_type="ssh",
+            execution_target="ssh",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+        repo_id = repo.id
+
+        response = test_client.post(
+            f"/api/repositories/{repo_id}/permanent-delete",
+            json={"confirmation_phrase": "Remote Repo", "understood": True},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        assert (
+            test_db.query(Repository).filter(Repository.id == repo_id).first()
+            is not None
+        )
 
     def test_delete_observe_repository_with_restore_check_jobs(
         self, test_client: TestClient, admin_headers, test_db

@@ -77,6 +77,7 @@ const defaultArgs = {
   onBreakLock: noop,
   onEdit: noop,
   onDelete: noop,
+  onPermanentDelete: noop,
   onBackupNow: noop,
   onViewArchives: noop,
   onViewBackupPlans: noop,
@@ -84,6 +85,7 @@ const defaultArgs = {
   getCompressionLabel: (compression: string) => compression.toUpperCase(),
   canManageRepository: true,
   canBreakLock: true,
+  canPermanentDeleteRepository: true,
   canDo,
 }
 
@@ -204,6 +206,29 @@ export const EnableCloudMirrorForSsh: Story = {
       connection_id: 11,
       rclone_storage: null,
     },
+  },
+  render: (args) => (
+    <Box sx={{ width: 620, maxWidth: 'calc(100vw - 32px)' }}>
+      <RepositoryCard {...args} />
+    </Box>
+  ),
+}
+
+export const RemoteRepositoryWithoutPermanentDelete: Story = {
+  args: {
+    ...defaultArgs,
+    repository: {
+      ...sampleRepository,
+      id: 51,
+      name: 'Remote SSH Repository',
+      path: 'ssh://borg@storage.example:22/backups/production',
+      repository_type: 'ssh',
+      storage_backend: 'ssh',
+      execution_target: 'ssh',
+      executor_type: 'server',
+      connection_id: 11,
+    },
+    canPermanentDeleteRepository: false,
   },
   render: (args) => (
     <Box sx={{ width: 620, maxWidth: 'calc(100vw - 32px)' }}>

@@ -22,6 +22,7 @@ import CompactWarningDialog from '../components/CompactWarningDialog'
 import RepositoryWizard from '../components/RepositoryWizard'
 import PruneRepositoryDialog from '../components/PruneRepositoryDialog'
 import RepositoryWipeDialog from '../components/RepositoryWipeDialog'
+import PermanentDeleteRepositoryDialog from '../components/PermanentDeleteRepositoryDialog'
 import RepositoryInfoDialog from '../components/RepositoryInfoDialog'
 import { getJobDurationSeconds } from '../utils/analyticsProperties'
 import { CreateBackupPlanDialog } from './repositories-page/CreateBackupPlanDialog'
@@ -63,6 +64,41 @@ function parseBackupPlanFilterId(value: string | null): number | null {
   return Number.isInteger(id) && id > 0 ? id : null
 }
 
+function canPermanentlyDeleteRepository(repository: Repository): boolean {
+  const repositoryType = (repository.repository_type || 'local').toLowerCase()
+  const storageBackend = (repository.storage_backend || 'local').toLowerCase()
+  const executionTarget = (repository.execution_target || 'local').toLowerCase()
+  const executorType = (repository.executor_type || 'server').toLowerCase()
+  const repositoryPath = repository.path || ''
+
+  return (
+    repositoryType === 'local' &&
+    storageBackend === 'local' &&
+    executionTarget === 'local' &&
+    executorType !== 'agent' &&
+    !repository.connection_id &&
+    !repository.agent_machine_id &&
+    !repositoryPath.includes('://')
+  )
+}
+
+function removeRepositoryFromResponse(data: unknown, repositoryId: number): unknown {
+  if (Array.isArray(data)) {
+    return data.filter((repository) => repository?.id !== repositoryId)
+  }
+
+  if (data && typeof data === 'object' && Array.isArray((data as { repositories?: unknown }).repositories)) {
+    return {
+      ...data,
+      repositories: (data as { repositories: Repository[] }).repositories.filter(
+        (repository) => repository.id !== repositoryId
+      ),
+    }
+  }
+
+  return data
+}
+
 export default function Repositories() {
   const { t } = useTranslation()
   const { hasGlobalPermission } = useAuth()
@@ -91,6 +127,8 @@ export default function Repositories() {
   const [compactingRepository, setCompactingRepository] = useState<Repository | null>(null)
   const [pruningRepository, setPruningRepository] = useState<Repository | null>(null)
   const [wipingRepository, setWipingRepository] = useState<Repository | null>(null)
+  const [permanentlyDeletingRepository, setPermanentlyDeletingRepository] =
+    useState<Repository | null>(null)
   const [wipePreview, setWipePreview] = useState<RepositoryWipeJob | null>(null)
   const [wipeJob, setWipeJob] = useState<RepositoryWipeJob | null>(null)
   const [planSourceRepository, setPlanSourceRepository] = useState<Repository | null>(null)
@@ -218,6 +256,45 @@ export default function Repositories() {
     onError: (error: any) => {
       toast.error(
         translateBackendKey(error.response?.data?.detail) || t('repositories.toasts.deleteFailed')
+      )
+    },
+  })
+
+  const permanentDeleteRepositoryMutation = useMutation({
+    mutationFn: ({
+      repository,
+      confirmationPhrase,
+    }: {
+      repository: Repository
+      confirmationPhrase: string
+    }) =>
+      repositoriesAPI.permanentlyDeleteRepository(repository.id, {
+        confirmation_phrase: confirmationPhrase,
+        understood: true,
+      }),
+    onSuccess: (_response, variables) => {
+      toast.success(t('repositories.toasts.permanentlyDeleted'))
+      queryClient.setQueryData<AxiosResponse<unknown>>(['repositories'], (current) =>
+        current
+          ? {
+              ...current,
+              data: removeRepositoryFromResponse(current.data, variables.repository.id),
+            }
+          : current
+      )
+      queryClient.invalidateQueries({ queryKey: ['repositories'] })
+      queryClient.invalidateQueries({ queryKey: ['app-repositories'] })
+      appState.refetch()
+      setPermanentlyDeletingRepository(null)
+      trackRepository(EventAction.DELETE, variables.repository, {
+        mode: 'permanent_filesystem',
+      })
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (error: any) => {
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) ||
+          t('repositories.toasts.permanentDeleteFailed')
       )
     },
   })
@@ -487,6 +564,18 @@ export default function Repositories() {
     if (window.confirm(`Are you sure you want to delete repository "${repository.name}"?`)) {
       deleteRepositoryMutation.mutate(repository.id)
     }
+  }
+
+  const handlePermanentDeleteRepository = (repository: Repository) => {
+    setPermanentlyDeletingRepository(repository)
+  }
+
+  const handleConfirmPermanentDeleteRepository = (confirmationPhrase: string) => {
+    if (!permanentlyDeletingRepository) return
+    permanentDeleteRepositoryMutation.mutate({
+      repository: permanentlyDeletingRepository,
+      confirmationPhrase,
+    })
   }
 
   const handleCheckRepository = (repository: Repository) => {
@@ -880,12 +969,14 @@ export default function Repositories() {
         onBreakLock={handleBreakLockRepository}
         onEdit={openEditModal}
         onDelete={handleDeleteRepository}
+        onPermanentDelete={handlePermanentDeleteRepository}
         onBackupNow={handleBackupNow}
         onViewArchives={handleViewArchives}
         onViewBackupPlans={handleViewBackupPlans}
         onCreateBackupPlan={handleCreateBackupPlan}
         onRcloneSync={handleRcloneSync}
         onRcloneHydrate={handleRcloneHydrate}
+        canPermanentDeleteRepository={canPermanentlyDeleteRepository}
         getCompressionLabel={getCompressionLabel}
         onJobCompleted={handleJobCompleted}
       />
@@ -959,6 +1050,14 @@ export default function Repositories() {
         onGeneratePreview={handleGenerateWipePreview}
         onExecute={handleExecuteWipe}
         onCancelPreview={handleCancelWipePreview}
+      />
+
+      <PermanentDeleteRepositoryDialog
+        open={!!permanentlyDeletingRepository}
+        repository={permanentlyDeletingRepository}
+        isPending={permanentDeleteRepositoryMutation.isPending}
+        onClose={() => setPermanentlyDeletingRepository(null)}
+        onConfirm={handleConfirmPermanentDeleteRepository}
       />
 
       {/* Lock Error Dialog */}

@@ -136,6 +136,11 @@ export interface RepositoryData {
   [key: string]: unknown
 }
 
+export interface RepositoryPermanentDeleteRequest {
+  confirmation_phrase: string
+  understood: boolean
+}
+
 export interface RcloneStatus {
   available: boolean
   version?: string | null
@@ -828,6 +833,8 @@ export const repositoriesAPI = {
   getRepository: (id: number) => api.get(`/repositories/${id}`),
   updateRepository: (id: number, data: RepositoryData) => api.put(`/repositories/${id}`, data),
   deleteRepository: (id: number) => api.delete(`/repositories/${id}`),
+  permanentlyDeleteRepository: (id: number, data: RepositoryPermanentDeleteRequest) =>
+    api.post(`/repositories/${id}/permanent-delete`, data),
   checkRepository: (id: number, maxDuration: number = 3600) =>
     api.post(`/repositories/${id}/check`, { max_duration: maxDuration }),
   restoreCheckRepository: (
