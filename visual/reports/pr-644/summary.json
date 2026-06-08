@@ -1,0 +1,1429 @@
+{
+  "generatedAt": "2026-06-08T04:19:56.373Z",
+  "reportUrl": "",
+  "metadata": {
+    "title": "PR #644 visual report",
+    "commitSha": "458d9636861b",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/27115609576"
+  },
+  "totals": {
+    "baseline": 396,
+    "actual": 406,
+    "compared": 394,
+    "changed": 11,
+    "added": 12,
+    "removed": 2,
+    "unchanged": 383
+  },
+  "changed": [
+    {
+      "fileName": "components-appsidebar--with-remote-clients.png",
+      "baselinePath": "images/baseline/components-appsidebar--with-remote-clients.png",
+      "actualPath": "images/actual/components-appsidebar--with-remote-clients.png",
+      "diffPath": "images/diff/components-appsidebar--with-remote-clients.png",
+      "diffPixels": 1242,
+      "totalPixels": 1024000,
+      "diffRatio": 0.001212890625,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-plangate--with-message--mobile.png",
+      "baselinePath": "images/baseline/components-plangate--with-message--mobile.png",
+      "actualPath": "images/actual/components-plangate--with-message--mobile.png",
+      "diffPath": "images/diff/components-plangate--with-message--mobile.png",
+      "diffPixels": 125007,
+      "totalPixels": 329160,
+      "diffRatio": 0.37977579292745167,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-plangate--with-message.png",
+      "baselinePath": "images/baseline/components-plangate--with-message.png",
+      "actualPath": "images/actual/components-plangate--with-message.png",
+      "diffPath": "images/diff/components-plangate--with-message.png",
+      "diffPixels": 152448,
+      "totalPixels": 1024000,
+      "diffRatio": 0.148875,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "pages-remoteclients--active-remote--mobile.png",
+      "baselinePath": "images/baseline/pages-remoteclients--active-remote--mobile.png",
+      "actualPath": "images/actual/pages-remoteclients--active-remote--mobile.png",
+      "diffPath": "images/diff/pages-remoteclients--active-remote--mobile.png",
+      "diffPixels": 65724,
+      "totalPixels": 329160,
+      "diffRatio": 0.1996718920889537,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "pages-remoteclients--active-remote.png",
+      "baselinePath": "images/baseline/pages-remoteclients--active-remote.png",
+      "actualPath": "images/actual/pages-remoteclients--active-remote.png",
+      "diffPath": "images/diff/pages-remoteclients--active-remote.png",
+      "diffPixels": 235164,
+      "totalPixels": 1024000,
+      "diffRatio": 0.22965234375,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "pages-remoteclients--empty--mobile.png",
+      "baselinePath": "images/baseline/pages-remoteclients--empty--mobile.png",
+      "actualPath": "images/actual/pages-remoteclients--empty--mobile.png",
+      "diffPath": "images/diff/pages-remoteclients--empty--mobile.png",
+      "diffPixels": 40739,
+      "totalPixels": 329160,
+      "diffRatio": 0.12376655729736298,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "pages-remoteclients--empty.png",
+      "baselinePath": "images/baseline/pages-remoteclients--empty.png",
+      "actualPath": "images/actual/pages-remoteclients--empty.png",
+      "diffPath": "images/diff/pages-remoteclients--empty.png",
+      "diffPixels": 144326,
+      "totalPixels": 1024000,
+      "diffRatio": 0.140943359375,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "pages-remoteclients--locked-community--mobile.png",
+      "baselinePath": "images/baseline/pages-remoteclients--locked-community--mobile.png",
+      "actualPath": "images/actual/pages-remoteclients--locked-community--mobile.png",
+      "diffPath": "images/diff/pages-remoteclients--locked-community--mobile.png",
+      "diffPixels": 282002,
+      "totalPixels": 329160,
+      "diffRatio": 0.8567322882488759,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "pages-remoteclients--locked-community.png",
+      "baselinePath": "images/baseline/pages-remoteclients--locked-community.png",
+      "actualPath": "images/actual/pages-remoteclients--locked-community.png",
+      "diffPath": "images/diff/pages-remoteclients--locked-community.png",
+      "diffPixels": 481684,
+      "totalPixels": 1024000,
+      "diffRatio": 0.47039453125,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "pages-remoteclients--overview--mobile.png",
+      "baselinePath": "images/baseline/pages-remoteclients--overview--mobile.png",
+      "actualPath": "images/actual/pages-remoteclients--overview--mobile.png",
+      "diffPath": "images/diff/pages-remoteclients--overview--mobile.png",
+      "diffPixels": 67101,
+      "totalPixels": 329160,
+      "diffRatio": 0.20385526795479403,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "pages-remoteclients--overview.png",
+      "baselinePath": "images/baseline/pages-remoteclients--overview.png",
+      "actualPath": "images/actual/pages-remoteclients--overview.png",
+      "diffPath": "images/diff/pages-remoteclients--overview.png",
+      "diffPixels": 236544,
+      "totalPixels": 1024000,
+      "diffRatio": 0.231,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    }
+  ],
+  "added": [
+    {
+      "fileName": "components-appsidebar--community-plan--mobile.png",
+      "actualPath": "images/actual/components-appsidebar--community-plan--mobile.png"
+    },
+    {
+      "fileName": "components-appsidebar--community-plan.png",
+      "actualPath": "images/actual/components-appsidebar--community-plan.png"
+    },
+    {
+      "fileName": "components-plangate--with-preview--mobile.png",
+      "actualPath": "images/actual/components-plangate--with-preview--mobile.png"
+    },
+    {
+      "fileName": "components-plangate--with-preview.png",
+      "actualPath": "images/actual/components-plangate--with-preview.png"
+    },
+    {
+      "fileName": "components-tabcontentlayout--with-header--mobile.png",
+      "actualPath": "images/actual/components-tabcontentlayout--with-header--mobile.png"
+    },
+    {
+      "fileName": "components-tabcontentlayout--with-header.png",
+      "actualPath": "images/actual/components-tabcontentlayout--with-header.png"
+    },
+    {
+      "fileName": "pages-backup-plans-content--community-locked-runs--mobile.png",
+      "actualPath": "images/actual/pages-backup-plans-content--community-locked-runs--mobile.png"
+    },
+    {
+      "fileName": "pages-backup-plans-content--community-locked-runs.png",
+      "actualPath": "images/actual/pages-backup-plans-content--community-locked-runs.png"
+    },
+    {
+      "fileName": "pages-cloudstorage--locked-community--mobile.png",
+      "actualPath": "images/actual/pages-cloudstorage--locked-community--mobile.png"
+    },
+    {
+      "fileName": "pages-cloudstorage--locked-community.png",
+      "actualPath": "images/actual/pages-cloudstorage--locked-community.png"
+    },
+    {
+      "fileName": "pages-managedagents--locked-community--mobile.png",
+      "actualPath": "images/actual/pages-managedagents--locked-community--mobile.png"
+    },
+    {
+      "fileName": "pages-managedagents--locked-community.png",
+      "actualPath": "images/actual/pages-managedagents--locked-community.png"
+    }
+  ],
+  "removed": [
+    {
+      "fileName": "components-appsidebar--without-remote-clients--mobile.png",
+      "baselinePath": "images/baseline/components-appsidebar--without-remote-clients--mobile.png"
+    },
+    {
+      "fileName": "components-appsidebar--without-remote-clients.png",
+      "baselinePath": "images/baseline/components-appsidebar--without-remote-clients.png"
+    }
+  ],
+  "unchanged": [
+    {
+      "fileName": "backup-plans-reviewstep--agent-source-to-same-agent-repo--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-reviewstep--agent-source-to-same-agent-repo.png"
+    },
+    {
+      "fileName": "backup-plans-reviewstep--database-source-to-server-repo--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-reviewstep--database-source-to-server-repo.png"
+    },
+    {
+      "fileName": "backup-plans-reviewstep--docker-container-source-to-server-repo--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-reviewstep--docker-container-source-to-server-repo.png"
+    },
+    {
+      "fileName": "backup-plans-reviewstep--server-source-to-server-repo--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-reviewstep--server-source-to-server-repo.png"
+    },
+    {
+      "fileName": "backup-plans-reviewstep--ssh-source-to-same-ssh-repo--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-reviewstep--ssh-source-to-same-ssh-repo.png"
+    },
+    {
+      "fileName": "backup-plans-reviewstep--unsupported-different-agent-source--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-reviewstep--unsupported-different-agent-source.png"
+    },
+    {
+      "fileName": "backup-plans-reviewstep--unsupported-server-source-to-agent-repo--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-reviewstep--unsupported-server-source-to-agent-repo.png"
+    },
+    {
+      "fileName": "backup-plans-schedulestep--check-flag-conflict--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-schedulestep--check-flag-conflict.png"
+    },
+    {
+      "fileName": "backup-plans-scriptsstep--database-source-scripts--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-scriptsstep--database-source-scripts.png"
+    },
+    {
+      "fileName": "backup-plans-scriptsstep--plan-script-chains--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-scriptsstep--plan-script-chains.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--community-mixed-sources-locked--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--community-mixed-sources-locked.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--community-pro-source-kinds-locked--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--community-pro-source-kinds-locked.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--container-picker-detected--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--container-picker-detected.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--container-picker-empty--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--container-picker-empty.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--container-picker-queued-edit-mode--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--container-picker-queued-edit-mode.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-detected-sqlite-detail--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-detected-sqlite-detail.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-queued-multiple-selection--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-queued-multiple-selection.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-queued-multiple-sqlite-selection--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-queued-multiple-sqlite-selection.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-queued-selection--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-queued-selection-with-scan-open--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-queued-selection-with-scan-open.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-queued-selection.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-scan-detected--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-scan-detected.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-scan-endpoint-missing--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-scan-endpoint-missing.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-scan-failed--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-scan-failed.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-scan-multiple-sqlite-detected--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-scan-multiple-sqlite-detected.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-scan-multiple-types-detected--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-scan-multiple-types-detected.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-scan-nothing-found--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-scan-nothing-found.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-scan-remote-target--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-scan-remote-target.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-scan-returned-after-add--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-scan-returned-after-add.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-scan-single-sqlite-detected--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-scan-single-sqlite-detected.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-template-detail--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-template-detail.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-capture-mode-expanded--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-capture-mode-expanded.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-empty--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-empty.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-btrfs-snapshot--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-btrfs-snapshot.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-incomplete-zfs-snapshot--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-incomplete-zfs-snapshot.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-local-selections--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-local-selections.png"
+    },
+    {
+      "fileName": "backup-plans-sourcestep--btrfs-snapshot-source--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourcestep--btrfs-snapshot-source.png"
+    },
+    {
+      "fileName": "backup-plans-sourcestep--community-mixed-sources-locked--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourcestep--community-mixed-sources-locked.png"
+    },
+    {
+      "fileName": "backup-plans-sourcestep--database-dump-source--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourcestep--database-dump-source.png"
+    },
+    {
+      "fileName": "backup-plans-sourcestep--docker-container-source--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourcestep--docker-container-source.png"
+    },
+    {
+      "fileName": "backup-plans-sourcestep--empty-state--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourcestep--empty-state.png"
+    },
+    {
+      "fileName": "backup-plans-sourcestep--mixed-source-groups--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourcestep--mixed-source-groups.png"
+    },
+    {
+      "fileName": "backup-plans-sourcestep--single-local-group--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourcestep--single-local-group.png"
+    },
+    {
+      "fileName": "components-appsidebar--with-remote-clients--mobile.png"
+    },
+    {
+      "fileName": "components-backendtargetselect--locked-community--mobile.png"
+    },
+    {
+      "fileName": "components-backendtargetselect--locked-community.png"
+    },
+    {
+      "fileName": "components-backendtargetselect--login-form-selector--mobile.png"
+    },
+    {
+      "fileName": "components-backendtargetselect--login-form-selector.png"
+    },
+    {
+      "fileName": "components-backendtargetselect--remote-selected--mobile.png"
+    },
+    {
+      "fileName": "components-backendtargetselect--remote-selected.png"
+    },
+    {
+      "fileName": "components-backendtargetswitcher--compact--mobile.png"
+    },
+    {
+      "fileName": "components-backendtargetswitcher--compact.png"
+    },
+    {
+      "fileName": "components-backendtargetswitcher--local-selected--mobile.png"
+    },
+    {
+      "fileName": "components-backendtargetswitcher--local-selected.png"
+    },
+    {
+      "fileName": "components-backendtargetswitcher--locked-community--mobile.png"
+    },
+    {
+      "fileName": "components-backendtargetswitcher--locked-community.png"
+    },
+    {
+      "fileName": "components-backendtargetswitcher--locked-non-admin--mobile.png"
+    },
+    {
+      "fileName": "components-backendtargetswitcher--locked-non-admin.png"
+    },
+    {
+      "fileName": "components-backendtargetswitcher--remote-selected--mobile.png"
+    },
+    {
+      "fileName": "components-backendtargetswitcher--remote-selected.png"
+    },
+    {
+      "fileName": "components-backupjobstable--non-retryable-destructive-job--mobile.png"
+    },
+    {
+      "fileName": "components-backupjobstable--non-retryable-destructive-job.png"
+    },
+    {
+      "fileName": "components-backupjobstable--retryable-failed-backup-job--mobile.png"
+    },
+    {
+      "fileName": "components-backupjobstable--retryable-failed-backup-job.png"
+    },
+    {
+      "fileName": "components-backupjobstable--transport-modes--mobile.png"
+    },
+    {
+      "fileName": "components-backupjobstable--transport-modes.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--disabled-due-to-active-run--mobile.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--disabled-due-to-active-run.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--disabled-no-failed-repositories--mobile.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--disabled-no-failed-repositories.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--disabled-no-permission--mobile.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--disabled-no-permission.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--retry-in-progress--mobile.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--retry-in-progress.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--retryable-backup-plan-run--mobile.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--retryable-backup-plan-run.png"
+    },
+    {
+      "fileName": "components-backupplanselect--configured-plan--mobile.png"
+    },
+    {
+      "fileName": "components-backupplanselect--configured-plan.png"
+    },
+    {
+      "fileName": "components-backupplanselect--disabled-control--mobile.png"
+    },
+    {
+      "fileName": "components-backupplanselect--disabled-control.png"
+    },
+    {
+      "fileName": "components-backupplanselect--empty-selection--mobile.png"
+    },
+    {
+      "fileName": "components-backupplanselect--empty-selection.png"
+    },
+    {
+      "fileName": "components-backupplanselect--empty-state--mobile.png"
+    },
+    {
+      "fileName": "components-backupplanselect--empty-state.png"
+    },
+    {
+      "fileName": "components-betafeaturestab--current-beta-switches--mobile.png"
+    },
+    {
+      "fileName": "components-betafeaturestab--current-beta-switches.png"
+    },
+    {
+      "fileName": "components-checkwarningdialog--advanced-flags--mobile.png"
+    },
+    {
+      "fileName": "components-checkwarningdialog--advanced-flags.png"
+    },
+    {
+      "fileName": "components-checkwarningdialog--conflicting-advanced-flags--mobile.png"
+    },
+    {
+      "fileName": "components-checkwarningdialog--conflicting-advanced-flags.png"
+    },
+    {
+      "fileName": "components-commandpreview--local-backup-commands--mobile.png"
+    },
+    {
+      "fileName": "components-commandpreview--local-backup-commands.png"
+    },
+    {
+      "fileName": "components-cronbuilder--daily--mobile.png"
+    },
+    {
+      "fileName": "components-cronbuilder--daily.png"
+    },
+    {
+      "fileName": "components-cronbuilder--weekly--mobile.png"
+    },
+    {
+      "fileName": "components-cronbuilder--weekly.png"
+    },
+    {
+      "fileName": "components-destinationselect--disabled-control--mobile.png"
+    },
+    {
+      "fileName": "components-destinationselect--disabled-control.png"
+    },
+    {
+      "fileName": "components-destinationselect--remote-unavailable--mobile.png"
+    },
+    {
+      "fileName": "components-destinationselect--remote-unavailable.png"
+    },
+    {
+      "fileName": "components-destinationselect--repository-destinations--mobile.png"
+    },
+    {
+      "fileName": "components-destinationselect--repository-destinations.png"
+    },
+    {
+      "fileName": "components-diagnosticstcptargetfields--collapsed--mobile.png"
+    },
+    {
+      "fileName": "components-diagnosticstcptargetfields--collapsed.png"
+    },
+    {
+      "fileName": "components-diagnosticstcptargetfields--expanded-with-invalid-port--mobile.png"
+    },
+    {
+      "fileName": "components-diagnosticstcptargetfields--expanded-with-invalid-port.png"
+    },
+    {
+      "fileName": "components-emptystatecard--cloud-storage-no-match-fallback--mobile.png"
+    },
+    {
+      "fileName": "components-emptystatecard--cloud-storage-no-match-fallback.png"
+    },
+    {
+      "fileName": "components-emptystatecard--cloud-storage-no-match-with-search--mobile.png"
+    },
+    {
+      "fileName": "components-emptystatecard--cloud-storage-no-match-with-search.png"
+    },
+    {
+      "fileName": "components-emptystatecard--cloud-storage-no-remotes--mobile.png"
+    },
+    {
+      "fileName": "components-emptystatecard--cloud-storage-no-remotes.png"
+    },
+    {
+      "fileName": "components-emptystatecard--default--mobile.png"
+    },
+    {
+      "fileName": "components-emptystatecard--default.png"
+    },
+    {
+      "fileName": "components-emptystatecard--inline-api-tokens--mobile.png"
+    },
+    {
+      "fileName": "components-emptystatecard--inline-api-tokens.png"
+    },
+    {
+      "fileName": "components-fileexplorerdialog--managed-agent-browser--mobile.png"
+    },
+    {
+      "fileName": "components-fileexplorerdialog--managed-agent-browser.png"
+    },
+    {
+      "fileName": "components-fileexplorerdialog--rclone-remote-browser--mobile.png"
+    },
+    {
+      "fileName": "components-fileexplorerdialog--rclone-remote-browser.png"
+    },
+    {
+      "fileName": "components-lockerrordialog--break-lock-available--mobile.png"
+    },
+    {
+      "fileName": "components-lockerrordialog--break-lock-available.png"
+    },
+    {
+      "fileName": "components-lockerrordialog--lock-breaking-disabled--mobile.png"
+    },
+    {
+      "fileName": "components-lockerrordialog--lock-breaking-disabled.png"
+    },
+    {
+      "fileName": "components-lockerrordialog--maintenance-required--mobile.png"
+    },
+    {
+      "fileName": "components-lockerrordialog--maintenance-required.png"
+    },
+    {
+      "fileName": "components-monitoringreportstab--community-locked--mobile.png"
+    },
+    {
+      "fileName": "components-monitoringreportstab--community-locked.png"
+    },
+    {
+      "fileName": "components-monitoringreportstab--configured--mobile.png"
+    },
+    {
+      "fileName": "components-monitoringreportstab--configured.png"
+    },
+    {
+      "fileName": "components-packagestab--install-started-toast--mobile.png"
+    },
+    {
+      "fileName": "components-packagestab--install-started-toast.png"
+    },
+    {
+      "fileName": "components-packagestab--package-list--mobile.png"
+    },
+    {
+      "fileName": "components-packagestab--package-list.png"
+    },
+    {
+      "fileName": "components-pathselectorfield--custom-browse-action--mobile.png"
+    },
+    {
+      "fileName": "components-pathselectorfield--custom-browse-action.png"
+    },
+    {
+      "fileName": "components-pathselectorfield--disabled-control--mobile.png"
+    },
+    {
+      "fileName": "components-pathselectorfield--disabled-control.png"
+    },
+    {
+      "fileName": "components-pathselectorfield--filesystem-browse--mobile.png"
+    },
+    {
+      "fileName": "components-pathselectorfield--filesystem-browse.png"
+    },
+    {
+      "fileName": "components-planinfodrawer--community-upgrade-drawer--mobile.png"
+    },
+    {
+      "fileName": "components-planinfodrawer--community-upgrade-drawer.png"
+    },
+    {
+      "fileName": "components-planinfodrawer--dark-community-upgrade-drawer--mobile.png"
+    },
+    {
+      "fileName": "components-planinfodrawer--dark-community-upgrade-drawer.png"
+    },
+    {
+      "fileName": "components-prunerepositorydialog--retention-preview--mobile.png"
+    },
+    {
+      "fileName": "components-prunerepositorydialog--retention-preview.png"
+    },
+    {
+      "fileName": "components-rcloneproviderselect--narrow-width--mobile.png"
+    },
+    {
+      "fileName": "components-rcloneproviderselect--narrow-width.png"
+    },
+    {
+      "fileName": "components-rcloneproviderselect--provider-search--mobile.png"
+    },
+    {
+      "fileName": "components-rcloneproviderselect--provider-search.png"
+    },
+    {
+      "fileName": "components-rcloneremoteselect--configured-remote--mobile.png"
+    },
+    {
+      "fileName": "components-rcloneremoteselect--configured-remote.png"
+    },
+    {
+      "fileName": "components-rcloneremoteselect--disabled-control--mobile.png"
+    },
+    {
+      "fileName": "components-rcloneremoteselect--disabled-control.png"
+    },
+    {
+      "fileName": "components-rcloneremoteselect--empty-state--mobile.png"
+    },
+    {
+      "fileName": "components-rcloneremoteselect--empty-state.png"
+    },
+    {
+      "fileName": "components-repositorycard--default--mobile.png"
+    },
+    {
+      "fileName": "components-repositorycard--default.png"
+    },
+    {
+      "fileName": "components-repositorycard--enable-cloud-mirror--mobile.png"
+    },
+    {
+      "fileName": "components-repositorycard--enable-cloud-mirror-for-ssh--mobile.png"
+    },
+    {
+      "fileName": "components-repositorycard--enable-cloud-mirror-for-ssh.png"
+    },
+    {
+      "fileName": "components-repositorycard--enable-cloud-mirror.png"
+    },
+    {
+      "fileName": "components-repositorycard--managed-agent-mirror-pending--mobile.png"
+    },
+    {
+      "fileName": "components-repositorycard--managed-agent-mirror-pending.png"
+    },
+    {
+      "fileName": "components-repositorycard--rclone-failed--mobile.png"
+    },
+    {
+      "fileName": "components-repositorycard--rclone-failed.png"
+    },
+    {
+      "fileName": "components-repositorycard--rclone-hydration-required--mobile.png"
+    },
+    {
+      "fileName": "components-repositorycard--rclone-hydration-required.png"
+    },
+    {
+      "fileName": "components-repositorycard--rclone-scheduled--mobile.png"
+    },
+    {
+      "fileName": "components-repositorycard--rclone-scheduled-failed--mobile.png"
+    },
+    {
+      "fileName": "components-repositorycard--rclone-scheduled-failed.png"
+    },
+    {
+      "fileName": "components-repositorycard--rclone-scheduled.png"
+    },
+    {
+      "fileName": "components-repositorycard--rclone-synced--mobile.png"
+    },
+    {
+      "fileName": "components-repositorycard--rclone-synced.png"
+    },
+    {
+      "fileName": "components-repositorycard--without-break-lock-access--mobile.png"
+    },
+    {
+      "fileName": "components-repositorycard--without-break-lock-access.png"
+    },
+    {
+      "fileName": "components-repositoryinfodialog--failed-info-recovery--mobile.png"
+    },
+    {
+      "fileName": "components-repositoryinfodialog--failed-info-recovery-unavailable--mobile.png"
+    },
+    {
+      "fileName": "components-repositoryinfodialog--failed-info-recovery-unavailable.png"
+    },
+    {
+      "fileName": "components-repositoryinfodialog--failed-info-recovery.png"
+    },
+    {
+      "fileName": "components-repositorywipedialog--compact-failure-recovery--mobile.png"
+    },
+    {
+      "fileName": "components-repositorywipedialog--compact-failure-recovery.png"
+    },
+    {
+      "fileName": "components-repositorywipedialog--confirmation-ready--mobile.png"
+    },
+    {
+      "fileName": "components-repositorywipedialog--confirmation-ready.png"
+    },
+    {
+      "fileName": "components-repositorywipedialog--protected-archive-blocked--mobile.png"
+    },
+    {
+      "fileName": "components-repositorywipedialog--protected-archive-blocked.png"
+    },
+    {
+      "fileName": "components-retryjobdialog--backup-job-retry--mobile.png"
+    },
+    {
+      "fileName": "components-retryjobdialog--backup-job-retry.png"
+    },
+    {
+      "fileName": "components-retryjobdialog--backup-plan-run-retry--mobile.png"
+    },
+    {
+      "fileName": "components-retryjobdialog--backup-plan-run-retry.png"
+    },
+    {
+      "fileName": "components-richselect--default--mobile.png"
+    },
+    {
+      "fileName": "components-richselect--default.png"
+    },
+    {
+      "fileName": "components-richselect--narrow-width--mobile.png"
+    },
+    {
+      "fileName": "components-richselect--narrow-width.png"
+    },
+    {
+      "fileName": "components-richselect--search-enabled--mobile.png"
+    },
+    {
+      "fileName": "components-richselect--search-enabled.png"
+    },
+    {
+      "fileName": "components-runningcloudstoragejobssection--active-jobs--mobile.png"
+    },
+    {
+      "fileName": "components-runningcloudstoragejobssection--active-jobs.png"
+    },
+    {
+      "fileName": "components-schedulejobcard--disabled-manual-run--mobile.png"
+    },
+    {
+      "fileName": "components-schedulejobcard--disabled-manual-run-pending--mobile.png"
+    },
+    {
+      "fileName": "components-schedulejobcard--disabled-manual-run-pending.png"
+    },
+    {
+      "fileName": "components-schedulejobcard--disabled-manual-run.png"
+    },
+    {
+      "fileName": "components-schedulejobcard--enabled-schedule--mobile.png"
+    },
+    {
+      "fileName": "components-schedulejobcard--enabled-schedule.png"
+    },
+    {
+      "fileName": "components-shared-rclone-provider-icon--o-auth-provider-coverage--mobile.png"
+    },
+    {
+      "fileName": "components-shared-rclone-provider-icon--o-auth-provider-coverage.png"
+    },
+    {
+      "fileName": "components-sidebarupdatenotice--dark--mobile.png"
+    },
+    {
+      "fileName": "components-sidebarupdatenotice--dark.png"
+    },
+    {
+      "fileName": "components-sidebarupdatenotice--light--mobile.png"
+    },
+    {
+      "fileName": "components-sidebarupdatenotice--light.png"
+    },
+    {
+      "fileName": "components-sidebarupdatenotice--stacked-above-plan-badge--mobile.png"
+    },
+    {
+      "fileName": "components-sidebarupdatenotice--stacked-above-plan-badge.png"
+    },
+    {
+      "fileName": "components-sidebarupdatenotice--without-cta--mobile.png"
+    },
+    {
+      "fileName": "components-sidebarupdatenotice--without-cta.png"
+    },
+    {
+      "fileName": "components-sidebarupdatenotice--without-version--mobile.png"
+    },
+    {
+      "fileName": "components-sidebarupdatenotice--without-version.png"
+    },
+    {
+      "fileName": "components-terminallogviewer--unicode-json-log--mobile.png"
+    },
+    {
+      "fileName": "components-terminallogviewer--unicode-json-log.png"
+    },
+    {
+      "fileName": "components-wizard-cloud-mirror--cached-rclone-repository--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-cloud-mirror--cached-rclone-repository.png"
+    },
+    {
+      "fileName": "components-wizard-cloud-mirror--disabled-by-default--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-cloud-mirror--disabled-by-default.png"
+    },
+    {
+      "fileName": "components-wizard-cloud-mirror--enabled--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-cloud-mirror--enabled.png"
+    },
+    {
+      "fileName": "components-wizard-cloud-mirror--managed-agent-primary-enabled--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-cloud-mirror--managed-agent-primary-enabled.png"
+    },
+    {
+      "fileName": "components-wizard-cloud-mirror--requires-pro--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-cloud-mirror--requires-pro.png"
+    },
+    {
+      "fileName": "components-wizard-cloud-mirror--scheduled--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-cloud-mirror--scheduled.png"
+    },
+    {
+      "fileName": "components-wizard-cloud-mirror--ssh-primary-enabled--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-cloud-mirror--ssh-primary-enabled.png"
+    },
+    {
+      "fileName": "components-wizard-rclone-remote-dialog--borg-ui-o-auth-credentials-missing--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-rclone-remote-dialog--borg-ui-o-auth-credentials-missing.png"
+    },
+    {
+      "fileName": "components-wizard-rclone-remote-dialog--borg-ui-o-auth-credentials-partially-saved--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-rclone-remote-dialog--borg-ui-o-auth-credentials-partially-saved.png"
+    },
+    {
+      "fileName": "components-wizard-rclone-remote-dialog--borg-ui-o-auth-setup-missing--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-rclone-remote-dialog--borg-ui-o-auth-setup-missing.png"
+    },
+    {
+      "fileName": "components-wizard-rclone-remote-dialog--create-error--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-rclone-remote-dialog--create-error.png"
+    },
+    {
+      "fileName": "components-wizard-rclone-remote-dialog--create-managed-remote--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-rclone-remote-dialog--create-managed-remote.png"
+    },
+    {
+      "fileName": "components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-rclone-remote-dialog--custom-backend-remote.png"
+    },
+    {
+      "fileName": "components-wizard-rclone-remote-dialog--guided-google-drive-remote--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-rclone-remote-dialog--guided-google-drive-remote.png"
+    },
+    {
+      "fileName": "components-wizard-repository-location--agent-destination-empty--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-repository-location--agent-destination-empty.png"
+    },
+    {
+      "fileName": "components-wizard-repository-location--agent-destination-multiple--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-repository-location--agent-destination-multiple.png"
+    },
+    {
+      "fileName": "components-wizard-repository-location--agent-execution-with-ssh-repository--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-repository-location--agent-execution-with-ssh-repository.png"
+    },
+    {
+      "fileName": "components-wizard-repository-location--community-plan-locked-destinations--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-repository-location--community-plan-locked-destinations.png"
+    },
+    {
+      "fileName": "components-wizard-repository-location--direct-borg-2-rclone--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-repository-location--direct-borg-2-rclone.png"
+    },
+    {
+      "fileName": "components-wizard-repository-location--filesystem-destinations--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-repository-location--filesystem-destinations.png"
+    },
+    {
+      "fileName": "components-wizard-repository-location--ssh-destination--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-repository-location--ssh-destination-no-connections--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-repository-location--ssh-destination-no-connections.png"
+    },
+    {
+      "fileName": "components-wizard-repository-location--ssh-destination.png"
+    },
+    {
+      "fileName": "components-wizard-repository-review--cloud-mirror--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-repository-review--cloud-mirror.png"
+    },
+    {
+      "fileName": "components-wizard-repository-review--direct-borg-2-rclone--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-repository-review--direct-borg-2-rclone.png"
+    },
+    {
+      "fileName": "components-wizard-repository-review--managed-agent-plan-sources--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-repository-review--managed-agent-plan-sources.png"
+    },
+    {
+      "fileName": "pages-cloudstorage--add-guided-remote--mobile.png"
+    },
+    {
+      "fileName": "pages-cloudstorage--add-guided-remote-setup-missing--mobile.png"
+    },
+    {
+      "fileName": "pages-cloudstorage--add-guided-remote-setup-missing.png"
+    },
+    {
+      "fileName": "pages-cloudstorage--add-guided-remote.png"
+    },
+    {
+      "fileName": "pages-cloudstorage--browse-dialog--mobile.png"
+    },
+    {
+      "fileName": "pages-cloudstorage--browse-dialog.png"
+    },
+    {
+      "fileName": "pages-cloudstorage--delete-confirmation--mobile.png"
+    },
+    {
+      "fileName": "pages-cloudstorage--delete-confirmation.png"
+    },
+    {
+      "fileName": "pages-cloudstorage--editing-remote--mobile.png"
+    },
+    {
+      "fileName": "pages-cloudstorage--editing-remote.png"
+    },
+    {
+      "fileName": "pages-cloudstorage--empty--mobile.png"
+    },
+    {
+      "fileName": "pages-cloudstorage--empty.png"
+    },
+    {
+      "fileName": "pages-cloudstorage--overview--mobile.png"
+    },
+    {
+      "fileName": "pages-cloudstorage--overview.png"
+    },
+    {
+      "fileName": "pages-cloudstorage--unavailable--mobile.png"
+    },
+    {
+      "fileName": "pages-cloudstorage--unavailable.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-capabilitylaunchpad--empty-start--mobile.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-capabilitylaunchpad--empty-start.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-capabilitylaunchpad--mixed-adoption--mobile.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-capabilitylaunchpad--mixed-adoption.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-repositoryhealthpanel--mixed-warning-and-healthy--mobile.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-repositoryhealthpanel--mixed-warning-and-healthy.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-resourcegaugegrid--narrow-rail--mobile.png"
+    },
+    {
+      "fileName": "pages-dashboardv3-resourcegaugegrid--narrow-rail.png"
+    },
+    {
+      "fileName": "pages-managedagents--add-agent-details-step--mobile.png"
+    },
+    {
+      "fileName": "pages-managedagents--add-agent-details-step.png"
+    },
+    {
+      "fileName": "pages-managedagents--add-agent-install-command-step--mobile.png"
+    },
+    {
+      "fileName": "pages-managedagents--add-agent-install-command-step.png"
+    },
+    {
+      "fileName": "pages-managedagents--add-agent-localhost-warning--mobile.png"
+    },
+    {
+      "fileName": "pages-managedagents--add-agent-localhost-warning.png"
+    },
+    {
+      "fileName": "pages-managedagents--add-agent-platform-step--mobile.png"
+    },
+    {
+      "fileName": "pages-managedagents--add-agent-platform-step.png"
+    },
+    {
+      "fileName": "pages-managedagents--add-agent-root-service-user-warning--mobile.png"
+    },
+    {
+      "fileName": "pages-managedagents--add-agent-root-service-user-warning.png"
+    },
+    {
+      "fileName": "pages-managedagents--add-agent-waiting-for-connection--mobile.png"
+    },
+    {
+      "fileName": "pages-managedagents--add-agent-waiting-for-connection.png"
+    },
+    {
+      "fileName": "pages-managedagents--agent-diagnostics-partial-failure--mobile.png"
+    },
+    {
+      "fileName": "pages-managedagents--agent-diagnostics-partial-failure.png"
+    },
+    {
+      "fileName": "pages-managedagents--agent-diagnostics-success--mobile.png"
+    },
+    {
+      "fileName": "pages-managedagents--agent-diagnostics-success.png"
+    },
+    {
+      "fileName": "pages-managedagents--agent-diagnostics-timeout--mobile.png"
+    },
+    {
+      "fileName": "pages-managedagents--agent-diagnostics-timeout.png"
+    },
+    {
+      "fileName": "pages-managedagents--agent-job-logs--mobile.png"
+    },
+    {
+      "fileName": "pages-managedagents--agent-job-logs.png"
+    },
+    {
+      "fileName": "pages-managedagents--agent-logs--mobile.png"
+    },
+    {
+      "fileName": "pages-managedagents--agent-logs.png"
+    },
+    {
+      "fileName": "pages-managedagents--agent-reinstall-dialog-open--mobile.png"
+    },
+    {
+      "fileName": "pages-managedagents--agent-reinstall-dialog-open.png"
+    },
+    {
+      "fileName": "pages-managedagents--delete-confirmation--mobile.png"
+    },
+    {
+      "fileName": "pages-managedagents--delete-confirmation.png"
+    },
+    {
+      "fileName": "pages-managedagents--fleet-overview--mobile.png"
+    },
+    {
+      "fileName": "pages-managedagents--fleet-overview.png"
+    },
+    {
+      "fileName": "pages-managedagents--setup-help-details--mobile.png"
+    },
+    {
+      "fileName": "pages-managedagents--setup-help-details.png"
+    },
+    {
+      "fileName": "remote-machines-connectiondiagnosticsdialog--partial-tcp-failure--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-connectiondiagnosticsdialog--partial-tcp-failure.png"
+    },
+    {
+      "fileName": "remote-machines-connectiondiagnosticsdialog--success--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-connectiondiagnosticsdialog--success.png"
+    },
+    {
+      "fileName": "remote-machines-connectiondiagnosticsdialog--timeout--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-connectiondiagnosticsdialog--timeout.png"
+    },
+    {
+      "fileName": "remote-machines-deploykeydialog--custom-defaults--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-deploykeydialog--custom-defaults.png"
+    },
+    {
+      "fileName": "remote-machines-deploykeydialog--hetzner-defaults--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-deploykeydialog--hetzner-defaults.png"
+    },
+    {
+      "fileName": "remote-machines-deploykeydialog--preset-icon-colors--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-deploykeydialog--preset-icon-colors.png"
+    },
+    {
+      "fileName": "remote-machines-remotemachinecard--with-run-diagnostics--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-remotemachinecard--with-run-diagnostics.png"
+    },
+    {
+      "fileName": "remote-machines-remotemachinecard--without-run-diagnostics--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-remotemachinecard--without-run-diagnostics.png"
+    },
+    {
+      "fileName": "remote-machines-sshhostfield--invalid-host--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-sshhostfield--invalid-host.png"
+    }
+  ]
+}
