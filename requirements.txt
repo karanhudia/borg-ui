@@ -23,7 +23,7 @@ redis==7.4.0
 requests==2.34.2
 ruff==0.15.15
 sqlalchemy==2.0.50
-structlog==25.5.0
+structlog==26.1.0
 tzdata==2026.2
 uvicorn[standard]==0.48.0
 paho-mqtt==2.1.0
