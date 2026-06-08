@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Failing Preset Tests
+## Task 1: Failing Preset Tests
 
 **Files:**
 - Modify: `frontend/src/pages/__tests__/SSHConnectionsSingleKey.test.tsx`
@@ -73,7 +73,7 @@
   Expected before implementation: failures for the old Hetzner path, old icon
   color source, missing placeholders, and `md` modal width.
 
-### Task 2: Preset Metadata And Dialog Rendering
+## Task 2: Preset Metadata And Dialog Rendering
 
 **Files:**
 - Modify: `frontend/src/pages/ssh-connections-single-key/connectionPresets.ts`
@@ -117,7 +117,7 @@
 
   Change `ResponsiveDialog` from `maxWidth="md"` to `maxWidth="sm"`.
 
-### Task 3: Locale And Storybook Updates
+## Task 3: Locale And Storybook Updates
 
 **Files:**
 - Modify: `frontend/src/locales/en.json`
@@ -150,7 +150,7 @@
   mount_point: 'hetzner-storage-box',
   ```
 
-### Task 4: Docs Updates
+## Task 4: Docs Updates
 
 **Files:**
 - Modify: `docs/ssh-keys.md`
@@ -177,7 +177,7 @@
 
   Leave BorgBase `/./repo` repository/default path guidance unchanged.
 
-### Task 5: Validation And Handoff
+## Task 5: Validation And Handoff
 
 **Files:**
 - No additional source changes expected.

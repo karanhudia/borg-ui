@@ -10,13 +10,9 @@ import { ConnectionDiagnosticsDialog } from '../ssh-connections-single-key/dialo
 import { DeployKeyDialog } from '../ssh-connections-single-key/dialogs/DeployKeyDialog'
 import type { DeployConnectionPayload } from '../ssh-connections-single-key/types'
 
-const remoteMachineSetupPresetBrandColors = {
-  custom: '#64748B',
-  linux: '#FCC624',
-  borgbase: '#00DD00',
-  hetzner: '#D50C2D',
-  nas: '#B5B5B6',
-} as const
+const remoteMachineSetupPresetBrandColors = Object.fromEntries(
+  remoteMachineSetupPresets.map((preset) => [preset.id, preset.brandColor])
+) as Record<(typeof remoteMachineSetupPresets)[number]['id'], string>
 
 function DeployDialogHarness({
   initialForm,
