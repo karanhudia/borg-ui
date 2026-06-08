@@ -10,7 +10,7 @@ class Settings(BaseSettings):
 
     # Application settings
     app_name: str = "Borg Web UI"
-    app_version: str = "2.2.2"
+    app_version: str = "2.2.3"
     debug: bool = False
     environment: str = "production"  # Default to production for safety
 
