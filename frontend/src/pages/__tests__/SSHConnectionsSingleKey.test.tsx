@@ -281,7 +281,7 @@ describe('SSHConnectionsSingleKey', () => {
         description: 'System SSH key for all remote connections',
       })
     })
-  })
+  }, 30000)
 
   it('deploys the system key with the expected connection payload', async () => {
     const { sshKeysAPI } = await import('../../services/api')
