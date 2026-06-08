@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, waitFor as rtlWaitFor, within } from '@testing-library/react'
-import { getWizardStepColor } from '../../components/shared/wizardStepColors'
 import i18n from '../../i18n'
 import { renderWithProviders, screen, userEvent, waitFor } from '../../test/test-utils'
 import SSHConnectionsSingleKey from '../SSHConnectionsSingleKey'
@@ -11,14 +10,21 @@ import { ConnectionDiagnosticsDialog } from '../ssh-connections-single-key/dialo
 import { DeployKeyDialog } from '../ssh-connections-single-key/dialogs/DeployKeyDialog'
 import type { DeployConnectionPayload } from '../ssh-connections-single-key/types'
 
-async function chooseDeployPreset(dialog: HTMLElement, name: RegExp) {
-  fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: /setup preset/i }))
-  const listbox = await screen.findByRole('listbox')
-  fireEvent.click(within(listbox).getByRole('option', { name }))
-  await rtlWaitFor(() => expect(screen.queryByRole('listbox')).not.toBeInTheDocument())
-}
+const remoteMachineSetupPresetBrandColors = {
+  custom: '#64748B',
+  linux: '#FCC624',
+  borgbase: '#00DD00',
+  hetzner: '#D50C2D',
+  nas: '#B5B5B6',
+} as const
 
-function DeployDialogHarness({ initialForm }: { initialForm: DeployConnectionPayload }) {
+function DeployDialogHarness({
+  initialForm,
+  onDeploy,
+}: {
+  initialForm: DeployConnectionPayload
+  onDeploy?: (form: DeployConnectionPayload) => void
+}) {
   const [open, setOpen] = useState(true)
   const [connectionForm, setConnectionForm] = useState(initialForm)
   const [hostError, setHostError] = useState<string>()
@@ -33,7 +39,7 @@ function DeployDialogHarness({ initialForm }: { initialForm: DeployConnectionPay
       hostError={hostError}
       setHostError={setHostError}
       pending={false}
-      onDeploy={() => {}}
+      onDeploy={() => onDeploy?.(connectionForm)}
     />
   )
 }
@@ -324,77 +330,118 @@ describe('SSHConnectionsSingleKey', () => {
     })
   }, 30000)
 
-  it('applies the Hetzner Storage Box preset when deploying the system key', async () => {
-    const { sshKeysAPI } = await import('../../services/api')
-
-    renderWithProviders(<SSHConnectionsSingleKey />)
-
-    await screen.findByText('Remote Machines')
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: /automatically deploy ssh key using password authentication/i,
-      })
+  it('renders and deploys the Hetzner Storage Box preset with provider-specific defaults', async () => {
+    const onDeploy = vi.fn()
+    renderWithProviders(
+      <DeployDialogHarness
+        initialForm={{
+          ...createConnectionForm(),
+          port: 23,
+          use_sftp_mode: true,
+          default_path: '/home',
+          ssh_path_prefix: '',
+          mount_point: 'hetzner-storage-box',
+        }}
+        onDeploy={onDeploy}
+      />
     )
     const dialog = await screen.findByRole('dialog', { name: /deploy ssh key to server/i })
-    await chooseDeployPreset(dialog, /hetzner storage box/i)
-    fireEvent.change(within(dialog).getByLabelText(/^host$/i), {
+
+    expect(within(dialog).getByRole('combobox', { name: /setup preset/i })).toHaveTextContent(
+      /hetzner storage box/i
+    )
+    expect(within(dialog).getByRole('textbox', { name: /^host$/i })).toHaveAttribute(
+      'placeholder',
+      'u123456.your-storagebox.de'
+    )
+    expect(within(dialog).getByRole('textbox', { name: /^username$/i })).toHaveAttribute(
+      'placeholder',
+      'u123456'
+    )
+    expect(within(dialog).getByLabelText(/^port$/i)).toHaveValue(23)
+    expect(within(dialog).getByRole('checkbox', { name: /use sftp mode/i })).toBeChecked()
+    expect(within(dialog).getByRole('textbox', { name: /^default path/i })).toHaveValue('/home')
+    expect(within(dialog).getByLabelText(/mount point/i)).toHaveValue('hetzner-storage-box')
+
+    fireEvent.change(within(dialog).getByRole('textbox', { name: /^host$/i }), {
       target: { value: 'u123456.your-storagebox.de' },
     })
-    fireEvent.change(within(dialog).getByLabelText(/^username$/i), {
+    fireEvent.change(within(dialog).getByRole('textbox', { name: /^username$/i }), {
       target: { value: 'u123456' },
     })
     fireEvent.change(within(dialog).getByLabelText(/^password$/i), {
       target: { value: 'secret' },
     })
+
     const deployButton = within(dialog).getByRole('button', { name: /^deploy key$/i })
     await rtlWaitFor(() => expect(deployButton).not.toBeDisabled())
     fireEvent.click(deployButton)
 
-    await rtlWaitFor(() => expect(sshKeysAPI.deploySSHKey).toHaveBeenCalledTimes(1))
-    expect(sshKeysAPI.deploySSHKey).toHaveBeenCalledWith(7, {
+    await rtlWaitFor(() => expect(onDeploy).toHaveBeenCalledTimes(1))
+    expect(onDeploy).toHaveBeenCalledWith({
       host: 'u123456.your-storagebox.de',
       username: 'u123456',
       port: 23,
       password: 'secret',
       use_sftp_mode: true,
-      default_path: '/./borg-repository',
+      default_path: '/home',
       ssh_path_prefix: '',
-      mount_point: 'hetzner',
+      mount_point: 'hetzner-storage-box',
     })
   }, 30000)
 
-  it('keeps manual edits after applying the NAS preset', async () => {
-    const { sshKeysAPI } = await import('../../services/api')
-
-    renderWithProviders(<SSHConnectionsSingleKey />)
-
-    await screen.findByText('Remote Machines')
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: /automatically deploy ssh key using password authentication/i,
-      })
+  it('keeps manual edits when starting from the NAS preset defaults', async () => {
+    const onDeploy = vi.fn()
+    renderWithProviders(
+      <DeployDialogHarness
+        initialForm={{
+          ...createConnectionForm(),
+          port: 22,
+          use_sftp_mode: false,
+          default_path: '/backups',
+          ssh_path_prefix: '/volume1',
+          mount_point: 'nas',
+        }}
+        onDeploy={onDeploy}
+      />
     )
     const dialog = await screen.findByRole('dialog', { name: /deploy ssh key to server/i })
-    await chooseDeployPreset(dialog, /^nas\b/i)
-    fireEvent.change(within(dialog).getByLabelText(/^host$/i), {
-      target: { value: 'nas.local' },
+
+    expect(within(dialog).getByRole('combobox', { name: /setup preset/i })).toHaveTextContent(
+      /^nas/i
+    )
+    expect(within(dialog).getByRole('textbox', { name: /^host$/i })).toHaveAttribute(
+      'placeholder',
+      'diskstation.local'
+    )
+    fireEvent.change(within(dialog).getByRole('textbox', { name: /^default path/i }), {
+      target: { value: '/backups/repo' },
     })
-    fireEvent.change(within(dialog).getByLabelText(/^username$/i), {
+    expect(within(dialog).getByRole('textbox', { name: /^default path/i })).toHaveValue(
+      '/backups/repo'
+    )
+    expect(within(dialog).getByRole('textbox', { name: /^ssh path prefix/i })).toHaveValue(
+      '/volume1'
+    )
+    expect(within(dialog).getByRole('textbox', { name: /^mount point/i })).toHaveValue('nas')
+
+    fireEvent.change(within(dialog).getByRole('textbox', { name: /^host$/i }), {
+      target: { value: 'diskstation.local' },
+    })
+    fireEvent.change(within(dialog).getByRole('textbox', { name: /^username$/i }), {
       target: { value: 'backup' },
     })
     fireEvent.change(within(dialog).getByLabelText(/^password$/i), {
       target: { value: 'secret' },
     })
-    fireEvent.change(within(dialog).getByLabelText(/default path/i), {
-      target: { value: '/backups/repo' },
-    })
+
     const deployButton = within(dialog).getByRole('button', { name: /^deploy key$/i })
     await rtlWaitFor(() => expect(deployButton).not.toBeDisabled())
     fireEvent.click(deployButton)
 
-    await rtlWaitFor(() => expect(sshKeysAPI.deploySSHKey).toHaveBeenCalledTimes(1))
-    expect(sshKeysAPI.deploySSHKey).toHaveBeenCalledWith(7, {
-      host: 'nas.local',
+    await rtlWaitFor(() => expect(onDeploy).toHaveBeenCalledTimes(1))
+    expect(onDeploy).toHaveBeenCalledWith({
+      host: 'diskstation.local',
       username: 'backup',
       port: 22,
       password: 'secret',
@@ -405,93 +452,47 @@ describe('SSHConnectionsSingleKey', () => {
     })
   }, 30000)
 
-  it('resets deploy defaults after returning to the Custom setup preset', async () => {
-    renderWithProviders(<SSHConnectionsSingleKey />)
+  it('renders Custom setup with standard deploy defaults', async () => {
+    renderWithProviders(<DeployDialogHarness initialForm={createConnectionForm()} />)
 
-    await screen.findByText('Remote Machines')
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: /automatically deploy ssh key using password authentication/i,
-      })
-    )
     const dialog = await screen.findByRole('dialog', { name: /deploy ssh key to server/i })
-    fireEvent.change(within(dialog).getByLabelText(/^host$/i), {
-      target: { value: 'backup.example.com' },
-    })
-    fireEvent.change(within(dialog).getByLabelText(/^password$/i), {
-      target: { value: 'secret' },
-    })
-    await chooseDeployPreset(dialog, /borgbase/i)
-    await chooseDeployPreset(dialog, /custom setup/i)
 
-    expect(within(dialog).getByLabelText(/^host$/i)).toHaveValue('backup.example.com')
-    expect(within(dialog).getByLabelText(/^password$/i)).toHaveValue('secret')
+    expect(within(dialog).getByRole('combobox', { name: /setup preset/i })).toHaveTextContent(
+      /custom setup/i
+    )
     expect(within(dialog).getByLabelText(/^port$/i)).toHaveValue(22)
     expect(within(dialog).getByRole('checkbox', { name: /use sftp mode/i })).toBeChecked()
-    expect(within(dialog).getByLabelText(/default path/i)).toHaveValue('')
+    expect(within(dialog).getByRole('textbox', { name: /^default path/i })).toHaveValue('')
     expect(within(dialog).getByLabelText(/mount point/i)).toHaveValue('')
   }, 30000)
 
-  it('shows the Custom setup preset when reopened with reset deploy defaults', async () => {
-    function DeployDialogHarness() {
-      const [open, setOpen] = useState(true)
-      const [connectionForm, setConnectionForm] = useState<DeployConnectionPayload>({
-        ...createConnectionForm(),
-        port: 23,
-        use_sftp_mode: true,
-        default_path: '/./borg-repository',
-        ssh_path_prefix: '',
-        mount_point: 'hetzner',
-      })
-      const [hostError, setHostError] = useState<string>()
+  it('selects the matching setup preset for corrected Hetzner and reset defaults', async () => {
+    const { unmount } = renderWithProviders(
+      <DeployDialogHarness
+        initialForm={{
+          ...createConnectionForm(),
+          port: 23,
+          use_sftp_mode: true,
+          default_path: '/home',
+          ssh_path_prefix: '',
+          mount_point: 'hetzner-storage-box',
+        }}
+      />
+    )
 
-      return (
-        <>
-          <button
-            type="button"
-            onClick={() => {
-              setConnectionForm(createConnectionForm())
-              setOpen(true)
-            }}
-          >
-            Reopen deploy dialog
-          </button>
-          <DeployKeyDialog
-            t={i18n.t.bind(i18n)}
-            open={open}
-            setOpen={setOpen}
-            connectionForm={connectionForm}
-            setConnectionForm={setConnectionForm}
-            hostError={hostError}
-            setHostError={setHostError}
-            pending={false}
-            onDeploy={() => {}}
-          />
-        </>
-      )
-    }
-
-    renderWithProviders(<DeployDialogHarness />)
-
-    const dialog = await screen.findByRole('dialog', { name: /deploy ssh key to server/i })
-    expect(within(dialog).getByRole('combobox', { name: /setup preset/i })).toHaveTextContent(
+    const hetznerDialog = await screen.findByRole('dialog', { name: /deploy ssh key to server/i })
+    expect(within(hetznerDialog).getByRole('combobox', { name: /setup preset/i })).toHaveTextContent(
       /hetzner storage box/i
     )
 
-    fireEvent.click(within(dialog).getByRole('button', { name: /cancel/i }))
-    await rtlWaitFor(() =>
-      expect(
-        screen.queryByRole('dialog', { name: /deploy ssh key to server/i })
-      ).not.toBeInTheDocument()
+    unmount()
+    renderWithProviders(<DeployDialogHarness initialForm={createConnectionForm()} />)
+
+    const customDialog = await screen.findByRole('dialog', { name: /deploy ssh key to server/i })
+    expect(within(customDialog).getByRole('combobox', { name: /setup preset/i })).toHaveTextContent(
+      /custom setup/i
     )
-
-    fireEvent.click(screen.getByRole('button', { name: /reopen deploy dialog/i }))
-    const reopenedDialog = await screen.findByRole('dialog', { name: /deploy ssh key to server/i })
-
-    expect(
-      within(reopenedDialog).getByRole('combobox', { name: /setup preset/i })
-    ).toHaveTextContent(/custom setup/i)
-    expect(within(reopenedDialog).getByLabelText(/^port$/i)).toHaveValue(22)
+    expect(within(customDialog).getByLabelText(/^port$/i)).toHaveValue(22)
   }, 30000)
 
   it('renders deploy preset icons with their configured colors', async () => {
@@ -504,9 +505,9 @@ describe('SSHConnectionsSingleKey', () => {
           ...createConnectionForm(),
           port: 23,
           use_sftp_mode: true,
-          default_path: '/./borg-repository',
+          default_path: '/home',
           ssh_path_prefix: '',
-          mount_point: 'hetzner',
+          mount_point: 'hetzner-storage-box',
         }}
       />
     )
@@ -514,7 +515,7 @@ describe('SSHConnectionsSingleKey', () => {
     const dialog = await screen.findByRole('dialog', { name: /deploy ssh key to server/i })
     const selectedIcon = within(dialog).getByTestId('remote-machine-preset-icon-hetzner')
     expect(selectedIcon).toHaveStyle({
-      color: getWizardStepColor(selectedPreset!.colorKey, 'light'),
+      color: remoteMachineSetupPresetBrandColors.hetzner,
     })
 
     fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: /setup preset/i }))
@@ -522,10 +523,18 @@ describe('SSHConnectionsSingleKey', () => {
 
     remoteMachineSetupPresets.forEach((preset) => {
       expect(within(listbox).getByTestId(`remote-machine-preset-icon-${preset.id}`)).toHaveStyle({
-        color: getWizardStepColor(preset.colorKey, 'light'),
+        color: remoteMachineSetupPresetBrandColors[preset.id],
       })
     })
   }, 30000)
+
+  it('renders the deploy preset dialog at a compact desktop width', async () => {
+    renderWithProviders(<DeployDialogHarness initialForm={createConnectionForm()} />)
+
+    const dialog = await screen.findByRole('dialog', { name: /deploy ssh key to server/i })
+
+    expect(dialog).toHaveClass('MuiDialog-paperWidthSm')
+  })
 
   it('tests and adds a manual connection with the expected payload', async () => {
     const { sshKeysAPI } = await import('../../services/api')

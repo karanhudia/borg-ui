@@ -59,9 +59,9 @@ export const HetznerDefaults: Story = {
       ...createConnectionForm(),
       port: 23,
       use_sftp_mode: true,
-      default_path: '/./borg-repository',
+      default_path: '/home',
       ssh_path_prefix: '',
-      mount_point: 'hetzner',
+      mount_point: 'hetzner-storage-box',
     },
   },
 }
@@ -72,9 +72,9 @@ export const PresetIconColors: Story = {
       ...createConnectionForm(),
       port: 23,
       use_sftp_mode: true,
-      default_path: '/./borg-repository',
+      default_path: '/home',
       ssh_path_prefix: '',
-      mount_point: 'hetzner',
+      mount_point: 'hetzner-storage-box',
     },
   },
 }
