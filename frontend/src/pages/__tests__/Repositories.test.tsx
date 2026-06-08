@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { renderWithProviders } from '../../test/test-utils'
@@ -229,7 +229,7 @@ vi.mock('../repositories-page/RepositoryGroups', () => ({
     }
 
     return (
-      <>
+      <div data-testid="repository-list">
         <span>{repositories[0].name}</span>
         <button type="button" onClick={() => onCheck(repositories[0])}>
           start check
@@ -250,7 +250,7 @@ vi.mock('../repositories-page/RepositoryGroups', () => ({
         <button type="button" onClick={() => onJobCompleted(1)}>
           complete check
         </button>
-      </>
+      </div>
     )
   },
 }))
@@ -408,6 +408,9 @@ describe('Repositories', () => {
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith('permission denied')
     })
-    expect(screen.getByText('Broken Repo')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(
+      within(screen.getByTestId('repository-list')).getByText('Broken Repo')
+    ).toBeInTheDocument()
   })
 })

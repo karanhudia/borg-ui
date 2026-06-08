@@ -2013,6 +2013,90 @@ class TestRepositoriesDelete:
             is not None
         )
 
+    def test_permanent_delete_rejects_confirmation_mismatch_and_keeps_data(
+        self, test_client: TestClient, admin_headers, test_db, tmp_path
+    ):
+        """Typed confirmation must match before permanent deletion can run."""
+        repo_path = tmp_path / "delete-confirmation-mismatch"
+        _create_borg_like_repository_dir(repo_path)
+        repo = Repository(
+            name="Confirm Me",
+            path=str(repo_path),
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+            execution_target="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+        repo_id = repo.id
+
+        response = test_client.post(
+            f"/api/repositories/{repo_id}/permanent-delete",
+            json={"confirmation_phrase": "Wrong Name", "understood": True},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        assert repo_path.exists()
+        assert (
+            test_db.query(Repository).filter(Repository.id == repo_id).first()
+            is not None
+        )
+
+        response = test_client.post(
+            f"/api/repositories/{repo_id}/permanent-delete",
+            json={"confirmation_phrase": "Confirm Me", "understood": False},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        assert repo_path.exists()
+        assert (
+            test_db.query(Repository).filter(Repository.id == repo_id).first()
+            is not None
+        )
+
+    def test_permanent_delete_rejects_symlinked_parent_paths(
+        self, test_client: TestClient, admin_headers, test_db, tmp_path
+    ):
+        """Permanent deletion rejects paths redirected through symlinked parents."""
+        real_parent = tmp_path / "real-parent"
+        repo_path = real_parent / "repo"
+        _create_borg_like_repository_dir(repo_path)
+        symlink_parent = tmp_path / "linked-parent"
+        try:
+            symlink_parent.symlink_to(real_parent, target_is_directory=True)
+        except OSError as exc:
+            pytest.skip(f"directory symlinks are unavailable: {exc}")
+
+        repo = Repository(
+            name="Linked Parent",
+            path=str(symlink_parent / "repo"),
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+            execution_target="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+        repo_id = repo.id
+
+        response = test_client.post(
+            f"/api/repositories/{repo_id}/permanent-delete",
+            json={"confirmation_phrase": "Linked Parent", "understood": True},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        assert repo_path.exists()
+        assert (
+            test_db.query(Repository).filter(Repository.id == repo_id).first()
+            is not None
+        )
+
     def test_permanent_delete_rejects_non_local_repositories(
         self, test_client: TestClient, admin_headers, test_db
     ):

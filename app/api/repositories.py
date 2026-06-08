@@ -334,19 +334,28 @@ def _permanent_delete_target(repository: Repository) -> FilesystemPath:
         )
 
     resolved_target = target.resolve()
+    if resolved_target != target:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.permanentDeleteUnsafePath"},
+        )
+
     if resolved_target.parent == resolved_target or len(resolved_target.parts) <= 2:
         raise HTTPException(
             status_code=400,
             detail={"key": "backend.errors.repo.permanentDeleteUnsafePath"},
         )
 
-    if not (target / "config").is_file() or not (target / "data").is_dir():
+    if (
+        not (resolved_target / "config").is_file()
+        or not (resolved_target / "data").is_dir()
+    ):
         raise HTTPException(
             status_code=400,
             detail={"key": "backend.errors.repo.permanentDeleteNotBorgRepository"},
         )
 
-    return target
+    return resolved_target
 
 
 # Helper function to get standard SSH options

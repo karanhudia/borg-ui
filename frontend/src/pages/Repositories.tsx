@@ -300,6 +300,7 @@ export default function Repositories() {
         translateBackendKey(error.response?.data?.detail) ||
           t('repositories.toasts.permanentDeleteFailed')
       )
+      setPermanentlyDeletingRepository(null)
     },
   })
 
