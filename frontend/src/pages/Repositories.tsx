@@ -87,7 +87,11 @@ function removeRepositoryFromResponse(data: unknown, repositoryId: number): unkn
     return data.filter((repository) => repository?.id !== repositoryId)
   }
 
-  if (data && typeof data === 'object' && Array.isArray((data as { repositories?: unknown }).repositories)) {
+  if (
+    data &&
+    typeof data === 'object' &&
+    Array.isArray((data as { repositories?: unknown }).repositories)
+  ) {
     return {
       ...data,
       repositories: (data as { repositories: Repository[] }).repositories.filter(

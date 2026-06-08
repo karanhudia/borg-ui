@@ -51,7 +51,9 @@ export default function PermanentDeleteRepositoryDialog({
         variant="contained"
         onClick={() => onConfirm(confirmationPhrase)}
         disabled={!isConfirmed || isPending}
-        startIcon={isPending ? <CircularProgress color="inherit" size={16} /> : <FolderX size={16} />}
+        startIcon={
+          isPending ? <CircularProgress color="inherit" size={16} /> : <FolderX size={16} />
+        }
       >
         {isPending
           ? t('repositories.permanentDeleteDialog.deleting')
