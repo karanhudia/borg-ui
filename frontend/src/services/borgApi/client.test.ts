@@ -22,20 +22,28 @@ describe('BorgApiClient', () => {
   })
 
   it('uses the active remote backend API base on httpClient requests', async () => {
-    const { createRemoteBackendClient, setActiveBackendTarget, resetRemoteBackendStateForTests } =
-      await import('../remoteBackends/storage')
+    const {
+      createRemoteBackendClient,
+      setActiveBackendTarget,
+      setBackendAccessToken,
+      resetRemoteBackendStateForTests,
+    } = await import('../remoteBackends/storage')
     resetRemoteBackendStateForTests()
+    localStorage.setItem('access_token', 'local-token')
     const remote = createRemoteBackendClient({
       name: 'Remote',
       backendUrl: 'https://remote.example.com',
     })
     setActiveBackendTarget(remote.id)
+    setBackendAccessToken('remote-token', remote.id)
 
     const clientModule = await import('./client')
     const mock = new MockAdapter(clientModule.httpClient)
 
     mock.onGet('/test').reply((config) => {
-      expect(config.baseURL).toBe('https://remote.example.com/api')
+      expect(config.baseURL).toBe(`/api/remote-clients/${remote.id}/proxy/api`)
+      expect(config.headers?.['X-Borg-Authorization']).toBe('Bearer local-token')
+      expect(config.headers?.['X-Borg-Remote-Authorization']).toBe('Bearer remote-token')
       return [200, { success: true }]
     })
 

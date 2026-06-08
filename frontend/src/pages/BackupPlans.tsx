@@ -859,6 +859,9 @@ export default function BackupPlans() {
         startingPlanId={startingPlanId}
         highlightedPlanId={highlightedPlanId}
         canUseMultiRepository={canUseMultiRepository}
+        canUseManagedAgents={canUseManagedAgents}
+        canUseDatabaseDiscovery={canUseDatabaseDiscovery}
+        canUseContainerBackups={canUseContainerBackups}
         cancellingRunId={cancellingRunId}
         runPending={runMutation.isPending}
         togglePending={toggleMutation.isPending}

@@ -19,7 +19,7 @@ import LicensingTab from '../components/LicensingTab'
 import BetaFeaturesTab from '../components/BetaFeaturesTab'
 import MqttSettingsTab from '../components/MqttSettingsTab'
 import UsersTab from '../components/UsersTab'
-import SettingsTabContent from '../components/SettingsTabContent'
+import TabContentLayout from '../components/shared/TabContentLayout'
 import MonitoringReportsTab from '../components/MonitoringReportsTab'
 import Scripts from './Scripts'
 import Activity from './Activity'
@@ -121,9 +121,9 @@ const Settings: React.FC = () => {
     <Box>
       {/* Account Tab */}
       {currentTabId === 'account' && (
-        <SettingsTabContent>
+        <TabContentLayout>
           <AccountTab />
-        </SettingsTabContent>
+        </TabContentLayout>
       )}
 
       {/* Appearance Tab */}
@@ -131,107 +131,107 @@ const Settings: React.FC = () => {
 
       {/* Preferences Tab */}
       {currentTabId === 'preferences' && (
-        <SettingsTabContent>
+        <TabContentLayout>
           <PreferencesTab />
-        </SettingsTabContent>
+        </TabContentLayout>
       )}
 
       {/* Notifications Tab */}
       {currentTabId === 'notifications' && (
-        <SettingsTabContent>
+        <TabContentLayout>
           <NotificationsTab />
-        </SettingsTabContent>
+        </TabContentLayout>
       )}
 
       {/* Licensing Tab - Admin Only */}
       {currentTabId === 'licensing' && canManageLicensing && (
-        <SettingsTabContent>
+        <TabContentLayout>
           <LicensingTab />
-        </SettingsTabContent>
+        </TabContentLayout>
       )}
 
       {/* System Settings Tab - Admin Only */}
       {currentTabId === 'system' && canManageSystem && (
-        <SettingsTabContent>
+        <TabContentLayout>
           <SystemSettingsTab />
-        </SettingsTabContent>
+        </TabContentLayout>
       )}
 
       {/* Monitoring & Reports Tab - Admin Only */}
       {currentTabId === 'monitoring' && canManageSystem && (
-        <SettingsTabContent>
+        <TabContentLayout>
           <MonitoringReportsTab />
-        </SettingsTabContent>
+        </TabContentLayout>
       )}
 
       {/* MQTT Settings Tab - Admin Only */}
       {currentTabId === 'mqtt' && canManageMqtt && mqttBetaEnabled && (
-        <SettingsTabContent>
+        <TabContentLayout>
           <MqttSettingsTab />
-        </SettingsTabContent>
+        </TabContentLayout>
       )}
 
       {/* Beta Features Tab - Admin Only */}
       {currentTabId === 'beta' && canManageBeta && (
-        <SettingsTabContent>
+        <TabContentLayout>
           <BetaFeaturesTab />
-        </SettingsTabContent>
+        </TabContentLayout>
       )}
 
       {/* Cache Management Tab - Admin Only */}
       {currentTabId === 'cache' && canManageCache && (
-        <SettingsTabContent>
+        <TabContentLayout>
           <CacheManagementTab />
-        </SettingsTabContent>
+        </TabContentLayout>
       )}
 
       {/* Log Management Tab - Admin Only */}
       {currentTabId === 'logs' && canManageLogs && (
-        <SettingsTabContent>
+        <TabContentLayout>
           <LogManagementTab />
-        </SettingsTabContent>
+        </TabContentLayout>
       )}
 
       {/* Mounts Management Tab */}
       {currentTabId === 'mounts' && canManageMounts && (
-        <SettingsTabContent>
+        <TabContentLayout>
           <MountsManagementTab />
-        </SettingsTabContent>
+        </TabContentLayout>
       )}
 
       {/* System Packages Tab - Admin Only */}
       {currentTabId === 'packages' && canManagePackages && (
-        <SettingsTabContent>
+        <TabContentLayout>
           <PackagesTab />
-        </SettingsTabContent>
+        </TabContentLayout>
       )}
 
       {/* Scripts Tab */}
       {currentTabId === 'scripts' && canManageScripts && (
-        <SettingsTabContent>
+        <TabContentLayout>
           <Scripts />
-        </SettingsTabContent>
+        </TabContentLayout>
       )}
 
       {/* Export/Import Tab */}
       {currentTabId === 'export' && canManageExportImport && (
-        <SettingsTabContent>
+        <TabContentLayout>
           <ExportImportTab />
-        </SettingsTabContent>
+        </TabContentLayout>
       )}
 
       {/* User Management Tab - Admin Only */}
       {currentTabId === 'users' && canManageUsers && (
-        <SettingsTabContent>
+        <TabContentLayout>
           <UsersTab />
-        </SettingsTabContent>
+        </TabContentLayout>
       )}
 
       {/* Activity Tab */}
       {currentTabId === 'activity' && (
-        <SettingsTabContent>
+        <TabContentLayout>
           <Activity />
-        </SettingsTabContent>
+        </TabContentLayout>
       )}
     </Box>
   )

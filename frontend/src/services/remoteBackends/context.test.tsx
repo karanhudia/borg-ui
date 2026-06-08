@@ -100,6 +100,7 @@ function makeDbClient(
 function createRemoteClientsApiFetch(
   options: {
     clients?: ReturnType<typeof makeDbClient>[]
+    handleCheck?: (id: string, init?: RequestInit) => Promise<Response>
     handleRemote?: (url: string, init?: RequestInit) => Promise<Response>
   } = {}
 ) {
@@ -150,6 +151,34 @@ function createRemoteClientsApiFetch(
           compatibility_message: body.compatibility_message as string | null,
         },
       }
+      return jsonResponse(clients[index])
+    }
+
+    if (url.includes('/api/remote-clients/') && method === 'POST' && url.endsWith('/check')) {
+      const markerIndex = url.lastIndexOf('/api/remote-clients/')
+      const id = decodeURIComponent(
+        url.slice(markerIndex + '/api/remote-clients/'.length).replace(/\/check$/, '')
+      )
+      if (options.handleCheck) {
+        return options.handleCheck(id, init)
+      }
+      const index = clients.findIndex((client) => client.id === id)
+      if (index === -1) return jsonResponse({ detail: 'Not found' }, 404)
+      clients[index] = makeDbClient({
+        id,
+        name: clients[index].name,
+        apiBaseUrl: clients[index].api_base_url,
+        webBaseUrl: clients[index].web_base_url,
+        health: {
+          status: 'online',
+          checked_at: '2026-06-05T12:00:00+00:00',
+          app_version: '2.1.0',
+          borg_version: 'borg 1.4.0',
+          borg2_version: 'borg2 2.0.0',
+          compatibility: 'compatible',
+          compatibility_message: 'Compatible with this frontend.',
+        },
+      })
       return jsonResponse(clients[index])
     }
 
@@ -372,22 +401,8 @@ describe('RemoteBackendProvider', () => {
     expect(screen.queryByText('first:Stale NAS')).not.toBeInTheDocument()
   })
 
-  it('checks reachability and version compatibility for a remote client', async () => {
-    const fetchMock = createRemoteClientsApiFetch({
-      handleRemote: async (url) => {
-        if (url === 'http://nas.local:9000/health') {
-          return jsonResponse({ status: 'healthy' })
-        }
-        if (url === 'http://nas.local:9000/api/system/info') {
-          return jsonResponse({
-            app_version: '2.1.0',
-            borg_version: 'borg 1.4.0',
-            borg2_version: 'borg2 2.0.0',
-          })
-        }
-        throw new Error(`Unexpected fetch: ${url}`)
-      },
-    })
+  it('checks reachability and version compatibility through the active backend server', async () => {
+    const fetchMock = createRemoteClientsApiFetch()
     const user = userEvent.setup()
     renderWithProviders(
       <RemoteBackendProvider frontendVersion="2.2.2" fetchImpl={fetchMock}>
@@ -403,9 +418,15 @@ describe('RemoteBackendProvider', () => {
       expect(screen.getByText('version:2.1.0')).toBeInTheDocument()
       expect(screen.getByText('compatibility:compatible')).toBeInTheDocument()
     })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/remote-clients\/db-client-\d+\/check$/),
+      expect.objectContaining({ method: 'POST' })
+    )
+    expect(fetchMock).not.toHaveBeenCalledWith('http://nas.local:9000/health', expect.anything())
   })
 
-  it('keeps reachable health state when persisting health fails', async () => {
+  it('keeps reachable health state returned by the backend check', async () => {
     const client = makeDbClient({
       id: 'db-client-1',
       apiBaseUrl: 'http://nas.local:9000/api',
@@ -417,19 +438,24 @@ describe('RemoteBackendProvider', () => {
       if (url === '/api/remote-clients' && method === 'GET') {
         return Promise.resolve(jsonResponse([client]))
       }
-      if (url === 'http://nas.local:9000/health') {
-        return Promise.resolve(jsonResponse({ status: 'healthy' }))
-      }
-      if (url === 'http://nas.local:9000/api/system/info') {
+      if (url === '/api/remote-clients/db-client-1/check' && method === 'POST') {
         return Promise.resolve(
-          jsonResponse({
-            app_version: '2.1.0',
-            borg_version: 'borg 1.4.0',
-          })
+          jsonResponse(
+            makeDbClient({
+              id: 'db-client-1',
+              apiBaseUrl: 'http://nas.local:9000/api',
+              webBaseUrl: 'http://nas.local:9000',
+              health: {
+                status: 'online',
+                checked_at: '2026-06-05T12:00:00+00:00',
+                app_version: '2.1.0',
+                borg_version: 'borg 1.4.0',
+                compatibility: 'compatible',
+                compatibility_message: 'Compatible with this frontend.',
+              },
+            })
+          )
         )
-      }
-      if (url.includes('/api/remote-clients/') && method === 'PATCH') {
-        return Promise.reject(new Error('database unavailable'))
       }
       return Promise.reject(new Error(`Unexpected fetch: ${method} ${url}`))
     })
@@ -452,9 +478,21 @@ describe('RemoteBackendProvider', () => {
 
   it('keeps an unreachable remote client inactive and records the error', async () => {
     const fetchMock = createRemoteClientsApiFetch({
-      handleRemote: async () => {
-        throw new Error('network unavailable')
-      },
+      handleCheck: async (id) =>
+        jsonResponse(
+          makeDbClient({
+            id,
+            apiBaseUrl: 'http://nas.local:9000/api',
+            webBaseUrl: 'http://nas.local:9000',
+            health: {
+              status: 'offline',
+              checked_at: '2026-06-05T12:00:00+00:00',
+              error: 'network unavailable',
+              compatibility: 'unknown',
+              compatibility_message: 'Remote client server compatibility could not be checked.',
+            },
+          })
+        ),
     })
     const user = userEvent.setup()
     renderWithProviders(
@@ -481,7 +519,7 @@ describe('RemoteBackendProvider', () => {
           webBaseUrl: 'http://nas.local:9000',
         }),
       ],
-      handleRemote: async (_url, init) =>
+      handleCheck: async (_id, init) =>
         new Promise<Response>((_resolve, reject) => {
           init?.signal?.addEventListener('abort', () => {
             const error = new Error('Aborted')
@@ -501,8 +539,8 @@ describe('RemoteBackendProvider', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Check' }))
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://nas.local:9000/health',
-      expect.objectContaining({ signal: expect.any(AbortSignal) })
+      '/api/remote-clients/db-client-1/check',
+      expect.objectContaining({ method: 'POST', signal: expect.any(AbortSignal) })
     )
 
     await act(async () => {
@@ -514,28 +552,30 @@ describe('RemoteBackendProvider', () => {
   })
 
   it('keeps the latest health check result when an older check resolves late', async () => {
-    let firstSystemInfoResolve: (value: Record<string, unknown>) => void = () => {}
-    let healthCallCount = 0
+    let firstCheckResolve: (value: Response) => void = () => {}
+    let checkCallCount = 0
     const fetchMock = createRemoteClientsApiFetch({
-      handleRemote: async (url) => {
-        if (url === 'http://nas.local:9000/health') {
-          healthCallCount += 1
-          if (healthCallCount === 1) {
-            return jsonResponse({ status: 'healthy' })
-          }
-          return jsonResponse({ status: 'down' }, 503)
+      handleCheck: async (id) => {
+        checkCallCount += 1
+        if (checkCallCount === 1) {
+          return new Promise<Response>((resolve) => {
+            firstCheckResolve = resolve
+          })
         }
-        if (url === 'http://nas.local:9000/api/system/info') {
-          return {
-            ok: true,
-            status: 200,
-            json: () =>
-              new Promise<Record<string, unknown>>((resolve) => {
-                firstSystemInfoResolve = resolve
-              }),
-          } as Response
-        }
-        throw new Error(`Unexpected fetch: ${url}`)
+        return jsonResponse(
+          makeDbClient({
+            id,
+            apiBaseUrl: 'http://nas.local:9000/api',
+            webBaseUrl: 'http://nas.local:9000',
+            health: {
+              status: 'offline',
+              checked_at: '2026-06-05T12:00:01+00:00',
+              error: 'Health check failed with HTTP 503.',
+              compatibility: 'unknown',
+              compatibility_message: 'Remote client server compatibility could not be checked.',
+            },
+          })
+        )
       },
     })
     const user = userEvent.setup()
@@ -550,8 +590,8 @@ describe('RemoteBackendProvider', () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        'http://nas.local:9000/api/system/info',
-        expect.anything()
+        '/api/remote-clients/db-client-1/check',
+        expect.objectContaining({ method: 'POST' })
       )
     })
 
@@ -562,10 +602,23 @@ describe('RemoteBackendProvider', () => {
     })
 
     await act(async () => {
-      firstSystemInfoResolve({
-        app_version: '2.1.0',
-        borg_version: 'borg 1.4.0',
-      })
+      firstCheckResolve(
+        jsonResponse(
+          makeDbClient({
+            id: 'db-client-1',
+            apiBaseUrl: 'http://nas.local:9000/api',
+            webBaseUrl: 'http://nas.local:9000',
+            health: {
+              status: 'online',
+              checked_at: '2026-06-05T12:00:00+00:00',
+              app_version: '2.1.0',
+              borg_version: 'borg 1.4.0',
+              compatibility: 'compatible',
+              compatibility_message: 'Compatible with this frontend.',
+            },
+          })
+        )
+      )
     })
 
     expect(screen.getByText('status:offline')).toBeInTheDocument()

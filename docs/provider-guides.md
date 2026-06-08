@@ -15,7 +15,7 @@ lives or where you want new archives to be stored.
 | Local disk or mounted share | Mount the host path into the Borg UI container and use the container path. |
 | NAS or Linux server over SSH | Add a Remote Machine, then create or import an SSH repository. See the NAS notes below when SSH and SFTP paths differ. |
 | Hosted Borg service | Add the provider as a Remote Machine and keep the provider's repository path exactly as given. BorgBase and Hetzner need the most care. |
-| Cloud or object storage through rclone | Add the provider in Cloud Storage, then select that reusable remote when configuring a cloud mirror. |
+| Cloud or object storage through rclone | On Pro or Enterprise, add the provider in Cloud Storage, then select that reusable remote when configuring a cloud mirror. |
 | Existing Borg repository | Use Import Existing. Choose Full mode if Borg UI should run backups, or Observability-only if another tool already writes archives. |
 
 ## Which Setups Need Provider Guidance?
@@ -31,7 +31,7 @@ lives or where you want new archives to be stored.
 
 ## Cloud Storage with rclone
 
-Cloud Storage manages reusable rclone remotes. Open Cloud Storage, choose
+Cloud Storage is available on Pro and Enterprise plans and manages reusable rclone remotes. Open Cloud Storage, choose
 **Add remote**, pick the provider, and review the provider-specific config
 template before saving. Google Drive and OneDrive use Borg UI-owned OAuth
 callbacks when `PUBLIC_BASE_URL` and provider client credentials are configured;

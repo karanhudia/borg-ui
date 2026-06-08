@@ -138,6 +138,7 @@ function createRemoteClientsPageFetch(
   options: {
     clients?: ReturnType<typeof makeDbClient>[]
     deleteStatus?: number
+    handleCheck?: (id: string, init?: RequestInit) => Promise<Response>
     handleRemote?: (url: string, init?: RequestInit) => Promise<Response>
   } = {}
 ) {
@@ -180,6 +181,32 @@ function createRemoteClientsPageFetch(
         name: body.name ?? clients[index].name,
         api_base_url: urls.apiBaseUrl,
         web_base_url: urls.webBaseUrl,
+      }
+      return jsonResponse(clients[index])
+    }
+
+    if (url.includes('/api/remote-clients/') && method === 'POST' && url.endsWith('/check')) {
+      const markerIndex = url.lastIndexOf('/api/remote-clients/')
+      const id = decodeURIComponent(
+        url.slice(markerIndex + '/api/remote-clients/'.length).replace(/\/check$/, '')
+      )
+      if (options.handleCheck) {
+        return options.handleCheck(id, init)
+      }
+      const index = clients.findIndex((client) => client.id === id)
+      if (index === -1) return jsonResponse({ detail: 'Not found' }, 404)
+      clients[index] = {
+        ...clients[index],
+        health: {
+          ...clients[index].health,
+          status: 'online',
+          checked_at: '2026-06-05T12:00:00+00:00',
+          app_version: '2.2.1',
+          borg_version: 'borg 1.4.0',
+          error: null,
+          compatibility: 'compatible',
+          compatibility_message: 'Borg UI 2.2.1 is compatible with this frontend.',
+        },
       }
       return jsonResponse(clients[index])
     }
@@ -242,7 +269,6 @@ describe('RemoteClients', () => {
     resetRemoteBackendStateForTests()
     nextDbClientId = 1
     vi.restoreAllMocks()
-    vi.unstubAllGlobals()
     vi.mocked(toast.success).mockClear()
     vi.mocked(toast.error).mockClear()
     mockHasGlobalPermission.mockReturnValue(true)
@@ -266,7 +292,7 @@ describe('RemoteClients', () => {
   it('adds and lists a remote client with normalized URL details', async () => {
     renderPage()
 
-    expect(screen.getByRole('heading', { name: 'Remote Clients' })).toBeInTheDocument()
+    expect(screen.getByText('Remote Clients')).toBeInTheDocument()
     expect(screen.getByText('No remote clients yet')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /add remote client/i }))
@@ -326,16 +352,23 @@ describe('RemoteClients', () => {
     expect(createCalls).toHaveLength(1)
   })
 
-  it('shows the plan gate instead of management controls when remote clients are unavailable', async () => {
+  it('shows the plan gate over a read-only page preview when remote clients are unavailable', async () => {
     mockPlanCan.mockImplementation((feature) => feature !== 'remote_clients')
 
-    renderPage()
+    renderPage(
+      createRemoteClientsPageFetch({
+        clients: [makeDbClient({ id: 'db-client-1', name: 'Studio NAS' })],
+      })
+    )
 
     expect(
       await screen.findByText(/remote client switching is available on pro and enterprise plans/i)
     ).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /add remote client/i })).not.toBeInTheDocument()
+    expect(screen.getByText('Remote Clients')).toBeInTheDocument()
+    expect(screen.getByText('This server')).toBeInTheDocument()
+    expect(await screen.findByText('Studio NAS')).toBeInTheDocument()
     expect(screen.queryByText('No remote clients yet')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /add remote client/i })).not.toBeInTheDocument()
   })
 
   it('renders the local server card with the active status indicator', () => {
@@ -349,17 +382,7 @@ describe('RemoteClients', () => {
   })
 
   it('checks health and switches to an online compatible remote client', async () => {
-    const fetchMock = createRemoteClientsPageFetch({
-      handleRemote: async (url) => {
-        if (url === 'http://nas.local:9000/health') {
-          return jsonResponse({ status: 'healthy' })
-        }
-        if (url === 'http://nas.local:9000/api/system/info') {
-          return jsonResponse({ app_version: '2.2.1', borg_version: 'borg 1.4.0' })
-        }
-        throw new Error(`Unexpected fetch: ${url}`)
-      },
-    })
+    const fetchMock = createRemoteClientsPageFetch()
     const user = userEvent.setup()
     renderPage(fetchMock)
 

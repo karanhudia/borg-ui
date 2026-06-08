@@ -34,7 +34,6 @@ import {
 } from 'lucide-react'
 import api, { settingsAPI, backupPlansAPI } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
-import { usePlan } from '../hooks/usePlan'
 import NavItem from './NavItem'
 import NavGroup from './NavGroup'
 import SidebarVersionInfo from './SidebarVersionInfo'
@@ -88,8 +87,6 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
   const canManageBeta = hasGlobalPermission('settings.beta.manage')
   const canManageMounts = hasGlobalPermission('settings.mounts.manage')
   const canManageSsh = hasGlobalPermission('settings.ssh.manage')
-  const { can: canUsePlanFeature, isLoading: isPlanLoading } = usePlan()
-  const canUseRemoteClients = !isPlanLoading && canUsePlanFeature('remote_clients')
   const { tabEnablement, getTabDisabledReason } = useTabEnablement()
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null)
   const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({})
@@ -169,20 +166,16 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
     }> = [
       ...(canManageSsh
         ? [
-            ...(canUseRemoteClients
-              ? [
-                  {
-                    name: 'Remote Clients',
-                    href: '/remote-clients',
-                    icon: Network,
-                    key: 'connections' as const,
-                  },
-                ]
-              : []),
             {
               name: 'Remote Machines',
               href: '/ssh-connections',
               icon: Computer,
+              key: 'connections' as const,
+            },
+            {
+              name: 'Remote Clients',
+              href: '/remote-clients',
+              icon: Network,
               key: 'connections' as const,
             },
             {
@@ -324,7 +317,6 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
     canManageBeta,
     canManageMounts,
     canManageSsh,
-    canUseRemoteClients,
   ])
 
   // Auto-expand menus based on current route

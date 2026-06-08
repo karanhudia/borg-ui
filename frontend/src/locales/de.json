@@ -162,7 +162,7 @@
   },
   "remoteClients": {
     "title": "Remote-Clients",
-    "description": "Registriere Borg-UI-Client-Server auf anderen Maschinen, prüfe ihre Verfügbarkeit und nutze diesen Browser mit dem ausgewählten Server.",
+    "description": "Registriere Borg-UI-Client-Server auf anderen Maschinen, prüfe ihre Verfügbarkeit von diesem Server aus und leite Anfragen an den ausgewählten Server darüber weiter.",
     "addButton": "Remote-Client hinzufügen",
     "planGate": {
       "message": "Remote-Client-Wechsel ist in Pro- und Enterprise-Plänen verfügbar. Führe ein Upgrade durch, um entfernte Borg UI-Server hinzuzufügen oder zu ihnen zu wechseln."
@@ -183,7 +183,7 @@
     },
     "switcher": {
       "title": "Serverziele",
-      "description": "Wähle, ob dieser Browser diesen Server oder einen Remote-Client nutzt.",
+      "description": "Wähle, ob Anfragen an diesen Server gehen oder über ihn zu einem Remote-Client geleitet werden.",
       "menuLabel": "Serverziele",
       "ariaLabel": "Serverziel {{name}}",
       "selectLabel": "Server",
@@ -254,9 +254,17 @@
       "remoteUnavailable": "Remote-Client-Server ist nicht verfügbar."
     }
   },
+  "managedAgents": {
+    "planGate": {
+      "message": "Managed Agents benötigen Pro oder Enterprise. Führe ein Upgrade durch, um entfernte Maschinen zu registrieren und Agent-Jobs auszuführen."
+    }
+  },
   "cloudStorage": {
     "title": "Cloud-Speicher",
     "subtitle": "Verwalte wiederverwendbare rclone-Remotes für Repository-Spiegel.",
+    "planGate": {
+      "message": "Cloud-Speicher mit rclone ist in Pro- und Enterprise-Plänen verfügbar. Führe ein Upgrade durch, um wiederverwendbare Remotes für Repository-Spiegel hinzuzufügen."
+    },
     "addRemote": "Remote hinzufügen",
     "rcloneAvailability": "rclone-Verfügbarkeit",
     "statusAvailable": "Verfügbar",
@@ -806,6 +814,14 @@
     "subtitle": "Definiere Quellen, Einstellungen, Zeitpläne und die Repositories, in die jede Sicherung schreibt.",
     "loading": "Backup-Pläne werden geladen...",
     "runTooltipPro": "Dieser Plan verwendet mehrere Repositories oder parallele Ausführung. Bearbeite ihn oder upgrade auf Pro, um ihn auszuführen.",
+    "runTooltipProFeature": "Dieser Plan verwendet {{feature}}, wofür Pro erforderlich ist. Bearbeite ihn oder upgrade auf Pro, um ihn auszuführen.",
+    "runTooltipProFeatures": "Dieser Plan verwendet reine Pro-Funktionen: {{features}}. Bearbeite ihn oder upgrade auf Pro, um ihn auszuführen.",
+    "proFeatureLabels": {
+      "multiRepository": "mehrere Repositories oder parallele Ausführung",
+      "managedAgent": "Managed-Agent-Backups",
+      "database": "Datenbank-Backups",
+      "container": "Container-Backups"
+    },
     "empty": {
       "title": "Noch keine Backup-Pläne",
       "description": "Erstelle einen Plan, um Quellen, Einstellungen, Zeitplan und Repositories zu verbinden."
@@ -4559,6 +4575,9 @@
         "oidcEmailAlreadyInUse": "Diese Single-Sign-on-E-Mail wird bereits von einem anderen Borg-UI-Konto verwendet.",
         "oidcPendingApproval": "Dein Single-Sign-on-Konto wartet auf die Freigabe durch einen Administrator",
         "oidcTemplateUserNotFound": "Der konfigurierte Single-Sign-on-Vorlagenbenutzer wurde nicht gefunden"
+      },
+      "plan": {
+        "featureNotAvailable": "Diese Funktion ist in deinem aktuellen Plan nicht verfügbar."
       },
       "agents": {
         "agentDisabled": "Dieser Agent ist deaktiviert",
