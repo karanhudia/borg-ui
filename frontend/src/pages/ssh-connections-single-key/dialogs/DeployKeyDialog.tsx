@@ -19,12 +19,10 @@ import {
   TextField,
   Tooltip,
   Typography,
-  useTheme,
 } from '@mui/material'
 import { Info } from 'lucide-react'
 import RichSelectRow from '../../../components/shared/RichSelectRow'
 import ResponsiveDialog from '../../../components/shared/ResponsiveDialog'
-import { getWizardStepColor } from '../../../components/shared/wizardStepColors'
 import { createConnectionForm } from '../formDefaults'
 import {
   remoteMachineSetupPresets,
@@ -71,7 +69,6 @@ export function DeployKeyDialog({
   pending,
   onDeploy,
 }: DeployKeyDialogProps) {
-  const theme = useTheme()
   const [selectedPreset, setSelectedPreset] = useState<RemoteMachineSetupPresetId>(() =>
     getPresetIdForForm(connectionForm)
   )
@@ -116,6 +113,9 @@ export function DeployKeyDialog({
   }
 
   const close = () => setOpen(false)
+  const selectedPresetDetails =
+    remoteMachineSetupPresets.find((preset) => preset.id === selectedPreset) ??
+    remoteMachineSetupPresets[0]
 
   const applyPreset = (presetId: RemoteMachineSetupPresetId) => {
     const preset = remoteMachineSetupPresets.find((item) => item.id === presetId)
@@ -133,6 +133,7 @@ export function DeployKeyDialog({
       return {
         ...nextForm,
         host: current.host,
+        username: current.username,
         password: current.password,
       }
     })
@@ -144,7 +145,6 @@ export function DeployKeyDialog({
   const renderPresetRow = (preset: RemoteMachineSetupPreset) => {
     const Icon = preset.icon
     const label = getPresetLabel(preset.id)
-    const presetColor = getWizardStepColor(preset.colorKey, theme.palette.mode)
 
     return (
       <RichSelectRow
@@ -153,7 +153,7 @@ export function DeployKeyDialog({
             aria-hidden
             component="span"
             data-testid={`remote-machine-preset-icon-${preset.id}`}
-            style={{ color: presetColor, display: 'inline-flex', lineHeight: 0 }}
+            style={{ color: preset.brandColor, display: 'inline-flex', lineHeight: 0 }}
           >
             <Icon size={18} />
           </Box>
@@ -168,7 +168,7 @@ export function DeployKeyDialog({
     <ResponsiveDialog
       open={open}
       onClose={close}
-      maxWidth="md"
+      maxWidth="sm"
       fullWidth
       footer={
         <DialogActions>
@@ -227,7 +227,7 @@ export function DeployKeyDialog({
           <SshHostField
             label={t('sshConnections.deployDialog.host')}
             value={connectionForm.host}
-            placeholder={t('sshConnections.deployDialog.hostPlaceholder')}
+            placeholder={selectedPresetDetails.hostPlaceholder}
             hostError={hostError}
             onHostChange={(host) => {
               setConnectionForm({ ...connectionForm, host })
@@ -239,7 +239,7 @@ export function DeployKeyDialog({
             fullWidth
             value={connectionForm.username}
             onChange={(e) => setConnectionForm({ ...connectionForm, username: e.target.value })}
-            placeholder="root"
+            placeholder={selectedPresetDetails.usernamePlaceholder}
             InputLabelProps={{ shrink: true }}
           />
           <TextField

@@ -1,7 +1,6 @@
 import type { ComponentType } from 'react'
 import { Settings2 } from 'lucide-react'
 import { SiBorgbackup, SiHetzner, SiLinux, SiSynology } from 'react-icons/si'
-import type { WizardStepColorKey } from '../../components/shared/wizardStepColors'
 import type { DeployConnectionPayload } from './types'
 
 export type RemoteMachineSetupPresetId = 'custom' | 'linux' | 'borgbase' | 'hetzner' | 'nas'
@@ -9,44 +8,42 @@ export type RemoteMachineSetupPresetId = 'custom' | 'linux' | 'borgbase' | 'hetz
 export interface RemoteMachineSetupPreset {
   id: RemoteMachineSetupPresetId
   icon: ComponentType<{ size?: number | string }>
-  colorKey: WizardStepColorKey
+  brandColor: string
+  hostPlaceholder: string
+  usernamePlaceholder: string
   defaults: Partial<DeployConnectionPayload>
 }
-
-export const remoteMachineSetupPresetIconColorKeys = {
-  custom: 'config',
-  linux: 'basic',
-  borgbase: 'source',
-  hetzner: 'location',
-  nas: 'maintenance',
-} satisfies Record<RemoteMachineSetupPresetId, WizardStepColorKey>
 
 export const remoteMachineSetupPresets: RemoteMachineSetupPreset[] = [
   {
     id: 'custom',
     icon: Settings2,
-    colorKey: remoteMachineSetupPresetIconColorKeys.custom,
+    brandColor: '#64748B',
+    hostPlaceholder: 'backup.example.com',
+    usernamePlaceholder: 'backup',
     defaults: {},
   },
   {
     id: 'linux',
     icon: SiLinux,
-    colorKey: remoteMachineSetupPresetIconColorKeys.linux,
+    brandColor: '#FCC624',
+    hostPlaceholder: 'backup.example.com',
+    usernamePlaceholder: 'backup',
     defaults: {
-      username: 'root',
       port: 22,
       use_sftp_mode: true,
-      default_path: '',
+      default_path: '/home/backup',
       ssh_path_prefix: '',
-      mount_point: '',
+      mount_point: 'linux-server',
     },
   },
   {
     id: 'borgbase',
     icon: SiBorgbackup,
-    colorKey: remoteMachineSetupPresetIconColorKeys.borgbase,
+    brandColor: '#00DD00',
+    hostPlaceholder: 'mmvz9gp4.repo.borgbase.com',
+    usernamePlaceholder: 'mmvz9gp4',
     defaults: {
-      username: '',
       port: 22,
       use_sftp_mode: false,
       default_path: '/./repo',
@@ -57,25 +54,27 @@ export const remoteMachineSetupPresets: RemoteMachineSetupPreset[] = [
   {
     id: 'hetzner',
     icon: SiHetzner,
-    colorKey: remoteMachineSetupPresetIconColorKeys.hetzner,
+    brandColor: '#D50C2D',
+    hostPlaceholder: 'u123456.your-storagebox.de',
+    usernamePlaceholder: 'u123456',
     defaults: {
-      username: '',
       port: 23,
       use_sftp_mode: true,
-      default_path: '/./borg-repository',
+      default_path: '/home',
       ssh_path_prefix: '',
-      mount_point: 'hetzner',
+      mount_point: 'hetzner-storage-box',
     },
   },
   {
     id: 'nas',
     icon: SiSynology,
-    colorKey: remoteMachineSetupPresetIconColorKeys.nas,
+    brandColor: '#B5B5B6',
+    hostPlaceholder: 'diskstation.local',
+    usernamePlaceholder: 'backup',
     defaults: {
-      username: '',
       port: 22,
       use_sftp_mode: false,
-      default_path: '',
+      default_path: '/backups',
       ssh_path_prefix: '/volume1',
       mount_point: 'nas',
     },
