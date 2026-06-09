@@ -56,7 +56,7 @@
     "jsdom": "^29.1.1",
     "lint-staged": "^17.0.7",
     "playwright": "^1.60.0",
-    "pngjs": "^5.0.0",
+    "pngjs": "^7.0.0",
     "postcss": "^8.5.15",
     "prettier": "^3.8.3",
     "storybook": "^10.4.0",
