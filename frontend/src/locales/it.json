@@ -4651,7 +4651,7 @@
         "sshUrlWithoutConnectionId": "Il percorso sembra essere un URL SSH ma non è stato fornito connection_id. Seleziona una connessione SSH.",
         "failedToRetrieveRepositories": "Impossibile recuperare i repository",
         "failedToCreateParentDirectory": "Impossibile creare la directory padre",
-        "failedToInitializeRepository": "Impossibile inizializzare il repository",
+        "failedToInitializeRepository": "Impossibile inizializzare il repository: {{error}}",
         "initFailed": "Impossibile inizializzare il repository: {{error}}",
         "verificationFailed": "Impossibile verificare il repository: {{error}}",
         "infoFailed": "Impossibile caricare le informazioni del repository: {{error}}",

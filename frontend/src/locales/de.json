@@ -4651,7 +4651,7 @@
         "sshUrlWithoutConnectionId": "Der Pfad scheint eine SSH-URL zu sein, aber es wurde keine connection_id angegeben. Bitte wählen Sie eine SSH-Verbindung aus.",
         "failedToRetrieveRepositories": "Repositories konnten nicht abgerufen werden",
         "failedToCreateParentDirectory": "Übergeordnetes Verzeichnis konnte nicht erstellt werden",
-        "failedToInitializeRepository": "Repository konnte nicht initialisiert werden",
+        "failedToInitializeRepository": "Repository konnte nicht initialisiert werden: {{error}}",
         "initFailed": "Repository konnte nicht initialisiert werden: {{error}}",
         "verificationFailed": "Repository konnte nicht verifiziert werden: {{error}}",
         "infoFailed": "Repository-Informationen konnten nicht geladen werden: {{error}}",
