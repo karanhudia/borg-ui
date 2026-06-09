@@ -50,9 +50,10 @@ Default path: /backups
 ## Setup Presets
 
 The deploy dialog includes setup presets for Linux servers, BorgBase, Hetzner
-Storage Box, and NAS targets such as Synology and Unraid. Presets only prefill
-editable defaults like port, deployment mode, default path, SSH path prefix,
-and mount point. Review provider-specific path details in
+Storage Box, and NAS targets such as Synology and Unraid. Presets prefill
+provider-aware placeholders and editable defaults like port, deployment mode,
+default path, SSH path prefix, and mount point. They do not fill passwords or
+private account IDs. Review provider-specific path details in
 [Provider Guides](provider-guides) before saving.
 
 ## Connection Options
@@ -118,6 +119,10 @@ For Hetzner Storage Box-style paths, keep the provider-specific path syntax:
 ```text
 ssh://u123456@u123456.your-storagebox.de:23/./backup-repo
 ```
+
+Use `/home` as the Remote Machine default path for Storage Box browsing and
+key deployment. Keep `/./backup-repo` or `/./borg-repository` as the repository
+path syntax when creating or importing the Borg repository.
 
 For BorgBase, repository URLs commonly use `/./repo`:
 

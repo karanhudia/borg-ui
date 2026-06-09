@@ -138,14 +138,16 @@ Map it into Borg UI like this:
 Host: u123456.your-storagebox.de
 Port: 23
 Username: u123456
-Default path: /./borg-repository
+Default path: /home
 Repository path: /./borg-repository
 Remote Borg Path: borg-1.4, when you need Hetzner's Borg 1.4 binary
 ```
 
-Keep the `./` path segment and use the sub-account username and host when the
-Storage Box uses a sub-account. Leave Remote Borg Path blank when Hetzner's
-default Borg version is correct for the repository.
+Use `/home` as the Remote Machine default path for Storage Box browsing and
+key deployment. Keep the `./` path segment in the repository path, and use the
+sub-account username and host when the Storage Box uses a sub-account. Leave
+Remote Borg Path blank when Hetzner's default Borg version is correct for the
+repository.
 
 If Borg UI needs to install the public key for a Storage Box, enable SFTP
 deployment mode on the Remote Machine. Hetzner's port 23 key format is the
@@ -155,7 +157,8 @@ normal one-line OpenSSH public key format.
 
 Hosted Borg providers often use SSH URLs with provider-specific path syntax, for
 example a `./` segment or a path relative to a restricted account. Keep that
-syntax when entering the Remote Machine default path and repository path.
+syntax when entering repository paths, and only use it as the Remote Machine
+default path when the provider exposes the same path for browsing.
 
 If verification fails:
 
