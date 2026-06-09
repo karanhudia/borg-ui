@@ -36,25 +36,31 @@ vi.mock('../../AdvancedRepositoryOptions', () => ({
   default: ({
     remotePath,
     customFlags,
+    uploadRatelimitMb,
     preBackupScript,
     postBackupScript,
     onRemotePathChange,
     onCustomFlagsChange,
+    onUploadRatelimitMbChange,
   }: {
     remotePath: string
     customFlags: string
+    uploadRatelimitMb: string
     preBackupScript: string
     postBackupScript: string
     onRemotePathChange: (v: string) => void
     onCustomFlagsChange: (v: string) => void
+    onUploadRatelimitMbChange: (v: string) => void
   }) => (
     <div data-testid="advanced-options">
       <span>Remote Path: {remotePath || '(empty)'}</span>
       <span>Custom Flags: {customFlags || '(empty)'}</span>
+      <span>Upload Limit: {uploadRatelimitMb || '(empty)'}</span>
       <span>Pre Script: {preBackupScript || '(empty)'}</span>
       <span>Post Script: {postBackupScript || '(empty)'}</span>
       <button onClick={() => onRemotePathChange('/usr/bin/borg')}>Set Remote Path</button>
       <button onClick={() => onCustomFlagsChange('--stats')}>Set Custom Flags</button>
+      <button onClick={() => onUploadRatelimitMbChange('2.5')}>Set Upload Limit</button>
     </div>
   ),
 }))
@@ -277,6 +283,22 @@ describe('WizardStepBackupConfig', () => {
       expect(screen.getByText('Custom Flags: --stats --progress')).toBeInTheDocument()
     })
 
+    it('passes upload speed limits to advanced options', () => {
+      const dataWithUploadLimit = { ...defaultData, uploadRatelimitMb: '1.5' }
+
+      render(
+        <WizardStepBackupConfig
+          dataSource="local"
+          repositoryMode="full"
+          data={dataWithUploadLimit}
+          onChange={vi.fn()}
+          onBrowseExclude={vi.fn()}
+        />
+      )
+
+      expect(screen.getByText('Upload Limit: 1.5')).toBeInTheDocument()
+    })
+
     it('passes hook scripts to advanced options', () => {
       const dataWithScripts = {
         ...defaultData,
@@ -336,6 +358,26 @@ describe('WizardStepBackupConfig', () => {
       await user.click(screen.getByText('Set Custom Flags'))
 
       expect(onChange).toHaveBeenCalledWith({ customFlags: '--stats' })
+    })
+
+    it('calls onChange when upload speed limits change', async () => {
+      const { userEvent } = await import('@testing-library/user-event')
+      const user = userEvent.setup()
+      const onChange = vi.fn()
+
+      render(
+        <WizardStepBackupConfig
+          dataSource="local"
+          repositoryMode="full"
+          data={defaultData}
+          onChange={onChange}
+          onBrowseExclude={vi.fn()}
+        />
+      )
+
+      await user.click(screen.getByText('Set Upload Limit'))
+
+      expect(onChange).toHaveBeenCalledWith({ uploadRatelimitMb: '2.5' })
     })
   })
 

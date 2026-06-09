@@ -2167,6 +2167,7 @@ async def _create_agent_repository_record(
         "executor_type": repository.executor_type,
         "agent_machine_id": repository.agent_machine_id,
         **_agent_machine_summary(repository, db),
+        "upload_ratelimit_kib": repository.upload_ratelimit_kib,
     }
     rclone_storage = _serialize_rclone_storage(repository, db)
     if rclone_storage:
@@ -2338,6 +2339,7 @@ async def _create_rclone_repository_record(
             "compression": repository.compression,
             "storage_backend": "rclone",
             "rclone_storage": _serialize_rclone_storage(repository, db),
+            "upload_ratelimit_kib": repository.upload_ratelimit_kib,
         },
     }
 
@@ -2445,6 +2447,7 @@ async def _create_direct_rclone_repository_record(
             "repository_type": "rclone",
             "borg_version": 2,
             "storage_backend": DIRECT_RCLONE_STORAGE_BACKEND,
+            "upload_ratelimit_kib": repository.upload_ratelimit_kib,
         },
     }
 
@@ -2567,6 +2570,7 @@ async def _import_rclone_repository_record(
             "archive_count": repository.archive_count,
             "storage_backend": "rclone",
             "rclone_storage": _serialize_rclone_storage(repository, db),
+            "upload_ratelimit_kib": repository.upload_ratelimit_kib,
         },
     }
 
@@ -2698,6 +2702,7 @@ async def _import_direct_rclone_repository_record(
             "repository_type": "rclone",
             "borg_version": 2,
             "storage_backend": DIRECT_RCLONE_STORAGE_BACKEND,
+            "upload_ratelimit_kib": repository.upload_ratelimit_kib,
         },
     }
 

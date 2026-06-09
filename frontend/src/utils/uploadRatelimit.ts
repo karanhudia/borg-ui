@@ -1,6 +1,7 @@
 export function kibToUploadRatelimitMb(value?: number | null): string {
   if (!value || value <= 0) return ''
-  return String(Math.round((value / 1024) * 100) / 100)
+  const mb = value / 1024
+  return mb.toFixed(3).replace(/\.?0+$/, '')
 }
 
 export function uploadRatelimitMbToKib(value: string): number | null {

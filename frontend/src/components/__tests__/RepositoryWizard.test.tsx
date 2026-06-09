@@ -1536,6 +1536,52 @@ describe('RepositoryWizard', () => {
       )
     })
 
+    it('preserves tiny positive upload speed limits when submitting unchanged edits', async () => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard('edit', {
+        id: 13,
+        name: 'Tiny Limit Repo',
+        path: '/backups/tiny-limit',
+        mode: 'full',
+        repository_type: 'local',
+        storage_backend: 'local',
+        execution_target: 'local',
+        executor_type: 'server',
+        borg_version: 1,
+        encryption: 'none',
+        compression: 'lz4',
+        connection_id: null,
+        rclone_storage: null,
+        upload_ratelimit_kib: 1,
+      })
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toHaveValue('Tiny Limit Repo')
+      })
+
+      const advancedStep = screen.getByText('Advanced').closest('div')
+      expect(advancedStep).not.toBeNull()
+      fireEvent.click(advancedStep!)
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Upload speed limit/i)).toHaveValue('0.001')
+      })
+
+      const reviewStep = screen.getByText('Review').closest('div')
+      expect(reviewStep).not.toBeNull()
+      fireEvent.click(reviewStep!)
+      await user.click(screen.getByRole('button', { name: /Save Changes/i }))
+
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalled()
+      })
+      const [submittedPayload] = onSubmit.mock.calls[0]
+      expect(submittedPayload).toEqual(
+        expect.objectContaining({
+          upload_ratelimit_kib: 1,
+        })
+      )
+    })
+
     it('allows edit workflow without re-entering the passphrase', async () => {
       const user = userEvent.setup()
       renderWizard('edit', legacyRepository)

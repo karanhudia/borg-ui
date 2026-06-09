@@ -30,10 +30,9 @@ def downgrade(db):
             0,
         )
         if not supports_drop:
-            print(
-                "SQLite version does not support DROP COLUMN; "
-                "repositories.upload_ratelimit_kib will remain"
+            raise RuntimeError(
+                "SQLite does not support DROP COLUMN; "
+                "repositories.upload_ratelimit_kib was not removed"
             )
-            return
     db.execute(text("ALTER TABLE repositories DROP COLUMN upload_ratelimit_kib"))
     db.commit()

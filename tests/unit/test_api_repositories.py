@@ -570,12 +570,14 @@ class TestRepositoriesCreate:
                     "source_directories": ["/home/user/docs"],
                     "execution_target": "agent",
                     "agent_machine_id": agent.id,
+                    "upload_ratelimit_kib": 1024,
                 },
                 headers=admin_headers,
             )
 
         wait_for_init.assert_awaited_once()
         assert response.status_code == 200
+        assert response.json()["repository"]["upload_ratelimit_kib"] == 1024
         initialize.assert_not_awaited()
         agent_job = test_db.query(AgentJob).one()
         assert agent_job.job_type == "repository"

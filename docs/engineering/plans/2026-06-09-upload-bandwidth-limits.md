@@ -18,7 +18,7 @@ Vitest, Storybook.
 
 ---
 
-### Task 1: Backend RED tests
+## Task 1: Backend RED tests
 
 **Files:**
 - Modify: `tests/unit/test_api_repositories.py`
@@ -37,7 +37,7 @@ Vitest, Storybook.
 - [x] Run the targeted pytest commands and confirm failures are caused by the
   missing repository-level default behavior.
 
-### Task 2: Backend implementation
+## Task 2: Backend implementation
 
 **Files:**
 - Modify: `app/database/models.py`
@@ -58,7 +58,7 @@ Vitest, Storybook.
   pass the repository default when no explicit plan value is supplied.
 - [x] Re-run targeted backend tests and keep the RED tests green.
 
-### Task 3: Frontend RED tests
+## Task 3: Frontend RED tests
 
 **Files:**
 - Modify: `frontend/src/components/__tests__/RepositoryWizard.test.tsx`
@@ -73,7 +73,7 @@ Vitest, Storybook.
 - [x] Keep existing backup plan upload-limit tests intact.
 - [x] Run targeted Vitest commands and confirm failures before UI changes.
 
-### Task 4: Frontend implementation
+## Task 4: Frontend implementation
 
 **Files:**
 - Modify: `frontend/src/components/RepositoryWizard.tsx`
@@ -102,7 +102,7 @@ Vitest, Storybook.
   limit.
 - [x] Re-run targeted frontend tests and keep them green.
 
-### Task 5: Required validation and handoff
+## Task 5: Required validation and handoff
 
 **Commands:**
 - `pytest tests/unit/test_api_repositories.py::TestRepositoriesCreate::test_create_local_repository_persists_upload_ratelimit_default tests/unit/test_api_repositories.py::TestRepositoriesCreate::test_create_repository_rejects_non_positive_upload_ratelimit tests/unit/test_api_repositories.py::TestRepositoriesUpdate::test_update_repository_upload_ratelimit_default tests/unit/test_api_repositories.py::TestRepositoriesUpdate::test_update_repository_rejects_non_positive_upload_ratelimit tests/unit/test_api_backup_plans.py::TestBackupPlanRoutes::test_execute_plan_run_uses_repository_upload_ratelimit_default tests/unit/test_api_backup_plans.py::TestBackupPlanRoutes::test_execute_plan_run_prefers_plan_upload_ratelimit_over_repository_default tests/unit/test_api_backup_plans.py::TestBackupPlanRoutes::test_execute_plan_run_prefers_link_upload_ratelimit_override tests/unit/test_backup_service.py::TestBackupService::test_execute_backup_delegates_remote_direct_route_strategy tests/unit/test_agent_runtime.py::test_backup_create_payload_builds_borg2_command_from_flat_payload -q`
@@ -125,7 +125,7 @@ Vitest, Storybook.
   attach the PR to Linear, sweep feedback/checks, and move to Human Review only
   when green.
 
-### Self-review
+## Self-review
 
 - The plan covers Borg 1, Borg 2, remote SSH, scheduled, manual, and managed
   agent backup paths.
