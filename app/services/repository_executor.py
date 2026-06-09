@@ -145,8 +145,13 @@ def build_agent_backup_payload(
         if custom_flags is not None
         else repository.custom_flags or "",
     }
-    if upload_ratelimit_kib:
-        backup_payload["upload_ratelimit_kib"] = upload_ratelimit_kib
+    effective_upload_ratelimit_kib = (
+        upload_ratelimit_kib
+        if upload_ratelimit_kib is not None
+        else getattr(repository, "upload_ratelimit_kib", None)
+    )
+    if effective_upload_ratelimit_kib:
+        backup_payload["upload_ratelimit_kib"] = effective_upload_ratelimit_kib
 
     secrets = {}
     if repository.passphrase:

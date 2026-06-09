@@ -247,6 +247,7 @@ def test_backup_create_payload_builds_borg2_command_from_flat_payload():
             "source_paths": ["/src"],
             "compression": "none",
             "custom_flags": ["--list"],
+            "upload_ratelimit_kib": 1536,
         }
     )
 
@@ -261,6 +262,8 @@ def test_backup_create_payload_builds_borg2_command_from_flat_payload():
         "--stats",
         "--compression",
         "none",
+        "--upload-ratelimit",
+        "1536",
         "--list",
         "laptop",
         "/src",

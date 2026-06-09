@@ -122,6 +122,23 @@ export const WithoutBreakLockAccess: Story = {
   ),
 }
 
+export const WithUploadLimit: Story = {
+  args: {
+    ...defaultArgs,
+    repository: {
+      ...sampleRepository,
+      id: 52,
+      name: 'Throttled Production Archive',
+      upload_ratelimit_kib: 1536,
+    },
+  },
+  render: (args) => (
+    <Box sx={{ width: 620, maxWidth: 'calc(100vw - 32px)' }}>
+      <RepositoryCard {...args} />
+    </Box>
+  ),
+}
+
 export const RcloneSynced: Story = {
   args: {
     ...defaultArgs,

@@ -69,6 +69,7 @@ const defaultData: BackupConfigStepData = {
   preHookTimeout: 300,
   postHookTimeout: 300,
   hookFailureMode: 'fail',
+  uploadRatelimitMb: '',
 }
 
 describe('WizardStepBackupConfig', () => {

@@ -108,13 +108,17 @@ vi.mock('../AdvancedRepositoryOptions', () => ({
   default: ({
     remotePath,
     customFlags,
+    uploadRatelimitMb = '',
     onRemotePathChange,
     onCustomFlagsChange,
+    onUploadRatelimitMbChange = () => {},
   }: {
     remotePath: string
     customFlags: string
+    uploadRatelimitMb?: string
     onRemotePathChange: (value: string) => void
     onCustomFlagsChange: (value: string) => void
+    onUploadRatelimitMbChange?: (value: string) => void
   }) => (
     <div data-testid="advanced-options">
       <label htmlFor="remote-borg-path">Remote Borg Path</label>
@@ -128,6 +132,12 @@ vi.mock('../AdvancedRepositoryOptions', () => ({
         id="custom-borg-flags"
         value={customFlags}
         onChange={(event) => onCustomFlagsChange(event.target.value)}
+      />
+      <label htmlFor="upload-speed-limit">Upload speed limit</label>
+      <input
+        id="upload-speed-limit"
+        value={uploadRatelimitMb}
+        onChange={(event) => onUploadRatelimitMbChange(event.target.value)}
       />
     </div>
   ),
@@ -486,6 +496,28 @@ describe('RepositoryWizard', () => {
             rclone_remote_path: null,
             rclone_remote_path_verified: false,
             rclone_extra_flags: [],
+          }),
+          null
+        )
+      })
+    })
+
+    it('submits upload speed limits in KiB per second', async () => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard('create')
+
+      await advanceCreateToAdvanced(user)
+      setInputValue(screen.getByLabelText(/Upload speed limit/i), '1.5')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /Create Repository/i })).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Create Repository/i }))
+
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalledWith(
+          expect.objectContaining({
+            upload_ratelimit_kib: 1536,
           }),
           null
         )
@@ -1424,6 +1456,84 @@ describe('RepositoryWizard', () => {
       expect(submittedPayload).not.toHaveProperty('execution_target')
       expect(submittedPayload).not.toHaveProperty('executor_type')
       expect(submittedPayload).not.toHaveProperty('agent_machine_id')
+    })
+
+    it('hydrates upload speed limits when editing a repository', async () => {
+      renderWizard('edit', {
+        id: 11,
+        name: 'Throttled Repo',
+        path: '/backups/throttled',
+        mode: 'full',
+        repository_type: 'local',
+        storage_backend: 'local',
+        execution_target: 'local',
+        executor_type: 'server',
+        borg_version: 1,
+        encryption: 'none',
+        compression: 'lz4',
+        connection_id: null,
+        rclone_storage: null,
+        upload_ratelimit_kib: 1536,
+      })
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toHaveValue('Throttled Repo')
+      })
+
+      const advancedStep = screen.getByText('Advanced').closest('div')
+      expect(advancedStep).not.toBeNull()
+      fireEvent.click(advancedStep!)
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Upload speed limit/i)).toHaveValue('1.5')
+      })
+    })
+
+    it('submits null when clearing an edited upload speed limit', async () => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard('edit', {
+        id: 12,
+        name: 'Clear Limit Repo',
+        path: '/backups/clear-limit',
+        mode: 'full',
+        repository_type: 'local',
+        storage_backend: 'local',
+        execution_target: 'local',
+        executor_type: 'server',
+        borg_version: 1,
+        encryption: 'none',
+        compression: 'lz4',
+        connection_id: null,
+        rclone_storage: null,
+        upload_ratelimit_kib: 2048,
+      })
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toHaveValue('Clear Limit Repo')
+      })
+
+      const advancedStep = screen.getByText('Advanced').closest('div')
+      expect(advancedStep).not.toBeNull()
+      fireEvent.click(advancedStep!)
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Upload speed limit/i)).toBeInTheDocument()
+      })
+      await user.clear(screen.getByLabelText(/Upload speed limit/i))
+
+      const reviewStep = screen.getByText('Review').closest('div')
+      expect(reviewStep).not.toBeNull()
+      fireEvent.click(reviewStep!)
+      await user.click(screen.getByRole('button', { name: /Save Changes/i }))
+
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalled()
+      })
+      const [submittedPayload] = onSubmit.mock.calls[0]
+      expect(submittedPayload).toEqual(
+        expect.objectContaining({
+          upload_ratelimit_kib: null,
+        })
+      )
     })
 
     it('allows edit workflow without re-entering the passphrase', async () => {

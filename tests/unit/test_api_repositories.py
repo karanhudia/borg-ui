@@ -406,6 +406,59 @@ class TestRepositoriesCreate:
 
         assert response.status_code == 200
 
+    def test_create_local_repository_persists_upload_ratelimit_default(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Limited Upload Repo",
+                    "path": "/tmp/upload-limit-repo",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "repository_type": "local",
+                    "upload_ratelimit_kib": 1536,
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        repo = test_db.query(Repository).filter_by(name="Limited Upload Repo").one()
+        assert repo.upload_ratelimit_kib == 1536
+
+        list_response = test_client.get("/api/repositories/", headers=admin_headers)
+        data = list_response.json()
+        created = next(item for item in data["repositories"] if item["id"] == repo.id)
+        assert created["upload_ratelimit_kib"] == 1536
+
+    def test_create_repository_rejects_non_positive_upload_ratelimit(
+        self, test_client: TestClient, admin_headers
+    ):
+        response = test_client.post(
+            "/api/repositories/",
+            json={
+                "name": "Invalid Upload Repo",
+                "path": "/tmp/invalid-upload-limit-repo",
+                "encryption": "none",
+                "compression": "lz4",
+                "repository_type": "local",
+                "upload_ratelimit_kib": 0,
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 422
+        assert response.json()["detail"] == {
+            "key": "backend.errors.repo.invalidUploadLimit"
+        }
+
     def test_create_ssh_repository(
         self, test_client: TestClient, admin_headers, test_db
     ):
@@ -1472,6 +1525,63 @@ class TestRepositoriesUpdate:
         )
 
         assert response.status_code == 200
+
+    def test_update_repository_upload_ratelimit_default(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Upload Limit Update",
+            path="/tmp/upload-limit-update-repo",
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}",
+            json={"upload_ratelimit_kib": 2048},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(repo)
+        assert repo.upload_ratelimit_kib == 2048
+
+        detail_response = test_client.get(
+            f"/api/repositories/{repo.id}", headers=admin_headers
+        )
+        assert detail_response.status_code == 200
+        data = detail_response.json()
+        repository = data.get("repository", data)
+        assert repository["upload_ratelimit_kib"] == 2048
+
+    def test_update_repository_rejects_non_positive_upload_ratelimit(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Invalid Upload Limit Update",
+            path="/tmp/invalid-upload-limit-update-repo",
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}",
+            json={"upload_ratelimit_kib": 0},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 422
+        assert response.json()["detail"] == {
+            "key": "backend.errors.repo.invalidUploadLimit"
+        }
 
     def test_update_nonexistent_repository(
         self, test_client: TestClient, admin_headers

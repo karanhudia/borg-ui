@@ -81,6 +81,7 @@ export interface Repository {
   mode?: 'full' | 'observe'
   bypass_lock?: boolean
   custom_flags?: string | null
+  upload_ratelimit_kib?: number | null
   check_extra_flags?: string | null
   archive_count?: number
   total_size?: string | null

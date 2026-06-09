@@ -178,6 +178,14 @@ def _normalize_optional_flags(value: Any) -> Optional[str]:
     return text or None
 
 
+def _validate_upload_ratelimit_kib(value: Optional[int]) -> None:
+    if value is not None and value <= 0:
+        raise HTTPException(
+            status_code=422,
+            detail={"key": "backend.errors.repo.invalidUploadLimit"},
+        )
+
+
 def _raise_check_flag_conflict(exc: CheckFlagConflictError) -> None:
     raise HTTPException(
         status_code=422,
@@ -977,6 +985,7 @@ class RepositoryCreate(BaseModel):
     custom_flags: Optional[str] = (
         None  # Custom command-line flags for borg create (e.g., "--stats --list")
     )
+    upload_ratelimit_kib: Optional[int] = None
     source_connection_id: Optional[int] = (
         None  # SSH connection ID for remote data source (pull-based backups)
     )
@@ -1027,6 +1036,7 @@ class RepositoryImport(BaseModel):
     custom_flags: Optional[str] = (
         None  # Custom command-line flags for borg create (e.g., "--stats --list")
     )
+    upload_ratelimit_kib: Optional[int] = None
     source_connection_id: Optional[int] = (
         None  # SSH connection ID for remote data source (pull-based backups)
     )
@@ -1073,6 +1083,7 @@ class RepositoryUpdate(BaseModel):
     )
     bypass_lock: Optional[bool] = None  # Use --bypass-lock for read-only storage access
     custom_flags: Optional[str] = None  # Custom command-line flags for borg create
+    upload_ratelimit_kib: Optional[int] = None
     source_connection_id: Optional[int] = (
         None  # SSH connection ID for remote data source
     )
@@ -2073,6 +2084,7 @@ async def _create_agent_repository_record(
         mode=repo_data.mode,
         bypass_lock=repo_data.bypass_lock,
         custom_flags=repo_data.custom_flags,
+        upload_ratelimit_kib=repo_data.upload_ratelimit_kib,
         source_ssh_connection_id=source_connection_id,
         source_locations=source_locations_json,
         borg_version=repo_data.borg_version or 1,
@@ -2199,6 +2211,7 @@ def _repository_common_values(
         "mode": repo_data.mode,
         "bypass_lock": repo_data.bypass_lock,
         "custom_flags": repo_data.custom_flags,
+        "upload_ratelimit_kib": repo_data.upload_ratelimit_kib,
         "execution_target": "local",
         "executor_type": "server",
         "agent_machine_id": None,
@@ -2783,6 +2796,7 @@ async def get_repositories(
                 or "full",  # Default to "full" for backward compatibility
                 "bypass_lock": repo.bypass_lock or False,
                 "custom_flags": repo.custom_flags,
+                "upload_ratelimit_kib": repo.upload_ratelimit_kib,
                 "has_running_maintenance": has_check or has_compact or has_prune,
                 "has_schedule": schedule_summary["has_schedule"],
                 "schedule_enabled": schedule_summary["schedule_enabled"],
@@ -2824,6 +2838,7 @@ async def create_repository(
     """Create a new repository"""
     try:
         executor_type = _normalize_repository_executor(repo_data)
+        _validate_upload_ratelimit_kib(repo_data.upload_ratelimit_kib)
         if _payload_uses_rclone(repo_data):
             _require_rclone_feature(db)
         if executor_type == "agent":
@@ -3114,6 +3129,7 @@ async def create_repository(
             mode=repo_data.mode,
             bypass_lock=repo_data.bypass_lock,
             custom_flags=repo_data.custom_flags,
+            upload_ratelimit_kib=repo_data.upload_ratelimit_kib,
             source_ssh_connection_id=source_connection_id,
             source_locations=source_locations_json,
             execution_target=legacy_execution_target(
@@ -3191,6 +3207,7 @@ async def create_repository(
             "executor_type": repository.executor_type,
             "agent_machine_id": repository.agent_machine_id,
             **_agent_machine_summary(repository, db),
+            "upload_ratelimit_kib": repository.upload_ratelimit_kib,
         }
         rclone_storage = _serialize_rclone_storage(repository, db)
         if rclone_storage:
@@ -3227,6 +3244,7 @@ async def import_repository(
     """Import an existing Borg repository"""
     try:
         executor_type = _normalize_repository_executor(repo_data)
+        _validate_upload_ratelimit_kib(repo_data.upload_ratelimit_kib)
         if _payload_uses_rclone(repo_data):
             _require_rclone_feature(db)
         if executor_type == "agent":
@@ -3477,6 +3495,7 @@ async def import_repository(
             mode=repo_data.mode,
             bypass_lock=repo_data.bypass_lock,
             custom_flags=repo_data.custom_flags,
+            upload_ratelimit_kib=repo_data.upload_ratelimit_kib,
             source_ssh_connection_id=source_connection_id,
             source_locations=source_locations_json,
             execution_target=legacy_execution_target(
@@ -3556,6 +3575,7 @@ async def import_repository(
             "executor_type": repository.executor_type,
             "agent_machine_id": repository.agent_machine_id,
             **_agent_machine_summary(repository, db),
+            "upload_ratelimit_kib": repository.upload_ratelimit_kib,
         }
         rclone_storage = _serialize_rclone_storage(repository, db)
         if rclone_storage:
@@ -3829,6 +3849,7 @@ async def get_repository(
                 repository.source_directories
             ),
             "source_locations": _repository_source_locations(repository),
+            "upload_ratelimit_kib": repository.upload_ratelimit_kib,
             "stats": stats,
         }
         rclone_storage = _serialize_rclone_storage(repository, db)
@@ -3873,6 +3894,8 @@ async def update_repository(
         _require_repository_access(db, current_user, repository, "operator")
 
         update_data = repo_data.model_dump(exclude_unset=True)
+        if "upload_ratelimit_kib" in update_data:
+            _validate_upload_ratelimit_kib(repo_data.upload_ratelimit_kib)
 
         # Update fields
         if repo_data.name is not None:
@@ -4589,6 +4612,9 @@ async def update_repository(
 
         if repo_data.custom_flags is not None:
             repository.custom_flags = repo_data.custom_flags
+
+        if "upload_ratelimit_kib" in update_data:
+            repository.upload_ratelimit_kib = repo_data.upload_ratelimit_kib
 
         executor_changed = (
             "executor_type" in update_data or repo_data.execution_target is not None

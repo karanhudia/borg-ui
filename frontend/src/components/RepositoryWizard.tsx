@@ -28,6 +28,7 @@ import { useAnalytics } from '../hooks/useAnalytics'
 import { useFeatureAnalytics } from '../hooks/useFeatureAnalytics'
 import { getApiErrorDetail } from '../utils/apiErrors'
 import { translateBackendKey } from '../utils/translateBackendKey'
+import { kibToUploadRatelimitMb, uploadRatelimitMbToKib } from '../utils/uploadRatelimit'
 import type { SourceLocation } from '../types'
 
 interface Repository extends RepositoryData {
@@ -106,6 +107,7 @@ interface WizardState {
   preHookTimeout: number
   postHookTimeout: number
   hookFailureMode: 'fail' | 'continue' | 'skip'
+  uploadRatelimitMb: string
 }
 
 const createInitialState = (): WizardState => ({
@@ -142,6 +144,7 @@ const createInitialState = (): WizardState => ({
   preHookTimeout: 300,
   postHookTimeout: 300,
   hookFailureMode: 'fail',
+  uploadRatelimitMb: '',
 })
 
 function repositorySourceLocations(repository?: Repository): SourceLocation[] {
@@ -461,6 +464,7 @@ const RepositoryWizard = ({
         : repository.continue_on_hook_failure
           ? 'continue'
           : 'fail',
+      uploadRatelimitMb: kibToUploadRatelimitMb(repository.upload_ratelimit_kib),
     })
   }, [repository])
 
@@ -834,6 +838,7 @@ const RepositoryWizard = ({
       post_hook_timeout: wizardState.postHookTimeout,
       continue_on_hook_failure: wizardState.hookFailureMode === 'continue',
       skip_on_hook_failure: wizardState.hookFailureMode === 'skip',
+      upload_ratelimit_kib: uploadRatelimitMbToKib(wizardState.uploadRatelimitMb),
       bypass_lock: wizardState.bypassLock,
       executor_type: wizardState.executionTarget === 'agent' ? 'agent' : 'server',
       execution_target: directRcloneEnabled
@@ -1162,6 +1167,7 @@ const RepositoryWizard = ({
               postHookTimeout: wizardState.postHookTimeout,
               hookFailureMode: wizardState.hookFailureMode,
               customFlags: wizardState.customFlags,
+              uploadRatelimitMb: wizardState.uploadRatelimitMb,
             }}
             onChange={handleStateChange}
           />
@@ -1183,6 +1189,7 @@ const RepositoryWizard = ({
               preHookTimeout: wizardState.preHookTimeout,
               postHookTimeout: wizardState.postHookTimeout,
               hookFailureMode: wizardState.hookFailureMode,
+              uploadRatelimitMb: wizardState.uploadRatelimitMb,
             }}
             onChange={handleStateChange}
             onBrowseExclude={
