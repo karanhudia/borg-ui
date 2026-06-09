@@ -9,13 +9,14 @@ import { translateBackendKey } from '../translateBackendKey'
 
 const locales = { de, en, es, it: itLocale }
 
-const borg2RepoErrorKeys = [
+const repositoryErrorKeys = [
   'backend.errors.repo.nameExists',
   'backend.errors.repo.pathExists',
   'backend.errors.repo.initFailed',
   'backend.errors.repo.verificationFailed',
   'backend.errors.repo.infoFailed',
   'backend.errors.repo.listFailed',
+  'backend.errors.repo.failedToInitializeRepository',
   'backend.errors.repo.remoteBorg2Incompatible',
 ] as const
 
@@ -29,9 +30,9 @@ function lookup(locale: unknown, key: string): unknown {
 }
 
 describe('backend repository translations', () => {
-  it('defines Borg 2 repository error keys in every bundled locale', () => {
+  it('defines repository error keys in every bundled locale', () => {
     for (const [localeName, locale] of Object.entries(locales)) {
-      for (const key of borg2RepoErrorKeys) {
+      for (const key of repositoryErrorKeys) {
         const value = lookup(locale, key)
 
         expect(value, `${localeName}:${key}`).toEqual(expect.any(String))
@@ -46,6 +47,17 @@ describe('backend repository translations', () => {
     expect(
       translateBackendKey({
         key: 'backend.errors.repo.initFailed',
+        params: { error: 'remote: borg: command not found' },
+      })
+    ).toBe('Failed to initialize repository: remote: borg: command not found')
+  })
+
+  it('translates legacy repository initialization failures with backend error params', async () => {
+    await i18n.changeLanguage('en')
+
+    expect(
+      translateBackendKey({
+        key: 'backend.errors.repo.failedToInitializeRepository',
         params: { error: 'remote: borg: command not found' },
       })
     ).toBe('Failed to initialize repository: remote: borg: command not found')
