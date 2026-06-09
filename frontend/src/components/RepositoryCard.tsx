@@ -11,6 +11,7 @@ import {
   Play,
   Trash2,
   Eraser,
+  FolderX,
   SquarePen,
   Archive,
   HardDrive,
@@ -47,6 +48,7 @@ interface RepositoryCardProps {
   onBreakLock: () => void
   onEdit: () => void
   onDelete: () => void
+  onPermanentDelete?: () => void
   onBackupNow: () => void
   onViewArchives: () => void
   onViewBackupPlans?: () => void
@@ -56,6 +58,7 @@ interface RepositoryCardProps {
   getCompressionLabel: (compression: string) => string
   canManageRepository?: boolean
   canBreakLock?: boolean
+  canPermanentDeleteRepository?: boolean
   canDo: (action: RepoAction) => boolean
   onJobCompleted?: (repositoryId: number) => void
 }
@@ -83,6 +86,7 @@ export default function RepositoryCard({
   onBreakLock,
   onEdit,
   onDelete,
+  onPermanentDelete,
   onBackupNow,
   onViewArchives,
   onViewBackupPlans,
@@ -92,6 +96,7 @@ export default function RepositoryCard({
   getCompressionLabel,
   canManageRepository = false,
   canBreakLock = false,
+  canPermanentDeleteRepository = false,
   canDo,
   onJobCompleted,
 }: RepositoryCardProps) {
@@ -1128,6 +1133,26 @@ export default function RepositoryCard({
                         <Trash2 size={16} />
                       </IconButton>
                     </Tooltip>
+                    {canPermanentDeleteRepository && onPermanentDelete && (
+                      <Tooltip title={t('repositoryCard.buttons.permanentDelete')} arrow>
+                        <IconButton
+                          size="small"
+                          onClick={onPermanentDelete}
+                          aria-label={t('repositoryCard.buttons.permanentDelete')}
+                          disabled={isMaintenanceRunning}
+                          sx={{
+                            ...iconBtnSx,
+                            color: alpha(theme.palette.error.main, 0.72),
+                            '&:hover': {
+                              color: theme.palette.error.dark,
+                              bgcolor: alpha(theme.palette.error.main, 0.13),
+                            },
+                          }}
+                        >
+                          <FolderX size={16} />
+                        </IconButton>
+                      </Tooltip>
+                    )}
                   </>
                 )}
               </>

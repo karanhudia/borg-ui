@@ -496,6 +496,23 @@ describe('API Configuration', () => {
 })
 
 describe('Repositories API - Repository wipe', () => {
+  it('posts permanent repository delete confirmations to the permanent delete endpoint', async () => {
+    const mock = new MockAdapter(api)
+    const payload = {
+      confirmation_phrase: 'Primary Repository',
+      understood: true,
+    }
+    mock.onPost('/repositories/7/permanent-delete').reply((config) => {
+      expect(JSON.parse(config.data)).toEqual(payload)
+      return [200, { success: true }]
+    })
+
+    const response = await repositoriesAPI.permanentlyDeleteRepository(7, payload)
+
+    expect(response.data).toEqual({ success: true })
+    mock.restore()
+  })
+
   it('posts wipe preview requests to the repository preview endpoint', async () => {
     const mock = new MockAdapter(api)
     mock.onPost('/repositories/7/wipe-preview').reply((config) => {

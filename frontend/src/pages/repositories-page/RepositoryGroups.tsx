@@ -29,12 +29,14 @@ interface RepositoryGroupsProps {
   onBreakLock: (repository: Repository) => void
   onEdit: (repository: Repository) => void
   onDelete: (repository: Repository) => void
+  onPermanentDelete: (repository: Repository) => void
   onBackupNow: (repository: Repository) => void
   onViewArchives: (repository: Repository) => void
   onViewBackupPlans: (repository: Repository) => void
   onCreateBackupPlan: (repository: Repository) => void
   onRcloneSync: (repository: Repository) => void
   onRcloneHydrate: (repository: Repository) => void
+  canPermanentDeleteRepository: (repository: Repository) => boolean
   getCompressionLabel: (compression: string) => string
   onJobCompleted: (repositoryId: number) => void
 }
@@ -58,12 +60,14 @@ export function RepositoryGroups({
   onBreakLock,
   onEdit,
   onDelete,
+  onPermanentDelete,
   onBackupNow,
   onViewArchives,
   onViewBackupPlans,
   onCreateBackupPlan,
   onRcloneSync,
   onRcloneHydrate,
+  canPermanentDeleteRepository,
   getCompressionLabel,
   onJobCompleted,
 }: RepositoryGroupsProps) {
@@ -180,6 +184,7 @@ export function RepositoryGroups({
                 onBreakLock={() => onBreakLock(repository)}
                 onEdit={() => onEdit(repository)}
                 onDelete={() => onDelete(repository)}
+                onPermanentDelete={() => onPermanentDelete(repository)}
                 onBackupNow={() => onBackupNow(repository)}
                 onViewArchives={() => onViewArchives(repository)}
                 onViewBackupPlans={() => onViewBackupPlans(repository)}
@@ -189,6 +194,7 @@ export function RepositoryGroups({
                 getCompressionLabel={getCompressionLabel}
                 canManageRepository={canManageRepositoriesGlobally}
                 canBreakLock={canBreakLock(repository)}
+                canPermanentDeleteRepository={canPermanentDeleteRepository(repository)}
                 canDo={(action) => canDo(repository.id, action)}
                 onJobCompleted={onJobCompleted}
               />

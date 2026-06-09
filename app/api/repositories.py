@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any, Union
 from datetime import datetime, timezone
+from pathlib import Path as FilesystemPath
 from types import SimpleNamespace
 import structlog
 import os
@@ -145,6 +146,11 @@ class RepositoryWipeExecuteRequest(BaseModel):
     run_compact: bool = True
 
 
+class RepositoryPermanentDeleteRequest(BaseModel):
+    confirmation_phrase: str
+    understood: bool
+
+
 def _normalize_restore_check_paths(paths: Any) -> list[str]:
     if not paths:
         return []
@@ -279,6 +285,77 @@ def _empty_running_jobs_response() -> Dict[str, Any]:
         "restore_check_job": None,
         "wipe_job": None,
     }
+
+
+def _permanent_delete_target(repository: Repository) -> FilesystemPath:
+    repository_type = (repository.repository_type or "local").strip().lower()
+    execution_target = (repository.execution_target or "local").strip().lower()
+    executor_type = (repository.executor_type or "server").strip().lower()
+
+    if (
+        repository_type != "local"
+        or execution_target != "local"
+        or executor_type == "agent"
+        or repository.connection_id
+        or repository.agent_machine_id
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.permanentDeleteLocalOnly"},
+        )
+
+    raw_path = (repository.path or "").strip()
+    if not raw_path or "://" in raw_path:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.permanentDeleteLocalOnly"},
+        )
+
+    target = FilesystemPath(os.path.expanduser(raw_path))
+    if not target.is_absolute():
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.permanentDeleteUnsafePath"},
+        )
+
+    if not target.exists():
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "key": "backend.errors.repo.permanentDeletePathMissing",
+                "params": {"path": raw_path},
+            },
+        )
+
+    if target.is_symlink() or not target.is_dir():
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.permanentDeleteUnsafePath"},
+        )
+
+    resolved_target = target.resolve()
+    if resolved_target != target:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.permanentDeleteUnsafePath"},
+        )
+
+    if resolved_target.parent == resolved_target or len(resolved_target.parts) <= 2:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.permanentDeleteUnsafePath"},
+        )
+
+    if (
+        not (resolved_target / "config").is_file()
+        or not (resolved_target / "data").is_dir()
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.permanentDeleteNotBorgRepository"},
+        )
+
+    return resolved_target
 
 
 # Helper function to get standard SSH options
@@ -4779,6 +4856,73 @@ async def delete_repository(
         raise HTTPException(
             status_code=500,
             detail={"key": "backend.errors.repo.failedToDeleteRepository"},
+        )
+
+
+@router.post("/{repo_id}/permanent-delete")
+async def permanently_delete_repository(
+    repo_id: int,
+    request: RepositoryPermanentDeleteRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete a local repository directory, then remove the Borg UI record."""
+    try:
+        repository = db.query(Repository).filter(Repository.id == repo_id).first()
+        if not repository:
+            raise HTTPException(
+                status_code=404,
+                detail={"key": "backend.errors.repo.repositoryNotFound"},
+            )
+        _require_repository_access(db, current_user, repository, "operator")
+
+        if not request.understood or request.confirmation_phrase != repository.name:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "key": "backend.errors.repo.permanentDeleteConfirmationMismatch"
+                },
+            )
+
+        repository_wipe_service._ensure_no_conflicting_operations(db, repository)
+        target = _permanent_delete_target(repository)
+
+        try:
+            shutil.rmtree(target)
+        except OSError as exc:
+            logger.error(
+                "Failed to remove repository files",
+                repo_id=repo_id,
+                path=repository.path,
+                error=str(exc),
+            )
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "key": "backend.errors.repo.failedToRemoveRepositoryFiles",
+                    "params": {"path": repository.path},
+                },
+            ) from exc
+
+        await delete_repository(repo_id, current_user, db)
+        logger.info(
+            "Repository permanently deleted",
+            repo_id=repo_id,
+            path=str(target),
+            user=current_user.username,
+        )
+        return {
+            "success": True,
+            "message": "backend.success.repo.repositoryPermanentlyDeleted",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error("Failed to permanently delete repository", error=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail={"key": "backend.errors.repo.failedToPermanentlyDeleteRepository"},
         )
 
 
