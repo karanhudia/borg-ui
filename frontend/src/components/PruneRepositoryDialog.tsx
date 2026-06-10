@@ -139,7 +139,10 @@ function segmentArchiveLine(line: string) {
   // Pattern: <Verb> archive <rule?>: <spaces><name> <date> [<hash>]
   const ruleMatch = line.match(/(\(rule:[^)]+\))/)
   const hashMatch = line.match(/\[([a-f0-9]{16,})\]/)
-  const colonIdx = line.indexOf(':')
+  const colonIdx =
+    ruleMatch && ruleMatch.index !== undefined
+      ? line.indexOf(':', ruleMatch.index + ruleMatch[1].length)
+      : line.indexOf(':')
 
   if (colonIdx === -1) return [{ text: line, kind: 'verb' as const }]
 

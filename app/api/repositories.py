@@ -5274,7 +5274,9 @@ async def prune_repository(
                 prune_job.completed_at = datetime.utcnow()
                 db.commit()
                 db.refresh(prune_job)
-            stdout_output = read_job_logs(prune_job, fallback_to_logs=True)
+            stdout_output = read_job_logs(
+                prune_job, fallback_to_logs=True, log_save_policy="all_jobs"
+            )
             if not stdout_output:
                 stdout_output = str(result.get("stdout") or "")
             return {
@@ -5356,7 +5358,9 @@ async def prune_repository(
         db.refresh(prune_job)
 
         # Read log file if it exists
-        stdout_output = read_job_logs(prune_job, fallback_to_logs=True)
+        stdout_output = read_job_logs(
+            prune_job, fallback_to_logs=True, log_save_policy="all_jobs"
+        )
         stderr_output = ""
 
         # Return results in format expected by frontend
