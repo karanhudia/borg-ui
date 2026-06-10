@@ -1,6 +1,6 @@
 import asyncio
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -324,6 +324,179 @@ class TestBackupPlanRoutes:
             f"/api/backup-plans/{created['id']}", headers=admin_headers
         )
         assert get_response.status_code == 404
+
+    def test_create_plan_persists_upload_ratelimit_schedule_policies(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        policies = [
+            {
+                "label": " Daytime cap ",
+                "start_time": "08:00",
+                "end_time": "18:00",
+                "upload_ratelimit_kib": 512,
+            },
+            {
+                "label": "Overnight unlimited",
+                "start_time": "18:00",
+                "end_time": "08:00",
+                "upload_ratelimit_kib": None,
+            },
+        ]
+
+        create_response = test_client.post(
+            "/api/backup-plans/",
+            json=_payload(
+                [repo.id],
+                upload_ratelimit_kib=2048,
+                upload_ratelimit_schedule_policies=policies,
+            ),
+            headers=admin_headers,
+        )
+
+        assert create_response.status_code == 201
+        created = create_response.json()
+        assert created["upload_ratelimit_schedule_policies"] == [
+            {
+                "label": "Daytime cap",
+                "start_time": "08:00",
+                "end_time": "18:00",
+                "upload_ratelimit_kib": 512,
+            },
+            {
+                "label": "Overnight unlimited",
+                "start_time": "18:00",
+                "end_time": "08:00",
+                "upload_ratelimit_kib": None,
+            },
+        ]
+
+        plan = test_db.query(BackupPlan).filter_by(id=created["id"]).one()
+        assert json.loads(plan.upload_ratelimit_schedule_policies) == [
+            {
+                "label": "Daytime cap",
+                "start_time": "08:00",
+                "end_time": "18:00",
+                "upload_ratelimit_kib": 512,
+            },
+            {
+                "label": "Overnight unlimited",
+                "start_time": "18:00",
+                "end_time": "08:00",
+                "upload_ratelimit_kib": None,
+            },
+        ]
+
+        detail_response = test_client.get(
+            f"/api/backup-plans/{created['id']}",
+            headers=admin_headers,
+        )
+
+        assert detail_response.status_code == 200
+        assert (
+            detail_response.json()["upload_ratelimit_schedule_policies"]
+            == created["upload_ratelimit_schedule_policies"]
+        )
+
+    def test_update_plan_replaces_upload_ratelimit_schedule_policies(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        create_response = test_client.post(
+            "/api/backup-plans/",
+            json=_payload(
+                [repo.id],
+                upload_ratelimit_schedule_policies=[
+                    {
+                        "label": "Daytime cap",
+                        "start_time": "08:00",
+                        "end_time": "18:00",
+                        "upload_ratelimit_kib": 512,
+                    }
+                ],
+            ),
+            headers=admin_headers,
+        )
+        assert create_response.status_code == 201
+
+        update_response = test_client.put(
+            f"/api/backup-plans/{create_response.json()['id']}",
+            json=_payload(
+                [repo.id],
+                name="Updated upload policy plan",
+                upload_ratelimit_schedule_policies=[
+                    {
+                        "label": "Overnight unlimited",
+                        "start_time": "18:00",
+                        "end_time": "08:00",
+                        "upload_ratelimit_kib": None,
+                    }
+                ],
+            ),
+            headers=admin_headers,
+        )
+
+        assert update_response.status_code == 200
+        assert update_response.json()["upload_ratelimit_schedule_policies"] == [
+            {
+                "label": "Overnight unlimited",
+                "start_time": "18:00",
+                "end_time": "08:00",
+                "upload_ratelimit_kib": None,
+            }
+        ]
+
+    def test_create_plan_rejects_invalid_upload_ratelimit_policy_time(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+
+        response = test_client.post(
+            "/api/backup-plans/",
+            json=_payload(
+                [repo.id],
+                upload_ratelimit_schedule_policies=[
+                    {
+                        "label": "Invalid time",
+                        "start_time": "25:00",
+                        "end_time": "18:00",
+                        "upload_ratelimit_kib": 512,
+                    }
+                ],
+            ),
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 422
+        assert response.json()["detail"]["key"] == (
+            "backend.errors.backupPlans.invalidUploadLimitPolicy"
+        )
+
+    def test_create_plan_rejects_non_positive_upload_ratelimit_policy_cap(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+
+        response = test_client.post(
+            "/api/backup-plans/",
+            json=_payload(
+                [repo.id],
+                upload_ratelimit_schedule_policies=[
+                    {
+                        "label": "Invalid cap",
+                        "start_time": "08:00",
+                        "end_time": "18:00",
+                        "upload_ratelimit_kib": 0,
+                    }
+                ],
+            ),
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 422
+        assert response.json()["detail"]["key"] == (
+            "backend.errors.backupPlans.invalidUploadLimitPolicy"
+        )
 
     def test_list_filters_plans_by_linked_repository(
         self, test_client: TestClient, admin_headers, test_db
@@ -4465,6 +4638,135 @@ class TestBackupPlanRoutes:
         with patch(
             "app.services.backup_plan_execution_service.backup_service.execute_backup",
             side_effect=fake_execute_backup,
+        ):
+            await backup_plan_execution_service.execute_run(run.id)
+
+        test_db.refresh(run)
+        assert run.status == "completed"
+
+    @pytest.mark.asyncio
+    async def test_execute_plan_run_prefers_active_upload_ratelimit_policy(
+        self, test_db
+    ):
+        repo = _create_repo(
+            test_db,
+            "Primary",
+            "/repos/primary",
+            upload_ratelimit_kib=768,
+        )
+        plan, run = _create_execution_plan(
+            test_db,
+            [repo],
+            upload_ratelimit_kib=1024,
+            timezone="UTC",
+            upload_ratelimit_schedule_policies=json.dumps(
+                [
+                    {
+                        "label": "Daytime cap",
+                        "start_time": "08:00",
+                        "end_time": "18:00",
+                        "upload_ratelimit_kib": 512,
+                    }
+                ]
+            ),
+        )
+        link = (
+            test_db.query(BackupPlanRepository)
+            .filter_by(backup_plan_id=plan.id, repository_id=repo.id)
+            .one()
+        )
+        link.upload_ratelimit_kib_override = 2048
+        test_db.commit()
+
+        class FixedDateTime:
+            @classmethod
+            def now(cls, tz=None):
+                fixed = datetime(2026, 6, 10, 12, 30)
+                if tz is not None:
+                    return fixed.replace(tzinfo=timezone.utc).astimezone(tz)
+                return fixed
+
+            @classmethod
+            def utcnow(cls):
+                return datetime(2026, 6, 10, 12, 30)
+
+        async def fake_execute_backup(job_id, repository, db, **kwargs):
+            assert kwargs["upload_ratelimit_kib"] == 512
+            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job.status = "completed"
+            job.completed_at = datetime.utcnow()
+            db.commit()
+
+        with (
+            patch(
+                "app.services.backup_plan_execution_service.datetime",
+                FixedDateTime,
+            ),
+            patch(
+                "app.services.backup_plan_execution_service.backup_service.execute_backup",
+                side_effect=fake_execute_backup,
+            ),
+        ):
+            await backup_plan_execution_service.execute_run(run.id)
+
+        test_db.refresh(run)
+        assert run.status == "completed"
+
+    @pytest.mark.asyncio
+    async def test_execute_plan_run_active_unlimited_policy_clears_constant_limit(
+        self, test_db
+    ):
+        repo = _create_repo(
+            test_db,
+            "Primary",
+            "/repos/primary",
+            upload_ratelimit_kib=768,
+        )
+        _plan, run = _create_execution_plan(
+            test_db,
+            [repo],
+            upload_ratelimit_kib=1024,
+            timezone="UTC",
+            upload_ratelimit_schedule_policies=json.dumps(
+                [
+                    {
+                        "label": "Overnight unlimited",
+                        "start_time": "18:00",
+                        "end_time": "08:00",
+                        "upload_ratelimit_kib": None,
+                    }
+                ]
+            ),
+        )
+
+        class FixedDateTime:
+            @classmethod
+            def now(cls, tz=None):
+                fixed = datetime(2026, 6, 10, 23, 15)
+                if tz is not None:
+                    return fixed.replace(tzinfo=timezone.utc).astimezone(tz)
+                return fixed
+
+            @classmethod
+            def utcnow(cls):
+                return datetime(2026, 6, 10, 23, 15)
+
+        async def fake_execute_backup(job_id, repository, db, **kwargs):
+            assert kwargs["upload_ratelimit_kib"] is None
+            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job.status = "completed"
+            job.completed_at = datetime.utcnow()
+            db.commit()
+
+        with (
+            patch(
+                "app.services.backup_plan_execution_service.datetime",
+                FixedDateTime,
+            ),
+            patch(
+                "app.services.backup_plan_execution_service.backup_service.execute_backup",
+                side_effect=fake_execute_backup,
+            ),
         ):
             await backup_plan_execution_service.execute_run(run.id)
 

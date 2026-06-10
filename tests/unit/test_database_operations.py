@@ -618,3 +618,36 @@ class TestMigration123:
             RuntimeError, match="SQLite.*DROP COLUMN.*upload_ratelimit_kib"
         ):
             migration.downgrade(FakeDb())
+
+
+@pytest.mark.unit
+class TestMigration124:
+    """Tests for migration 124: backup plan upload rate limit policies."""
+
+    def test_adds_backup_plan_upload_ratelimit_policies_column(self):
+        import importlib
+
+        from sqlalchemy import create_engine
+
+        migration = importlib.import_module(
+            "app.database.migrations.124_add_backup_plan_upload_ratelimit_policies"
+        )
+        engine = create_engine("sqlite:///:memory:", future=True)
+        with engine.connect() as conn:
+            conn.execute(
+                text("""
+                CREATE TABLE backup_plans (
+                    id INTEGER PRIMARY KEY,
+                    name VARCHAR NOT NULL
+                )
+                """)
+            )
+            conn.commit()
+
+            migration.upgrade(conn)
+            migration.upgrade(conn)
+            columns = {
+                row[1] for row in conn.execute(text("PRAGMA table_info(backup_plans)"))
+            }
+
+        assert "upload_ratelimit_schedule_policies" in columns

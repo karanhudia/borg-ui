@@ -261,6 +261,13 @@ export interface BackupPlanRepositoryLink {
   repository?: Repository | null
 }
 
+export interface UploadRatelimitSchedulePolicy {
+  label: string
+  start_time: string
+  end_time: string
+  upload_ratelimit_kib?: number | null
+}
+
 export type BackupPlanScriptHookType = 'pre-backup' | 'post-backup'
 export type BackupPlanScriptRunCondition = 'success' | 'failure' | 'warning' | 'always'
 
@@ -303,6 +310,7 @@ export interface BackupPlan {
   compression: string
   custom_flags?: string | null
   upload_ratelimit_kib?: number | null
+  upload_ratelimit_schedule_policies?: UploadRatelimitSchedulePolicy[]
   repository_run_mode: 'series' | 'parallel'
   max_parallel_repositories: number
   failure_behavior: 'continue' | 'stop'
@@ -391,6 +399,7 @@ export interface BackupPlanData {
   compression: string
   custom_flags?: string | null
   upload_ratelimit_kib?: number | null
+  upload_ratelimit_schedule_policies?: UploadRatelimitSchedulePolicy[]
   repository_run_mode: 'series' | 'parallel'
   max_parallel_repositories: number
   failure_behavior: 'continue' | 'stop'

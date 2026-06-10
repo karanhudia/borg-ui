@@ -17,6 +17,9 @@ const translations: Record<string, string> = {
   'backupPlans.wizard.fields.archiveNameTemplate': 'Archive name',
   'backupPlans.wizard.fields.cronExpression': 'Cron expression',
   'backupPlans.wizard.fields.timezone': 'Timezone',
+  'backupPlans.wizard.review.scheduledUploadLimits': 'Scheduled upload limits',
+  'backupPlans.wizard.review.uploadPolicyLimit': '{{limit}} MB/s',
+  'backupPlans.wizard.review.uploadPolicyUnlimited': 'Unlimited',
   'backupPlans.wizard.maintenance.title': 'Maintenance',
   'backupPlans.wizard.review.check': 'Check',
   'backupPlans.wizard.review.checkDuration': '{{seconds}} seconds',
@@ -52,6 +55,7 @@ const t = (key: string, options?: Record<string, unknown>) => {
     .replace('{{daily}}', String(options?.daily ?? ''))
     .replace('{{weekly}}', String(options?.weekly ?? ''))
     .replace('{{seconds}}', String(options?.seconds ?? ''))
+    .replace('{{limit}}', String(options?.limit ?? ''))
 }
 
 const repository: Repository = {
@@ -75,6 +79,37 @@ function renderReview(wizardState: WizardState) {
 }
 
 describe('ReviewStep', () => {
+  it('shows scheduled upload limit windows', () => {
+    renderReview({
+      ...createInitialState(),
+      name: 'Policy backup',
+      sourceDirectories: ['/data'],
+      repositoryIds: [10],
+      uploadRatelimitSchedulePolicies: [
+        {
+          label: 'Daytime cap',
+          startTime: '08:00',
+          endTime: '18:00',
+          uploadRatelimitMb: '0.5',
+        },
+        {
+          label: 'Overnight unlimited',
+          startTime: '18:00',
+          endTime: '08:00',
+          uploadRatelimitMb: '',
+        },
+      ],
+    })
+
+    expect(screen.getByText('Scheduled upload limits')).toBeInTheDocument()
+    expect(screen.getByText('Daytime cap')).toBeInTheDocument()
+    expect(screen.getByText('08:00-18:00')).toBeInTheDocument()
+    expect(screen.getByText('0.5 MB/s')).toBeInTheDocument()
+    expect(screen.getByText('Overnight unlimited')).toBeInTheDocument()
+    expect(screen.getByText('18:00-08:00')).toBeInTheDocument()
+    expect(screen.getByText('Unlimited')).toBeInTheDocument()
+  })
+
   it('shows live database source paths next to final Borg paths', () => {
     renderReview({
       ...createInitialState(),

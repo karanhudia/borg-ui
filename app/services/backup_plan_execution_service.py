@@ -6,7 +6,7 @@ import os
 import shlex
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -50,6 +50,7 @@ from app.services.repository_executor import (
     queue_agent_backup_job,
     wait_for_agent_backup_job,
 )
+from app.services.upload_ratelimit_policies import resolve_scheduled_upload_ratelimit
 from app.services.script_executor import execute_script
 from app.services.template_service import get_system_variables
 from app.utils.archive_names import build_archive_name
@@ -86,6 +87,7 @@ class PlanRunContext:
     compression: str
     custom_flags: Optional[str]
     upload_ratelimit_kib: Optional[int]
+    upload_ratelimit_schedule_policies: list[dict[str, Any]]
     repository_run_mode: str
     max_parallel_repositories: int
     failure_behavior: str
@@ -132,6 +134,18 @@ def _json_list(value: Optional[str]) -> list[str]:
     except (TypeError, json.JSONDecodeError):
         return []
     return decoded if isinstance(decoded, list) else []
+
+
+def _json_dict_list(value: Optional[str]) -> list[dict[str, Any]]:
+    if not value:
+        return []
+    try:
+        decoded = json.loads(value)
+    except (TypeError, json.JSONDecodeError):
+        return []
+    if not isinstance(decoded, list):
+        return []
+    return [item for item in decoded if isinstance(item, dict)]
 
 
 def _is_failure(status: Optional[str]) -> bool:
@@ -1014,6 +1028,7 @@ class BackupPlanExecutionService:
                 raise ValueError("Backup plan has no enabled repositories")
 
             now = datetime.now()
+            upload_policy_now = datetime.now(timezone.utc)
             context = PlanRunContext(
                 plan_id=plan.id,
                 plan_name=plan.name,
@@ -1031,6 +1046,9 @@ class BackupPlanExecutionService:
                 compression=plan.compression,
                 custom_flags=plan.custom_flags,
                 upload_ratelimit_kib=plan.upload_ratelimit_kib,
+                upload_ratelimit_schedule_policies=_json_dict_list(
+                    plan.upload_ratelimit_schedule_policies
+                ),
                 repository_run_mode=plan.repository_run_mode,
                 max_parallel_repositories=max(1, plan.max_parallel_repositories or 1),
                 failure_behavior=plan.failure_behavior,
@@ -1057,37 +1075,44 @@ class BackupPlanExecutionService:
                 time_str=now.strftime("%H:%M:%S"),
                 unix_timestamp=str(int(now.timestamp() * 1000)),
             )
-            repositories = [
-                RepositoryRunContext(
-                    repository_id=link.repository_id,
-                    repository_name=link.repository.name,
-                    execution_order=link.execution_order,
-                    compression=(
-                        link.repository.compression or context.compression
-                        if link.compression_source == "repository"
-                        else link.compression_override
-                        if link.compression_source == "custom"
-                        and link.compression_override
-                        else context.compression
-                    ),
-                    custom_flags=(
-                        link.custom_flags_override
-                        if link.custom_flags_override is not None
-                        else context.custom_flags
-                    ),
-                    upload_ratelimit_kib=(
-                        link.upload_ratelimit_kib_override
-                        if link.upload_ratelimit_kib_override is not None
-                        else context.upload_ratelimit_kib
-                        if context.upload_ratelimit_kib is not None
-                        else link.repository.upload_ratelimit_kib
-                    ),
-                    failure_behavior=(
-                        link.failure_behavior_override or context.failure_behavior
-                    ),
+            repositories = []
+            for link in enabled_links:
+                base_upload_ratelimit_kib = (
+                    link.upload_ratelimit_kib_override
+                    if link.upload_ratelimit_kib_override is not None
+                    else context.upload_ratelimit_kib
+                    if context.upload_ratelimit_kib is not None
+                    else link.repository.upload_ratelimit_kib
                 )
-                for link in enabled_links
-            ]
+                repositories.append(
+                    RepositoryRunContext(
+                        repository_id=link.repository_id,
+                        repository_name=link.repository.name,
+                        execution_order=link.execution_order,
+                        compression=(
+                            link.repository.compression or context.compression
+                            if link.compression_source == "repository"
+                            else link.compression_override
+                            if link.compression_source == "custom"
+                            and link.compression_override
+                            else context.compression
+                        ),
+                        custom_flags=(
+                            link.custom_flags_override
+                            if link.custom_flags_override is not None
+                            else context.custom_flags
+                        ),
+                        upload_ratelimit_kib=resolve_scheduled_upload_ratelimit(
+                            base_upload_ratelimit_kib=base_upload_ratelimit_kib,
+                            policies=context.upload_ratelimit_schedule_policies,
+                            run_at=upload_policy_now,
+                            timezone_name=plan.timezone,
+                        ),
+                        failure_behavior=(
+                            link.failure_behavior_override or context.failure_behavior
+                        ),
+                    )
+                )
 
             run.status = "running"
             run.started_at = datetime.utcnow()

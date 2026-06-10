@@ -6,7 +6,15 @@ import type {
   SourceLocation,
   SourceSnapshotConfig,
   SourceType,
+  UploadRatelimitSchedulePolicy,
 } from '../types'
+
+export interface UploadRatelimitSchedulePolicyState {
+  label: string
+  startTime: string
+  endTime: string
+  uploadRatelimitMb: string
+}
 
 export interface BackupPlanPayloadState {
   name: string
@@ -22,6 +30,7 @@ export interface BackupPlanPayloadState {
   archiveNameTemplate: string
   customFlags: string
   uploadRatelimitMb: string
+  uploadRatelimitSchedulePolicies?: UploadRatelimitSchedulePolicyState[]
   repositoryRunMode: 'series' | 'parallel'
   maxParallelRepositories: number
   failureBehavior: 'continue' | 'stop'
@@ -107,6 +116,19 @@ function mbToKib(value: string): number | null {
   const parsed = Number(value)
   if (!Number.isFinite(parsed) || parsed <= 0) return null
   return Math.round(parsed * 1024)
+}
+
+function normalizeUploadRatelimitSchedulePolicies(
+  policies?: UploadRatelimitSchedulePolicyState[]
+): UploadRatelimitSchedulePolicy[] {
+  return (policies || [])
+    .map((policy) => ({
+      label: policy.label.trim(),
+      start_time: policy.startTime,
+      end_time: policy.endTime,
+      upload_ratelimit_kib: mbToKib(policy.uploadRatelimitMb),
+    }))
+    .filter((policy) => policy.label.length > 0 || policy.start_time || policy.end_time)
 }
 
 function normalizeSourceLocations(state: BackupPlanPayloadState): SourceLocation[] {
@@ -351,6 +373,9 @@ export function buildBackupPlanPayload(
     compression: state.compression,
     custom_flags: state.customFlags.trim() || null,
     upload_ratelimit_kib: mbToKib(state.uploadRatelimitMb),
+    upload_ratelimit_schedule_policies: normalizeUploadRatelimitSchedulePolicies(
+      state.uploadRatelimitSchedulePolicies
+    ),
     repository_run_mode: state.repositoryRunMode,
     max_parallel_repositories:
       state.repositoryRunMode === 'parallel' ? state.maxParallelRepositories : 1,
