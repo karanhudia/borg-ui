@@ -184,6 +184,52 @@ class TestRepositoryApiDispatch:
         mock_router.assert_called_once()
         fake_router.prune.assert_awaited_once()
 
+    def test_prune_dry_run_response_includes_successful_log_output(
+        self, test_client: TestClient, admin_headers, test_db, tmp_path
+    ):
+        repo = Repository(
+            name="Repo Dry Run Logs",
+            path="/tmp/repo-dry-run-logs",
+            encryption="none",
+            repository_type="local",
+            borg_version=1,
+        )
+        settings = SystemSettings(log_save_policy="failed_and_warnings")
+        test_db.add_all([repo, settings])
+        test_db.commit()
+        test_db.refresh(repo)
+
+        dry_run_logs = "\n".join(
+            [
+                '[stderr] {"type": "log_message", "message": "Keeping archive (rule: daily #1):            repo-2026-06-09      Tue, 2026-06-09 04:00:42 [abcdef0123456789]", "levelname": "INFO", "name": "borg.output.list"}',
+                '[stderr] {"type": "log_message", "message": "Would prune:                                 repo-2026-06-08      Mon, 2026-06-08 22:24:37 [1234567890abcdef]", "levelname": "INFO", "name": "borg.output.list"}',
+            ]
+        )
+
+        async def complete_prune_with_logs(job_id, *_args, **_kwargs):
+            log_path = tmp_path / "prune-dry-run.log"
+            log_path.write_text(dry_run_logs, encoding="utf-8")
+            job = test_db.query(PruneJob).filter(PruneJob.id == job_id).one()
+            job.status = "completed"
+            job.log_file_path = str(log_path)
+            job.has_logs = True
+            test_db.commit()
+
+        fake_router = Mock(prune=AsyncMock(side_effect=complete_prune_with_logs))
+        with patch("app.api.repositories.BorgRouter", return_value=fake_router):
+            response = test_client.post(
+                f"/api/repositories/{repo.id}/prune",
+                json={"keep_daily": 3, "dry_run": True},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["dry_run"] is True
+        assert body["prune_result"]["success"] is True
+        assert "Keeping archive (rule: daily #1)" in body["prune_result"]["stdout"]
+        assert "Would prune:" in body["prune_result"]["stdout"]
+
     @pytest.mark.asyncio
     async def test_prune_route_starts_background_job_for_actual_prune(
         self, test_client: TestClient, admin_headers, test_db

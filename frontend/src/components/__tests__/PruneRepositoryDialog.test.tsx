@@ -376,6 +376,37 @@ describe('PruneRepositoryDialog', () => {
       expect(screen.getByRole('dialog')).toHaveTextContent('Would prune: archive-2023-01-01')
     })
 
+    it('shows Borg v1 dry run log messages from prune output', async () => {
+      render(
+        <PruneRepositoryDialog
+          open={true}
+          repository={mockRepository}
+          onClose={vi.fn()}
+          onDryRun={vi.fn()}
+          onConfirmPrune={vi.fn()}
+          isLoading={false}
+          results={{
+            dry_run: true,
+            prune_result: {
+              success: true,
+              stdout: [
+                '[stderr] {"type": "log_message", "message": "Keeping archive (rule: daily #1):            repo-2026-06-09      Tue, 2026-06-09 04:00:42 [abcdef0123456789]", "levelname": "INFO", "name": "borg.output.list"}',
+                '[stderr] {"type": "log_message", "message": "Would prune:                                 repo-2026-06-08      Mon, 2026-06-08 22:24:37 [1234567890abcdef]", "levelname": "INFO", "name": "borg.output.list"}',
+              ].join('\n'),
+            },
+          }}
+        />
+      )
+
+      await screen.findByText('Dry Run Results (Preview)')
+      const dialogs = screen.getAllByRole('dialog')
+      const resultsDialog = dialogs[dialogs.length - 1]
+      expect(resultsDialog).toHaveTextContent(
+        /Keeping archive \(rule: daily #1\):\s+repo-2026-06-09/
+      )
+      expect(resultsDialog).toHaveTextContent(/Would prune:\s+repo-2026-06-08/)
+    })
+
     it('shows error state for failed operation', async () => {
       render(
         <PruneRepositoryDialog
