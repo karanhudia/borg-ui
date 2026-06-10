@@ -52,7 +52,7 @@ RUN apt-get update && apt-get install -y \
 RUN pip install --no-cache-dir pyfuse3
 RUN pip install --no-cache-dir "borgbackup[fuse]==${BORG1_VERSION}"
 RUN python3 -m venv /opt/borg2-venv && \
-    /opt/borg2-venv/bin/pip install --no-cache-dir pyfuse3 "borgbackup[fuse]==${BORG2_VERSION}" && \
+    /opt/borg2-venv/bin/pip install --no-cache-dir pyfuse3 "borgbackup[fuse]==${BORG2_VERSION}" "borgstore[rclone]==0.4.1" && \
     ln -sf /opt/borg2-venv/bin/borg /usr/local/bin/borg2
 
 RUN mkdir -p \
