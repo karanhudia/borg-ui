@@ -95,7 +95,7 @@ if [ -d "$SSH_HOME_DIR" ] && [ ! -L "$SSH_HOME_DIR" ]; then
         echo "[$(date)] Detected mounted SSH directory at ${SSH_HOME_DIR}; preserving mounted SSH directory"
     fi
 
-    if [ "$(ls -A "$SSH_HOME_DIR" 2>/dev/null)" ]; then
+    if [ "$SSH_HOME_IS_MOUNT" != "true" ] && [ "$(ls -A "$SSH_HOME_DIR" 2>/dev/null)" ]; then
         echo "[$(date)] Migrating existing SSH files to persistent storage..."
         cp -a "$SSH_HOME_DIR"/. "$PERSISTENT_SSH_DIR"/
     fi
