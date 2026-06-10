@@ -68,18 +68,48 @@ echo "[$(date)] Borg cache directory setup complete"
 # Plain ssh commands in pre/post-backup hooks use ~/.ssh/known_hosts by default.
 SSH_HOME_DIR=/home/borg/.ssh
 PERSISTENT_SSH_DIR=/data/ssh_keys
+
+is_mountpoint() {
+    local path="$1"
+
+    if command -v mountpoint >/dev/null 2>&1; then
+        mountpoint -q "$path"
+        return $?
+    fi
+
+    if [ -r /proc/self/mountinfo ]; then
+        awk -v path="$path" '$5 == path { found = 1 } END { exit found ? 0 : 1 }' /proc/self/mountinfo
+        return $?
+    fi
+
+    return 1
+}
+
 echo "[$(date)] Setting up persistent SSH directory at ${PERSISTENT_SSH_DIR}..."
 mkdir -p "$PERSISTENT_SSH_DIR"
 
+SSH_HOME_IS_MOUNT=false
 if [ -d "$SSH_HOME_DIR" ] && [ ! -L "$SSH_HOME_DIR" ]; then
+    if is_mountpoint "$SSH_HOME_DIR"; then
+        SSH_HOME_IS_MOUNT=true
+        echo "[$(date)] Detected mounted SSH directory at ${SSH_HOME_DIR}; preserving mounted SSH directory"
+    fi
+
     if [ "$(ls -A "$SSH_HOME_DIR" 2>/dev/null)" ]; then
         echo "[$(date)] Migrating existing SSH files to persistent storage..."
         cp -a "$SSH_HOME_DIR"/. "$PERSISTENT_SSH_DIR"/
     fi
-    rm -rf "$SSH_HOME_DIR"
+
+    if [ "$SSH_HOME_IS_MOUNT" = "true" ]; then
+        echo "[$(date)] Preserving mounted SSH directory at ${SSH_HOME_DIR}; not replacing it with a symlink"
+    else
+        rm -rf "$SSH_HOME_DIR"
+    fi
 fi
 
-ln -sfn "$PERSISTENT_SSH_DIR" "$SSH_HOME_DIR"
+if [ "$SSH_HOME_IS_MOUNT" != "true" ]; then
+    ln -sfn "$PERSISTENT_SSH_DIR" "$SSH_HOME_DIR"
+fi
 
 if ! chown -R borg:borg "$PERSISTENT_SSH_DIR" 2>/dev/null; then
     echo "[$(date)] Warning: Could not change ownership of persistent SSH directory; continuing with existing permissions"
