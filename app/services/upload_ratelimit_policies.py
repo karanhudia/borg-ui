@@ -63,5 +63,8 @@ def resolve_scheduled_upload_ratelimit(
             continue
         if _is_active_window(current_time, start, end):
             value = policy.get("upload_ratelimit_kib")
-            return value if isinstance(value, int) and value > 0 else None
+            if value is None:
+                return None
+            if isinstance(value, int) and value > 0:
+                return value
     return base_upload_ratelimit_kib

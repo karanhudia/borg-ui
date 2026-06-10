@@ -103,10 +103,10 @@ describe('ReviewStep', () => {
 
     expect(screen.getByText('Scheduled upload limits')).toBeInTheDocument()
     expect(screen.getByText('Daytime cap')).toBeInTheDocument()
-    expect(screen.getByText('08:00-18:00')).toBeInTheDocument()
+    expect(screen.getByText(/08:00\s*[-–]\s*18:00/)).toBeInTheDocument()
     expect(screen.getByText('0.5 MB/s')).toBeInTheDocument()
     expect(screen.getByText('Overnight unlimited')).toBeInTheDocument()
-    expect(screen.getByText('18:00-08:00')).toBeInTheDocument()
+    expect(screen.getByText(/18:00\s*[-–]\s*08:00/)).toBeInTheDocument()
     expect(screen.getByText('Unlimited')).toBeInTheDocument()
   })
 

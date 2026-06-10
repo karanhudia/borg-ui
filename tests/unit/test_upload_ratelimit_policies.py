@@ -75,6 +75,33 @@ def test_no_matching_policy_uses_constant_limit():
 
 
 @pytest.mark.unit
+def test_invalid_active_policy_limit_is_skipped():
+    policies = [
+        {
+            "label": "Invalid daytime cap",
+            "start_time": "08:00",
+            "end_time": "18:00",
+            "upload_ratelimit_kib": 0,
+        },
+        {
+            "label": "Valid daytime cap",
+            "start_time": "08:00",
+            "end_time": "18:00",
+            "upload_ratelimit_kib": 512,
+        },
+    ]
+
+    resolved = resolve_scheduled_upload_ratelimit(
+        base_upload_ratelimit_kib=2048,
+        policies=policies,
+        run_at=datetime(2026, 6, 10, 12, 30, tzinfo=timezone.utc),
+        timezone_name="UTC",
+    )
+
+    assert resolved == 512
+
+
+@pytest.mark.unit
 def test_policy_matching_uses_backup_plan_timezone():
     policies = [
         {

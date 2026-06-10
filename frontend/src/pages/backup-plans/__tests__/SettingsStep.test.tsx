@@ -55,7 +55,7 @@ describe('SettingsStep scheduled upload policies', () => {
 
     await user.click(screen.getByRole('button', { name: 'Add upload policy' }))
 
-    expect(updateState).toHaveBeenCalledWith({
+    expect(updateState).toHaveBeenLastCalledWith({
       uploadRatelimitSchedulePolicies: [
         {
           label: 'Daytime cap',

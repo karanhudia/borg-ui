@@ -1203,7 +1203,7 @@
         "extraBorgFlagsHelper": "Flag da riga di comando personalizzati per borg create (es., --stats, --progress, --list). Applicato a ogni esecuzione repository in questo piano.",
         "uploadSpeedHelper": "MB/s. Vuoto significa senza limite.",
         "uploadPoliciesTitle": "Limiti di upload pianificati",
-        "uploadPoliciesHelper": "Le finestre orarie sostituiscono il limite di upload costante. Lascia il limite vuoto per senza limite.",
+        "uploadPoliciesHelper": "Le finestre orarie sostituiscono il limite di upload costante. Lascia il campo del limite vuoto per non applicare alcun limite.",
         "addUploadPolicy": "Aggiungi policy di upload",
         "removeUploadPolicy": "Rimuovi policy di upload",
         "daytimePolicyLabel": "Limite diurno",
