@@ -1079,6 +1079,8 @@ class BackupPlanExecutionService:
                         link.upload_ratelimit_kib_override
                         if link.upload_ratelimit_kib_override is not None
                         else context.upload_ratelimit_kib
+                        if context.upload_ratelimit_kib is not None
+                        else link.repository.upload_ratelimit_kib
                     ),
                     failure_behavior=(
                         link.failure_behavior_override or context.failure_behavior

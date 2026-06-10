@@ -191,6 +191,24 @@ describe('RepositoryCard', () => {
       expect(screen.getByText('10.5 GB')).toBeInTheDocument()
     })
 
+    it('renders repository upload speed limit metadata', () => {
+      renderWithProviders(
+        <RepositoryCard
+          repository={{
+            ...mockRepository,
+            upload_ratelimit_kib: 1536,
+          }}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(screen.getByText('Upload limit:')).toBeInTheDocument()
+      expect(screen.getByText('1.5 MB/s')).toBeInTheDocument()
+    })
+
     it('renders next backup badge when an enabled schedule exists', () => {
       renderWithProviders(
         <RepositoryCard

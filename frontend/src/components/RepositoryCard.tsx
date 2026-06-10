@@ -31,6 +31,7 @@ import { useMaintenanceJobs } from '../hooks/useMaintenanceJobs'
 import BorgVersionChip from './BorgVersionChip'
 import { getRepoCapabilities } from '../utils/repoCapabilities'
 import { formatDateShort, formatDateTimeFull, formatElapsedTime } from '../utils/dateUtils'
+import { formatUploadRatelimit } from '../utils/uploadRatelimit'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { Repository } from '../types'
@@ -154,6 +155,7 @@ export default function RepositoryCard({
     rcloneStorage?.sync_direction !== 'sshfs_to_remote'
   const canShowDestructiveActions = canManageRepository && capabilities.canDeleteRepository
   const hasSeparatedRepositoryActions = canBreakLock || canShowDestructiveActions
+  const uploadRatelimitLabel = formatUploadRatelimit(repository.upload_ratelimit_kib)
 
   const [elapsedTime, setElapsedTime] = useState('')
 
@@ -214,6 +216,15 @@ export default function RepositoryCard({
       label: t('repositoryCard.compression'),
       value: getCompressionLabel(repository.compression ?? ''),
     },
+    ...(uploadRatelimitLabel
+      ? [
+          {
+            label: t('repositoryCard.uploadLimit'),
+            value: uploadRatelimitLabel,
+            tooltip: t('repositoryCard.uploadLimitTooltip'),
+          },
+        ]
+      : []),
     {
       label: t('repositoryCard.lastCompact'),
       value: repository.last_compact ? formatDateShort(repository.last_compact) : t('common.never'),

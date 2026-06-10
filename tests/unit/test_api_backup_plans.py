@@ -4369,6 +4369,109 @@ class TestBackupPlanRoutes:
         assert run.status == "completed"
 
     @pytest.mark.asyncio
+    async def test_execute_plan_run_uses_repository_upload_ratelimit_default(
+        self, test_db
+    ):
+        repo = _create_repo(
+            test_db,
+            "Primary",
+            "/repos/primary",
+            upload_ratelimit_kib=768,
+        )
+        _plan, run = _create_execution_plan(
+            test_db,
+            [repo],
+            upload_ratelimit_kib=None,
+        )
+
+        async def fake_execute_backup(job_id, repository, db, **kwargs):
+            assert kwargs["upload_ratelimit_kib"] == 768
+            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job.status = "completed"
+            job.completed_at = datetime.utcnow()
+            db.commit()
+
+        with patch(
+            "app.services.backup_plan_execution_service.backup_service.execute_backup",
+            side_effect=fake_execute_backup,
+        ):
+            await backup_plan_execution_service.execute_run(run.id)
+
+        test_db.refresh(run)
+        assert run.status == "completed"
+
+    @pytest.mark.asyncio
+    async def test_execute_plan_run_prefers_plan_upload_ratelimit_over_repository_default(
+        self, test_db
+    ):
+        repo = _create_repo(
+            test_db,
+            "Primary",
+            "/repos/primary",
+            upload_ratelimit_kib=768,
+        )
+        _plan, run = _create_execution_plan(
+            test_db,
+            [repo],
+            upload_ratelimit_kib=1024,
+        )
+
+        async def fake_execute_backup(job_id, repository, db, **kwargs):
+            assert kwargs["upload_ratelimit_kib"] == 1024
+            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job.status = "completed"
+            job.completed_at = datetime.utcnow()
+            db.commit()
+
+        with patch(
+            "app.services.backup_plan_execution_service.backup_service.execute_backup",
+            side_effect=fake_execute_backup,
+        ):
+            await backup_plan_execution_service.execute_run(run.id)
+
+        test_db.refresh(run)
+        assert run.status == "completed"
+
+    @pytest.mark.asyncio
+    async def test_execute_plan_run_prefers_link_upload_ratelimit_override(
+        self, test_db
+    ):
+        repo = _create_repo(
+            test_db,
+            "Primary",
+            "/repos/primary",
+            upload_ratelimit_kib=768,
+        )
+        plan, run = _create_execution_plan(
+            test_db,
+            [repo],
+            upload_ratelimit_kib=1024,
+        )
+        link = (
+            test_db.query(BackupPlanRepository)
+            .filter_by(backup_plan_id=plan.id, repository_id=repo.id)
+            .one()
+        )
+        link.upload_ratelimit_kib_override = 2048
+        test_db.commit()
+
+        async def fake_execute_backup(job_id, repository, db, **kwargs):
+            assert kwargs["upload_ratelimit_kib"] == 2048
+            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job.status = "completed"
+            job.completed_at = datetime.utcnow()
+            db.commit()
+
+        with patch(
+            "app.services.backup_plan_execution_service.backup_service.execute_backup",
+            side_effect=fake_execute_backup,
+        ):
+            await backup_plan_execution_service.execute_run(run.id)
+
+        test_db.refresh(run)
+        assert run.status == "completed"
+
+    @pytest.mark.asyncio
     async def test_execute_plan_run_passes_grouped_source_locations(self, test_db):
         repo = _create_repo(test_db, "Primary", "/repos/primary")
         source_a = _create_ssh_connection(

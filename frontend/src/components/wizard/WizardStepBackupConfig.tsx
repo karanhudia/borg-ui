@@ -16,6 +16,7 @@ export interface BackupConfigStepData {
   preHookTimeout: number
   postHookTimeout: number
   hookFailureMode: OnFailureMode
+  uploadRatelimitMb: string
 }
 
 interface WizardStepBackupConfigProps {
@@ -73,6 +74,7 @@ export default function WizardStepBackupConfig({
           postHookTimeout={data.postHookTimeout}
           hookFailureMode={data.hookFailureMode}
           customFlags={data.customFlags}
+          uploadRatelimitMb={data.uploadRatelimitMb}
           onRemotePathChange={(value) => onChange({ remotePath: value })}
           onPreBackupScriptChange={(value) => onChange({ preBackupScript: value })}
           onPostBackupScriptChange={(value) => onChange({ postBackupScript: value })}
@@ -80,6 +82,7 @@ export default function WizardStepBackupConfig({
           onPostHookTimeoutChange={(value) => onChange({ postHookTimeout: value })}
           onHookFailureModeChange={(value) => onChange({ hookFailureMode: value })}
           onCustomFlagsChange={(value) => onChange({ customFlags: value })}
+          onUploadRatelimitMbChange={(value) => onChange({ uploadRatelimitMb: value })}
         />
       )}
     </Box>

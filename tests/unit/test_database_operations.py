@@ -584,3 +584,37 @@ class TestMigration116:
 
         assert "default_path" in agent_columns
         assert "default_path" in token_columns
+
+
+@pytest.mark.unit
+class TestMigration123:
+    """Tests for migration 123: repository upload rate limits."""
+
+    def test_downgrade_raises_when_old_sqlite_cannot_drop_column(self, monkeypatch):
+        import importlib
+        from types import SimpleNamespace
+
+        migration = importlib.import_module(
+            "app.database.migrations.123_add_repository_upload_ratelimit"
+        )
+        monkeypatch.setattr(
+            migration,
+            "_columns",
+            lambda _db, _table_name: {"id", "upload_ratelimit_kib"},
+        )
+
+        class FakeResult:
+            def scalar(self):
+                return "3.34.1"
+
+        class FakeDb:
+            def get_bind(self):
+                return SimpleNamespace(dialect=SimpleNamespace(name="sqlite"))
+
+            def execute(self, _statement):
+                return FakeResult()
+
+        with pytest.raises(
+            RuntimeError, match="SQLite.*DROP COLUMN.*upload_ratelimit_kib"
+        ):
+            migration.downgrade(FakeDb())

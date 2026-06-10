@@ -1754,6 +1754,11 @@ class BackupService:
                 )
                 if not repo_record:
                     raise Exception(f"Repository not found: {repository}")
+                effective_upload_ratelimit_kib = (
+                    upload_ratelimit_kib
+                    if upload_ratelimit_kib is not None
+                    else repo_record.upload_ratelimit_kib
+                )
 
                 remote_source_paths = (
                     flatten_source_locations(source_locations)
@@ -1788,7 +1793,7 @@ class BackupService:
                     exclude_patterns=remote_exclude_patterns,
                     compression=remote_compression,
                     custom_flags=remote_custom_flags,
-                    upload_ratelimit_kib=upload_ratelimit_kib,
+                    upload_ratelimit_kib=effective_upload_ratelimit_kib,
                 )
                 return
 
@@ -1860,6 +1865,7 @@ class BackupService:
             source_paths = None  # No default - must be configured
             exclude_patterns = []  # Default no exclusions
             compression = "lz4"  # Default compression
+            effective_upload_ratelimit_kib = upload_ratelimit_kib
             router = None
             normalized_locations = None
             using_source_override = (
@@ -1870,6 +1876,10 @@ class BackupService:
                     db.query(Repository).filter(Repository.path == repository).first()
                 )
                 if repo_record:
+                    if effective_upload_ratelimit_kib is None:
+                        effective_upload_ratelimit_kib = (
+                            repo_record.upload_ratelimit_kib
+                        )
                     router = BorgRouter(repo_record)
                     # Check if repository is in observability-only mode
                     if repo_record.mode == "observe":
@@ -2298,7 +2308,7 @@ class BackupService:
                 compression=compression,
                 exclude_patterns=exclude_patterns,
                 custom_flags=custom_flag_list,
-                upload_ratelimit_kib=upload_ratelimit_kib,
+                upload_ratelimit_kib=effective_upload_ratelimit_kib,
             )
 
             backup_paths, backup_cwd = self._resolve_backup_command_paths(

@@ -309,6 +309,9 @@ class Repository(Base):
     custom_flags = Column(
         Text, nullable=True
     )  # Custom command-line flags for borg create (e.g., "--stats --progress")
+    upload_ratelimit_kib = Column(
+        Integer, nullable=True
+    )  # Default Borg upload rate limit in KiB/s for create commands
 
     # Data source location (for pull-based backups)
     source_ssh_connection_id = Column(

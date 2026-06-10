@@ -1374,6 +1374,7 @@ class TestBackupService:
             source_directories='["/var/lib/docker/volumes/app"]',
             exclude_patterns="[]",
             compression="lz4",
+            upload_ratelimit_kib=640,
         )
         test_db.add_all([source_connection, repository])
         test_db.flush()
@@ -1412,7 +1413,7 @@ class TestBackupService:
                 "exclude_patterns": [],
                 "compression": "lz4",
                 "custom_flags": None,
-                "upload_ratelimit_kib": None,
+                "upload_ratelimit_kib": 640,
             }
         ]
 

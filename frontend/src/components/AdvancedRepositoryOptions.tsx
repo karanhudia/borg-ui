@@ -16,6 +16,7 @@ interface AdvancedRepositoryOptionsProps {
   postHookTimeout: number
   hookFailureMode: OnFailureMode
   customFlags: string
+  uploadRatelimitMb: string
   onRemotePathChange: (value: string) => void
   onPreBackupScriptChange: (value: string) => void
   onPostBackupScriptChange: (value: string) => void
@@ -23,6 +24,7 @@ interface AdvancedRepositoryOptionsProps {
   onPostHookTimeoutChange: (value: number) => void
   onHookFailureModeChange: (value: OnFailureMode) => void
   onCustomFlagsChange: (value: string) => void
+  onUploadRatelimitMbChange: (value: string) => void
 }
 
 export default function AdvancedRepositoryOptions({
@@ -35,6 +37,7 @@ export default function AdvancedRepositoryOptions({
   postHookTimeout,
   hookFailureMode,
   customFlags,
+  uploadRatelimitMb,
   onRemotePathChange,
   onPreBackupScriptChange,
   onPostBackupScriptChange,
@@ -42,6 +45,7 @@ export default function AdvancedRepositoryOptions({
   onPostHookTimeoutChange,
   onHookFailureModeChange,
   onCustomFlagsChange,
+  onUploadRatelimitMbChange,
 }: AdvancedRepositoryOptionsProps) {
   const { t } = useTranslation()
   const [preScriptDialogOpen, setPreScriptDialogOpen] = useState(false)
@@ -71,14 +75,26 @@ export default function AdvancedRepositoryOptions({
 
       {/* Custom Flags - Only show for full repositories */}
       {mode === 'full' && (
-        <TextField
-          label={t('advancedRepositoryOptions.customFlags')}
-          value={customFlags}
-          onChange={(e) => onCustomFlagsChange(e.target.value)}
-          placeholder="--stats --list --filter AME"
-          fullWidth
-          helperText={t('advancedRepositoryOptions.customFlagsHint')}
-        />
+        <>
+          <TextField
+            label={t('advancedRepositoryOptions.customFlags')}
+            value={customFlags}
+            onChange={(e) => onCustomFlagsChange(e.target.value)}
+            placeholder="--stats --list --filter AME"
+            fullWidth
+            helperText={t('advancedRepositoryOptions.customFlagsHint')}
+          />
+
+          <TextField
+            label={t('advancedRepositoryOptions.uploadSpeedLimit')}
+            value={uploadRatelimitMb}
+            onChange={(e) => onUploadRatelimitMbChange(e.target.value)}
+            type="number"
+            fullWidth
+            inputProps={{ min: 0, step: 0.1 }}
+            helperText={t('advancedRepositoryOptions.uploadSpeedLimitHint')}
+          />
+        </>
       )}
 
       {/* Scripts Section - Grouped by timing (pre-backup / post-backup) */}

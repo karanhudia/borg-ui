@@ -3694,6 +3694,7 @@ def test_create_rclone_repository_derives_cache_path_and_syncs(
             "rclone_remote_id": remote.id,
             "rclone_remote_path": "borg-ui/repositories/app",
             "rclone_sync_policy": "after_success",
+            "upload_ratelimit_kib": 3072,
         },
     )
 
@@ -3711,6 +3712,7 @@ def test_create_rclone_repository_derives_cache_path_and_syncs(
     assert response.json()["repository"]["rclone_storage"]["rclone_target"] == (
         "prod-s3:borg-ui/repositories/app"
     )
+    assert response.json()["repository"]["upload_ratelimit_kib"] == 3072
 
 
 @pytest.mark.unit
@@ -3743,6 +3745,7 @@ def test_create_direct_borg2_rclone_repository_uses_url_without_storage_row(
             "borg_version": 2,
             "encryption": "none",
             "storage_backend": "rclone_direct",
+            "upload_ratelimit_kib": 4096,
         },
     )
 
@@ -3762,6 +3765,7 @@ def test_create_direct_borg2_rclone_repository_uses_url_without_storage_row(
         is None
     )
     assert response.json()["repository"]["storage_backend"] == "rclone_direct"
+    assert response.json()["repository"]["upload_ratelimit_kib"] == 4096
     init_mock.assert_awaited_once()
     assert init_mock.await_args.kwargs["borg_version"] == 2
     sync_mock.assert_not_awaited()
@@ -3802,6 +3806,7 @@ def test_import_direct_borg2_rclone_repository_verifies_url_without_hydrate(
             "borg_version": 2,
             "encryption": "none",
             "storage_backend": "rclone_direct",
+            "upload_ratelimit_kib": 5120,
         },
     )
 
@@ -3821,6 +3826,7 @@ def test_import_direct_borg2_rclone_repository_verifies_url_without_hydrate(
         is None
     )
     assert response.json()["repository"]["storage_backend"] == "rclone_direct"
+    assert response.json()["repository"]["upload_ratelimit_kib"] == 5120
     verify_mock.assert_awaited_once()
     assert verify_mock.await_args.kwargs["borg_version"] == 2
     hydrate_mock.assert_not_awaited()
@@ -4327,6 +4333,7 @@ def test_import_rclone_repository_verify_failure_removes_repository_record(
             "rclone_remote_id": remote.id,
             "rclone_remote_path": "borg-ui/repositories/imported",
             "rclone_sync_policy": "manual",
+            "upload_ratelimit_kib": 6144,
         },
     )
 
@@ -4391,6 +4398,7 @@ def test_import_rclone_repository_flushes_storage_before_hydrate(
             "rclone_remote_id": remote.id,
             "rclone_remote_path": "borg-ui/repositories/imported",
             "rclone_sync_policy": "manual",
+            "upload_ratelimit_kib": 6144,
         },
     )
 
@@ -4406,6 +4414,7 @@ def test_import_rclone_repository_flushes_storage_before_hydrate(
     assert storage.cache_path == str(
         tmp_path / "cache" / "repositories" / str(repository.id)
     )
+    assert response.json()["repository"]["upload_ratelimit_kib"] == 6144
 
 
 @pytest.mark.unit

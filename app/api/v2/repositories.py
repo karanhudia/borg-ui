@@ -49,6 +49,7 @@ class RepositoryV2Create(BaseModel):
     mode: str = "full"
     bypass_lock: bool = False
     custom_flags: Optional[str] = None
+    upload_ratelimit_kib: Optional[int] = None
     pre_backup_script: Optional[str] = None
     post_backup_script: Optional[str] = None
     pre_hook_timeout: int = 300
@@ -72,6 +73,7 @@ class RepositoryV2Import(BaseModel):
     mode: str = "full"
     bypass_lock: bool = False
     custom_flags: Optional[str] = None
+    upload_ratelimit_kib: Optional[int] = None
     pre_backup_script: Optional[str] = None
     post_backup_script: Optional[str] = None
     pre_hook_timeout: int = 300
@@ -97,6 +99,14 @@ def _get_info_timeout(db: Session) -> int:
     if sys_settings and sys_settings.info_timeout:
         return sys_settings.info_timeout
     return 600
+
+
+def _validate_upload_ratelimit_kib(value: Optional[int]) -> None:
+    if value is not None and value <= 0:
+        raise HTTPException(
+            status_code=422,
+            detail={"key": "backend.errors.repo.invalidUploadLimit"},
+        )
 
 
 def _resolve_bypass_lock(repo: Repository, db: Session, setting_name: str) -> bool:
@@ -253,6 +263,7 @@ async def create_repository(
     db: Session = Depends(get_db),
 ):
     """Create and initialise a new Borg 2 repository (borg2 rcreate)."""
+    _validate_upload_ratelimit_kib(data.upload_ratelimit_kib)
     if not current_user.is_admin:
         raise HTTPException(
             status_code=403, detail={"key": "backend.errors.repo.adminAccessRequired"}
@@ -330,6 +341,7 @@ async def create_repository(
         mode=data.mode,
         bypass_lock=data.bypass_lock,
         custom_flags=data.custom_flags,
+        upload_ratelimit_kib=data.upload_ratelimit_kib,
         pre_backup_script=data.pre_backup_script,
         post_backup_script=data.post_backup_script,
         pre_hook_timeout=data.pre_hook_timeout,
@@ -356,6 +368,7 @@ async def create_repository(
         "name": repo.name,
         "path": repo.path,
         "borg_version": 2,
+        "upload_ratelimit_kib": repo.upload_ratelimit_kib,
         "already_existed": result.get("already_existed", False),
         "message": "backend.success.repo.created",
     }
@@ -368,6 +381,7 @@ async def import_repository(
     db: Session = Depends(get_db),
 ):
     """Import an existing Borg 2 repository (no rcreate — repo already exists)."""
+    _validate_upload_ratelimit_kib(data.upload_ratelimit_kib)
     if not current_user.is_admin:
         raise HTTPException(
             status_code=403, detail={"key": "backend.errors.repo.adminAccessRequired"}
@@ -445,6 +459,7 @@ async def import_repository(
         mode=data.mode,
         bypass_lock=data.bypass_lock,
         custom_flags=data.custom_flags,
+        upload_ratelimit_kib=data.upload_ratelimit_kib,
         pre_backup_script=data.pre_backup_script,
         post_backup_script=data.post_backup_script,
         pre_hook_timeout=data.pre_hook_timeout,
@@ -467,6 +482,7 @@ async def import_repository(
         "name": repo.name,
         "path": repo.path,
         "borg_version": 2,
+        "upload_ratelimit_kib": repo.upload_ratelimit_kib,
         "message": "backend.success.repo.imported",
     }
 

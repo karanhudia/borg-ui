@@ -162,6 +162,7 @@ export interface RepositoryData {
   rclone_extra_flags?: string[] | null
   rclone_storage?: RcloneStorage | null
   custom_flags?: string | null
+  upload_ratelimit_kib?: number | null
   check_extra_flags?: string | null
   bypass_lock?: boolean
   has_schedule?: boolean

@@ -13,6 +13,7 @@ export interface RepositoryAdvancedStepData {
   postHookTimeout: number
   hookFailureMode: OnFailureMode
   customFlags: string
+  uploadRatelimitMb: string
 }
 
 interface WizardStepRepositoryAdvancedProps {
@@ -45,6 +46,7 @@ export default function WizardStepRepositoryAdvanced({
         postHookTimeout={data.postHookTimeout}
         hookFailureMode={data.hookFailureMode}
         customFlags={data.customFlags}
+        uploadRatelimitMb={data.uploadRatelimitMb}
         onRemotePathChange={(value) => onChange({ remotePath: value })}
         onPreBackupScriptChange={(value) => onChange({ preBackupScript: value })}
         onPostBackupScriptChange={(value) => onChange({ postBackupScript: value })}
@@ -52,6 +54,7 @@ export default function WizardStepRepositoryAdvanced({
         onPostHookTimeoutChange={(value) => onChange({ postHookTimeout: value })}
         onHookFailureModeChange={(value) => onChange({ hookFailureMode: value })}
         onCustomFlagsChange={(value) => onChange({ customFlags: value })}
+        onUploadRatelimitMbChange={(value) => onChange({ uploadRatelimitMb: value })}
       />
     </Box>
   )
