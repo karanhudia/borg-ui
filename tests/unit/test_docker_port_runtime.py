@@ -21,6 +21,34 @@ def test_entrypoint_binds_server_to_configured_port() -> None:
     assert "--bind 0.0.0.0:${PORT}" in entrypoint
 
 
+def test_entrypoint_preserves_mounted_ssh_home_before_removal() -> None:
+    entrypoint = (ROOT / "entrypoint.sh").read_text(encoding="utf-8")
+
+    mount_check = 'if is_mountpoint "$SSH_HOME_DIR"; then'
+    migration_check = (
+        'if [ "$SSH_HOME_IS_MOUNT" != "true" ] '
+        '&& [ "$(ls -A "$SSH_HOME_DIR" 2>/dev/null)" ]; then'
+    )
+    preserve_check = 'if [ "$SSH_HOME_IS_MOUNT" = "true" ]; then'
+    removal = 'rm -rf "$SSH_HOME_DIR"'
+
+    assert "is_mountpoint()" in entrypoint
+    assert mount_check in entrypoint
+    assert migration_check in entrypoint
+    assert "preserving mounted SSH directory" in entrypoint
+    assert removal in entrypoint
+    assert entrypoint.index(mount_check) < entrypoint.index(migration_check)
+    assert entrypoint.index(mount_check) < entrypoint.index(removal)
+
+    mounted_branch = entrypoint[
+        entrypoint.index(preserve_check) : entrypoint.index(
+            "\n    else\n", entrypoint.index(preserve_check)
+        )
+    ]
+    copy_or_move_tokens = ("cp ", "cp -", "cp -r", "cp -a", "rsync", "mv ")
+    assert [token for token in copy_or_move_tokens if token in mounted_branch] == []
+
+
 def test_production_compose_passes_port_to_container_and_healthcheck() -> None:
     compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
 
