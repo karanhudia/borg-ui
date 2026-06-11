@@ -7,6 +7,7 @@ import type {
   SourceDatabaseSelection,
   SourceLocation,
   SourceType,
+  UploadRatelimitSchedulePolicy,
 } from '../../types'
 import type { BasicRepositoryState, WizardState } from './types'
 
@@ -24,6 +25,7 @@ export const createInitialState = (): WizardState => ({
   archiveNameTemplate: '{plan_name}-{repo_name}-{now}',
   customFlags: '',
   uploadRatelimitMb: '',
+  uploadRatelimitSchedulePolicies: [],
   repositoryRunMode: 'series',
   maxParallelRepositories: 1,
   failureBehavior: 'continue',
@@ -61,6 +63,17 @@ export const createInitialBasicRepositoryState = (): BasicRepositoryState => ({
 function kibToMb(value?: number | null): string {
   if (!value || value <= 0) return ''
   return String(Math.round((value / 1024) * 100) / 100)
+}
+
+function normalizeUploadRatelimitSchedulePolicies(
+  policies?: UploadRatelimitSchedulePolicy[] | null
+) {
+  return (policies || []).map((policy) => ({
+    label: policy.label || '',
+    startTime: policy.start_time || '',
+    endTime: policy.end_time || '',
+    uploadRatelimitMb: kibToMb(policy.upload_ratelimit_kib),
+  }))
 }
 
 function normalizePlanSourceLocations(plan: BackupPlan): SourceLocation[] {
@@ -318,6 +331,9 @@ export function planToState(plan: BackupPlan): WizardState {
     archiveNameTemplate: plan.archive_name_template || '{plan_name}-{repo_name}-{now}',
     customFlags: plan.custom_flags || '',
     uploadRatelimitMb: kibToMb(plan.upload_ratelimit_kib),
+    uploadRatelimitSchedulePolicies: normalizeUploadRatelimitSchedulePolicies(
+      plan.upload_ratelimit_schedule_policies
+    ),
     repositoryRunMode: plan.repository_run_mode || 'series',
     maxParallelRepositories: plan.max_parallel_repositories || 1,
     failureBehavior: plan.failure_behavior || 'continue',

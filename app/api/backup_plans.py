@@ -37,6 +37,7 @@ from app.services.backup_plan_policy import (
 )
 from app.services.backup_plan_execution_service import backup_plan_execution_service
 from app.services.backup_route_planner import plan_repository_route
+from app.services.upload_ratelimit_policies import parse_upload_policy_time
 from app.services.check_flag_validation import (
     CheckFlagConflictError,
     validate_check_flags_for_max_duration,
@@ -93,6 +94,13 @@ class BackupPlanRepositoryPayload(BaseModel):
     failure_behavior_override: Optional[str] = None
 
 
+class UploadRatelimitSchedulePolicyPayload(BaseModel):
+    label: str
+    start_time: str
+    end_time: str
+    upload_ratelimit_kib: Optional[int] = None
+
+
 class BackupPlanScriptPayload(BaseModel):
     script_id: int
     hook_type: str
@@ -121,6 +129,9 @@ class BackupPlanPayload(BaseModel):
     compression: str = "lz4"
     custom_flags: Optional[str] = None
     upload_ratelimit_kib: Optional[int] = None
+    upload_ratelimit_schedule_policies: list[UploadRatelimitSchedulePolicyPayload] = (
+        Field(default_factory=list)
+    )
     repository_run_mode: str = "series"
     max_parallel_repositories: int = 1
     failure_behavior: str = "continue"
@@ -479,6 +490,66 @@ def _serialize_plan_script_hooks(plan: BackupPlan) -> list[dict[str, Any]]:
     return hooks
 
 
+def _decode_upload_ratelimit_schedule_policies(
+    value: Optional[str],
+) -> list[dict[str, Any]]:
+    if not value:
+        return []
+    try:
+        decoded = json.loads(value)
+    except (TypeError, json.JSONDecodeError):
+        return []
+    if not isinstance(decoded, list):
+        return []
+    policies: list[dict[str, Any]] = []
+    for item in decoded:
+        if isinstance(item, dict):
+            policies.append(
+                {
+                    "label": str(item.get("label", "")).strip(),
+                    "start_time": item.get("start_time"),
+                    "end_time": item.get("end_time"),
+                    "upload_ratelimit_kib": item.get("upload_ratelimit_kib"),
+                }
+            )
+    return policies
+
+
+def _normalize_upload_ratelimit_schedule_policies(
+    policies: list[UploadRatelimitSchedulePolicyPayload],
+) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    for policy in policies:
+        label = policy.label.strip()
+        try:
+            start = parse_upload_policy_time(policy.start_time)
+            end = parse_upload_policy_time(policy.end_time)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"key": "backend.errors.backupPlans.invalidUploadLimitPolicy"},
+            ) from exc
+        if not label or start == end:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"key": "backend.errors.backupPlans.invalidUploadLimitPolicy"},
+            )
+        if policy.upload_ratelimit_kib is not None and policy.upload_ratelimit_kib <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"key": "backend.errors.backupPlans.invalidUploadLimitPolicy"},
+            )
+        normalized.append(
+            {
+                "label": label,
+                "start_time": policy.start_time,
+                "end_time": policy.end_time,
+                "upload_ratelimit_kib": policy.upload_ratelimit_kib,
+            }
+        )
+    return normalized
+
+
 def _serialize_plan(plan: BackupPlan, *, detail: bool = False) -> dict[str, Any]:
     enabled_links = [link for link in plan.repositories if link.enabled]
     source_directories = _decode_json_list(plan.source_directories)
@@ -504,6 +575,9 @@ def _serialize_plan(plan: BackupPlan, *, detail: bool = False) -> dict[str, Any]
         "custom_flags": plan.custom_flags,
         "check_extra_flags": plan.check_extra_flags,
         "upload_ratelimit_kib": plan.upload_ratelimit_kib,
+        "upload_ratelimit_schedule_policies": _decode_upload_ratelimit_schedule_policies(
+            plan.upload_ratelimit_schedule_policies
+        ),
         "repository_run_mode": plan.repository_run_mode,
         "max_parallel_repositories": plan.max_parallel_repositories,
         "failure_behavior": plan.failure_behavior,
@@ -940,6 +1014,9 @@ def _validate_payload(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"key": "backend.errors.backupPlans.invalidUploadLimit"},
         )
+    _normalize_upload_ratelimit_schedule_policies(
+        payload.upload_ratelimit_schedule_policies
+    )
     if payload.run_check_after:
         try:
             validate_check_flags_for_max_duration(
@@ -1105,6 +1182,11 @@ def _apply_payload(plan: BackupPlan, payload: BackupPlanPayload) -> None:
     plan.compression = payload.compression
     plan.custom_flags = payload.custom_flags.strip() if payload.custom_flags else None
     plan.upload_ratelimit_kib = payload.upload_ratelimit_kib
+    plan.upload_ratelimit_schedule_policies = json.dumps(
+        _normalize_upload_ratelimit_schedule_policies(
+            payload.upload_ratelimit_schedule_policies
+        )
+    )
     plan.repository_run_mode = payload.repository_run_mode
     plan.max_parallel_repositories = payload.max_parallel_repositories
     plan.failure_behavior = payload.failure_behavior

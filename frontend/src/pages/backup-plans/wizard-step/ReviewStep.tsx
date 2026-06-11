@@ -105,6 +105,7 @@ export function ReviewStep({
     wizardState.excludePatterns.length - visibleExcludePatterns.length,
     0
   )
+  const uploadPolicies = wizardState.uploadRatelimitSchedulePolicies || []
   const retentionLabel = t('backupPlans.wizard.review.retentionValue', {
     hourly: wizardState.pruneKeepHourly,
     daily: wizardState.pruneKeepDaily,
@@ -404,6 +405,49 @@ export function ReviewStep({
             <ReviewAttrRow label={t('backupPlans.wizard.fields.uploadSpeedLimit')}>
               <ReviewCodePill>{wizardState.uploadRatelimitMb} MB/s</ReviewCodePill>
             </ReviewAttrRow>
+          )}
+          {uploadPolicies.length > 0 && (
+            <ReviewAttrStack label={t('backupPlans.wizard.review.scheduledUploadLimits')}>
+              {uploadPolicies.map((policy, index) => (
+                <Box
+                  key={`${policy.label}-${policy.startTime}-${policy.endTime}-${index}`}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 1,
+                    minWidth: 0,
+                  }}
+                >
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        color: 'text.primary',
+                        lineHeight: 1.35,
+                      }}
+                    >
+                      {policy.label}
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      sx={{ color: 'text.secondary', fontSize: '0.68rem' }}
+                    >
+                      {policy.startTime}-{policy.endTime}
+                    </Typography>
+                  </Box>
+                  <ReviewCodePill>
+                    {policy.uploadRatelimitMb
+                      ? t('backupPlans.wizard.review.uploadPolicyLimit', {
+                          limit: policy.uploadRatelimitMb,
+                        })
+                      : t('backupPlans.wizard.review.uploadPolicyUnlimited')}
+                  </ReviewCodePill>
+                </Box>
+              ))}
+            </ReviewAttrStack>
           )}
           <ReviewAttrRow label={t('backupPlans.wizard.review.runMode')}>
             <Typography

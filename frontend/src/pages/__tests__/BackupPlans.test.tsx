@@ -1,14 +1,27 @@
 import { describe, expect, it } from 'vitest'
 import MockAdapter from 'axios-mock-adapter'
 import api, { backupPlansAPI } from '../../services/api'
-import { buildBackupPlanPayload } from '../../utils/backupPlanPayload'
-import { planToState } from '../backup-plans/state'
+import { buildBackupPlanPayload, type BackupPlanPayloadState } from '../../utils/backupPlanPayload'
+import { createInitialState, planToState } from '../backup-plans/state'
 import {
   applyRepositorySelectionLimit,
   isRepositorySelectionOverLimit,
 } from '../../utils/backupPlanRepositorySelection'
 import { getLegacySourceRepositoryReviews } from '../backup-plans/legacySourceSettings'
 import { buildRoutePreviews } from '../backup-plans/routePreview'
+
+function createPayloadState(
+  overrides: Partial<BackupPlanPayloadState> = {}
+): BackupPlanPayloadState {
+  return {
+    ...createInitialState(),
+    name: 'Policy Plan',
+    sourceDirectories: ['/data'],
+    repositoryIds: [10],
+    timezone: 'UTC',
+    ...overrides,
+  }
+}
 
 describe('BackupPlans API', () => {
   it('posts to the toggle endpoint for a backup plan', async () => {
@@ -119,6 +132,92 @@ describe('BackupPlans legacy source settings', () => {
 })
 
 describe('BackupPlans payload', () => {
+  it('converts scheduled upload policies to KiB per second', () => {
+    const payload = buildBackupPlanPayload(
+      createPayloadState({
+        uploadRatelimitSchedulePolicies: [
+          {
+            label: 'Daytime cap',
+            startTime: '08:00',
+            endTime: '18:00',
+            uploadRatelimitMb: '0.5',
+          },
+          {
+            label: 'Overnight unlimited',
+            startTime: '18:00',
+            endTime: '08:00',
+            uploadRatelimitMb: '',
+          },
+        ],
+      })
+    )
+
+    expect(payload.upload_ratelimit_schedule_policies).toEqual([
+      {
+        label: 'Daytime cap',
+        start_time: '08:00',
+        end_time: '18:00',
+        upload_ratelimit_kib: 512,
+      },
+      {
+        label: 'Overnight unlimited',
+        start_time: '18:00',
+        end_time: '08:00',
+        upload_ratelimit_kib: null,
+      },
+    ])
+  })
+
+  it('hydrates scheduled upload policies from backup plan details', () => {
+    const state = planToState({
+      id: 5,
+      name: 'Policy Plan',
+      enabled: true,
+      source_type: 'local',
+      source_directories: ['/data'],
+      source_locations: [],
+      exclude_patterns: [],
+      archive_name_template: '{plan_name}-{repo_name}-{now}',
+      compression: 'lz4',
+      repository_run_mode: 'series',
+      max_parallel_repositories: 1,
+      failure_behavior: 'continue',
+      schedule_enabled: false,
+      timezone: 'UTC',
+      repository_count: 1,
+      repositories: [],
+      upload_ratelimit_schedule_policies: [
+        {
+          label: 'Daytime cap',
+          start_time: '08:00',
+          end_time: '18:00',
+          upload_ratelimit_kib: 512,
+        },
+        {
+          label: 'Overnight unlimited',
+          start_time: '18:00',
+          end_time: '08:00',
+          upload_ratelimit_kib: null,
+        },
+      ],
+    })
+
+    expect(state.uploadRatelimitSchedulePolicies).toEqual([
+      {
+        label: 'Daytime cap',
+        startTime: '08:00',
+        endTime: '18:00',
+        uploadRatelimitMb: '0.5',
+      },
+      {
+        label: 'Overnight unlimited',
+        startTime: '18:00',
+        endTime: '08:00',
+        uploadRatelimitMb: '',
+      },
+    ])
+  })
+
   it('builds grouped source location payloads with legacy mirrors', () => {
     const sourceLocations = [
       {

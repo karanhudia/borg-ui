@@ -482,6 +482,51 @@ def test_build_backup_create_command_uses_v2_shape():
 
 
 @pytest.mark.unit
+def test_build_backup_create_command_adds_v1_resolved_upload_ratelimit():
+    repo = SimpleNamespace(borg_version=1)
+
+    cmd = BorgRouter(repo).build_backup_create_command(
+        repository_path="/repos/v1",
+        archive_name="manual-1",
+        compression="zstd",
+        exclude_patterns=[],
+        custom_flags=[],
+        upload_ratelimit_kib=512,
+    )
+
+    assert "--upload-ratelimit" in cmd
+    assert cmd[cmd.index("--upload-ratelimit") + 1] == "512"
+
+
+@pytest.mark.unit
+def test_build_backup_create_command_forwards_v2_resolved_upload_ratelimit():
+    repo = SimpleNamespace(borg_version=2)
+
+    with patch(
+        "app.services.v2.backup_service.backup_v2_service.build_backup_create_command",
+        return_value=["borg2", "create", "manual-1"],
+    ) as mock_build:
+        cmd = BorgRouter(repo).build_backup_create_command(
+            repository_path="/repos/v2",
+            archive_name="manual-1",
+            compression="zstd",
+            exclude_patterns=[],
+            custom_flags=[],
+            upload_ratelimit_kib=512,
+        )
+
+    assert cmd == ["borg2", "create", "manual-1"]
+    mock_build.assert_called_once_with(
+        repository_path="/repos/v2",
+        archive_name="manual-1",
+        compression="zstd",
+        exclude_patterns=[],
+        custom_flags=[],
+        upload_ratelimit_kib=512,
+    )
+
+
+@pytest.mark.unit
 def test_build_mount_command_uses_v1_shape():
     repo = SimpleNamespace(borg_version=1)
 

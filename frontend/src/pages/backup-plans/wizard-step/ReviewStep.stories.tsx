@@ -115,6 +115,9 @@ const translations: Record<string, string> = {
   'backupPlans.wizard.review.planPostScript': 'Plan post-script',
   'backupPlans.wizard.review.repositoryScripts': 'Repository scripts',
   'backupPlans.wizard.review.runMode': 'Run mode',
+  'backupPlans.wizard.review.scheduledUploadLimits': 'Scheduled upload limits',
+  'backupPlans.wizard.review.uploadPolicyLimit': '{{limit}} MB/s',
+  'backupPlans.wizard.review.uploadPolicyUnlimited': 'Unlimited',
   'backupPlans.wizard.review.manualOnlyHint': 'Runs only when triggered manually.',
   'backupPlans.wizard.review.prune': 'Prune',
   'backupPlans.wizard.review.compact': 'Compact',
@@ -154,6 +157,7 @@ const t = (key: string, params?: Record<string, unknown>) =>
     .replace('{{daily}}', String(params?.daily ?? ''))
     .replace('{{weekly}}', String(params?.weekly ?? ''))
     .replace('{{seconds}}', String(params?.seconds ?? ''))
+    .replace('{{limit}}', String(params?.limit ?? ''))
 
 function renderReview(wizardState: WizardState, repositories: Repository[]) {
   const selectedSourceConnection =
@@ -188,6 +192,34 @@ export const ServerSourceToServerRepo: Story = {
         [serverRepo.id],
         [{ source_type: 'local', source_ssh_connection_id: null, paths: ['/srv/app'] }]
       ),
+      [serverRepo]
+    ),
+}
+
+export const ScheduledUploadPolicies: Story = {
+  render: () =>
+    renderReview(
+      {
+        ...stateWith(
+          [serverRepo.id],
+          [{ source_type: 'local', source_ssh_connection_id: null, paths: ['/srv/app'] }]
+        ),
+        uploadRatelimitMb: '2',
+        uploadRatelimitSchedulePolicies: [
+          {
+            label: 'Daytime cap',
+            startTime: '08:00',
+            endTime: '18:00',
+            uploadRatelimitMb: '0.5',
+          },
+          {
+            label: 'Overnight unlimited',
+            startTime: '18:00',
+            endTime: '08:00',
+            uploadRatelimitMb: '',
+          },
+        ],
+      },
       [serverRepo]
     ),
 }

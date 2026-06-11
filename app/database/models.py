@@ -870,6 +870,7 @@ class BackupPlan(Base):
     compression = Column(String, default="lz4", nullable=False)
     custom_flags = Column(Text, nullable=True)
     upload_ratelimit_kib = Column(Integer, nullable=True)
+    upload_ratelimit_schedule_policies = Column(Text, nullable=True)
 
     repository_run_mode = Column(String, default="series", nullable=False)
     max_parallel_repositories = Column(Integer, default=1, nullable=False)
