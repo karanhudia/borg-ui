@@ -31,10 +31,12 @@ Key command differences from Borg 1:
 """
 
 import asyncio
-import subprocess
 import os
-import structlog
+import subprocess
+from pathlib import Path
 from typing import Dict, List, Optional
+
+import structlog
 
 from app.config import settings
 
@@ -125,6 +127,7 @@ class Borg2Interface:
             "LogLevel=ERROR",
         ]
         env["BORG_RSH"] = f"ssh {' '.join(ssh_opts)}"
+        env["RCLONE_CONFIG"] = str(Path(settings.rclone_config_root) / "rclone.conf")
         if extra:
             env.update(extra)
         return env

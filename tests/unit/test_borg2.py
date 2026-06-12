@@ -2,6 +2,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from app.config import settings
 from app.core.borg2 import borg2
 
 
@@ -88,3 +89,45 @@ async def test_extract_archive_uses_restore_umask():
         cwd="/restore",
         env=None,
     )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_rcreate_injects_managed_rclone_config_into_process_env(
+    monkeypatch, tmp_path
+):
+    rclone_root = tmp_path / "rclone"
+    monkeypatch.setattr(settings, "rclone_config_root", str(rclone_root))
+    captured: dict[str, object] = {}
+
+    class Process:
+        returncode = 0
+
+        async def communicate(self):
+            return b"", b""
+
+    async def create_subprocess_exec(*cmd, **kwargs):
+        captured["cmd"] = cmd
+        captured["env"] = kwargs["env"]
+        return Process()
+
+    monkeypatch.setattr(
+        "app.core.borg2.asyncio.create_subprocess_exec",
+        create_subprocess_exec,
+    )
+
+    result = await borg2.rcreate(
+        repository="rclone://prod-s3/borg-ui/direct",
+        encryption="none",
+    )
+
+    assert result["success"] is True
+    assert captured["cmd"] == (
+        borg2.borg_cmd,
+        "-r",
+        "rclone://prod-s3/borg-ui/direct",
+        "repo-create",
+        "--encryption",
+        "none",
+    )
+    assert captured["env"]["RCLONE_CONFIG"] == str(rclone_root / "rclone.conf")
