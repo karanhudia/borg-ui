@@ -238,6 +238,24 @@ describe('API Response Interceptor - 401 Handling', () => {
     mock.restore()
   })
 
+  it('does NOT clear a fresh token on 401 from /auth/oidc/exchange endpoint', async () => {
+    const mock = new MockAdapter(api)
+    localStorageMock['access_token'] = 'fresh-token'
+
+    mock.onPost('/auth/oidc/exchange').reply(401, { detail: 'OIDC exchange already consumed' })
+
+    try {
+      await authAPI.exchangeOidcToken()
+    } catch (error) {
+      expect(error).toBeDefined()
+    }
+
+    expect(localStorageMock['access_token']).toBe('fresh-token')
+    expect(windowLocationHref).toBe('')
+
+    mock.restore()
+  })
+
   it('clears localStorage token on 401 redirect', async () => {
     const mock = new MockAdapter(api)
     localStorageMock['access_token'] = 'expired-token'

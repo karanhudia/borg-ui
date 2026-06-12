@@ -1,3 +1,4 @@
+import { StrictMode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders, screen, userEvent, waitFor } from '../../test/test-utils'
 import Login from '../Login'
@@ -9,21 +10,32 @@ import {
   updateRemoteBackendHealth,
 } from '../../services/remoteBackends/storage'
 
-const { loginMock, verifyTotpLoginMock, loginWithPasskeyMock, navigateMock, trackAuthMock } =
-  vi.hoisted(() => ({
-    loginMock: vi.fn(),
-    verifyTotpLoginMock: vi.fn(),
-    loginWithPasskeyMock: vi.fn(),
-    navigateMock: vi.fn(),
-    trackAuthMock: vi.fn(),
-  }))
+const {
+  loginMock,
+  verifyTotpLoginMock,
+  loginWithOidcExchangeTokenMock,
+  loginWithPasskeyMock,
+  navigateMock,
+  trackAuthMock,
+} = vi.hoisted(() => ({
+  loginMock: vi.fn(),
+  verifyTotpLoginMock: vi.fn(),
+  loginWithOidcExchangeTokenMock: vi.fn(),
+  loginWithPasskeyMock: vi.fn(),
+  navigateMock: vi.fn(),
+  trackAuthMock: vi.fn(),
+}))
 
 vi.mock('../../hooks/useAuth.tsx', () => ({
   useAuth: () => ({
     login: loginMock,
     verifyTotpLogin: verifyTotpLoginMock,
+    loginWithOidcExchangeToken: loginWithOidcExchangeTokenMock,
     loginWithPasskey: loginWithPasskeyMock,
     mustChangePassword: false,
+    oidcEnabled: true,
+    oidcProviderName: 'Authentik',
+    oidcDisableLocalAuth: false,
   }),
 }))
 
@@ -184,6 +196,24 @@ describe('Login page', () => {
         requires_password_setup: false,
       })
     })
+  })
+
+  it('completes OIDC login with one exchange when the completion effect re-enters', async () => {
+    loginWithOidcExchangeTokenMock.mockResolvedValue({ mustChangePassword: false })
+
+    renderWithProviders(
+      <StrictMode>
+        <RemoteBackendProvider>
+          <Login />
+        </RemoteBackendProvider>
+      </StrictMode>,
+      { initialRoute: '/login?oidc=complete' }
+    )
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith('/dashboard')
+    })
+    expect(loginWithOidcExchangeTokenMock).toHaveBeenCalledTimes(1)
   })
 
   it('shows a server selector below credentials without a manage action', async () => {

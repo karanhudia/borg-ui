@@ -103,6 +103,7 @@ api.interceptors.response.use(
       error.response?.status === 401 &&
       error.config?.url !== '/auth/login' &&
       error.config?.url !== '/auth/login/totp' &&
+      error.config?.url !== '/auth/oidc/exchange' &&
       error.config?.url !== '/auth/passkeys/authenticate/verify' &&
       error.config?.url !== '/auth/config' &&
       authTransportMode === 'jwt'
