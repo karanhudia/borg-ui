@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { QueryClient } from '@tanstack/react-query'
 import { renderWithProviders } from '../../test/test-utils'
 import RepositoryCard from '../RepositoryCard'
 import * as useMaintenanceJobsModule from '../../hooks/useMaintenanceJobs'
@@ -842,6 +843,25 @@ describe('RepositoryCard', () => {
   })
 
   describe('Maintenance Jobs', () => {
+    it('waits to observe a running job before announcing completion', () => {
+      vi.spyOn(useMaintenanceJobsModule, 'useMaintenanceJobs').mockReturnValue({
+        ...mockMaintenanceJobs,
+        hasRunningJobs: false,
+      })
+
+      renderWithProviders(
+        <RepositoryCard
+          repository={mockRepository}
+          isInJobsSet={true}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(mockCallbacks.onJobCompleted).not.toHaveBeenCalled()
+    })
+
     it('disables all action buttons when maintenance is running', () => {
       vi.spyOn(useMaintenanceJobsModule, 'useMaintenanceJobs').mockReturnValue({
         ...mockMaintenanceJobs,
@@ -948,7 +968,16 @@ describe('RepositoryCard', () => {
     })
 
     it('calls onJobCompleted and invalidates queries when jobs complete', async () => {
-      // Start with running jobs
+      const invalidateQueriesSpy = vi
+        .spyOn(QueryClient.prototype, 'invalidateQueries')
+        .mockResolvedValue()
+      const maintenanceJobsSpy = vi
+        .spyOn(useMaintenanceJobsModule, 'useMaintenanceJobs')
+        .mockReturnValue({
+          ...mockMaintenanceJobs,
+          hasRunningJobs: true,
+        })
+
       const { rerender } = renderWithProviders(
         <RepositoryCard
           repository={mockRepository}
@@ -959,14 +988,7 @@ describe('RepositoryCard', () => {
         />
       )
 
-      // Initial state: jobs running
-      vi.spyOn(useMaintenanceJobsModule, 'useMaintenanceJobs').mockReturnValue({
-        ...mockMaintenanceJobs,
-        hasRunningJobs: true,
-      })
-
-      // Jobs complete
-      vi.spyOn(useMaintenanceJobsModule, 'useMaintenanceJobs').mockReturnValue({
+      maintenanceJobsSpy.mockReturnValue({
         ...mockMaintenanceJobs,
         hasRunningJobs: false,
       })
@@ -984,6 +1006,7 @@ describe('RepositoryCard', () => {
 
       await waitFor(() => {
         expect(mockCallbacks.onJobCompleted).toHaveBeenCalledWith(mockRepository.id)
+        expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ['repositories'] })
       })
     })
   })

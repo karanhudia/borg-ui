@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Box, Typography, Button, IconButton, Tooltip, Chip, useTheme, alpha } from '@mui/material'
 import { format, isTomorrow, isToday, isThisYear } from 'date-fns'
@@ -112,6 +112,7 @@ export default function RepositoryCard({
     repository.id,
     true
   )
+  const hasObservedTrackedJobRef = useRef(false)
   const isMaintenanceRunning = hasRunningJobs
   const hasManualBackupSources = Boolean(repository.source_directories?.length)
   const canCreatePlan = Boolean(onCreateBackupPlan) && canDo('backup') && repository.mode === 'full'
@@ -181,7 +182,18 @@ export default function RepositoryCard({
   ])
 
   useEffect(() => {
-    if (!hasRunningJobs && isInJobsSet) {
+    if (!isInJobsSet) {
+      hasObservedTrackedJobRef.current = false
+      return
+    }
+
+    if (hasRunningJobs) {
+      hasObservedTrackedJobRef.current = true
+      return
+    }
+
+    if (hasObservedTrackedJobRef.current) {
+      hasObservedTrackedJobRef.current = false
       onJobCompleted?.(repository.id)
       queryClient.invalidateQueries({ queryKey: ['repositories'] })
     }
