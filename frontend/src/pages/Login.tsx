@@ -80,6 +80,8 @@ export default function Login() {
   const [pendingUsername, setPendingUsername] = useState<string | null>(null)
   const [searchParams, setSearchParams] = useSearchParams()
   const conditionalPasskeyAbortRef = useRef<AbortController | null>(null)
+  const oidcExchangeStartedRef = useRef(false)
+  const isMountedRef = useRef(true)
   const {
     login,
     verifyTotpLogin,
@@ -99,6 +101,13 @@ export default function Login() {
     handleSubmit,
     formState: { errors },
   } = useForm<LoginForm>()
+
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
 
   const handleSuccessfulLogin = useCallback(
     (
@@ -188,7 +197,9 @@ export default function Login() {
 
     if (!oidcComplete) return
 
-    let cancelled = false
+    if (oidcExchangeStartedRef.current) return
+    oidcExchangeStartedRef.current = true
+
     setSearchParams((current) => {
       const next = new URLSearchParams(current)
       next.delete('oidc')
@@ -199,10 +210,10 @@ export default function Login() {
     void (async () => {
       try {
         const result = await loginWithOidcExchangeToken()
-        if (cancelled) return
+        if (!isMountedRef.current) return
         handleSuccessfulLogin(null, result.mustChangePassword, 'password')
       } catch (error: unknown) {
-        if (!cancelled) {
+        if (isMountedRef.current) {
           toast.error(translateBackendKey(getApiErrorDetail(error)) || t('login.failed'))
           setSearchParams((current) => {
             const next = new URLSearchParams(current)
@@ -211,15 +222,12 @@ export default function Login() {
           })
         }
       } finally {
-        if (!cancelled) {
+        oidcExchangeStartedRef.current = false
+        if (isMountedRef.current) {
           setIsLoading(false)
         }
       }
     })()
-
-    return () => {
-      cancelled = true
-    }
   }, [handleSuccessfulLogin, loginWithOidcExchangeToken, searchParams, setSearchParams, t])
 
   const onSubmit = async (data: LoginForm) => {
