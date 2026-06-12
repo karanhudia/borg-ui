@@ -2912,6 +2912,47 @@ class TestRepositoriesJobStatus:
 
         assert response.status_code == 200
 
+    @pytest.mark.parametrize(
+        "job_model,response_key",
+        [
+            (CheckJob, "check_job"),
+            (CompactJob, "compact_job"),
+            (PruneJob, "prune_job"),
+            (RestoreCheckJob, "restore_check_job"),
+        ],
+    )
+    def test_get_repository_running_jobs_includes_pending_maintenance_job(
+        self, test_client: TestClient, admin_headers, test_db, job_model, response_key
+    ):
+        """Pending maintenance jobs should be active while startup is settling."""
+        repo = Repository(
+            name=f"Pending {response_key} Repo",
+            path=f"/job/pending-{response_key}-repo",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        job = job_model(
+            repository_id=repo.id,
+            repository_path=repo.path,
+            status="pending",
+        )
+        test_db.add(job)
+        test_db.commit()
+
+        response = test_client.get(
+            f"/api/repositories/{repo.id}/running-jobs", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["has_running_jobs"] is True
+        assert data[response_key]["id"] == job.id
+        assert data[response_key]["status"] == "pending"
+
     def test_get_check_jobs_repository_not_found(
         self, test_client: TestClient, admin_headers
     ):

@@ -129,6 +129,7 @@ AGENT_REPOSITORY_INIT_CAPABILITY = "repository.init"
 DIRECT_RCLONE_STORAGE_BACKEND = "rclone_direct"
 RCLONE_FEATURE = "rclone"
 MANAGED_AGENTS_FEATURE = "managed_agents"
+ACTIVE_MAINTENANCE_JOB_STATUSES = ("pending", "running")
 
 # Initialize Borg interface
 borg = BorgInterface()
@@ -6314,19 +6315,28 @@ async def get_running_jobs(
 
         check_job = (
             db.query(CheckJob)
-            .filter(CheckJob.repository_id == repo_id, CheckJob.status == "running")
+            .filter(
+                CheckJob.repository_id == repo_id,
+                CheckJob.status.in_(ACTIVE_MAINTENANCE_JOB_STATUSES),
+            )
             .first()
         )
 
         compact_job = (
             db.query(CompactJob)
-            .filter(CompactJob.repository_id == repo_id, CompactJob.status == "running")
+            .filter(
+                CompactJob.repository_id == repo_id,
+                CompactJob.status.in_(ACTIVE_MAINTENANCE_JOB_STATUSES),
+            )
             .first()
         )
 
         prune_job = (
             db.query(PruneJob)
-            .filter(PruneJob.repository_id == repo_id, PruneJob.status == "running")
+            .filter(
+                PruneJob.repository_id == repo_id,
+                PruneJob.status.in_(ACTIVE_MAINTENANCE_JOB_STATUSES),
+            )
             .first()
         )
 
@@ -6334,7 +6344,7 @@ async def get_running_jobs(
             db.query(RestoreCheckJob)
             .filter(
                 RestoreCheckJob.repository_id == repo_id,
-                RestoreCheckJob.status == "running",
+                RestoreCheckJob.status.in_(ACTIVE_MAINTENANCE_JOB_STATUSES),
             )
             .first()
         )
@@ -6354,6 +6364,7 @@ async def get_running_jobs(
             ),
             "check_job": {
                 "id": check_job.id,
+                "status": check_job.status,
                 "progress": check_job.progress,
                 "progress_message": check_job.progress_message,
                 "started_at": serialize_datetime(check_job.started_at),
@@ -6362,6 +6373,7 @@ async def get_running_jobs(
             else None,
             "compact_job": {
                 "id": compact_job.id,
+                "status": compact_job.status,
                 "progress": compact_job.progress,
                 "progress_message": compact_job.progress_message,
                 "started_at": serialize_datetime(compact_job.started_at),
@@ -6370,12 +6382,14 @@ async def get_running_jobs(
             else None,
             "prune_job": {
                 "id": prune_job.id,
+                "status": prune_job.status,
                 "started_at": serialize_datetime(prune_job.started_at),
             }
             if prune_job
             else None,
             "restore_check_job": {
                 "id": restore_check_job.id,
+                "status": restore_check_job.status,
                 "progress": restore_check_job.progress,
                 "progress_message": restore_check_job.progress_message,
                 "started_at": serialize_datetime(restore_check_job.started_at),
