@@ -33,6 +33,7 @@ from app.database.models import (
     LicensingState,
     PruneJob,
     Repository,
+    RepositoryStorage,
     RestoreCheckJob,
     ScheduledJob,
     SSHConnection,
@@ -1504,6 +1505,72 @@ class TestRepositoriesUpdate:
         )
 
         assert response.status_code == 200
+
+    def test_update_repository_allows_local_storage_noop_on_community_plan(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _set_plan(test_db, "community")
+        repo = Repository(
+            name="Community Local Repo",
+            path="/tmp/community-local-repo",
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}",
+            json={
+                "exclude_patterns": ["*.tmp"],
+                "storage_backend": "local",
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200, response.json()
+        test_db.refresh(repo)
+        assert repo.exclude_patterns == '["*.tmp"]'
+        assert (
+            test_db.query(RepositoryStorage)
+            .filter(RepositoryStorage.repository_id == repo.id)
+            .first()
+            is None
+        )
+
+    def test_update_repository_requires_rclone_feature_to_enable_cloud_mirror(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _set_plan(test_db, "community")
+        repo = Repository(
+            name="Community Mirror Repo",
+            path="/tmp/community-mirror-repo",
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}",
+            json={
+                "storage_backend": "local",
+                "cloud_mirror_enabled": True,
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 403
+        assert response.json()["detail"] == {
+            "key": "backend.errors.plan.featureNotAvailable",
+            "feature": "rclone",
+            "required": "pro",
+            "current": "community",
+        }
 
     def test_update_repository_compression(
         self, test_client: TestClient, admin_headers, test_db
