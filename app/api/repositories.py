@@ -1441,7 +1441,7 @@ def _rclone_feature_gate_updates(
     update_data: dict[str, Any],
     requested_rclone_updates: set[str],
 ) -> set[str]:
-    if repo_data.cloud_mirror_enabled is not False:
+    if repo_data.cloud_mirror_enabled is True:
         return requested_rclone_updates
 
     exempt_updates = {"cloud_mirror_enabled"}
