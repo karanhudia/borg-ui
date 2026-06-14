@@ -444,6 +444,40 @@ async def test_sshfs_includes_sudo_sftp_server_option_when_use_sudo_true(
 
 
 @pytest.mark.asyncio
+async def test_sshfs_uses_public_key_only_authentication_options(
+    mount_service_fixture,
+):
+    """SSHFS mounts and sudo diagnostics must not fall back to password auth."""
+    connection = _make_sshfs_connection(use_sudo=True)
+    _, _, captured_commands, capture_exec = _make_subprocess_mocks()
+
+    with patch(
+        "app.services.mount_service.asyncio.create_subprocess_exec",
+        side_effect=capture_exec,
+    ):
+        with patch("app.services.mount_service.asyncio.sleep", return_value=None):
+            await mount_service_fixture._execute_sshfs_mount(
+                connection=connection,
+                remote_path="/remote/data",
+                mount_point="/tmp/mounts/test",
+                temp_key_file="/tmp/test_key",
+            )
+
+    ssh_cmd = next((cmd for cmd in captured_commands if cmd[0] == "ssh"), None)
+    sshfs_cmd = next((cmd for cmd in captured_commands if cmd[0] == "sshfs"), None)
+    assert ssh_cmd is not None, "ssh diagnostic command was not called"
+    assert sshfs_cmd is not None, "sshfs command was not called"
+
+    for cmd in (ssh_cmd, sshfs_cmd):
+        cmd_flat = " ".join(cmd)
+        assert "BatchMode=yes" in cmd_flat
+        assert "IdentitiesOnly=yes" in cmd_flat
+        assert "PreferredAuthentications=publickey" in cmd_flat
+        assert "PasswordAuthentication=no" in cmd_flat
+        assert "NumberOfPasswordPrompts=0" in cmd_flat
+
+
+@pytest.mark.asyncio
 async def test_sshfs_omits_sudo_sftp_server_option_when_use_sudo_false(
     mount_service_fixture,
 ):

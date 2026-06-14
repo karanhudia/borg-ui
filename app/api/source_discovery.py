@@ -22,6 +22,7 @@ from app.core.security import get_current_user
 from app.database.database import get_db
 from app.database.models import SSHConnection, SSHKey, User
 from app.services.filesystem_snapshot_service import DEFAULT_SNAPSHOT_STAGING_ROOT
+from app.utils.ssh_options import ssh_key_auth_args
 from app.utils.ssh_utils import write_ssh_key_to_tempfile
 
 router = APIRouter()
@@ -1073,8 +1074,7 @@ def _run_remote_mount_size_probe(
     remote_command = f"du -s -B1 {shlex.quote(path)}"
     ssh_cmd = [
         "ssh",
-        "-i",
-        key_file_path,
+        *ssh_key_auth_args(key_file_path),
         "-p",
         str(connection.port or 22),
         "-o",
@@ -1294,8 +1294,7 @@ def _run_remote_container_scan(
     )
     ssh_cmd = [
         "ssh",
-        "-i",
-        key_file_path,
+        *ssh_key_auth_args(key_file_path),
         "-p",
         str(connection.port or 22),
         "-o",
@@ -1605,8 +1604,7 @@ def _run_remote_database_probe(
     remote_command = f"sh -c {shlex.quote(script)}"
     ssh_cmd = [
         "ssh",
-        "-i",
-        key_file_path,
+        *ssh_key_auth_args(key_file_path),
         "-p",
         str(connection.port or 22),
         "-o",

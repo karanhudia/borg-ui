@@ -7,6 +7,8 @@ import re
 import structlog
 from typing import Optional
 
+from app.utils.ssh_options import public_key_only_ssh_args, ssh_key_auth_args
+
 logger = structlog.get_logger()
 
 
@@ -129,7 +131,9 @@ async def _du_ssh(
     async def run_remote_du(command_remote_path: str):
         cmd = ["ssh"]
         if key_file:
-            cmd.extend(["-i", key_file])
+            cmd.extend(ssh_key_auth_args(key_file))
+        else:
+            cmd.extend(public_key_only_ssh_args())
         cmd.extend(
             [
                 "-o",

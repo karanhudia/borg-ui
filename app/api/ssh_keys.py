@@ -25,6 +25,7 @@ from app.core.authorization import authorize_request
 from app.core.security import get_current_user, encrypt_secret, decrypt_secret
 from app.config import settings
 from app.utils.datetime_utils import serialize_datetime
+from app.utils.ssh_options import ssh_key_auth_args
 from app.utils.ssh_host_validation import normalize_ssh_host
 from app.utils.ssh_utils import write_ssh_key_to_tempfile
 import hashlib
@@ -77,8 +78,7 @@ async def _run_df_command(
 
     df_cmd = [
         "ssh",
-        "-i",
-        temp_key_file,
+        *ssh_key_auth_args(temp_key_file),
         "-o",
         "StrictHostKeyChecking=no",
         "-o",

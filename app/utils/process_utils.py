@@ -28,6 +28,7 @@ from app.utils.backup_maintenance import (
     COMPLETED_BACKUP_STATUSES,
     RUNNING_BACKUP_MAINTENANCE_FAILURES,
 )
+from app.utils.ssh_options import public_key_only_ssh_args
 
 logger = structlog.get_logger()
 
@@ -266,6 +267,7 @@ def break_repository_lock(repository: Repository) -> bool:
         # For remote repos, add SSH options
         if repository.connection_id:
             ssh_opts = [
+                *public_key_only_ssh_args(),
                 "-o",
                 "StrictHostKeyChecking=no",
                 "-o",

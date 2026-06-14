@@ -113,6 +113,7 @@ from app.utils.borg_env import (
 from app.utils.ssh_utils import (
     resolve_repo_ssh_key_file,
 )  # Backward-compatible patch target for tests
+from app.utils.ssh_options import ssh_key_auth_args
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["repositories"], dependencies=[Depends(authorize_request)])
@@ -5598,8 +5599,7 @@ async def check_remote_borg_installation(
         # Check for borg
         borg_cmd = [
             "ssh",
-            "-i",
-            temp_key_file,
+            *ssh_key_auth_args(temp_key_file),
             "-o",
             "StrictHostKeyChecking=no",
             "-o",

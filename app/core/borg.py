@@ -6,6 +6,7 @@ import structlog
 from typing import Dict, List
 from datetime import datetime, timezone
 from app.config import settings
+from app.utils.ssh_options import public_key_only_ssh_args
 
 logger = structlog.get_logger()
 
@@ -86,6 +87,7 @@ class BorgInterface:
         # Add SSH options to disable host key checking for remote repos
         # This allows automatic connection to new hosts without manual intervention
         ssh_opts = [
+            *public_key_only_ssh_args(),
             "-o",
             "StrictHostKeyChecking=no",  # Don't check host keys
             "-o",
@@ -181,6 +183,7 @@ class BorgInterface:
         exec_env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
 
         ssh_opts = [
+            *public_key_only_ssh_args(),
             "-o",
             "StrictHostKeyChecking=no",
             "-o",

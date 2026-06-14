@@ -4,6 +4,7 @@ from contextlib import contextmanager
 import os
 from typing import Iterator, Optional
 
+from app.utils.ssh_options import public_key_only_ssh_args
 from app.utils.ssh_utils import resolve_repo_ssh_key_file, resolve_ssh_key_file_by_id
 
 
@@ -17,6 +18,8 @@ def get_standard_ssh_opts(
 
     if include_key_path:
         opts.extend(["-i", include_key_path])
+
+    opts.extend(public_key_only_ssh_args(identities_only=bool(include_key_path)))
 
     opts.extend(
         [

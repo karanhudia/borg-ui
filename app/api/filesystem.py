@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.database.models import SSHConnection, SSHKey
 from app.config import settings
 from app.utils.datetime_utils import serialize_datetime
+from app.utils.ssh_options import ssh_key_auth_args
 
 logger = structlog.get_logger()
 
@@ -116,8 +117,7 @@ def is_borg_repository_ssh(
 
         ssh_cmd = [
             "ssh",
-            "-i",
-            ssh_key_path,
+            *ssh_key_auth_args(ssh_key_path),
             "-p",
             str(port),
             "-o",
@@ -415,8 +415,7 @@ async def browse_ssh_filesystem(
                     "sftp",
                     "-b",
                     sftp_batch_file,
-                    "-i",
-                    temp_key_file,
+                    *ssh_key_auth_args(temp_key_file),
                     "-P",
                     str(port),
                     "-o",
@@ -720,8 +719,7 @@ async def validate_path(
 
                     ssh_cmd = [
                         "ssh",
-                        "-i",
-                        temp_key_file,
+                        *ssh_key_auth_args(temp_key_file),
                         "-p",
                         str(port),
                         "-o",
@@ -916,8 +914,7 @@ async def create_folder(
                             "sftp",
                             "-b",
                             sftp_batch_file,
-                            "-i",
-                            temp_key_file,
+                            *ssh_key_auth_args(temp_key_file),
                             "-P",
                             str(port),
                             "-o",

@@ -39,6 +39,7 @@ from typing import Dict, List, Optional
 import structlog
 
 from app.config import settings
+from app.utils.ssh_options import public_key_only_ssh_args
 
 logger = structlog.get_logger()
 
@@ -119,6 +120,7 @@ class Borg2Interface:
         env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
         env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
         ssh_opts = [
+            *public_key_only_ssh_args(),
             "-o",
             "StrictHostKeyChecking=no",
             "-o",

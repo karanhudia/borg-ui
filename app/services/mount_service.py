@@ -29,6 +29,8 @@ from app.core.borg_router import BorgRouter
 from app.core.security import decrypt_secret
 from app.database.database import SessionLocal
 from app.database.models import SSHConnection, SSHKey, Repository, SystemSettings
+from app.utils.borg_env import get_standard_ssh_opts
+from app.utils.ssh_options import ssh_key_auth_args, sshfs_key_auth_options
 
 logger = structlog.get_logger()
 
@@ -930,9 +932,7 @@ class MountService:
                 # Handle SSH repositories
                 if repository.connection_id:
                     # Always disable strict host key checking for SSH repos
-                    ssh_opts = (
-                        "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-                    )
+                    ssh_opts = get_standard_ssh_opts()
 
                     if repository.connection_id:
                         # Repository linked to SSH connection
@@ -961,7 +961,10 @@ class MountService:
                                 # Decrypt SSH key
                                 temp_key_file = self._decrypt_and_write_key(ssh_key)
                                 # Set BORG_RSH with key and SSH options
-                                env["BORG_RSH"] = f"ssh -i {temp_key_file} {ssh_opts}"
+                                key_ssh_opts = get_standard_ssh_opts(
+                                    include_key_path=temp_key_file
+                                )
+                                env["BORG_RSH"] = f"ssh {' '.join(key_ssh_opts)}"
                                 logger.info(
                                     "Set BORG_RSH with key",
                                     mount_id=mount_id,
@@ -969,7 +972,7 @@ class MountService:
                                 )
                             else:
                                 # No key found, use SSH options only
-                                env["BORG_RSH"] = f"ssh {ssh_opts}"
+                                env["BORG_RSH"] = f"ssh {' '.join(ssh_opts)}"
                                 logger.info(
                                     "Set BORG_RSH without key (key not found)",
                                     mount_id=mount_id,
@@ -977,7 +980,7 @@ class MountService:
                                 )
                         else:
                             # No key configured or connection not found
-                            env["BORG_RSH"] = f"ssh {ssh_opts}"
+                            env["BORG_RSH"] = f"ssh {' '.join(ssh_opts)}"
                             logger.info(
                                 "Set BORG_RSH without key (no connection or key)",
                                 mount_id=mount_id,
@@ -985,7 +988,7 @@ class MountService:
                             )
                     else:
                         # SSH repository without connection_id (embedded SSH URL)
-                        env["BORG_RSH"] = f"ssh {ssh_opts}"
+                        env["BORG_RSH"] = f"ssh {' '.join(ssh_opts)}"
                         logger.info(
                             "Set BORG_RSH for SSH repo without connection",
                             mount_id=mount_id,
@@ -1357,8 +1360,7 @@ class MountService:
             # Method 1: Try SSH shell command first (fast, but requires shell access)
             cmd = [
                 "ssh",
-                "-i",
-                temp_key_file,
+                *ssh_key_auth_args(temp_key_file),
                 "-o",
                 "StrictHostKeyChecking=no",
                 "-o",
@@ -1439,8 +1441,7 @@ class MountService:
         # Use SFTP subsystem via SSH
         cmd = [
             "sftp",
-            "-i",
-            temp_key_file,
+            *ssh_key_auth_args(temp_key_file),
             "-o",
             "StrictHostKeyChecking=no",
             "-o",
@@ -1548,8 +1549,7 @@ class MountService:
             try:
                 diag_ssh = [
                     "ssh",
-                    "-i",
-                    temp_key_file,
+                    *ssh_key_auth_args(temp_key_file),
                     "-o",
                     "StrictHostKeyChecking=no",
                     "-o",
@@ -1611,8 +1611,7 @@ class MountService:
                 mount_point,
                 "-p",
                 str(connection.port),
-                "-o",
-                f"IdentityFile={temp_key_file}",  # CRITICAL: SSH key auth
+                *sshfs_key_auth_options(temp_key_file),
                 "-o",
                 "StrictHostKeyChecking=no",
                 "-o",

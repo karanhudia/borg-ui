@@ -46,6 +46,11 @@ class TestRepositoryHelperFunctions:
         assert "-i" not in opts
         assert "StrictHostKeyChecking=no" in opts
         assert "UserKnownHostsFile=/dev/null" in opts
+        assert "BatchMode=yes" in opts
+        assert "PreferredAuthentications=publickey" in opts
+        assert "PasswordAuthentication=no" in opts
+        assert "NumberOfPasswordPrompts=0" in opts
+        assert "IdentitiesOnly=yes" not in opts
         assert "RequestTTY=no" in opts
 
     def test_get_standard_ssh_opts_with_key(self):
@@ -53,6 +58,11 @@ class TestRepositoryHelperFunctions:
 
         assert opts[:2] == ["-i", "/tmp/test-key"]
         assert "StrictHostKeyChecking=no" in opts
+        assert "BatchMode=yes" in opts
+        assert "IdentitiesOnly=yes" in opts
+        assert "PreferredAuthentications=publickey" in opts
+        assert "PasswordAuthentication=no" in opts
+        assert "NumberOfPasswordPrompts=0" in opts
 
     def test_get_operation_timeouts_uses_database_values(self):
         mock_settings = Mock(
