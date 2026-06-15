@@ -4531,9 +4531,24 @@ async def update_repository(
         )
         if source_settings_changed:
             if "source_locations" in update_data:
-                source_locations_input = repo_data.source_locations or []
-                source_directories_input = None
-                source_connection_id_input = None
+                if repo_data.source_locations:
+                    source_locations_input = repo_data.source_locations
+                    source_directories_input = None
+                    source_connection_id_input = None
+                elif "source_directories" in update_data and any(
+                    str(path).strip() for path in repo_data.source_directories or []
+                ):
+                    source_locations_input = None
+                    source_directories_input = repo_data.source_directories
+                    source_connection_id_input = (
+                        repo_data.source_connection_id
+                        if "source_connection_id" in update_data
+                        else repository.source_ssh_connection_id
+                    )
+                else:
+                    source_locations_input = []
+                    source_directories_input = None
+                    source_connection_id_input = None
             else:
                 source_locations_input = None
                 source_directories_input = (
