@@ -3,7 +3,7 @@ apprise==1.11.0
 bcrypt==5.0.0
 coverage[toml]==7.14.1
 croniter==6.2.2
-cryptography==48.0.0
+cryptography==49.0.0
 fastapi-cache2==0.2.2
 fastapi==0.136.3
 gunicorn==26.0.0
