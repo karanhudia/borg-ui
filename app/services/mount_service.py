@@ -30,7 +30,7 @@ from app.core.security import decrypt_secret
 from app.database.database import SessionLocal
 from app.database.models import SSHConnection, SSHKey, Repository, SystemSettings
 from app.utils.borg_env import get_standard_ssh_opts
-from app.utils.ssh_options import ssh_key_auth_args, sshfs_key_auth_options
+from app.utils.ssh_utils import ssh_key_auth_args, sshfs_key_auth_options
 
 logger = structlog.get_logger()
 

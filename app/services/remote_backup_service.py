@@ -21,8 +21,7 @@ from app.database.models import BackupJob, Repository, SSHConnection, SSHKey
 from app.database.database import SessionLocal
 from app.config import settings
 from app.services.notification_service import notification_service
-from app.utils.ssh_options import ssh_key_auth_args
-from app.utils.ssh_utils import write_ssh_key_to_tempfile
+from app.utils.ssh_utils import ssh_key_auth_args, write_ssh_key_to_tempfile
 
 logger = structlog.get_logger()
 

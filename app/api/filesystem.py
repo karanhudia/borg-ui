@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from app.database.models import SSHConnection, SSHKey
 from app.config import settings
 from app.utils.datetime_utils import serialize_datetime
-from app.utils.ssh_options import ssh_key_auth_args
+from app.utils.ssh_utils import ssh_key_auth_args
 
 logger = structlog.get_logger()
 

@@ -6,7 +6,7 @@ import structlog
 from typing import Dict, List
 from datetime import datetime, timezone
 from app.config import settings
-from app.utils.ssh_options import public_key_only_ssh_args
+from app.utils.ssh_utils import public_key_only_ssh_args
 
 logger = structlog.get_logger()
 

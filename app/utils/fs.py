@@ -7,7 +7,7 @@ import re
 import structlog
 from typing import Optional
 
-from app.utils.ssh_options import public_key_only_ssh_args, ssh_key_auth_args
+from app.utils.ssh_utils import public_key_only_ssh_args, ssh_key_auth_args
 
 logger = structlog.get_logger()
 

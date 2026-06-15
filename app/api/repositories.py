@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any, Union
 from datetime import datetime, timezone
+from functools import partial
 from pathlib import Path as FilesystemPath
 from types import SimpleNamespace
 import structlog
@@ -112,8 +113,8 @@ from app.utils.borg_env import (
 )
 from app.utils.ssh_utils import (
     resolve_repo_ssh_key_file,
+    ssh_key_auth_args,
 )  # Backward-compatible patch target for tests
-from app.utils.ssh_options import ssh_key_auth_args
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["repositories"], dependencies=[Depends(authorize_request)])
@@ -124,6 +125,41 @@ V2_ONLY_ENCRYPTION_MODES = {
     "keyfile-aes-ocb",
     "keyfile-chacha20-poly1305",
 }
+
+
+def _router_repo_snapshot(repository: Repository) -> SimpleNamespace:
+    return SimpleNamespace(id=repository.id, borg_version=repository.borg_version)
+
+
+def _dispatch_router_check(router_repo: SimpleNamespace, job: CheckJob):
+    return BorgRouter(router_repo).check(job.id)
+
+
+def _dispatch_router_compact(router_repo: SimpleNamespace, job: CompactJob):
+    return BorgRouter(router_repo).compact(job.id)
+
+
+def _dispatch_router_prune(
+    router_repo: SimpleNamespace,
+    keep_hourly: int,
+    keep_daily: int,
+    keep_weekly: int,
+    keep_monthly: int,
+    keep_quarterly: int,
+    keep_yearly: int,
+    job: PruneJob,
+):
+    return BorgRouter(router_repo).prune(
+        job.id,
+        keep_hourly,
+        keep_daily,
+        keep_weekly,
+        keep_monthly,
+        keep_quarterly,
+        keep_yearly,
+        False,
+    )
+
 
 AGENT_RCLONE_SYNC_CAPABILITY = "repository.rclone_sync"
 AGENT_REPOSITORY_INIT_CAPABILITY = "repository.init"
@@ -5030,8 +5066,9 @@ async def check_repository(
             repository,
             CheckJob,
             error_key="backend.errors.repo.checkAlreadyRunning",
-            dispatcher=lambda job, router_repo=SimpleNamespace(id=repository.id, borg_version=repository.borg_version): (
-                BorgRouter(router_repo).check(job.id)
+            dispatcher=partial(
+                _dispatch_router_check,
+                _router_repo_snapshot(repository),
             ),
             extra_fields={
                 "max_duration": max_duration,
@@ -5181,8 +5218,9 @@ async def compact_repository(
             repository,
             CompactJob,
             error_key="backend.errors.repo.compactAlreadyRunning",
-            dispatcher=lambda job, router_repo=SimpleNamespace(id=repository.id, borg_version=repository.borg_version): (
-                BorgRouter(router_repo).compact(job.id)
+            dispatcher=partial(
+                _dispatch_router_compact,
+                _router_repo_snapshot(repository),
             ),
             extra_fields={"scheduled_compact": False},
         )
@@ -5299,17 +5337,15 @@ async def prune_repository(
                 repository,
                 PruneJob,
                 error_key="backend.errors.repo.pruneAlreadyRunning",
-                dispatcher=lambda job, router_repo=SimpleNamespace(id=repository.id, borg_version=repository.borg_version): (
-                    BorgRouter(router_repo).prune(
-                        job.id,
-                        keep_hourly,
-                        keep_daily,
-                        keep_weekly,
-                        keep_monthly,
-                        keep_quarterly,
-                        keep_yearly,
-                        False,
-                    )
+                dispatcher=partial(
+                    _dispatch_router_prune,
+                    _router_repo_snapshot(repository),
+                    keep_hourly,
+                    keep_daily,
+                    keep_weekly,
+                    keep_monthly,
+                    keep_quarterly,
+                    keep_yearly,
                 ),
                 extra_fields={"scheduled_prune": False},
             )

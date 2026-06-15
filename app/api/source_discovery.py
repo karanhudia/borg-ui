@@ -22,8 +22,7 @@ from app.core.security import get_current_user
 from app.database.database import get_db
 from app.database.models import SSHConnection, SSHKey, User
 from app.services.filesystem_snapshot_service import DEFAULT_SNAPSHOT_STAGING_ROOT
-from app.utils.ssh_options import ssh_key_auth_args
-from app.utils.ssh_utils import write_ssh_key_to_tempfile
+from app.utils.ssh_utils import ssh_key_auth_args, write_ssh_key_to_tempfile
 
 router = APIRouter()
 

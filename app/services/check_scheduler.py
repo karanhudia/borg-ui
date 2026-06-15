@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from functools import partial
 from types import SimpleNamespace
 from typing import Optional
 
@@ -19,6 +20,14 @@ from app.utils.schedule_time import (
 logger = structlog.get_logger()
 
 STALE_PENDING_SCHEDULED_CHECK_AFTER = timedelta(minutes=15)
+
+
+def _router_repo_snapshot(repository: Repository) -> SimpleNamespace:
+    return SimpleNamespace(id=repository.id, borg_version=repository.borg_version)
+
+
+def _dispatch_router_check(router_repo: SimpleNamespace, job: CheckJob):
+    return BorgRouter(router_repo).check(job.id)
 
 
 def _utc_naive(value: datetime) -> datetime:
@@ -166,8 +175,9 @@ async def run_due_scheduled_checks(db: Session, now: Optional[datetime] = None) 
                 repo,
                 CheckJob,
                 error_key="backend.errors.repo.checkAlreadyRunning",
-                dispatcher=lambda job, router_repo=SimpleNamespace(id=repo.id, borg_version=repo.borg_version): (
-                    BorgRouter(router_repo).check(job.id)
+                dispatcher=partial(
+                    _dispatch_router_check,
+                    _router_repo_snapshot(repo),
                 ),
                 extra_fields={
                     "max_duration": (
