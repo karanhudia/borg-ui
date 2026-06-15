@@ -1764,6 +1764,95 @@ class TestRepositoriesUpdate:
         assert repo.source_directories is None
         assert repo.exclude_patterns is None
 
+    def test_update_repository_empty_source_locations_preserves_legacy_remaining_sources(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """A stale empty source_locations field must not clear non-empty source_directories."""
+        repo = Repository(
+            name="Source Removal Repo",
+            path="/tmp/source-removal-repo",
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+            source_directories=json.dumps(["/srv/old", "/srv/keep"]),
+            source_locations=json.dumps(
+                [
+                    {
+                        "source_type": "local",
+                        "source_ssh_connection_id": None,
+                        "agent_machine_id": None,
+                        "paths": ["/srv/old", "/srv/keep"],
+                    }
+                ]
+            ),
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}",
+            json={
+                "source_directories": ["/srv/keep"],
+                "source_locations": [],
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(repo)
+        assert json.loads(repo.source_directories) == ["/srv/keep"]
+        assert json.loads(repo.source_locations) == [
+            {
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "agent_machine_id": None,
+                "paths": ["/srv/keep"],
+            }
+        ]
+
+    def test_update_repository_empty_source_locations_and_directories_clear_connection(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Empty source fields clear stale remote source connection metadata."""
+        repo = Repository(
+            name="Remote Source Clear Repo",
+            path="/tmp/remote-source-clear-repo",
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+            source_ssh_connection_id=42,
+            source_directories=json.dumps(["/remote/old"]),
+            source_locations=json.dumps(
+                [
+                    {
+                        "source_type": "remote",
+                        "source_ssh_connection_id": 42,
+                        "agent_machine_id": None,
+                        "paths": ["/remote/old"],
+                    }
+                ]
+            ),
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}",
+            json={
+                "source_directories": [],
+                "source_locations": [],
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(repo)
+        assert repo.source_directories is None
+        assert repo.source_locations is None
+        assert repo.source_ssh_connection_id is None
+
     def test_update_repository_type_local_to_ssh(
         self, test_client: TestClient, admin_headers, test_db
     ):
