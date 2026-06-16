@@ -83,6 +83,10 @@ export interface CheckRepositoryOptions {
   checkExtraFlags?: string | null
 }
 
+function usesRepositoryDispatcher(data: Omit<Repository, 'id'>): boolean {
+  return data.storage_backend === 'rclone_direct'
+}
+
 export class BorgApiClient {
   /** Version-aware URL prefix — the single routing decision point. */
   private readonly v: string
@@ -100,12 +104,22 @@ export class BorgApiClient {
   // ── Pre-creation (no repo ID yet) ────────────────────────────────────────
 
   static createRepository(data: Omit<Repository, 'id'>) {
-    const v = data.execution_target === 'agent' ? '' : isV2Repo(data) ? '/v2' : ''
+    const v =
+      data.execution_target === 'agent' || usesRepositoryDispatcher(data)
+        ? ''
+        : isV2Repo(data)
+          ? '/v2'
+          : ''
     return httpClient.post(`${v}/repositories/`, data)
   }
 
   static importRepository(data: Omit<Repository, 'id'>) {
-    const v = data.execution_target === 'agent' ? '' : isV2Repo(data) ? '/v2' : ''
+    const v =
+      data.execution_target === 'agent' || usesRepositoryDispatcher(data)
+        ? ''
+        : isV2Repo(data)
+          ? '/v2'
+          : ''
     return httpClient.post(`${v}/repositories/import`, data)
   }
 
