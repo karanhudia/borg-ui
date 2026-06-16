@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PR #689 visual report</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f8fa;
+      --panel: #ffffff;
+      --text: #1f2937;
+      --muted: #637083;
+      --border: #d8dee8;
+      --accent: #1769aa;
+      --changed: #b42318;
+      --added: #067647;
+      --removed: #7f56d9;
+      --shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+
+    header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      padding: 28px min(5vw, 56px);
+    }
+
+    main {
+      display: grid;
+      gap: 24px;
+      padding: 24px min(5vw, 56px) 48px;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    h1 {
+      font-size: clamp(1.6rem, 2.2vw, 2.4rem);
+      letter-spacing: 0;
+      line-height: 1.15;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      margin-top: 8px;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-top: 22px;
+      max-width: 980px;
+    }
+
+    .metric {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 14px 16px;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 1.6rem;
+      line-height: 1.1;
+    }
+
+    .metric span {
+      color: var(--muted);
+      display: block;
+      font-size: 0.88rem;
+      margin-top: 4px;
+    }
+
+    .meta {
+      align-items: center;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .pill {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+      display: inline-flex;
+      font-size: 0.84rem;
+      padding: 4px 10px;
+    }
+
+    .pill-ok { color: var(--added); border-color: #abefc6; background: #ecfdf3; }
+    .pill-changed { color: var(--changed); border-color: #fecdca; background: #fef3f2; }
+    .pill-info { color: var(--accent); border-color: #b9d6f2; background: #eff8ff; }
+
+    .section {
+      display: grid;
+      gap: 14px;
+    }
+
+    .section-title {
+      align-items: center;
+      display: flex;
+      gap: 10px;
+    }
+
+    .section-title h2 {
+      font-size: 1.08rem;
+      letter-spacing: 0;
+    }
+
+    .section-title span {
+      background: #e9eef5;
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 0.82rem;
+      padding: 2px 9px;
+    }
+
+    .empty {
+      color: var(--muted);
+      padding: 12px 0;
+    }
+
+    .shot {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .shot-header {
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      justify-content: space-between;
+      padding: 14px 16px;
+    }
+
+    .shot-header h3 {
+      font-size: 0.96rem;
+      overflow-wrap: anywhere;
+    }
+
+    .shot-header p {
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .image-grid {
+      display: grid;
+      gap: 1px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      background: var(--border);
+    }
+
+    .image-grid.single {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    figure {
+      background: #f8fafc;
+      margin: 0;
+      min-width: 0;
+      padding: 12px;
+    }
+
+    figcaption {
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+
+    img {
+      background: white;
+      border: 1px solid #e5e7eb;
+      display: block;
+      height: auto;
+      max-width: 100%;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    a:hover { text-decoration: underline; }
+
+    @media (max-width: 820px) {
+      header { padding: 22px 18px; }
+      main { padding: 18px; }
+      .image-grid { grid-template-columns: minmax(0, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>PR #689 visual report</h1>
+    <p class="subtitle">Generated Jun 16, 2026, 9:16 AM UTC</p>
+    <div class="meta">
+      <span class="pill pill-ok">No visual changes</span>
+      
+      <span class="pill pill-info">Commit d1a3098cb0ba</span>
+      <a class="pill pill-info" href="https://github.com/karanhudia/borg-ui/actions/runs/27606989665">Workflow run</a>
+    </div>
+    <div class="summary">
+      <div class="metric"><strong>0</strong><span>Changed</span></div>
+      <div class="metric"><strong>0</strong><span>Added</span></div>
+      <div class="metric"><strong>0</strong><span>Removed</span></div>
+      <div class="metric"><strong>422</strong><span>Unchanged</span></div>
+      <div class="metric"><strong>422</strong><span>Current screenshots</span></div>
+      <div class="metric"><strong>422</strong><span>Baseline screenshots</span></div>
+    </div>
+  </header>
+  <main>
+    
+    <section class="section">
+      <div class="section-title">
+        <h2>Changed</h2>
+        <span>0</span>
+      </div>
+      <p class="empty">No screenshots changed.</p>
+    </section>
+    
+    <section class="section">
+      <div class="section-title">
+        <h2>Added</h2>
+        <span>0</span>
+      </div>
+      <p class="empty">No screenshots were added.</p>
+    </section>
+    
+    <section class="section">
+      <div class="section-title">
+        <h2>Removed</h2>
+        <span>0</span>
+      </div>
+      <p class="empty">No screenshots were removed.</p>
+    </section>
+  </main>
+</body>
+</html>
