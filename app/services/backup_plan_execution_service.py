@@ -55,7 +55,7 @@ from app.services.script_executor import execute_script
 from app.services.template_service import get_system_variables
 from app.utils.archive_names import build_archive_name
 from app.utils.script_params import SYSTEM_VARIABLE_PREFIX
-from app.utils.ssh_utils import write_ssh_key_to_tempfile
+from app.utils.ssh_utils import ssh_key_auth_args, write_ssh_key_to_tempfile
 from app.utils.source_locations import decode_source_locations
 from app.utils.schedule_time import calculate_next_cron_run, to_utc_naive
 
@@ -1485,8 +1485,7 @@ class BackupPlanExecutionService:
         try:
             ssh_cmd = [
                 "ssh",
-                "-i",
-                key_file_path,
+                *ssh_key_auth_args(key_file_path),
                 "-o",
                 "StrictHostKeyChecking=no",
                 "-o",

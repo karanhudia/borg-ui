@@ -135,7 +135,18 @@ class TestProcessUtils:
         # Verify SSH setup
         env = mock_run.call_args[1]["env"]
         assert "BORG_RSH" in env
-        assert "ssh -o StrictHostKeyChecking=no" in env["BORG_RSH"]
+        borg_rsh = env["BORG_RSH"]
+        assert borg_rsh.startswith("ssh ")
+        for option in [
+            "-o BatchMode=yes",
+            "-o PreferredAuthentications=publickey",
+            "-o PasswordAuthentication=no",
+            "-o NumberOfPasswordPrompts=0",
+            "-o StrictHostKeyChecking=no",
+            "-o UserKnownHostsFile=/dev/null",
+            "-o LogLevel=ERROR",
+        ]:
+            assert option in borg_rsh
 
     def test_cleanup_orphaned_jobs(self):
         """Test cleanup of orphaned jobs"""

@@ -1,8 +1,8 @@
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.database.models import BackupJob, Repository, SSHConnection
+from app.database.models import BackupJob, Repository, SSHConnection, SSHKey
 from app.services.remote_backup_service import RemoteBackupService
 
 
@@ -139,6 +139,71 @@ async def test_execute_remote_backup_updates_same_job_row_and_uses_source_borg_w
     assert "BORG_REMOTE_PATH=/usr/lib/borg/borg" in commands[0]
     assert "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes" in commands[0]
     assert "BORG_RELOCATED_REPO_ACCESS_IS_OK=yes" in commands[0]
+
+
+@pytest.mark.asyncio
+async def test_execute_ssh_command_uses_public_key_only_authentication_options(
+    monkeypatch,
+):
+    service = RemoteBackupService()
+    connection = SSHConnection(
+        id=7,
+        host="truenas.example",
+        username="backup",
+        port=2222,
+        ssh_key_id=42,
+    )
+    ssh_key = MagicMock(spec=SSHKey)
+    job = MagicMock(spec=BackupJob)
+    db = MagicMock()
+
+    def query_side_effect(model):
+        query = MagicMock()
+        if model == SSHKey:
+            query.filter.return_value.first.return_value = ssh_key
+        elif model == BackupJob:
+            query.filter.return_value.first.return_value = job
+        return query
+
+    db.query.side_effect = query_side_effect
+    captured_cmd: list[str] = []
+
+    process = AsyncMock()
+    process.pid = 1234
+    process.stdout.readline = AsyncMock(return_value=b"")
+    process.stderr.readline = AsyncMock(return_value=b"")
+    process.wait = AsyncMock(return_value=0)
+
+    async def fake_create_subprocess_exec(*cmd, **kwargs):
+        captured_cmd.extend(cmd)
+        return process
+
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.write_ssh_key_to_tempfile",
+        lambda key: "/tmp/source.key",
+    )
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.asyncio.create_subprocess_exec",
+        fake_create_subprocess_exec,
+    )
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.os.unlink", lambda path: None
+    )
+
+    result = await service._execute_ssh_command(
+        ssh_connection=connection,
+        command="borg create /repo::archive /data",
+        job_id=99,
+        db=db,
+    )
+
+    assert result["success"] is True
+    assert captured_cmd[:3] == ["ssh", "-i", "/tmp/source.key"]
+    assert "BatchMode=yes" in captured_cmd
+    assert "IdentitiesOnly=yes" in captured_cmd
+    assert "PreferredAuthentications=publickey" in captured_cmd
+    assert "PasswordAuthentication=no" in captured_cmd
+    assert "NumberOfPasswordPrompts=0" in captured_cmd
 
 
 @pytest.mark.asyncio

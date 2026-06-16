@@ -468,6 +468,11 @@ async def test_calculate_source_size_ssh_uses_key_file_by_target(
     assert "-i" in args
     assert "/tmp/source.key" in args
     assert "user@host" in args
+    assert "BatchMode=yes" in args
+    assert "IdentitiesOnly=yes" in args
+    assert "PreferredAuthentications=publickey" in args
+    assert "PasswordAuthentication=no" in args
+    assert "NumberOfPasswordPrompts=0" in args
 
 
 @pytest.mark.asyncio
