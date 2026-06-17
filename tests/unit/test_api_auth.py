@@ -1747,6 +1747,69 @@ class TestOidcAuthentication:
         assert login_state.user_id == admin.id
         assert login_state.return_to == "http://testserver/settings/account"
 
+    def test_oidc_link_callback_links_user_without_exchange_grant(
+        self, test_client: TestClient, test_db, admin_user, monkeypatch
+    ):
+        from app.core.oidc import create_oidc_state_token
+
+        test_db.add(
+            SystemSettings(
+                oidc_enabled=True,
+                oidc_discovery_url="https://id.example.com/.well-known/openid-configuration",
+                oidc_client_id="borg-ui",
+                oidc_client_secret_encrypted=encrypt_secret("secret-value"),
+            )
+        )
+        test_db.add(
+            OidcLoginState(
+                state_id="link-state",
+                nonce="link-nonce",
+                code_verifier="link-code-verifier",
+                return_to="http://testserver/settings/account",
+                flow="link",
+                user_id=admin_user.id,
+                expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+            )
+        )
+        test_db.commit()
+
+        async def fake_discover(*args, **kwargs):
+            return self._oidc_provider()
+
+        async def fake_exchange(*args, **kwargs):
+            return {"id_token": "id-token-value", "access_token": "access-token"}
+
+        def fake_verify(*args, **kwargs):
+            return {
+                "sub": "linked-subject",
+                "preferred_username": admin_user.username,
+                "email": admin_user.email,
+                "name": admin_user.full_name,
+            }
+
+        async def fake_userinfo(*args, **kwargs):
+            return {}
+
+        monkeypatch.setattr("app.api.auth.discover_oidc_configuration", fake_discover)
+        monkeypatch.setattr("app.api.auth.exchange_code_for_tokens", fake_exchange)
+        monkeypatch.setattr("app.api.auth.verify_id_token", fake_verify)
+        monkeypatch.setattr("app.api.auth.fetch_userinfo", fake_userinfo)
+
+        state = create_oidc_state_token(state_id="link-state", nonce="link-nonce")
+        response = test_client.get(
+            f"/api/auth/oidc/callback?code=code-123&state={state}",
+            follow_redirects=False,
+        )
+
+        assert response.status_code == 302
+        assert (
+            response.headers["location"]
+            == "http://testserver/settings/account?oidc_link=complete"
+        )
+        test_db.refresh(admin_user)
+        assert admin_user.oidc_subject == "linked-subject"
+        assert test_db.query(OidcExchangeGrant).count() == 0
+
     def test_local_login_is_blocked_when_oidc_disables_local_auth(
         self, test_client: TestClient, test_db
     ):
@@ -1959,6 +2022,55 @@ class TestOidcAuthentication:
         assert (
             response.json()["detail"]["key"]
             == "backend.errors.auth.oidcIdentityConflict"
+        )
+
+    def test_oidc_exchange_accepts_https_origin_for_http_backend_host(
+        self, test_client: TestClient, test_db
+    ):
+        test_db.add(
+            SystemSettings(
+                oidc_enabled=True,
+                oidc_discovery_url="https://id.example.com/.well-known/openid-configuration",
+                oidc_client_id="borg-ui",
+                oidc_client_secret_encrypted=encrypt_secret("secret-value"),
+            )
+        )
+        test_db.commit()
+
+        create_test_oidc_exchange_grant(test_db)
+        test_client.cookies.set("oidc_exchange_grant", "grant-123")
+
+        response = test_client.post(
+            "/api/auth/oidc/exchange", headers={"Origin": "https://testserver"}
+        )
+
+        assert response.status_code == 200
+        assert response.json()["access_token"]
+
+    def test_oidc_exchange_rejects_cross_origin_request(
+        self, test_client: TestClient, test_db
+    ):
+        test_db.add(
+            SystemSettings(
+                oidc_enabled=True,
+                oidc_discovery_url="https://id.example.com/.well-known/openid-configuration",
+                oidc_client_id="borg-ui",
+                oidc_client_secret_encrypted=encrypt_secret("secret-value"),
+            )
+        )
+        test_db.commit()
+
+        create_test_oidc_exchange_grant(test_db)
+        test_client.cookies.set("oidc_exchange_grant", "grant-123")
+
+        response = test_client.post(
+            "/api/auth/oidc/exchange", headers={"Origin": "https://evil.example"}
+        )
+
+        assert response.status_code == 403
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.auth.invalidAuthentication"
         )
 
     def test_oidc_exchange_requires_same_origin_request(
