@@ -765,6 +765,10 @@ class TestSourceDiscovery:
             "btrfs subvolume snapshot -r" in requirement
             for requirement in providers["btrfs"]["requirements"]
         )
+        assert any(
+            "btrfs subvolume delete" in requirement
+            for requirement in providers["btrfs"]["requirements"]
+        )
         assert providers["zfs"]["available"] is False
         assert providers["zfs"]["command"] == "zfs"
         assert body["supported_source_types"] == ["local"]

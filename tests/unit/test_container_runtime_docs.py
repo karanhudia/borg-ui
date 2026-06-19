@@ -26,4 +26,5 @@ def test_filesystem_snapshot_runtime_requirements_are_documented() -> None:
     assert "Synology DSM" in usage_guide
     assert "btrfs subvolume show" in usage_guide
     assert "btrfs subvolume snapshot -r" in usage_guide
+    assert "btrfs subvolume delete" in usage_guide
     assert "inside the Borg UI runtime" in usage_guide
