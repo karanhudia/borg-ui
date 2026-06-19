@@ -78,6 +78,7 @@ jobs:
         run: |
           docker run --rm borg-ui-runtime-base:smoke-test borg --version
           docker run --rm borg-ui-runtime-base:smoke-test borg2 --version
+          docker run --rm borg-ui-runtime-base:smoke-test btrfs --version
           docker run --rm borg-ui-runtime-base:smoke-test python3 -c "import pyfuse3; print('pyfuse3 ok')"
           docker run --rm borg-ui-runtime-base:smoke-test /opt/borg2-venv/bin/python -c "import importlib.metadata as metadata; metadata.version('borgstore'); import requests; print('borgstore rclone dependencies ok')"
 

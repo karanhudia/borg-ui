@@ -23,6 +23,13 @@ def test_runtime_base_installs_rclone():
     assert "rclone" in content
 
 
+def test_runtime_base_installs_btrfs_snapshot_tooling():
+    dockerfile = Path(__file__).resolve().parents[2] / "Dockerfile.runtime-base"
+    content = dockerfile.read_text()
+
+    assert "btrfs-progs" in content
+
+
 def test_runtime_base_ci_smoke_checks_rclone_backend_dependency():
     workflow = (
         Path(__file__).resolve().parents[2]
@@ -37,12 +44,24 @@ def test_runtime_base_ci_smoke_checks_rclone_backend_dependency():
     assert "borgstore rclone dependencies ok" in content
 
 
+def test_runtime_base_ci_smoke_checks_btrfs_tooling():
+    workflow = (
+        Path(__file__).resolve().parents[2]
+        / ".github"
+        / "workflows"
+        / "docker-runtime-base.yml"
+    )
+    content = workflow.read_text()
+
+    assert "btrfs --version" in content
+
+
 def test_app_dockerfile_uses_rclone_runtime_base_tag():
     repo_root = Path(__file__).resolve().parents[2]
     dockerfile = (repo_root / "Dockerfile").read_text()
     runtime_env = (repo_root / "docker" / "runtime-base.env").read_text()
 
-    expected_tag = "runtime-borg1-1.4.4-borg2-2.0.0b21-r3"
+    expected_tag = "runtime-borg1-1.4.4-borg2-2.0.0b21-r4"
 
     assert f"BORG_RUNTIME_BASE_TAG={expected_tag}" in runtime_env
     assert (
