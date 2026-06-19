@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-06-19T13:10:18.841Z",
+  "generatedAt": "2026-06-19T13:36:52.035Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #694 visual report",
-    "commitSha": "b210445f8777",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/27827450158"
+    "commitSha": "00a633214c1b",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/27828780819"
   },
   "totals": {
     "baseline": 422,
@@ -17,24 +17,6 @@
   },
   "changed": [
     {
-      "fileName": "backup-plans-sourceselectiondialog--container-picker-detected.png",
-      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--container-picker-detected.png",
-      "actualPath": "images/actual/backup-plans-sourceselectiondialog--container-picker-detected.png",
-      "diffPath": "images/diff/backup-plans-sourceselectiondialog--container-picker-detected.png",
-      "diffPixels": 3,
-      "totalPixels": 1024000,
-      "diffRatio": 0.0000029296875,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
       "fileName": "backup-plans-sourceselectiondialog--database-detected-sqlite-detail--mobile.png",
       "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--database-detected-sqlite-detail--mobile.png",
       "actualPath": "images/actual/backup-plans-sourceselectiondialog--database-detected-sqlite-detail--mobile.png",
@@ -42,6 +24,24 @@
       "diffPixels": 8,
       "totalPixels": 329160,
       "diffRatio": 0.00002430428970713331,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-btrfs-snapshot--mobile.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--path-picker-with-btrfs-snapshot--mobile.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--path-picker-with-btrfs-snapshot--mobile.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--path-picker-with-btrfs-snapshot--mobile.png",
+      "diffPixels": 25,
+      "totalPixels": 329160,
+      "diffRatio": 0.0000759509053347916,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -154,6 +154,9 @@
     },
     {
       "fileName": "backup-plans-sourceselectiondialog--container-picker-detected--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--container-picker-detected.png"
     },
     {
       "fileName": "backup-plans-sourceselectiondialog--container-picker-empty--mobile.png"
@@ -271,9 +274,6 @@
     },
     {
       "fileName": "backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups.png"
-    },
-    {
-      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-btrfs-snapshot--mobile.png"
     },
     {
       "fileName": "backup-plans-sourceselectiondialog--path-picker-with-btrfs-snapshot.png"
