@@ -36,6 +36,7 @@ RUN apt-get update && apt-get install -y \
     libfuse3-dev \
     rsync \
     rclone \
+    btrfs-progs \
     openssh-client \
     sshfs \
     python3-pip \

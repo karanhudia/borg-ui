@@ -757,6 +757,14 @@ class TestSourceDiscovery:
         providers = {provider["id"]: provider for provider in body["providers"]}
         assert providers["btrfs"]["available"] is True
         assert providers["btrfs"]["command"] == "btrfs"
+        assert any(
+            "Borg UI runtime" in requirement and "container" in requirement
+            for requirement in providers["btrfs"]["requirements"]
+        )
+        assert any(
+            "btrfs subvolume snapshot -r" in requirement
+            for requirement in providers["btrfs"]["requirements"]
+        )
         assert providers["zfs"]["available"] is False
         assert providers["zfs"]["command"] == "zfs"
         assert body["supported_source_types"] == ["local"]
