@@ -904,6 +904,60 @@ class TestRepositoriesCreate:
         assert repo.connection_id is None
         assert repo.repository_type == "local"
 
+    def test_create_agent_repository_accepts_ssh_path(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Agent repos may target ssh:// with an explicit ``execution_target=ssh``;
+        the agent uses its own SSH credentials, so the server accepts it."""
+        agent = AgentMachine(
+            name="SSH Owner",
+            agent_id="agt_ssh_owner",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+            capabilities=["repository.init"],
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ),
+            patch(
+                "app.api.repositories.wait_for_agent_repository_operation_job",
+                new=AsyncMock(return_value={"status": "completed"}),
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Agent SSH Repo",
+                    "path": "ssh://u123456@u123456.your-storagebox.de:23/./repo",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "source_directories": ["/data"],
+                    "executor_type": "agent",
+                    "execution_target": "ssh",
+                    "agent_machine_id": agent.id,
+                    "borg_version": 1,
+                    "remote_path": "borg-1.4",
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        repo = test_db.query(Repository).filter_by(name="Agent SSH Repo").one()
+        assert repo.executor_type == "agent"
+        assert repo.execution_target == "agent"
+        assert repo.path == "ssh://u123456@u123456.your-storagebox.de:23/./repo"
+        assert repo.borg_version == 1
+        assert repo.remote_path == "borg-1.4"
+        assert repo.connection_id is None
+
     def test_update_agent_repository_rejects_ssh_target(
         self, test_client: TestClient, admin_headers, test_db
     ):
