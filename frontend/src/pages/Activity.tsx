@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
-import { Box, IconButton, MenuItem, Select, Typography } from '@mui/material'
+import { Box, IconButton, Typography } from '@mui/material'
 import { History, Info, RefreshCw } from 'lucide-react'
 import { activityAPI, repositoriesAPI } from '../services/api'
 import { useAnalytics } from '../hooks/useAnalytics'
@@ -10,8 +10,9 @@ import { useLockBreakPermissions } from '../hooks/useLockBreakPermissions'
 import BackupJobsTable from '../components/BackupJobsTable'
 import LogViewerDialog from '../components/LogViewerDialog'
 import RunningCloudStorageJobsSection from '../components/RunningCloudStorageJobsSection'
+import { ActivityFilters } from './activity/ActivityFilters'
 
-interface ActivityItem {
+export interface ActivityItem {
   id: number
   type: string
   status: string
@@ -33,62 +34,34 @@ interface ActivityItem {
   has_logs?: boolean
 }
 
-const Activity: React.FC = () => {
+interface ActivityContentProps {
+  activities?: ActivityItem[]
+  isLoading: boolean
+  typeFilter: string
+  statusFilter: string
+  onTypeFilterChange: (value: string) => void
+  onStatusFilterChange: (value: string) => void
+  onRefresh: () => void
+  canManageActivityJobs: boolean
+  canBreakLockForActivity: (job: ActivityItem) => boolean
+  lockBreakingEnabled: boolean
+}
+
+export function ActivityContent({
+  activities,
+  isLoading,
+  typeFilter,
+  statusFilter,
+  onTypeFilterChange,
+  onStatusFilterChange,
+  onRefresh,
+  canManageActivityJobs,
+  canBreakLockForActivity,
+  lockBreakingEnabled,
+}: ActivityContentProps) {
   const { t } = useTranslation()
-  const { track, EventCategory, EventAction } = useAnalytics()
-  const { hasGlobalPermission } = useAuth()
-  const canManageActivityJobs = hasGlobalPermission('repositories.manage_all')
-  const [typeFilter, setTypeFilter] = useState<string>('all')
-  const [statusFilter, setStatusFilter] = useState<string>('all')
   const [logJob, setLogJob] = useState<ActivityItem | null>(null)
 
-  // Fetch activity data
-  const {
-    data: activities,
-    isLoading,
-    refetch,
-  } = useQuery({
-    queryKey: ['activity', typeFilter, statusFilter],
-    queryFn: async () => {
-      const params: Record<string, unknown> = { limit: 200 }
-      if (typeFilter !== 'all') params.job_type = typeFilter
-      if (statusFilter !== 'all') params.status = statusFilter
-
-      const response = await activityAPI.list(params)
-      return response.data
-    },
-    refetchInterval: 3000, // Refresh every 3 seconds
-  })
-
-  const { data: repositoriesData } = useQuery({
-    queryKey: ['repositories'],
-    queryFn: repositoriesAPI.getRepositories,
-  })
-  const repositories = React.useMemo(
-    () => repositoriesData?.data?.repositories ?? [],
-    [repositoriesData?.data?.repositories]
-  )
-  const { canBreakLock: canBreakLockForActivity, lockBreakingEnabled } = useLockBreakPermissions({
-    repositories,
-  })
-
-  const handleTypeFilterChange = (value: string) => {
-    setTypeFilter(value)
-    track(EventCategory.NAVIGATION, EventAction.FILTER, {
-      filter_kind: 'type',
-      filter_value: value,
-    })
-  }
-
-  const handleStatusFilterChange = (value: string) => {
-    setStatusFilter(value)
-    track(EventCategory.NAVIGATION, EventAction.FILTER, {
-      filter_kind: 'status',
-      filter_value: value,
-    })
-  }
-
-  // Just return all activities without grouping
   const processedActivities = React.useMemo(() => {
     if (!activities) return { grouped: [], individual: [] }
     return { grouped: [], individual: activities }
@@ -126,7 +99,7 @@ const Activity: React.FC = () => {
           </Box>
         </Box>
         <IconButton
-          onClick={() => refetch()}
+          onClick={onRefresh}
           title="Refresh"
           sx={{ alignSelf: { xs: 'flex-end', sm: 'auto' } }}
         >
@@ -134,43 +107,12 @@ const Activity: React.FC = () => {
         </IconButton>
       </Box>
 
-      {/* Filters */}
-      <Box sx={{ mb: 3, display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center' }}>
-        <Select
-          size="small"
-          value={typeFilter}
-          onChange={(e) => handleTypeFilterChange(e.target.value)}
-          sx={{ minWidth: 160, fontSize: '0.8rem', fontWeight: 600, borderRadius: 1.5 }}
-        >
-          <MenuItem value="all">{t('activity.filters.allTypes')}</MenuItem>
-          <MenuItem value="backup">{t('activity.filters.types.backup')}</MenuItem>
-          <MenuItem value="restore">{t('activity.filters.types.restore')}</MenuItem>
-          <MenuItem value="restore_check">{t('activity.filters.types.restoreCheck')}</MenuItem>
-          <MenuItem value="check">{t('activity.filters.types.check')}</MenuItem>
-          <MenuItem value="compact">{t('activity.filters.types.compact')}</MenuItem>
-          <MenuItem value="prune">{t('activity.filters.types.prune')}</MenuItem>
-          <MenuItem value="package">{t('activity.filters.types.package')}</MenuItem>
-          <MenuItem value="rclone_sync">{t('activity.filters.types.rcloneSync')}</MenuItem>
-          <MenuItem value="rclone_hydrate">{t('activity.filters.types.rcloneHydrate')}</MenuItem>
-          <MenuItem value="script_execution">
-            {t('activity.filters.types.scriptExecution')}
-          </MenuItem>
-        </Select>
-
-        <Select
-          size="small"
-          value={statusFilter}
-          onChange={(e) => handleStatusFilterChange(e.target.value)}
-          sx={{ minWidth: 140, fontSize: '0.8rem', fontWeight: 600, borderRadius: 1.5 }}
-        >
-          <MenuItem value="all">{t('activity.filters.allStatus')}</MenuItem>
-          <MenuItem value="completed">{t('activity.filters.statuses.completed')}</MenuItem>
-          <MenuItem value="needs_backup">{t('activity.filters.statuses.needsBackup')}</MenuItem>
-          <MenuItem value="failed">{t('activity.filters.statuses.failed')}</MenuItem>
-          <MenuItem value="running">{t('activity.filters.statuses.running')}</MenuItem>
-          <MenuItem value="pending">{t('activity.filters.statuses.pending')}</MenuItem>
-        </Select>
-      </Box>
+      <ActivityFilters
+        typeFilter={typeFilter}
+        statusFilter={statusFilter}
+        onTypeFilterChange={onTypeFilterChange}
+        onStatusFilterChange={onStatusFilterChange}
+      />
 
       <RunningCloudStorageJobsSection
         jobs={activeCloudStorageJobs}
@@ -228,6 +170,75 @@ const Activity: React.FC = () => {
       )}
       <LogViewerDialog job={logJob} open={Boolean(logJob)} onClose={() => setLogJob(null)} />
     </Box>
+  )
+}
+
+const Activity: React.FC = () => {
+  const { track, EventCategory, EventAction } = useAnalytics()
+  const { hasGlobalPermission } = useAuth()
+  const canManageActivityJobs = hasGlobalPermission('repositories.manage_all')
+  const [typeFilter, setTypeFilter] = useState<string>('all')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
+
+  // Fetch activity data
+  const {
+    data: activities,
+    isLoading,
+    refetch,
+  } = useQuery({
+    queryKey: ['activity', typeFilter, statusFilter],
+    queryFn: async () => {
+      const params: Record<string, unknown> = { limit: 200 }
+      if (typeFilter !== 'all') params.job_type = typeFilter
+      if (statusFilter !== 'all') params.status = statusFilter
+
+      const response = await activityAPI.list(params)
+      return response.data
+    },
+    refetchInterval: 3000, // Refresh every 3 seconds
+  })
+
+  const { data: repositoriesData } = useQuery({
+    queryKey: ['repositories'],
+    queryFn: repositoriesAPI.getRepositories,
+  })
+  const repositories = React.useMemo(
+    () => repositoriesData?.data?.repositories ?? [],
+    [repositoriesData?.data?.repositories]
+  )
+  const { canBreakLock: canBreakLockForActivity, lockBreakingEnabled } = useLockBreakPermissions({
+    repositories,
+  })
+
+  const handleTypeFilterChange = (value: string) => {
+    setTypeFilter(value)
+    track(EventCategory.NAVIGATION, EventAction.FILTER, {
+      filter_kind: 'type',
+      filter_value: value,
+    })
+  }
+
+  const handleStatusFilterChange = (value: string) => {
+    setStatusFilter(value)
+    track(EventCategory.NAVIGATION, EventAction.FILTER, {
+      filter_kind: 'status',
+      filter_value: value,
+    })
+  }
+
+  return (
+    <ActivityContent
+      activities={activities}
+      isLoading={isLoading}
+      typeFilter={typeFilter}
+      statusFilter={statusFilter}
+      onTypeFilterChange={handleTypeFilterChange}
+      onStatusFilterChange={handleStatusFilterChange}
+      onRefresh={() => refetch()}
+      canManageActivityJobs={canManageActivityJobs}
+      canBreakLockForActivity={canBreakLockForActivity}
+      lockBreakingEnabled={lockBreakingEnabled}
+    />
   )
 }
 

@@ -144,6 +144,21 @@ describe('Activity page', () => {
       filter_value: 'failed',
     })
 
+    fireEvent.mouseDown(screen.getAllByRole('combobox')[1])
+    await user.click(await screen.findByRole('option', { name: /completed with warnings/i }))
+
+    await waitFor(() => {
+      expect(activityAPI.list).toHaveBeenLastCalledWith({
+        limit: 200,
+        job_type: 'restore_check',
+        status: 'completed_with_warnings',
+      })
+    })
+    expect(track).toHaveBeenCalledWith('Navigation', 'Filter', {
+      filter_kind: 'status',
+      filter_value: 'completed_with_warnings',
+    })
+
     await user.click(screen.getByRole('button', { name: /refresh/i }))
     expect(refetchSpy).toHaveBeenCalled()
   })

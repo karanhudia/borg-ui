@@ -1523,6 +1523,7 @@
       },
       "statuses": {
         "completed": "Completato",
+        "completedWithWarnings": "Completato con avvisi",
         "needsBackup": "Backup richiesto",
         "failed": "Fallito",
         "running": "In Esecuzione",
