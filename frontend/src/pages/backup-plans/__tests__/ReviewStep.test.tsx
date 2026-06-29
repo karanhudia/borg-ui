@@ -193,14 +193,14 @@ describe('ReviewStep', () => {
     expect(screen.getByText(/within 1d/)).toBeInTheDocument()
   })
 
-  it('omits keep-within retention when the interval is blank', () => {
+  it('omits keep-within retention when the interval is whitespace', () => {
     renderReview({
       ...createInitialState(),
       name: 'Frequent backup',
       sourceDirectories: ['/data'],
       repositoryIds: [10],
       runPruneAfter: true,
-      pruneKeepWithin: '',
+      pruneKeepWithin: '   ',
     })
 
     expect(screen.getByText('Prune')).toBeInTheDocument()

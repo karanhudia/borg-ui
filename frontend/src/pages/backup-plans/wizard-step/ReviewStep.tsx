@@ -106,8 +106,9 @@ export function ReviewStep({
     0
   )
   const uploadPolicies = wizardState.uploadRatelimitSchedulePolicies || []
+  const pruneKeepWithin = wizardState.pruneKeepWithin?.trim() ?? ''
   const retentionLabel = t(
-    wizardState.pruneKeepWithin
+    pruneKeepWithin
       ? 'backupPlans.wizard.review.retentionValueWithWithin'
       : 'backupPlans.wizard.review.retentionValue',
     {
@@ -117,7 +118,7 @@ export function ReviewStep({
       monthly: wizardState.pruneKeepMonthly,
       quarterly: wizardState.pruneKeepQuarterly,
       yearly: wizardState.pruneKeepYearly,
-      within: wizardState.pruneKeepWithin,
+      within: pruneKeepWithin,
     }
   )
 
