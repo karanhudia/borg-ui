@@ -103,6 +103,12 @@ describe('Activity page', () => {
     renderWithProviders(<Activity />)
 
     expect(await screen.findByText('Jobs Table')).toBeInTheDocument()
+    const getTypeFilter = () => screen.getByRole('combobox', { name: /^type$/i })
+    const getStatusFilter = () => screen.getByRole('combobox', { name: /^status$/i })
+    const refreshButton = screen.getByRole('button', { name: /^refresh activity$/i })
+    expect(getTypeFilter()).toBeInTheDocument()
+    expect(getStatusFilter()).toBeInTheDocument()
+    expect(refreshButton).toHaveAttribute('title', 'Refresh activity')
     expect(activityAPI.list).toHaveBeenCalledWith({ limit: 200 })
     expect(jobsTablePropsSpy).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -115,7 +121,7 @@ describe('Activity page', () => {
       })
     )
 
-    fireEvent.mouseDown(screen.getAllByRole('combobox')[0])
+    fireEvent.mouseDown(getTypeFilter())
     await user.click(await screen.findByRole('option', { name: /^Restore Check$/i }))
 
     await waitFor(() => {
@@ -129,7 +135,7 @@ describe('Activity page', () => {
       filter_value: 'restore_check',
     })
 
-    fireEvent.mouseDown(screen.getAllByRole('combobox')[1])
+    fireEvent.mouseDown(getStatusFilter())
     await user.click(await screen.findByRole('option', { name: /failed/i }))
 
     await waitFor(() => {
@@ -144,7 +150,7 @@ describe('Activity page', () => {
       filter_value: 'failed',
     })
 
-    fireEvent.mouseDown(screen.getAllByRole('combobox')[1])
+    fireEvent.mouseDown(getStatusFilter())
     await user.click(await screen.findByRole('option', { name: /completed with warnings/i }))
 
     await waitFor(() => {
@@ -159,7 +165,7 @@ describe('Activity page', () => {
       filter_value: 'completed_with_warnings',
     })
 
-    await user.click(screen.getByRole('button', { name: /refresh/i }))
+    await user.click(refreshButton)
     expect(refetchSpy).toHaveBeenCalled()
   })
 
@@ -204,7 +210,7 @@ describe('Activity page', () => {
     expect(screen.getByText('Cloud Mirror Repo')).toBeInTheDocument()
     expect(screen.getByText('Cloud Hydrate Repo')).toBeInTheDocument()
 
-    fireEvent.mouseDown(screen.getAllByRole('combobox')[0])
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /^type$/i }))
     await user.click(await screen.findByRole('option', { name: /^Cloud Sync$/i }))
 
     await waitFor(() => {

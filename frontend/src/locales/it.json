@@ -1504,6 +1504,9 @@
   "activity": {
     "title": "Attività",
     "subtitle": "Visualizza tutte le operazioni e i relativi log",
+    "actions": {
+      "refresh": "Aggiorna attività"
+    },
     "filters": {
       "type": "Tipo",
       "status": "Stato",

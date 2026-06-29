@@ -1504,6 +1504,9 @@
   "activity": {
     "title": "Aktivität",
     "subtitle": "Alle Vorgänge und ihre Protokolle anzeigen",
+    "actions": {
+      "refresh": "Aktivität aktualisieren"
+    },
     "filters": {
       "type": "Typ",
       "status": "Status",

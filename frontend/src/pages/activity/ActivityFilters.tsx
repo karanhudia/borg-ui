@@ -22,6 +22,7 @@ export function ActivityFilters({
         size="small"
         value={typeFilter}
         onChange={(event) => onTypeFilterChange(event.target.value)}
+        inputProps={{ 'aria-label': t('activity.filters.type') }}
         sx={{ minWidth: 160, fontSize: '0.8rem', fontWeight: 600, borderRadius: 1.5 }}
       >
         <MenuItem value="all">{t('activity.filters.allTypes')}</MenuItem>
@@ -41,6 +42,7 @@ export function ActivityFilters({
         size="small"
         value={statusFilter}
         onChange={(event) => onStatusFilterChange(event.target.value)}
+        inputProps={{ 'aria-label': t('activity.filters.status') }}
         sx={{ minWidth: 210, fontSize: '0.8rem', fontWeight: 600, borderRadius: 1.5 }}
       >
         <MenuItem value="all">{t('activity.filters.allStatus')}</MenuItem>

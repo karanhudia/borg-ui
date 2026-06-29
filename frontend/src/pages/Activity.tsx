@@ -75,6 +75,7 @@ export function ActivityContent({
       ),
     [activities]
   )
+  const refreshLabel = t('activity.actions.refresh')
 
   return (
     <Box>
@@ -100,7 +101,8 @@ export function ActivityContent({
         </Box>
         <IconButton
           onClick={onRefresh}
-          title="Refresh"
+          aria-label={refreshLabel}
+          title={refreshLabel}
           sx={{ alignSelf: { xs: 'flex-end', sm: 'auto' } }}
         >
           <RefreshCw size={20} />

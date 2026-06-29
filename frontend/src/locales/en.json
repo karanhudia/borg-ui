@@ -1504,6 +1504,9 @@
   "activity": {
     "title": "Activity",
     "subtitle": "View all operations and their logs",
+    "actions": {
+      "refresh": "Refresh activity"
+    },
     "filters": {
       "type": "Type",
       "status": "Status",
