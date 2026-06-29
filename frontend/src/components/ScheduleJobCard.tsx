@@ -45,6 +45,7 @@ interface ScheduledJob {
   prune_keep_monthly: number
   prune_keep_quarterly: number
   prune_keep_yearly: number
+  prune_keep_within?: string | null
   last_prune: string | null
   last_compact: string | null
 }
@@ -141,8 +142,18 @@ export default function ScheduleJobCard({
   if (job.run_prune_after)
     meta.push({
       label: t('schedule.card.meta.prune'),
-      value: `${job.prune_keep_daily}d/${job.prune_keep_weekly}w/${job.prune_keep_monthly}m/${job.prune_keep_yearly}y`,
-      tooltip: `Keep: daily=${job.prune_keep_daily} weekly=${job.prune_keep_weekly} monthly=${job.prune_keep_monthly} yearly=${job.prune_keep_yearly}`,
+      value: [
+        job.prune_keep_within ? `within ${job.prune_keep_within}` : null,
+        `${job.prune_keep_daily}d/${job.prune_keep_weekly}w/${job.prune_keep_monthly}m/${job.prune_keep_yearly}y`,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      tooltip: [
+        `Keep: daily=${job.prune_keep_daily} weekly=${job.prune_keep_weekly} monthly=${job.prune_keep_monthly} yearly=${job.prune_keep_yearly}`,
+        job.prune_keep_within ? `within=${job.prune_keep_within}` : null,
+      ]
+        .filter(Boolean)
+        .join(' '),
     })
   if (job.last_prune)
     meta.push({

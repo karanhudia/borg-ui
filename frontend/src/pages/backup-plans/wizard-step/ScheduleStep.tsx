@@ -116,6 +116,7 @@ export function ScheduleStep({
                   keepMonthly: wizardState.pruneKeepMonthly,
                   keepQuarterly: wizardState.pruneKeepQuarterly,
                   keepYearly: wizardState.pruneKeepYearly,
+                  keepWithin: wizardState.pruneKeepWithin || '',
                 }}
                 onChange={handlePruneSettingsChange}
               />

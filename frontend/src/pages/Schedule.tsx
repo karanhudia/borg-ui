@@ -65,6 +65,7 @@ interface ScheduledJob {
   prune_keep_monthly: number
   prune_keep_quarterly: number
   prune_keep_yearly: number
+  prune_keep_within?: string | null
   last_prune: string | null
   last_compact: string | null
 }

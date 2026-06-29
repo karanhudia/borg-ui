@@ -108,6 +108,7 @@ class PlanRunContext:
     prune_keep_monthly: int
     prune_keep_quarterly: int
     prune_keep_yearly: int
+    prune_keep_within: Optional[str]
     repository_count: int
     timestamp: str
     date: str
@@ -1069,6 +1070,7 @@ class BackupPlanExecutionService:
                 prune_keep_monthly=plan.prune_keep_monthly,
                 prune_keep_quarterly=plan.prune_keep_quarterly,
                 prune_keep_yearly=plan.prune_keep_yearly,
+                prune_keep_within=plan.prune_keep_within,
                 repository_count=len(enabled_links),
                 timestamp=now.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3],
                 date=now.strftime("%Y-%m-%d"),
@@ -1765,6 +1767,7 @@ class BackupPlanExecutionService:
                 keep_quarterly=context.prune_keep_quarterly,
                 keep_yearly=context.prune_keep_yearly,
                 dry_run=False,
+                keep_within=context.prune_keep_within,
             )
             db.refresh(prune_job)
             if self._is_run_cancelled(run_id):

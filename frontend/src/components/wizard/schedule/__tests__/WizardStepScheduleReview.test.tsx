@@ -32,6 +32,7 @@ describe('WizardStepScheduleReview', () => {
     pruneKeepMonthly: 6,
     pruneKeepQuarterly: 2,
     pruneKeepYearly: 1,
+    pruneKeepWithin: '',
   }
 
   const defaultProps = {

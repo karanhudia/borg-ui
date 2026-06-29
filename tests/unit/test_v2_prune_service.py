@@ -153,3 +153,21 @@ async def test_borg2_prune_command_omits_stats_flag():
     assert "prune" in cmd
     assert "--stats" not in cmd
     assert "--list" in cmd
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_borg2_prune_command_includes_keep_within():
+    with patch(
+        "app.core.borg2.borg2._run",
+        new=AsyncMock(return_value={"success": True, "stdout": "", "stderr": ""}),
+    ) as mock_run:
+        await borg2.prune_archives(
+            repository="/tmp/v2-repo",
+            keep_daily=7,
+            keep_within="1d",
+            dry_run=True,
+        )
+
+    cmd = mock_run.await_args.args[0]
+    assert "--keep-within=1d" in cmd

@@ -289,6 +289,8 @@ class BorgmaticExportService:
             retention["keep_monthly"] = scheduled_job.prune_keep_monthly
         if scheduled_job.prune_keep_yearly is not None:
             retention["keep_yearly"] = scheduled_job.prune_keep_yearly
+        if scheduled_job.prune_keep_within:
+            retention["keep_within"] = scheduled_job.prune_keep_within
 
         return retention
 
@@ -615,6 +617,7 @@ class BorgmaticImportService:
                         "keep_monthly",
                         "keep_quarterly",
                         "keep_yearly",
+                        "keep_within",
                     ]:
                         if key in data:
                             retention[key] = data[key]
@@ -906,6 +909,7 @@ class BorgmaticImportService:
         scheduled_job.prune_keep_weekly = retention.get("keep_weekly", 4)
         scheduled_job.prune_keep_monthly = retention.get("keep_monthly", 6)
         scheduled_job.prune_keep_yearly = retention.get("keep_yearly", 1)
+        scheduled_job.prune_keep_within = retention.get("keep_within")
         try:
             scheduled_job.next_run = calculate_next_cron_run(
                 scheduled_job.cron_expression,

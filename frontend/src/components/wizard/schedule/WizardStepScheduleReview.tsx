@@ -24,6 +24,7 @@ interface WizardStepScheduleReviewProps {
     pruneKeepMonthly: number
     pruneKeepQuarterly: number
     pruneKeepYearly: number
+    pruneKeepWithin: string
   }
   repositories: Repository[]
   scripts: Script[]
@@ -181,6 +182,7 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
     `${data.pruneKeepMonthly}m`,
     data.pruneKeepQuarterly > 0 && `${data.pruneKeepQuarterly}q`,
     `${data.pruneKeepYearly}y`,
+    data.pruneKeepWithin && `within ${data.pruneKeepWithin}`,
   ]
     .filter(Boolean)
     .join(' · ')

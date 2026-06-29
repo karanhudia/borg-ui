@@ -1216,7 +1216,7 @@ def test_repository_operation_payload_builds_agent_local_commands():
         {
             "job_kind": "repository.prune",
             "repository": {"path": "/agent/repo", "borg_version": 2},
-            "operation": {"keep_daily": 7, "dry_run": True},
+            "operation": {"keep_daily": 7, "keep_within": "1d", "dry_run": True},
         }
     )
 
@@ -1232,6 +1232,7 @@ def test_repository_operation_payload_builds_agent_local_commands():
         "--log-json",
         "--keep-daily",
         "7",
+        "--keep-within=1d",
         "--dry-run",
     ]
 

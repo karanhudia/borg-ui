@@ -12,6 +12,7 @@ describe('WizardStepMaintenance', () => {
     pruneKeepMonthly: 6,
     pruneKeepQuarterly: 0,
     pruneKeepYearly: 1,
+    pruneKeepWithin: '',
   }
 
   const defaultProps = {
@@ -88,6 +89,7 @@ describe('WizardStepMaintenance', () => {
     render(<WizardStepMaintenance {...defaultProps} data={dataWithPrune} />)
 
     expect(screen.getByLabelText(/Keep Hourly/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/Keep Within/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/Keep Daily/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/Keep Weekly/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/Keep Monthly/i)).toBeInTheDocument()
@@ -134,6 +136,30 @@ describe('WizardStepMaintenance', () => {
       pruneKeepMonthly: 6,
       pruneKeepQuarterly: 0,
       pruneKeepYearly: 1,
+      pruneKeepWithin: '',
+    })
+  })
+
+  it('calls onChange with keep-within when the interval changes', () => {
+    const onChange = vi.fn()
+    const dataWithPrune = {
+      ...defaultData,
+      runPruneAfter: true,
+    }
+
+    render(<WizardStepMaintenance {...defaultProps} data={dataWithPrune} onChange={onChange} />)
+
+    const keepWithinInput = screen.getByLabelText(/Keep Within/i)
+    fireEvent.change(keepWithinInput, { target: { value: '1d' } })
+
+    expect(onChange).toHaveBeenCalledWith({
+      pruneKeepHourly: 0,
+      pruneKeepDaily: 7,
+      pruneKeepWeekly: 4,
+      pruneKeepMonthly: 6,
+      pruneKeepQuarterly: 0,
+      pruneKeepYearly: 1,
+      pruneKeepWithin: '1d',
     })
   })
 

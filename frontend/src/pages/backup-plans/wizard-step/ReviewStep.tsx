@@ -113,6 +113,7 @@ export function ReviewStep({
     monthly: wizardState.pruneKeepMonthly,
     quarterly: wizardState.pruneKeepQuarterly,
     yearly: wizardState.pruneKeepYearly,
+    within: wizardState.pruneKeepWithin || t('common.disabled'),
   })
 
   return (

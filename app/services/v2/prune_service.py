@@ -59,6 +59,7 @@ class PruneV2Service:
         keep_quarterly: int,
         keep_yearly: int,
         dry_run: bool = False,
+        keep_within: str | None = None,
     ) -> dict:
         """Execute a Borg 2 prune command and return the raw result."""
         return await borg2.prune_archives(
@@ -70,6 +71,7 @@ class PruneV2Service:
             keep_quarterly=keep_quarterly,
             keep_yearly=keep_yearly,
             dry_run=dry_run,
+            keep_within=keep_within,
             passphrase=repo.passphrase,
             remote_path=repo.remote_path,
         )
@@ -86,6 +88,7 @@ class PruneV2Service:
         keep_yearly: int,
         dry_run: bool = False,
         _db=None,
+        keep_within: str | None = None,
     ):
         """Execute borg2 prune and persist results to the shared PruneJob model."""
         db = SessionLocal()
@@ -149,6 +152,8 @@ class PruneV2Service:
                 cmd.extend(["--keep-3monthly", str(keep_quarterly)])
             if keep_yearly > 0:
                 cmd.extend(["--keep-yearly", str(keep_yearly)])
+            if keep_within and keep_within.strip():
+                cmd.append(f"--keep-within={keep_within.strip()}")
             if dry_run:
                 cmd.append("--dry-run")
 

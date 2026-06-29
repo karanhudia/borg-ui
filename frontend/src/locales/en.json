@@ -1290,7 +1290,7 @@
         "schedule": "Schedule",
         "prune": "Prune",
         "retention": "Retention",
-        "retentionValue": "H {{hourly}} / D {{daily}} / W {{weekly}} / M {{monthly}} / Q {{quarterly}} / Y {{yearly}}",
+        "retentionValue": "Within {{within}} / H {{hourly}} / D {{daily}} / W {{weekly}} / M {{monthly}} / Q {{quarterly}} / Y {{yearly}}",
         "compact": "Compact",
         "check": "Check",
         "checkExtraFlags": "Check flags",
@@ -2463,6 +2463,10 @@
       "dryRunTip": "Tip: Always run \"Dry Run\" first to preview what will be deleted!",
       "retentionPolicy": "Retention Policy",
       "retentionDescription": "Specify how many backups to keep for each time period",
+      "keepWithin": "Keep Within",
+      "keepWithinHelper": "Keep all archives created within this recent interval",
+      "keepWithinPlaceholder": "1d",
+      "keepWithinSummary": "all archives within {{interval}}",
       "keepHourly": "Keep Hourly",
       "keepHourlyHelper": "Last N hourly backups (0 = disabled)",
       "keepDaily": "Keep Daily",
@@ -3269,7 +3273,10 @@
     "keepQuarterly": "Keep Quarterly",
     "keepQuarterlyHint": "Quarterly backups to keep (0 = disabled)",
     "keepYearly": "Keep Yearly",
-    "keepYearlyHint": "Yearly backups to keep"
+    "keepYearlyHint": "Yearly backups to keep",
+    "keepWithin": "Keep Within",
+    "keepWithinHint": "Keep all archives within this recent interval, for example 1d or 12H",
+    "keepWithinPlaceholder": "1d"
   },
   "compressionSettings": {
     "title": "Compression Settings",
