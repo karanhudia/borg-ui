@@ -106,15 +106,20 @@ export function ReviewStep({
     0
   )
   const uploadPolicies = wizardState.uploadRatelimitSchedulePolicies || []
-  const retentionLabel = t('backupPlans.wizard.review.retentionValue', {
-    hourly: wizardState.pruneKeepHourly,
-    daily: wizardState.pruneKeepDaily,
-    weekly: wizardState.pruneKeepWeekly,
-    monthly: wizardState.pruneKeepMonthly,
-    quarterly: wizardState.pruneKeepQuarterly,
-    yearly: wizardState.pruneKeepYearly,
-    within: wizardState.pruneKeepWithin || t('common.disabled'),
-  })
+  const retentionLabel = t(
+    wizardState.pruneKeepWithin
+      ? 'backupPlans.wizard.review.retentionValueWithWithin'
+      : 'backupPlans.wizard.review.retentionValue',
+    {
+      hourly: wizardState.pruneKeepHourly,
+      daily: wizardState.pruneKeepDaily,
+      weekly: wizardState.pruneKeepWeekly,
+      monthly: wizardState.pruneKeepMonthly,
+      quarterly: wizardState.pruneKeepQuarterly,
+      yearly: wizardState.pruneKeepYearly,
+      within: wizardState.pruneKeepWithin,
+    }
+  )
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

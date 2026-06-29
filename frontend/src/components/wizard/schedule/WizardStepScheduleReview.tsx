@@ -182,7 +182,10 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
     `${data.pruneKeepMonthly}m`,
     data.pruneKeepQuarterly > 0 && `${data.pruneKeepQuarterly}q`,
     `${data.pruneKeepYearly}y`,
-    data.pruneKeepWithin && `within ${data.pruneKeepWithin}`,
+    data.pruneKeepWithin &&
+      t('wizard.scheduleWizard.review.keepWithin', {
+        interval: data.pruneKeepWithin,
+      }),
   ]
     .filter(Boolean)
     .join(' · ')

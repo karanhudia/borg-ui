@@ -56,9 +56,9 @@ and empty strings both mean disabled.
 
 ## Validation
 
-- Backend targeted tests:
+- Backend-targeted tests:
   `pytest tests/unit/test_borg_router.py tests/unit/test_v2_prune_service.py tests/unit/test_agent_runtime.py tests/unit/test_api_backup_plans.py tests/unit/test_borgmatic_service.py`
-- Frontend targeted tests:
+- Frontend-targeted tests:
   `cd frontend && npm run test -- PruneSettingsInput PruneRepositoryDialog ScheduleStep ReviewStep borgApi/client backupPlanPayload`
 - Required backend checks:
   `ruff check app tests`, `ruff format --check app tests`

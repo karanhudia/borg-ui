@@ -35,6 +35,8 @@ const translations: Record<string, string> = {
   'backupPlans.wizard.review.repositories': 'Repositories',
   'backupPlans.wizard.review.repositoryScripts': 'Repository scripts',
   'backupPlans.wizard.review.retentionValue':
+    'daily {{daily}}, weekly {{weekly}}',
+  'backupPlans.wizard.review.retentionValueWithWithin':
     'daily {{daily}}, weekly {{weekly}}, within {{within}}',
   'backupPlans.wizard.review.runMode': 'Run mode',
   'backupPlans.wizard.review.sourceLocation': 'Source location',
@@ -190,5 +192,19 @@ describe('ReviewStep', () => {
 
     expect(screen.getByText('Prune')).toBeInTheDocument()
     expect(screen.getByText(/within 1d/)).toBeInTheDocument()
+  })
+
+  it('omits keep-within retention when the interval is blank', () => {
+    renderReview({
+      ...createInitialState(),
+      name: 'Frequent backup',
+      sourceDirectories: ['/data'],
+      repositoryIds: [10],
+      runPruneAfter: true,
+      pruneKeepWithin: '',
+    })
+
+    expect(screen.getByText('Prune')).toBeInTheDocument()
+    expect(screen.queryByText(/within/i)).not.toBeInTheDocument()
   })
 })

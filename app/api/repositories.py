@@ -727,7 +727,12 @@ def _agent_prune_operation_payload(request: dict) -> dict[str, Any]:
 def _normalize_prune_keep_within(value: Any) -> str | None:
     if value is None:
         return None
-    value = str(value).strip()
+    if not isinstance(value, str):
+        raise HTTPException(
+            status_code=422,
+            detail={"key": "backend.errors.repo.invalidPruneKeepWithin"},
+        )
+    value = value.strip()
     return value or None
 
 

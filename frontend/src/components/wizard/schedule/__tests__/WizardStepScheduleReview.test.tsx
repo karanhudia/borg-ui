@@ -216,6 +216,17 @@ describe('WizardStepScheduleReview', () => {
     expect(screen.getByText(/1y/i)).toBeInTheDocument()
   })
 
+  it('displays keep-within prune interval when configured', () => {
+    render(
+      <WizardStepScheduleReview
+        {...defaultProps}
+        data={{ ...defaultData, pruneKeepWithin: '1d' }}
+      />
+    )
+
+    expect(screen.getByText(/within 1d/i)).toBeInTheDocument()
+  })
+
   it('does not display prune keep format when prune is disabled', () => {
     const dataNoPrune = {
       ...defaultData,

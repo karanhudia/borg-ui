@@ -238,6 +238,60 @@ retention:
         schedule = db_session.query(ScheduledJob).filter_by(repository=repo.path).one()
         assert schedule.prune_keep_within == "1d"
 
+    def test_import_trims_keep_within_retention(self, db_session):
+        """Test importing borgmatic retention trims keep_within."""
+        yaml_content = """
+location:
+  source_directories:
+    - /home/user
+  repositories:
+    - /backup/trimmed.borg
+
+retention:
+  keep_within: " 1d "
+"""
+
+        import_service = BorgmaticImportService(db_session)
+        result = import_service.import_from_yaml(
+            yaml_content, merge_strategy="skip_duplicates", dry_run=False
+        )
+
+        assert result["success"]
+        repo = (
+            db_session.query(Repository)
+            .filter(Repository.path == "/backup/trimmed.borg")
+            .one()
+        )
+        schedule = db_session.query(ScheduledJob).filter_by(repository=repo.path).one()
+        assert schedule.prune_keep_within == "1d"
+
+    def test_import_clears_blank_keep_within_retention(self, db_session):
+        """Test importing borgmatic retention clears blank keep_within."""
+        yaml_content = """
+location:
+  source_directories:
+    - /home/user
+  repositories:
+    - /backup/blank.borg
+
+retention:
+  keep_within: "   "
+"""
+
+        import_service = BorgmaticImportService(db_session)
+        result = import_service.import_from_yaml(
+            yaml_content, merge_strategy="skip_duplicates", dry_run=False
+        )
+
+        assert result["success"]
+        repo = (
+            db_session.query(Repository)
+            .filter(Repository.path == "/backup/blank.borg")
+            .one()
+        )
+        schedule = db_session.query(ScheduledJob).filter_by(repository=repo.path).one()
+        assert schedule.prune_keep_within is None
+
     def test_import_with_hooks(self, db_session):
         """Test importing configuration with hooks."""
         yaml_content = """

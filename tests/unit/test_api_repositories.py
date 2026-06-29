@@ -1455,6 +1455,26 @@ class TestRepositoriesCreate:
             routed_keep_within = args[8]
         assert routed_keep_within == "1d"
 
+    def test_legacy_prune_route_rejects_non_string_keep_within(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(**_base_repository_payload(name="Invalid Keep Within"))
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.post(
+            f"/api/repositories/{repo.id}/prune",
+            json={"keep_within": ["1d"], "dry_run": True},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 422
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.repo.invalidPruneKeepWithin"
+        )
+
     def test_create_repository_duplicate_path(
         self, test_client: TestClient, admin_headers, test_db
     ):

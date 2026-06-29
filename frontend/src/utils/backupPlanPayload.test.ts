@@ -18,6 +18,19 @@ describe('backupPlanPayload prune keep-within', () => {
     expect(payload.prune_keep_within).toBe('1d')
   })
 
+  it('normalizes a cleared keep-within interval to null in backup plan payloads', () => {
+    const payload = buildBackupPlanPayload({
+      ...createInitialState(),
+      name: 'Frequent backup',
+      sourceDirectories: ['/data'],
+      repositoryIds: [10],
+      runPruneAfter: true,
+      pruneKeepWithin: '   ',
+    })
+
+    expect(payload.prune_keep_within).toBeNull()
+  })
+
   it('hydrates keep-within from an existing backup plan', () => {
     const state = planToState({
       id: 1,

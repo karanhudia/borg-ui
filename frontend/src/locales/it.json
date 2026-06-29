@@ -742,6 +742,8 @@
       "meta": {
         "note": "Note",
         "prune": "Prune",
+        "keepWithin": "entro {{interval}}",
+        "keepWithinTooltip": "entro={{interval}}",
         "lastPruned": "Last Pruned",
         "compact": "Compact",
         "lastCompact": "Last Compact",
@@ -1290,7 +1292,8 @@
         "schedule": "Pianificazione",
         "prune": "Prune",
         "retention": "Conservazione",
-        "retentionValue": "Entro {{within}} / H {{hourly}} / G {{daily}} / S {{weekly}} / M {{monthly}} / T {{quarterly}} / A {{yearly}}",
+        "retentionValue": "H {{hourly}} / G {{daily}} / S {{weekly}} / M {{monthly}} / T {{quarterly}} / A {{yearly}}",
+        "retentionValueWithWithin": "Entro {{within}} / H {{hourly}} / G {{daily}} / S {{weekly}} / M {{monthly}} / T {{quarterly}} / A {{yearly}}",
         "compact": "Compact",
         "check": "Check",
         "checkExtraFlags": "Flag di check",
@@ -4005,6 +4008,7 @@
         "pruneAfterBackup": "Pulizia dopo Backup",
         "enabled": "Abilitato",
         "disabled": "Disabilitato",
+        "keepWithin": "entro {{interval}}",
         "compactAfterPrune": "Compattazione dopo Pulizia",
         "none": "Nessuno"
       },
