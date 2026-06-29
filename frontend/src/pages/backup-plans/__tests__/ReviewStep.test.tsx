@@ -34,8 +34,7 @@ const translations: Record<string, string> = {
   'backupPlans.wizard.review.prune': 'Prune',
   'backupPlans.wizard.review.repositories': 'Repositories',
   'backupPlans.wizard.review.repositoryScripts': 'Repository scripts',
-  'backupPlans.wizard.review.retentionValue':
-    'daily {{daily}}, weekly {{weekly}}',
+  'backupPlans.wizard.review.retentionValue': 'daily {{daily}}, weekly {{weekly}}',
   'backupPlans.wizard.review.retentionValueWithWithin':
     'daily {{daily}}, weekly {{weekly}}, within {{within}}',
   'backupPlans.wizard.review.runMode': 'Run mode',
