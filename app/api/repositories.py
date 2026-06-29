@@ -150,7 +150,7 @@ def _dispatch_router_prune(
     keep_within: str | None,
     job: PruneJob,
 ):
-    return BorgRouter(router_repo).prune(
+    args = (
         job.id,
         keep_hourly,
         keep_daily,
@@ -158,9 +158,10 @@ def _dispatch_router_prune(
         keep_monthly,
         keep_quarterly,
         keep_yearly,
-        dry_run=False,
-        keep_within=keep_within,
+        False,
     )
+    kwargs = {"keep_within": keep_within} if keep_within is not None else {}
+    return BorgRouter(router_repo).prune(*args, **kwargs)
 
 
 AGENT_RCLONE_SYNC_CAPABILITY = "repository.rclone_sync"
@@ -5409,6 +5410,7 @@ async def prune_repository(
         )
 
         # Wait for prune to complete and get logs
+        prune_kwargs = {"keep_within": keep_within} if keep_within is not None else {}
         await BorgRouter(repository).prune(
             prune_job.id,
             keep_hourly,
@@ -5417,8 +5419,8 @@ async def prune_repository(
             keep_monthly,
             keep_quarterly,
             keep_yearly,
-            dry_run=dry_run,
-            keep_within=keep_within,
+            dry_run,
+            **prune_kwargs,
         )
 
         # Refresh job to get updated status and logs
