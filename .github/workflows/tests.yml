@@ -338,7 +338,7 @@ jobs:
           path: coverage-artifacts/backend
 
       - name: Upload backend coverage to Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage-artifacts/backend/coverage.xml
@@ -364,7 +364,7 @@ jobs:
           path: coverage-artifacts/frontend
 
       - name: Upload frontend coverage to Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage-artifacts/frontend/lcov.info
