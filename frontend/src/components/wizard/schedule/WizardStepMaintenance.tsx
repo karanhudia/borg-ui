@@ -22,6 +22,7 @@ interface WizardStepMaintenanceData {
   pruneKeepMonthly: number
   pruneKeepQuarterly: number
   pruneKeepYearly: number
+  pruneKeepWithin: string
 }
 
 interface WizardStepMaintenanceProps {
@@ -40,6 +41,7 @@ const WizardStepMaintenance: React.FC<WizardStepMaintenanceProps> = ({ data, onC
       pruneKeepMonthly: values.keepMonthly,
       pruneKeepQuarterly: values.keepQuarterly,
       pruneKeepYearly: values.keepYearly,
+      pruneKeepWithin: values.keepWithin,
     })
   }
 
@@ -106,6 +108,7 @@ const WizardStepMaintenance: React.FC<WizardStepMaintenanceProps> = ({ data, onC
                 keepMonthly: data.pruneKeepMonthly,
                 keepQuarterly: data.pruneKeepQuarterly,
                 keepYearly: data.pruneKeepYearly,
+                keepWithin: data.pruneKeepWithin,
               }}
               onChange={handlePruneSettingsChange}
             />

@@ -188,6 +188,27 @@ class TestScheduleRouteContracts:
             response.json()["detail"]["key"] == "backend.errors.schedule.jobNameExists"
         )
 
+    def test_update_schedule_clears_prune_keep_within(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        schedule = _create_schedule(
+            test_db,
+            "Keep Within",
+            repository="/repos/keep-within",
+            prune_keep_within="1d",
+        )
+
+        response = test_client.put(
+            f"/api/schedule/{schedule.id}",
+            json={"prune_keep_within": None},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+        test_db.refresh(schedule)
+        assert schedule.prune_keep_within is None
+
     def test_toggle_schedule_enable_recomputes_stale_next_run(
         self, test_client: TestClient, admin_headers, test_db
     ):

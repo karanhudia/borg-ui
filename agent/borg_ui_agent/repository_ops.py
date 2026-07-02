@@ -240,6 +240,9 @@ class RepositoryOperationPayload:
                 value = operation.get(key)
                 if value is not None:
                     cmd.extend([flag, str(int(value))])
+            keep_within = operation.get("keep_within")
+            if keep_within is not None and str(keep_within).strip():
+                cmd.append(f"--keep-within={str(keep_within).strip()}")
             if dry_run:
                 cmd.append("--dry-run")
             if self.borg_version == 1:

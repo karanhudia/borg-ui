@@ -742,6 +742,8 @@
       "meta": {
         "note": "Note",
         "prune": "Prune",
+        "keepWithin": "dentro de {{interval}}",
+        "keepWithinTooltip": "dentro={{interval}}",
         "lastPruned": "Last Pruned",
         "compact": "Compact",
         "lastCompact": "Last Compact",
@@ -1291,6 +1293,7 @@
         "prune": "Prune",
         "retention": "Retención",
         "retentionValue": "H {{hourly}} / D {{daily}} / S {{weekly}} / M {{monthly}} / T {{quarterly}} / A {{yearly}}",
+        "retentionValueWithWithin": "Dentro de {{within}} / H {{hourly}} / D {{daily}} / S {{weekly}} / M {{monthly}} / T {{quarterly}} / A {{yearly}}",
         "compact": "Compact",
         "check": "Check",
         "checkExtraFlags": "Flags de check",
@@ -2463,6 +2466,10 @@
       "dryRunTip": "Consejo: ¡Ejecuta siempre el \"Simulacro\" primero para ver qué se eliminará!",
       "retentionPolicy": "Política de retención",
       "retentionDescription": "Especifica cuántas copias conservar para cada período de tiempo",
+      "keepWithin": "Mantener dentro de",
+      "keepWithinHelper": "Conserva todos los archivos creados dentro de este intervalo reciente",
+      "keepWithinPlaceholder": "1d",
+      "keepWithinSummary": "todos los archivos dentro de {{interval}}",
       "keepHourly": "Mantener por hora",
       "keepHourlyHelper": "Últimas N copias horarias (0 = deshabilitado)",
       "keepDaily": "Mantener por día",
@@ -3269,7 +3276,10 @@
     "keepQuarterly": "Mantener por trimestre",
     "keepQuarterlyHint": "Copias de seguridad trimestrales a mantener (0 = deshabilitado)",
     "keepYearly": "Mantener por año",
-    "keepYearlyHint": "Copias de seguridad anuales a mantener"
+    "keepYearlyHint": "Copias de seguridad anuales a mantener",
+    "keepWithin": "Mantener dentro de",
+    "keepWithinHint": "Conserva todos los archivos dentro de este intervalo reciente, por ejemplo 1d o 12H",
+    "keepWithinPlaceholder": "1d"
   },
   "compressionSettings": {
     "title": "Configuración de compresión",
@@ -3998,6 +4008,7 @@
         "pruneAfterBackup": "Poda tras la copia de seguridad",
         "enabled": "Habilitado",
         "disabled": "Deshabilitado",
+        "keepWithin": "dentro de {{interval}}",
         "compactAfterPrune": "Compactación tras la poda",
         "none": "Ninguno"
       },

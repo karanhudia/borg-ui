@@ -155,6 +155,7 @@ class BackupPlanPayload(BaseModel):
     prune_keep_monthly: int = 6
     prune_keep_quarterly: int = 0
     prune_keep_yearly: int = 1
+    prune_keep_within: Optional[str] = None
     repositories: list[BackupPlanRepositoryPayload]
     clear_legacy_source_repository_ids: list[int] = Field(default_factory=list)
 
@@ -176,6 +177,13 @@ def _decode_json_list(value: Optional[str]) -> list[str]:
     except (TypeError, json.JSONDecodeError):
         return []
     return decoded if isinstance(decoded, list) else []
+
+
+def _normalize_prune_keep_within(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
 
 
 def _unique_backup_plan_name(db: Session, base_name: str) -> str:
@@ -333,6 +341,7 @@ def _payload_from_repository(
         prune_keep_monthly=schedule.prune_keep_monthly if schedule else 6,
         prune_keep_quarterly=schedule.prune_keep_quarterly if schedule else 0,
         prune_keep_yearly=schedule.prune_keep_yearly if schedule else 1,
+        prune_keep_within=schedule.prune_keep_within if schedule else None,
         repositories=[
             BackupPlanRepositoryPayload(
                 repository_id=repository.id,
@@ -609,6 +618,7 @@ def _serialize_plan(plan: BackupPlan, *, detail: bool = False) -> dict[str, Any]
                 "prune_keep_monthly": plan.prune_keep_monthly,
                 "prune_keep_quarterly": plan.prune_keep_quarterly,
                 "prune_keep_yearly": plan.prune_keep_yearly,
+                "prune_keep_within": plan.prune_keep_within,
                 "repositories": [
                     _serialize_repository_link(link) for link in plan.repositories
                 ],
@@ -1218,6 +1228,7 @@ def _apply_payload(plan: BackupPlan, payload: BackupPlanPayload) -> None:
     plan.prune_keep_monthly = payload.prune_keep_monthly
     plan.prune_keep_quarterly = payload.prune_keep_quarterly
     plan.prune_keep_yearly = payload.prune_keep_yearly
+    plan.prune_keep_within = _normalize_prune_keep_within(payload.prune_keep_within)
     plan.updated_at = datetime.utcnow()
 
 

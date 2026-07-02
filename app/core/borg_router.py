@@ -463,36 +463,31 @@ class BorgRouter:
         keep_quarterly: int,
         keep_yearly: int,
         dry_run: bool = False,
+        keep_within: str | None = None,
     ) -> None:
         """Run repository pruning through the version-aware service layer."""
+        kwargs = {
+            "job_id": job_id,
+            "repository_id": self.repo.id,
+            "keep_hourly": keep_hourly,
+            "keep_daily": keep_daily,
+            "keep_weekly": keep_weekly,
+            "keep_monthly": keep_monthly,
+            "keep_quarterly": keep_quarterly,
+            "keep_yearly": keep_yearly,
+            "dry_run": dry_run,
+        }
+        if keep_within is not None:
+            kwargs["keep_within"] = keep_within
+
         if self.is_v2:
             from app.services.v2.prune_service import prune_v2_service
 
-            await prune_v2_service.execute_prune(
-                job_id=job_id,
-                repository_id=self.repo.id,
-                keep_hourly=keep_hourly,
-                keep_daily=keep_daily,
-                keep_weekly=keep_weekly,
-                keep_monthly=keep_monthly,
-                keep_quarterly=keep_quarterly,
-                keep_yearly=keep_yearly,
-                dry_run=dry_run,
-            )
+            await prune_v2_service.execute_prune(**kwargs)
         else:
             from app.services.prune_service import prune_service
 
-            await prune_service.execute_prune(
-                job_id=job_id,
-                repository_id=self.repo.id,
-                keep_hourly=keep_hourly,
-                keep_daily=keep_daily,
-                keep_weekly=keep_weekly,
-                keep_monthly=keep_monthly,
-                keep_quarterly=keep_quarterly,
-                keep_yearly=keep_yearly,
-                dry_run=dry_run,
-            )
+            await prune_service.execute_prune(**kwargs)
 
     async def delete_archive(self, job_id: int, archive_name: str) -> None:
         """Delete an archive through the version-aware service layer."""
