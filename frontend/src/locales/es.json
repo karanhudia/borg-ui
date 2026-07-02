@@ -1507,6 +1507,9 @@
   "activity": {
     "title": "Actividad",
     "subtitle": "Ver todas las operaciones y sus registros",
+    "actions": {
+      "refresh": "Actualizar actividad"
+    },
     "filters": {
       "type": "Tipo",
       "status": "Estado",
@@ -1526,6 +1529,7 @@
       },
       "statuses": {
         "completed": "Completado",
+        "completedWithWarnings": "Completado con advertencias",
         "needsBackup": "Necesita copia",
         "failed": "Fallido",
         "running": "En ejecución",

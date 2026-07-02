@@ -1507,6 +1507,9 @@
   "activity": {
     "title": "Aktivität",
     "subtitle": "Alle Vorgänge und ihre Protokolle anzeigen",
+    "actions": {
+      "refresh": "Aktivität aktualisieren"
+    },
     "filters": {
       "type": "Typ",
       "status": "Status",
@@ -1526,6 +1529,7 @@
       },
       "statuses": {
         "completed": "Abgeschlossen",
+        "completedWithWarnings": "Abgeschlossen mit Warnungen",
         "needsBackup": "Backup erforderlich",
         "failed": "Fehlgeschlagen",
         "running": "Läuft",
