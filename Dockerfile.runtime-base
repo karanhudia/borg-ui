@@ -1,12 +1,51 @@
-# Internal Borg runtime base image used by CI.
-# Keep this image private on Docker Hub and build it separately so app releases
-# do not recompile Borg for every tag.
+# syntax=docker/dockerfile:1
+#
+# Shared Borg runtime base image with Borg 1.x and Borg 2.x preinstalled.
+# It exists so that every component that needs borg1/borg2 can build FROM it
+# instead of compiling Borg itself — Borg is compiled once here, not rebuilt for
+# every app tag.
+#
+# Two-stage build: the compile toolchain (build-essential + *-dev headers,
+# ~350-400 MB) lives only in the `builder` stage. The final `runtime-base`
+# stage ships just the shared libraries Borg links against plus the operational
+# tooling, so the toolchain never reaches the published image.
 
-FROM python:3.10-slim AS runtime-base
+# --- builder: compile the Borg wheels (needs the toolchain + -dev headers) ----
+FROM python:3.10-slim AS builder
 
 ARG BORG1_VERSION=1.4.4
 ARG BORG2_VERSION=2.0.0b21
 
+# Build-time only. OS packages track the base image's Debian release rather than
+# pinned versions (DL3008): upstream does not pin them either and a pin would
+# break on the next base bump. None of this reaches the runtime stage.
+# hadolint ignore=DL3008
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    python3-dev \
+    pkg-config \
+    libacl1-dev \
+    libssl-dev \
+    liblz4-dev \
+    libzstd-dev \
+    libxxhash-dev \
+    libfuse3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Borg 1.x into the image Python, Borg 2.x into its own venv. Borg versions are
+# pinned via ARG; pyfuse3 tracks the interpreter and is intentionally unpinned
+# (DL3013). Kept as its own layer, separate from the apt layer above (DL3059),
+# so a Borg version bump does not re-run the OS package install.
+# hadolint ignore=DL3013,DL3059
+RUN pip install --no-cache-dir pyfuse3 "borgbackup[fuse]==${BORG1_VERSION}" && \
+    python3 -m venv /opt/borg2-venv && \
+    /opt/borg2-venv/bin/pip install --no-cache-dir pyfuse3 "borgbackup[fuse]==${BORG2_VERSION}" "borgstore[rclone]==0.4.1"
+
+# --- runtime-base: slim image, no compilers — runtime libs + operational tools -
+FROM python:3.10-slim AS runtime-base
+
+ARG BORG1_VERSION=1.4.4
+ARG BORG2_VERSION=2.0.0b21
 ENV BORG1_VERSION=${BORG1_VERSION}
 ENV BORG2_VERSION=${BORG2_VERSION}
 
@@ -17,30 +56,29 @@ LABEL org.opencontainers.image.source="https://github.com/karanhudia/borg-ui"
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y \
+# Runtime shared libraries Borg links against (the runtime counterparts of the
+# builder's -dev headers) plus the operational tooling. No compilers here.
+# OS packages track the base Debian release rather than pinned versions (DL3008).
+# hadolint ignore=DL3008
+RUN apt-get update && apt-get install -y --no-install-recommends \
     cron \
     curl \
     wget \
     gnupg \
-    lsb-release \
     gosu \
     sudo \
-    libacl1-dev \
-    libssl-dev \
-    liblz4-dev \
-    libzstd-dev \
-    libxxhash-dev \
-    build-essential \
-    pkg-config \
+    libacl1 \
+    liblz4-1 \
+    libzstd1 \
+    libxxhash0 \
+    libssl3t64 \
+    libfuse3-4 \
     fuse3 \
-    libfuse3-dev \
     rsync \
     rclone \
     btrfs-progs \
     openssh-client \
     sshfs \
-    python3-pip \
-    python3-dev \
     htop \
     iotop \
     net-tools \
@@ -50,31 +88,24 @@ RUN apt-get update && apt-get install -y \
     sshpass \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir pyfuse3
-RUN pip install --no-cache-dir "borgbackup[fuse]==${BORG1_VERSION}"
-RUN python3 -m venv /opt/borg2-venv && \
-    /opt/borg2-venv/bin/pip install --no-cache-dir pyfuse3 "borgbackup[fuse]==${BORG2_VERSION}" "borgstore[rclone]==0.4.1" && \
-    ln -sf /opt/borg2-venv/bin/borg /usr/local/bin/borg2
+# Borg was compiled in the builder stage — copy the artifacts, not the toolchain.
+COPY --from=builder /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+COPY --from=builder /opt/borg2-venv /opt/borg2-venv
 
-RUN mkdir -p \
-    /data \
-    /data/ssh_keys \
-    /data/borg_keys \
-    /data/logs \
-    /data/config \
-    /backups \
-    /var/log/borg \
-    /etc/borg
-
-RUN groupadd -g 1001 borg && \
+# Symlink borg2, create the runtime directories, and set up the borg user.
+RUN ln -sf /opt/borg2-venv/bin/borg /usr/local/bin/borg2 && \
+    mkdir -p \
+        /data /data/ssh_keys /data/borg_keys /data/logs /data/config \
+        /backups /var/log/borg /etc/borg && \
+    groupadd -g 1001 borg && \
     useradd -m -u 1001 -g 1001 -s /bin/bash borg && \
     usermod -a -G sudo borg && \
     groupadd -f fuse && \
     usermod -a -G fuse borg && \
     echo "borg ALL=(ALL) NOPASSWD: /usr/bin/borg, /usr/bin/crontab, /usr/bin/apt-get" >> /etc/sudoers && \
-    sed -i 's/^#user_allow_other/user_allow_other/' /etc/fuse.conf
-
-RUN mkdir -p /home/borg/.ssh /home/borg/.cache/borg /etc/cron.d && \
+    sed -i 's/^#user_allow_other/user_allow_other/' /etc/fuse.conf && \
+    mkdir -p /home/borg/.ssh /home/borg/.cache/borg /etc/cron.d && \
     chown -R borg:borg /app /data /backups /var/log/borg /etc/borg /home/borg/.ssh /home/borg/.cache /etc/cron.d && \
     chmod -R 755 /app /data /backups /var/log/borg /etc/borg && \
     chmod 700 /home/borg/.ssh /home/borg/.cache/borg

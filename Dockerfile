@@ -1,11 +1,29 @@
+# syntax=docker/dockerfile:1
+
 ARG BASE_IMAGE=docker.io/ainullcode/borg-ui-runtime-base:runtime-borg1-1.4.4-borg2-2.0.0b21-r4
+
+# --- frontend (Vite): built in-image, once on the builder arch for multi-arch ---
+# Building the bundle here (instead of copying one prepared out-of-band in CI)
+# makes `docker build` alone fully reproducible. Pinned to the build host's
+# native arch: the JS bundle is architecture-independent, so this avoids
+# emulating a full npm build per target platform (DL3029).
+# hadolint ignore=DL3029
+FROM --platform=$BUILDPLATFORM node:22-slim AS frontend-builder
+WORKDIR /frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
 
 # Build stage for backend
 FROM python:3.10-slim AS backend-builder
 WORKDIR /app
 
-# Install build dependencies for psutil and other packages
-RUN apt-get update && apt-get install -y \
+# Install build dependencies for psutil and other packages.
+# OS build deps track the base image's Debian release rather than pinned
+# versions (DL3008); they never leave this discarded builder stage.
+# hadolint ignore=DL3008
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     make \
@@ -15,12 +33,14 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Upgrade pip and setuptools for better wheel support
-RUN pip install --upgrade pip setuptools wheel
-
 COPY requirements.txt .
-# Install Python packages
-RUN pip install --no-cache-dir -r requirements.txt
+
+# Bootstrap the latest pip/setuptools/wheel for wheel support, then install the
+# pinned application dependencies. The bootstrap trio is intentionally unpinned
+# (DL3013); the app deps are pinned in requirements.txt.
+# hadolint ignore=DL3013
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Development stage
 FROM ${BASE_IMAGE} AS development
@@ -82,9 +102,9 @@ WORKDIR /app
 COPY --from=backend-builder /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
 COPY --from=backend-builder /usr/local/bin /usr/local/bin
 
-# Frontend assets are prepared outside Docker in CI and copied into the
-# build context to avoid rebuilding the same static bundle per architecture.
-COPY docker/frontend-build-output/ ./app/static/
+# Frontend assets built hermetically in the frontend-builder stage above (once
+# on the builder arch), so `docker build` alone is fully reproducible.
+COPY --from=frontend-builder /frontend/build ./app/static/
 
 # Copy application code
 COPY app/ ./app/
