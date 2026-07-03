@@ -4270,6 +4270,7 @@
     "none": "None"
   },
   "repositoryWizard": {
+    "agentRepoUnknownWarning": "This managed agent doesn't seem to know its own Borg repository. If you enter an ssh:// or sftp:// URL here, make sure this managed agent can actually reach that repository.",
     "titleCreate": "Create Repository",
     "titleEdit": "Edit Repository",
     "titleImport": "Import Repository",
@@ -4662,6 +4663,7 @@
         "permissionDeniedCreateDirectory": "Permission denied: cannot create directory at '{{path}}'. To store repositories on your host machine, use paths starting with '/local/'.",
         "permissionDeniedCreateParentDirectory": "Permission denied: cannot create parent directory '{{path}}'. Please ensure the directory exists on your host machine with proper permissions.",
         "encryptedPassphraseRequired": "Passphrase is required for encryption mode '{{mode}}'",
+        "agentPassphraseUnavailable": "This managed agent didn't report a BORG_PASSPHRASE, so an encrypted repository can't be opened by it. Set BORG_PASSPHRASE in the agent's environment, or enter a passphrase here.",
         "encryptedPassphraseIncorrect": "Repository is encrypted but the passphrase is incorrect or missing. Please provide the correct passphrase.",
         "encryptionKeyfileNotRequired": "Repository uses '{{mode}}' encryption, which does not require a keyfile. Keyfile upload is only needed for 'keyfile' or 'keyfile-blake2' encryption modes.",
         "adminAccessRequired": "Admin access required",

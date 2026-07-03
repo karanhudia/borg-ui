@@ -19,6 +19,7 @@ vi.mock('../../services/api', () => ({
   },
   managedAgentsAPI: {
     listAgents: vi.fn(),
+    getRepositoryDefaults: vi.fn(),
   },
   rcloneAPI: {
     getStatus: vi.fn(),
@@ -357,6 +358,9 @@ describe('RepositoryWizard', () => {
     })
     ;(managedAgentsAPI.listAgents as Mock).mockResolvedValue({
       data: mockManagedAgents,
+    })
+    ;(managedAgentsAPI.getRepositoryDefaults as Mock).mockResolvedValue({
+      data: { repo: null, remote_path: null, has_passphrase: false },
     })
     ;(rcloneAPI.getStatus as Mock).mockResolvedValue({
       data: { available: true, version: 'rclone v1.66.0', error: null },
