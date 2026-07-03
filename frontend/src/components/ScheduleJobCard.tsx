@@ -45,6 +45,7 @@ interface ScheduledJob {
   prune_keep_monthly: number
   prune_keep_quarterly: number
   prune_keep_yearly: number
+  prune_keep_within?: string | null
   last_prune: string | null
   last_compact: string | null
 }
@@ -133,6 +134,28 @@ export default function ScheduleJobCard({
   ]
 
   const meta: MetaItem[] = []
+  const keepWithinSummary = job.prune_keep_within
+    ? t('schedule.card.meta.keepWithin', { interval: job.prune_keep_within })
+    : null
+  const keepWithinTooltip = job.prune_keep_within
+    ? t('schedule.card.meta.keepWithinTooltip', { interval: job.prune_keep_within })
+    : null
+  const pruneRetentionParts = [
+    job.prune_keep_hourly > 0 ? `${job.prune_keep_hourly}h` : null,
+    `${job.prune_keep_daily}d`,
+    `${job.prune_keep_weekly}w`,
+    `${job.prune_keep_monthly}m`,
+    job.prune_keep_quarterly > 0 ? `${job.prune_keep_quarterly}q` : null,
+    `${job.prune_keep_yearly}y`,
+  ].filter(Boolean)
+  const pruneTooltipParts = [
+    job.prune_keep_hourly > 0 ? `hourly=${job.prune_keep_hourly}` : null,
+    `daily=${job.prune_keep_daily}`,
+    `weekly=${job.prune_keep_weekly}`,
+    `monthly=${job.prune_keep_monthly}`,
+    job.prune_keep_quarterly > 0 ? `quarterly=${job.prune_keep_quarterly}` : null,
+    `yearly=${job.prune_keep_yearly}`,
+  ].filter(Boolean)
   meta.push({
     label: t('common.timezone', { defaultValue: 'Timezone' }),
     value: scheduleTimezone,
@@ -141,8 +164,10 @@ export default function ScheduleJobCard({
   if (job.run_prune_after)
     meta.push({
       label: t('schedule.card.meta.prune'),
-      value: `${job.prune_keep_daily}d/${job.prune_keep_weekly}w/${job.prune_keep_monthly}m/${job.prune_keep_yearly}y`,
-      tooltip: `Keep: daily=${job.prune_keep_daily} weekly=${job.prune_keep_weekly} monthly=${job.prune_keep_monthly} yearly=${job.prune_keep_yearly}`,
+      value: [keepWithinSummary, pruneRetentionParts.join('/')].filter(Boolean).join(' · '),
+      tooltip: [`Keep: ${pruneTooltipParts.join(' ')}`, keepWithinTooltip]
+        .filter(Boolean)
+        .join(' '),
     })
   if (job.last_prune)
     meta.push({

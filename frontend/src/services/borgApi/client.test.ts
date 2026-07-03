@@ -81,7 +81,7 @@ describe('BorgApiClient', () => {
     client.deleteArchive('archive-1')
     client.getDeleteJobStatus(12)
     client.runBackup({ archive_name: 'nightly' })
-    client.pruneArchives({ keep_daily: 7 })
+    client.pruneArchives({ keep_daily: 7, keep_within: '1d' })
     client.compact()
     client.checkRepository(30)
     const downloadUrl = client.getDownloadUrl('archive-1', '/etc/hosts')
@@ -102,7 +102,10 @@ describe('BorgApiClient', () => {
       repository: '/repo-v1',
       archive_name: 'nightly',
     })
-    expect(postMock).toHaveBeenCalledWith('/repositories/7/prune', { keep_daily: 7 })
+    expect(postMock).toHaveBeenCalledWith('/repositories/7/prune', {
+      keep_daily: 7,
+      keep_within: '1d',
+    })
     expect(postMock).toHaveBeenCalledWith('/repositories/7/compact')
     expect(postMock).toHaveBeenCalledWith('/repositories/7/check', { max_duration: 30 })
     expect(downloadUrl).toContain('/api/archives/download?')
@@ -120,7 +123,7 @@ describe('BorgApiClient', () => {
 
     client.runBackup({ archive_name: 'manual-v2' })
     client.getArchiveContents('archive-id', 'ignored-name', '/srv')
-    client.pruneArchives({ keep_weekly: 4 })
+    client.pruneArchives({ keep_weekly: 4, keep_within: '1d' })
     client.compact()
     client.checkRepository()
     const downloadUrl = client.getDownloadUrl('archive-2', '/srv/data.txt')
@@ -135,6 +138,7 @@ describe('BorgApiClient', () => {
     expect(postMock).toHaveBeenCalledWith('/v2/backup/prune', {
       repository_id: 9,
       keep_weekly: 4,
+      keep_within: '1d',
     })
     expect(postMock).toHaveBeenCalledWith('/v2/backup/compact', { repository_id: 9 })
     expect(postMock).toHaveBeenCalledWith('/v2/backup/check', {

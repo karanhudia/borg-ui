@@ -645,6 +645,7 @@ export default function BackupPlans() {
       pruneKeepMonthly: values.keepMonthly,
       pruneKeepQuarterly: values.keepQuarterly,
       pruneKeepYearly: values.keepYearly,
+      pruneKeepWithin: values.keepWithin,
     })
   }
 

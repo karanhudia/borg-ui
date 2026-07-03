@@ -75,6 +75,7 @@ export interface PruneOptions {
   keep_monthly?: number
   keep_quarterly?: number
   keep_yearly?: number
+  keep_within?: string
   dry_run?: boolean
 }
 

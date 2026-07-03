@@ -338,6 +338,7 @@ export interface BackupPlan {
   prune_keep_monthly?: number
   prune_keep_quarterly?: number
   prune_keep_yearly?: number
+  prune_keep_within?: string | null
   created_at?: string | null
   updated_at?: string | null
 }
@@ -423,6 +424,7 @@ export interface BackupPlanData {
   prune_keep_monthly: number
   prune_keep_quarterly: number
   prune_keep_yearly: number
+  prune_keep_within?: string | null
   repositories: BackupPlanRepositoryLink[]
   clear_legacy_source_repository_ids?: number[]
 }

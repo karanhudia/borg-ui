@@ -89,6 +89,7 @@ class ScheduledJobCreate(BaseModel):
     prune_keep_monthly: int = 6
     prune_keep_quarterly: int = 0
     prune_keep_yearly: int = 1
+    prune_keep_within: Optional[str] = None
 
 
 class ScheduledJobUpdate(BaseModel):
@@ -122,6 +123,7 @@ class ScheduledJobUpdate(BaseModel):
     prune_keep_monthly: Optional[int] = None
     prune_keep_quarterly: Optional[int] = None
     prune_keep_yearly: Optional[int] = None
+    prune_keep_within: Optional[str] = None
 
 
 class CronExpression(BaseModel):
@@ -131,6 +133,13 @@ class CronExpression(BaseModel):
     month: str = "*"
     day_of_week: str = "*"
     timezone: Optional[str] = None
+
+
+def _normalize_prune_keep_within(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
 
 
 def _calculate_next_schedule_run(
@@ -439,6 +448,7 @@ async def get_scheduled_jobs(
                     "prune_keep_monthly": job.prune_keep_monthly,
                     "prune_keep_quarterly": job.prune_keep_quarterly,
                     "prune_keep_yearly": job.prune_keep_yearly,
+                    "prune_keep_within": job.prune_keep_within,
                     "last_prune": serialize_datetime(job.last_prune),
                     "last_compact": serialize_datetime(job.last_compact),
                 }
@@ -646,6 +656,7 @@ async def create_scheduled_job(
             prune_keep_monthly=job_data.prune_keep_monthly,
             prune_keep_quarterly=job_data.prune_keep_quarterly,
             prune_keep_yearly=job_data.prune_keep_yearly,
+            prune_keep_within=_normalize_prune_keep_within(job_data.prune_keep_within),
         )
 
         logger.info(
@@ -1048,6 +1059,7 @@ async def get_scheduled_job(
                 "prune_keep_monthly": job.prune_keep_monthly,
                 "prune_keep_quarterly": job.prune_keep_quarterly,
                 "prune_keep_yearly": job.prune_keep_yearly,
+                "prune_keep_within": job.prune_keep_within,
                 "last_prune": serialize_datetime(job.last_prune),
                 "last_compact": serialize_datetime(job.last_compact),
             },
@@ -1195,6 +1207,11 @@ async def update_scheduled_job(
 
         if job_data.prune_keep_yearly is not None:
             job.prune_keep_yearly = job_data.prune_keep_yearly
+
+        if "prune_keep_within" in job_data.model_fields_set:
+            job.prune_keep_within = _normalize_prune_keep_within(
+                job_data.prune_keep_within
+            )
 
         # Update multi-repo settings
         if job_data.repository_id is not None:
@@ -1449,6 +1466,7 @@ async def duplicate_scheduled_job(
             prune_keep_monthly=original_job.prune_keep_monthly,
             prune_keep_quarterly=original_job.prune_keep_quarterly,
             prune_keep_yearly=original_job.prune_keep_yearly,
+            prune_keep_within=original_job.prune_keep_within,
         )
 
         db.add(duplicated_job)
@@ -2220,6 +2238,7 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                             keep_quarterly=scheduled_job.prune_keep_quarterly,
                             keep_yearly=scheduled_job.prune_keep_yearly,
                             dry_run=False,
+                            keep_within=scheduled_job.prune_keep_within,
                         )
 
                         # Refresh job to get updated status
@@ -2474,6 +2493,7 @@ async def execute_scheduled_backup_with_maintenance(
                     keep_quarterly=scheduled_job.prune_keep_quarterly,
                     keep_yearly=scheduled_job.prune_keep_yearly,
                     dry_run=False,
+                    keep_within=scheduled_job.prune_keep_within,
                 )
 
                 # Refresh job to get updated status

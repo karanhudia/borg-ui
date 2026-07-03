@@ -742,6 +742,8 @@
       "meta": {
         "note": "Note",
         "prune": "Prune",
+        "keepWithin": "innerhalb {{interval}}",
+        "keepWithinTooltip": "innerhalb={{interval}}",
         "lastPruned": "Last Pruned",
         "compact": "Compact",
         "lastCompact": "Last Compact",
@@ -1291,6 +1293,7 @@
         "prune": "Prune",
         "retention": "Aufbewahrung",
         "retentionValue": "H {{hourly}} / T {{daily}} / W {{weekly}} / M {{monthly}} / Q {{quarterly}} / J {{yearly}}",
+        "retentionValueWithWithin": "Innerhalb {{within}} / H {{hourly}} / T {{daily}} / W {{weekly}} / M {{monthly}} / Q {{quarterly}} / J {{yearly}}",
         "compact": "Compact",
         "check": "Check",
         "checkExtraFlags": "Check-Flags",
@@ -1504,6 +1507,9 @@
   "activity": {
     "title": "Aktivität",
     "subtitle": "Alle Vorgänge und ihre Protokolle anzeigen",
+    "actions": {
+      "refresh": "Aktivität aktualisieren"
+    },
     "filters": {
       "type": "Typ",
       "status": "Status",
@@ -1523,6 +1529,7 @@
       },
       "statuses": {
         "completed": "Abgeschlossen",
+        "completedWithWarnings": "Abgeschlossen mit Warnungen",
         "needsBackup": "Backup erforderlich",
         "failed": "Fehlgeschlagen",
         "running": "Läuft",
@@ -2463,6 +2470,10 @@
       "dryRunTip": "Tipp: Immer zuerst 'Testlauf' ausführen, um eine Vorschau der zu löschenden Elemente zu sehen!",
       "retentionPolicy": "Aufbewahrungsrichtlinie",
       "retentionDescription": "Angeben, wie viele Sicherungen für jeden Zeitraum behalten werden sollen",
+      "keepWithin": "Innerhalb behalten",
+      "keepWithinHelper": "Alle Archive behalten, die innerhalb dieses aktuellen Intervalls erstellt wurden",
+      "keepWithinPlaceholder": "1d",
+      "keepWithinSummary": "alle Archive innerhalb von {{interval}}",
       "keepHourly": "Stündlich behalten",
       "keepHourlyHelper": "Letzte N stündliche Sicherungen (0 = deaktiviert)",
       "keepDaily": "Täglich behalten",
@@ -3269,7 +3280,10 @@
     "keepQuarterly": "Vierteljährlich behalten",
     "keepQuarterlyHint": "Vierteljährliche Sicherungen zum Behalten (0 = deaktiviert)",
     "keepYearly": "Jährlich behalten",
-    "keepYearlyHint": "Jährliche Sicherungen zum Behalten"
+    "keepYearlyHint": "Jährliche Sicherungen zum Behalten",
+    "keepWithin": "Innerhalb behalten",
+    "keepWithinHint": "Alle Archive innerhalb dieses aktuellen Intervalls behalten, z. B. 1d oder 12H",
+    "keepWithinPlaceholder": "1d"
   },
   "compressionSettings": {
     "title": "Komprimierungseinstellungen",
@@ -3998,6 +4012,7 @@
         "pruneAfterBackup": "Bereinigung nach Sicherung",
         "enabled": "Aktiviert",
         "disabled": "Deaktiviert",
+        "keepWithin": "innerhalb {{interval}}",
         "compactAfterPrune": "Komprimierung nach Bereinigung",
         "none": "Keine"
       },
