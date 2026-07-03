@@ -147,9 +147,10 @@ def _dispatch_router_prune(
     keep_monthly: int,
     keep_quarterly: int,
     keep_yearly: int,
+    keep_within: str | None,
     job: PruneJob,
 ):
-    return BorgRouter(router_repo).prune(
+    args = (
         job.id,
         keep_hourly,
         keep_daily,
@@ -159,6 +160,8 @@ def _dispatch_router_prune(
         keep_yearly,
         False,
     )
+    kwargs = {"keep_within": keep_within} if keep_within is not None else {}
+    return BorgRouter(router_repo).prune(*args, **kwargs)
 
 
 AGENT_RCLONE_SYNC_CAPABILITY = "repository.rclone_sync"
@@ -708,6 +711,7 @@ def _parse_agent_json_result(result: dict[str, Any]) -> dict[str, Any]:
 
 
 def _agent_prune_operation_payload(request: dict) -> dict[str, Any]:
+    keep_within = _normalize_prune_keep_within(request.get("keep_within"))
     return {
         "keep_hourly": request.get("keep_hourly", 0),
         "keep_daily": request.get("keep_daily", 7),
@@ -715,8 +719,21 @@ def _agent_prune_operation_payload(request: dict) -> dict[str, Any]:
         "keep_monthly": request.get("keep_monthly", 6),
         "keep_quarterly": request.get("keep_quarterly", 0),
         "keep_yearly": request.get("keep_yearly", 1),
+        "keep_within": keep_within,
         "dry_run": request.get("dry_run", False),
     }
+
+
+def _normalize_prune_keep_within(value: Any) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise HTTPException(
+            status_code=422,
+            detail={"key": "backend.errors.repo.invalidPruneKeepWithin"},
+        )
+    value = value.strip()
+    return value or None
 
 
 # Helper function to get operation timeouts from DB settings (with fallback to config)
@@ -5292,6 +5309,7 @@ async def prune_repository(
         keep_monthly = request.get("keep_monthly", 6)
         keep_quarterly = request.get("keep_quarterly", 0)
         keep_yearly = request.get("keep_yearly", 1)
+        keep_within = _normalize_prune_keep_within(request.get("keep_within"))
         dry_run = request.get("dry_run", False)
 
         if is_agent_executor(repository):
@@ -5366,6 +5384,7 @@ async def prune_repository(
                     keep_monthly,
                     keep_quarterly,
                     keep_yearly,
+                    keep_within,
                 ),
                 extra_fields={"scheduled_prune": False},
             )
@@ -5401,6 +5420,7 @@ async def prune_repository(
         )
 
         # Wait for prune to complete and get logs
+        prune_kwargs = {"keep_within": keep_within} if keep_within is not None else {}
         await BorgRouter(repository).prune(
             prune_job.id,
             keep_hourly,
@@ -5410,6 +5430,7 @@ async def prune_repository(
             keep_quarterly,
             keep_yearly,
             dry_run,
+            **prune_kwargs,
         )
 
         # Refresh job to get updated status and logs

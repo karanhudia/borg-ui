@@ -177,6 +177,41 @@ async def test_prune_delegates_to_v2_service():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_prune_delegates_keep_within_to_v2_service():
+    repo = SimpleNamespace(borg_version=2, id=41)
+
+    with patch(
+        "app.services.v2.prune_service.prune_v2_service.execute_prune",
+        new=AsyncMock(),
+    ) as mock_prune:
+        await BorgRouter(repo).prune(
+            job_id=7,
+            keep_hourly=1,
+            keep_daily=2,
+            keep_weekly=3,
+            keep_monthly=4,
+            keep_quarterly=5,
+            keep_yearly=6,
+            dry_run=True,
+            keep_within="1d",
+        )
+
+    mock_prune.assert_awaited_once_with(
+        job_id=7,
+        repository_id=41,
+        keep_hourly=1,
+        keep_daily=2,
+        keep_weekly=3,
+        keep_monthly=4,
+        keep_quarterly=5,
+        keep_yearly=6,
+        dry_run=True,
+        keep_within="1d",
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_prune_delegates_to_v1_service():
     repo = SimpleNamespace(borg_version=1, id=19)
 

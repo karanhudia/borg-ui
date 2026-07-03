@@ -35,6 +35,8 @@ const translations: Record<string, string> = {
   'backupPlans.wizard.review.repositories': 'Repositories',
   'backupPlans.wizard.review.repositoryScripts': 'Repository scripts',
   'backupPlans.wizard.review.retentionValue': 'daily {{daily}}, weekly {{weekly}}',
+  'backupPlans.wizard.review.retentionValueWithWithin':
+    'daily {{daily}}, weekly {{weekly}}, within {{within}}',
   'backupPlans.wizard.review.runMode': 'Run mode',
   'backupPlans.wizard.review.sourceLocation': 'Source location',
   'backupPlans.wizard.review.sources': 'Sources',
@@ -54,6 +56,7 @@ const t = (key: string, options?: Record<string, unknown>) => {
     .replace('{{count}}', String(options?.count ?? ''))
     .replace('{{daily}}', String(options?.daily ?? ''))
     .replace('{{weekly}}', String(options?.weekly ?? ''))
+    .replace('{{within}}', String(options?.within ?? ''))
     .replace('{{seconds}}', String(options?.seconds ?? ''))
     .replace('{{limit}}', String(options?.limit ?? ''))
 }
@@ -174,5 +177,33 @@ describe('ReviewStep', () => {
     expect(screen.getByText('postgres:17')).toBeInTheDocument()
     expect(screen.getByText('Export staging path')).toBeInTheDocument()
     expect(screen.getByText('/var/tmp/borg-ui/container-exports/postgres')).toBeInTheDocument()
+  })
+
+  it('shows keep-within retention in the prune review', () => {
+    renderReview({
+      ...createInitialState(),
+      name: 'Frequent backup',
+      sourceDirectories: ['/data'],
+      repositoryIds: [10],
+      runPruneAfter: true,
+      pruneKeepWithin: '1d',
+    })
+
+    expect(screen.getByText('Prune')).toBeInTheDocument()
+    expect(screen.getByText(/within 1d/)).toBeInTheDocument()
+  })
+
+  it('omits keep-within retention when the interval is whitespace', () => {
+    renderReview({
+      ...createInitialState(),
+      name: 'Frequent backup',
+      sourceDirectories: ['/data'],
+      repositoryIds: [10],
+      runPruneAfter: true,
+      pruneKeepWithin: '   ',
+    })
+
+    expect(screen.getByText('Prune')).toBeInTheDocument()
+    expect(screen.queryByText(/within/i)).not.toBeInTheDocument()
   })
 })

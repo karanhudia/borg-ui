@@ -398,6 +398,28 @@ class TestBackupPlanRoutes:
             == created["upload_ratelimit_schedule_policies"]
         )
 
+    def test_create_plan_persists_prune_keep_within(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+
+        create_response = test_client.post(
+            "/api/backup-plans/",
+            json=_payload(
+                [repo.id],
+                run_prune_after=True,
+                prune_keep_within="1d",
+            ),
+            headers=admin_headers,
+        )
+
+        assert create_response.status_code == 201
+        created = create_response.json()
+        assert created["prune_keep_within"] == "1d"
+
+        plan = test_db.query(BackupPlan).filter_by(id=created["id"]).one()
+        assert plan.prune_keep_within == "1d"
+
     def test_update_plan_replaces_upload_ratelimit_schedule_policies(
         self, test_client: TestClient, admin_headers, test_db
     ):
@@ -4344,6 +4366,7 @@ class TestBackupPlanRoutes:
             run_check_after=True,
             check_extra_flags="--verify-data",
             run_prune_after=True,
+            prune_keep_within="1d",
             run_compact_after=True,
         )
 
@@ -4370,6 +4393,7 @@ class TestBackupPlanRoutes:
 
             async def prune(self, job_id, **kwargs):
                 maintenance_calls.append("prune")
+                assert kwargs["keep_within"] == "1d"
                 job = test_db.query(PruneJob).filter_by(id=job_id).one()
                 assert job.repository_id == repo.id
                 job.status = "completed"

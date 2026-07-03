@@ -530,6 +530,7 @@ class Borg2Interface:
         dry_run: bool = False,
         passphrase: Optional[str] = None,
         remote_path: Optional[str] = None,
+        keep_within: Optional[str] = None,
     ) -> Dict:
         """Prune old archives.
 
@@ -551,6 +552,8 @@ class Borg2Interface:
             cmd.extend(["--keep-3monthly", str(keep_quarterly)])
         if keep_yearly > 0:
             cmd.extend(["--keep-yearly", str(keep_yearly)])
+        if keep_within and keep_within.strip():
+            cmd.append(f"--keep-within={keep_within.strip()}")
         cmd.append("--list")
         if dry_run:
             cmd.append("--dry-run")

@@ -39,6 +39,14 @@ def _safe_export_name(name: str, fallback: str) -> str:
     return safe_name or fallback
 
 
+def _normalize_import_keep_within(value: Any) -> tuple[str | None, str | None]:
+    if value is None:
+        return None, None
+    if not isinstance(value, str):
+        return None, f"Ignored invalid keep_within value for schedule: {value!r}"
+    return value.strip() or None, None
+
+
 def _unique_yaml_filename(base_name: str, used_names: set[str]) -> str:
     filename = f"{base_name}.yaml"
     if filename not in used_names:
@@ -289,6 +297,8 @@ class BorgmaticExportService:
             retention["keep_monthly"] = scheduled_job.prune_keep_monthly
         if scheduled_job.prune_keep_yearly is not None:
             retention["keep_yearly"] = scheduled_job.prune_keep_yearly
+        if scheduled_job.prune_keep_within:
+            retention["keep_within"] = scheduled_job.prune_keep_within
 
         return retention
 
@@ -615,6 +625,7 @@ class BorgmaticImportService:
                         "keep_monthly",
                         "keep_quarterly",
                         "keep_yearly",
+                        "keep_within",
                     ]:
                         if key in data:
                             retention[key] = data[key]
@@ -906,6 +917,12 @@ class BorgmaticImportService:
         scheduled_job.prune_keep_weekly = retention.get("keep_weekly", 4)
         scheduled_job.prune_keep_monthly = retention.get("keep_monthly", 6)
         scheduled_job.prune_keep_yearly = retention.get("keep_yearly", 1)
+        keep_within, keep_within_warning = _normalize_import_keep_within(
+            retention.get("keep_within")
+        )
+        scheduled_job.prune_keep_within = keep_within
+        if keep_within_warning:
+            result["warnings"].append(keep_within_warning)
         try:
             scheduled_job.next_run = calculate_next_cron_run(
                 scheduled_job.cron_expression,

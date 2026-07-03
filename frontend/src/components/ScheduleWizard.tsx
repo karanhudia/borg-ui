@@ -39,6 +39,7 @@ export interface ScheduledJob {
   prune_keep_monthly: number
   prune_keep_quarterly: number
   prune_keep_yearly: number
+  prune_keep_within?: string | null
 }
 
 export interface Script {
@@ -78,6 +79,7 @@ export interface ScheduleData {
   prune_keep_monthly: number
   prune_keep_quarterly: number
   prune_keep_yearly: number
+  prune_keep_within: string | null
   [key: string]: unknown
 }
 
@@ -108,6 +110,7 @@ interface WizardState {
   pruneKeepMonthly: number
   pruneKeepQuarterly: number
   pruneKeepYearly: number
+  pruneKeepWithin: string
 }
 
 const createInitialState = (): WizardState => ({
@@ -130,6 +133,7 @@ const createInitialState = (): WizardState => ({
   pruneKeepMonthly: 6,
   pruneKeepQuarterly: 0,
   pruneKeepYearly: 1,
+  pruneKeepWithin: '',
 })
 
 const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
@@ -200,6 +204,7 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
       pruneKeepMonthly: scheduledJob.prune_keep_monthly ?? 6,
       pruneKeepQuarterly: scheduledJob.prune_keep_quarterly ?? 0,
       pruneKeepYearly: scheduledJob.prune_keep_yearly ?? 1,
+      pruneKeepWithin: scheduledJob.prune_keep_within || '',
     })
   }, [scheduledJob, repositories])
 
@@ -285,6 +290,7 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
       prune_keep_monthly: wizardState.pruneKeepMonthly,
       prune_keep_quarterly: wizardState.pruneKeepQuarterly,
       prune_keep_yearly: wizardState.pruneKeepYearly,
+      prune_keep_within: wizardState.pruneKeepWithin.trim() || null,
     }
 
     track(EventCategory.BACKUP, mode === 'create' ? EventAction.CREATE : EventAction.EDIT, {
@@ -357,6 +363,7 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
               pruneKeepMonthly: wizardState.pruneKeepMonthly,
               pruneKeepQuarterly: wizardState.pruneKeepQuarterly,
               pruneKeepYearly: wizardState.pruneKeepYearly,
+              pruneKeepWithin: wizardState.pruneKeepWithin,
             }}
             onChange={handleStateChange}
           />
