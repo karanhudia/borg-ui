@@ -158,7 +158,7 @@
     "loading": "Caricamento in corso...",
     "welcome": "Benvenuto,",
     "logout": "Esci",
-    "yourPlan": "Your Plan"
+    "yourPlan": "Il tuo piano"
   },
   "remoteClients": {
     "title": "Client remoti",
@@ -396,8 +396,8 @@
       "dimensionLabels": {
         "backup": "BACKUP",
         "check": "CHECK",
-        "compact": "COMPACT",
-        "restore": "RESTORE",
+        "compact": "COMPATTA",
+        "restore": "RIPRISTINA",
         "freshness": "RECENTE",
         "archives": "ARCHIVI"
       },
@@ -488,19 +488,19 @@
       "legendFailed": "falliti",
       "jobType": {
         "backup": "backup",
-        "check": "check",
-        "compact": "compact",
-        "restore_check": "restore check",
-        "restore": "restore",
-        "prune": "prune"
+        "check": "controllo",
+        "compact": "compattazione",
+        "restore_check": "verifica ripristino",
+        "restore": "ripristino",
+        "prune": "pulizia archivi (prune)"
       }
     },
     "banner": {
       "systemStatus": "Stato del sistema",
-      "allNominal": "Tutti i sistemi nominali",
+      "allNominal": "Tutti i sistemi funzionano correttamente",
       "warnings": "{{count}} avviso{{s}}",
       "critical": "{{count}} critico{{s}}",
-      "warnChip": "{{count}} avv.",
+      "warnChip": "{{count}} avviso",
       "okChip": "{{count}} ok",
       "stats": {
         "lastBackup": "Ultimo backup",
@@ -734,47 +734,47 @@
     },
     "card": {
       "stats": {
-        "schedule": "Schedule",
+        "schedule": "Pianificazione",
         "repository": "Repository",
-        "lastRun": "Last Run",
-        "nextRun": "Next Run"
+        "lastRun": "Ultima esecuzione",
+        "nextRun": "Prossima esecuzione"
       },
       "meta": {
-        "note": "Note",
-        "prune": "Prune",
+        "note": "Nota",
+        "prune": "Pulisci",
         "keepWithin": "entro {{interval}}",
         "keepWithinTooltip": "entro={{interval}}",
-        "lastPruned": "Last Pruned",
-        "compact": "Compact",
-        "lastCompact": "Last Compact",
-        "afterBackup": "After backup"
+        "lastPruned": "Ultima pulizia",
+        "compact": "Compatta",
+        "lastCompact": "Ultima compattazione",
+        "afterBackup": "Dopo il backup"
       },
       "actions": {
-        "duplicate": "Duplicate",
-        "runNow": "Run Now"
+        "duplicate": "Duplica",
+        "runNow": "Esegui ora"
       },
       "badge": {
-        "clickToDisable": "Click to disable",
-        "clickToEnable": "Click to enable",
-        "enabled": "Enabled",
-        "disabled": "Disabled"
+        "clickToDisable": "Clicca per disabilitare",
+        "clickToEnable": "Clicca per abilitare",
+        "enabled": "Abilitato",
+        "disabled": "Disabilitato"
       }
     },
     "checkCard": {
       "stats": {
-        "lastCheck": "Last Check",
-        "nextCheck": "Next Check",
-        "notSet": "Not set",
-        "maxDuration": "Max Duration",
-        "unlimited": "Unlimited"
+        "lastCheck": "Ultimo controllo",
+        "nextCheck": "Prossimo controllo",
+        "notSet": "Non impostato",
+        "maxDuration": "Durata massima",
+        "unlimited": "Illimitato"
       },
       "meta": {
         "extraFlags": "Flag di check"
       },
       "actions": {
-        "editSchedule": "Edit schedule",
-        "removeSchedule": "Remove schedule",
-        "runCheck": "Run Check"
+        "editSchedule": "Modifica pianificazione",
+        "removeSchedule": "Rimuovi pianificazione",
+        "runCheck": "Esegui controllo"
       },
       "badge": {
         "healthCheck": "Health Check"
@@ -931,87 +931,87 @@
       "repositoryCreateFailed": "Impossibile creare il repository",
       "multiRepositoryRequiresPro": "Più repository in un piano di backup richiedono Pro",
       "selectSourceConnection": "Seleziona un client remoto prima di sfogliare i percorsi sorgente",
-      "scriptCreateFailed": "Failed to create generated script"
+      "scriptCreateFailed": "Creazione dello script generato fallita"
     },
     "sourceChooser": {
-      "summaryTitle": "Backup source",
-      "summaryEmpty": "No source selected yet",
-      "chooseSource": "Choose source",
-      "title": "Choose backup source",
-      "kindFiles": "Files",
+      "summaryTitle": "Sorgente di backup",
+      "summaryEmpty": "Nessuna sorgente selezionata",
+      "chooseSource": "Scegli sorgente",
+      "title": "Scegli sorgente di backup",
+      "kindFiles": "File",
       "kindDatabase": "Database",
       "kindContainer": "Container",
-      "kindContainerSoonBadge": "Soon",
-      "advancedCaptureMode": "Advanced capture mode",
-      "captureModeDirect": "Direct (no snapshot)",
-      "databaseTitle": "Database scan",
-      "filesTitle": "Files and folders",
-      "mixedSources": "Multiple sources",
-      "localSource": "Borg UI server",
-      "borgUiServer": "Borg UI server",
-      "localSourceDescription": "This Borg UI server",
-      "sshSource": "SSH source",
-      "sshSourceDescription": "Remote machine",
-      "managedAgent": "Managed agent",
-      "managedAgentDescription": "Read paths from an enrolled managed agent",
-      "managedAgentRequiresPro": "Le sorgenti managed-agent richiedono Pro.",
+      "kindContainerSoonBadge": "Prossimamente",
+      "advancedCaptureMode": "Modalità di acquisizione avanzata",
+      "captureModeDirect": "Diretta (senza snapshot)",
+      "databaseTitle": "Scansione database",
+      "filesTitle": "File e cartelle",
+      "mixedSources": "Sorgenti multiple",
+      "localSource": "Server Borg UI",
+      "borgUiServer": "Server Borg UI",
+      "localSourceDescription": "Questo server Borg UI",
+      "sshSource": "Sorgente SSH",
+      "sshSourceDescription": "Macchina remota",
+      "managedAgent": "Agente gestito",
+      "managedAgentDescription": "Leggi i percorsi da un agente gestito registrato",
+      "managedAgentRequiresPro": "Le sorgenti con agente gestito richiedono Pro.",
       "mixedSourceTypesRequiresPro": "I tipi di sorgente misti richiedono Pro. Restano disponibili più percorsi dello stesso tipo di sorgente.",
-      "agentRepoConstraintBanner": "This repository runs on {{agent}}. Backup sources must come from the same agent.",
-      "agentRepoLockedLocal": "Borg UI server sources can't be pushed into an agent repository.",
-      "agentRepoLockedRemote": "Remote sources aren't allowed for agent repositories.",
-      "agentRepoLockedAgentPicker": "Locked to {{agent}}",
-      "selectManagedAgent": "Select a managed agent",
-      "noManagedAgents": "No managed agents available",
-      "agentFallback": "Agent #{{id}}",
-      "sourcePath": "Source path",
-      "addPath": "Add path",
-      "browseCurrentSource": "Browse current source",
-      "selectedSourceGroups": "Selected source groups",
-      "removePath": "Remove path",
-      "removeSourceGroup": "Remove source group",
-      "backToTypes": "Back to source types",
-      "applyPaths": "Use these paths",
+      "agentRepoConstraintBanner": "Questo repository risiede su {{agent}}. Le sorgenti di backup devono provenire dallo stesso agente.",
+      "agentRepoLockedLocal": "Le sorgenti del server Borg UI non possono essere inserite in un repository agente.",
+      "agentRepoLockedRemote": "Le sorgenti remote non sono consentite per i repository agente.",
+      "agentRepoLockedAgentPicker": "Bloccato su {{agent}}",
+      "selectManagedAgent": "Seleziona un agente gestito",
+      "noManagedAgents": "Nessun agente gestito disponibile",
+      "agentFallback": "Agente #{{id}}",
+      "sourcePath": "Percorso sorgente",
+      "addPath": "Aggiungi percorso",
+      "browseCurrentSource": "Sfoglia la sorgente corrente",
+      "selectedSourceGroups": "Gruppi di sorgenti selezionati",
+      "removePath": "Rimuovi percorso",
+      "removeSourceGroup": "Rimuovi gruppo di sorgenti",
+      "backToTypes": "Torna ai tipi di sorgente",
+      "applyPaths": "Usa questi percorsi",
       "applyContainers": "Usa questi container",
-      "selectPaths": "Select paths",
-      "currentPath": "Current path",
-      "agentBrowseTitle": "Browse {{agent}}",
-      "agentBrowseFailed": "Could not browse this agent",
-      "openPath": "Open",
-      "parentDirectory": "Parent directory",
-      "selected": "Selected",
-      "select": "Select",
-      "emptyDirectory": "No visible files in this directory",
-      "loading": "Scanning sources...",
-      "discoveryError": "Source scan failed. You can still use the database templates.",
-      "noDatabaseTemplates": "No database templates available",
-      "databaseTemplates": "Templates",
-      "detectedDatabases": "Detected databases",
-      "detectedBadge": "Detected",
-      "scriptDrafts": "Script drafts",
-      "preScriptDraft": "Pre-backup script draft",
-      "postScriptDraft": "Post-backup script draft",
-      "createScripts": "Create new scripts",
-      "reuseScripts": "Use existing scripts",
-      "skipScripts": "Skip script assignment",
-      "preScriptName": "Pre-backup script name",
-      "postScriptName": "Post-backup script name",
-      "preExistingScript": "Existing pre-backup script",
-      "postExistingScript": "Existing post-backup script",
-      "applyDatabase": "Add database",
-      "selectedDatabases": "Selected databases",
+      "selectPaths": "Seleziona percorsi",
+      "currentPath": "Percorso corrente",
+      "agentBrowseTitle": "Sfoglia {{agent}}",
+      "agentBrowseFailed": "Impossibile sfogliare questo agente",
+      "openPath": "Apri",
+      "parentDirectory": "Cartella padre",
+      "selected": "Selezionato",
+      "select": "Seleziona",
+      "emptyDirectory": "Nessun file visibile in questa cartella",
+      "loading": "Scansione sorgenti in corso...",
+      "discoveryError": "Scansione sorgente fallita. Puoi comunque usare i template dei database.",
+      "noDatabaseTemplates": "Nessun template database disponibile",
+      "databaseTemplates": "Template",
+      "detectedDatabases": "Database rilevati",
+      "detectedBadge": "Rilevato",
+      "scriptDrafts": "Bozze script",
+      "preScriptDraft": "Bozza script pre-backup",
+      "postScriptDraft": "Bozza script post-backup",
+      "createScripts": "Crea nuovi script",
+      "reuseScripts": "Usa script esistenti",
+      "skipScripts": "Salta assegnazione script",
+      "preScriptName": "Nome script pre-backup",
+      "postScriptName": "Nome script post-backup",
+      "preExistingScript": "Script pre-backup esistente",
+      "postExistingScript": "Script post-backup esistente",
+      "applyDatabase": "Aggiungi database",
+      "selectedDatabases": "Database selezionati",
       "databaseScriptsAssigned": "Script sorgente assegnati",
       "databaseScriptsSkipped": "Nessuno script sorgente",
-      "showTemplates": "Show templates",
-      "hideTemplates": "Hide templates",
-      "captureModeDatabase": "Database capture mode",
-      "captureModeDump": "Dump to staging path",
-      "captureModeOriginal": "Back up original path",
-      "captureModeOriginalWarning": "Borg will read the live database files directly. Use this only when the database is stopped or you have another consistency mechanism.",
-      "captureModeOriginalUnavailable": "Original path mode requires a detected filesystem path.",
-      "databaseSourceMachine": "Source machine",
-      "databaseLivePath": "Live database path",
-      "databaseDumpPath": "Dump path",
-      "databaseBackupPaths": "Final Borg paths",
+      "showTemplates": "Mostra template",
+      "hideTemplates": "Nascondi template",
+      "captureModeDatabase": "Modalità di acquisizione database",
+      "captureModeDump": "Esegui dump nel percorso di staging",
+      "captureModeOriginal": "Esegui backup del percorso originale",
+      "captureModeOriginalWarning": "Borg leggerà direttamente i file del database live. Usa questa modalità solo quando il database è fermo o disponi di un altro meccanismo di consistenza.",
+      "captureModeOriginalUnavailable": "La modalità percorso originale richiede un percorso filesystem rilevato.",
+      "databaseSourceMachine": "Macchina sorgente",
+      "databaseLivePath": "Percorso database live",
+      "databaseDumpPath": "Percorso dump",
+      "databaseBackupPaths": "Percorsi Borg finali",
       "containerTitle": "Container Docker",
       "containerBackupTitle": "Aggiungi backup di container Docker",
       "containerName": "Nome o ID del container",
@@ -1025,10 +1025,10 @@
       "containerBackupPath": "Percorso di staging dell'esportazione",
       "containerModeExport": "docker export",
       "scanContainers": "Scansiona container",
-      "rescanContainers": "Scansiona di nuovo i container",
+      "rescanContainers": "Riscansiona container",
       "scanContainersHint": "Scansiona l'host Docker selezionato.",
       "detectedContainers": "Container rilevati",
-      "containerBackupCoverageTitle": "Cosa esegue il backup questa sorgente",
+      "containerBackupCoverageTitle": "Cosa viene incluso nel backup da questa sorgente",
       "containerFilesystemIncluded": "Incluso: esportazione del filesystem del container in {{path}}",
       "containerMountsNotIncluded": "Non incluso: dati montati",
       "containerMountsNotIncludedHelp": "Aggiungi questi percorsi di mount come sorgenti File se contengono dati necessari.",
@@ -1048,24 +1048,24 @@
       "containerAdded": "Aggiunto",
       "noContainersFoundTitle": "Nessun container trovato",
       "noContainersFoundBody": "Verifica l'accesso a Docker su questo host o inserisci un container manualmente.",
-      "containerScanUnsupportedForAgents": "La scansione dei container Docker è disponibile per il server Borg UI e le sorgenti SSH. Inserisci manualmente i container degli agent gestiti.",
+      "containerScanUnsupportedForAgents": "La scansione dei container Docker è disponibile per il server Borg UI e le sorgenti SSH. Inserisci manualmente i container degli agenti gestiti.",
       "containerScanFailedBody": "La scansione dei container Docker non ha restituito dati. Verifica l'accesso a Docker su questo host e riprova.",
       "addContainer": "Aggiungi container",
       "selectedContainers": "Container selezionati",
       "containerScriptsAssigned": "Script di esportazione assegnati",
-      "sourcePaths": "Source paths",
-      "notesLabel": "Notes",
-      "pathCount_one": "{{count}} path",
-      "pathCount_other": "{{count}} paths",
-      "showMorePaths_one": "Show {{count}} more path",
-      "showMorePaths_other": "Show {{count}} more paths",
-      "showLessPaths": "Show less",
-      "remoteMachine": "Remote machine",
-      "remoteMachineDescription": "Pull from an SSH connection",
-      "selectRemoteMachine": "Select a remote machine",
-      "noRemoteMachines": "No SSH connections available",
-      "where": "Where are the files?",
-      "readingFromLocal": "Reading directly from this server",
+      "sourcePaths": "Percorsi sorgente",
+      "notesLabel": "Note",
+      "pathCount_one": "{{count}} percorso",
+      "pathCount_other": "{{count}} percorsi",
+      "showMorePaths_one": "Mostra {{count}} altro percorso",
+      "showMorePaths_other": "Mostra {{count}} altri percorsi",
+      "showLessPaths": "Mostra meno",
+      "remoteMachine": "Macchina remota",
+      "remoteMachineDescription": "Estrai da una connessione SSH",
+      "selectRemoteMachine": "Seleziona una macchina remota",
+      "noRemoteMachines": "Nessuna connessione SSH disponibile",
+      "where": "Dove si trovano i file?",
+      "readingFromLocal": "Lettura diretta da questo server",
       "snapshotMode": "Modalità snapshot",
       "snapshotModeNone": "Nessuno snapshot del filesystem",
       "snapshotModeBtrfs": "snapshot btrfs",
@@ -1079,16 +1079,16 @@
       "snapshotToolAvailable": "{{command}} disponibile",
       "snapshotToolMissing": "{{command}} non trovato",
       "snapshotChip": "snapshot {{provider}}",
-      "backToFiles": "Back to files and folders",
-      "back": "Back",
-      "change": "Change",
-      "edit": "Edit",
+      "backToFiles": "Torna a file e cartelle",
+      "back": "Indietro",
+      "change": "Cambia",
+      "edit": "Modifica",
       "inPrefix": "in",
-      "scanTarget": "Scan where?",
-      "pathsToScan": "Paths to scan",
-      "noScanPaths": "Add at least one path to scan.",
-      "scanning": "Scanning…",
-      "rescan": "Re-scan",
+      "scanTarget": "Scansiona dove?",
+      "pathsToScan": "Percorsi da scansionare",
+      "noScanPaths": "Aggiungi almeno un percorso da scansionare.",
+      "scanning": "Scansione in corso…",
+      "rescan": "Riscansiona",
       "discoveredAt": "Rilevato in",
       "discoveredAtHint": "Directory dei dati live. Lo script pre-backup punta a questa istanza; Borg non legge questi file direttamente.",
       "borgWillBackUp": "Borg eseguirà il backup di",
@@ -1108,32 +1108,32 @@
       "scanTimeoutHelp": "Limite massimo per la durata della scansione.",
       "scanIgnorePatterns": "Modelli da ignorare (uno per riga)",
       "scanIgnorePatternsHelp": "Nomi di directory da saltare durante la scansione. Sono ammessi i caratteri jolly (*).",
-      "scanFailedTitle": "Couldn't scan {{target}}",
-      "scanFailedBody": "Check the connection or try again.",
-      "scanEndpointMissing": "Database scanning isn't available on this server yet. Open templates to configure manually.",
-      "nothingFoundTitle": "No databases found on {{target}}",
-      "nothingFoundBody": "Add another path above, or open templates to set one up manually.",
-      "checkedPaths": "Checked:",
-      "detectedSection": "Detected",
-      "orPickTemplate": "Or pick a template",
-      "pickTemplateManually": "Pick a template to configure manually",
-      "databaseBackupTitle": "Add database backup",
-      "scanForDatabases": "Scan for databases",
-      "scanForDatabasesHint": "Find databases running on the source machine.",
-      "scanForDatabasesTitle": "Scan for databases",
-      "scanForDatabasesSubtitle": "Pick a detected database, or close this dialog and choose a template manually.",
-      "closeScanDialog": "Close",
-      "noQueuedDatabases": "No databases selected yet."
+      "scanFailedTitle": "Impossibile scansionare {{target}}",
+      "scanFailedBody": "Verifica la connessione o riprova.",
+      "scanEndpointMissing": "La scansione dei database non è ancora disponibile su questo server. Apri i template per configurare manualmente.",
+      "nothingFoundTitle": "Nessun database trovato su {{target}}",
+      "nothingFoundBody": "Aggiungi un altro percorso qui sopra, o apri i template per configurarne uno manualmente.",
+      "checkedPaths": "Controllati:",
+      "detectedSection": "Rilevati",
+      "orPickTemplate": "Oppure scegli un template",
+      "pickTemplateManually": "Scegli un template da configurare manualmente",
+      "databaseBackupTitle": "Aggiungi backup database",
+      "scanForDatabases": "Scansiona per database",
+      "scanForDatabasesHint": "Trova i database in esecuzione sulla macchina sorgente.",
+      "scanForDatabasesTitle": "Scansiona per database",
+      "scanForDatabasesSubtitle": "Scegli un database rilevato, oppure chiudi questa finestra e scegli un template manualmente.",
+      "closeScanDialog": "Chiudi",
+      "noQueuedDatabases": "Nessun database selezionato."
     },
     "routePreview": {
-      "runsOnServer": "Runs on Borg UI server",
-      "runsOnSshHost": "Runs on SSH host",
-      "runsOnManagedAgent": "Runs on managed agent",
-      "sourceMustMatchAgent": "This repository is controlled by {{agent}}, so sources must also be on {{agent}}.",
-      "agentRepoSshUnsupported": "Agent-owned repositories cannot use SSH repository targets.",
-      "serverToAgentRepo": "Borg UI cannot push server-local paths into an agent-owned repository.",
-      "agentSourceToServerRepo": "Agent sources cannot be backed up into a server-owned repository.",
-      "mixedAgentSources": "Managed-agent sources cannot be mixed with Borg UI server or SSH sources."
+      "runsOnServer": "Esegue sul server Borg UI",
+      "runsOnSshHost": "Esegue sull'host SSH",
+      "runsOnManagedAgent": "Esegue sull'agente gestito",
+      "sourceMustMatchAgent": "Questo repository è controllato da {{agent}}, quindi anche le sorgenti devono risiedere su {{agent}}.",
+      "agentRepoSshUnsupported": "I repository di proprietà di un agente non possono utilizzare destinazioni repository SSH.",
+      "serverToAgentRepo": "Borg UI non può inviare percorsi locali del server in un repository di proprietà di un agente.",
+      "agentSourceToServerRepo": "Le sorgenti degli agenti gestiti non possono essere sottoposte a backup in un repository di proprietà del server.",
+      "mixedAgentSources": "Le sorgenti degli agenti gestiti non possono essere mescolate con sorgenti del server Borg UI o SSH."
     },
     "wizard": {
       "createTitle": "Crea piano di backup",
@@ -1290,12 +1290,12 @@
         "repositoryScripts": "Script repository",
         "runMode": "Modalità esecuzione",
         "schedule": "Pianificazione",
-        "prune": "Prune",
+        "prune": "Pulisci",
         "retention": "Conservazione",
         "retentionValue": "H {{hourly}} / G {{daily}} / S {{weekly}} / M {{monthly}} / T {{quarterly}} / A {{yearly}}",
         "retentionValueWithWithin": "Entro {{within}} / H {{hourly}} / G {{daily}} / S {{weekly}} / M {{monthly}} / T {{quarterly}} / A {{yearly}}",
-        "compact": "Compact",
-        "check": "Check",
+        "compact": "Compatta",
+        "check": "Controllo",
         "checkExtraFlags": "Flag di check",
         "checkDuration": "{{seconds}} secondi",
         "pathCount_one": "{{count}} percorso",
@@ -1335,7 +1335,7 @@
       "viewLogs": "Visualizza log",
       "transport": {
         "server": "Server",
-        "remoteSsh": "Remote SSH",
+        "remoteSsh": "SSH remoto",
         "agent": "Agente"
       }
     },
@@ -1481,15 +1481,15 @@
       "pruneStarted": "Job di pulizia avviato",
       "pruned": "Repository pulito con successo!",
       "pruneFailed": "Impossibile pulire il repository",
-      "wipePreviewGenerated": "Wipe preview generated",
-      "wipePreviewFailed": "Failed to generate wipe preview",
-      "wipeStarted": "Repository contents wipe started",
-      "wipeSuccess": "Repository contents wiped. Repository configuration is still available.",
-      "wipeCompactFailed": "Archives were deleted, but compact failed. Run compact later to reclaim space.",
-      "wipeCompactSkipped": "Archives were deleted, but compact was skipped. Run compact later to reclaim space.",
-      "wipeFailed": "Repository contents wipe failed",
-      "wipeCancelled": "Repository wipe cancelled",
-      "wipeCancelFailed": "Failed to cancel repository wipe",
+      "wipePreviewGenerated": "Anteprima della cancellazione generata",
+      "wipePreviewFailed": "Generazione dell'anteprima della cancellazione fallita",
+      "wipeStarted": "Cancellazione del contenuto del repository avviata",
+      "wipeSuccess": "Contenuto del repository cancellato. La configurazione del repository è ancora disponibile.",
+      "wipeCompactFailed": "Gli archivi sono stati eliminati, ma la compattazione è fallita. Esegui la compattazione in seguito per recuperare spazio.",
+      "wipeCompactSkipped": "Gli archivi sono stati eliminati, ma la compattazione è stata saltata. Esegui la compattazione in seguito per recuperare spazio.",
+      "wipeFailed": "Cancellazione del contenuto del repository fallita",
+      "wipeCancelled": "Cancellazione del repository annullata",
+      "wipeCancelFailed": "Annullamento della cancellazione del repository fallito",
       "updated": "Repository aggiornato con successo",
       "created": "Repository creato con successo",
       "backupPlanCreated": "Piano di backup creato",
@@ -1591,27 +1591,27 @@
     },
     "users": {
       "title": "Gestione Utenti",
-      "subtitle": "Manage account records and repository-level access from one admin surface.",
+      "subtitle": "Gestisci i record degli account e i permessi a livello di repository da un'unica console di amministrazione.",
       "addUser": "Aggiungi Utente",
       "stats": {
-        "total": "Total",
-        "active": "Active",
+        "total": "Totale",
+        "active": "Attivi",
         "pendingSso": "SSO in attesa",
-        "admins": "Admins",
-        "operators": "Operators",
-        "viewers": "Viewers"
+        "admins": "Amministratori",
+        "operators": "Operatori",
+        "viewers": "Visualizzatori"
       },
       "statLabels": {
-        "joined": "Joined",
-        "lastLogin": "Last login",
-        "status": "Status"
+        "joined": "Registrato",
+        "lastLogin": "Ultimo accesso",
+        "status": "Stato"
       },
       "actions": {
         "approveSsoUser": "Approva utente SSO",
         "edit": "Modifica Utente",
         "resetPassword": "Reimposta Password",
         "delete": "Elimina Utente",
-        "manageAccess": "Manage Access"
+        "manageAccess": "Gestisci accesso"
       },
       "badges": {
         "sso": "SSO",
@@ -1626,29 +1626,29 @@
         "action": "Controlla utenti in attesa"
       },
       "repositoryAccess": {
-        "title": "Repository Access",
-        "globalAccess": "Global access",
-        "globalAccessDesc": "Admin accounts inherit full access to all repositories. No per-repository grants needed."
+        "title": "Accesso ai repository",
+        "globalAccess": "Accesso globale",
+        "globalAccessDesc": "Gli account amministratore ereditano l'accesso completo a tutti i repository. Non sono necessarie autorizzazioni per singolo repository."
       },
       "accessSummary": {
-        "adminRole": "Admin role grants full access to all repositories.",
-        "defaultAccess": "Default access is all repositories as {{role}}. Switch to selected repositories only if you want to limit them.",
-        "restricted": "This user is currently restricted to selected repositories only."
+        "adminRole": "Il ruolo di amministratore concede l'accesso completo a tutti i repository.",
+        "defaultAccess": "L'accesso predefinito è a tutti i repository come {{role}}. Passa a \"solo repository selezionati\" solo se desideri limitarli.",
+        "restricted": "Questo utente è attualmente limitato ai soli repository selezionati."
       },
       "table": {
         "user": "Utente",
         "status": "Stato",
         "role": "Ruolo",
         "created": "Creato",
-        "lastLogin": "Ultimo Accesso"
+        "lastLogin": "Ultimo accesso"
       },
       "roles": {
         "admin": "Amministratore",
         "operator": "Operatore",
         "viewer": "Visualizzatore",
-        "adminDescription": "Admin: Full access to all features and settings",
-        "operatorDescription": "Operator: Can run backups, manage schedules. Cannot manage users or system settings",
-        "viewerDescription": "Viewer: Read-only access"
+        "adminDescription": "Amministratore: accesso completo a tutte le funzionalità e impostazioni",
+        "operatorDescription": "Operatore: può eseguire backup e gestire le pianificazioni. Non può gestire utenti o impostazioni di sistema.",
+        "viewerDescription": "Visualizzatore: accesso in sola lettura"
       },
       "status": {
         "active": "Attivo",
@@ -1665,19 +1665,19 @@
         "username": "Nome utente",
         "email": "Email",
         "password": "Password",
-        "fullName": "Full name",
-        "role": "Role",
-        "authSource": "Auth source",
-        "oidcSubject": "OIDC subject"
+        "fullName": "Nome completo",
+        "role": "Ruolo",
+        "authSource": "Sorgente di autenticazione",
+        "oidcSubject": "Oggetto OIDC"
       },
       "authSources": {
-        "local": "Local",
+        "local": "Locale",
         "oidc": "OIDC"
       },
       "ssoIdentity": {
-        "selfLinkHint": "Prefer asking the user to link their own local account from Account & Security. Manual edits are for recovery when the backend supports these fields.",
-        "subjectHelper": "Paste the exact stable subject claim from the identity provider.",
-        "clearHelper": "Local auth clears the stored OIDC subject on save."
+        "selfLinkHint": "È preferibile chiedere all'utente di collegare il proprio account locale da Account e Sicurezza. Le modifiche manuali sono utili per il ripristino quando il backend supporta questi campi.",
+        "subjectHelper": "Incolla l'esatto subject claim stabile fornito dal provider di identità.",
+        "clearHelper": "L'autenticazione locale cancella l'oggetto OIDC memorizzato al momento del salvataggio."
       },
       "buttons": {
         "cancel": "Annulla",
@@ -1725,85 +1725,85 @@
     },
     "permissions": {
       "scope": {
-        "title": "Repository scope",
-        "allRepositories": "All repositories",
-        "selectedOnly": "Selected only",
-        "autoInheritHint": "New repositories inherit this automatically.",
-        "restrictedHint": "Use this when you want to limit access to a few repositories only.",
-        "automaticAccess": "Automatic {{role}} access",
-        "futureInheritHint": "Future repositories inherit this access automatically.",
-        "restrictedAccess": "Restricted access. This user only sees repositories assigned below."
+        "title": "Ambito repository",
+        "allRepositories": "Tutti i repository",
+        "selectedOnly": "Solo selezionati",
+        "autoInheritHint": "I nuovi repository ereditano automaticamente questo accesso.",
+        "restrictedHint": "Usa questa opzione quando vuoi limitare l'accesso a pochi repository specifici.",
+        "automaticAccess": "Accesso automatico come {{role}}",
+        "futureInheritHint": "I repository futuri ereditano automaticamente questo accesso.",
+        "restrictedAccess": "Accesso limitato. Questo utente vede solo i repository assegnati di seguito."
       },
       "alert": {
-        "allAccessPrefix": "This user currently has access to all repositories as",
-        "allAccessSuffix": ". Switch to selected repositories only if you want to restrict them.",
-        "automaticAccessPrefix": "This account currently has automatic access to all repositories as"
+        "allAccessPrefix": "Questo utente ha attualmente accesso a tutti i repository come",
+        "allAccessSuffix": ". Passa a \"solo repository selezionati\" solo se desideri limitarli.",
+        "automaticAccessPrefix": "Questo account ha attualmente accesso automatico a tutti i repository come"
       },
       "empty": {
-        "automaticCoverage": "No repository-specific assignments. Automatic access covers current and future repositories.",
-        "noPermissions": "No repository permissions assigned yet."
+        "automaticCoverage": "Nessuna assegnazione specifica per repository. L'accesso automatico copre i repository attuali e futuri.",
+        "noPermissions": "Nessun permesso per repository assegnato."
       },
       "actions": {
-        "removeAccess": "Remove access"
+        "removeAccess": "Rimuovi accesso"
       },
       "grantAccess": {
-        "title": "Grant access",
-        "noRepositories": "No repositories configured. Add a repository first.",
-        "allAssigned": "All repositories are already assigned to this user.",
-        "selectRepository": "Select repository",
-        "assign": "Assign"
+        "title": "Concedi accesso",
+        "noRepositories": "Nessun repository configurato. Aggiungi prima un repository.",
+        "allAssigned": "Tutti i repository sono già assegnati a questo utente.",
+        "selectRepository": "Seleziona repository",
+        "assign": "Assegna"
       },
       "toasts": {
-        "assigned": "Permission assigned",
-        "failedToAssign": "Failed to assign permission",
-        "removed": "Permission removed",
-        "failedToRemove": "Failed to remove permission",
-        "updated": "Permission updated",
-        "failedToUpdate": "Failed to update permission",
-        "automaticUpdated": "Automatic access updated",
-        "automaticCleared": "Automatic access cleared",
-        "failedToUpdateAutomatic": "Failed to update automatic access"
+        "assigned": "Permesso assegnato",
+        "failedToAssign": "Assegnazione del permesso fallita",
+        "removed": "Permesso rimosso",
+        "failedToRemove": "Rimozione del permesso fallita",
+        "updated": "Permesso aggiornato",
+        "failedToUpdate": "Aggiornamento del permesso fallito",
+        "automaticUpdated": "Accesso automatico aggiornato",
+        "automaticCleared": "Accesso automatico cancellato",
+        "failedToUpdateAutomatic": "Aggiornamento dell'accesso automatico fallito"
       },
-      "saveChanges": "Save changes"
+      "saveChanges": "Salva modifiche"
     },
     "account": {
       "title": "Impostazioni utente",
       "description": "Gestisci il tuo profilo personale, le credenziali e le preferenze di accesso.",
       "subtitle": {
-        "individual": "Your personal account settings, security, and access are managed here.",
-        "enterprise": "Personal profile is separate from the system-wide deployment identity."
+        "individual": "Le tue impostazioni personali dell'account, la sicurezza e l'accesso sono gestite qui.",
+        "enterprise": "Il profilo personale è separato dall'identità di deployment a livello di sistema."
       },
       "editProfile": "Modifica profilo",
       "toasts": {
-        "profileUpdated": "Personal profile updated",
-        "failedToUpdateProfile": "Failed to update profile",
-        "deploymentUpdated": "Deployment profile updated",
-        "failedToUpdateDeployment": "Failed to update deployment profile"
+        "profileUpdated": "Profilo personale aggiornato",
+        "failedToUpdateProfile": "Aggiornamento del profilo fallito",
+        "deploymentUpdated": "Profilo di deployment aggiornato",
+        "failedToUpdateDeployment": "Aggiornamento del profilo di deployment fallito"
       },
       "profile": {
-        "title": "Personal profile",
-        "description": "Your own identity. Changes here do not affect the system-wide deployment identity.",
-        "saving": "Saving…",
-        "saveButton": "Save profile",
+        "title": "Profilo personale",
+        "description": "La tua identità personale. Le modifiche qui non influiscono sull'identità di deployment a livello di sistema.",
+        "saving": "Salvataggio in corso…",
+        "saveButton": "Salva profilo",
         "setup": {
-          "title": "Finish account setup",
-          "description": "Change your password first, then update your personal profile details below."
+          "title": "Completa la configurazione dell'account",
+          "description": "Cambia prima la password, poi aggiorna i dettagli del tuo profilo personale qui sotto."
         },
         "deployment": {
-          "title": "Deployment profile",
-          "description": "System-wide setting. Controls how this deployment presents itself to all users.",
-          "individual": "Individual",
-          "individualDesc": "Show admin full name as the account identity.",
-          "enterprise": "Enterprise",
-          "enterpriseDesc": "Show an organization name as the deployment identity.",
-          "orgName": "Organization name",
-          "saveButton": "Save deployment"
+          "title": "Profilo di deployment",
+          "description": "Impostazione a livello di sistema. Controlla come questo deployment si presenta a tutti gli utenti.",
+          "individual": "Individuale",
+          "individualDesc": "Mostra il nome completo dell'amministratore come identità dell'account.",
+          "enterprise": "Aziendale",
+          "enterpriseDesc": "Mostra un nome dell'organizzazione come identità del deployment.",
+          "orgName": "Nome dell'organizzazione",
+          "saveButton": "Salva deployment"
         },
         "badges": {
           "memberSince": "Membro dal {{date}}",
           "totpActive": "2FA attivo",
           "passkeyActive_one": "{{count}} passkey",
-          "passkeyActive_other": "{{count}} passkeys"
+          "passkeyActive_other": "{{count}} passkey"
         }
       },
       "security": {
@@ -1812,7 +1812,7 @@
         "description": "Rafforza questo account locale con un accesso resistente al phishing e un percorso di recupero adatto a come usi davvero questo dispositivo.",
         "highlights": {
           "twoFactor": "Autenticazione a due fattori",
-          "passkeys": "Passkeys"
+          "passkeys": "Passkey"
         },
         "passwordUpdateRequired": "Aggiornamento password richiesto",
         "accountPassword": "Password dell'account",
@@ -1848,7 +1848,7 @@
         "totpVerificationLabel": "Codice di verifica",
         "recoveryCodesRemaining_one": "{{count}} codice di recupero rimanente",
         "recoveryCodesRemaining_other": "{{count}} codici di recupero rimanenti",
-        "passkeysTitle": "Passkeys",
+        "passkeysTitle": "Passkey",
         "passkeysDescription": "Registra passkey WebAuthn per un accesso senza password e resistente al phishing.",
         "noPasskeys": "Nessuna passkey registrata al momento.",
         "passkeysCount_one": "1 passkey registrata",
@@ -1875,25 +1875,25 @@
         "passkeyDeleteFailed": "Impossibile eliminare la passkey",
         "passkeyLastUsed": "Ultimo utilizzo {{date}}",
         "passkeyNeverUsed": "Mai usata",
-        "ssoLinkTitle": "Link single sign-on",
-        "ssoLinkDescription": "Start a provider redirect to attach this local account to your SSO identity.",
-        "ssoLinkButton": "Link SSO",
-        "ssoLinkedTitle": "Single sign-on linked",
-        "ssoLinkedDescription": "This account can sign in through the configured identity provider.",
-        "ssoUnlinkButton": "Unlink SSO",
-        "ssoUnlinkedToast": "Single sign-on unlinked",
-        "ssoUnlinkFailed": "Failed to unlink single sign-on"
+        "ssoLinkTitle": "Collega single sign-on",
+        "ssoLinkDescription": "Avvia un reindirizzamento al provider per collegare questo account locale alla tua identità SSO.",
+        "ssoLinkButton": "Collega SSO",
+        "ssoLinkedTitle": "Single sign-on collegato",
+        "ssoLinkedDescription": "Questo account può accedere tramite il provider d'identità configurato.",
+        "ssoUnlinkButton": "Scollega SSO",
+        "ssoUnlinkedToast": "Single sign-on scollegato",
+        "ssoUnlinkFailed": "Impossibile scollegare single sign-on"
       },
       "access": {
-        "title": "Access",
-        "description": "Tokens and repository access live under the same account umbrella.",
+        "title": "Accesso",
+        "description": "I token e l'accesso ai repository fanno capo allo stesso account.",
         "permissions": {
-          "title": "Repository permissions",
-          "subtitle": "Your current repository-level access."
+          "title": "Permessi sui repository",
+          "subtitle": "Il tuo attuale livello di accesso ai repository."
         },
         "globalAccess": {
-          "title": "Global access",
-          "description": "Admin accounts inherit full access to all repositories and settings."
+          "title": "Accesso globale",
+          "description": "Gli account amministratore ereditano l'accesso completo a tutti i repository e le impostazioni."
         }
       }
     }
@@ -2141,7 +2141,7 @@
       "usageCount": "Usato in {{count}} posti"
     },
     "actions": {
-      "test": "Test Script",
+      "test": "Test script",
       "edit": "Modifica Script",
       "delete": "Elimina Script",
       "cannotDeleteTemplates": "Impossibile eliminare i template"
@@ -2181,7 +2181,7 @@
       "update": "Aggiorna"
     },
     "testDialog": {
-      "title": "Test Script",
+      "title": "Test script",
       "hasParams": "Questo script ha parametri. Fornisci i valori qui sotto per testarlo.",
       "noParams": "Questo script non ha parametri. Clicca 'Esegui Test' per eseguirlo.",
       "running": "Esecuzione in corso...",
@@ -2229,7 +2229,7 @@
       "viewArchives": "Visualizza Archivi",
       "viewBackupPlans": "Visualizza piani di backup collegati",
       "breakLock": "Rompi Blocco",
-      "wipeContents": "Wipe contents",
+      "wipeContents": "Cancella contenuto",
       "delete": "Elimina",
       "permanentDelete": "Elimina file definitivamente",
       "createBackupPlan": "Crea piano di backup",
@@ -2402,40 +2402,40 @@
       "noBackupsYet": "Ancora nessun backup",
       "noBackupsDesc": "Questo repository è stato inizializzato ma non contiene archivi. Le statistiche di archiviazione appariranno qui dopo aver creato il primo backup.",
       "loadFailed": "Impossibile caricare le informazioni del repository. Assicurati che il repository sia accessibile e inizializzato correttamente.",
-      "v2PlanRequired": "This repository uses Borg 2. Your data is safe. Upgrade to Pro to view its details.",
+      "v2PlanRequired": "Questo repository usa Borg 2. I tuoi dati sono al sicuro. Aggiorna a Pro per visualizzare i dettagli.",
       "exportKeyfileTooltip": "Esporta file chiave. conservalo al sicuro!"
     },
     "repositoryWipe": {
-      "title": "Wipe repository contents",
-      "scopeSummary": "This will delete every archive in this repository. The repository configuration will remain, but existing restore points will be gone.",
-      "warningPanel": "This is not repository deletion. Borg UI will keep the repository record, schedules, scripts, connection settings, and future backup capability. The archive data selected in this preview cannot be restored through Borg UI after the wipe completes.",
-      "previewButton": "Generate wipe preview",
-      "previewReady": "Preview ready",
-      "previewScope": "{{count}} archives selected for deletion",
-      "dryRunOutput": "Dry-run output",
-      "emptyState": "No archives were found in this repository. There is nothing to wipe.",
-      "staleState": "The archive list changed after this preview was generated. Generate a new preview before wiping contents.",
-      "protectedTitle": "Protected archives prevent this wipe.",
-      "blockedTitle": "This preview cannot be executed.",
-      "confirmationLabel": "Type WIPE {{repositoryName}} to confirm",
-      "confirmationMismatch": "The confirmation phrase must match exactly.",
-      "compactOption": "Run compact after deleting archives to reclaim repository space",
-      "compactHelper": "Without compact, archive entries are removed but repository disk usage may not shrink yet. Borg 2 soft-deleted archives may be recoverable with Borg CLI until compact runs.",
-      "understandingLabel": "I understand this removes every archive and restore point in this repository",
-      "finalButton": "Wipe all archives",
-      "cancelPreview": "Cancel preview",
-      "running": "Repository wipe is running",
-      "success": "Repository contents wiped. Repository configuration is still available.",
-      "compactFailed": "Archives were deleted, but compact failed. Run compact later to reclaim space.",
-      "compactSkipped": "Archives were deleted, but compact was skipped. Run compact later to reclaim space.",
-      "partialFailed": "The wipe failed after partial progress. Some archives may already be gone; review the job logs before retrying.",
-      "failed": "Repository contents wipe failed. No supported one-click recovery is available in Borg UI.",
-      "cancelled": "Repository wipe was cancelled.",
+      "title": "Cancella contenuto repository",
+      "scopeSummary": "Questo eliminerà tutti gli archivi in questo repository. La configurazione del repository rimarrà, ma i punti di ripristino esistenti andranno persi.",
+      "warningPanel": "Questa non è l'eliminazione del repository. Borg UI manterrà il record del repository, le pianificazioni, gli script, le impostazioni di connessione e la capacità di backup futuri. I dati degli archivi selezionati in questa anteprima non possono essere ripristinati tramite Borg UI dopo il completamento della cancellazione.",
+      "previewButton": "Genera anteprima cancellazione",
+      "previewReady": "Anteprima pronta",
+      "previewScope": "{{count}} archivi selezionati per la cancellazione",
+      "dryRunOutput": "Output prova simulata",
+      "emptyState": "Nessun archivio trovato in questo repository. Non c'è nulla da cancellare.",
+      "staleState": "L'elenco degli archivi è cambiato dopo la generazione di questa anteprima. Genera una nuova anteprima prima di cancellare.",
+      "protectedTitle": "Gli archivi protetti impediscono questa cancellazione.",
+      "blockedTitle": "Questa anteprima non può essere eseguita.",
+      "confirmationLabel": "Digita WIPE {{repositoryName}} per confermare",
+      "confirmationMismatch": "La frase di conferma deve corrispondere esattamente.",
+      "compactOption": "Esegui compact dopo l'eliminazione degli archivi per recuperare spazio",
+      "compactHelper": "Senza compact, le voci degli archivi vengono rimosse ma lo spazio su disco potrebbe non ridursi subito. Gli archivi eliminati in Borg 2 potrebbero essere recuperabili tramite Borg CLI fino all'esecuzione del compact.",
+      "understandingLabel": "Comprendo che questo rimuove tutti gli archivi e i punti di ripristino in questo repository",
+      "finalButton": "Cancella tutti gli archivi",
+      "cancelPreview": "Annulla anteprima",
+      "running": "Cancellazione repository in corso",
+      "success": "Contenuto repository cancellato. La configurazione del repository è ancora disponibile.",
+      "compactFailed": "Gli archivi sono stati eliminati, ma il compact non è riuscito. Esegui compact in seguito per recuperare spazio.",
+      "compactSkipped": "Gli archivi sono stati eliminati, ma il compact è stato saltato. Esegui compact in seguito per recuperare spazio.",
+      "partialFailed": "La cancellazione non è riuscita dopo un avanzamento parziale. Alcuni archivi potrebbero essere già stati rimossi; controlla i log del job prima di riprovare.",
+      "failed": "Cancellazione contenuto repository fallita. Non è disponibile alcun recupero con un clic in Borg UI.",
+      "cancelled": "Cancellazione repository annullata.",
       "metadata": {
         "borgVersion": "Borg",
-        "archives": "Archives",
-        "totalSize": "Total Size",
-        "lastBackup": "Last Backup"
+        "archives": "Archivi",
+        "totalSize": "Dimensione Totale",
+        "lastBackup": "Ultimo Backup"
       }
     },
     "mountArchive": {
@@ -2472,7 +2472,7 @@
       "retentionDescription": "Specifica quanti backup mantenere per ogni periodo di tempo",
       "keepWithin": "Mantieni entro",
       "keepWithinHelper": "Mantieni tutti gli archivi creati entro questo intervallo recente",
-      "keepWithinPlaceholder": "1d",
+      "keepWithinPlaceholder": "1g",
       "keepWithinSummary": "tutti gli archivi entro {{interval}}",
       "keepHourly": "Mantieni Orari",
       "keepHourlyHelper": "Ultimi N backup orari (0 = disabilitato)",
@@ -2520,7 +2520,7 @@
     },
     "fileExplorer": {
       "selectDirectory": "Seleziona Directory",
-      "root": "Root"
+      "root": "Radice"
     }
   },
   "backupJobsTable": {
@@ -2585,7 +2585,7 @@
     "manual": "Manuale",
     "transport": {
       "server": "Server",
-      "remoteSsh": "Remote SSH",
+      "remoteSsh": "SSH remoto",
       "agent": "Agente"
     },
     "toasts": {
@@ -2753,8 +2753,8 @@
     "oidcDisableLocalAuthLabel": "Disattiva accesso locale con password e passkey",
     "oidcProviderNameLabel": "Nome visualizzato del provider",
     "oidcProviderNameHelper": "Mostrato sul pulsante di accesso.",
-    "oidcTokenAuthMethodLabel": "Token auth method",
-    "oidcTokenAuthMethodHelper": "Choose how Borg UI authenticates to the provider token endpoint.",
+    "oidcTokenAuthMethodLabel": "Metodo di autenticazione token",
+    "oidcTokenAuthMethodHelper": "Scegli come Borg UI si autentica all'endpoint token del provider.",
     "oidcTokenAuthMethodPost": "client_secret_post",
     "oidcTokenAuthMethodBasic": "client_secret_basic",
     "oidcDiscoveryUrlLabel": "URL di discovery",
@@ -2794,8 +2794,8 @@
     "oidcRequiredFieldsError": "OIDC richiede un URL di discovery e un client ID.",
     "oidcClientSecretRequired": "OIDC richiede un client secret prima di poter essere attivato.",
     "oidcTemplateUserRequired": "La modalità template richiede un nome utente modello.",
-    "oidcDisableLocalAuthWarning": "Before disabling local login, confirm at least one active admin can sign in with OIDC.",
-    "oidcActiveAdminRequired": "Local auth cannot be disabled until an active OIDC admin exists.",
+    "oidcDisableLocalAuthWarning": "Prima di disabilitare l'accesso locale, assicurati che almeno un amministratore attivo possa accedere con OIDC.",
+    "oidcActiveAdminRequired": "L'accesso locale non può essere disabilitato finché non esiste un amministratore OIDC attivo.",
     "authEventSuccess": "Riuscito",
     "authEventFailed": "Fallito",
     "authEventPending": "In attesa di approvazione",
@@ -2836,8 +2836,8 @@
       "passkey_login_succeeded": "Accesso con passkey riuscito",
       "logout": "Utente disconnesso"
     },
-    "roleViewer": "Viewer",
-    "roleOperator": "Operator",
+    "roleViewer": "Visualizzatore",
+    "roleOperator": "Operatore",
     "roleAdmin": "Admin",
     "maxFilesToLoadLabel": "Max File da Caricare",
     "maxFilesRangeError": "Deve essere compreso tra {{min}} e {{max}}",
@@ -3023,46 +3023,46 @@
     },
     "card": {
       "stats": {
-        "service": "Service",
-        "events": "Events",
-        "active": "active",
-        "scope": "Scope",
-        "allRepos": "All repos",
-        "repoCount_one": "{{count}} repo",
-        "repoCount_other": "{{count}} repos",
-        "lastUsed": "Last Used"
+        "service": "Servizio",
+        "events": "Eventi",
+        "active": "attivo",
+        "scope": "Scope (Copertura)",
+        "allRepos": "Tutti i repository",
+        "repoCount_one": "{{count}} repository",
+        "repoCount_other": "{{count}} repository",
+        "lastUsed": "Ultimo utilizzo"
       },
       "categories": {
         "backup": "Backup",
-        "restore": "Restore",
-        "restoreCheck": "Restore Check",
-        "check": "Check",
-        "schedule": "Schedule",
-        "monitoring": "Monitoring",
-        "reports": "Reports"
+        "restore": "Ripristino",
+        "restoreCheck": "Controllo ripristino",
+        "check": "Controllo",
+        "schedule": "Pianificazione",
+        "monitoring": "Monitoraggio",
+        "reports": "Report"
       },
       "events": {
-        "start": "Start",
-        "success": "Success",
+        "start": "Avvio",
+        "success": "Successo",
         "warning": "Avviso",
-        "failure": "Failure",
-        "off": "Off",
-        "errors": "Errors",
+        "failure": "Fallimento",
+        "off": "Spento",
+        "errors": "Errori",
         "staleBackup": "Backup obsoleti",
         "reports": "Report"
       },
       "actions": {
-        "sendTest": "Send test notification",
-        "duplicate": "Duplicate"
+        "sendTest": "Invia notifica di test",
+        "duplicate": "Duplica"
       },
       "confirmDelete": {
-        "messagePrefix": "Are you sure you want to delete",
-        "messageSuffix": "? You will no longer receive notifications from this service."
+        "messagePrefix": "Sei sicuro di voler eliminare",
+        "messageSuffix": "? Non riceverai più notifiche da questo servizio."
       }
     },
     "confirmDelete": {
-      "messagePrefix": "Are you sure you want to delete",
-      "messageSuffix": "? You will no longer receive notifications from this service."
+      "messagePrefix": "Sei sicuro di voler eliminare",
+      "messageSuffix": "? Non riceverai più notifiche da questo servizio."
     }
   },
   "preferences": {
@@ -3283,7 +3283,7 @@
     "keepYearlyHint": "Backup annuali da mantenere",
     "keepWithin": "Mantieni entro",
     "keepWithinHint": "Mantieni tutti gli archivi entro questo intervallo recente, ad esempio 1d o 12H",
-    "keepWithinPlaceholder": "1d"
+    "keepWithinPlaceholder": "1g"
   },
   "compressionSettings": {
     "title": "Impostazioni Compressione",
@@ -3899,7 +3899,7 @@
       "observeOnly": "Solo Osservazione",
       "location": "Posizione",
       "execution": "Esecuzione",
-      "agent": "Agent",
+      "agent": "Agente",
       "path": "Percorso",
       "notSet": "(non impostato)",
       "borgUiServer": "Server Borg UI",
@@ -4070,7 +4070,7 @@
     "archiveTooLargeDesc": "Questo archivio contiene troppi file per essere navigato in sicurezza nell'interfaccia.",
     "emptyDirectory": "Questa directory è vuota",
     "selectedCount": "{{count}} selezionati",
-    "root": "Root",
+    "root": "Radice",
     "selected": "Selezionato",
     "notSelected": "Non selezionato",
     "continueWithSelected": "Continua con {{count}} selezionati",
@@ -4088,7 +4088,7 @@
     "emptyArchive": "Questo archivio è vuoto",
     "emptyArchiveDesc": "Nessun file è stato salvato in questo archivio. Questo può accadere se la directory sorgente era vuota o inaccessibile durante il backup.",
     "noInfo": "Nessuna informazione sull'archivio disponibile",
-    "root": "Root",
+    "root": "Radice",
     "downloadFile": "Scarica file",
     "managedCanaryLabel": "Canary Borg UI",
     "managedCanaryDescription": "File canary gestiti per i controlli di ripristino. Borg UI li aggiunge ai backup mentre la modalità canary è attiva.",
@@ -4707,20 +4707,20 @@
         "failedToStartCompact": "Impossibile avviare la compattazione",
         "pruneAlreadyRunning": "Un'operazione di pulizia è già in esecuzione per questo repository",
         "failedToStartPrune": "Impossibile avviare la pulizia",
-        "operationAlreadyRunning": "Another repository operation is already running",
-        "wipeAlreadyRunning": "A repository wipe is already running for this repository",
-        "wipePreviewNotFound": "Wipe preview not found",
-        "wipePreviewNotFresh": "Generate a fresh wipe preview before continuing",
-        "wipePreviewBlocked": "This wipe preview is blocked",
-        "wipePreviewStale": "The archive list changed after this preview was generated",
-        "wipeUnderstandingRequired": "Confirm that you understand the repository wipe scope",
-        "wipeConfirmationMismatch": "The confirmation phrase must match exactly",
-        "wipeJobNotFound": "Repository wipe job not found",
-        "wipeCannotCancelRunning": "A running repository wipe cannot be cancelled from the preview dialog",
-        "failedToPreviewWipe": "Failed to generate wipe preview",
-        "failedToStartWipe": "Failed to start repository wipe",
-        "failedToGetWipeJob": "Failed to get repository wipe job",
-        "failedToCancelWipe": "Failed to cancel repository wipe",
+        "operationAlreadyRunning": "Un'altra operazione sul repository è già in esecuzione",
+        "wipeAlreadyRunning": "Una cancellazione del repository è già in esecuzione per questo repository",
+        "wipePreviewNotFound": "Anteprima cancellazione non trovata",
+        "wipePreviewNotFresh": "Genera una nuova anteprima di cancellazione prima di continuare",
+        "wipePreviewBlocked": "Questa anteprima di cancellazione è bloccata",
+        "wipePreviewStale": "L'elenco degli archivi è cambiato dopo la generazione di questa anteprima",
+        "wipeUnderstandingRequired": "Conferma di aver compreso l'ambito della cancellazione del repository",
+        "wipeConfirmationMismatch": "La frase di conferma deve corrispondere esattamente",
+        "wipeJobNotFound": "Job di cancellazione repository non trovato",
+        "wipeCannotCancelRunning": "Una cancellazione in esecuzione non può essere annullata dalla finestra di anteprima",
+        "failedToPreviewWipe": "Impossibile generare l'anteprima di cancellazione",
+        "failedToStartWipe": "Impossibile avviare la cancellazione del repository",
+        "failedToGetWipeJob": "Impossibile ottenere il job di cancellazione repository",
+        "failedToCancelWipe": "Impossibile annullare la cancellazione del repository",
         "failedToGetStatistics": "Impossibile ottenere le statistiche del repository",
         "failedToListArchives": "Impossibile elencare gli archivi",
         "failedToGetRepositoryInfo": "Impossibile ottenere le informazioni del repository",
