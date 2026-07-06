@@ -221,6 +221,7 @@ def test_backup_create_payload_builds_borg1_command():
         "create",
         "--progress",
         "--stats",
+        "--json",
         "--show-rc",
         "--log-json",
         "--compression",
@@ -260,6 +261,7 @@ def test_backup_create_payload_builds_borg2_command_from_flat_payload():
         "/backup/repo",
         "create",
         "--stats",
+        "--json",
         "--compression",
         "none",
         "--upload-ratelimit",
@@ -562,7 +564,7 @@ def test_session_runtime_connects_with_websocket_url_and_sends_hello(monkeypatch
         "type": "hello",
         "agent_id": "agt_123",
         "hostname": "host.local",
-        "agent_version": "0.1.0",
+        "agent_version": "0.1.1",
         "borg_versions": [],
         "capabilities": get_capabilities(),
         "running_job_ids": [],
@@ -1360,17 +1362,26 @@ def test_repository_extract_file_job_returns_base64_content(monkeypatch):
     ).decode("ascii")
 
 
-class FakeStdout:
-    def __init__(self, lines):
-        self.lines = lines
+class FakeStream:
+    """Doubles as an iterable line stream (stderr) or a readable blob (stdout)."""
+
+    def __init__(self, lines=None, data=""):
+        self.lines = lines or []
+        self._data = data
 
     def __iter__(self):
         return iter(self.lines)
 
+    def read(self):
+        return self._data
+
 
 class FakeProcess:
-    def __init__(self, lines, return_code):
-        self.stdout = FakeStdout(lines)
+    # `lines` are the stderr progress/log lines borg streams; `stdout_data` is
+    # the final `borg create --json` result document (with the resolved name).
+    def __init__(self, lines, return_code, stdout_data=""):
+        self.stderr = FakeStream(lines=lines)
+        self.stdout = FakeStream(data=stdout_data)
         self.return_code = return_code
 
     def wait(self):
@@ -1449,8 +1460,53 @@ def test_execute_backup_create_job_completes_successfully(monkeypatch):
     assert popen_calls[0]["kwargs"]["start_new_session"] is True
     assert any(call[0] == "send_progress" for call in client.calls)
     complete_call = [call for call in client.calls if call[0] == "complete_job"][0]
+    # No --json document on stdout -> fall back to the requested archive name.
     assert complete_call[2]["archive_name"] == "archive"
     assert complete_call[2]["return_code"] == 0
+
+
+@pytest.mark.unit
+def test_execute_backup_create_job_reports_resolved_archive_name(monkeypatch):
+    # borg expands placeholders like {now:...} itself; the resolved name comes
+    # back on stdout as the --json document's archive.name. The agent must report
+    # that resolved name, not the template it requested.
+    json_document = json.dumps(
+        {
+            "archive": {
+                "name": "m3s02-2026-07-06-1783316999",
+                "id": "c46ef96c",
+                "stats": {"nfiles": 1},
+            },
+            "repository": {"location": "/repo"},
+        }
+    )
+
+    def fake_popen(cmd, stdout, stderr, text, env, **kwargs):
+        return FakeProcess(
+            ['{"type":"archive_progress","finished":true}\n'],
+            0,
+            stdout_data=json_document,
+        )
+
+    monkeypatch.setattr("agent.borg_ui_agent.backup.subprocess.Popen", fake_popen)
+    client = BackupClient()
+
+    result = execute_backup_create_job(
+        {
+            "id": 12,
+            "payload": {
+                "job_kind": "backup.create",
+                "repository_path": "/repo",
+                "archive_name": "m3s02-{now:%Y-%m-%d-%s}",
+                "source_paths": ["/src"],
+            },
+        },
+        client,
+    )
+
+    assert result.status == "completed"
+    complete_call = [call for call in client.calls if call[0] == "complete_job"][0]
+    assert complete_call[2]["archive_name"] == "m3s02-2026-07-06-1783316999"
 
 
 @pytest.mark.unit
