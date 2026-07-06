@@ -13,7 +13,7 @@ import axios from 'axios'
 import { BASE_PATH } from '@/utils/basePath'
 import type { Repository } from '@/types'
 import { isV2Repo } from '@/utils/repoCapabilities'
-import { buildDownloadUrl, getApiBaseUrl } from '../remoteBackends/gateway'
+import { getApiBaseUrl } from '../remoteBackends/gateway'
 import { getActiveBackendTarget } from '../remoteBackends/storage'
 import {
   attachBackendTargetAccessHeaders,
@@ -154,16 +154,20 @@ export class BorgApiClient {
     return httpClient.get(`${this.v}/archives/delete-jobs/${jobId}`)
   }
 
-  getDownloadUrl(archiveId: string, filePath: string) {
-    return buildDownloadUrl(`${this.v}/archives/download`, {
-      repository: this.repoId,
-      archive: archiveId,
-      file_path: filePath,
+  /**
+   * Fetch a single file from an archive as a Blob via XHR (so HTTP errors are
+   * catchable and can be surfaced in the UI). The Bearer header set by the
+   * request interceptor authenticates; `get_current_download_user` accepts it.
+   */
+  fetchArchiveFile(archiveId: string, filePath: string) {
+    return httpClient.get(`${this.v}/archives/download`, {
+      params: {
+        repository: this.repoId,
+        archive: archiveId,
+        file_path: filePath,
+      },
+      responseType: 'blob',
     })
-  }
-
-  downloadFile(archiveId: string, filePath: string) {
-    window.location.assign(this.getDownloadUrl(archiveId, filePath))
   }
 
   // ── Backup operations ────────────────────────────────────────────────────

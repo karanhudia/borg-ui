@@ -4093,7 +4093,8 @@
     "managedCanaryLabel": "Borg UI canary",
     "managedCanaryDescription": "Managed restore-check canary files. Borg UI adds these to backups while canary mode is enabled.",
     "managedCanaryBanner": "This folder is managed by Borg UI for canary restore checks. It is safe to leave untouched.",
-    "managedCanaryProbeDisabled": "Canary paths are verified automatically by canary mode."
+    "managedCanaryProbeDisabled": "Canary paths are verified automatically by canary mode.",
+    "failedToDownloadFile": "Failed to download file"
   },
   "codeEditor": {
     "loading": "Loading editor..."
@@ -5031,6 +5032,9 @@
         "invalidAuthCredentials": "Invalid authentication credentials",
         "userNotFoundOrInactive": "User not found or inactive",
         "failedStartEventStream": "Failed to start event stream"
+      },
+      "jobs": {
+        "repositoryOperationActive": "Another operation is already running on this repository. Please wait for it to finish and try again."
       }
     },
     "success": {

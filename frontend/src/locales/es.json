@@ -4093,7 +4093,8 @@
     "managedCanaryLabel": "Canario de Borg UI",
     "managedCanaryDescription": "Archivos canarios administrados para comprobaciones de restauración. Borg UI los añade a las copias mientras el modo canario está activado.",
     "managedCanaryBanner": "Esta carpeta la administra Borg UI para comprobaciones canarias de restauración. Es seguro dejarla intacta.",
-    "managedCanaryProbeDisabled": "Las rutas canarias se verifican automáticamente mediante el modo canario."
+    "managedCanaryProbeDisabled": "Las rutas canarias se verifican automáticamente mediante el modo canario.",
+    "failedToDownloadFile": "No se pudo descargar el archivo"
   },
   "codeEditor": {
     "loading": "Cargando editor..."
@@ -5031,6 +5032,9 @@
         "invalidAuthCredentials": "Credenciales de autenticación inválidas",
         "userNotFoundOrInactive": "Usuario no encontrado o inactivo",
         "failedStartEventStream": "Error al iniciar el flujo de eventos"
+      },
+      "jobs": {
+        "repositoryOperationActive": "Ya se está ejecutando otra operación en este repositorio. Espera a que finalice e inténtalo de nuevo."
       }
     },
     "success": {

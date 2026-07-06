@@ -29,7 +29,7 @@ import RetryJobDialog from './RetryJobDialog'
 import LockErrorDialog from './LockErrorDialog'
 import { activityAPI, repositoriesAPI } from '../services/api'
 import { buildDownloadUrl } from '@/utils/downloadUrl'
-import { BorgApiClient } from '../services/borgApi'
+import { downloadArchiveFile } from '../utils/downloadArchiveFile'
 import ArchiveContentsDialog from './ArchiveContentsDialog'
 import type { Repository as FullRepository, Archive } from '../types'
 
@@ -873,7 +873,7 @@ export const BackupJobsTable = <T extends Job = Job>({
         onClose={() => setArchiveView(null)}
         onDownloadFile={(archiveName, filePath) => {
           if (!archiveView?.repository) return
-          new BorgApiClient(archiveView.repository).downloadFile(archiveName, filePath)
+          void downloadArchiveFile(archiveView.repository, archiveName, filePath)
         }}
       />
 
