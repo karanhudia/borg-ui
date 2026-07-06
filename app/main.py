@@ -447,6 +447,14 @@ async def startup_event():
     app.state.background_tasks.append(task4)
     logger.info("MQTT sync scheduler started")
 
+    # Start agent-job reaper (background task): terminally fails in-flight agent
+    # jobs whose session died mid-job, so an orphaned job never wedges a repo.
+    from app.services.agent_job_reaper import start_agent_job_reaper
+
+    task5 = asyncio.create_task(start_agent_job_reaper())
+    app.state.background_tasks.append(task5)
+    logger.info("Agent job reaper started")
+
     logger.info("Borg Web UI started successfully")
 
 
