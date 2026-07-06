@@ -4094,7 +4094,11 @@
     "managedCanaryDescription": "File canary gestiti per i controlli di ripristino. Borg UI li aggiunge ai backup mentre la modalità canary è attiva.",
     "managedCanaryBanner": "Questa cartella è gestita da Borg UI per i controlli di ripristino canary. Puoi lasciarla invariata.",
     "managedCanaryProbeDisabled": "I percorsi canary vengono verificati automaticamente dalla modalità canary.",
-    "failedToDownloadFile": "Impossibile scaricare il file"
+    "failedToDownloadFile": "Impossibile scaricare il file",
+    "downloadPreparing": "Preparazione del download di {{name}}…",
+    "downloadingBytes": "Download… {{size}}",
+    "downloadingPercent": "Download… {{percent}}% ({{size}})",
+    "downloadComplete": "{{name}} scaricato"
   },
   "codeEditor": {
     "loading": "Caricamento editor..."

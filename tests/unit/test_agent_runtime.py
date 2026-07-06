@@ -1,5 +1,6 @@
 import base64
 import json
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -150,7 +151,7 @@ def test_agent_client_register_and_authenticated_request_headers():
         hostname="laptop.local",
         os_name="linux",
         arch="amd64",
-        agent_version="0.1.0",
+        agent_version="0.1.1",
         borg_versions=[],
         capabilities=["jobs.poll"],
     )
@@ -1360,6 +1361,159 @@ def test_repository_extract_file_job_returns_base64_content(monkeypatch):
     assert complete_call[2]["content_base64"] == base64.b64encode(
         b"\x00hello\n"
     ).decode("ascii")
+
+
+@pytest.mark.unit
+def test_repository_extract_file_streams_artifact_when_delivery_requested(monkeypatch):
+    uploaded = {}
+
+    class _FakeStdout:
+        def __init__(self, data):
+            self._data = data
+            self._done = False
+
+        def read(self, *args):
+            if self._done:
+                return b""
+            self._done = True
+            return self._data
+
+        def close(self):
+            pass
+
+    def fake_popen(cmd, **kwargs):
+        assert cmd[:3] == ["borg", "extract", "--stdout"]
+        return SimpleNamespace(
+            stdout=_FakeStdout(b"\x00filebytes"),
+            stderr=SimpleNamespace(read=lambda: b""),
+            wait=lambda: 0,
+            poll=lambda: 0,
+        )
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.repository_ops.subprocess.Popen", fake_popen
+    )
+
+    class _StreamingClient(FakeRuntimeClient):
+        def upload_artifact(self, job_id, data):
+            uploaded["job_id"] = job_id
+            uploaded["bytes"] = data.read()
+            return {"accepted": True, "size": len(uploaded["bytes"])}
+
+    client = _StreamingClient([])
+
+    result = execute_repository_operation_job(
+        {
+            "id": 91,
+            "payload": {
+                "job_kind": "repository.extract_archive_file",
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+                "operation": {
+                    "archive": "archive-1",
+                    "file_path": "docs/report.txt",
+                    "delivery": "artifact",
+                },
+                "secrets": {"BORG_PASSPHRASE": {"value": "secret"}},
+            },
+        },
+        client,
+    )
+
+    assert result.status == "completed"
+    assert uploaded["job_id"] == 91
+    assert uploaded["bytes"] == b"\x00filebytes"
+    complete_call = [c for c in client.calls if c[0] == "complete_job"][0]
+    assert complete_call[2]["artifact"] is True
+    assert "content_base64" not in complete_call[2]
+
+
+@pytest.mark.unit
+def test_repository_extract_file_streaming_cancels_a_wedged_borg(monkeypatch):
+    # The watchdog must terminate borg on cancellation so a stalled process
+    # (upload read blocked) does not pin the worker.
+    terminated = threading.Event()
+
+    class _BlockingStdout:
+        def read(self, *args):
+            terminated.wait(timeout=5)  # unblocks when borg is "terminated"
+            return b""
+
+        def close(self):
+            terminated.set()
+
+    process = SimpleNamespace(
+        stdout=_BlockingStdout(),
+        stderr=SimpleNamespace(read=lambda: b""),
+        pid=4321,
+        poll=lambda: -15 if terminated.is_set() else None,
+        wait=lambda *a, **k: -15,
+    )
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.repository_ops.subprocess.Popen", lambda *a, **k: process
+    )
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.repository_ops.os.getpgid", lambda pid: 9999
+    )
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.repository_ops.os.killpg",
+        lambda pgid, sig: terminated.set(),
+    )
+
+    class _CancelClient(FakeRuntimeClient):
+        def upload_artifact(self, job_id, data):
+            data.read()  # blocks until borg is terminated
+            return {}
+
+        def cancel_job(self, job_id):
+            self.calls.append(("cancel_job", job_id))
+            return {"id": job_id, "status": "canceled"}
+
+    client = _CancelClient([])
+
+    result = execute_repository_operation_job(
+        {
+            "id": 93,
+            "payload": {
+                "job_kind": "repository.extract_archive_file",
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+                "operation": {"archive": "a", "file_path": "f", "delivery": "artifact"},
+            },
+        },
+        client,
+        should_cancel=lambda: True,
+    )
+
+    assert result.status == "canceled"
+    assert ("cancel_job", 93) in client.calls
+
+
+@pytest.mark.unit
+def test_repository_extract_file_falls_back_to_base64_without_upload(monkeypatch):
+    # delivery=artifact requested, but a client without upload_artifact (e.g. an
+    # older transport) must still work via the base64 path.
+    def fake_run(cmd, *, capture_output, env, timeout):
+        return SimpleNamespace(returncode=0, stdout=b"data", stderr=b"")
+
+    monkeypatch.setattr("agent.borg_ui_agent.repository_ops.subprocess.run", fake_run)
+    client = FakeRuntimeClient([])  # no upload_artifact attribute
+
+    result = execute_repository_operation_job(
+        {
+            "id": 92,
+            "payload": {
+                "job_kind": "repository.extract_archive_file",
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+                "operation": {"archive": "a", "file_path": "f", "delivery": "artifact"},
+            },
+        },
+        client,
+    )
+
+    assert result.status == "completed"
+    complete_call = [c for c in client.calls if c[0] == "complete_job"][0]
+    assert complete_call[2]["content_base64"] == base64.b64encode(b"data").decode(
+        "ascii"
+    )
 
 
 class FakeStream:

@@ -21,7 +21,7 @@ import {
   clearAccessToken,
   type BackendTargetRequestConfig,
 } from '../authHeaders'
-import type { InternalAxiosRequestConfig } from 'axios'
+import type { AxiosProgressEvent, InternalAxiosRequestConfig } from 'axios'
 
 export const httpClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL || `${BASE_PATH}/api`,
@@ -159,7 +159,11 @@ export class BorgApiClient {
    * catchable and can be surfaced in the UI). The Bearer header set by the
    * request interceptor authenticates; `get_current_download_user` accepts it.
    */
-  fetchArchiveFile(archiveId: string, filePath: string) {
+  fetchArchiveFile(
+    archiveId: string,
+    filePath: string,
+    options?: { onDownloadProgress?: (event: AxiosProgressEvent) => void }
+  ) {
     return httpClient.get(`${this.v}/archives/download`, {
       params: {
         repository: this.repoId,
@@ -167,6 +171,7 @@ export class BorgApiClient {
         file_path: filePath,
       },
       responseType: 'blob',
+      onDownloadProgress: options?.onDownloadProgress,
     })
   }
 

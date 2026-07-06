@@ -871,9 +871,11 @@ export const BackupJobsTable = <T extends Job = Job>({
         archive={archiveView?.archive ?? null}
         repository={archiveView?.repository ?? null}
         onClose={() => setArchiveView(null)}
-        onDownloadFile={(archiveName, filePath) => {
+        onDownloadFile={(archiveName, filePath, size) => {
           if (!archiveView?.repository) return
-          void downloadArchiveFile(archiveView.repository, archiveName, filePath)
+          return downloadArchiveFile(archiveView.repository, archiveName, filePath, {
+            totalSize: size ?? undefined,
+          })
         }}
       />
 

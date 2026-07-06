@@ -54,7 +54,7 @@ def _register_agent(
             "hostname": "laptop.local",
             "os": "linux",
             "arch": "amd64",
-            "agent_version": "0.1.0",
+            "agent_version": "0.1.1",
             "borg_versions": [
                 {"major": 1, "version": "1.2.8", "path": "/usr/bin/borg"}
             ],
@@ -802,7 +802,7 @@ class TestAgentJobTransport:
             "/api/agents/heartbeat",
             json={
                 "agent_id": registered["agent_id"],
-                "agent_version": "0.1.0",
+                "agent_version": "0.1.1",
                 "borg_versions": [],
                 "capabilities": ["backup.create"],
                 "running_job_ids": [],
@@ -858,7 +858,7 @@ class TestAgentJobTransport:
             "/api/agents/heartbeat",
             json={
                 "agent_id": registered["agent_id"],
-                "agent_version": "0.1.0",
+                "agent_version": "0.1.1",
                 "borg_versions": [],
                 "capabilities": ["backup.create"],
                 "running_job_ids": [],
@@ -893,7 +893,7 @@ class TestAgentJobTransport:
             "/api/agents/heartbeat",
             json={
                 "agent_id": registered["agent_id"],
-                "agent_version": "0.1.0",
+                "agent_version": "0.1.1",
                 "borg_versions": [],
                 "capabilities": ["backup.create"],
                 "running_job_ids": [],
@@ -929,7 +929,7 @@ class TestAgentJobTransport:
             "/api/agents/heartbeat",
             json={
                 "agent_id": registered["agent_id"],
-                "agent_version": "0.1.0",
+                "agent_version": "0.1.1",
                 "borg_versions": [],
                 "capabilities": ["backup.create"],
                 "running_job_ids": [],
@@ -940,6 +940,27 @@ class TestAgentJobTransport:
         assert response.status_code == 200
         test_db.refresh(job)
         assert job.status == "queued"
+
+    def test_upload_job_artifact_drops_body_without_consumer(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        # No download is waiting (relay channel not registered) -> the endpoint
+        # drains the body and reports it was dropped, so the agent never blocks.
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        job = _create_agent_job(test_db, agent, status="running")
+
+        response = test_client.post(
+            f"/api/agents/jobs/{job.id}/artifact",
+            content=b"orphaned-bytes",
+            headers=_agent_headers(registered["agent_token"]),
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"accepted": False, "size": 0}
 
     def test_agent_cannot_mutate_another_agents_job(
         self, test_client: TestClient, test_db, admin_headers

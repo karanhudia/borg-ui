@@ -4094,7 +4094,11 @@
     "managedCanaryDescription": "Verwaltete Canary-Dateien für Restore-Prüfungen. Borg UI fügt sie zu Backups hinzu, solange der Canary-Modus aktiviert ist.",
     "managedCanaryBanner": "Dieser Ordner wird von Borg UI für Canary-Restore-Prüfungen verwaltet. Du kannst ihn unverändert lassen.",
     "managedCanaryProbeDisabled": "Canary-Pfade werden automatisch vom Canary-Modus geprüft.",
-    "failedToDownloadFile": "Datei konnte nicht heruntergeladen werden"
+    "failedToDownloadFile": "Datei konnte nicht heruntergeladen werden",
+    "downloadPreparing": "Download von {{name}} wird vorbereitet…",
+    "downloadingBytes": "Lädt… {{size}}",
+    "downloadingPercent": "Lädt… {{percent}} % ({{size}})",
+    "downloadComplete": "{{name}} heruntergeladen"
   },
   "codeEditor": {
     "loading": "Editor wird geladen..."

@@ -14,7 +14,11 @@ interface ArchiveContentsDialogProps {
   archive: Archive | null
   repository: Repository | null
   onClose: () => void
-  onDownloadFile?: (archiveName: string, filePath: string) => void
+  onDownloadFile?: (
+    archiveName: string,
+    filePath: string,
+    size?: number | null
+  ) => void | Promise<void>
 }
 
 interface RawFileItem {
@@ -47,6 +51,7 @@ export default function ArchiveContentsDialog({
 }: ArchiveContentsDialogProps) {
   const { t } = useTranslation()
   const [currentPath, setCurrentPath] = useState('')
+  const [downloading, setDownloading] = useState(false)
 
   useEffect(() => {
     if (open && archive) {
@@ -129,8 +134,21 @@ export default function ArchiveContentsDialog({
       onClose={onClose}
       onNavigate={(path) => setCurrentPath(normalizeBrowserPath(path))}
       onDownloadFile={
-        onDownloadFile && archive ? (filePath) => onDownloadFile(archive.name, filePath) : undefined
+        onDownloadFile && archive
+          ? async (filePath, size) => {
+              setDownloading(true)
+              try {
+                await onDownloadFile(archive.name, filePath, size)
+              } catch {
+                // downloadArchiveFile surfaces its own errors; this guard just
+                // prevents an unhandled rejection if a handler throws.
+              } finally {
+                setDownloading(false)
+              }
+            }
+          : undefined
       }
+      downloadBusy={downloading}
       downloadLabel={t('archiveContents.downloadFile')}
       formatSize={formatBytesUtil}
       formatModified={formatDateCompact}

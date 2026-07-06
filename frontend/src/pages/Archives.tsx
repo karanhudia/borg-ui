@@ -566,7 +566,7 @@ const Archives: React.FC = () => {
         archive={viewArchive}
         repository={selectedRepository ?? null}
         onClose={() => setViewArchive(null)}
-        onDownloadFile={(archiveName, filePath) => {
+        onDownloadFile={(archiveName, filePath, size) => {
           if (selectedRepository) {
             trackArchive(EventAction.DOWNLOAD, selectedRepository, {
               operation: 'download_archive_file',
@@ -576,7 +576,9 @@ const Archives: React.FC = () => {
               getBorgVersion(selectedRepository) === 2
                 ? (viewArchive?.id ?? archiveName)
                 : archiveName
-            void downloadArchiveFile(selectedRepository, archiveRef, filePath)
+            return downloadArchiveFile(selectedRepository, archiveRef, filePath, {
+              totalSize: size ?? undefined,
+            })
           }
         }}
       />

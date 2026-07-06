@@ -4094,7 +4094,11 @@
     "managedCanaryDescription": "Managed restore-check canary files. Borg UI adds these to backups while canary mode is enabled.",
     "managedCanaryBanner": "This folder is managed by Borg UI for canary restore checks. It is safe to leave untouched.",
     "managedCanaryProbeDisabled": "Canary paths are verified automatically by canary mode.",
-    "failedToDownloadFile": "Failed to download file"
+    "failedToDownloadFile": "Failed to download file",
+    "downloadPreparing": "Preparing download of {{name}}…",
+    "downloadingBytes": "Downloading… {{size}}",
+    "downloadingPercent": "Downloading… {{percent}}% ({{size}})",
+    "downloadComplete": "Downloaded {{name}}"
   },
   "codeEditor": {
     "loading": "Loading editor..."

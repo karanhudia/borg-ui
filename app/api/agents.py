@@ -8,6 +8,7 @@ from fastapi import (
     Depends,
     HTTPException,
     Query,
+    Request,
     WebSocket,
     WebSocketDisconnect,
     status,
@@ -36,6 +37,7 @@ from app.database.models import (
     PruneJob,
     Repository,
 )
+from app.services.agent_artifact_relay import agent_artifact_relay
 from app.services.agent_connection_manager import (
     AgentConnection,
     agent_connection_manager,
@@ -1213,6 +1215,50 @@ async def complete_job(
     db.commit()
 
     return AgentJobStatusResponse(id=job.id, status=job.status)
+
+
+@router.post("/jobs/{job_id}/artifact")
+async def upload_job_artifact(
+    job_id: int,
+    request: Request,
+    current_agent: AgentMachine = Depends(get_current_agent),
+    db: Session = Depends(get_db),
+):
+    """Relay a streamed job artifact (e.g. an extracted file) to the waiting
+    download consumer without buffering it to disk.
+
+    The download route registers a relay channel before dispatching the job. If
+    none is registered the client has already gone (aborted or timed out), so we
+    drain and drop the body rather than let the agent block.
+    """
+    job = _get_agent_job(job_id, current_agent, db)
+
+    if not agent_artifact_relay.is_registered(job.id):
+        async for _ in request.stream():
+            pass
+        return {"accepted": False, "size": 0}
+
+    size = 0
+    delivered = True
+    try:
+        async for chunk in request.stream():
+            if not chunk:
+                continue
+            size += len(chunk)
+            if not await agent_artifact_relay.push(job.id, chunk):
+                # The download consumer is gone; stop relaying (and stop the
+                # agent's upload) instead of draining the whole body for nobody.
+                delivered = False
+                break
+        if delivered:
+            await agent_artifact_relay.close(job.id)
+    except Exception as exc:
+        await agent_artifact_relay.close(job.id, error=str(exc))
+        raise
+
+    job.updated_at = _now_utc()
+    db.commit()
+    return {"accepted": delivered, "size": size}
 
 
 @router.post("/jobs/{job_id}/fail", response_model=AgentJobStatusResponse)
