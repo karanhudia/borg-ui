@@ -815,6 +815,132 @@ class TestAgentJobTransport:
         assert job.status == "queued"
         assert job.claimed_at is None
 
+    def _create_repository_job(
+        self, test_db, agent, *, job_kind, operation, stale_at
+    ) -> AgentJob:
+        job = AgentJob(
+            agent_machine_id=agent.id,
+            job_type="repository",
+            status="running",
+            payload={
+                "schema_version": 1,
+                "job_kind": job_kind,
+                "repository": {"id": 7},
+                "operation": operation,
+            },
+            created_at=stale_at,
+            started_at=stale_at,
+            updated_at=stale_at,
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+        return job
+
+    def test_heartbeat_fails_stale_request_scoped_repository_job(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        stale_at = datetime.now(timezone.utc) - timedelta(minutes=30)
+        job = self._create_repository_job(
+            test_db,
+            agent,
+            job_kind="repository.extract_archive_file",
+            operation={"archive": "a", "file_path": "f"},
+            stale_at=stale_at,
+        )
+
+        response = test_client.post(
+            "/api/agents/heartbeat",
+            json={
+                "agent_id": registered["agent_id"],
+                "agent_version": "0.1.0",
+                "borg_versions": [],
+                "capabilities": ["backup.create"],
+                "running_job_ids": [],
+            },
+            headers=_agent_headers(registered["agent_token"]),
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(job)
+        # No receiver for the timed-out download request -> fail, don't restart.
+        assert job.status == "failed"
+        assert "no client is waiting" in (job.error_message or "")
+
+    def test_heartbeat_requeues_stale_durable_repository_job(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        stale_at = datetime.now(timezone.utc) - timedelta(minutes=30)
+        job = self._create_repository_job(
+            test_db,
+            agent,
+            job_kind="repository.check",
+            operation={"maintenance_job": {"kind": "check", "id": 1}},
+            stale_at=stale_at,
+        )
+
+        response = test_client.post(
+            "/api/agents/heartbeat",
+            json={
+                "agent_id": registered["agent_id"],
+                "agent_version": "0.1.0",
+                "borg_versions": [],
+                "capabilities": ["backup.create"],
+                "running_job_ids": [],
+            },
+            headers=_agent_headers(registered["agent_token"]),
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(job)
+        # Durable maintenance op keeps its retry-on-reconnect behaviour.
+        assert job.status == "queued"
+
+    def test_heartbeat_requeues_stale_rclone_sync_job(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        stale_at = datetime.now(timezone.utc) - timedelta(minutes=30)
+        # rclone_sync owns a durable RcloneSyncJob record and also runs after
+        # backups, so it must be retried on reconnect, not failed.
+        job = self._create_repository_job(
+            test_db,
+            agent,
+            job_kind="repository.rclone_sync",
+            operation={"rclone": {"remote_name": "r", "remote_path": "p"}},
+            stale_at=stale_at,
+        )
+
+        response = test_client.post(
+            "/api/agents/heartbeat",
+            json={
+                "agent_id": registered["agent_id"],
+                "agent_version": "0.1.0",
+                "borg_versions": [],
+                "capabilities": ["backup.create"],
+                "running_job_ids": [],
+            },
+            headers=_agent_headers(registered["agent_token"]),
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(job)
+        assert job.status == "queued"
+
     def test_agent_cannot_mutate_another_agents_job(
         self, test_client: TestClient, test_db, admin_headers
     ):
