@@ -389,6 +389,16 @@ def normalize_role_claim(value: Any) -> Optional[str]:
 
 
 def normalize_groups_claim(value: Any) -> list[str]:
+    if isinstance(value, dict):
+        # Some IdPs express roles/groups as an object keyed by the group name
+        # rather than a list — notably Zitadel's
+        # "urn:zitadel:iam:org:project:roles": {"admin": {"<projId>": "<org>"}, …}.
+        # The keys are the group names.
+        return [
+            normalized
+            for key in value
+            if (normalized := normalize_string_claim(key)) is not None
+        ]
     if isinstance(value, list):
         return [
             normalized
