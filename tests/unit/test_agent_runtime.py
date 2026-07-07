@@ -47,6 +47,28 @@ class FakeWebSocket:
         self.closed = True
 
 
+class RecordingHttpClient:
+    """Records the REST terminal-delivery calls the session makes (results,
+    errors and cancels now go over the job API instead of the WebSocket)."""
+
+    def __init__(self):
+        self.completed = []
+        self.failed = []
+        self.canceled = []
+
+    def complete_job(self, job_id, *, result):
+        self.completed.append((job_id, result))
+        return {"id": job_id, "status": "completed"}
+
+    def fail_job(self, job_id, *, error_message, return_code=None):
+        self.failed.append((job_id, error_message, return_code))
+        return {"id": job_id, "status": "failed"}
+
+    def cancel_job(self, job_id):
+        self.canceled.append(job_id)
+        return {"id": job_id, "status": "canceled"}
+
+
 class FakeResponse:
     def __init__(self, payload=None, status_code=200, text=""):
         self.payload = payload or {}
@@ -74,6 +96,16 @@ class FakeSession:
             }
         )
         return self.responses.pop(0)
+
+
+@pytest.fixture
+def patch_session_platform(monkeypatch):
+    """Stub the platform / borg detection the session runtime runs on hello."""
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session.detect_platform",
+        lambda: {"hostname": "host.local", "os": "linux", "arch": "amd64"},
+    )
+    monkeypatch.setattr("agent.borg_ui_agent.session.detect_borg_binaries", lambda: [])
 
 
 @pytest.mark.unit
@@ -600,6 +632,121 @@ def test_session_runtime_sends_app_heartbeat_while_idle(monkeypatch):
 
 
 @pytest.mark.unit
+def test_session_delivers_result_over_rest_not_ws(patch_session_platform, monkeypatch):
+    """Job results are delivered over the REST job API, never over the WebSocket,
+    so a large result frame can't starve the keepalive and break the session."""
+    from agent.borg_ui_agent.session import AgentSessionRuntime
+
+    socket = FakeWebSocket(
+        [
+            {
+                "type": "command",
+                "command_id": "cmd-1",
+                "command": "filesystem.browse",
+                "job_id": 42,
+                "payload": {"path": "/home"},
+            },
+        ]
+    )
+    http = RecordingHttpClient()
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session.browse_filesystem",
+        lambda path, include_hidden=False: {
+            "success": True,
+            "current_path": path,
+            "parent_path": "/",
+            "items": [],
+        },
+    )
+
+    runtime = AgentSessionRuntime(
+        AgentConfig("https://borgui.example.com", "agt_123", "secret"),
+        connect=lambda *args, **kwargs: socket,
+        http_client=http,
+    )
+    runtime.run_session(max_messages=1)
+
+    # Result delivered over REST...
+    assert len(http.completed) == 1
+    assert http.completed[0][0] == 42
+    assert http.completed[0][1]["success"] is True
+    # ...and NOT over the WebSocket.
+    assert all(frame.get("type") != "command_result" for frame in socket.sent)
+
+
+@pytest.mark.unit
+def test_session_command_client_delivers_error_over_rest():
+    """A failed command reports via REST fail_job (with error_message/return_code
+    preserved), not over the WebSocket."""
+    from agent.borg_ui_agent.session import SessionCommandClient
+
+    socket = FakeWebSocket([])
+    http = RecordingHttpClient()
+    client = SessionCommandClient(
+        socket, command_id="cmd-1", job_id=7, http_client=http
+    )
+
+    client.fail_job(7, error_message="boom", return_code=2)
+
+    assert http.failed == [(7, "boom", 2)]
+    assert all(frame.get("type") != "command_error" for frame in socket.sent)
+
+
+@pytest.mark.unit
+def test_session_terminal_rest_failure_is_swallowed():
+    """If REST delivery raises, the worker must not crash: the failure is logged
+    and swallowed, and the client still marks the job finished."""
+    from agent.borg_ui_agent.session import SessionCommandClient
+
+    class FailingHttpClient:
+        def complete_job(self, job_id, *, result):
+            raise RuntimeError("rest unreachable")
+
+    socket = FakeWebSocket([])
+    client = SessionCommandClient(
+        socket, command_id="cmd-1", job_id=9, http_client=FailingHttpClient()
+    )
+
+    client.complete_job(9, result={"ok": True})  # must not raise
+
+    assert client.finished is True
+    assert all(frame.get("type") != "command_result" for frame in socket.sent)
+
+
+@pytest.mark.unit
+def test_session_cancel_command_cancels_target_job_not_completes(
+    patch_session_platform,
+):
+    """A cancel command must record the target job as canceled (REST /cancel),
+    never completed — otherwise it races the worker's own cancel unwind."""
+    from agent.borg_ui_agent.session import AgentSessionRuntime
+
+    socket = FakeWebSocket(
+        [
+            {
+                "type": "command",
+                "command_id": "cmd-c",
+                "command": "cancel",
+                "job_id": 55,
+                "payload": {"job_id": 55},
+            },
+        ]
+    )
+    http = RecordingHttpClient()
+
+    runtime = AgentSessionRuntime(
+        AgentConfig("https://borgui.example.com", "agt_123", "secret"),
+        connect=lambda *args, **kwargs: socket,
+        http_client=http,
+    )
+    runtime.run_session(max_messages=1)
+
+    assert http.canceled == [55]
+    assert http.completed == []
+
+
+@pytest.mark.unit
 def test_session_runtime_handles_ephemeral_filesystem_browse(monkeypatch):
     from agent.borg_ui_agent.session import AgentSessionRuntime
 
@@ -866,12 +1013,15 @@ def test_session_runtime_reports_durable_job_events(monkeypatch):
         lambda command: fake_handler if command == "backup.create" else None,
     )
 
+    http = RecordingHttpClient()
     runtime = AgentSessionRuntime(
         AgentConfig("https://borgui.example.com", "agt_123", "secret"),
         connect=lambda *args, **kwargs: socket,
+        http_client=http,
     )
     runtime.run_session(max_messages=1)
 
+    # Control + telemetry frames stay on the WebSocket...
     assert socket.sent[1]["type"] == "command_ack"
     assert socket.sent[2]["type"] == "job_started"
     assert socket.sent[3] == {
@@ -884,8 +1034,9 @@ def test_session_runtime_reports_durable_job_events(monkeypatch):
     }
     assert socket.sent[4]["type"] == "progress"
     assert socket.sent[4]["progress_percent"] == 25
-    assert socket.sent[5]["type"] == "command_result"
-    assert socket.sent[5]["result"] == {"archive_name": "archive"}
+    # ...the terminal result goes over REST.
+    assert http.completed == [(77, {"archive_name": "archive"})]
+    assert all(frame.get("type") != "command_result" for frame in socket.sent)
 
 
 @pytest.mark.unit

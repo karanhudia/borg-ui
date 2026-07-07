@@ -69,6 +69,8 @@ class SessionCommandClient:
         send_lock: Optional[threading.Lock] = None,
         closing: Optional[threading.Event] = None,
         artifact_uploader: Optional[Callable[[int, Any], dict[str, Any]]] = None,
+        http_client: Optional[AgentClient] = None,
+        http_lock: Optional[threading.Lock] = None,
     ):
         self.socket = socket
         self.command_id = command_id
@@ -78,6 +80,12 @@ class SessionCommandClient:
         self._send_lock = send_lock or threading.Lock()
         self._closing = closing
         self._artifact_uploader = artifact_uploader
+        # Terminal job outcomes (result/error/canceled) are delivered over the
+        # REST job API, not the WebSocket — see _deliver_terminal. The client
+        # wraps one requests.Session shared by all worker threads, so calls are
+        # serialized under http_lock.
+        self._http_client = http_client
+        self._http_lock = http_lock or threading.Lock()
 
     def upload_artifact(self, job_id: int, data: Any) -> dict[str, Any]:
         """Stream a binary job artifact to the server over HTTP (not the WS)."""
@@ -118,12 +126,9 @@ class SessionCommandClient:
     def complete_job(self, job_id: int, *, result: dict[str, Any]) -> dict[str, Any]:
         self._ensure_started(job_id)
         self.finished = True
-        self._send(
-            {
-                "type": "command_result",
-                "job_id": job_id,
-                "result": result,
-            }
+        self._deliver_terminal(
+            {"type": "command_result", "job_id": job_id, "result": result},
+            lambda c: c.complete_job(job_id, result=result),
         )
         return {"id": job_id, "status": "completed"}
 
@@ -135,18 +140,28 @@ class SessionCommandClient:
         error: dict[str, Any] = {"message": error_message}
         if return_code is not None:
             error["return_code"] = return_code
-        self._send({"type": "command_error", "job_id": job_id, "error": error})
+        self._deliver_terminal(
+            {"type": "command_error", "job_id": job_id, "error": error},
+            lambda c: c.fail_job(
+                job_id, error_message=error_message, return_code=return_code
+            ),
+        )
         return {"id": job_id, "status": "failed"}
 
     def cancel_job(self, job_id: int) -> dict[str, Any]:
-        self._ensure_started(job_id)
         self.finished = True
-        self._send({"type": "job_canceled", "job_id": job_id})
+        self._deliver_terminal(
+            {"type": "job_canceled", "job_id": job_id},
+            lambda c: c.cancel_job(job_id),
+        )
         return {"id": job_id, "status": "canceled"}
 
     def send_result(self, result: dict[str, Any]) -> None:
         self.finished = True
-        self._send({"type": "command_result", "job_id": self.job_id, "result": result})
+        self._deliver_terminal(
+            {"type": "command_result", "job_id": self.job_id, "result": result},
+            lambda c: c.complete_job(self.job_id, result=result),
+        )
 
     def send_error(
         self,
@@ -159,19 +174,73 @@ class SessionCommandClient:
         error: dict[str, Any] = {"code": code, "message": message}
         if return_code is not None:
             error["return_code"] = return_code
-        self._send({"type": "command_error", "job_id": self.job_id, "error": error})
+        self._deliver_terminal(
+            {"type": "command_error", "job_id": self.job_id, "error": error},
+            lambda c: c.fail_job(
+                self.job_id, error_message=message, return_code=return_code
+            ),
+        )
+
+    def _deliver_terminal(
+        self,
+        ws_payload: dict[str, Any],
+        http_call: Callable[[AgentClient], Any],
+    ) -> None:
+        """Deliver a terminal outcome (result/error/canceled).
+
+        A **persisted** job (``job_id`` set) is reported over the REST job API,
+        NOT the WebSocket. A job result can be large (an archive listing is
+        hundreds of KB); sending it as one WebSocket frame holds websocket-client's
+        per-connection send lock for the whole write, which starves the keepalive
+        pong the recv loop must emit. The server then hits its ws-ping timeout and
+        tears the session down mid-send — the result is lost and the job orphaned
+        (empty browse dialogs) until the reaper cleans it up 15 minutes later.
+        REST keeps the socket free for small control frames + keepalive, and
+        /complete, /fail and /cancel are idempotent so a retry/late delivery is a
+        no-op. The client wraps one requests.Session shared by all worker threads,
+        so calls are serialized under _http_lock.
+
+        An **ephemeral** command (``job_id`` is None, e.g. an interactive
+        filesystem browse) has no job row, so its result is correlated by
+        command_id and returned over the WebSocket. These payloads are small
+        directory listings, not large archive results.
+        """
+        if self.job_id is not None and self._http_client is not None:
+            with self._http_lock:
+                try:
+                    http_call(self._http_client)
+                except Exception:
+                    # Outcome is dropped until the server-side reaper reconciles
+                    # it (~15 min); log the job id + traceback so that window is
+                    # diagnosable.
+                    logger.warning(
+                        "Failed to deliver terminal job outcome over REST for job %s",
+                        self.job_id,
+                        exc_info=True,
+                    )
+            return
+        self._try_ws_send(ws_payload)
 
     def _send(self, payload: dict[str, Any]) -> None:
-        """Serialize one frame onto the socket under the shared send lock, but
-        skip the write once the session is closing, so a worker never touches a
-        connection the drop handler has already torn down."""
+        """Best-effort telemetry send (job_started/progress/log/cancel). Losing
+        one is harmless; terminal results go through _deliver_terminal instead."""
+        self._try_ws_send(payload)
+
+    def _try_ws_send(self, payload: dict[str, Any]) -> bool:
+        """Serialize one frame onto the socket under the shared send lock. Skip
+        (reporting failure) once the session is closing, so a worker never
+        touches a connection the drop handler has already torn down."""
         if self._closing is not None and self._closing.is_set():
-            return
+            return False
         message = json.dumps({"command_id": self.command_id, **payload})
         with self._send_lock:
             if self._closing is not None and self._closing.is_set():
-                return
-            self.socket.send(message)
+                return False
+            try:
+                self.socket.send(message)
+                return True
+            except Exception:
+                return False
 
     def _ensure_started(self, job_id: int) -> None:
         if not self.started:
@@ -186,6 +255,7 @@ class AgentSessionRuntime:
         connect: Optional[Callable[..., Any]] = None,
         sleep: Callable[[float], None] = time.sleep,
         timeout_seconds: int = 30,
+        http_client: Optional[AgentClient] = None,
     ):
         self.config = config
         self.connect = connect or _default_connect
@@ -194,6 +264,12 @@ class AgentSessionRuntime:
         # HTTP client used to stream binary artifacts (e.g. extracted files) to
         # the server out-of-band, so they never go through the WebSocket.
         self._artifact_client = AgentClient.from_config(config)
+        # REST client used to re-deliver terminal job frames if the WebSocket
+        # drops mid-command (see SessionCommandClient._deliver_terminal).
+        self._http_client = http_client or AgentClient.from_config(config)
+        # Serializes REST terminal deliveries across worker threads (the client
+        # wraps one requests.Session).
+        self._http_lock = threading.Lock()
         self._send_lock = threading.Lock()
         self._registry_lock = threading.Lock()
         self._cancel_events: dict[int, threading.Event] = {}
@@ -334,6 +410,8 @@ class AgentSessionRuntime:
             send_lock=self._send_lock,
             closing=closing,
             artifact_uploader=self._artifact_client.upload_artifact,
+            http_client=self._http_client,
+            http_lock=self._http_lock,
         )
 
         ack = json.dumps(
@@ -360,11 +438,16 @@ class AgentSessionRuntime:
             return
 
         if command == "cancel":
-            # Signal the worker running this job so it actually stops; the worker
-            # emits the job_canceled frame itself as it unwinds.
+            # Signal the worker running this job so it actually stops; it emits
+            # its own job_canceled as it unwinds. Also record the cancel here via
+            # the cancel path (idempotent /cancel) so the outcome is captured even
+            # if no worker is running. NOT send_result — that routes through
+            # complete_job and would wrongly finalize the target job as completed,
+            # racing the worker's cancel. The server dispatches cancel
+            # fire-and-forget (wait_for_result=False), so no response is expected.
             if job_id is not None:
                 self._signal_cancel(job_id)
-            client.send_result({"success": True})
+                client.cancel_job(job_id)
             return
 
         handler = get_job_handler(command)
