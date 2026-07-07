@@ -37,6 +37,24 @@ def test_password_verification():
 
 
 @pytest.mark.unit
+def test_verify_password_rejects_invalid_or_missing_hash():
+    """A missing/non-bcrypt stored hash fails cleanly instead of raising.
+
+    OIDC-only users have no local bcrypt password_hash; bcrypt.checkpw would
+    raise ValueError('Invalid salt'), which previously surfaced as a 500 on a
+    password login attempt. verify_password must return False for these.
+    """
+    assert verify_password("anything", "") is False
+    assert verify_password("anything", None) is False
+    assert verify_password("anything", "not-a-bcrypt-hash") is False
+
+    # A real hash still verifies correctly.
+    hashed = get_password_hash("realpassword")
+    assert verify_password("realpassword", hashed) is True
+    assert verify_password("wrong", hashed) is False
+
+
+@pytest.mark.unit
 def test_different_passwords_different_hashes():
     """Test that different passwords produce different hashes"""
     password1 = "password123"

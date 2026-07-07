@@ -43,11 +43,22 @@ LOGIN_CHALLENGE_EXPIRE_MINUTES = 10
 TOTP_SETUP_EXPIRE_MINUTES = 15
 
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a password against its hash"""
-    return bcrypt.checkpw(
-        plain_password.encode("utf-8"), hashed_password.encode("utf-8")
-    )
+def verify_password(plain_password: str, hashed_password: Optional[str]) -> bool:
+    """Verify a password against its bcrypt hash.
+
+    Returns False (instead of raising) when the stored hash is missing or not a
+    valid bcrypt hash — e.g. OIDC-only users have no local password. bcrypt would
+    otherwise raise ``ValueError: Invalid salt``, which surfaced as a 500 on a
+    password login attempt; a clean False lets it fail with the normal 401.
+    """
+    if not hashed_password:
+        return False
+    try:
+        return bcrypt.checkpw(
+            plain_password.encode("utf-8"), hashed_password.encode("utf-8")
+        )
+    except ValueError:
+        return False
 
 
 def get_password_hash(password: str) -> str:
