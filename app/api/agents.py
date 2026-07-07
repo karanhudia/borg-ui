@@ -648,6 +648,21 @@ async def _handle_agent_session_message(
     command_id = str(message.get("command_id") or "")
     job_id = message.get("job_id")
 
+    if message_type == "heartbeat":
+        # Idle-liveness signal. The agent stays in recv() and sends this on a
+        # timer (even while a job runs in a worker thread), so it is the one
+        # signal that keeps last_seen_at fresh when the agent is not actively
+        # POSTing /heartbeat during a job. Protocol-level WS pings keep the
+        # socket alive but never reach here, so without this an idle-but-healthy
+        # agent looks stale.
+        now = _now_utc()
+        db.query(AgentMachine).filter(AgentMachine.id == agent_machine_id).update(
+            {"last_seen_at": now, "status": "online", "updated_at": now},
+            synchronize_session=False,
+        )
+        db.commit()
+        return
+
     job = _load_session_job(db, agent_machine_id, job_id)
 
     if message_type == "command_ack":

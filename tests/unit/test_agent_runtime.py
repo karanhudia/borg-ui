@@ -571,6 +571,32 @@ def test_session_runtime_connects_with_websocket_url_and_sends_hello(monkeypatch
 
 
 @pytest.mark.unit
+def test_session_runtime_sends_app_heartbeat_while_idle(monkeypatch):
+    from agent.borg_ui_agent.session import AgentSessionRuntime
+
+    # recv() raises a timeout first (idle) then yields a harmless message so the
+    # bounded loop can exit; the idle branch must emit an app-level heartbeat.
+    socket = FakeWebSocket([TimeoutError(), {"type": "noop"}])
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session.detect_platform",
+        lambda: {"hostname": "host.local", "os": "linux", "arch": "amd64"},
+    )
+    monkeypatch.setattr("agent.borg_ui_agent.session.detect_borg_binaries", lambda: [])
+
+    runtime = AgentSessionRuntime(
+        AgentConfig("https://borgui.example.com", "agt_123", "secret"),
+        connect=lambda url, *, header, timeout: socket,
+    )
+    runtime.run_session(max_messages=1)
+
+    # hello first, then the idle heartbeat; the protocol ping is also sent.
+    assert socket.sent[0]["type"] == "hello"
+    assert {"type": "heartbeat"} in socket.sent
+    assert socket.pings >= 1
+
+
+@pytest.mark.unit
 def test_session_runtime_handles_ephemeral_filesystem_browse(monkeypatch):
     from agent.borg_ui_agent.session import AgentSessionRuntime
 
@@ -898,8 +924,12 @@ def test_session_runtime_sends_ping_on_idle_recv_timeout(monkeypatch):
     runtime.run_session(max_messages=1)
 
     assert socket.pings == 1
-    assert socket.sent[1]["type"] == "command_ack"
-    assert socket.sent[2]["type"] == "command_result"
+    # Idle recv timeout now emits an app-level heartbeat before the ping, so the
+    # command handshake follows it.
+    assert socket.sent[0]["type"] == "hello"
+    assert socket.sent[1] == {"type": "heartbeat"}
+    assert socket.sent[2]["type"] == "command_ack"
+    assert socket.sent[3]["type"] == "command_result"
 
 
 @pytest.mark.unit
