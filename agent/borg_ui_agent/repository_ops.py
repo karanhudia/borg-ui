@@ -143,7 +143,7 @@ class RepositoryOperationPayload:
 
         if self.job_kind == "repository.list_archives":
             if self.borg_version == 2:
-                return [*self._base_borg2("list"), "--json"]
+                return [*self._base_borg2("repo-list"), "--json"]
             return [*self._base_borg1("list"), "--json", self.repository_path]
 
         if self.job_kind == "repository.list_archive_contents":
