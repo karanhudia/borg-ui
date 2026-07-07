@@ -119,3 +119,66 @@ class TestApiTokens:
     def test_unauthenticated_returns_401(self, test_client: TestClient):
         """Token endpoints require authentication"""
         assert test_client.get("/api/settings/tokens").status_code == 401
+
+
+@pytest.mark.unit
+class TestApiTokenAuth:
+    """A personal access token ("borgui_…") authenticates API requests as a Bearer."""
+
+    def _make_pat(
+        self, test_client: TestClient, admin_headers, name="auth-test"
+    ) -> str:
+        resp = test_client.post(
+            "/api/settings/tokens", json={"name": name}, headers=admin_headers
+        )
+        assert resp.status_code == 201
+        return resp.json()["token"]
+
+    def test_pat_authenticates_via_authorization_header(
+        self, test_client: TestClient, admin_headers
+    ):
+        """The raw PAT works as its own Bearer credential on a protected endpoint."""
+        pat = self._make_pat(test_client, admin_headers)
+        resp = test_client.get(
+            "/api/settings/tokens", headers={"Authorization": f"Bearer {pat}"}
+        )
+        assert resp.status_code == 200
+        # Authenticated as the same (admin) user -> sees the token it just created.
+        assert any(t["name"] == "auth-test" for t in resp.json())
+
+    def test_pat_authenticates_via_x_borg_authorization_header(
+        self, test_client: TestClient, admin_headers
+    ):
+        """The PAT also works on the X-Borg-Authorization header (proxy-friendly)."""
+        pat = self._make_pat(test_client, admin_headers, name="proxy-header")
+        resp = test_client.get(
+            "/api/settings/tokens", headers={"X-Borg-Authorization": f"Bearer {pat}"}
+        )
+        assert resp.status_code == 200
+
+    def test_bogus_pat_is_rejected(self, test_client: TestClient):
+        """A well-formed but unknown borgui_ token is rejected."""
+        resp = test_client.get(
+            "/api/settings/tokens",
+            headers={"Authorization": "Bearer borgui_thisisnotarealtoken"},
+        )
+        assert resp.status_code == 401
+
+    def test_revoked_pat_is_rejected(self, test_client: TestClient, admin_headers):
+        """A revoked PAT no longer authenticates."""
+        create = test_client.post(
+            "/api/settings/tokens", json={"name": "to-revoke"}, headers=admin_headers
+        )
+        pat = create.json()["token"]
+        token_id = create.json()["id"]
+
+        auth = {"Authorization": f"Bearer {pat}"}
+        assert test_client.get("/api/settings/tokens", headers=auth).status_code == 200
+
+        assert (
+            test_client.delete(
+                f"/api/settings/tokens/{token_id}", headers=admin_headers
+            ).status_code
+            == 204
+        )
+        assert test_client.get("/api/settings/tokens", headers=auth).status_code == 401
