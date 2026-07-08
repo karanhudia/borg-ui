@@ -387,10 +387,17 @@ const RepositoryWizard = ({
   const populateEditData = React.useCallback(() => {
     if (!repository) return
 
+    const isAgentRepo =
+      repository.executor_type === 'agent' || repository.execution_target === 'agent'
+
     let repoPath = repository.path || ''
 
-    // Extract plain path from SSH URL if needed
-    if (repoPath.startsWith('ssh://')) {
+    // A non-agent SSH repo keeps host/user/port in a separate SSH connection, so
+    // the path field holds only the path portion. An agent repo's path IS the
+    // agent's full $BORG_REPO ssh URL (there is no separate connection) — keep it
+    // intact; chopping it here would drop ssh://user@host:port and a subsequent
+    // save would overwrite the agent's repository URL with just the path.
+    if (!isAgentRepo && repoPath.startsWith('ssh://')) {
       const sshUrlMatch = repoPath.match(/^ssh:\/\/[^@]+@[^:/]+(?::\d+)?(.*)$/)
       if (sshUrlMatch) {
         repoPath = sshUrlMatch[1]
@@ -681,9 +688,12 @@ const RepositoryWizard = ({
     }
   }, [open, mode, repository, populateEditData, loadWizardData])
 
-  // Auto-fill the repository target from the selected agent's own $BORG_REPO
+  // Reflect the selected agent's own $BORG_REPO: advertise it (drives the "agent
+  // has no repo" warning) and auto-fill the path. Runs in edit too so agent repos
+  // behave the same as on import; the "only fill an empty field" guard below means
+  // it never overwrites the existing repository URL.
   useEffect(() => {
-    if (mode === 'edit' || wizardState.executionTarget !== 'agent' || !wizardState.agentMachineId) {
+    if (wizardState.executionTarget !== 'agent' || !wizardState.agentMachineId) {
       setAgentRepoAdvertised(null)
       return
     }
@@ -711,7 +721,7 @@ const RepositoryWizard = ({
     return () => {
       cancelled = true
     }
-  }, [mode, wizardState.executionTarget, wizardState.agentMachineId])
+  }, [wizardState.executionTarget, wizardState.agentMachineId])
 
   // Auto-select SSH connection for edit mode
   useEffect(() => {
