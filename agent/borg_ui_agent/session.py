@@ -233,11 +233,20 @@ class AgentSessionRuntime:
                 try:
                     raw_message = socket.recv()
                 except (TimeoutError, WebSocketTimeoutException):
-                    # Idle keep-alive ping. The key property of this loop is that
-                    # it stays in recv() *even while a job runs in a worker
-                    # thread*, so websocket-client keeps auto-ponging the server's
-                    # pings and the session survives long backups/checks.
+                    # Idle keep-alive. The key property of this loop is that it
+                    # stays in recv() *even while a job runs in a worker thread*,
+                    # so websocket-client keeps auto-ponging the server's pings
+                    # and the session survives long backups/checks.
+                    #
+                    # The protocol ping keeps the socket alive but never reaches
+                    # application code, so it cannot refresh the server's
+                    # last_seen_at. Send an application-level heartbeat too so an
+                    # idle-but-healthy agent stays "live" server-side.
                     with self._send_lock:
+                        try:
+                            socket.send(json.dumps({"type": "heartbeat"}))
+                        except Exception:
+                            pass
                         ping = getattr(socket, "ping", None)
                         if callable(ping):
                             ping()
