@@ -133,6 +133,19 @@ describe('BorgApiClient', () => {
     })
   })
 
+  it('passes the browse poll job id on v1 archive-contents requests', async () => {
+    const clientModule = await import('./client')
+    const getMock = vi.spyOn(clientModule.httpClient, 'get').mockResolvedValue({} as never)
+    const { BorgApiClient } = clientModule
+    const client = new BorgApiClient({ id: 7, borg_version: 1, path: '/repo-v1' } as never)
+
+    client.getArchiveContents('archive-id', 'archive-name', '/etc', 42)
+
+    expect(getMock).toHaveBeenCalledWith('/browse/7/archive-name', {
+      params: { path: '/etc', job_id: 42 },
+    })
+  })
+
   it('uses v2 routes for Borg 2 repositories', async () => {
     const clientModule = await import('./client')
     const getMock = vi.spyOn(clientModule.httpClient, 'get').mockResolvedValue({} as never)

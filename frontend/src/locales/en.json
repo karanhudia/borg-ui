@@ -3849,7 +3849,8 @@
       "clearAll": "Clear all",
       "selectDirTooltip": "Select directory and all contents",
       "helpText": "Click files to select them, or click folders to navigate. Use the checkbox next to folders to select entire directories.",
-      "failedToLoadContents": "Failed to load archive contents"
+      "failedToLoadContents": "Failed to load archive contents",
+      "loadContentsTimeout": "Still loading — this archive is taking longer than expected. Try again in a moment."
     },
     "restorePath": {
       "title": "Choose restore location",
@@ -4090,6 +4091,7 @@
   "archiveContents": {
     "title": "Archive Contents",
     "loading": "Loading archive contents...",
+    "slowLoadingHint": "This archive is large, so listing its files takes a little longer. Hang tight — this only happens the first time; afterwards it's cached.",
     "emptyDirectory": "This directory is empty",
     "emptyArchive": "This archive is empty",
     "emptyArchiveDesc": "No files were backed up in this archive. This may happen if the source directory was empty or inaccessible during the backup.",

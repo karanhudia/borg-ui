@@ -3849,7 +3849,8 @@
       "clearAll": "Cancella tutto",
       "selectDirTooltip": "Seleziona directory e tutto il contenuto",
       "helpText": "Clicca sui file per selezionarli, o sulle cartelle per navigare. Usa la casella di controllo accanto alle cartelle per selezionare intere directory.",
-      "failedToLoadContents": "Impossibile caricare il contenuto dell'archivio"
+      "failedToLoadContents": "Impossibile caricare il contenuto dell'archivio",
+      "loadContentsTimeout": "Ancora in caricamento — questo archivio richiede più tempo del previsto. Riprova tra un momento."
     },
     "restorePath": {
       "title": "Scegli posizione di ripristino",
@@ -4090,6 +4091,7 @@
   "archiveContents": {
     "title": "Contenuto Archivio",
     "loading": "Caricamento contenuto archivio...",
+    "slowLoadingHint": "Questo archivio è grande, quindi elencare i suoi file richiede un po' più di tempo. Un attimo — succede solo la prima volta, poi viene messo in cache.",
     "emptyDirectory": "Questa directory è vuota",
     "emptyArchive": "Questo archivio è vuoto",
     "emptyArchiveDesc": "Nessun file è stato salvato in questo archivio. Questo può accadere se la directory sorgente era vuota o inaccessibile durante il backup.",
