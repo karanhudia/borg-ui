@@ -371,6 +371,8 @@ export interface BackupPlanScriptExecution {
   exit_code?: number | null
   error_message?: string | null
   has_logs?: boolean
+  // Latest streamed line while an agent hook is running (live "current activity").
+  current_line?: string | null
 }
 
 export interface BackupPlanRun {

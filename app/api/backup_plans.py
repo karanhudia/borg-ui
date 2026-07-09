@@ -7,7 +7,7 @@ from typing import Any, Optional
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, object_session
 
 from app.core.security import (
     check_repo_access,
@@ -17,6 +17,7 @@ from app.core.security import (
 )
 from app.database.database import get_db
 from app.database.models import (
+    AgentJobLog,
     BackupJob,
     BackupPlan,
     BackupPlanRepository,
@@ -726,6 +727,24 @@ def _serialize_plan_run_repository(
     }
 
 
+def _latest_agent_script_line(execution: ScriptExecution) -> Optional[str]:
+    """The most recent streamed line of a still-running agent hook, for the live
+    inline "current activity" ticker (mirrors a borg job's current file). Uses the
+    session the execution is already attached to, so no db argument is threaded."""
+    if execution.status != "running" or execution.agent_job_id is None:
+        return None
+    session = object_session(execution)
+    if session is None:
+        return None
+    row = (
+        session.query(AgentJobLog.message)
+        .filter(AgentJobLog.agent_job_id == execution.agent_job_id)
+        .order_by(AgentJobLog.sequence.desc(), AgentJobLog.id.desc())
+        .first()
+    )
+    return row[0] if row else None
+
+
 def _serialize_script_execution(
     execution: ScriptExecution, *, log_save_policy: str = DEFAULT_LOG_SAVE_POLICY
 ) -> dict[str, Any]:
@@ -743,6 +762,7 @@ def _serialize_script_execution(
         "execution_time": execution.execution_time,
         "exit_code": execution.exit_code,
         "error_message": execution.error_message,
+        "current_line": _latest_agent_script_line(execution),
         "has_logs": job_has_logs_by_policy(
             execution,
             log_save_policy,

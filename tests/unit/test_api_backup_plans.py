@@ -1041,6 +1041,57 @@ class TestBackupPlanRoutes:
         assert row["has_logs"] is True
         assert row["started_at"]
         assert row["completed_at"]
+        # A completed/failed hook has no live current line.
+        assert row["current_line"] is None
+
+    def test_run_response_exposes_running_agent_hook_current_line(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        # A still-running agent hook exposes its latest streamed line so the live
+        # run card can ticker it like a borg job's current file.
+        from app.database.models import AgentJob, AgentJobLog
+
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        plan, run = _create_execution_plan(test_db, [repo])
+        agent_job = AgentJob(
+            agent_machine_id=1, job_type="script.run", status="running", payload={}
+        )
+        test_db.add(agent_job)
+        test_db.flush()
+        for seq, message in enumerate(
+            ["Dumping database: ccnet_db", "Dumping database: seafile_db"]
+        ):
+            test_db.add(
+                AgentJobLog(
+                    agent_job_id=agent_job.id,
+                    sequence=seq,
+                    stream="stdout",
+                    message=message,
+                    created_at=datetime.utcnow(),
+                )
+            )
+        execution = ScriptExecution(
+            script_id=None,
+            agent_script_name="backup-cluster-mariadb",
+            backup_plan_id=plan.id,
+            backup_plan_run_id=run.id,
+            hook_type="pre-backup",
+            status="running",
+            started_at=datetime.utcnow(),
+            agent_job_id=agent_job.id,
+            triggered_by="backup_plan",
+        )
+        test_db.add(execution)
+        test_db.commit()
+
+        response = test_client.get(
+            f"/api/backup-plans/runs/{run.id}", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        row = response.json()["script_executions"][0]
+        assert row["status"] == "running"
+        assert row["current_line"] == "Dumping database: seafile_db"
 
     def test_run_response_hides_quiet_backup_logs_under_failed_only(
         self, test_client: TestClient, admin_headers, test_db
