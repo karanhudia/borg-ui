@@ -1,6 +1,7 @@
 import {
   alpha,
   Box,
+  Collapse,
   IconButton,
   Stack,
   Table,
@@ -12,11 +13,12 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
-import { Ban, Eye, RotateCcw } from 'lucide-react'
+import { Ban, ChevronDown, ChevronRight, Eye, RotateCcw } from 'lucide-react'
 import type { TFunction } from 'i18next'
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 
 import type { BackupPlanRunLogJob } from '../../../components/BackupPlanRunsPanel'
+import { PlanRunScriptsSection } from '../../../components/PlanRunScripts'
 import RetryJobDialog from '../../../components/RetryJobDialog'
 import {
   getBackupPlanRunRetryDisabledReason,
@@ -53,6 +55,14 @@ export function PlanRunsHistoryTable({
   t,
 }: PlanRunsHistoryTableProps) {
   const [retryRun, setRetryRun] = useState<BackupPlanRun | null>(null)
+  const [expandedRuns, setExpandedRuns] = useState<Set<number>>(new Set())
+  const toggleExpanded = (runId: number) =>
+    setExpandedRuns((prev) => {
+      const next = new Set(prev)
+      if (next.has(runId)) next.delete(runId)
+      else next.add(runId)
+      return next
+    })
   const formatStatusLabel = (status?: string) =>
     status
       ? t(`backupPlans.statuses.${status}`, { defaultValue: formatRunStatus(status) })
@@ -104,6 +114,8 @@ export function PlanRunsHistoryTable({
               const startedAt = run.started_at || run.created_at
               const logJob = findFirstLogJobForRun(run)
               const active = isActiveRun(run.status)
+              const scriptCount = run.script_executions?.length ?? 0
+              const expanded = expandedRuns.has(run.id)
               const retryDisabledReason = getBackupPlanRunRetryDisabledReason(run, t, {
                 canRetry: canRetryRun(run),
                 hasActiveRunForPlan: hasActiveRunForPlan(run),
@@ -114,98 +126,101 @@ export function PlanRunsHistoryTable({
                   : retryDisabledReason || t('backupPlans.runsPanel.retryTooltips.ready')
 
               return (
-                <TableRow key={run.id} hover>
-                  <TableCell
-                    sx={{
-                      fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace',
-                      fontSize: '0.78rem',
-                      color: 'text.secondary',
-                    }}
+                <Fragment key={run.id}>
+                  <TableRow
+                    hover
+                    sx={expanded ? { '& > td': { borderBottom: 'unset' } } : undefined}
                   >
-                    #{run.id}
-                  </TableCell>
-                  <TableCell>
-                    {startedAt ? (
-                      <Tooltip title={formatDateTimeFull(startedAt)} arrow>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          sx={{ cursor: 'help', display: 'inline-block' }}
-                        >
-                          {formatRelativeTime(startedAt)}
-                        </Typography>
-                      </Tooltip>
-                    ) : (
-                      <Typography variant="body2" color="text.disabled">
-                        —
-                      </Typography>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Stack direction="row" spacing={0.5} alignItems="center">
-                      <Box
-                        sx={{
-                          display: 'flex',
-                          color: runStatusIconColor(run.status),
-                          lineHeight: 0,
-                        }}
-                      >
-                        <RunStatusLeadIcon status={run.status} />
-                      </Box>
-                      <Typography variant="body2">{formatStatusLabel(run.status)}</Typography>
-                    </Stack>
-                  </TableCell>
-                  <TableCell>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
+                    <TableCell
                       sx={{
                         fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace',
                         fontSize: '0.78rem',
+                        color: 'text.secondary',
                       }}
                     >
-                      {formatTimeRange(run.started_at, run.completed_at, run.status)}
-                    </Typography>
-                  </TableCell>
-                  <TableCell align="right">
-                    <Stack direction="row" spacing={0.25} justifyContent="flex-end">
-                      {logJob && (
-                        <Tooltip
-                          title={t('backupPlans.runsDialog.viewLogs', {
-                            defaultValue: 'View logs',
-                          })}
-                          arrow
-                        >
+                      <Stack direction="row" spacing={0.25} alignItems="center">
+                        {scriptCount > 0 ? (
                           <IconButton
                             size="small"
-                            onClick={() => onViewLogs(logJob)}
-                            aria-label={t('backupPlans.runsDialog.viewLogs', {
+                            onClick={() => toggleExpanded(run.id)}
+                            aria-expanded={expanded}
+                            aria-label={
+                              expanded
+                                ? t('backupPlans.runsTable.hideScripts', {
+                                    defaultValue: 'Hide scripts',
+                                  })
+                                : t('backupPlans.runsTable.showScripts', {
+                                    defaultValue: 'Show scripts',
+                                  })
+                            }
+                            sx={{ width: 22, height: 22, color: 'text.secondary' }}
+                          >
+                            {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                          </IconButton>
+                        ) : (
+                          <Box sx={{ width: 22, flexShrink: 0 }} />
+                        )}
+                        <span>#{run.id}</span>
+                      </Stack>
+                    </TableCell>
+                    <TableCell>
+                      {startedAt ? (
+                        <Tooltip title={formatDateTimeFull(startedAt)} arrow>
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ cursor: 'help', display: 'inline-block' }}
+                          >
+                            {formatRelativeTime(startedAt)}
+                          </Typography>
+                        </Tooltip>
+                      ) : (
+                        <Typography variant="body2" color="text.disabled">
+                          —
+                        </Typography>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Stack direction="row" spacing={0.5} alignItems="center">
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            color: runStatusIconColor(run.status),
+                            lineHeight: 0,
+                          }}
+                        >
+                          <RunStatusLeadIcon status={run.status} />
+                        </Box>
+                        <Typography variant="body2">{formatStatusLabel(run.status)}</Typography>
+                      </Stack>
+                    </TableCell>
+                    <TableCell>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{
+                          fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace',
+                          fontSize: '0.78rem',
+                        }}
+                      >
+                        {formatTimeRange(run.started_at, run.completed_at, run.status)}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Stack direction="row" spacing={0.25} justifyContent="flex-end">
+                        {logJob && (
+                          <Tooltip
+                            title={t('backupPlans.runsDialog.viewLogs', {
                               defaultValue: 'View logs',
                             })}
-                            sx={{
-                              width: 28,
-                              height: 28,
-                              color: 'info.main',
-                              '&:hover': {
-                                bgcolor: (theme) => alpha(theme.palette.info.main, 0.12),
-                              },
-                            }}
+                            arrow
                           >
-                            <Eye size={15} />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                      {onRetry && shouldShowBackupPlanRunRetryAction(run) && (
-                        <Tooltip title={retryTooltip} arrow>
-                          <span>
                             <IconButton
                               size="small"
-                              onClick={() => {
-                                if (retryDisabledReason) return
-                                setRetryRun(run)
-                              }}
-                              disabled={retryingRunId === run.id || Boolean(retryDisabledReason)}
-                              aria-label={retryTooltip}
+                              onClick={() => onViewLogs(logJob)}
+                              aria-label={t('backupPlans.runsDialog.viewLogs', {
+                                defaultValue: 'View logs',
+                              })}
                               sx={{
                                 width: 28,
                                 height: 28,
@@ -213,44 +228,80 @@ export function PlanRunsHistoryTable({
                                 '&:hover': {
                                   bgcolor: (theme) => alpha(theme.palette.info.main, 0.12),
                                 },
-                                '&.Mui-disabled': { opacity: 0.35 },
                               }}
                             >
-                              <RotateCcw size={15} />
+                              <Eye size={15} />
                             </IconButton>
-                          </span>
-                        </Tooltip>
-                      )}
-                      {active && (
-                        <Tooltip
-                          title={t('backupPlans.runsPanel.cancelRun', {
-                            defaultValue: 'Cancel run',
-                          })}
-                          arrow
-                        >
-                          <IconButton
-                            size="small"
-                            onClick={() => onCancel(run.id)}
-                            disabled={cancelling === run.id}
-                            aria-label={t('backupPlans.runsPanel.cancelRun', {
+                          </Tooltip>
+                        )}
+                        {onRetry && shouldShowBackupPlanRunRetryAction(run) && (
+                          <Tooltip title={retryTooltip} arrow>
+                            <span>
+                              <IconButton
+                                size="small"
+                                onClick={() => {
+                                  if (retryDisabledReason) return
+                                  setRetryRun(run)
+                                }}
+                                disabled={retryingRunId === run.id || Boolean(retryDisabledReason)}
+                                aria-label={retryTooltip}
+                                sx={{
+                                  width: 28,
+                                  height: 28,
+                                  color: 'info.main',
+                                  '&:hover': {
+                                    bgcolor: (theme) => alpha(theme.palette.info.main, 0.12),
+                                  },
+                                  '&.Mui-disabled': { opacity: 0.35 },
+                                }}
+                              >
+                                <RotateCcw size={15} />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        )}
+                        {active && (
+                          <Tooltip
+                            title={t('backupPlans.runsPanel.cancelRun', {
                               defaultValue: 'Cancel run',
                             })}
-                            sx={{
-                              width: 28,
-                              height: 28,
-                              color: 'warning.main',
-                              '&:hover': {
-                                bgcolor: (theme) => alpha(theme.palette.warning.main, 0.12),
-                              },
-                            }}
+                            arrow
                           >
-                            <Ban size={15} />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                    </Stack>
-                  </TableCell>
-                </TableRow>
+                            <IconButton
+                              size="small"
+                              onClick={() => onCancel(run.id)}
+                              disabled={cancelling === run.id}
+                              aria-label={t('backupPlans.runsPanel.cancelRun', {
+                                defaultValue: 'Cancel run',
+                              })}
+                              sx={{
+                                width: 28,
+                                height: 28,
+                                color: 'warning.main',
+                                '&:hover': {
+                                  bgcolor: (theme) => alpha(theme.palette.warning.main, 0.12),
+                                },
+                              }}
+                            >
+                              <Ban size={15} />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
+                  {scriptCount > 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} sx={{ py: 0, border: 0 }}>
+                        <Collapse in={expanded} unmountOnExit>
+                          <Box sx={{ py: 1.5, px: 1 }}>
+                            <PlanRunScriptsSection run={run} onViewLogs={onViewLogs} />
+                          </Box>
+                        </Collapse>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </Fragment>
               )
             })}
           </TableBody>
