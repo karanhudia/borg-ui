@@ -142,6 +142,33 @@ def _format_script_execution_logs(execution: ScriptExecution) -> str:
     return "\n".join(lines)
 
 
+def _format_running_agent_script_logs(execution: ScriptExecution, db: Session) -> str:
+    """Live log for a still-running agent hook: the header plus the agent's
+    streamed ``agent_job_logs`` lines, which arrive before the terminal
+    stdout/stderr are captured at completion. The frontend polls this every 2s
+    while the execution is ``running`` (same as a live borg job)."""
+    rows = (
+        db.query(AgentJobLog)
+        .filter(AgentJobLog.agent_job_id == execution.agent_job_id)
+        .order_by(AgentJobLog.sequence.asc(), AgentJobLog.id.asc())
+        .all()
+    )
+    stdout_lines = [row.message for row in rows if row.stream != "stderr"]
+    stderr_lines = [row.message for row in rows if row.stream == "stderr"]
+    lines = [
+        f"SCRIPT: {_script_execution_display_name(execution)}",
+        f"HOOK: {execution.hook_type or 'standalone'}",
+        f"STATUS: {execution.status}",
+        "",
+        "STDOUT:",
+        "\n".join(stdout_lines) if stdout_lines else "(no output yet)",
+        "",
+        "STDERR:",
+        "\n".join(stderr_lines) if stderr_lines else "(no output yet)",
+    ]
+    return "\n".join(lines)
+
+
 RCLONE_ACTIVITY_OPERATIONS = {
     "rclone_sync": "sync",
     "rclone_hydrate": "hydrate",
@@ -789,9 +816,14 @@ async def get_job_logs(
                 },
             )
         _ensure_activity_logs_visible(job_type, execution, db)
-        return _paginate_log_text(
-            _format_script_execution_logs(execution), offset, limit
-        )
+        # While an agent hook runs, stream its live agent_job_logs (the terminal
+        # stdout/stderr are only captured at completion); afterwards serve the
+        # captured result.
+        if execution.status == "running" and execution.agent_job_id is not None:
+            log_text = _format_running_agent_script_logs(execution, db)
+        else:
+            log_text = _format_script_execution_logs(execution)
+        return _paginate_log_text(log_text, offset, limit)
 
     if job_type in RCLONE_ACTIVITY_OPERATIONS:
         job = _get_rclone_job(db, job_type, job_id)

@@ -1896,6 +1896,15 @@ class ScriptExecution(Base):
         nullable=True,
         index=True,
     )  # NULL outside backup plan runs
+    # Set for agent-executed hooks: the AgentJob whose streamed AgentJobLog lines
+    # provide the live output while the hook is running (before the terminal
+    # stdout/stderr are captured). NULL for server-side executions.
+    agent_job_id = Column(
+        Integer,
+        ForeignKey("agent_jobs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     # Execution details
     hook_type = Column(
