@@ -16,6 +16,7 @@ from agent.borg_ui_agent.client import AGENT_AUTH_HEADER, AgentClient
 from agent.borg_ui_agent.config import AgentConfig
 from agent.borg_ui_agent.filesystem import FilesystemBrowseError, browse_filesystem
 from agent.borg_ui_agent.runtime import get_capabilities, get_job_handler
+from agent.borg_ui_agent.scripts import list_allowed_scripts
 
 logger = logging.getLogger(__name__)
 
@@ -437,6 +438,10 @@ class AgentSessionRuntime:
             self._handle_repository_defaults(client, payload)
             return
 
+        if command == "agent.list_scripts":
+            self._handle_list_scripts(client, payload)
+            return
+
         if command == "cancel":
             # Signal the worker running this job so it actually stops; it emits
             # its own job_canceled as it unwinds. Also record the cancel here via
@@ -553,6 +558,18 @@ class AgentSessionRuntime:
                 "items_truncated": True,
             }
         client.send_result(result)
+
+    def _handle_list_scripts(
+        self, client: SessionCommandClient, payload: dict[str, Any]
+    ) -> None:
+        """Report the scripts the agent publishes (its allow-list) so the UI can
+        offer them for pre/post-backup hooks. Never exposes paths — names only."""
+        try:
+            scripts = list_allowed_scripts()
+        except Exception as exc:  # defensive: listing must never drop the session
+            client.send_error(f"Listing agent scripts failed: {exc}")
+            return
+        client.send_result({"scripts": scripts})
 
     def _handle_diagnostics(
         self, client: SessionCommandClient, payload: dict[str, Any]

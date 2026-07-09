@@ -106,10 +106,18 @@ def _paginate_log_text(log_text: str, offset: int, limit: int) -> dict:
     }
 
 
+def _script_execution_display_name(execution: ScriptExecution) -> str:
+    """Human label for a script execution: the library script name, or the
+    agent-published script name for agent hooks (which have no ``script_id``)."""
+    if execution.script:
+        return execution.script.name
+    if execution.agent_script_name:
+        return execution.agent_script_name
+    return f"Script #{execution.script_id}"
+
+
 def _format_script_execution_logs(execution: ScriptExecution) -> str:
-    script_name = (
-        execution.script.name if execution.script else f"Script #{execution.script_id}"
-    )
+    script_name = _script_execution_display_name(execution)
     lines = [
         f"SCRIPT: {script_name}",
         f"HOOK: {execution.hook_type or 'standalone'}",
@@ -636,11 +644,7 @@ async def list_recent_activity(
         for execution in script_executions:
             if status and execution.status != status:
                 continue
-            script_name = (
-                execution.script.name
-                if execution.script
-                else f"Script #{execution.script_id}"
-            )
+            script_name = _script_execution_display_name(execution)
             backup_plan_name = None
             if execution.backup_plan:
                 backup_plan_name = execution.backup_plan.name

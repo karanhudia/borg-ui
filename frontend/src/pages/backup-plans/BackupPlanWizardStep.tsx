@@ -103,6 +103,8 @@ export function BackupPlanWizardStep({
         loadingScripts={loadingScripts}
         updateState={updateState}
         t={t}
+        repositories={repositories}
+        agentMachines={agentMachines}
       />
     )
   }

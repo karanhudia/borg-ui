@@ -102,7 +102,10 @@ class UploadRatelimitSchedulePolicyPayload(BaseModel):
 
 
 class BackupPlanScriptPayload(BaseModel):
-    script_id: int
+    # A hook references EITHER a server-side library script (script_id) OR a
+    # script the agent publishes (agent_script_name). Exactly one must be set.
+    script_id: Optional[int] = None
+    agent_script_name: Optional[str] = None
     hook_type: str
     execution_order: float = 1
     enabled: bool = True
@@ -404,12 +407,35 @@ def _decode_hook_parameter_values(value: Optional[str]) -> dict[str, Any]:
 
 
 def _serialize_script_hook_assignment(hook: BackupPlanScript) -> dict[str, Any]:
+    if hook.agent_script_name:
+        # Agent-published script: no server-side Script row, no parameters.
+        return {
+            "id": hook.id,
+            "script_id": None,
+            "agent_script_name": hook.agent_script_name,
+            "is_agent_script": True,
+            "script_name": hook.agent_script_name,
+            "script_description": None,
+            "hook_type": hook.hook_type,
+            "execution_order": hook.execution_order,
+            "enabled": bool(hook.enabled),
+            "custom_timeout": hook.custom_timeout,
+            "custom_run_on": hook.custom_run_on,
+            "continue_on_error": bool(hook.continue_on_error),
+            "skip_on_failure": bool(hook.skip_on_failure),
+            "default_timeout": None,
+            "default_run_on": "always",
+            "parameters": [],
+            "parameter_values": None,
+        }
     script = hook.script
     parameters = _script_parameter_defs(script)
     parameter_values = _decode_hook_parameter_values(hook.parameter_values)
     return {
         "id": hook.id,
         "script_id": hook.script_id,
+        "agent_script_name": None,
+        "is_agent_script": False,
         "script_name": script.name if script else f"Script #{hook.script_id}",
         "script_description": script.description if script else None,
         "hook_type": hook.hook_type,
@@ -458,7 +484,11 @@ def _serialize_legacy_script_hook(
 
 
 def _serialize_plan_script_hooks(plan: BackupPlan) -> list[dict[str, Any]]:
-    explicit_hooks = [hook for hook in plan.script_hooks if hook.script is not None]
+    explicit_hooks = [
+        hook
+        for hook in plan.script_hooks
+        if hook.script is not None or hook.agent_script_name
+    ]
     if explicit_hooks:
         hook_order = {"pre-backup": 0, "post-backup": 1}
         return [
@@ -702,9 +732,10 @@ def _serialize_script_execution(
     return {
         "id": execution.id,
         "script_id": execution.script_id,
+        "agent_script_name": execution.agent_script_name,
         "script_name": execution.script.name
         if execution.script
-        else f"Script #{execution.script_id}",
+        else (execution.agent_script_name or f"Script #{execution.script_id}"),
         "hook_type": execution.hook_type,
         "status": execution.status,
         "started_at": serialize_datetime(execution.started_at),
@@ -879,12 +910,34 @@ def _validate_script_hooks(db: Session, payload: BackupPlanPayload) -> None:
     if payload.script_hooks is None:
         return
 
-    seen: set[tuple[int, str]] = set()
+    seen: set[tuple[Any, str]] = set()
     for hook in payload.script_hooks:
         if hook.hook_type not in PLAN_SCRIPT_HOOK_TYPES:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail={"key": "backend.errors.scripts.hookTypeMustBe"},
+            )
+        # Exactly one of script_id / agent_script_name identifies the script.
+        agent_script_name = (hook.agent_script_name or "").strip()
+        has_library = hook.script_id is not None
+        has_agent = bool(agent_script_name)
+        if has_library == has_agent:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"key": "backend.errors.scripts.hookScriptRequired"},
+            )
+        # Defense-in-depth: the agent is the real allow-list boundary, but reject
+        # obviously malformed names here too (length matches the DB column; no path
+        # separators / traversal) for a clear 422 instead of an agent-side failure.
+        if has_agent and (
+            len(agent_script_name) > 255
+            or "/" in agent_script_name
+            or "\\" in agent_script_name
+            or ".." in agent_script_name
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"key": "backend.errors.scripts.invalidAgentScriptName"},
             )
         if hook.custom_run_on and hook.custom_run_on not in PLAN_SCRIPT_RUN_ON_VALUES:
             raise HTTPException(
@@ -901,14 +954,21 @@ def _validate_script_hooks(db: Session, payload: BackupPlanPayload) -> None:
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail={"key": "backend.errors.scripts.invalidExecutionOrder"},
             )
-        key = (hook.script_id, hook.hook_type)
+        key = (
+            ("agent", agent_script_name) if has_agent else ("library", hook.script_id),
+            hook.hook_type,
+        )
         if key in seen:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail={"key": "backend.errors.scripts.scriptAlreadyAssigned"},
             )
         seen.add(key)
-        if not db.query(Script.id).filter(Script.id == hook.script_id).first():
+        # Agent scripts live on the node and are validated by the agent at run
+        # time; only library scripts are checked against the server-side table.
+        if has_library and not (
+            db.query(Script.id).filter(Script.id == hook.script_id).first()
+        ):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail={"key": "backend.errors.scripts.scriptNotFound"},
@@ -919,7 +979,12 @@ def _mirror_legacy_script_fields(payload: BackupPlanPayload) -> None:
     if payload.script_hooks is None:
         return
 
-    enabled_hooks = [hook for hook in payload.script_hooks if hook.enabled]
+    # Legacy single-FK columns are library-only; agent hooks never mirror here.
+    enabled_hooks = [
+        hook
+        for hook in payload.script_hooks
+        if hook.enabled and hook.script_id is not None
+    ]
     pre_hooks = sorted(
         (hook for hook in enabled_hooks if hook.hook_type == "pre-backup"),
         key=lambda item: item.execution_order,
@@ -946,11 +1011,24 @@ def _replace_script_hooks(
         BackupPlanScript.backup_plan_id == plan.id
     ).delete()
     for hook in payload.script_hooks:
-        script = db.query(Script).filter(Script.id == hook.script_id).one()
+        is_agent_hook = hook.script_id is None
+        if is_agent_hook:
+            script = None
+            parameter_values = None
+        else:
+            script = db.query(Script).filter(Script.id == hook.script_id).one()
+            parameter_values = _process_hook_parameter_values(
+                script, hook.parameter_values
+            )
         db.add(
             BackupPlanScript(
                 backup_plan_id=plan.id,
                 script_id=hook.script_id,
+                agent_script_name=(
+                    (hook.agent_script_name or "").strip() or None
+                    if is_agent_hook
+                    else None
+                ),
                 hook_type=hook.hook_type,
                 execution_order=hook.execution_order,
                 enabled=hook.enabled,
@@ -958,9 +1036,7 @@ def _replace_script_hooks(
                 custom_run_on=hook.custom_run_on,
                 continue_on_error=bool(hook.continue_on_error),
                 skip_on_failure=bool(hook.skip_on_failure),
-                parameter_values=_process_hook_parameter_values(
-                    script, hook.parameter_values
-                ),
+                parameter_values=parameter_values,
                 created_at=datetime.utcnow(),
             )
         )

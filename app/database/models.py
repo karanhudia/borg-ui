@@ -977,12 +977,16 @@ class BackupPlanScript(Base):
         nullable=False,
         index=True,
     )
+    # A hook references EITHER a server-side library script (script_id) OR a
+    # named script published by the agent (agent_script_name). Exactly one is set;
+    # script_id is nullable so agent-script hooks can omit it.
     script_id = Column(
         Integer,
         ForeignKey("scripts.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
+    agent_script_name = Column(String(255), nullable=True)
     hook_type = Column(String(50), nullable=False)
     execution_order = Column(Float, default=1, nullable=False)
     enabled = Column(Boolean, default=True, nullable=False)
@@ -1859,12 +1863,15 @@ class ScriptExecution(Base):
     __tablename__ = "script_executions"
 
     id = Column(Integer, primary_key=True, index=True)
+    # NULL for agent-script executions, which have no server-side Script row and
+    # are identified by agent_script_name instead.
     script_id = Column(
         Integer,
         ForeignKey("scripts.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
+    agent_script_name = Column(String(255), nullable=True)
     repository_id = Column(
         Integer,
         ForeignKey("repositories.id", ondelete="SET NULL"),

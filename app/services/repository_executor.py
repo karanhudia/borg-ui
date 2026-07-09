@@ -10,6 +10,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database.models import AgentJob, AgentMachine, BackupJob, Repository
+from app.services.agent_job_dispatcher import dispatch_agent_cancel_if_connected
 from app.services.job_admission import (
     OPERATION_BACKUP,
     ensure_repository_admission,
@@ -438,6 +439,140 @@ def queue_agent_backup_job(
     db.commit()
     db.refresh(agent_job)
     return agent_job
+
+
+SCRIPT_RUN_CAPABILITY = "script.run"
+
+
+def build_agent_script_payload(
+    script_name: str, env: Optional[dict[str, str]] = None
+) -> dict[str, Any]:
+    """Payload for a ``script.run`` agent job. Carries only the script *name*
+    (never a path) and the ``BORG_UI_*`` context env — the agent resolves the
+    name against its own allow-list."""
+    return {
+        "schema_version": 1,
+        "job_kind": "script.run",
+        "script": {"name": script_name},
+        "env": {
+            key: str(value)
+            for key, value in (env or {}).items()
+            if isinstance(key, str)
+        },
+    }
+
+
+def validate_agent_script(agent: AgentMachine) -> None:
+    """Ensure the agent is queueable and advertises the ``script.run`` capability."""
+    if agent.status in ("disabled", "revoked"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"key": "backend.errors.agents.agentNotQueueable"},
+        )
+    if SCRIPT_RUN_CAPABILITY not in (agent.capabilities or []):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "key": "backend.errors.agents.capabilityMissing",
+                "params": {"capability": SCRIPT_RUN_CAPABILITY},
+            },
+        )
+
+
+def queue_agent_script_job(
+    db: Session,
+    agent: AgentMachine,
+    *,
+    script_name: str,
+    env: Optional[dict[str, str]] = None,
+    backup_job_id: Optional[int] = None,
+) -> AgentJob:
+    """Enqueue a ``script.run`` job for a resolved agent. Not a borg operation, so
+    it carries no repository admission — it wraps a plan run, not the borg call."""
+    validate_agent_script(agent)
+    now = datetime.utcnow()
+    agent_job = AgentJob(
+        agent_machine_id=agent.id,
+        backup_job_id=backup_job_id,
+        job_type="script",
+        status="queued",
+        payload=build_agent_script_payload(script_name, env),
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(agent_job)
+    db.commit()
+    db.refresh(agent_job)
+    return agent_job
+
+
+def _terminate_agent_script_job(
+    db: Session, agent_job: AgentJob, error_message: str
+) -> None:
+    """Move a ``script.run`` job to the non-dispatchable terminal ``canceled``
+    state and commit, so an offline agent's fallback dispatch cannot run the
+    script after the plan was cancelled or timed out. Remote cancellation stays
+    best-effort; this is the local guarantee that the job never fires later."""
+    if agent_job.status not in TERMINAL_AGENT_STATUSES:
+        agent_job.status = "canceled"
+        if error_message and not agent_job.error_message:
+            agent_job.error_message = error_message
+        db.commit()
+
+
+async def wait_for_agent_script_job(
+    db: Session,
+    agent_job_id: int,
+    *,
+    is_cancelled: Optional[Callable[[], bool]] = None,
+    timeout_seconds: Optional[float] = None,
+    poll_interval_seconds: float = 0.5,
+) -> dict[str, Any]:
+    """Poll a ``script.run`` agent job to a terminal state and return a snapshot
+    ``{status, result, error_message}`` — never raises for a script failure, so
+    the plan hook policy (skip/continue/fail) decides in the caller. ``status`` is
+    ``"timeout"`` if the deadline passes first."""
+    deadline = None if timeout_seconds is None else time.monotonic() + timeout_seconds
+    while True:
+        db.expire_all()
+        agent_job = db.query(AgentJob).filter(AgentJob.id == agent_job_id).first()
+        if not agent_job:
+            return {"status": "failed", "result": {}, "error_message": "job not found"}
+
+        if (
+            is_cancelled
+            and is_cancelled()
+            and agent_job.status not in TERMINAL_AGENT_STATUSES
+        ):
+            # Best-effort remote cancel, then persist a terminal state so the job
+            # can never be dispatched (and the script run) after cancellation.
+            await dispatch_agent_cancel_if_connected(agent_job)
+            _terminate_agent_script_job(db, agent_job, "canceled")
+            return {
+                "status": "canceled",
+                "result": agent_job.result or {},
+                "error_message": agent_job.error_message,
+            }
+
+        if agent_job.status in TERMINAL_AGENT_STATUSES:
+            return {
+                "status": agent_job.status,
+                "result": agent_job.result or {},
+                "error_message": agent_job.error_message,
+            }
+
+        if deadline is not None and time.monotonic() > deadline:
+            # Same guarantee on timeout: an offline agent must not run the script
+            # later via fallback dispatch once the plan gave up waiting.
+            await dispatch_agent_cancel_if_connected(agent_job)
+            _terminate_agent_script_job(db, agent_job, "agent script timed out")
+            return {
+                "status": "timeout",
+                "result": agent_job.result or {},
+                "error_message": "agent script timed out",
+            }
+
+        await asyncio.sleep(poll_interval_seconds)
 
 
 def get_agent_job_for_backup(db: Session, backup_job_id: int) -> Optional[AgentJob]:

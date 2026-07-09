@@ -20,6 +20,7 @@ from app.core.borg_router import BorgRouter
 from app.core.security import decrypt_secret
 from app.database.database import SessionLocal
 from app.database.models import (
+    AgentMachine,
     BackupJob,
     BackupPlan,
     BackupPlanRepository,
@@ -48,7 +49,9 @@ from app.services.repository_executor import (
     cancel_agent_backup_job,
     is_agent_executor,
     queue_agent_backup_job,
+    queue_agent_script_job,
     wait_for_agent_backup_job,
+    wait_for_agent_script_job,
 )
 from app.services.upload_ratelimit_policies import resolve_scheduled_upload_ratelimit
 from app.services.script_executor import execute_script
@@ -493,6 +496,7 @@ def _plan_script_hooks(plan: BackupPlan) -> list[dict[str, Any]]:
         {
             "legacy": False,
             "script_id": hook.script_id,
+            "agent_script_name": hook.agent_script_name,
             "hook_type": hook.hook_type,
             "execution_order": hook.execution_order,
             "enabled": bool(hook.enabled),
@@ -512,6 +516,46 @@ def _plan_script_hooks(plan: BackupPlan) -> list[dict[str, Any]]:
             ),
         )
     ]
+
+
+def _classify_agent_script_outcome(
+    outcome: dict[str, Any], *, hook_type: str, script_name: str
+) -> tuple[bool, str, Optional[str]]:
+    """Map an agent ``script.run`` outcome to (hook_ok, execution_status, message)
+    per the agent-script contract: return code 0 = success, 1 = warning
+    (non-fatal — the backup proceeds), >1 = failure. A job that did not complete
+    (offline/timeout/crash) is a failure with the reported reason."""
+    result = outcome.get("result") or {}
+    rc = result.get("return_code")
+    if outcome.get("status") == "completed" and isinstance(rc, int):
+        if rc == 0:
+            return True, "completed", None
+        if rc == 1:
+            return True, "warning", f"exit code {rc} (warning)"
+        return (
+            False,
+            "failed",
+            f"Plan {hook_type} agent script '{script_name}' failed with exit code {rc}",
+        )
+    message = outcome.get("error_message") or outcome.get("status") or "failed"
+    return (
+        False,
+        "failed",
+        f"Plan {hook_type} agent script '{script_name}': {message}",
+    )
+
+
+def _http_detail_message(exc: HTTPException) -> Optional[str]:
+    """A human-ish string from an HTTPException detail (which is usually a
+    ``{"key": ..., "params": ...}`` dict) for logging/recording."""
+    detail = getattr(exc, "detail", None)
+    if isinstance(detail, dict):
+        key = detail.get("key")
+        params = detail.get("params")
+        if key and params:
+            return f"{key} {params}"
+        return str(key) if key else str(detail)
+    return str(detail) if detail is not None else None
 
 
 def _should_run_plan_script(run_on: str, backup_result: Optional[str]) -> bool:
@@ -899,6 +943,7 @@ class BackupPlanExecutionService:
 
     async def execute_run(self, run_id: int) -> None:
         try:
+            run_warnings: list[str] = []
             context, repositories = self._prepare_run(run_id)
             (
                 pre_script_ok,
@@ -918,6 +963,10 @@ class BackupPlanExecutionService:
                 error_message = pre_script_error or "Plan pre-backup script failed"
                 self._mark_pending_repositories_failed(run_id, error_message)
                 raise ValueError(error_message)
+            # A successful pre-backup hook can still carry a warning (agent rc==1);
+            # keep it so it reaches the final run state alongside post-hook warnings.
+            if pre_script_error:
+                run_warnings.append(pre_script_error)
 
             source_pre_ok, source_pre_error = await self._execute_source_scripts(
                 run_id,
@@ -936,7 +985,6 @@ class BackupPlanExecutionService:
             else:
                 await self._execute_series(run_id, context, repositories)
 
-            post_script_warnings: list[str] = []
             if not self._is_run_cancelled(run_id):
                 backup_result = self._plan_backup_result(run_id)
                 source_post_ok, source_post_error = await self._execute_source_scripts(
@@ -946,7 +994,7 @@ class BackupPlanExecutionService:
                     backup_result=backup_result,
                 )
                 if not source_post_ok:
-                    post_script_warnings.append(
+                    run_warnings.append(
                         source_post_error or "Database source post-backup script failed"
                     )
                 (
@@ -960,15 +1008,13 @@ class BackupPlanExecutionService:
                     backup_result=backup_result,
                 )
                 if not post_script_ok:
-                    post_script_warnings.append(
+                    run_warnings.append(
                         post_script_error or "Plan post-backup script failed"
                     )
 
             self._finalize_run(
                 run_id,
-                warning_message="; ".join(post_script_warnings)
-                if post_script_warnings
-                else None,
+                warning_message="; ".join(run_warnings) if run_warnings else None,
             )
         except Exception as exc:
             logger.error("Backup plan run failed", run_id=run_id, error=str(exc))
@@ -1226,6 +1272,7 @@ class BackupPlanExecutionService:
                 kwargs.update(
                     {
                         "script_id": hook.get("script_id"),
+                        "agent_script_name": hook.get("agent_script_name"),
                         "script_parameters": hook.get("parameter_values") or {},
                         "custom_timeout": hook.get("custom_timeout"),
                     }
@@ -1233,6 +1280,12 @@ class BackupPlanExecutionService:
 
             ok, error = await self._execute_plan_script(run_id, context, **kwargs)
             if ok:
+                # A hook can succeed *with a warning* (agent rc==1): surface the
+                # message without treating the hook as failed. Server library
+                # hooks always return (True, None) here, so this is a no-op for
+                # them.
+                if error:
+                    warnings.append(error)
                 continue
 
             error_message = error or f"Plan {hook_type} script failed"
@@ -1246,10 +1299,209 @@ class BackupPlanExecutionService:
             warnings.append(error_message)
 
         if warnings and hook_type == "pre-backup":
-            return True, None, False
+            # Pre-backup warnings are non-fatal (the backup proceeds) but must
+            # still surface in the final run state, so carry the joined message.
+            return True, "; ".join(warnings), False
         if warnings:
             return False, "; ".join(warnings), False
         return True, None, False
+
+    def _resolve_plan_agent(
+        self, db: Session, plan_id: int
+    ) -> tuple[Optional[AgentMachine], Optional[str]]:
+        """The single agent that owns this plan's agent-executed repositories.
+        A plan is bound to one repo → one agent, so more than one distinct agent
+        is a misconfiguration we refuse rather than guess."""
+        plan = (
+            db.query(BackupPlan)
+            .options(
+                joinedload(BackupPlan.repositories).joinedload(
+                    BackupPlanRepository.repository
+                )
+            )
+            .filter(BackupPlan.id == plan_id)
+            .first()
+        )
+        if not plan:
+            return None, "Backup plan not found for agent script"
+        agent_ids = {
+            link.repository.agent_machine_id
+            for link in plan.repositories
+            if link.enabled
+            and link.repository is not None
+            and is_agent_executor(link.repository)
+            and link.repository.agent_machine_id is not None
+        }
+        if not agent_ids:
+            return None, (
+                "Agent script hook requires an agent-executed repository in the plan"
+            )
+        if len(agent_ids) > 1:
+            return None, (
+                "Agent script hooks are only supported for plans bound to a single agent"
+            )
+        agent = (
+            db.query(AgentMachine)
+            .filter(AgentMachine.id == next(iter(agent_ids)))
+            .first()
+        )
+        if not agent:
+            return None, "Agent for this plan no longer exists"
+        return agent, None
+
+    def _build_agent_script_env(
+        self,
+        context: PlanRunContext,
+        *,
+        run_id: int,
+        hook_type: str,
+        backup_result: Optional[str],
+    ) -> dict[str, str]:
+        """The BORG_UI_* context passed to an agent script. No source secrets —
+        the agent merges this over a minimal base and never sees agent secrets."""
+        env: dict[str, str] = {}
+        env.update(
+            get_system_variables(backup_status=backup_result, hook_type=hook_type)
+        )
+        env.update(
+            {
+                "BORG_UI_BACKUP_PLAN_ID": str(context.plan_id),
+                "BORG_UI_BACKUP_PLAN_NAME": context.plan_name,
+                "BORG_UI_BACKUP_PLAN_RUN_ID": str(run_id),
+                "BORG_UI_REPOSITORY_COUNT": str(context.repository_count),
+                "BORG_UI_SOURCE_TYPE": context.source_type,
+                "BORG_UI_SOURCE_DIRECTORIES": json.dumps(context.source_directories),
+                "BORG_UI_HOOK_TYPE": hook_type,
+            }
+        )
+        return {key: str(value) for key, value in env.items() if value is not None}
+
+    async def _execute_agent_plan_script(
+        self,
+        run_id: int,
+        context: PlanRunContext,
+        *,
+        hook_type: str,
+        backup_result: Optional[str],
+        agent_script_name: str,
+        custom_timeout: Optional[int] = None,
+    ) -> tuple[bool, Optional[str]]:
+        db = SessionLocal()
+        execution: Optional[ScriptExecution] = None
+        start_time = time.time()
+
+        def _finish(status_value: str, error_message: Optional[str], rc, out, err):
+            if execution is not None:
+                execution.status = status_value
+                execution.completed_at = datetime.utcnow()
+                execution.execution_time = time.time() - start_time
+                execution.exit_code = rc
+                execution.stdout = out
+                execution.stderr = err
+                execution.error_message = error_message
+                db.commit()
+
+        try:
+            agent, resolve_error = self._resolve_plan_agent(db, context.plan_id)
+            if agent is None:
+                # Record the failure like every other failure path in this method,
+                # so it shows up in the script-execution history, not just the log.
+                db.add(
+                    ScriptExecution(
+                        script_id=None,
+                        agent_script_name=agent_script_name,
+                        backup_plan_id=context.plan_id,
+                        backup_plan_run_id=run_id,
+                        hook_type=hook_type,
+                        status="failed",
+                        started_at=datetime.utcnow(),
+                        completed_at=datetime.utcnow(),
+                        error_message=resolve_error,
+                        triggered_by="backup_plan",
+                    )
+                )
+                db.commit()
+                return False, resolve_error
+
+            execution = ScriptExecution(
+                script_id=None,
+                agent_script_name=agent_script_name,
+                backup_plan_id=context.plan_id,
+                backup_plan_run_id=run_id,
+                hook_type=hook_type,
+                status="running",
+                started_at=datetime.utcnow(),
+                triggered_by="backup_plan",
+            )
+            db.add(execution)
+            db.commit()
+            db.refresh(execution)
+
+            env = self._build_agent_script_env(
+                context, run_id=run_id, hook_type=hook_type, backup_result=backup_result
+            )
+            try:
+                agent_job = queue_agent_script_job(
+                    db, agent, script_name=agent_script_name, env=env
+                )
+            except HTTPException as exc:
+                message = _http_detail_message(exc) or "agent cannot run scripts"
+                _finish("failed", message, None, None, None)
+                return (
+                    False,
+                    f"Plan {hook_type} agent script '{agent_script_name}': {message}",
+                )
+
+            await dispatch_agent_job_best_effort(db, agent_job)
+
+            timeout_seconds = float(custom_timeout) if custom_timeout else None
+            outcome = await wait_for_agent_script_job(
+                db,
+                agent_job.id,
+                is_cancelled=lambda: self._is_run_cancelled(run_id),
+                timeout_seconds=timeout_seconds,
+            )
+            result = outcome.get("result") or {}
+            rc = result.get("return_code")
+            stdout = result.get("stdout")
+            stderr = result.get("stderr")
+
+            hook_ok, exec_status, message = _classify_agent_script_outcome(
+                outcome, hook_type=hook_type, script_name=agent_script_name
+            )
+            _finish(exec_status, message, rc, stdout, stderr)
+            logger.info(
+                "Agent plan script completed",
+                backup_plan_id=context.plan_id,
+                backup_plan_run_id=run_id,
+                agent_script_name=agent_script_name,
+                hook_type=hook_type,
+                status=exec_status,
+                return_code=rc,
+            )
+            # Return the message even when the hook is OK: rc==1 is a non-fatal
+            # *warning* (backup proceeds) whose message must still surface in the
+            # run's warning aggregation. rc==0 yields message=None (no warning).
+            return hook_ok, message
+        except Exception as exc:
+            db.rollback()
+            if execution is not None:
+                execution.status = "failed"
+                execution.completed_at = datetime.utcnow()
+                execution.execution_time = time.time() - start_time
+                execution.error_message = str(exc)
+                db.commit()
+            logger.error(
+                "Agent plan script failed",
+                backup_plan_id=context.plan_id,
+                backup_plan_run_id=run_id,
+                agent_script_name=agent_script_name,
+                hook_type=hook_type,
+                error=str(exc),
+            )
+            return False, str(exc)
+        finally:
+            db.close()
 
     async def _execute_plan_script(
         self,
@@ -1259,11 +1511,25 @@ class BackupPlanExecutionService:
         hook_type: str,
         backup_result: Optional[str] = None,
         script_id: Optional[int] = None,
+        agent_script_name: Optional[str] = None,
         script_parameters: Optional[dict[str, Any]] = None,
         custom_timeout: Optional[int] = None,
         source_location: Optional[dict[str, Any]] = None,
         source_index: Optional[int] = None,
     ) -> tuple[bool, Optional[str]]:
+        # Agent-published script: run it on the agent node over the same job path
+        # as borg commands. This branch is reached only when the hook carries an
+        # agent_script_name; every existing (library) hook falls straight through.
+        if agent_script_name:
+            return await self._execute_agent_plan_script(
+                run_id,
+                context,
+                hook_type=hook_type,
+                backup_result=backup_result,
+                agent_script_name=agent_script_name,
+                custom_timeout=custom_timeout,
+            )
+
         if script_id is None:
             script_id = (
                 context.pre_backup_script_id
@@ -2018,7 +2284,11 @@ class BackupPlanExecutionService:
         db = SessionLocal()
         try:
             run = db.query(BackupPlanRun).filter(BackupPlanRun.id == run_id).first()
-            if run:
+            # A cancellation surfaces here as a generic hook/backup failure (the
+            # agent script outcome classifies "canceled" as failed and raises).
+            # Don't overwrite the run's "cancelled" status with "failed" — same
+            # guard as _finalize_run.
+            if run and run.status != "cancelled":
                 run.status = "failed"
                 run.error_message = error_message
                 run.completed_at = datetime.utcnow()

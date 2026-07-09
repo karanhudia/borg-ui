@@ -67,6 +67,10 @@ export function ReviewStep({
     .sort((left, right) => left.execution_order - right.execution_order)
   const scriptName = (scriptId: number) =>
     scripts.find((script) => script.id === scriptId)?.name || `Script #${scriptId}`
+  const hookLabel = (hook: (typeof planScriptHooks)[number]) =>
+    hook.agent_script_name
+      ? `${hook.agent_script_name} (${t('backupPlans.wizard.scripts.agentScriptBadge')})`
+      : scriptName(Number(hook.script_id))
   const selectedRepositories = wizardState.repositoryIds
     .map((repositoryId) => repositories.find((repository) => repository.id === repositoryId))
     .filter((repository): repository is Repository => Boolean(repository))
@@ -491,7 +495,7 @@ export function ReviewStep({
               color={prePlanScripts.length > 0 ? 'text.primary' : 'text.disabled'}
             >
               {prePlanScripts.length > 0
-                ? prePlanScripts.map((hook) => scriptName(hook.script_id)).join(', ')
+                ? prePlanScripts.map((hook) => hookLabel(hook)).join(', ')
                 : t('backupPlans.wizard.review.noScript')}
             </Typography>
           </ReviewAttrRow>
@@ -503,7 +507,7 @@ export function ReviewStep({
               color={postPlanScripts.length > 0 ? 'text.primary' : 'text.disabled'}
             >
               {postPlanScripts.length > 0
-                ? postPlanScripts.map((hook) => scriptName(hook.script_id)).join(', ')
+                ? postPlanScripts.map((hook) => hookLabel(hook)).join(', ')
                 : t('backupPlans.wizard.review.noScript')}
             </Typography>
           </ReviewAttrRow>

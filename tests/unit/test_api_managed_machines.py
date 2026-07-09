@@ -20,6 +20,7 @@ from app.database.models import (
     SystemSettings,
 )
 from app.services.agent_connection_manager import (
+    AgentCommandError,
     AgentCommandTimeout,
     AgentConnectionUnavailable,
     agent_connection_manager,
@@ -464,6 +465,94 @@ def test_agent_filesystem_browse_truncates_oversized_session_result(
     assert response.status_code == 200
     assert [item["name"] for item in response.json()["items"]] == ["a", "b"]
     assert response.json()["items_truncated"] is True
+
+
+def test_agent_scripts_lists_published_scripts(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    agent = _agent(test_db, agent_id="agt_scripts", capabilities=["script.run"])
+
+    async def fake_send_command(agent_machine_id, *, command, **kwargs):
+        assert command == "agent.list_scripts"
+        return {
+            "scripts": [
+                {"name": "pre-db-dump.sh", "description": "Dump DB"},
+                {"name": "post-notify.sh"},
+                {"bad": "no name"},
+            ]
+        }
+
+    monkeypatch.setattr(agent_connection_manager, "send_command", fake_send_command)
+
+    response = test_client.get(
+        f"/api/managed-machines/agents/{agent.id}/scripts", headers=admin_headers
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["agent_online"] is True
+    assert data["scripts"] == [
+        {"name": "pre-db-dump.sh", "description": "Dump DB"},
+        {"name": "post-notify.sh"},
+    ]
+
+
+def test_agent_scripts_returns_empty_when_offline(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    agent = _agent(test_db, agent_id="agt_offline", capabilities=["script.run"])
+
+    async def fake_send_command(*args, **kwargs):
+        raise AgentConnectionUnavailable("offline")
+
+    monkeypatch.setattr(agent_connection_manager, "send_command", fake_send_command)
+
+    response = test_client.get(
+        f"/api/managed-machines/agents/{agent.id}/scripts", headers=admin_headers
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"scripts": [], "agent_online": False}
+
+
+def test_agent_scripts_404_for_deleted_agent(
+    test_client: TestClient, admin_headers, test_db
+):
+    # A soft-deleted agent must stay inaccessible — the scripts endpoint applies
+    # the same status != "deleted" filter as get_agent_machine_repository_defaults,
+    # so a deleted id resolves to a 404, not to script/status data.
+    agent = _agent(
+        test_db,
+        agent_id="agt_deleted_scripts",
+        status="deleted",
+        capabilities=["script.run"],
+    )
+
+    response = test_client.get(
+        f"/api/managed-machines/agents/{agent.id}/scripts", headers=admin_headers
+    )
+
+    assert response.status_code == 404
+
+
+def test_agent_scripts_reports_online_when_command_errors(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    # The agent responded but the command failed (e.g. older agent) — it is
+    # online, just has no scripts to offer.
+    agent = _agent(test_db, agent_id="agt_cmderr", capabilities=["script.run"])
+
+    async def fake_send_command(*args, **kwargs):
+        raise AgentCommandError("unsupported command")
+
+    monkeypatch.setattr(agent_connection_manager, "send_command", fake_send_command)
+
+    response = test_client.get(
+        f"/api/managed-machines/agents/{agent.id}/scripts", headers=admin_headers
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"scripts": [], "agent_online": True}
 
 
 def test_agent_diagnostics_uses_live_session_without_agent_job(
