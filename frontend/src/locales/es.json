@@ -1229,6 +1229,10 @@
         "postBackupScripts": "Scripts posteriores a la copia",
         "addPreBackupScript": "Agregar script previo",
         "addPostBackupScript": "Agregar script posterior",
+        "addAgentScript": "Agregar script del agente",
+        "agentScriptBadge": "Agente",
+        "agentNoScripts": "El agente \"{{agent}}\" no publica scripts",
+        "agentOffline": "El agente \"{{agent}}\" está sin conexión — conéctalo para listar sus scripts",
         "noPreBackupScripts": "No hay scripts previos configurados.",
         "noPostBackupScripts": "No hay scripts posteriores configurados.",
         "onFailure": "Ante fallo",
@@ -5000,6 +5004,7 @@
         "cannotDeleteTemplateScript": "No se pueden eliminar los scripts de plantilla",
         "scriptInUse": "No se puede eliminar el script: se usa en {{count}} {{places}}: {{repos}}",
         "hookTypeMustBe": "hook_type debe ser 'pre-backup' o 'post-backup'",
+        "hookScriptRequired": "Un hook debe referenciar un script de biblioteca o un script del agente, pero no ambos",
         "scriptAlreadyAssigned": "El script '{{name}}' ya está asignado a este repositorio como {{hookType}}",
         "scriptAssignmentNotFound": "Asignación de script no encontrada"
       },

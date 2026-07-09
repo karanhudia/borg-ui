@@ -265,17 +265,28 @@ function sourceConnectionFromLocations(locations: SourceLocation[]): number | ''
 function normalizePlanScriptHooks(plan: BackupPlan): BackupPlanScriptHook[] {
   if (plan.script_hooks && plan.script_hooks.length > 0) {
     return plan.script_hooks
-      .filter((hook) => Number.isInteger(Number(hook.script_id)) && Number(hook.script_id) > 0)
-      .map((hook, index) => ({
-        ...hook,
-        script_id: Number(hook.script_id),
-        execution_order:
-          Number(hook.execution_order) > 0 ? Number(hook.execution_order) : index + 1,
-        enabled: hook.enabled !== false,
-        continue_on_error: Boolean(hook.continue_on_error),
-        skip_on_failure: Boolean(hook.skip_on_failure),
-        parameter_values: hook.parameter_values || {},
-      }))
+      .filter((hook) => {
+        const hasLibrary =
+          Number.isInteger(Number(hook.script_id)) && Number(hook.script_id) > 0
+        const hasAgent = Boolean((hook.agent_script_name || '').trim())
+        return hasLibrary || hasAgent
+      })
+      .map((hook, index) => {
+        const agentName = (hook.agent_script_name || '').trim()
+        const isAgent = Boolean(agentName)
+        return {
+          ...hook,
+          script_id: isAgent ? null : Number(hook.script_id),
+          agent_script_name: isAgent ? agentName : null,
+          is_agent_script: isAgent,
+          execution_order:
+            Number(hook.execution_order) > 0 ? Number(hook.execution_order) : index + 1,
+          enabled: hook.enabled !== false,
+          continue_on_error: Boolean(hook.continue_on_error),
+          skip_on_failure: Boolean(hook.skip_on_failure),
+          parameter_values: hook.parameter_values || {},
+        }
+      })
   }
 
   const hooks: BackupPlanScriptHook[] = []
@@ -311,11 +322,12 @@ export function planToState(plan: BackupPlan): WizardState {
     ? sourceLocations.flatMap((location) => location.paths)
     : plan.source_directories || []
   const scriptHooks = normalizePlanScriptHooks(plan)
+  // Legacy single-FK fields are library-only; agent hooks are excluded.
   const firstPreHook = scriptHooks
-    .filter((hook) => hook.hook_type === 'pre-backup' && hook.enabled !== false)
+    .filter((hook) => hook.hook_type === 'pre-backup' && hook.enabled !== false && hook.script_id)
     .sort((left, right) => left.execution_order - right.execution_order)[0]
   const firstPostHook = scriptHooks
-    .filter((hook) => hook.hook_type === 'post-backup' && hook.enabled !== false)
+    .filter((hook) => hook.hook_type === 'post-backup' && hook.enabled !== false && hook.script_id)
     .sort((left, right) => left.execution_order - right.execution_order)[0]
 
   return {

@@ -273,7 +273,11 @@ export type BackupPlanScriptRunCondition = 'success' | 'failure' | 'warning' | '
 
 export interface BackupPlanScriptHook {
   id?: number | null
-  script_id: number
+  // A hook references EITHER a server-side library script (script_id) OR a
+  // script published by the agent (agent_script_name).
+  script_id?: number | null
+  agent_script_name?: string | null
+  is_agent_script?: boolean
   script_name?: string
   script_description?: string | null
   hook_type: BackupPlanScriptHookType

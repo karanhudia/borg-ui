@@ -1229,6 +1229,10 @@
         "postBackupScripts": "Post-backup scripts",
         "addPreBackupScript": "Add pre-backup script",
         "addPostBackupScript": "Add post-backup script",
+        "addAgentScript": "Add agent script",
+        "agentScriptBadge": "Agent",
+        "agentNoScripts": "Agent \"{{agent}}\" publishes no scripts",
+        "agentOffline": "Agent \"{{agent}}\" is offline — connect it to list its scripts",
         "noPreBackupScripts": "No pre-backup scripts configured.",
         "noPostBackupScripts": "No post-backup scripts configured.",
         "onFailure": "On failure",
@@ -5000,6 +5004,7 @@
         "cannotDeleteTemplateScript": "Cannot delete template scripts",
         "scriptInUse": "Cannot delete script: it is used in {{count}} {{places}}: {{repos}}",
         "hookTypeMustBe": "hook_type must be 'pre-backup' or 'post-backup'",
+        "hookScriptRequired": "A hook must reference either a library script or an agent script, but not both",
         "scriptAlreadyAssigned": "Script '{{name}}' is already assigned to this repository as {{hookType}}",
         "scriptAssignmentNotFound": "Script assignment not found"
       },

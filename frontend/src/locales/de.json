@@ -1229,6 +1229,10 @@
         "postBackupScripts": "Post-Backup-Skripte",
         "addPreBackupScript": "Pre-Backup-Skript hinzufügen",
         "addPostBackupScript": "Post-Backup-Skript hinzufügen",
+        "addAgentScript": "Agent-Skript hinzufügen",
+        "agentScriptBadge": "Agent",
+        "agentNoScripts": "Agent \"{{agent}}\" stellt keine Skripte bereit",
+        "agentOffline": "Agent \"{{agent}}\" ist offline – verbinde ihn, um seine Skripte anzuzeigen",
         "noPreBackupScripts": "Keine Pre-Backup-Skripte konfiguriert.",
         "noPostBackupScripts": "Keine Post-Backup-Skripte konfiguriert.",
         "onFailure": "Bei Fehler",
@@ -5000,6 +5004,7 @@
         "cannotDeleteTemplateScript": "Vorlagenskripte können nicht gelöscht werden",
         "scriptInUse": "Skript kann nicht gelöscht werden: Es wird in {{count}} {{places}} verwendet: {{repos}}",
         "hookTypeMustBe": "hook_type muss 'pre-backup' oder 'post-backup' sein",
+        "hookScriptRequired": "Ein Hook muss entweder ein Bibliotheksskript oder ein Agent-Skript referenzieren, aber nicht beides",
         "scriptAlreadyAssigned": "Skript '{{name}}' ist diesem Repository bereits als {{hookType}} zugewiesen",
         "scriptAssignmentNotFound": "Skriptzuweisung nicht gefunden"
       },

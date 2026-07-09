@@ -76,17 +76,27 @@ function normalizePlanScriptHooks(state: BackupPlanPayloadState): BackupPlanScri
   const stateHooks = state.scriptHooks || []
   if (stateHooks.length > 0) {
     return stateHooks
-      .filter((hook) => Number.isInteger(Number(hook.script_id)) && Number(hook.script_id) > 0)
-      .map((hook, index) => ({
-        ...hook,
-        script_id: Number(hook.script_id),
-        execution_order:
-          Number(hook.execution_order) > 0 ? Number(hook.execution_order) : index + 1,
-        enabled: hook.enabled !== false,
-        continue_on_error: Boolean(hook.continue_on_error),
-        skip_on_failure: Boolean(hook.skip_on_failure),
-        parameter_values: normalizeParameterValues(hook.parameter_values),
-      }))
+      .filter((hook) => {
+        const hasLibrary =
+          Number.isInteger(Number(hook.script_id)) && Number(hook.script_id) > 0
+        const hasAgent = Boolean((hook.agent_script_name || '').trim())
+        return hasLibrary || hasAgent
+      })
+      .map((hook, index) => {
+        const agentName = (hook.agent_script_name || '').trim()
+        const isAgent = Boolean(agentName)
+        return {
+          ...hook,
+          script_id: isAgent ? null : Number(hook.script_id),
+          agent_script_name: isAgent ? agentName : null,
+          execution_order:
+            Number(hook.execution_order) > 0 ? Number(hook.execution_order) : index + 1,
+          enabled: hook.enabled !== false,
+          continue_on_error: Boolean(hook.continue_on_error),
+          skip_on_failure: Boolean(hook.skip_on_failure),
+          parameter_values: isAgent ? {} : normalizeParameterValues(hook.parameter_values),
+        }
+      })
   }
 
   const hooks: BackupPlanScriptHook[] = []
@@ -358,11 +368,16 @@ export function buildBackupPlanPayload(
     ? sourceLocations.flatMap((location) => location.paths)
     : state.sourceDirectories
   const scriptHooks = normalizePlanScriptHooks(state)
+  // Legacy single-FK columns are library-only; agent hooks never mirror there.
   const firstPreHook = scriptHooks
-    .filter((hook) => hook.enabled !== false && hook.hook_type === 'pre-backup')
+    .filter(
+      (hook) => hook.enabled !== false && hook.hook_type === 'pre-backup' && hook.script_id
+    )
     .sort((left, right) => left.execution_order - right.execution_order)[0]
   const firstPostHook = scriptHooks
-    .filter((hook) => hook.enabled !== false && hook.hook_type === 'post-backup')
+    .filter(
+      (hook) => hook.enabled !== false && hook.hook_type === 'post-backup' && hook.script_id
+    )
     .sort((left, right) => left.execution_order - right.execution_order)[0]
 
   return {

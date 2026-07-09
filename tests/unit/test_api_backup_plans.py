@@ -691,6 +691,84 @@ class TestBackupPlanRoutes:
             == 2
         )
 
+    def test_create_plan_stores_agent_script_hook(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        # An agent-script hook is stored regardless of the repo executor type;
+        # the agent binding is resolved (and enforced) at run time, not save time.
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+
+        response = test_client.post(
+            "/api/backup-plans/",
+            json=_payload(
+                [repo.id],
+                script_hooks=[
+                    {
+                        "agent_script_name": "pre-db-dump.sh",
+                        "hook_type": "pre-backup",
+                        "execution_order": 1,
+                        "enabled": True,
+                    }
+                ],
+            ),
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 201, response.text
+        body = response.json()
+        [hook] = body["script_hooks"]
+        assert hook["is_agent_script"] is True
+        assert hook["agent_script_name"] == "pre-db-dump.sh"
+        assert hook["script_id"] is None
+        assert hook["script_name"] == "pre-db-dump.sh"
+
+        plan = test_db.query(BackupPlan).filter(BackupPlan.id == body["id"]).one()
+        # Agent hooks never populate the library-only legacy columns.
+        assert plan.pre_backup_script_id is None
+        stored = (
+            test_db.query(BackupPlanScript)
+            .filter(BackupPlanScript.backup_plan_id == plan.id)
+            .one()
+        )
+        assert stored.agent_script_name == "pre-db-dump.sh"
+        assert stored.script_id is None
+
+    def test_create_plan_rejects_hook_without_any_script(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        response = test_client.post(
+            "/api/backup-plans/",
+            json=_payload(
+                [repo.id],
+                script_hooks=[{"hook_type": "pre-backup", "execution_order": 1}],
+            ),
+            headers=admin_headers,
+        )
+        assert response.status_code == 422
+
+    def test_create_plan_rejects_hook_with_both_scripts(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        script = _create_script(test_db, "Lib Script")
+        response = test_client.post(
+            "/api/backup-plans/",
+            json=_payload(
+                [repo.id],
+                script_hooks=[
+                    {
+                        "script_id": script.id,
+                        "agent_script_name": "x.sh",
+                        "hook_type": "pre-backup",
+                        "execution_order": 1,
+                    }
+                ],
+            ),
+            headers=admin_headers,
+        )
+        assert response.status_code == 422
+
     def test_create_plan_returns_disabled_script_hooks(
         self, test_client: TestClient, admin_headers, test_db
     ):

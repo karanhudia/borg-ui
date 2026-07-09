@@ -12,6 +12,7 @@ from agent.borg_ui_agent.client import AgentClient
 from agent.borg_ui_agent.config import AgentConfig
 from agent.borg_ui_agent.filesystem import execute_filesystem_browse_job
 from agent.borg_ui_agent.repository_ops import execute_repository_operation_job
+from agent.borg_ui_agent.scripts import execute_script_run_job
 
 DEFAULT_REPOSITORY_OPERATION_HANDLER = execute_repository_operation_job
 
@@ -35,11 +36,14 @@ DEFAULT_CAPABILITIES = [
     "repository.prune",
     "repository.compact",
     "repository.rclone_sync",
+    "agent.list_scripts",
+    "script.run",
 ]
 
 JOB_HANDLERS = {
     "backup.create": execute_backup_create_job,
     "filesystem.browse": execute_filesystem_browse_job,
+    "script.run": execute_script_run_job,
     "repository.init": execute_repository_operation_job,
     "repository.info": execute_repository_operation_job,
     "repository.list_archives": execute_repository_operation_job,
@@ -68,6 +72,8 @@ def get_job_handler(job_kind: str):
         return execute_backup_create_job
     if job_kind == "filesystem.browse":
         return execute_filesystem_browse_job
+    if job_kind == "script.run":
+        return execute_script_run_job
     handler = JOB_HANDLERS.get(job_kind)
     if job_kind.startswith("repository."):
         if handler is not None and handler is not DEFAULT_REPOSITORY_OPERATION_HANDLER:

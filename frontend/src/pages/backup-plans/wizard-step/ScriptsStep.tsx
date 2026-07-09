@@ -25,7 +25,11 @@ import {
   Trash2,
 } from 'lucide-react'
 
+import { useEffect, useState } from 'react'
+
 import ScriptParameterInputs from '../../../components/ScriptParameterInputs'
+import { managedAgentsAPI } from '../../../services/api'
+import type { AgentScriptsResponse } from '../../../services/api'
 import type {
   BackupPlanScriptHook,
   BackupPlanScriptHookType,
@@ -37,7 +41,8 @@ import type { BackupPlanWizardStepProps } from './types'
 type ScriptsStepProps = Pick<
   BackupPlanWizardStepProps,
   'wizardState' | 'scripts' | 'loadingScripts' | 'updateState' | 't'
->
+> &
+  Partial<Pick<BackupPlanWizardStepProps, 'repositories' | 'agentMachines'>>
 
 function parameterValues(parameters?: Record<string, string> | null) {
   return Object.entries(parameters || {})
@@ -88,7 +93,10 @@ function failureModeForHook(hook: BackupPlanScriptHook): FailureMode {
 }
 
 function hooksWithLegacyFields(scriptHooks: BackupPlanScriptHook[]) {
-  const enabledHooks = scriptHooks.filter((hook) => hook.enabled !== false)
+  // Legacy single-FK fields are library-only; agent hooks never mirror there.
+  const enabledHooks = scriptHooks.filter(
+    (hook) => hook.enabled !== false && hook.script_id
+  )
   const firstPre = enabledHooks
     .filter((hook) => hook.hook_type === 'pre-backup')
     .sort((left, right) => left.execution_order - right.execution_order)[0]
@@ -111,7 +119,53 @@ export function ScriptsStep({
   loadingScripts,
   updateState,
   t,
+  repositories = [],
+  agentMachines = [],
 }: ScriptsStepProps) {
+  // A plan is bound to one agent (one repo → one agent). Resolve the distinct
+  // agent behind the plan's selected agent-executed repositories so we can offer
+  // the scripts that agent publishes.
+  const selectedRepoIds = new Set(wizardState.repositoryIds || [])
+  const agentIds = new Set(
+    (repositories || [])
+      .filter(
+        (repo) =>
+          selectedRepoIds.has(repo.id) &&
+          repo.executor_type === 'agent' &&
+          repo.agent_machine_id != null
+      )
+      .map((repo) => repo.agent_machine_id as number)
+  )
+  const planAgentId = agentIds.size === 1 ? [...agentIds][0] : null
+  const planAgent = (agentMachines || []).find((agent) => agent.id === planAgentId) || null
+
+  const [agentScriptsData, setAgentScriptsData] = useState<AgentScriptsResponse | null>(null)
+  const [loadingAgentScripts, setLoadingAgentScripts] = useState(false)
+  useEffect(() => {
+    if (planAgentId == null) {
+      setAgentScriptsData(null)
+      return
+    }
+    let cancelled = false
+    setLoadingAgentScripts(true)
+    managedAgentsAPI
+      .listAgentScripts(planAgentId)
+      .then((response) => {
+        if (!cancelled) setAgentScriptsData(response.data)
+      })
+      .catch(() => {
+        if (!cancelled) setAgentScriptsData({ scripts: [], agent_online: false })
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingAgentScripts(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [planAgentId])
+  const agentScripts = agentScriptsData?.scripts || []
+  const agentOnline = agentScriptsData?.agent_online ?? false
+
   const scriptName = (scriptId?: number | null) => {
     if (!scriptId) return null
     return scripts.find((script) => script.id === scriptId)?.name || `Script #${scriptId}`
@@ -148,6 +202,23 @@ export function ScriptsStep({
       ...scriptHooks,
       {
         script_id: scriptId,
+        hook_type: hookType,
+        execution_order: existing.length + 1,
+        enabled: true,
+        continue_on_error: false,
+        skip_on_failure: false,
+        parameter_values: {},
+      },
+    ])
+  }
+
+  const addAgentHook = (hookType: BackupPlanScriptHookType, agentScriptName: string) => {
+    const existing = hookEntries(hookType)
+    updateScriptHooks([
+      ...scriptHooks,
+      {
+        agent_script_name: agentScriptName,
+        is_agent_script: true,
         hook_type: hookType,
         execution_order: existing.length + 1,
         enabled: true,
@@ -214,6 +285,15 @@ export function ScriptsStep({
     const availableScripts = scripts.filter((script) => !assignedIds.has(script.id))
     const addLabelId = `backup-plan-${hookType}-script-select-label`
 
+    const assignedAgentNames = new Set(
+      entries.map(({ hook }) => hook.agent_script_name).filter(Boolean)
+    )
+    const availableAgentScripts = agentScripts.filter(
+      (script) => !assignedAgentNames.has(script.name)
+    )
+    const agentAddLabelId = `backup-plan-${hookType}-agent-script-select-label`
+    const agentAddLabel = String(t('backupPlans.wizard.scripts.addAgentScript'))
+
     return (
       <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 2 }}>
         <Stack spacing={1.5}>
@@ -257,6 +337,48 @@ export function ScriptsStep({
             </Select>
           </FormControl>
 
+          {planAgent && (
+            <FormControl
+              fullWidth
+              size="small"
+              disabled={loadingAgentScripts || availableAgentScripts.length === 0}
+            >
+              <InputLabel id={agentAddLabelId}>{agentAddLabel}</InputLabel>
+              <Select
+                labelId={agentAddLabelId}
+                value=""
+                label={agentAddLabel}
+                onChange={(event) => {
+                  const name = String(event.target.value)
+                  if (name) addAgentHook(hookType, name)
+                }}
+                renderValue={() => ''}
+              >
+                {availableAgentScripts.map((script) => (
+                  <MenuItem key={script.name} value={script.name}>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        {script.name}
+                      </Typography>
+                      {script.description && (
+                        <Typography variant="caption" color="text.secondary">
+                          {script.description}
+                        </Typography>
+                      )}
+                    </Box>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+          {planAgent && !loadingAgentScripts && agentScripts.length === 0 && (
+            <Typography variant="caption" color="text.secondary">
+              {agentOnline
+                ? t('backupPlans.wizard.scripts.agentNoScripts', { agent: planAgent.name })
+                : t('backupPlans.wizard.scripts.agentOffline', { agent: planAgent.name })}
+            </Typography>
+          )}
+
           {entries.length === 0 ? (
             <Typography variant="body2" color="text.secondary">
               {emptyText}
@@ -264,9 +386,14 @@ export function ScriptsStep({
           ) : (
             <Stack spacing={1}>
               {entries.map(({ hook, index }, position) => {
-                const script = scripts.find((item) => item.id === hook.script_id)
-                const scriptName = script?.name || hook.script_name || `Script #${hook.script_id}`
-                const parameters = script?.parameters || hook.parameters || []
+                const isAgentHook = Boolean(hook.agent_script_name)
+                const script = isAgentHook
+                  ? undefined
+                  : scripts.find((item) => item.id === hook.script_id)
+                const scriptName = isAgentHook
+                  ? (hook.agent_script_name as string)
+                  : script?.name || hook.script_name || `Script #${hook.script_id}`
+                const parameters = isAgentHook ? [] : script?.parameters || hook.parameters || []
                 const runCondition = normalizeRunCondition(
                   hook.custom_run_on || script?.run_on || hook.default_run_on
                 )
@@ -274,7 +401,7 @@ export function ScriptsStep({
 
                 return (
                   <Box
-                    key={`${hook.hook_type}:${hook.script_id}:${hook.execution_order}`}
+                    key={`${hook.hook_type}:${hook.script_id ?? hook.agent_script_name}:${hook.execution_order}`}
                     sx={{
                       border: 1,
                       borderColor: 'divider',
@@ -294,6 +421,15 @@ export function ScriptsStep({
                         <Typography variant="body2" sx={{ fontWeight: 600, flex: 1, minWidth: 0 }}>
                           {scriptName}
                         </Typography>
+                        {isAgentHook && (
+                          <Chip
+                            size="small"
+                            color="info"
+                            variant="outlined"
+                            label={t('backupPlans.wizard.scripts.agentScriptBadge')}
+                            sx={{ flexShrink: 0 }}
+                          />
+                        )}
                         <Tooltip
                           title={t('backupPlans.wizard.scripts.moveScriptUp', {
                             script: scriptName,
