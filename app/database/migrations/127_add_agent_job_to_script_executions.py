@@ -33,6 +33,15 @@ def upgrade(connection):
         _add_column_if_missing(
             connection, "script_executions", "agent_job_id", "INTEGER"
         )
+        # Match the model's index=True so a DB provisioned via migrations has the
+        # same schema as one built from Base.metadata.create_all. SQLAlchemy's
+        # default name for an index=True column is ix_<table>_<column>.
+        connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_script_executions_agent_job_id"
+                " ON script_executions (agent_job_id)"
+            )
+        )
 
 
 def downgrade(connection):

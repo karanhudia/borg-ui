@@ -142,17 +142,25 @@ def _format_script_execution_logs(execution: ScriptExecution) -> str:
     return "\n".join(lines)
 
 
+# Cap the live-log tail read on the 2s polling path so a verbose hook (e.g. a
+# large line-by-line DB dump) can't grow the query + string rebuild unbounded.
+_MAX_LIVE_LOG_ROWS = 500
+
+
 def _format_running_agent_script_logs(execution: ScriptExecution, db: Session) -> str:
     """Live log for a still-running agent hook: the header plus the agent's
     streamed ``agent_job_logs`` lines, which arrive before the terminal
     stdout/stderr are captured at completion. The frontend polls this every 2s
-    while the execution is ``running`` (same as a live borg job)."""
+    while the execution is ``running`` (same as a live borg job), so only the
+    last ``_MAX_LIVE_LOG_ROWS`` rows are read (the most recent activity)."""
     rows = (
         db.query(AgentJobLog)
         .filter(AgentJobLog.agent_job_id == execution.agent_job_id)
-        .order_by(AgentJobLog.sequence.asc(), AgentJobLog.id.asc())
+        .order_by(AgentJobLog.sequence.desc(), AgentJobLog.id.desc())
+        .limit(_MAX_LIVE_LOG_ROWS)
         .all()
     )
+    rows.reverse()  # back to chronological order after the tail fetch
     stdout_lines = [row.message for row in rows if row.stream != "stderr"]
     stderr_lines = [row.message for row in rows if row.stream == "stderr"]
     lines = [
