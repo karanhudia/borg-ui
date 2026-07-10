@@ -59,6 +59,16 @@ def _uses_remote_execution(job: BackupJob) -> bool:
     ).strip().lower() == "remote_direct"
 
 
+def _stable_sshfs_temp_root(repository_id: int | None) -> str | None:
+    if repository_id is None:
+        return None
+    return os.path.join(
+        settings.data_dir,
+        "sshfs-cache",
+        f"repository-{repository_id}",
+    )
+
+
 class BackupService:
     """Service for executing backups with real-time log streaming"""
 
@@ -1197,7 +1207,11 @@ class BackupService:
             )
 
     async def _prepare_source_paths(
-        self, source_paths: list[str], job_id: int, source_connection_id: int = None
+        self,
+        source_paths: list[str],
+        job_id: int,
+        source_connection_id: int = None,
+        stable_sshfs_temp_root: str | None = None,
     ) -> tuple[list[str], list[tuple[str, str]]]:
         """
         Prepare source paths for backup by mounting SSH URLs via SSHFS
@@ -1291,7 +1305,9 @@ class BackupService:
             # Second pass: Mount SSH paths. Reuse the first SSHFS temp root across
             # source connections so Borg can run from one cwd and store relative
             # remote paths instead of /tmp/sshfs_mount_* implementation paths.
-            shared_ssh_temp_root = None
+            shared_ssh_temp_root = (
+                stable_sshfs_temp_root if ssh_paths_by_connection else None
+            )
             for connection_id, paths_data in ssh_paths_by_connection.items():
                 remote_paths = [parsed["path"] for _, parsed, _ in paths_data]
                 connection = paths_data[0][2]  # Get connection from first item
@@ -2250,6 +2266,9 @@ class BackupService:
                 source_paths,
                 job_id,
                 source_connection_id=effective_source_ssh_connection_id,
+                stable_sshfs_temp_root=_stable_sshfs_temp_root(
+                    repo_record.id if repo_record else None
+                ),
             )
             if not processed_source_paths:
                 logger.error(

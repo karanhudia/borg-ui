@@ -178,14 +178,25 @@ class MountService:
 
     def _cleanup_orphaned_temp_dirs(self):
         """
-        Clean up orphaned /tmp/sshfs_mount_* directories from crashed processes.
+        Clean up orphaned SSHFS temp directories from crashed processes.
         Only removes directories that aren't being tracked by active mounts.
         """
         try:
             import glob
 
-            # Find all sshfs_mount temp directories
-            temp_dirs = glob.glob("/tmp/sshfs_mount_*")
+            # Find all legacy /tmp roots and repository-stable cache roots.
+            temp_dirs = list(
+                dict.fromkeys(
+                    [
+                        *glob.glob("/tmp/sshfs_mount_*"),
+                        *glob.glob(
+                            str(
+                                Path(settings.data_dir) / "sshfs-cache" / "repository-*"
+                            )
+                        ),
+                    ]
+                )
+            )
 
             # Get all temp_roots that are currently tracked
             tracked_temp_roots = set()
