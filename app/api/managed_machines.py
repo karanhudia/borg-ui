@@ -544,6 +544,48 @@ async def browse_agent_machine_filesystem(
     )
 
 
+@router.get("/agents/{agent_machine_id}/repository-defaults")
+async def get_agent_machine_repository_defaults(
+    agent_machine_id: int,
+    _: User = Depends(require_managed_agents_admin_user),
+    db: Session = Depends(get_db),
+):
+    """Ask a connected managed agent for its environment-configured repository
+    target (``$BORG_REPO`` / ``$BORG_REMOTE_PATH``) so the repository wizard can
+    pre-fill the form. Returns nulls when the agent is offline or does not set
+    them; no secrets are requested."""
+    agent = (
+        db.query(AgentMachine)
+        .filter(
+            AgentMachine.id == agent_machine_id,
+            AgentMachine.status != "deleted",
+        )
+        .first()
+    )
+    if not agent:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"key": "backend.errors.agents.agentNotFound"},
+        )
+    try:
+        result = await agent_connection_manager.send_command(
+            agent.id,
+            command="agent.repository_defaults",
+            payload={},
+            timeout_seconds=AGENT_FILESYSTEM_BROWSE_TIMEOUT_SECONDS,
+            wait_for_result=True,
+        )
+    except (AgentConnectionUnavailable, AgentCommandTimeout, AgentCommandError):
+        return {"repo": None, "remote_path": None, "has_passphrase": False}
+    if not isinstance(result, dict):
+        return {"repo": None, "remote_path": None, "has_passphrase": False}
+    return {
+        "repo": result.get("repo"),
+        "remote_path": result.get("remote_path"),
+        "has_passphrase": bool(result.get("has_passphrase")),
+    }
+
+
 @router.post("/agents/{agent_machine_id}/diagnostics")
 async def run_agent_machine_diagnostics(
     agent_machine_id: int,

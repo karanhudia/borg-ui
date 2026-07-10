@@ -74,6 +74,13 @@ from app.services.check_flag_validation import (
     validate_check_flags_for_max_duration,
 )
 from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
+from app.services.agent_connection_manager import (
+    agent_connection_manager,
+    AgentConnectionUnavailable,
+    AgentCommandTimeout,
+    AgentCommandError,
+)
+from app.core.agent_constants import AGENT_FILESYSTEM_BROWSE_TIMEOUT_SECONDS
 from app.services.job_admission import (
     OPERATION_CHECK,
     OPERATION_COMPACT,
@@ -2039,7 +2046,7 @@ def _reject_agent_repository_ssh_target(
         )
 
 
-def _validate_agent_repository_payload(
+async def _validate_agent_repository_payload(
     repo_data: Union[RepositoryCreate, RepositoryImport], db: Session
 ) -> AgentMachine:
     _reject_agent_repository_ssh_target(
@@ -2047,8 +2054,9 @@ def _validate_agent_repository_payload(
         connection_id=repo_data.connection_id,
         execution_target=repo_data.execution_target,
     )
+    agent = _require_queueable_agent(repo_data.agent_machine_id, db)
 
-    if repo_data.encryption in [
+    encrypted = repo_data.encryption in [
         "repokey",
         "keyfile",
         "repokey-blake2",
@@ -2057,17 +2065,48 @@ def _validate_agent_repository_payload(
         "repokey-chacha20-poly1305",
         "keyfile-aes-ocb",
         "keyfile-chacha20-poly1305",
-    ]:
-        if not repo_data.passphrase or repo_data.passphrase.strip() == "":
+    ]
+    if encrypted and not (repo_data.passphrase or "").strip():
+        # Agent repos run every borg op on the agent, so the server never needs
+        # the passphrase — but confirm the agent has one, or the repo would be
+        # openable by neither. The agent returns a boolean, never the value.
+        if not await _agent_has_passphrase(agent):
             raise HTTPException(
                 status_code=400,
                 detail={
-                    "key": "backend.errors.repo.encryptedPassphraseRequired",
+                    "key": "backend.errors.repo.agentPassphraseUnavailable",
                     "params": {"mode": repo_data.encryption},
                 },
             )
 
-    return _require_queueable_agent(repo_data.agent_machine_id, db)
+    return agent
+
+
+async def _agent_has_passphrase(agent: AgentMachine) -> bool:
+    """Ask the agent whether it has a ``$BORG_PASSPHRASE`` of its own — a
+    boolean, never the passphrase value. False when the agent is offline or does
+    not set one."""
+    try:
+        result = await agent_connection_manager.send_command(
+            agent.id,
+            command="agent.repository_defaults",
+            payload={},
+            timeout_seconds=AGENT_FILESYSTEM_BROWSE_TIMEOUT_SECONDS,
+            wait_for_result=True,
+        )
+    except (AgentConnectionUnavailable, AgentCommandTimeout, AgentCommandError):
+        return False
+    except Exception:
+        # Fail closed: any unexpected error reaching the agent (e.g. the websocket
+        # layer re-raising a connection reset) must not surface as a 500 — treat it
+        # as "passphrase not confirmed" so the caller asks for one instead.
+        logger.warning(
+            "Failed to confirm agent passphrase; treating as unavailable",
+            agent_id=agent.id,
+            exc_info=True,
+        )
+        return False
+    return bool(isinstance(result, dict) and result.get("has_passphrase"))
 
 
 async def _create_agent_repository_record(
@@ -2079,7 +2118,7 @@ async def _create_agent_repository_record(
 ):
     cloud_mirror_remote = _validate_cloud_mirror_payload(repo_data, db)
     await _preflight_cloud_mirror_path(repo_data, cloud_mirror_remote)
-    agent = _validate_agent_repository_payload(repo_data, db)
+    agent = await _validate_agent_repository_payload(repo_data, db)
     if not imported:
         _require_agent_capability(agent, AGENT_REPOSITORY_INIT_CAPABILITY)
     if cloud_mirror_remote:

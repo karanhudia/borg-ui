@@ -19,6 +19,7 @@ vi.mock('../../services/api', () => ({
   },
   managedAgentsAPI: {
     listAgents: vi.fn(),
+    getRepositoryDefaults: vi.fn(),
   },
   rcloneAPI: {
     getStatus: vi.fn(),
@@ -358,6 +359,9 @@ describe('RepositoryWizard', () => {
     ;(managedAgentsAPI.listAgents as Mock).mockResolvedValue({
       data: mockManagedAgents,
     })
+    ;(managedAgentsAPI.getRepositoryDefaults as Mock).mockResolvedValue({
+      data: { repo: null, remote_path: null, has_passphrase: false },
+    })
     ;(rcloneAPI.getStatus as Mock).mockResolvedValue({
       data: { available: true, version: 'rclone v1.66.0', error: null },
     })
@@ -422,6 +426,31 @@ describe('RepositoryWizard', () => {
       expect(
         cloudMirrorStep.compareDocumentPosition(sourceStep) & Node.DOCUMENT_POSITION_FOLLOWING
       ).toBeTruthy()
+    })
+
+    it('preserves an agent repository ssh:// URL in edit mode (does not chop it to the path)', async () => {
+      const agentRepoUrl = 'ssh://u209739@borg01.ioanalytica.com:23/./m3s/k8s-borg-m3s'
+      // The agent still advertises the same repo; edit must show the full URL and
+      // must not overwrite it with the advertised value (only-fill-if-empty guard).
+      ;(managedAgentsAPI.getRepositoryDefaults as Mock).mockResolvedValue({
+        data: { repo: agentRepoUrl, remote_path: null, has_passphrase: false },
+      })
+
+      renderWizard('edit', {
+        id: 7,
+        name: 'Agent Repo',
+        path: agentRepoUrl,
+        executor_type: 'agent',
+        agent_machine_id: 101,
+        encryption: 'repokey',
+        compression: 'lz4',
+        mode: 'full',
+      })
+
+      await waitForLocationStep()
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Path/i)).toHaveValue(agentRepoUrl)
+      })
     })
 
     it('requires repository name and path before continuing', async () => {

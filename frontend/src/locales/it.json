@@ -4270,6 +4270,7 @@
     "none": "Nessuno"
   },
   "repositoryWizard": {
+    "agentRepoUnknownWarning": "Questo agent gestito non sembra conoscere il proprio repository Borg. Se inserisci qui un URL ssh:// o sftp://, assicurati che questo agent gestito possa effettivamente raggiungere quel repository.",
     "titleCreate": "Crea Repository",
     "titleEdit": "Modifica Repository",
     "titleImport": "Importa Repository",
@@ -4662,6 +4663,7 @@
         "permissionDeniedCreateDirectory": "Permesso negato: impossibile creare la directory in '{{path}}'. Per archiviare repository sulla tua macchina host, usa percorsi che iniziano con '/local/'.",
         "permissionDeniedCreateParentDirectory": "Permesso negato: impossibile creare la directory padre '{{path}}'. Assicurati che la directory esista sulla tua macchina host con i permessi corretti.",
         "encryptedPassphraseRequired": "La passphrase è richiesta per la modalità di crittografia '{{mode}}'",
+        "agentPassphraseUnavailable": "Questo agent gestito non ha segnalato una BORG_PASSPHRASE, quindi non può aprire un repository crittografato. Imposta BORG_PASSPHRASE nell'ambiente dell'agent oppure inserisci qui una passphrase.",
         "encryptedPassphraseIncorrect": "Il repository è crittografato ma la passphrase non è corretta o mancante. Fornisci la passphrase corretta.",
         "encryptionKeyfileNotRequired": "Il repository usa la crittografia '{{mode}}', che non richiede un file chiave. Il caricamento del file chiave è necessario solo per le modalità di crittografia 'keyfile' o 'keyfile-blake2'.",
         "adminAccessRequired": "Accesso amministratore richiesto",

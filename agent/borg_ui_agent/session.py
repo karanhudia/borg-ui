@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import socket as socket_module
 import threading
 import time
@@ -342,6 +343,10 @@ class AgentSessionRuntime:
             self._handle_diagnostics(client, payload)
             return
 
+        if command == "agent.repository_defaults":
+            self._handle_repository_defaults(client, payload)
+            return
+
         if command == "cancel":
             # Signal the worker running this job so it actually stops; the worker
             # emits the job_canceled frame itself as it unwinds.
@@ -414,6 +419,21 @@ class AgentSessionRuntime:
         with self._registry_lock:
             self._cancel_events.pop(job_id, None)
             self._pending_cancels.discard(job_id)
+
+    def _handle_repository_defaults(
+        self, client: SessionCommandClient, payload: dict[str, Any]
+    ) -> None:
+        """Report the agent's own environment-configured repository target
+        (``$BORG_REPO`` / ``$BORG_REMOTE_PATH``) so the UI can pre-fill the
+        repository form, plus whether a ``$BORG_PASSPHRASE`` is set — a boolean,
+        never the passphrase value itself."""
+        client.send_result(
+            {
+                "repo": os.environ.get("BORG_REPO"),
+                "remote_path": os.environ.get("BORG_REMOTE_PATH"),
+                "has_passphrase": bool(os.environ.get("BORG_PASSPHRASE")),
+            }
+        )
 
     def _handle_filesystem_browse(
         self, client: SessionCommandClient, payload: dict[str, Any]

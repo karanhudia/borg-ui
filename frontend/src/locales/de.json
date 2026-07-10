@@ -4270,6 +4270,7 @@
     "none": "Keine"
   },
   "repositoryWizard": {
+    "agentRepoUnknownWarning": "Dieser Managed Agent scheint sein eigenes Borg-Repository nicht zu kennen. Wenn du hier eine ssh://- oder sftp://-URL eingibst, stelle sicher, dass dieser Managed Agent das Repository auch wirklich erreichen kann.",
     "titleCreate": "Repository erstellen",
     "titleEdit": "Repository bearbeiten",
     "titleImport": "Repository importieren",
@@ -4662,6 +4663,7 @@
         "permissionDeniedCreateDirectory": "Zugriff verweigert: Verzeichnis kann nicht unter '{{path}}' erstellt werden. Um Repositories auf Ihrem Host-Rechner zu speichern, verwenden Sie Pfade, die mit '/local/' beginnen.",
         "permissionDeniedCreateParentDirectory": "Zugriff verweigert: Übergeordnetes Verzeichnis '{{path}}' kann nicht erstellt werden. Stellen Sie sicher, dass das Verzeichnis auf Ihrem Host-Rechner mit den entsprechenden Berechtigungen vorhanden ist.",
         "encryptedPassphraseRequired": "Passphrase ist für den Verschlüsselungsmodus '{{mode}}' erforderlich",
+        "agentPassphraseUnavailable": "Dieser Managed Agent hat keine BORG_PASSPHRASE gemeldet, daher kann er ein verschlüsseltes Repository nicht öffnen. Setze BORG_PASSPHRASE in der Umgebung des Agents oder gib hier eine Passphrase ein.",
         "encryptedPassphraseIncorrect": "Das Repository ist verschlüsselt, aber die Passphrase ist falsch oder fehlt. Bitte geben Sie die korrekte Passphrase an.",
         "encryptionKeyfileNotRequired": "Das Repository verwendet die Verschlüsselung '{{mode}}', für die keine Schlüsseldatei erforderlich ist. Der Upload einer Schlüsseldatei ist nur für die Verschlüsselungsmodi 'keyfile' oder 'keyfile-blake2' erforderlich.",
         "adminAccessRequired": "Administratorzugriff erforderlich",
