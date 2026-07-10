@@ -21,6 +21,7 @@ DEFAULT_CAPABILITIES = [
     "jobs.claim",
     "jobs.report",
     "logs.stream",
+    "artifact.upload",
     "backup.create",
     "backup.cancel",
     "diagnostics.run",

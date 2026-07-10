@@ -7,6 +7,8 @@ import shlex
 import signal
 import subprocess
 import tempfile
+import threading
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -27,6 +29,11 @@ REPOSITORY_JOB_KINDS = {
     "repository.compact",
     "repository.rclone_sync",
 }
+
+# Kill a streaming extract only when no bytes have flowed for this long — a
+# wedged borg, not a slow one. Idle (not an absolute cap) so a legitimately
+# large/slow download is never truncated mid-transfer.
+STREAM_EXTRACT_IDLE_SECONDS = 300
 
 
 @dataclass(frozen=True)
@@ -390,7 +397,7 @@ def execute_repository_operation_job(
     if payload.job_kind == "repository.extract_archive_file":
         try:
             return _execute_binary_output_repository_operation(
-                job_id, payload, client, cmd, env
+                job_id, payload, client, cmd, env, should_cancel=should_cancel
             )
         finally:
             _remove_temp_file(rclone_config_path)
@@ -575,13 +582,185 @@ def _operation_max_lines(operation: dict[str, Any] | None) -> int:
     return max(1, max_lines)
 
 
+class _ActivityTrackingReader:
+    """Wrap a readable stream and record when it last yielded data.
+
+    Lets the streaming watchdog tell an actively-transferring extract (bytes
+    flowing) from a wedged one (read blocked, no data) without capping the total
+    duration, so legitimately large/slow downloads are never truncated.
+    """
+
+    def __init__(self, stream: Any):
+        self._stream = stream
+        self.last_activity = time.monotonic()
+
+    def read(self, *args: Any) -> bytes:
+        chunk = self._stream.read(*args)
+        if chunk:
+            self.last_activity = time.monotonic()
+        return chunk
+
+    def close(self) -> None:
+        self._stream.close()
+
+
+def _execute_streaming_artifact_operation(
+    job_id: int,
+    payload: RepositoryOperationPayload,
+    client: AgentClient,
+    cmd: list[str],
+    env: dict[str, str],
+    *,
+    should_cancel: Optional[Callable[[], bool]] = None,
+) -> RepositoryOperationResult:
+    """Stream `borg extract --stdout` straight to the server over HTTP.
+
+    The file content never enters the WebSocket, so it works at any size. stderr
+    is drained on a thread so a full stderr pipe can't deadlock the stdout the
+    upload is reading. A watchdog terminates borg on cancellation or if it wedges
+    past a deadline, so a hung process can't pin this worker — terminating closes
+    stdout, which unblocks the upload read below.
+    """
+    try:
+        popen_kwargs: dict[str, Any] = {
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.PIPE,
+            "env": env,
+        }
+        if os.name == "posix":
+            # Own session so the watchdog's process-group SIGTERM hits only borg.
+            popen_kwargs["start_new_session"] = True
+        process = subprocess.Popen(cmd, **popen_kwargs)
+    except OSError as exc:
+        error_message = f"Failed to start {payload.job_kind}: {exc}"
+        client.send_log(job_id, sequence=1, stream="stderr", message=error_message)
+        client.fail_job(job_id, error_message=error_message)
+        return RepositoryOperationResult(
+            job_id=job_id, status="failed", message=error_message
+        )
+
+    stderr_chunks: list[bytes] = []
+
+    def _drain_stderr() -> None:
+        if process.stderr is not None:
+            stderr_chunks.append(process.stderr.read())
+
+    stderr_thread = threading.Thread(target=_drain_stderr, daemon=True)
+    stderr_thread.start()
+
+    cancelled = threading.Event()
+    timed_out = threading.Event()
+    watchdog_done = threading.Event()
+
+    reader = _ActivityTrackingReader(process.stdout)
+
+    def _watchdog() -> None:
+        while not watchdog_done.wait(0.5):
+            if process.poll() is not None:
+                return
+            if should_cancel is not None and should_cancel():
+                cancelled.set()
+                _terminate_process(process)
+                return
+            # Idle, not absolute: only kill borg once no bytes have flowed for
+            # the timeout, so an actively-streaming large transfer is not cut off.
+            if time.monotonic() - reader.last_activity >= STREAM_EXTRACT_IDLE_SECONDS:
+                timed_out.set()
+                _terminate_process(process)
+                return
+
+    watchdog = threading.Thread(target=_watchdog, daemon=True)
+    watchdog.start()
+
+    upload_error: Optional[BaseException] = None
+    try:
+        client.upload_artifact(job_id, reader)
+    except BaseException as exc:  # noqa: BLE001 - reported below
+        upload_error = exc
+    finally:
+        # Closing stdout makes borg see EPIPE and exit if the upload broke.
+        if process.stdout is not None:
+            try:
+                process.stdout.close()
+            except OSError:
+                pass
+
+    return_code = process.wait()
+    watchdog_done.set()
+    watchdog.join(timeout=5)
+    stderr_thread.join()
+    stderr = b"".join(stderr_chunks).decode("utf-8", errors="replace")
+
+    if cancelled.is_set():
+        client.cancel_job(job_id)
+        return RepositoryOperationResult(
+            job_id=job_id,
+            status="canceled",
+            return_code=return_code,
+            message=f"{payload.job_kind} canceled",
+        )
+
+    if timed_out.is_set():
+        error_message = (
+            f"{payload.job_kind} stalled: no output for {STREAM_EXTRACT_IDLE_SECONDS}s"
+        )
+        client.fail_job(job_id, error_message=error_message, return_code=return_code)
+        return RepositoryOperationResult(
+            job_id=job_id,
+            status="failed",
+            return_code=return_code,
+            message=error_message,
+        )
+
+    if upload_error is not None:
+        error_message = f"{payload.job_kind} artifact upload failed: {upload_error}"
+        client.fail_job(job_id, error_message=error_message, return_code=return_code)
+        return RepositoryOperationResult(
+            job_id=job_id,
+            status="failed",
+            return_code=return_code,
+            message=error_message,
+        )
+
+    if return_code == 0:
+        client.complete_job(
+            job_id,
+            result={"return_code": return_code, "command": cmd, "artifact": True},
+        )
+        return RepositoryOperationResult(
+            job_id=job_id,
+            status="completed",
+            return_code=return_code,
+            message=f"{payload.job_kind} exited with code {return_code}",
+        )
+
+    if stderr:
+        client.send_log(job_id, sequence=1, stream="stderr", message=stderr.rstrip())
+    error_message = f"{payload.job_kind} exited with code {return_code}"
+    client.fail_job(job_id, error_message=error_message, return_code=return_code)
+    return RepositoryOperationResult(
+        job_id=job_id,
+        status="failed",
+        return_code=return_code,
+        message=error_message,
+    )
+
+
 def _execute_binary_output_repository_operation(
     job_id: int,
     payload: RepositoryOperationPayload,
     client: AgentClient,
     cmd: list[str],
     env: dict[str, str],
+    *,
+    should_cancel: Optional[Callable[[], bool]] = None,
 ) -> RepositoryOperationResult:
+    operation = payload.operation or {}
+    if operation.get("delivery") == "artifact" and hasattr(client, "upload_artifact"):
+        return _execute_streaming_artifact_operation(
+            job_id, payload, client, cmd, env, should_cancel=should_cancel
+        )
+
     try:
         process = subprocess.run(cmd, capture_output=True, env=env, timeout=300)
     except OSError as exc:

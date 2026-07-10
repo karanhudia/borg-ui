@@ -12,7 +12,7 @@ from urllib.parse import urlparse, urlunparse
 
 from agent.borg_ui_agent import __version__
 from agent.borg_ui_agent.borg import detect_borg_binaries, detect_platform
-from agent.borg_ui_agent.client import AGENT_AUTH_HEADER
+from agent.borg_ui_agent.client import AGENT_AUTH_HEADER, AgentClient
 from agent.borg_ui_agent.config import AgentConfig
 from agent.borg_ui_agent.filesystem import FilesystemBrowseError, browse_filesystem
 from agent.borg_ui_agent.runtime import get_capabilities, get_job_handler
@@ -68,6 +68,7 @@ class SessionCommandClient:
         job_id: Optional[int],
         send_lock: Optional[threading.Lock] = None,
         closing: Optional[threading.Event] = None,
+        artifact_uploader: Optional[Callable[[int, Any], dict[str, Any]]] = None,
     ):
         self.socket = socket
         self.command_id = command_id
@@ -76,6 +77,13 @@ class SessionCommandClient:
         self.started = False
         self._send_lock = send_lock or threading.Lock()
         self._closing = closing
+        self._artifact_uploader = artifact_uploader
+
+    def upload_artifact(self, job_id: int, data: Any) -> dict[str, Any]:
+        """Stream a binary job artifact to the server over HTTP (not the WS)."""
+        if self._artifact_uploader is None:
+            raise RuntimeError("artifact upload is not available in this session")
+        return self._artifact_uploader(job_id, data)
 
     def start_job(self, job_id: int) -> dict[str, Any]:
         self.started = True
@@ -183,6 +191,9 @@ class AgentSessionRuntime:
         self.connect = connect or _default_connect
         self.sleep = sleep
         self.timeout_seconds = timeout_seconds
+        # HTTP client used to stream binary artifacts (e.g. extracted files) to
+        # the server out-of-band, so they never go through the WebSocket.
+        self._artifact_client = AgentClient.from_config(config)
         self._send_lock = threading.Lock()
         self._registry_lock = threading.Lock()
         self._cancel_events: dict[int, threading.Event] = {}
@@ -322,6 +333,7 @@ class AgentSessionRuntime:
             job_id=job_id,
             send_lock=self._send_lock,
             closing=closing,
+            artifact_uploader=self._artifact_client.upload_artifact,
         )
 
         ack = json.dumps(

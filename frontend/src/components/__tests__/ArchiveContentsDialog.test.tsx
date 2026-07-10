@@ -400,7 +400,9 @@ describe('ArchiveContentsDialog', () => {
     const downloadButton = screen.getByTitle('Download file')
     fireEvent.click(downloadButton)
 
-    expect(mockHandlers.onDownloadFile).toHaveBeenCalledWith(mockArchive.name, '/file.txt')
+    await waitFor(() =>
+      expect(mockHandlers.onDownloadFile).toHaveBeenCalledWith(mockArchive.name, '/file.txt', 512)
+    )
   })
 
   it('calls onClose when Close button is clicked', async () => {

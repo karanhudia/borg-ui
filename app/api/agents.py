@@ -8,6 +8,7 @@ from fastapi import (
     Depends,
     HTTPException,
     Query,
+    Request,
     WebSocket,
     WebSocketDisconnect,
     status,
@@ -36,6 +37,7 @@ from app.database.models import (
     PruneJob,
     Repository,
 )
+from app.services.agent_artifact_relay import agent_artifact_relay
 from app.services.agent_connection_manager import (
     AgentConnection,
     agent_connection_manager,
@@ -262,6 +264,34 @@ def _is_terminal_backup_status(status_value: Optional[str]) -> bool:
     }
 
 
+# Repository ops that exist only to serve a synchronous, read-only UI request
+# (browse/info) or a one-shot repo init. They have no durable record, so once the
+# HTTP request that queued them times out there is no receiver left — restarting
+# one on reconnect re-runs it for nobody (and, for an extract, re-breaks the agent
+# session). Everything NOT listed here is treated as durable and retried:
+# backups, maintenance ops (check/prune/compact), and rclone_sync (which owns a
+# persistent RcloneSyncJob record and also runs automatically after backups).
+# Allowlist, not blocklist, so an unknown/new job kind defaults to the safe side
+# (retry) rather than being silently dropped.
+REQUEST_SCOPED_REPOSITORY_JOB_KINDS = frozenset(
+    {
+        "repository.extract_archive_file",
+        "repository.list_archive_contents",
+        "repository.list_archives",
+        "repository.info",
+        "repository.init",
+    }
+)
+
+
+def _is_request_scoped_repository_job(job: AgentJob) -> bool:
+    """True for repository ops whose only receiver is a synchronous request."""
+    if job.job_type != "repository":
+        return False
+    payload = job.payload if isinstance(job.payload, dict) else {}
+    return payload.get("job_kind") in REQUEST_SCOPED_REPOSITORY_JOB_KINDS
+
+
 def _requeue_stale_agent_jobs(
     db: Session,
     current_agent: AgentMachine,
@@ -283,6 +313,18 @@ def _requeue_stale_agent_jobs(
         if job.id in running_ids:
             continue
         if _job_activity_at(job) > stale_cutoff:
+            continue
+
+        if _is_request_scoped_repository_job(job):
+            # No client is waiting for the result any more — fail terminally
+            # instead of restarting a job whose receiver is gone.
+            job.status = "failed"
+            job.completed_at = now
+            job.updated_at = now
+            job.error_message = (
+                "Agent session lost before delivery; request-scoped repository "
+                "operation failed (no client is waiting for the result)."
+            )
             continue
 
         job.status = "queued"
@@ -1188,6 +1230,50 @@ async def complete_job(
     db.commit()
 
     return AgentJobStatusResponse(id=job.id, status=job.status)
+
+
+@router.post("/jobs/{job_id}/artifact")
+async def upload_job_artifact(
+    job_id: int,
+    request: Request,
+    current_agent: AgentMachine = Depends(get_current_agent),
+    db: Session = Depends(get_db),
+):
+    """Relay a streamed job artifact (e.g. an extracted file) to the waiting
+    download consumer without buffering it to disk.
+
+    The download route registers a relay channel before dispatching the job. If
+    none is registered the client has already gone (aborted or timed out), so we
+    drain and drop the body rather than let the agent block.
+    """
+    job = _get_agent_job(job_id, current_agent, db)
+
+    if not agent_artifact_relay.is_registered(job.id):
+        async for _ in request.stream():
+            pass
+        return {"accepted": False, "size": 0}
+
+    size = 0
+    delivered = True
+    try:
+        async for chunk in request.stream():
+            if not chunk:
+                continue
+            size += len(chunk)
+            if not await agent_artifact_relay.push(job.id, chunk):
+                # The download consumer is gone; stop relaying (and stop the
+                # agent's upload) instead of draining the whole body for nobody.
+                delivered = False
+                break
+        if delivered:
+            await agent_artifact_relay.close(job.id)
+    except Exception as exc:
+        await agent_artifact_relay.close(job.id, error=str(exc))
+        raise
+
+    job.updated_at = _now_utc()
+    db.commit()
+    return {"accepted": delivered, "size": size}
 
 
 @router.post("/jobs/{job_id}/fail", response_model=AgentJobStatusResponse)

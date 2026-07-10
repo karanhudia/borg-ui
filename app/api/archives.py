@@ -5,10 +5,12 @@ import json
 import os
 import tempfile  # noqa: F401 - retained as a patch target in download endpoint tests
 from types import SimpleNamespace
+from urllib.parse import quote
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse  # noqa: F401 - retained as a patch target in download endpoint tests
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api.archive_download import extract_file_download, resolve_extracted_file_path
@@ -21,7 +23,8 @@ from app.core.security import (
     require_repository_access_by_path,
 )
 from app.database.database import get_db
-from app.database.models import DeleteArchiveJob, Repository, User
+from app.database.models import AgentMachine, DeleteArchiveJob, Repository, User
+from app.services.agent_artifact_relay import agent_artifact_relay
 from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
 from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.services.repository_executor import (
@@ -82,6 +85,109 @@ def _write_agent_extracted_file(result: dict, *, temp_dir: str, file_path: str) 
         extracted_file.write(content)
 
     return {"success": True, "stderr": result.get("stderr", "")}
+
+
+# Agents advertising this capability stream an extracted file to the server over
+# HTTP instead of returning it base64-encoded in a WebSocket message, so the
+# download can be proxied straight to the client at any size. Older agents
+# without it keep using the base64 path below.
+ARTIFACT_UPLOAD_CAPABILITY = "artifact.upload"
+
+# Time the download waits for the agent's first byte (reach the remote repo,
+# find the archive+file, spawn borg). Once bytes flow there is no total cap.
+AGENT_ARTIFACT_FIRST_BYTE_TIMEOUT = 60.0
+# Max gap between chunks before a stalled stream is abandoned.
+AGENT_ARTIFACT_IDLE_TIMEOUT = 60.0
+
+
+def _content_disposition_attachment(filename: str) -> str:
+    """Build a safe `Content-Disposition` for a user-controlled filename.
+
+    Escapes an ASCII fallback (dropping quotes/backslashes/control chars so the
+    header can't be broken or injected) and adds an RFC 5987 `filename*` UTF-8
+    variant so non-ASCII names survive.
+    """
+    ascii_name = filename.encode("ascii", "ignore").decode("ascii")
+    ascii_name = "".join(
+        ch for ch in ascii_name if ch.isprintable() and ch not in '"\\'
+    ).strip()
+    ascii_name = ascii_name or "download"
+    utf8_name = quote(filename, safe="")
+    return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{utf8_name}"
+
+
+def _repo_bound_agent(repo: Repository, db: Session) -> AgentMachine | None:
+    if not repo.agent_machine_id:
+        return None
+    return (
+        db.query(AgentMachine).filter(AgentMachine.id == repo.agent_machine_id).first()
+    )
+
+
+async def _stream_agent_archive_file(
+    db: Session, repo: Repository, archive: str, file_path: str
+) -> StreamingResponse:
+    """Proxy a single archived file from the agent straight to the client.
+
+    The agent runs `borg extract --stdout` and streams it to
+    POST /jobs/{id}/artifact; those chunks are relayed here without buffering.
+    """
+    agent_job = queue_agent_repository_operation_job(
+        db,
+        repo,
+        job_kind="repository.extract_archive_file",
+        operation={"archive": archive, "file_path": file_path, "delivery": "artifact"},
+    )
+    agent_artifact_relay.register(agent_job.id)
+    try:
+        await dispatch_agent_job_best_effort(
+            db,
+            agent_job,
+            repository_id=repo.id,
+            archive=archive,
+            file_path=file_path,
+        )
+    except Exception:
+        agent_artifact_relay.unregister(agent_job.id)
+        raise
+
+    stream = agent_artifact_relay.stream(
+        agent_job.id,
+        first_byte_timeout=AGENT_ARTIFACT_FIRST_BYTE_TIMEOUT,
+        idle_timeout=AGENT_ARTIFACT_IDLE_TIMEOUT,
+    )
+    # Pull the first chunk here so a timeout/failure still yields a proper status
+    # code, before StreamingResponse commits 200 + headers to the client.
+    try:
+        first_chunk = await stream.__anext__()
+    except StopAsyncIteration:
+        first_chunk = None  # empty file
+    except TimeoutError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail={"key": "backend.errors.agents.repositoryOperationTimeout"},
+        ) from exc
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={
+                "key": "backend.errors.agents.repositoryOperationFailed",
+                "message": str(exc),
+            },
+        ) from exc
+
+    async def body():
+        if first_chunk is not None:
+            yield first_chunk
+        async for chunk in stream:
+            yield chunk
+
+    filename = os.path.basename(file_path) or "download"
+    return StreamingResponse(
+        body(),
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": _content_disposition_attachment(filename)},
+    )
 
 
 @router.get("/list")
@@ -381,6 +487,13 @@ async def download_file_from_archive(
             "viewer",
             detail_key="backend.errors.archives.repositoryNotFound",
         )
+
+        # New agents stream the file straight through; older agents (and
+        # server-side repos) fall through to the base64/local path below.
+        if is_agent_executor(repo):
+            agent = _repo_bound_agent(repo, db)
+            if agent and ARTIFACT_UPLOAD_CAPABILITY in (agent.capabilities or []):
+                return await _stream_agent_archive_file(db, repo, archive, file_path)
 
         async def extract(temp_dir: str):
             if is_agent_executor(repo):

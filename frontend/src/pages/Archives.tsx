@@ -8,6 +8,7 @@ import { repositoriesAPI, mountsAPI, restoreAPI } from '../services/api'
 import { useRepositoryStats } from '../hooks/useRepositoryStats'
 import { BorgApiClient } from '../services/borgApi'
 import { translateBackendKey } from '../utils/translateBackendKey'
+import { downloadArchiveFile } from '../utils/downloadArchiveFile'
 import RepositorySelectorCard from '../components/RepositorySelectorCard'
 import RepositoryStatsGrid from '../components/RepositoryStatsGrid'
 import RepositoryStatsGridSkeleton from '../components/RepositoryStatsGridSkeleton'
@@ -565,7 +566,7 @@ const Archives: React.FC = () => {
         archive={viewArchive}
         repository={selectedRepository ?? null}
         onClose={() => setViewArchive(null)}
-        onDownloadFile={(archiveName, filePath) => {
+        onDownloadFile={(archiveName, filePath, size) => {
           if (selectedRepository) {
             trackArchive(EventAction.DOWNLOAD, selectedRepository, {
               operation: 'download_archive_file',
@@ -575,7 +576,9 @@ const Archives: React.FC = () => {
               getBorgVersion(selectedRepository) === 2
                 ? (viewArchive?.id ?? archiveName)
                 : archiveName
-            new BorgApiClient(selectedRepository).downloadFile(archiveRef, filePath)
+            return downloadArchiveFile(selectedRepository, archiveRef, filePath, {
+              totalSize: size ?? undefined,
+            })
           }
         }}
       />

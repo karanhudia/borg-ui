@@ -47,7 +47,8 @@ interface StorageBrowserDialogProps {
   showModifiedColumn?: boolean
   onClose: () => void
   onNavigate: (path: string) => void
-  onDownloadFile?: (path: string) => void
+  onDownloadFile?: (path: string, size?: number | null) => void
+  downloadBusy?: boolean
   downloadLabel?: string
   formatSize?: (size: number) => string
   formatModified?: (modified: string) => string
@@ -147,6 +148,7 @@ export default function StorageBrowserDialog({
   onClose,
   onNavigate,
   onDownloadFile,
+  downloadBusy = false,
   downloadLabel,
   formatSize = defaultFormatSize,
   formatModified,
@@ -449,7 +451,10 @@ export default function StorageBrowserDialog({
                                   <IconButton
                                     size="small"
                                     sx={{ color: 'text.secondary' }}
-                                    onClick={() => onDownloadFile(file.downloadPath || file.path)}
+                                    disabled={downloadBusy}
+                                    onClick={() =>
+                                      onDownloadFile(file.downloadPath || file.path, file.size)
+                                    }
                                     title={downloadLabel}
                                     aria-label={downloadLabel}
                                   >

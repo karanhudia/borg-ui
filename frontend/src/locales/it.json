@@ -4093,7 +4093,12 @@
     "managedCanaryLabel": "Canary Borg UI",
     "managedCanaryDescription": "File canary gestiti per i controlli di ripristino. Borg UI li aggiunge ai backup mentre la modalità canary è attiva.",
     "managedCanaryBanner": "Questa cartella è gestita da Borg UI per i controlli di ripristino canary. Puoi lasciarla invariata.",
-    "managedCanaryProbeDisabled": "I percorsi canary vengono verificati automaticamente dalla modalità canary."
+    "managedCanaryProbeDisabled": "I percorsi canary vengono verificati automaticamente dalla modalità canary.",
+    "failedToDownloadFile": "Impossibile scaricare il file",
+    "downloadPreparing": "Preparazione del download di {{name}}…",
+    "downloadingBytes": "Download… {{size}}",
+    "downloadingPercent": "Download… {{percent}}% ({{size}})",
+    "downloadComplete": "{{name}} scaricato"
   },
   "codeEditor": {
     "loading": "Caricamento editor..."
@@ -5033,6 +5038,9 @@
         "invalidAuthCredentials": "Credenziali di autenticazione non valide",
         "userNotFoundOrInactive": "Utente non trovato o inattivo",
         "failedStartEventStream": "Impossibile avviare il flusso di eventi"
+      },
+      "jobs": {
+        "repositoryOperationActive": "Un'altra operazione è già in corso su questo repository. Attendi che finisca e riprova."
       }
     },
     "success": {
