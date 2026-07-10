@@ -9,7 +9,7 @@ const trackArchive = vi.fn()
 const borgListArchivesMock = vi.fn()
 const borgGetInfoMock = vi.fn()
 const borgDeleteArchiveMock = vi.fn()
-const borgDownloadFileMock = vi.fn()
+const { downloadArchiveFileMock } = vi.hoisted(() => ({ downloadArchiveFileMock: vi.fn() }))
 
 function createDeferred<T>() {
   let resolve!: (value: T) => void
@@ -132,9 +132,12 @@ vi.mock('../../services/borgApi', () => ({
       listArchives: borgListArchivesMock,
       getInfo: borgGetInfoMock,
       deleteArchive: borgDeleteArchiveMock,
-      downloadFile: borgDownloadFileMock,
     }
   }),
+}))
+
+vi.mock('../../utils/downloadArchiveFile', () => ({
+  downloadArchiveFile: downloadArchiveFileMock,
 }))
 
 vi.mock('../../services/api', () => ({
@@ -219,7 +222,7 @@ describe('Archives page actions', () => {
     })
     borgGetInfoMock.mockResolvedValue({ data: { info: {} } })
     borgDeleteArchiveMock.mockResolvedValue({ data: { job_id: 7 } })
-    borgDownloadFileMock.mockResolvedValue(undefined)
+    downloadArchiveFileMock.mockResolvedValue(undefined)
   })
 
   it('tracks filter/view and calls download, restore, and mount APIs from archive actions', async () => {
@@ -243,7 +246,10 @@ describe('Archives page actions', () => {
     await user.click(screen.getByText('View Archive'))
     await user.click(await screen.findByText('Download File'))
 
-    expect(borgDownloadFileMock).toHaveBeenCalledWith('a1', '/etc/hosts')
+    await waitFor(() => expect(downloadArchiveFileMock).toHaveBeenCalled())
+    const downloadCall = downloadArchiveFileMock.mock.calls[0]
+    expect(downloadCall[1]).toBe('a1')
+    expect(downloadCall[2]).toBe('/etc/hosts')
     expect(trackArchive).toHaveBeenCalledWith('View', repository, {
       surface: 'archive_contents',
       operation: 'open_archive',

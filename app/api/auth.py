@@ -838,25 +838,32 @@ async def login(
 
 
 def _resolve_oidc_role(identity: dict[str, Any], settings_row: SystemSettings) -> str:
+    admin_groups = {
+        group.strip().lower()
+        for group in (settings_row.oidc_admin_groups or "").split(",")
+        if group.strip()
+    }
+    identity_groups = set(_normalize_oidc_groups(identity.get("groups")))
+    in_admin_group = bool(admin_groups) and not identity_groups.isdisjoint(admin_groups)
+
     candidate = identity.get("role")
     if candidate in {"viewer", "operator", "admin"}:
-        if candidate == "admin":
-            admin_groups = {
-                group.strip().lower()
-                for group in (settings_row.oidc_admin_groups or "").split(",")
-                if group.strip()
-            }
-            identity_groups = set(_normalize_oidc_groups(identity.get("groups")))
-            if not admin_groups or identity_groups.isdisjoint(admin_groups):
-                logger.warning(
-                    "Ignoring OIDC admin role claim without matching admin group allow-list",
-                    username=identity.get("username"),
-                    subject=identity.get("subject"),
-                    configured_groups=sorted(admin_groups),
-                    identity_groups=sorted(identity_groups),
-                )
-                return (settings_row.oidc_default_role or "viewer").strip() or "viewer"
-        return candidate
+        if candidate == "admin" and not in_admin_group:
+            logger.warning(
+                "Ignoring OIDC admin role claim without matching admin group allow-list",
+                username=identity.get("username"),
+                subject=identity.get("subject"),
+                configured_groups=sorted(admin_groups),
+                identity_groups=sorted(identity_groups),
+            )
+            # fall through to group-based / default resolution below
+        else:
+            return candidate
+
+    # Membership in an allow-listed admin group grants admin even without a role
+    # claim (the common "admin via group" pattern — e.g. IdP-managed groups).
+    if in_admin_group:
+        return "admin"
     return (settings_row.oidc_default_role or "viewer").strip() or "viewer"
 
 
@@ -1033,8 +1040,30 @@ def _provision_oidc_user(
             detail={"key": "backend.errors.auth.inactiveUser"},
         )
 
-    if identity.get("role"):
+    # Re-resolve the role from the IdP on each login when it carries role info —
+    # a role claim OR groups. Group membership is now a role source (admin via
+    # group), so an existing user's role must sync from groups too, not only from
+    # a role claim; otherwise a pre-existing user never gains/loses admin.
+    if identity.get("role") or identity.get("groups"):
         role = _resolve_oidc_role(identity, settings_row)
+        # Never demote the last active admin — that would leave the instance with
+        # no administrator and lock everyone out.
+        if user.role == "admin" and role != "admin":
+            other_admins = (
+                db.query(User)
+                .filter(
+                    User.role == "admin",
+                    User.is_active.is_(True),
+                    User.id != user.id,
+                )
+                .count()
+            )
+            if other_admins == 0:
+                logger.warning(
+                    "Refusing to demote the last active admin via OIDC role sync",
+                    username=user.username,
+                )
+                role = "admin"
         user.role = role
     else:
         role = user.role

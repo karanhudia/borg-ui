@@ -109,7 +109,7 @@ def plan_repository_route(
         )
 
     if executor_type == EXECUTOR_AGENT:
-        if _is_ssh_repository(repository):
+        if getattr(repository, "connection_id", None):
             return _unsupported(
                 repository,
                 reason_key="backend.errors.backupPlans.agentRepoSshTargetUnsupported",

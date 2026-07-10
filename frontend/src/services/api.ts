@@ -1267,6 +1267,10 @@ export const managedAgentsAPI = {
     ),
   runDiagnostics: (agentId: number, data: AgentDiagnosticsRequest) =>
     api.post<AgentDiagnosticsResponse>(`/managed-machines/agents/${agentId}/diagnostics`, data),
+  getRepositoryDefaults: (agentId: number) =>
+    api.get<{ repo: string | null; remote_path: string | null; has_passphrase: boolean }>(
+      `/managed-machines/agents/${agentId}/repository-defaults`
+    ),
 }
 
 // Schedule API

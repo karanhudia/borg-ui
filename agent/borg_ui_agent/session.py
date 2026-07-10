@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import socket as socket_module
 import threading
 import time
@@ -11,7 +12,7 @@ from urllib.parse import urlparse, urlunparse
 
 from agent.borg_ui_agent import __version__
 from agent.borg_ui_agent.borg import detect_borg_binaries, detect_platform
-from agent.borg_ui_agent.client import AGENT_AUTH_HEADER
+from agent.borg_ui_agent.client import AGENT_AUTH_HEADER, AgentClient
 from agent.borg_ui_agent.config import AgentConfig
 from agent.borg_ui_agent.filesystem import FilesystemBrowseError, browse_filesystem
 from agent.borg_ui_agent.runtime import get_capabilities, get_job_handler
@@ -67,6 +68,7 @@ class SessionCommandClient:
         job_id: Optional[int],
         send_lock: Optional[threading.Lock] = None,
         closing: Optional[threading.Event] = None,
+        artifact_uploader: Optional[Callable[[int, Any], dict[str, Any]]] = None,
     ):
         self.socket = socket
         self.command_id = command_id
@@ -75,6 +77,13 @@ class SessionCommandClient:
         self.started = False
         self._send_lock = send_lock or threading.Lock()
         self._closing = closing
+        self._artifact_uploader = artifact_uploader
+
+    def upload_artifact(self, job_id: int, data: Any) -> dict[str, Any]:
+        """Stream a binary job artifact to the server over HTTP (not the WS)."""
+        if self._artifact_uploader is None:
+            raise RuntimeError("artifact upload is not available in this session")
+        return self._artifact_uploader(job_id, data)
 
     def start_job(self, job_id: int) -> dict[str, Any]:
         self.started = True
@@ -182,6 +191,9 @@ class AgentSessionRuntime:
         self.connect = connect or _default_connect
         self.sleep = sleep
         self.timeout_seconds = timeout_seconds
+        # HTTP client used to stream binary artifacts (e.g. extracted files) to
+        # the server out-of-band, so they never go through the WebSocket.
+        self._artifact_client = AgentClient.from_config(config)
         self._send_lock = threading.Lock()
         self._registry_lock = threading.Lock()
         self._cancel_events: dict[int, threading.Event] = {}
@@ -233,11 +245,20 @@ class AgentSessionRuntime:
                 try:
                     raw_message = socket.recv()
                 except (TimeoutError, WebSocketTimeoutException):
-                    # Idle keep-alive ping. The key property of this loop is that
-                    # it stays in recv() *even while a job runs in a worker
-                    # thread*, so websocket-client keeps auto-ponging the server's
-                    # pings and the session survives long backups/checks.
+                    # Idle keep-alive. The key property of this loop is that it
+                    # stays in recv() *even while a job runs in a worker thread*,
+                    # so websocket-client keeps auto-ponging the server's pings
+                    # and the session survives long backups/checks.
+                    #
+                    # The protocol ping keeps the socket alive but never reaches
+                    # application code, so it cannot refresh the server's
+                    # last_seen_at. Send an application-level heartbeat too so an
+                    # idle-but-healthy agent stays "live" server-side.
                     with self._send_lock:
+                        try:
+                            socket.send(json.dumps({"type": "heartbeat"}))
+                        except Exception:
+                            pass
                         ping = getattr(socket, "ping", None)
                         if callable(ping):
                             ping()
@@ -312,6 +333,7 @@ class AgentSessionRuntime:
             job_id=job_id,
             send_lock=self._send_lock,
             closing=closing,
+            artifact_uploader=self._artifact_client.upload_artifact,
         )
 
         ack = json.dumps(
@@ -331,6 +353,10 @@ class AgentSessionRuntime:
 
         if command == "diagnostics.run":
             self._handle_diagnostics(client, payload)
+            return
+
+        if command == "agent.repository_defaults":
+            self._handle_repository_defaults(client, payload)
             return
 
         if command == "cancel":
@@ -405,6 +431,21 @@ class AgentSessionRuntime:
         with self._registry_lock:
             self._cancel_events.pop(job_id, None)
             self._pending_cancels.discard(job_id)
+
+    def _handle_repository_defaults(
+        self, client: SessionCommandClient, payload: dict[str, Any]
+    ) -> None:
+        """Report the agent's own environment-configured repository target
+        (``$BORG_REPO`` / ``$BORG_REMOTE_PATH``) so the UI can pre-fill the
+        repository form, plus whether a ``$BORG_PASSPHRASE`` is set — a boolean,
+        never the passphrase value itself."""
+        client.send_result(
+            {
+                "repo": os.environ.get("BORG_REPO"),
+                "remote_path": os.environ.get("BORG_REMOTE_PATH"),
+                "has_passphrase": bool(os.environ.get("BORG_PASSPHRASE")),
+            }
+        )
 
     def _handle_filesystem_browse(
         self, client: SessionCommandClient, payload: dict[str, Any]
