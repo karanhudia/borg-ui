@@ -498,9 +498,15 @@
     "banner": {
       "systemStatus": "Systemstatus",
       "allNominal": "Alle Systeme nominal",
-      "warnings": "{{count}} Warnung{{s}}",
+      "warnings": "{{count}} Warnung",
+      "warnings_one": "{{count}} Warnung",
+      "warnings_other": "{{count}} Warnungen",
       "critical": "{{count}} kritisch",
+      "critical_one": "{{count}} kritisch",
+      "critical_other": "{{count}} kritisch",
       "warnChip": "{{count}} Warn.",
+      "warnChip_one": "{{count}} Warn.",
+      "warnChip_other": "{{count}} Warn.",
       "okChip": "{{count}} ok",
       "stats": {
         "lastBackup": "Letztes Backup",
