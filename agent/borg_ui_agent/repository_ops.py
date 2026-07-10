@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import os
 import shlex
+import shutil
 import signal
 import subprocess
 import tempfile
@@ -24,6 +26,7 @@ REPOSITORY_JOB_KINDS = {
     "repository.list_archives",
     "repository.list_archive_contents",
     "repository.extract_archive_file",
+    "repository.restore",
     "repository.check",
     "repository.prune",
     "repository.compact",
@@ -186,6 +189,46 @@ class RepositoryOperationPayload:
                 file_path,
             ]
 
+        if self.job_kind == "repository.restore":
+            archive = _operation_archive(self.operation, self.job_kind)
+            operation = self.operation or {}
+            paths = _restore_paths(operation)
+            strip_components = _restore_strip_components(operation)
+            # Mirror BorgRouter.build_restore_extract_command so agent-side
+            # restores behave identically to server-side ones. Borg only emits
+            # JSON progress events when --progress is paired with --log-json, so
+            # both borg versions get --progress here. A `--` separator guards
+            # against user-supplied paths that start with "-".
+            if self.borg_version == 2:
+                cmd = [
+                    *self._base_borg2("extract"),
+                    "--progress",
+                    "--log-json",
+                    "--umask",
+                    "0022",
+                ]
+                if strip_components:
+                    cmd.extend(["--strip-components", str(strip_components)])
+                cmd.append(archive)
+                if paths:
+                    cmd.append("--")
+                    cmd.extend(paths)
+                return cmd
+            cmd = [
+                *self._base_borg1("extract"),
+                "--progress",
+                "--log-json",
+                "--umask",
+                "0022",
+            ]
+            if strip_components:
+                cmd.extend(["--strip-components", str(strip_components)])
+            cmd.append(f"{self.repository_path}::{archive}")
+            if paths:
+                cmd.append("--")
+                cmd.extend(paths)
+            return cmd
+
         if self.job_kind == "repository.check":
             extra_flags = _split_flags((self.operation or {}).get("check_extra_flags"))
             max_duration = (self.operation or {}).get("max_duration")
@@ -303,6 +346,28 @@ def _operation_file_path(operation: dict[str, Any] | None, job_kind: str) -> str
     return normalized
 
 
+def _restore_paths(operation: dict[str, Any] | None) -> list[str]:
+    paths = (operation or {}).get("paths")
+    if paths is None:
+        return []
+    if not isinstance(paths, list):
+        raise ValueError("repository.restore requires operation.paths to be a list")
+    return [path for path in paths if isinstance(path, str) and path.strip()]
+
+
+def _restore_strip_components(operation: dict[str, Any] | None) -> Optional[int]:
+    value = (operation or {}).get("strip_components")
+    if value is None:
+        return None
+    try:
+        number = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "repository.restore strip_components must be an integer"
+        ) from exc
+    return number if number > 0 else None
+
+
 def _write_temp_rclone_config(payload: RepositoryOperationPayload) -> str:
     rclone = _rclone_operation(payload.operation)
     remote_name = _require_non_empty_string(rclone.get("remote_name"), "remote_name")
@@ -398,6 +463,20 @@ def execute_repository_operation_job(
         try:
             return _execute_binary_output_repository_operation(
                 job_id, payload, client, cmd, env, should_cancel=should_cancel
+            )
+        finally:
+            _remove_temp_file(rclone_config_path)
+
+    if payload.job_kind == "repository.restore":
+        try:
+            return _execute_restore_operation(
+                job_id,
+                payload,
+                client,
+                cmd,
+                env,
+                initial_sequence=sequence,
+                should_cancel=should_cancel,
             )
         finally:
             _remove_temp_file(rclone_config_path)
@@ -895,6 +974,242 @@ def _execute_streaming_repository_operation(
         return_code=return_code,
         message=error_message,
     )
+
+
+def _is_borg_warning_rc(return_code: Optional[int]) -> bool:
+    # Borg uses exit code 1 (and 100-127 in newer builds) for warnings that
+    # still produced output. Mirrors restore_check_service._is_borg_warning_exit_code.
+    return return_code == 1 or (return_code is not None and 100 <= return_code <= 127)
+
+
+def _resolve_restore_target(operation: dict[str, Any]) -> tuple[str, bool]:
+    """Return (target_dir, is_temp) for a repository.restore job.
+
+    `target.type == "temp"` extracts into a throwaway directory the agent owns
+    and deletes afterwards (used by restore checks); otherwise it extracts into
+    the given absolute path on the node (used by ad-hoc restores).
+    """
+    target = operation.get("target")
+    if not isinstance(target, dict):
+        raise ValueError("repository.restore requires operation.target")
+    if target.get("type") == "temp":
+        return tempfile.mkdtemp(prefix="borg-ui-restore-"), True
+    path = target.get("path")
+    if not isinstance(path, str) or not path.strip():
+        raise ValueError("repository.restore requires operation.target.path")
+    destination = Path(path.strip())
+    # borg extract runs with cwd=destination, so a relative path would extract
+    # into the agent service's working directory rather than the intended node
+    # location. Require an absolute path.
+    if not destination.is_absolute():
+        raise ValueError("repository.restore operation.target.path must be absolute")
+    destination.mkdir(parents=True, exist_ok=True)
+    return str(destination), False
+
+
+def _execute_restore_operation(
+    job_id: int,
+    payload: RepositoryOperationPayload,
+    client: AgentClient,
+    cmd: list[str],
+    env: dict[str, str],
+    *,
+    initial_sequence: int,
+    should_cancel: Optional[Callable[[], bool]],
+) -> RepositoryOperationResult:
+    """Run `borg extract` into a destination on the node, streaming progress.
+
+    Extraction is relative to the working directory, so we run it with cwd set
+    to the resolved target. Optionally verifies a restore-check canary on the
+    node afterwards and reports the verdict in the completion result; the server
+    maps that verdict onto the RestoreCheckJob status.
+    """
+    operation = payload.operation or {}
+    try:
+        target_dir, is_temp = _resolve_restore_target(operation)
+    except (OSError, ValueError) as exc:
+        error_message = f"Failed to prepare restore destination: {exc}"
+        client.send_log(
+            job_id, sequence=initial_sequence, stream="stderr", message=error_message
+        )
+        client.fail_job(job_id, error_message=error_message)
+        return RepositoryOperationResult(
+            job_id=job_id, status="failed", message=error_message
+        )
+
+    try:
+        try:
+            popen_kwargs: dict[str, Any] = {
+                "stdout": subprocess.PIPE,
+                "stderr": subprocess.STDOUT,
+                "text": True,
+                "env": env,
+                "cwd": target_dir,
+            }
+            if os.name == "posix":
+                popen_kwargs["start_new_session"] = True
+            process = subprocess.Popen(cmd, **popen_kwargs)
+        except OSError as exc:
+            error_message = f"Failed to start {payload.job_kind}: {exc}"
+            client.send_log(
+                job_id,
+                sequence=initial_sequence,
+                stream="stderr",
+                message=error_message,
+            )
+            client.fail_job(job_id, error_message=error_message)
+            return RepositoryOperationResult(
+                job_id=job_id, status="failed", message=error_message
+            )
+
+        sequence = initial_sequence
+        if process.stdout is not None:
+            for line in process.stdout:
+                message = line.rstrip("\n")
+                client.send_log(
+                    job_id, sequence=sequence, stream="stdout", message=message
+                )
+                sequence += 1
+                progress = parse_borg_progress(message)
+                if progress:
+                    client.send_progress(job_id, progress)
+                if should_cancel and should_cancel():
+                    return_code = _terminate_process(process)
+                    client.cancel_job(job_id)
+                    return RepositoryOperationResult(
+                        job_id=job_id,
+                        status="canceled",
+                        return_code=return_code,
+                        message=f"{payload.job_kind} canceled",
+                    )
+
+        return_code = process.wait()
+        warning = _is_borg_warning_rc(return_code)
+
+        # A hard borg failure has no meaningful verification verdict.
+        if return_code != 0 and not warning:
+            error_message = f"{payload.job_kind} exited with code {return_code}"
+            client.fail_job(
+                job_id, error_message=error_message, return_code=return_code
+            )
+            return RepositoryOperationResult(
+                job_id=job_id,
+                status="failed",
+                return_code=return_code,
+                message=error_message,
+            )
+
+        result_payload: dict[str, Any] = {
+            "return_code": return_code,
+            "command": cmd,
+            "status": "completed",
+            "warning": warning,
+        }
+        verify_spec = operation.get("verify")
+        if verify_spec:
+            verification = _verify_restore(target_dir, verify_spec)
+            result_payload["verification"] = verification
+            if verification.get("status") != "verified":
+                client.send_log(
+                    job_id,
+                    sequence=sequence,
+                    stream="stderr",
+                    message=verification.get(
+                        "message", "restore verification did not pass"
+                    ),
+                )
+
+        client.complete_job(job_id, result=result_payload)
+        return RepositoryOperationResult(
+            job_id=job_id,
+            status="completed",
+            return_code=return_code,
+            message=f"{payload.job_kind} exited with code {return_code}",
+        )
+    finally:
+        if is_temp:
+            shutil.rmtree(target_dir, ignore_errors=True)
+
+
+def _verify_restore(target_dir: str, verify_spec: Any) -> dict[str, Any]:
+    if isinstance(verify_spec, dict) and verify_spec.get("kind") == "canary":
+        return _verify_canary(target_dir, verify_spec)
+    # Unknown/absent verification: the extract itself succeeded, so treat as
+    # verified rather than failing a restore that actually produced files.
+    return {"status": "verified"}
+
+
+def _verify_canary(target_dir: str, verify_spec: dict[str, Any]) -> dict[str, Any]:
+    """Verify Borg UI restore-check canary files on the node.
+
+    Data-driven mirror of app.services.restore_check_canary.verify_restored_canary:
+    locate the manifest among the candidate archive-relative paths, then confirm
+    each listed file's sha256 and size. The agent package cannot import app.*, so
+    the logic is reproduced here but reads all expectations from the manifest.
+    """
+    # Resolve against the real restored root and reject any candidate/manifest
+    # entry that escapes it (via "..") so verification can only ever read files
+    # inside the just-restored tree, never arbitrary files on the agent.
+    restore_root = Path(target_dir).resolve()
+    manifest_path: Optional[Path] = None
+    for candidate in verify_spec.get("manifest_candidates") or []:
+        if not isinstance(candidate, str) or not candidate.strip():
+            continue
+        candidate_path = (restore_root / candidate.strip().strip("/")).resolve()
+        if not candidate_path.is_relative_to(restore_root):
+            continue
+        if candidate_path.is_file():
+            manifest_path = candidate_path
+            break
+
+    if manifest_path is None:
+        return {
+            "status": "needs_backup",
+            "message": (
+                "The Borg UI canary file was not found in the latest archive. "
+                "Run a backup while canary mode is enabled, then run this restore "
+                "check again."
+            ),
+        }
+
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {"status": "failed", "message": f"Could not read canary manifest: {exc}"}
+
+    base_dir = manifest_path.parent.parent
+    verified_files: list[str] = []
+    for entry in manifest.get("files", []):
+        if not isinstance(entry, dict):
+            continue
+        relative_path = entry.get("path")
+        if not isinstance(relative_path, str):
+            continue
+        target = (base_dir / relative_path).resolve()
+        if not target.is_relative_to(restore_root):
+            return {
+                "status": "failed",
+                "message": f"Canary path escapes restore root: {relative_path}",
+            }
+        if not target.is_file():
+            return {
+                "status": "failed",
+                "message": f"Canary file missing after restore: {relative_path}",
+            }
+        content = target.read_bytes()
+        if hashlib.sha256(content).hexdigest() != entry.get("sha256"):
+            return {
+                "status": "failed",
+                "message": f"Canary hash mismatch for {relative_path}",
+            }
+        if len(content) != entry.get("size"):
+            return {
+                "status": "failed",
+                "message": f"Canary size mismatch for {relative_path}",
+            }
+        verified_files.append(relative_path)
+
+    return {"status": "verified", "verified_files": verified_files}
 
 
 def _parse_json_output(stdout: str) -> Any:

@@ -115,9 +115,12 @@ class TestRestoreServiceRouting:
     async def test_execute_restore_routes_local_to_local(self):
         service = RestoreService()
 
-        with patch.object(
-            service, "_execute_local_to_local", new=AsyncMock()
-        ) as mock_exec:
+        with (
+            patch.object(
+                service, "_execute_local_to_local", new=AsyncMock()
+            ) as mock_exec,
+            patch.object(service, "_is_agent_restore", return_value=False),
+        ):
             await service.execute_restore(1, "/repo", "arch", "/dest")
 
         mock_exec.assert_awaited_once_with(
@@ -135,9 +138,12 @@ class TestRestoreServiceRouting:
     async def test_execute_restore_routes_ssh_to_local(self):
         service = RestoreService()
 
-        with patch.object(
-            service, "_execute_ssh_to_local", new=AsyncMock()
-        ) as mock_exec:
+        with (
+            patch.object(
+                service, "_execute_ssh_to_local", new=AsyncMock()
+            ) as mock_exec,
+            patch.object(service, "_is_agent_restore", return_value=False),
+        ):
             await service.execute_restore(
                 1,
                 "/repo",
@@ -154,9 +160,12 @@ class TestRestoreServiceRouting:
     async def test_execute_restore_routes_local_to_ssh(self):
         service = RestoreService()
 
-        with patch.object(
-            service, "_execute_local_to_ssh", new=AsyncMock()
-        ) as mock_exec:
+        with (
+            patch.object(
+                service, "_execute_local_to_ssh", new=AsyncMock()
+            ) as mock_exec,
+            patch.object(service, "_is_agent_restore", return_value=False),
+        ):
             await service.execute_restore(
                 1,
                 "/repo",
