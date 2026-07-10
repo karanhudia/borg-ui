@@ -1,0 +1,31 @@
+**/node_modules
+frontend/build
+frontend/dist
+
+# Out-of-band frontend bundle — now built hermetically in the frontend-builder stage
+docker/frontend-build-output
+
+# VCS, CI and local dev cruft — not needed to build the image
+.git
+.gitignore
+.github
+**/__pycache__
+*.py[cod]
+.venv
+venv
+.env
+.env.*
+.vscode
+.idea
+
+# macOS filesystem cruft (.gitignore doesn't filter the Docker build context)
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
+.DocumentRevisions-V100
+.TemporaryItems
+.apdisk

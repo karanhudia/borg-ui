@@ -101,7 +101,6 @@ ehthumbs.db
 Thumbs.db
 
 # Docker
-.dockerignore
 docker/frontend-build-output/
 
 # Claude Code
