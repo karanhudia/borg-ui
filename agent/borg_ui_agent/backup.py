@@ -179,6 +179,35 @@ def _extract_environment(
     return environment
 
 
+# borg prompts interactively on first access to an unknown *unencrypted* repo
+# ("Attempting to access a previously unknown unencrypted repository! ... [yN]")
+# and again when a repository looks relocated. A managed agent runs borg
+# non-interactively, so those prompts hang (or abort with rc=2) every operation
+# on such a repository — which surfaces in the UI as empty stats (0 archives /
+# N/A size / never). Opt into non-interactive access exactly like the server
+# side does. Respected by borg 1.x and borg 2.
+_BORG_NONINTERACTIVE_ACCESS_DEFAULTS = {
+    "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK": "yes",
+    "BORG_RELOCATED_REPO_ACCESS_IS_OK": "yes",
+}
+
+
+def build_borg_env(overrides: Optional[dict[str, str]] = None) -> dict[str, str]:
+    """Build the environment for a borg subprocess launched by the agent.
+
+    Starts from the agent process environment, layers the non-interactive
+    access defaults (only where not already set, so an explicit container
+    setting still wins), then applies the per-job overrides last so a value
+    sent by the server is never clobbered.
+    """
+    env = os.environ.copy()
+    for key, value in _BORG_NONINTERACTIVE_ACCESS_DEFAULTS.items():
+        env.setdefault(key, value)
+    if overrides:
+        env.update(overrides)
+    return env
+
+
 def parse_borg_progress(line: str) -> Optional[dict[str, Any]]:
     stripped = line.strip()
     if not stripped.startswith("{"):
@@ -265,8 +294,7 @@ def execute_backup_create_job(
         )
 
     cmd = payload.build_command()
-    env = os.environ.copy()
-    env.update(payload.environment)
+    env = build_borg_env(payload.environment)
 
     sequence = 0
     client.send_log(

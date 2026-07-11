@@ -8,6 +8,7 @@ import pytest
 
 from agent.borg_ui_agent.backup import (
     BackupCreatePayload,
+    build_borg_env,
     execute_backup_create_job,
     parse_borg_progress,
 )
@@ -1641,12 +1642,43 @@ def test_execute_backup_create_job_completes_successfully(monkeypatch):
     assert result.status == "completed"
     assert popen_calls[0]["cmd"][-2:] == ["/repo::archive", "/src"]
     assert popen_calls[0]["env"]["BORG_PASSPHRASE"] == "secret"
+    # Unencrypted repos must not stall the non-interactive agent on borg's
+    # "previously unknown unencrypted repository [yN]" prompt (issue #741).
+    assert popen_calls[0]["env"]["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] == "yes"
     assert popen_calls[0]["kwargs"]["start_new_session"] is True
     assert any(call[0] == "send_progress" for call in client.calls)
     complete_call = [call for call in client.calls if call[0] == "complete_job"][0]
     # No --json document on stdout -> fall back to the requested archive name.
     assert complete_call[2]["archive_name"] == "archive"
     assert complete_call[2]["return_code"] == 0
+
+
+@pytest.mark.unit
+def test_build_borg_env_sets_noninteractive_access_defaults(monkeypatch):
+    # borg 1.x and 2 both prompt "[yN]" on first access to an unknown
+    # unencrypted (or relocated) repository. The agent runs borg
+    # non-interactively, so without these flags every operation on such a repo
+    # hangs and the UI shows empty stats (0 archives / N/A / never) -> #741.
+    monkeypatch.delenv("BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK", raising=False)
+    monkeypatch.delenv("BORG_RELOCATED_REPO_ACCESS_IS_OK", raising=False)
+
+    env = build_borg_env()
+
+    assert env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] == "yes"
+    assert env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] == "yes"
+
+
+@pytest.mark.unit
+def test_build_borg_env_overrides_win_but_container_setting_is_kept(monkeypatch):
+    # A per-job override (e.g. the passphrase) is layered last and wins.
+    env = build_borg_env({"BORG_PASSPHRASE": "secret"})
+    assert env["BORG_PASSPHRASE"] == "secret"
+    assert env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] == "yes"
+
+    # An explicit container-level setting is respected over the default.
+    monkeypatch.setenv("BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK", "no")
+    env = build_borg_env()
+    assert env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] == "no"
 
 
 @pytest.mark.unit
