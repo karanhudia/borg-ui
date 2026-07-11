@@ -790,18 +790,124 @@ def get_operation_timeouts(db: Session = None) -> dict:
 
 
 # Helper function to update repository archive count
+def _agent_result_archives(result) -> list:
+    """Parse the archives list out of an agent repo-list job result."""
+    try:
+        data = json.loads((result or {}).get("stdout") or "{}")
+    except (json.JSONDecodeError, TypeError):
+        return []
+    archives = data.get("archives", []) if isinstance(data, dict) else data
+    return archives if isinstance(archives, list) else []
+
+
+async def _update_agent_repository_stats(repository: Repository, db: Session) -> bool:
+    """Refresh stats for an agent repo by running list + repo-info on the node.
+
+    Sets archive_count, last_backup and encryption from the live agent results.
+    A remote Borg 2 repository has no client-computable on-disk size (borg2
+    repo-info exposes no size, and du is server/local-only), so total_size is
+    left unchanged rather than reset.
+    """
+    from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
+    from app.services.repository_executor import (
+        queue_agent_repository_operation_job,
+        wait_for_agent_repository_operation_job,
+    )
+
+    try:
+        timeouts = get_operation_timeouts(db)
+
+        list_job = queue_agent_repository_operation_job(
+            db, repository, job_kind="repository.list_archives"
+        )
+        await dispatch_agent_job_best_effort(db, list_job, repository_id=repository.id)
+        list_result = await wait_for_agent_repository_operation_job(
+            db, list_job.id, timeout_seconds=timeouts["list_timeout"]
+        )
+        archives = _agent_result_archives(list_result)
+        # A completed job can still carry a non-zero borg exit with no stdout,
+        # which parses to [] -- don't let that wipe the stored count to 0. Trust
+        # the list (incl. a legitimately empty repo) unless it explicitly failed
+        # (non-zero return_code or success=False); the result shape uses either.
+        result_meta = list_result or {}
+        list_ok = (
+            result_meta.get("return_code", 0) == 0
+            and result_meta.get("success", True) is not False
+        )
+        archive_count = len(archives)
+
+        archive_times = []
+        for archive in archives:
+            archive_time = archive.get("time") or archive.get("start")
+            if not archive_time:
+                continue
+            try:
+                parsed_time = _parse_borg_archive_time(archive_time)
+            except ValueError:
+                continue
+            if parsed_time:
+                archive_times.append(parsed_time)
+        last_backup_time = max(archive_times) if archive_times else None
+
+        encryption_mode = None
+        total_size = None
+        try:
+            rinfo_job = queue_agent_repository_operation_job(
+                db, repository, job_kind="repository.rinfo"
+            )
+            await dispatch_agent_job_best_effort(
+                db, rinfo_job, repository_id=repository.id
+            )
+            rinfo_result = await wait_for_agent_repository_operation_job(
+                db, rinfo_job.id, timeout_seconds=timeouts["info_timeout"]
+            )
+            rinfo = json.loads((rinfo_result or {}).get("stdout") or "{}")
+            encryption_mode = (rinfo.get("encryption") or {}).get("mode")
+            # Borg 1 `info --json` exposes repo-level dedup size in cache.stats;
+            # Borg 2 `repo-info --json` does not (remote size is unknowable).
+            stats = (rinfo.get("cache") or {}).get("stats") or {}
+            size_bytes = stats.get("unique_csize") or stats.get("unique_size")
+            if isinstance(size_bytes, (int, float)) and size_bytes > 0:
+                total_size = format_bytes(int(size_bytes))
+        except Exception as e:
+            logger.warning(
+                "agent repo-info for stats refresh failed",
+                repository=repository.name,
+                error=str(e),
+            )
+
+        if list_ok:
+            repository.archive_count = archive_count
+            if last_backup_time:
+                repository.last_backup = last_backup_time
+        if encryption_mode:
+            repository.encryption = encryption_mode
+        if total_size:
+            repository.total_size = total_size
+        db.commit()
+        logger.info(
+            "Updated agent repository stats",
+            repository=repository.name,
+            archive_count=archive_count,
+            encryption=encryption_mode,
+        )
+        return True
+    except Exception as e:
+        logger.error(
+            "Failed to update agent repository stats",
+            repository=repository.name,
+            error=str(e),
+        )
+        return False
+
+
 async def update_repository_stats(repository: Repository, db: Session) -> bool:
     """
     Update the archive count and repository size stats by querying Borg.
     Returns True if successful, False otherwise.
     """
     if is_agent_executor(repository):
-        logger.info(
-            "Skipping server-side stats refresh for agent-owned repository",
-            repository=repository.name,
-            repository_id=repository.id,
-        )
-        return True
+        return await _update_agent_repository_stats(repository, db)
 
     temp_key_file = None
     try:
@@ -5945,10 +6051,19 @@ async def get_repository_info(
             await dispatch_agent_job_best_effort(db, agent_job, repository_id=repo_id)
             result = await wait_for_agent_repository_operation_job(db, agent_job.id)
             info_data = _parse_agent_json_result(result)
+
+            # The dialog's stats panel (the Borg 2 view in particular) is driven
+            # by `archives`. Borg 2 `info --json` already carries the archive list
+            # *with* per-archive stats (original_size, nfiles), so surface it —
+            # otherwise the panel shows a false "no backups yet". Borg 1 repo-info
+            # has no archives (its panel reads cache.stats instead), yielding [].
+            archives = info_data.get("archives") or []
+
             logger.info(
                 "Agent repository info retrieved successfully",
                 repo_id=repo_id,
                 agent_job_id=agent_job.id,
+                archive_count=len(archives),
             )
             return {
                 "success": True,
@@ -5956,6 +6071,7 @@ async def get_repository_info(
                     "repository": info_data.get("repository", {}),
                     "cache": info_data.get("cache", {}),
                     "encryption": info_data.get("encryption", {}),
+                    "archives": archives,
                 },
                 "raw_output": info_data,
             }

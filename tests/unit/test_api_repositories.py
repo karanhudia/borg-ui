@@ -19,6 +19,7 @@ import json
 import os
 from pathlib import Path
 from datetime import datetime
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
@@ -1112,6 +1113,9 @@ class TestRepositoriesCreate:
                             "repository": {"id": "abc"},
                             "cache": {},
                             "encryption": {"mode": "none"},
+                            "archives": [
+                                {"name": "archive-1", "stats": {"nfiles": 3}},
+                            ],
                         }
                     }
                 ),
@@ -1126,11 +1130,66 @@ class TestRepositoriesCreate:
             )
 
         assert response.status_code == 200
-        assert response.json()["info"]["repository"] == {"id": "abc"}
+        info = response.json()["info"]
+        assert info["repository"] == {"id": "abc"}
+        # The dialog needs the archive list (esp. the Borg 2 stats view); Borg 2
+        # `info --json` already carries it with per-archive stats.
+        assert info["archives"] == [{"name": "archive-1", "stats": {"nfiles": 3}}]
         agent_job = test_db.query(AgentJob).one()
         assert agent_job.payload["job_kind"] == "repository.info"
         wait_for_agent.assert_awaited_once_with(test_db, agent_job.id)
         run_local.assert_not_called()
+
+    async def test_agent_stats_refresh_keeps_count_when_list_job_fails(self, test_db):
+        # A completed list job can still carry a non-zero borg exit with no
+        # stdout (-> []). That must not wipe the stored archive_count to 0.
+        from app.api.repositories import _update_agent_repository_stats
+
+        agent = _agent_machine_with_capabilities(
+            "repository.list_archives", "repository.rinfo"
+        )
+        repo = Repository(
+            name="Agent Stats Repo",
+            path="/agent/stats/repo",
+            encryption="repokey-blake2",
+            executor_type="agent",
+            execution_target="agent",
+            repository_type="local",
+            archive_count=5,
+        )
+        test_db.add_all([agent, repo])
+        test_db.commit()
+        repo.agent_machine_id = agent.id
+        test_db.commit()
+        test_db.refresh(repo)
+
+        # _update_agent_repository_stats imports these at function scope from the
+        # service modules, so patch them at the source (not on app.api.repositories).
+        rinfo_stdout = json.dumps({"encryption": {"mode": "repokey-blake2"}})
+        with (
+            patch(
+                "app.services.repository_executor.queue_agent_repository_operation_job",
+                side_effect=lambda db, r, **kw: SimpleNamespace(id=1),
+            ),
+            patch(
+                "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort",
+                new=AsyncMock(),
+            ),
+            patch(
+                "app.services.repository_executor.wait_for_agent_repository_operation_job",
+                new=AsyncMock(
+                    side_effect=[
+                        {"return_code": 4},  # list failed -> [] , must be ignored
+                        {"return_code": 0, "stdout": rinfo_stdout},  # rinfo ok
+                    ]
+                ),
+            ),
+        ):
+            ok = await _update_agent_repository_stats(repo, test_db)
+
+        assert ok is True
+        test_db.refresh(repo)
+        assert repo.archive_count == 5  # preserved, not overwritten with 0
 
     def test_agent_repository_list_archives_queues_agent_job(
         self, test_client: TestClient, admin_headers, test_db
