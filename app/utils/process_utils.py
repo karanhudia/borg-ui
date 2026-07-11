@@ -8,7 +8,7 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 import structlog
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 from app.config import settings
@@ -193,6 +193,103 @@ def _mark_stale_backup_maintenance_failed(db: Session, now: datetime) -> int:
         )
 
     return normalized_count
+
+
+# A backup row stuck in a running maintenance state for longer than this (with no
+# live child job) is reconciled at runtime. Kept generous so genuinely-running
+# maintenance whose child row is written a moment later is never killed; the
+# liveness guard below is the primary protection.
+MAINTENANCE_RECONCILE_AFTER = timedelta(minutes=5)
+
+_MAINTENANCE_CHILD_MODELS = {
+    "running_prune": PruneJob,
+    "running_compact": CompactJob,
+    "running_check": CheckJob,
+}
+
+
+def _has_running_maintenance_child(
+    db: Session, backup_job: BackupJob, maintenance_status: str
+) -> bool:
+    """True if a maintenance child job for this repo is still actually running.
+
+    The PruneJob/CompactJob/CheckJob row is created and set to 'running' for both
+    server-side and agent-delegated maintenance, so it is a reliable liveness
+    signal. Agent maintenance jobs carry no backup_job_id, so we correlate by
+    repository (mirroring _has_running_check_child).
+    """
+    model = _MAINTENANCE_CHILD_MODELS.get(maintenance_status)
+    if model is None:
+        return False
+    query = db.query(model.id).filter(model.status == "running")
+    if backup_job.repository_id is not None:
+        query = query.filter(model.repository_id == backup_job.repository_id)
+    else:
+        query = query.filter(model.repository_path == backup_job.repository)
+    return query.first() is not None
+
+
+def _strip_tz(value: datetime) -> datetime:
+    """Drop tzinfo so a possibly-aware DB value compares with naive utcnow()."""
+    return value.replace(tzinfo=None) if value.tzinfo is not None else value
+
+
+def reconcile_stale_backup_maintenance(
+    db: Session,
+    *,
+    now: Optional[datetime] = None,
+    reap_after: timedelta = MAINTENANCE_RECONCILE_AFTER,
+) -> int:
+    """Normalize backup rows stuck in a running maintenance state, at RUNTIME.
+
+    ``_mark_stale_backup_maintenance_failed`` runs only at startup and assumes
+    nothing is live. This runs periodically, so it must not kill genuinely
+    running maintenance: it skips any row whose maintenance child job is still
+    'running', and only reaps rows older than ``reap_after``.
+
+    This closes the gap where an agent-delegated maintenance op fails without
+    writing a terminal ``maintenance_status`` -- the child job reaper only fires
+    on a 'running' child, and the agent-job reaper propagates via backup_job_id
+    (which repository maintenance jobs do not carry). Returns the count reaped.
+    """
+    # Normalize to naive UTC so the age comparison holds even if a caller passes
+    # a tz-aware `now` (DB datetimes are naive UTC).
+    now = _strip_tz(now or datetime.utcnow())
+    cutoff = now - reap_after
+
+    stuck = (
+        db.query(BackupJob)
+        .filter(
+            BackupJob.maintenance_status.in_(list(RUNNING_BACKUP_MAINTENANCE_FAILURES)),
+        )
+        .all()
+    )
+
+    reaped = 0
+    for backup_job in stuck:
+        state = backup_job.maintenance_status
+        # 1) genuinely in-progress maintenance -> leave alone
+        if _has_running_maintenance_child(db, backup_job, state):
+            continue
+        # 2) age guard (BackupJob has no updated_at; completed_at is set when the
+        #    backup phase finished, i.e. before maintenance started)
+        activity = backup_job.completed_at or backup_job.created_at
+        if activity is not None and _strip_tz(activity) > cutoff:
+            continue
+        _mark_backup_maintenance_failed(backup_job, state, now)
+        reaped += 1
+        logger.info(
+            "Reconciled stale backup maintenance state at runtime",
+            backup_job_id=backup_job.id,
+            repository=backup_job.repository,
+            previous_maintenance_status=state,
+            new_maintenance_status=backup_job.maintenance_status,
+        )
+
+    if reaped:
+        db.commit()
+
+    return reaped
 
 
 def is_process_alive(pid: int, stored_start_time: int) -> bool:
