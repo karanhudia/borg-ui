@@ -1,5 +1,7 @@
 import json
 from datetime import datetime, timezone
+
+import pytest
 from unittest.mock import patch, mock_open, MagicMock
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.process_utils import (
@@ -8,17 +10,36 @@ from app.utils.process_utils import (
     cleanup_orphaned_jobs,
     cleanup_orphaned_mounts,
     reconcile_stale_backup_maintenance,
+    reconcile_orphaned_maintenance_jobs,
 )
 from app.database.models import (
+    AgentJob,
+    AgentMachine,
     BackupJob,
     BackupPlan,
     BackupPlanRun,
     BackupPlanRunRepository,
     CheckJob,
     CompactJob,
+    DeleteArchiveJob,
     PruneJob,
     Repository,
 )
+
+# (maintenance_kind, model, extra required kwargs, agent-payload job_kind) for the
+# four maintenance job types the reaper reconciles.
+_MAINTENANCE_CASES = [
+    ("prune", PruneJob, {}, "repository.prune"),
+    ("compact", CompactJob, {}, "repository.compact"),
+    ("check", CheckJob, {}, "repository.check"),
+    (
+        "delete_archive",
+        DeleteArchiveJob,
+        {"archive_name": "arch-1"},
+        "repository.delete_archive",
+    ),
+]
+from app.core.security import get_password_hash
 
 # ==========================================
 # Datetime Utils Tests
@@ -402,9 +423,9 @@ class TestProcessUtils:
         db_session.refresh(backup_job)
         assert backup_job.maintenance_status == "running_prune"
 
-    def test_reap_once_runs_agent_and_maintenance_reapers(self):
-        # The background loop must run BOTH the agent-job reaper and the new
-        # maintenance reconciler each tick.
+    def test_reap_once_runs_all_three_reaper_passes(self):
+        # The background loop must run the agent-job reaper, the maintenance
+        # status reconciler AND the orphaned-*_job reaper each tick.
         with (
             patch("app.services.agent_job_reaper.SessionLocal"),
             patch(
@@ -415,14 +436,206 @@ class TestProcessUtils:
                 "app.utils.process_utils.reconcile_stale_backup_maintenance",
                 return_value=3,
             ) as m_maint,
+            patch(
+                "app.utils.process_utils.reconcile_orphaned_maintenance_jobs",
+                return_value=1,
+            ) as m_orphan,
         ):
             from app.services.agent_job_reaper import _reap_once
 
             total = _reap_once()
 
-        assert total == 5
+        assert total == 6
         m_agent.assert_called_once()
         m_maint.assert_called_once()
+        m_orphan.assert_called_once()
+
+    @pytest.mark.parametrize("kind, model, extra, job_kind", _MAINTENANCE_CASES)
+    def test_reconcile_orphaned_reaps_old_pending_without_agent_job(
+        self, db_session, kind, model, extra, job_kind
+    ):
+        from datetime import timedelta
+
+        repo = Repository(
+            name=f"Orphan {kind} Repo",
+            path=f"/repos/orphan-{kind}",
+            encryption="none",
+            repository_type="local",
+        )
+        db_session.add(repo)
+        db_session.flush()
+        # pending maintenance job created long ago, no agent job was ever queued
+        job = model(
+            repository_id=repo.id,
+            repository_path=repo.path,
+            status="pending",
+            created_at=datetime.utcnow() - timedelta(minutes=10),
+            **extra,
+        )
+        db_session.add(job)
+        db_session.commit()
+
+        reaped = reconcile_orphaned_maintenance_jobs(db_session)
+
+        assert reaped == 1
+        db_session.refresh(job)
+        assert job.status == "failed"
+
+    @pytest.mark.parametrize("kind, model, extra, job_kind", _MAINTENANCE_CASES)
+    def test_reconcile_orphaned_preserves_pending_with_active_agent_job(
+        self, db_session, kind, model, extra, job_kind
+    ):
+        from datetime import timedelta
+
+        repo = Repository(
+            name=f"Dispatched {kind} Repo",
+            path=f"/repos/dispatched-{kind}",
+            encryption="none",
+            repository_type="local",
+        )
+        agent = AgentMachine(
+            name="Agent",
+            agent_id="agt_orphan_test",
+            token_hash=get_password_hash("secret"),
+            token_prefix="secret",
+            status="online",
+        )
+        db_session.add_all([repo, agent])
+        db_session.flush()
+        job = model(
+            repository_id=repo.id,
+            repository_path=repo.path,
+            status="pending",
+            created_at=datetime.utcnow() - timedelta(minutes=10),
+            **extra,
+        )
+        db_session.add(job)
+        db_session.flush()
+        # a live agent job IS queued for this maintenance job -> must be preserved
+        db_session.add(
+            AgentJob(
+                agent_machine_id=agent.id,
+                job_type="repository",
+                status="queued",
+                payload={
+                    "job_kind": job_kind,
+                    "operation": {
+                        "maintenance_job": {"kind": kind, "id": job.id},
+                    },
+                },
+            )
+        )
+        db_session.commit()
+
+        reaped = reconcile_orphaned_maintenance_jobs(db_session)
+
+        assert reaped == 0
+        db_session.refresh(job)
+        assert job.status == "pending"
+
+    def test_reconcile_orphaned_preserves_row_that_turns_running_mid_reap(
+        self, db_session
+    ):
+        from datetime import timedelta
+        from unittest.mock import patch
+
+        repo = Repository(
+            name="Racing Prune Repo",
+            path="/repos/racing-prune",
+            encryption="none",
+            repository_type="local",
+        )
+        db_session.add(repo)
+        db_session.flush()
+        prune = PruneJob(
+            repository_id=repo.id,
+            repository_path=repo.path,
+            status="pending",
+            created_at=datetime.utcnow() - timedelta(minutes=10),
+        )
+        db_session.add(prune)
+        db_session.commit()
+
+        # Simulate a concurrent dispatch that flips the row to 'running' after it
+        # is selected as a candidate but before the guarded UPDATE. The
+        # correlation check still reports no active agent job, so only the
+        # WHERE status == 'pending' guard can prevent a spurious 'failed'.
+        def _flip_to_running(db, kind, job_id):
+            db.query(PruneJob).filter(PruneJob.id == job_id).update(
+                {PruneJob.status: "running"}, synchronize_session=False
+            )
+            db.commit()
+            return False
+
+        with patch(
+            "app.utils.process_utils._has_active_agent_job_for",
+            side_effect=_flip_to_running,
+        ):
+            reaped = reconcile_orphaned_maintenance_jobs(db_session)
+
+        assert reaped == 0
+        db_session.refresh(prune)
+        assert prune.status == "running"
+
+    def test_reconcile_orphaned_preserves_when_correlation_appears_after_update(
+        self, db_session
+    ):
+        from datetime import timedelta
+        from unittest.mock import patch
+
+        repo = Repository(
+            name="Late Dispatch Repo",
+            path="/repos/late-dispatch",
+            encryption="none",
+            repository_type="local",
+        )
+        db_session.add(repo)
+        db_session.flush()
+        prune = PruneJob(
+            repository_id=repo.id,
+            repository_path=repo.path,
+            status="pending",
+            created_at=datetime.utcnow() - timedelta(minutes=10),
+        )
+        db_session.add(prune)
+        db_session.commit()
+
+        # No agent job at candidate-selection time (first call -> False), but one
+        # appears before the re-check after the guarded UPDATE (second call ->
+        # True). The row must be rolled back to 'pending', not reaped.
+        with patch(
+            "app.utils.process_utils._has_active_agent_job_for",
+            side_effect=[False, True],
+        ):
+            reaped = reconcile_orphaned_maintenance_jobs(db_session)
+
+        assert reaped == 0
+        db_session.refresh(prune)
+        assert prune.status == "pending"
+
+    def test_reconcile_orphaned_skips_fresh_pending(self, db_session):
+        repo = Repository(
+            name="Fresh Orphan Repo",
+            path="/repos/fresh-orphan",
+            encryption="none",
+            repository_type="local",
+        )
+        db_session.add(repo)
+        db_session.flush()
+        prune = PruneJob(
+            repository_id=repo.id,
+            repository_path=repo.path,
+            status="pending",
+            created_at=datetime.utcnow(),  # just created -> under age threshold
+        )
+        db_session.add(prune)
+        db_session.commit()
+
+        reaped = reconcile_orphaned_maintenance_jobs(db_session)
+
+        assert reaped == 0
+        db_session.refresh(prune)
+        assert prune.status == "pending"
 
     @patch("app.utils.process_utils.is_process_alive", return_value=True)
     def test_cleanup_orphaned_jobs_preserves_running_check_with_live_child_process(
