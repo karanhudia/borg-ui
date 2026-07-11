@@ -262,19 +262,21 @@ class RepositoryOperationPayload:
         if self.job_kind == "repository.prune":
             operation = self.operation or {}
             dry_run = bool(operation.get("dry_run", False))
+            # Borg 2 prune has no --stats (Borg 1 does). Both versions spell
+            # quarterly retention --keep-3monthly; borg 1.4 has no --keep-quarterly
+            # (mirrors the server-side borg.py / borg2.py commands).
             keep_flags = [
                 ("keep_hourly", "--keep-hourly"),
                 ("keep_daily", "--keep-daily"),
                 ("keep_weekly", "--keep-weekly"),
                 ("keep_monthly", "--keep-monthly"),
-                ("keep_quarterly", "--keep-quarterly"),
+                ("keep_quarterly", "--keep-3monthly"),
                 ("keep_yearly", "--keep-yearly"),
             ]
             if self.borg_version == 2:
                 cmd = [
                     *self._base_borg2("prune"),
                     "--progress",
-                    "--stats",
                     "--show-rc",
                     "--log-json",
                 ]
@@ -288,7 +290,9 @@ class RepositoryOperationPayload:
                 ]
             for key, flag in keep_flags:
                 value = operation.get(key)
-                if value is not None:
+                # Emit only positive retentions (matches server-side `> 0`);
+                # `--keep-* 0` is meaningless and clutters the command.
+                if value:
                     cmd.extend([flag, str(int(value))])
             keep_within = operation.get("keep_within")
             if keep_within is not None and str(keep_within).strip():

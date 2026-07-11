@@ -1249,15 +1249,43 @@ def test_repository_operation_payload_builds_agent_local_commands():
         {
             "job_kind": "repository.prune",
             "repository": {"path": "/agent/repo", "borg_version": 2},
-            "operation": {"keep_daily": 7, "keep_within": "1d", "dry_run": True},
+            "operation": {
+                "keep_daily": 7,
+                "keep_quarterly": 3,
+                "keep_within": "1d",
+                "dry_run": True,
+            },
+        }
+    )
+    prune_v1_payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "job_kind": "repository.prune",
+            "repository": {"path": "/agent/repo", "borg_version": 1},
+            "operation": {"keep_daily": 7, "keep_quarterly": 3},
         }
     )
 
     assert info_payload.build_command() == ["borg", "info", "--json", "/agent/repo"]
+    # Borg 2 prune: no --stats, quarterly -> --keep-3monthly.
     assert prune_payload.build_command() == [
         "borg2",
         "-r",
         "/agent/repo",
+        "prune",
+        "--progress",
+        "--show-rc",
+        "--log-json",
+        "--keep-daily",
+        "7",
+        "--keep-3monthly",
+        "3",
+        "--keep-within=1d",
+        "--dry-run",
+    ]
+    # Borg 1 prune keeps --stats; quarterly is --keep-3monthly on borg1 too
+    # (borg 1.4 has no --keep-quarterly), and the repo path comes last.
+    assert prune_v1_payload.build_command() == [
+        "borg",
         "prune",
         "--progress",
         "--stats",
@@ -1265,9 +1293,25 @@ def test_repository_operation_payload_builds_agent_local_commands():
         "--log-json",
         "--keep-daily",
         "7",
-        "--keep-within=1d",
-        "--dry-run",
+        "--keep-3monthly",
+        "3",
+        "/agent/repo",
     ]
+
+    # Zero retentions must not be emitted (matches server-side `> 0`): a payload
+    # with keep_hourly=0/keep_quarterly=0 yields no --keep-hourly / --keep-3monthly.
+    prune_zero_payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "job_kind": "repository.prune",
+            "repository": {"path": "/agent/repo", "borg_version": 1},
+            "operation": {"keep_hourly": 0, "keep_daily": 7, "keep_quarterly": 0},
+        }
+    )
+    zero_cmd = prune_zero_payload.build_command()
+    assert "--keep-hourly" not in zero_cmd
+    assert "--keep-3monthly" not in zero_cmd
+    assert "--keep-quarterly" not in zero_cmd
+    assert zero_cmd.count("--keep-daily") == 1
 
 
 @pytest.mark.unit
