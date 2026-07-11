@@ -5,7 +5,7 @@
  * because `repository-info` was not being invalidated alongside `repository-archives`.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { screen, waitFor, act } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient } from '@tanstack/react-query'
 import { renderWithProviders } from '../../test/test-utils'
@@ -15,6 +15,7 @@ import * as apiModule from '../../services/api'
 const deleteArchiveMock = vi.fn()
 const listArchivesMock = vi.fn()
 const getInfoMock = vi.fn()
+const getDeleteJobStatusMock = vi.fn()
 
 // Mock heavy child components to keep the test focused on deletion logic
 vi.mock('../../components/RepositorySelectorCard', () => ({
@@ -26,8 +27,15 @@ vi.mock('../../components/RepositoryStatsGrid', () => ({
   default: () => <div data-testid="stats-grid" />,
 }))
 vi.mock('../../components/ArchivesList', () => ({
-  default: ({ onDeleteArchive }: { onDeleteArchive: (name: string) => void }) => (
-    <button data-testid="delete-archive-btn" onClick={() => onDeleteArchive('backup-2024-01-15')}>
+  default: ({
+    onDeleteArchive,
+  }: {
+    onDeleteArchive: (archive: { name: string; id?: string }) => void
+  }) => (
+    <button
+      data-testid="delete-archive-btn"
+      onClick={() => onDeleteArchive({ name: 'backup-2024-01-15' })}
+    >
       Trigger Delete
     </button>
   ),
@@ -55,6 +63,7 @@ vi.mock('../../services/borgApi', () => ({
       listArchives: listArchivesMock,
       getInfo: getInfoMock,
       deleteArchive: deleteArchiveMock,
+      getDeleteJobStatus: getDeleteJobStatusMock,
     }
   }),
 }))
@@ -97,11 +106,8 @@ const mockRepository = {
 
 describe('Archives page — delete cache invalidation (regression #352)', () => {
   let queryClient: QueryClient
-  let setTimeoutCallback: (() => void) | null = null
 
   beforeEach(() => {
-    setTimeoutCallback = null
-
     queryClient = new QueryClient({
       defaultOptions: {
         queries: { retry: false, gcTime: Infinity },
@@ -136,19 +142,11 @@ describe('Archives page — delete cache invalidation (regression #352)', () => 
     deleteArchiveMock.mockResolvedValue({
       data: { job_id: 'job-123' },
     })
-
-    // Intercept only the 2000ms setTimeout the component uses for invalidation,
-    // letting all other setTimeout calls (react-query internals etc.) pass through
-    const realSetTimeout = global.setTimeout
-    vi.spyOn(global, 'setTimeout').mockImplementation(
-      (fn: Parameters<typeof setTimeout>[0], delay?: number, ...args: unknown[]) => {
-        if (delay === 2000) {
-          setTimeoutCallback = fn as () => void
-          return 999 as unknown as ReturnType<typeof setTimeout>
-        }
-        return realSetTimeout(fn, delay, ...args) as unknown as ReturnType<typeof setTimeout>
-      }
-    )
+    // The background delete job reports completed immediately in the test so the
+    // first poll (scheduled ~1s after success) invalidates the queries.
+    getDeleteJobStatusMock.mockResolvedValue({
+      data: { status: 'completed' },
+    })
   })
 
   afterEach(() => {
@@ -184,18 +182,19 @@ describe('Archives page — delete cache invalidation (regression #352)', () => 
       expect(deleteArchiveMock).toHaveBeenCalledWith('backup-2024-01-15')
     })
 
-    // Simulate the 2000ms setTimeout firing by calling the captured callback
-    expect(setTimeoutCallback).not.toBeNull()
-    await act(async () => {
-      setTimeoutCallback!()
-    })
-
-    // Both queries must be invalidated — this is the regression check for #352
-    expect(invalidateSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ queryKey: ['repository-archives', 1] })
-    )
-    expect(invalidateSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ queryKey: ['repository-info', 1] })
+    // The poll fires ~1s later, reads the completed job status, then refreshes.
+    // Both queries must be invalidated — this is the regression check for #352.
+    await waitFor(
+      () => {
+        expect(getDeleteJobStatusMock).toHaveBeenCalledWith('job-123')
+        expect(invalidateSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ queryKey: ['repository-archives', 1] })
+        )
+        expect(invalidateSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ queryKey: ['repository-info', 1] })
+        )
+      },
+      { timeout: 4000 }
     )
   })
 })

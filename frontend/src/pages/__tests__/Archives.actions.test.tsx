@@ -41,7 +41,7 @@ vi.mock('../../components/ArchivesList', () => ({
     onViewArchive: (archive: { id: string; name: string; start: string }) => void
     onRestoreArchive: (archive: { id: string; name: string; start: string }) => void
     onMountArchive: (archive: { id: string; name: string; start: string }) => void
-    onDeleteArchive: (archiveName: string) => void
+    onDeleteArchive: (archive: { id: string; name: string; start: string }) => void
   }) => {
     const archive = { id: 'a1', name: 'archive-1', start: '2026-01-01T00:00:00Z' }
     return (
@@ -49,7 +49,7 @@ vi.mock('../../components/ArchivesList', () => ({
         <button onClick={() => onViewArchive(archive)}>View Archive</button>
         <button onClick={() => onRestoreArchive(archive)}>Restore Archive</button>
         <button onClick={() => onMountArchive(archive)}>Mount Archive</button>
-        <button onClick={() => onDeleteArchive(archive.name)}>Delete Archive</button>
+        <button onClick={() => onDeleteArchive(archive)}>Delete Archive</button>
       </div>
     )
   },
@@ -365,7 +365,9 @@ describe('Archives page actions', () => {
     await user.click(await screen.findByText('Confirm Delete Archive'))
 
     await waitFor(() => {
-      expect(borgDeleteArchiveMock).toHaveBeenCalledWith('archive-1')
+      // Borg 2 series: the id is sent (backend wraps it as aid:<hex>), not the
+      // ambiguous series name.
+      expect(borgDeleteArchiveMock).toHaveBeenCalledWith('a1')
       expect(toast.error).toHaveBeenCalledWith('Failed to delete archive')
     })
     expect(trackArchive).not.toHaveBeenCalledWith('Delete', repository)

@@ -427,6 +427,10 @@ async def delete_archive(
         repo = require_repository_access_by_path(
             db, current_user, repository, "operator"
         )
+        # Borg 2: address the archive by id (aid:) so a series delete removes
+        # exactly one archive; a bare series name matches N → borg errors. The
+        # frontend sends the archive id for Borg 2; Borg 1 names are unique.
+        archive_id = _archive_extract_selector(archive_id, repo)
         # Check if there's already a running delete job for this archive
         running_job = (
             db.query(DeleteArchiveJob)
@@ -458,10 +462,17 @@ async def delete_archive(
         db.commit()
         db.refresh(delete_job)
 
-        # Execute delete asynchronously (non-blocking)
+        # Execute delete asynchronously (non-blocking). Carry the executor fields
+        # so BorgRouter can route an agent repo to the node instead of running
+        # borg on the server (_run_agent_maintenance reloads the full repo by id).
         asyncio.create_task(
             BorgRouter(
-                SimpleNamespace(id=repo.id, borg_version=repo.borg_version)
+                SimpleNamespace(
+                    id=repo.id,
+                    borg_version=repo.borg_version,
+                    executor_type=repo.executor_type,
+                    execution_target=repo.execution_target,
+                )
             ).delete_archive(delete_job.id, archive_id)
         )
 

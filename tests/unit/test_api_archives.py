@@ -167,6 +167,55 @@ class TestArchivesResourceValidation:
         asyncio.run(created["coro"])
         fake_router.delete_archive.assert_awaited_once()
 
+    def test_delete_archive_borg2_addresses_series_by_aid_selector(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+    ):
+        # A Borg 2 series name is ambiguous, so the frontend sends the archive
+        # id; the endpoint must wrap it as aid:<hex> before deleting, otherwise
+        # borg matches N archives in the series.
+        repo = Repository(
+            name="V2 Repo",
+            path="/tmp/v2-aid-repo",
+            encryption="none",
+            repository_type="local",
+            borg_version=2,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        hex_id = "a1b2c3d4e5f60718"
+        fake_router = Mock(delete_archive=AsyncMock())
+        created = {}
+
+        with (
+            patch("app.api.archives.BorgRouter", return_value=fake_router),
+            patch(
+                "app.api.archives.asyncio.create_task",
+                side_effect=lambda coro: created.setdefault("coro", coro) or object(),
+            ),
+        ):
+            response = test_client.delete(
+                f"/api/archives/{hex_id}",
+                params={"repository": repo.path},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        job_id = response.json()["job_id"]
+        delete_job = (
+            test_db.query(DeleteArchiveJob)
+            .filter(DeleteArchiveJob.id == job_id)
+            .first()
+        )
+        assert delete_job.archive_name == f"aid:{hex_id}"
+
+        asyncio.run(created["coro"])
+        fake_router.delete_archive.assert_awaited_once_with(job_id, f"aid:{hex_id}")
+
     def test_delete_job_status_applies_log_save_policy(
         self, test_client: TestClient, admin_headers, test_db, tmp_path
     ):

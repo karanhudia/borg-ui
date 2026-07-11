@@ -77,6 +77,7 @@ AGENT_JOB_KIND_OPERATIONS = {
     "repository.rinfo": OPERATION_REPOSITORY_INFO,
     "repository.archive_info": OPERATION_REPOSITORY_INFO,
     "repository.list_archives": OPERATION_REPOSITORY_LIST_ARCHIVES,
+    "repository.delete_archive": OPERATION_DELETE_ARCHIVE,
     "repository.list_archive_contents": OPERATION_REPOSITORY_LIST_ARCHIVE_CONTENTS,
     "repository.extract_archive_file": OPERATION_REPOSITORY_EXTRACT_ARCHIVE_FILE,
     "repository.restore": OPERATION_RESTORE,

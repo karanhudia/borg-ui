@@ -1199,6 +1199,7 @@ def test_rinfo_and_archive_info_use_the_stdout_capturing_executor(monkeypatch):
     for job_kind, operation in (
         ("repository.rinfo", None),
         ("repository.archive_info", {"archive": "aid:deadbeef"}),
+        ("repository.delete_archive", {"archive": "aid:deadbeef"}),
     ):
         execute_repository_operation_job(
             {
@@ -1213,7 +1214,49 @@ def test_rinfo_and_archive_info_use_the_stdout_capturing_executor(monkeypatch):
             client,
         )
 
-    assert routed == ["repository.rinfo", "repository.archive_info"]
+    assert routed == [
+        "repository.rinfo",
+        "repository.archive_info",
+        "repository.delete_archive",
+    ]
+
+
+@pytest.mark.unit
+def test_repository_delete_archive_payload_builds_borg2_command():
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "schema_version": 1,
+            "job_kind": "repository.delete_archive",
+            "repository": {"path": "/agent/repo2", "borg_version": 2},
+            "operation": {"archive": "aid:deadbeef"},
+        }
+    )
+
+    assert payload.build_command() == [
+        "borg2",
+        "-r",
+        "/agent/repo2",
+        "delete",
+        "aid:deadbeef",
+    ]
+
+
+@pytest.mark.unit
+def test_repository_delete_archive_payload_builds_borg1_command():
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "schema_version": 1,
+            "job_kind": "repository.delete_archive",
+            "repository": {"path": "/agent/repo", "borg_version": 1},
+            "operation": {"archive": "arch-1"},
+        }
+    )
+
+    assert payload.build_command() == [
+        "borg",
+        "delete",
+        "/agent/repo::arch-1",
+    ]
 
 
 @pytest.mark.unit

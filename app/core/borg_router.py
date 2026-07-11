@@ -601,7 +601,21 @@ class BorgRouter:
             await prune_service.execute_prune(**kwargs)
 
     async def delete_archive(self, job_id: int, archive_name: str) -> None:
-        """Delete an archive through the version-aware service layer."""
+        """Delete an archive through the version-aware service layer.
+
+        agent: delegates to the managed agent (repository.delete_archive). The
+        caller has already resolved ``archive_name`` to the exact selector
+        (``aid:<hex>`` for a Borg 2 series, a unique name for Borg 1), so the
+        agent removes only the intended archive.
+        """
+        if self._is_agent():
+            await self._run_agent_maintenance(
+                job_kind="repository.delete_archive",
+                maintenance_kind="delete_archive",
+                maintenance_job_id=job_id,
+                operation={"archive": archive_name},
+            )
+            return
         if self.is_v2:
             from app.services.v2.delete_archive_service import delete_archive_v2_service
 

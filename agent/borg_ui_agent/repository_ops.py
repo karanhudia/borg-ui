@@ -26,6 +26,7 @@ REPOSITORY_JOB_KINDS = {
     "repository.rinfo",
     "repository.archive_info",
     "repository.list_archives",
+    "repository.delete_archive",
     "repository.list_archive_contents",
     "repository.extract_archive_file",
     "repository.restore",
@@ -167,6 +168,19 @@ class RepositoryOperationPayload:
             return [
                 *self._base_borg1("info"),
                 "--json",
+                f"{self.repository_path}::{archive}",
+            ]
+
+        if self.job_kind == "repository.delete_archive":
+            # The server passes the exact selector (an `aid:<hex>` for a Borg 2
+            # series, a unique name for Borg 1), so a series delete removes only
+            # the intended archive. No extra flags: mirrors borg.delete_archive /
+            # borg2.delete_archive. Space is reclaimed by a later compact.
+            archive = _operation_archive(self.operation, self.job_kind)
+            if self.borg_version == 2:
+                return [*self._base_borg2("delete"), archive]
+            return [
+                *self._base_borg1("delete"),
                 f"{self.repository_path}::{archive}",
             ]
 
@@ -471,6 +485,7 @@ def execute_repository_operation_job(
         "repository.rinfo",
         "repository.archive_info",
         "repository.list_archives",
+        "repository.delete_archive",
     }:
         try:
             return _execute_short_repository_operation(
