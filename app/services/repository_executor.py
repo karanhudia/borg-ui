@@ -23,6 +23,8 @@ TERMINAL_AGENT_STATUSES = {"completed", "failed", "canceled"}
 REPOSITORY_OPERATION_CAPABILITIES = {
     "repository.init",
     "repository.info",
+    "repository.rinfo",
+    "repository.archive_info",
     "repository.list_archives",
     "repository.list_archive_contents",
     "repository.extract_archive_file",

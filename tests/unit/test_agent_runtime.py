@@ -16,6 +16,7 @@ from agent.borg_ui_agent.client import AGENT_AUTH_HEADER, AgentClient
 from agent.borg_ui_agent.config import AgentConfig, load_config, save_config
 from agent.borg_ui_agent.repository_ops import (
     RepositoryOperationPayload,
+    RepositoryOperationResult,
     execute_repository_operation_job,
     _write_temp_rclone_config,
 )
@@ -489,6 +490,65 @@ def test_repository_init_payload_builds_borg1_command():
     command = payload.build_command()
 
     assert command == ["borg", "init", "--encryption", "repokey", "/agent/repo"]
+
+
+@pytest.mark.unit
+def test_repository_rinfo_payload_builds_borg2_command():
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "schema_version": 1,
+            "job_kind": "repository.rinfo",
+            "repository": {"path": "/agent/repo2", "borg_version": 2},
+        }
+    )
+
+    assert payload.build_command() == [
+        "borg2",
+        "-r",
+        "/agent/repo2",
+        "repo-info",
+        "--json",
+    ]
+
+
+@pytest.mark.unit
+def test_repository_archive_info_payload_builds_borg2_command():
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "schema_version": 1,
+            "job_kind": "repository.archive_info",
+            "repository": {"path": "/agent/repo2", "borg_version": 2},
+            "operation": {"archive": "aid:deadbeef"},
+        }
+    )
+
+    assert payload.build_command() == [
+        "borg2",
+        "-r",
+        "/agent/repo2",
+        "info",
+        "--json",
+        "aid:deadbeef",
+    ]
+
+
+@pytest.mark.unit
+def test_repository_archive_info_payload_builds_borg1_command():
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "schema_version": 1,
+            "job_kind": "repository.archive_info",
+            "repository": {"path": "/agent/repo", "borg_version": 1},
+            "operation": {"archive": "arch-1"},
+        }
+    )
+
+    assert payload.build_command() == [
+        "borg",
+        "info",
+        "--json",
+        "/agent/repo::arch-1",
+    ]
 
 
 @pytest.mark.unit
@@ -1117,6 +1177,43 @@ def test_repository_rclone_sync_removes_temp_config_when_command_build_fails(
 
     assert result.status == "failed"
     assert not config_path.exists()
+
+
+@pytest.mark.unit
+def test_rinfo_and_archive_info_use_the_stdout_capturing_executor(monkeypatch):
+    # info/list_archives/rinfo/archive_info must run through the short-operation
+    # path so their JSON stdout is captured in the job result; the streaming
+    # path drops stdout (which broke stats/encryption refresh for agent repos).
+    routed = []
+
+    def fake_short(job_id, payload, client, cmd, env):
+        routed.append(payload.job_kind)
+        return RepositoryOperationResult(job_id=job_id, status="completed")
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.repository_ops._execute_short_repository_operation",
+        fake_short,
+    )
+    client = FakeRuntimeClient([])
+
+    for job_kind, operation in (
+        ("repository.rinfo", None),
+        ("repository.archive_info", {"archive": "aid:deadbeef"}),
+    ):
+        execute_repository_operation_job(
+            {
+                "id": 1,
+                "payload": {
+                    "schema_version": 1,
+                    "job_kind": job_kind,
+                    "repository": {"path": "/agent/repo", "borg_version": 2},
+                    "operation": operation,
+                },
+            },
+            client,
+        )
+
+    assert routed == ["repository.rinfo", "repository.archive_info"]
 
 
 @pytest.mark.unit

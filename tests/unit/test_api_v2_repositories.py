@@ -2,6 +2,7 @@ import asyncio
 import base64
 import contextlib
 import json
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from cryptography.fernet import Fernet
@@ -689,6 +690,149 @@ class TestV2RepositoryRoutes:
         assert state["max_active"] == 1
         assert archives_result["archives"] == []
         assert info_result["borg_version"] == 2
+
+    @pytest.mark.asyncio
+    async def test_list_archives_delegates_to_agent(self, test_db):
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db, name="Agent Repo", path="/tmp/v2-agent-repo")
+        agent_stdout = json.dumps({"archives": [{"name": "m3s02", "id": "deadbeef"}]})
+
+        with (
+            patch("app.api.v2.repositories.is_agent_executor", return_value=True),
+            patch(
+                "app.api.v2.repositories.queue_agent_repository_operation_job",
+                return_value=SimpleNamespace(id=99),
+            ) as mock_queue,
+            patch(
+                "app.api.v2.repositories.dispatch_agent_job_best_effort",
+                new=AsyncMock(),
+            ) as mock_dispatch,
+            patch(
+                "app.api.v2.repositories.wait_for_agent_repository_operation_job",
+                new=AsyncMock(return_value={"success": True, "stdout": agent_stdout}),
+            ) as mock_wait,
+            patch.object(
+                repositories_v2_api.borg2, "list_archives", new=AsyncMock()
+            ) as mock_borg2,
+        ):
+            result = await repositories_v2_api.list_archives(
+                repo.id, current_user=object(), db=test_db
+            )
+
+        assert result["borg_version"] == 2
+        assert len(result["archives"]) == 1
+        # The node's archive payload is preserved (enrichment may add fields).
+        assert result["archives"][0]["name"] == "m3s02"
+        assert result["archives"][0]["id"] == "deadbeef"
+        mock_borg2.assert_not_awaited()
+        assert mock_queue.call_args.kwargs["job_kind"] == "repository.list_archives"
+        # The queued job is dispatched to the node (scoped to this repo) and
+        # awaited with the configured list timeout (default 600s).
+        mock_dispatch.assert_awaited_once()
+        assert mock_dispatch.await_args.args[1].id == 99
+        assert mock_dispatch.await_args.kwargs["repository_id"] == repo.id
+        mock_wait.assert_awaited_once()
+        assert mock_wait.await_args.args[1] == 99
+        assert mock_wait.await_args.kwargs["timeout_seconds"] == 600
+
+    @pytest.mark.asyncio
+    async def test_get_repository_stats_delegates_to_agent(self, test_db):
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db, name="Agent Stats", path="/tmp/v2-agent-stats")
+        stats_stdout = json.dumps({"repository": {"id": "r1"}, "cache": {}})
+
+        with (
+            patch("app.api.v2.repositories.is_agent_executor", return_value=True),
+            patch(
+                "app.api.v2.repositories.queue_agent_repository_operation_job",
+                return_value=SimpleNamespace(id=99),
+            ) as mock_queue,
+            patch(
+                "app.api.v2.repositories.dispatch_agent_job_best_effort",
+                new=AsyncMock(),
+            ) as mock_dispatch,
+            patch(
+                "app.api.v2.repositories.wait_for_agent_repository_operation_job",
+                new=AsyncMock(return_value={"success": True, "stdout": stats_stdout}),
+            ) as mock_wait,
+            patch.object(
+                repositories_v2_api.borg2, "rinfo", new=AsyncMock()
+            ) as mock_borg2,
+        ):
+            result = await repositories_v2_api.get_repository_stats(
+                repo.id, current_user=object(), db=test_db
+            )
+
+        assert result["borg_version"] == 2
+        assert result["stats"] == {"repository": {"id": "r1"}, "cache": {}}
+        mock_borg2.assert_not_awaited()
+        assert mock_queue.call_args.kwargs["job_kind"] == "repository.rinfo"
+        mock_dispatch.assert_awaited_once()
+        assert mock_dispatch.await_args.args[1].id == 99
+        assert mock_dispatch.await_args.kwargs["repository_id"] == repo.id
+        mock_wait.assert_awaited_once()
+        assert mock_wait.await_args.args[1] == 99
+        assert mock_wait.await_args.kwargs["timeout_seconds"] == 600
+
+    @pytest.mark.asyncio
+    async def test_get_repository_info_delegates_info_and_rinfo_to_agent(self, test_db):
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db, name="Agent Info", path="/tmp/v2-agent-info")
+        info_stdout = json.dumps({"archives": []})
+        rinfo_stdout = json.dumps(
+            {"repository": {"id": "r1"}, "encryption": {"mode": "repokey-aes-ocb"}}
+        )
+
+        async def fake_wait(db, agent_job_id, **kwargs):
+            # first call = repository.info, second = repository.rinfo
+            fake_wait.timeouts.append(kwargs.get("timeout_seconds"))
+            return {"success": True, "stdout": fake_wait.responses.pop(0)}
+
+        fake_wait.responses = [info_stdout, rinfo_stdout]
+        fake_wait.timeouts = []
+
+        with (
+            patch("app.api.v2.repositories.is_agent_executor", return_value=True),
+            patch(
+                "app.api.v2.repositories.queue_agent_repository_operation_job",
+                return_value=SimpleNamespace(id=99),
+            ) as mock_queue,
+            patch(
+                "app.api.v2.repositories.dispatch_agent_job_best_effort",
+                new=AsyncMock(),
+            ) as mock_dispatch,
+            patch(
+                "app.api.v2.repositories.wait_for_agent_repository_operation_job",
+                new=fake_wait,
+            ),
+            patch.object(
+                repositories_v2_api.borg2, "info_repo", new=AsyncMock()
+            ) as mock_info_repo,
+            patch.object(
+                repositories_v2_api.borg2, "rinfo", new=AsyncMock()
+            ) as mock_rinfo,
+        ):
+            result = await repositories_v2_api.get_repository_info(
+                repo.id, current_user=object(), db=test_db
+            )
+
+        assert result["borg_version"] == 2
+        assert result["info"]["repository"] == {"id": "r1"}
+        assert result["info"]["encryption"] == {"mode": "repokey-aes-ocb"}
+        # info's own payload (archives) is preserved alongside the merged rinfo fields.
+        assert result["info"]["archives"] == []
+        mock_info_repo.assert_not_awaited()
+        mock_rinfo.assert_not_awaited()
+        job_kinds = [c.kwargs["job_kind"] for c in mock_queue.call_args_list]
+        assert job_kinds == ["repository.info", "repository.rinfo"]
+        # Both jobs are dispatched to the node (scoped to this repo) and awaited
+        # with the configured info timeout (fake_wait consumed both).
+        assert mock_dispatch.await_count == 2
+        assert all(
+            c.kwargs["repository_id"] == repo.id for c in mock_dispatch.await_args_list
+        )
+        assert fake_wait.responses == []
+        assert fake_wait.timeouts == [600, 600]
 
     def test_get_repository_info_merges_rinfo_and_disk_usage(
         self, test_client: TestClient, admin_headers, test_db

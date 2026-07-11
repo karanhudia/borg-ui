@@ -1,5 +1,6 @@
 import json
 from datetime import datetime
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -100,6 +101,163 @@ class TestV2ArchiveRoutes:
             remote_path=None,
             bypass_lock=False,
         )
+
+    def test_list_archives_delegates_to_agent(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db)
+        agent_stdout = json.dumps({"archives": [{"name": "m3s02", "id": "deadbeef"}]})
+
+        with (
+            patch("app.api.v2.archives.is_agent_executor", return_value=True),
+            patch(
+                "app.api.v2.archives.queue_agent_repository_operation_job",
+                return_value=SimpleNamespace(id=99),
+            ) as mock_queue,
+            patch(
+                "app.api.v2.archives.dispatch_agent_job_best_effort", new=AsyncMock()
+            ) as mock_dispatch,
+            patch(
+                "app.api.v2.archives.wait_for_agent_repository_operation_job",
+                new=AsyncMock(return_value={"success": True, "stdout": agent_stdout}),
+            ) as mock_wait,
+            patch(
+                "app.api.v2.archives.borg2.list_archives", new=AsyncMock()
+            ) as mock_borg2,
+        ):
+            response = test_client.get(
+                f"/api/v2/archives/list?repository={repo.id}", headers=admin_headers
+            )
+
+        assert response.status_code == 200
+        assert response.json() == {"archives": agent_stdout}
+        mock_borg2.assert_not_awaited()
+        assert mock_queue.call_args.kwargs["job_kind"] == "repository.list_archives"
+        # The queued job is dispatched and awaited with the configured list
+        # timeout (default 600s), not the 15s wait default.
+        mock_dispatch.assert_awaited_once()
+        assert mock_dispatch.await_args.args[1].id == 99
+        assert mock_dispatch.await_args.kwargs["repository_id"] == repo.id
+        mock_wait.assert_awaited_once()
+        assert mock_wait.await_args.args[1] == 99
+        assert mock_wait.await_args.kwargs["timeout_seconds"] == 600
+
+    def test_get_archive_contents_delegates_to_agent_with_aid_selector(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db)
+        archive_id = "deadbeefdeadbeef"  # matches ARCHIVE_ID_RE -> aid: selector
+        agent_stdout = json.dumps(
+            {
+                "path": "file.txt",
+                "type": "-",
+                "size": 5,
+                "mtime": "2026-01-01T00:00:00",
+            }
+        )
+
+        with (
+            patch("app.api.v2.archives.is_agent_executor", return_value=True),
+            patch(
+                "app.api.v2.archives.queue_agent_repository_operation_job",
+                return_value=SimpleNamespace(id=99),
+            ) as mock_queue,
+            patch(
+                "app.api.v2.archives.dispatch_agent_job_best_effort", new=AsyncMock()
+            ) as mock_dispatch,
+            patch(
+                "app.api.v2.archives.wait_for_agent_repository_operation_job",
+                new=AsyncMock(return_value={"success": True, "stdout": agent_stdout}),
+            ) as mock_wait,
+            patch(
+                "app.api.v2.archives.borg2.list_archive_contents", new=AsyncMock()
+            ) as mock_borg2,
+        ):
+            response = test_client.get(
+                f"/api/v2/archives/{archive_id}/contents?repository={repo.id}",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        # The agent's parsed listing is surfaced (not just a 200): file.txt with
+        # its size must appear in the returned items.
+        items = response.json()["items"]
+        entry = next(
+            (
+                it
+                for it in items
+                if it.get("name") == "file.txt" or it.get("path") == "file.txt"
+            ),
+            None,
+        )
+        assert entry is not None, items
+        assert entry.get("size") == 5
+        mock_borg2.assert_not_awaited()
+        assert (
+            mock_queue.call_args.kwargs["job_kind"]
+            == "repository.list_archive_contents"
+        )
+        assert (
+            mock_queue.call_args.kwargs["operation"]["archive"] == f"aid:{archive_id}"
+        )
+        mock_dispatch.assert_awaited_once()
+        assert mock_dispatch.await_args.args[1].id == 99
+        mock_wait.assert_awaited_once()
+        assert mock_wait.await_args.args[1] == 99
+        assert mock_wait.await_args.kwargs["timeout_seconds"] == 600
+
+    def test_get_archive_info_delegates_to_agent(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db)
+        archive_id = "deadbeefdeadbeef"
+        agent_stdout = json.dumps(
+            {
+                "archives": [{"name": "m3s02", "id": archive_id}],
+                "repository": {"id": "r1"},
+                "encryption": {"mode": "repokey-aes-ocb"},
+            }
+        )
+
+        with (
+            patch("app.api.v2.archives.is_agent_executor", return_value=True),
+            patch(
+                "app.api.v2.archives.queue_agent_repository_operation_job",
+                return_value=SimpleNamespace(id=99),
+            ) as mock_queue,
+            patch(
+                "app.api.v2.archives.dispatch_agent_job_best_effort", new=AsyncMock()
+            ) as mock_dispatch,
+            patch(
+                "app.api.v2.archives.wait_for_agent_repository_operation_job",
+                new=AsyncMock(return_value={"success": True, "stdout": agent_stdout}),
+            ) as mock_wait,
+            patch(
+                "app.api.v2.archives.borg2.info_archive", new=AsyncMock()
+            ) as mock_borg2,
+        ):
+            response = test_client.get(
+                f"/api/v2/archives/{archive_id}/info?repository={repo.id}",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        assert response.json()["info"]["name"] == "m3s02"
+        mock_borg2.assert_not_awaited()
+        assert mock_queue.call_args.kwargs["job_kind"] == "repository.archive_info"
+        # A Borg 2 series is addressed by id, so the aid: selector must be sent.
+        assert (
+            mock_queue.call_args.kwargs["operation"]["archive"] == f"aid:{archive_id}"
+        )
+        # archive_info uses the configured info timeout (default 600s).
+        mock_dispatch.assert_awaited_once()
+        assert mock_dispatch.await_args.args[1].id == 99
+        mock_wait.assert_awaited_once()
+        assert mock_wait.await_args.args[1] == 99
+        assert mock_wait.await_args.kwargs["timeout_seconds"] == 600
 
     def test_list_archives_returns_404_for_unknown_repo(
         self, test_client: TestClient, admin_headers, test_db

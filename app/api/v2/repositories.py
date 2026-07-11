@@ -20,7 +20,13 @@ from app.core.security import get_current_user
 from app.core.features import require_feature
 from app.core.borg2 import borg2, BORG2_ENCRYPTION_MODES
 from app.core.borg_errors import is_lock_error
+from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
 from app.services.repository_command_lock import run_serialized_repository_command
+from app.services.repository_executor import (
+    is_agent_executor,
+    queue_agent_repository_operation_job,
+    wait_for_agent_repository_operation_job,
+)
 from app.services.v2.repository_service import repository_v2_service
 from app.utils.fs import calculate_path_size_bytes
 from app.utils.borg_env import repository_borg_env
@@ -487,6 +493,34 @@ async def import_repository(
     }
 
 
+async def _agent_repo_read(
+    db: Session,
+    repo: Repository,
+    *,
+    job_kind: str,
+    operation: Optional[dict] = None,
+    timeout_seconds: Optional[int] = None,
+) -> dict:
+    """Run a repository read op (info/rinfo) on the managed agent, return result."""
+    agent_job = queue_agent_repository_operation_job(
+        db, repo, job_kind=job_kind, operation=operation
+    )
+    await dispatch_agent_job_best_effort(db, agent_job, repository_id=repo.id)
+    wait_kwargs = {}
+    if timeout_seconds is not None:
+        wait_kwargs["timeout_seconds"] = timeout_seconds
+    return await wait_for_agent_repository_operation_job(
+        db, agent_job.id, **wait_kwargs
+    )
+
+
+def _parse_agent_json(result: dict) -> dict:
+    try:
+        return json.loads(result.get("stdout", "{}") or "{}")
+    except json.JSONDecodeError:
+        return {}
+
+
 @router.get("/{repo_id}/info")
 async def get_repository_info(
     repo_id: int,
@@ -507,6 +541,25 @@ async def get_repository_info(
             )
 
         info_timeout = _get_info_timeout(db)
+
+        if is_agent_executor(repo):
+            # Managed agent: run info + repo-info on the node and merge, mirroring
+            # the server-side path below. Disk usage (du) is server/local-only and
+            # unavailable for a remote agent repo, so it is omitted.
+            info_result = await _agent_repo_read(
+                db, repo, job_kind="repository.info", timeout_seconds=info_timeout
+            )
+            info_data = _parse_agent_json(info_result)
+            rinfo_result = await _agent_repo_read(
+                db, repo, job_kind="repository.rinfo", timeout_seconds=info_timeout
+            )
+            rinfo_data = _parse_agent_json(rinfo_result)
+            if rinfo_data.get("repository") and not info_data.get("repository"):
+                info_data["repository"] = rinfo_data["repository"]
+            if rinfo_data.get("encryption") and not info_data.get("encryption"):
+                info_data["encryption"] = rinfo_data["encryption"]
+            return {"info": info_data, "borg_version": 2}
+
         bypass_lock = _resolve_bypass_lock(repo, db, "bypass_lock_on_info")
         with repository_borg_env(repo, db) as env:
             result = await borg2.info_repo(
@@ -612,15 +665,31 @@ async def list_archives(
             system_settings and system_settings.bypass_lock_on_list
         )
 
-        with repository_borg_env(repo, db) as env:
-            result = await borg2.list_archives(
-                repo.path,
-                passphrase=repo.passphrase,
-                remote_path=repo.remote_path,
-                bypass_lock=bypass_lock,
-                env=env,
+        if is_agent_executor(repo):
+            # Managed agent: list on the node (holds the credentials/backend);
+            # the returned stdout is the same borg2 repo-list --json output.
+            list_timeout = (
+                system_settings.list_timeout
+                if system_settings and system_settings.list_timeout
+                else 600
             )
-        if not result["success"]:
+            agent_job = queue_agent_repository_operation_job(
+                db, repo, job_kind="repository.list_archives"
+            )
+            await dispatch_agent_job_best_effort(db, agent_job, repository_id=repo.id)
+            result = await wait_for_agent_repository_operation_job(
+                db, agent_job.id, timeout_seconds=list_timeout
+            )
+        else:
+            with repository_borg_env(repo, db) as env:
+                result = await borg2.list_archives(
+                    repo.path,
+                    passphrase=repo.passphrase,
+                    remote_path=repo.remote_path,
+                    bypass_lock=bypass_lock,
+                    env=env,
+                )
+        if not result.get("success", bool(result.get("stdout"))):
             raise HTTPException(
                 status_code=500,
                 detail=_borg2_failure_detail(result, "backend.errors.repo.listFailed"),
@@ -657,23 +726,28 @@ async def get_repository_stats(
         )
 
     info_timeout = _get_info_timeout(db)
-    with repository_borg_env(repo, db) as env:
-        result = await borg2.rinfo(
-            repository=repo.path,
-            passphrase=repo.passphrase,
-            remote_path=repo.remote_path,
-            bypass_lock=_resolve_bypass_lock(repo, db, "bypass_lock_on_info"),
-            timeout=info_timeout,
-            env=env,
+    if is_agent_executor(repo):
+        result = await _agent_repo_read(
+            db, repo, job_kind="repository.rinfo", timeout_seconds=info_timeout
         )
-    if not result["success"]:
+    else:
+        with repository_borg_env(repo, db) as env:
+            result = await borg2.rinfo(
+                repository=repo.path,
+                passphrase=repo.passphrase,
+                remote_path=repo.remote_path,
+                bypass_lock=_resolve_bypass_lock(repo, db, "bypass_lock_on_info"),
+                timeout=info_timeout,
+                env=env,
+            )
+    if not result.get("success", bool(result.get("stdout"))):
         raise HTTPException(
             status_code=500,
             detail=_borg2_failure_detail(result, "backend.errors.repo.infoFailed"),
         )
 
     try:
-        stats_data = json.loads(result["stdout"])
+        stats_data = json.loads(result.get("stdout", "{}"))
     except json.JSONDecodeError:
         stats_data = {}
 

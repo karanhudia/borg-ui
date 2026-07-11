@@ -23,6 +23,8 @@ from agent.borg_ui_agent.client import AgentClient
 REPOSITORY_JOB_KINDS = {
     "repository.init",
     "repository.info",
+    "repository.rinfo",
+    "repository.archive_info",
     "repository.list_archives",
     "repository.list_archive_contents",
     "repository.extract_archive_file",
@@ -150,6 +152,23 @@ class RepositoryOperationPayload:
             if self.borg_version == 2:
                 return [*self._base_borg2("info"), "--json"]
             return [*self._base_borg1("info"), "--json", self.repository_path]
+
+        if self.job_kind == "repository.rinfo":
+            # Repository-level metadata (repository id, encryption). borg2 has a
+            # dedicated repo-info; borg1 folds it into `info`.
+            if self.borg_version == 2:
+                return [*self._base_borg2("repo-info"), "--json"]
+            return [*self._base_borg1("info"), "--json", self.repository_path]
+
+        if self.job_kind == "repository.archive_info":
+            archive = _operation_archive(self.operation, self.job_kind)
+            if self.borg_version == 2:
+                return [*self._base_borg2("info"), "--json", archive]
+            return [
+                *self._base_borg1("info"),
+                "--json",
+                f"{self.repository_path}::{archive}",
+            ]
 
         if self.job_kind == "repository.list_archives":
             if self.borg_version == 2:
@@ -447,7 +466,12 @@ def execute_repository_operation_job(
     )
     sequence += 1
 
-    if payload.job_kind in {"repository.info", "repository.list_archives"}:
+    if payload.job_kind in {
+        "repository.info",
+        "repository.rinfo",
+        "repository.archive_info",
+        "repository.list_archives",
+    }:
         try:
             return _execute_short_repository_operation(
                 job_id, payload, client, cmd, env

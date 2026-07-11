@@ -16,10 +16,11 @@ import structlog
 
 from app.api.archive_download import extract_file_download
 from app.database.database import get_db
-from app.database.models import User, Repository, DeleteArchiveJob
+from app.database.models import User, Repository, DeleteArchiveJob, SystemSettings
 from app.core.security import get_current_user, get_current_download_user
 from app.core.features import require_feature
 from app.core.borg2 import borg2
+from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
 from app.services.archive_browse_service import (
     build_browse_items,
     collect_browse_paths,
@@ -27,6 +28,11 @@ from app.services.archive_browse_service import (
 )
 from app.services.cache_service import archive_cache
 from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
+from app.services.repository_executor import (
+    is_agent_executor,
+    queue_agent_repository_operation_job,
+    wait_for_agent_repository_operation_job,
+)
 from app.services.v2.archive_browse import get_browse_depth, is_fast_browse_enabled
 from app.utils.borg_env import repository_borg_env
 from app.utils.datetime_utils import serialize_datetime
@@ -35,6 +41,88 @@ logger = structlog.get_logger()
 router = APIRouter(tags=["Archives v2"], dependencies=[require_feature("borg_v2")])
 
 ARCHIVE_ID_RE = re.compile(r"^[0-9a-fA-F]{16,}$")
+
+# Upper bound on entries the agent streams back before it kills borg to bound
+# memory (mirrors browse.py's MAX_ITEMS_IN_MEMORY); overridable per install via
+# SystemSettings.browse_max_items.
+MAX_ITEMS_IN_MEMORY = 1_000_000
+
+
+def _browse_max_lines(db: Session) -> int:
+    settings = db.query(SystemSettings).first()
+    if settings and settings.browse_max_items:
+        return settings.browse_max_items
+    return MAX_ITEMS_IN_MEMORY
+
+
+def _get_info_timeout(db: Session) -> int:
+    s = db.query(SystemSettings).first()
+    return s.info_timeout if s and s.info_timeout else 600
+
+
+def _get_list_timeout(db: Session) -> int:
+    s = db.query(SystemSettings).first()
+    return s.list_timeout if s and s.list_timeout else 600
+
+
+async def _agent_list_archives_result(
+    db: Session, repo: Repository, *, timeout_seconds: int
+) -> dict:
+    """Run `repository.list_archives` on the managed agent, return its result."""
+    agent_job = queue_agent_repository_operation_job(
+        db, repo, job_kind="repository.list_archives"
+    )
+    await dispatch_agent_job_best_effort(db, agent_job, repository_id=repo.id)
+    return await wait_for_agent_repository_operation_job(
+        db, agent_job.id, timeout_seconds=timeout_seconds
+    )
+
+
+async def _agent_archive_contents_result(
+    db: Session,
+    repo: Repository,
+    *,
+    archive: str,
+    path: str,
+    max_lines: int,
+    timeout_seconds: int,
+) -> dict:
+    """Run `repository.list_archive_contents` on the managed agent.
+
+    The agent executes `borg2 list <archive> --json-lines [path]` on the node,
+    so passing the `aid:<hex>` selector disambiguates a Borg 2 archive series
+    and the returned ``stdout`` is parsed exactly like the server-side result.
+    """
+    agent_job = queue_agent_repository_operation_job(
+        db,
+        repo,
+        job_kind="repository.list_archive_contents",
+        operation={"archive": archive, "path": path, "max_lines": max_lines},
+    )
+    await dispatch_agent_job_best_effort(
+        db, agent_job, repository_id=repo.id, archive_name=archive
+    )
+    return await wait_for_agent_repository_operation_job(
+        db, agent_job.id, timeout_seconds=timeout_seconds
+    )
+
+
+async def _agent_archive_info_result(
+    db: Session, repo: Repository, archive: str, *, timeout_seconds: int
+) -> dict:
+    """Run `repository.archive_info` (borg2 info <archive>) on the managed agent."""
+    agent_job = queue_agent_repository_operation_job(
+        db,
+        repo,
+        job_kind="repository.archive_info",
+        operation={"archive": archive},
+    )
+    await dispatch_agent_job_best_effort(
+        db, agent_job, repository_id=repo.id, archive_name=archive
+    )
+    return await wait_for_agent_repository_operation_job(
+        db, agent_job.id, timeout_seconds=timeout_seconds
+    )
 
 
 def _repo_needs_custom_env(repo: Repository) -> bool:
@@ -157,7 +245,11 @@ async def list_archives(
 ):
     """List archives in a Borg 2 repository."""
     repo = _get_v2_repo(repository, db)
-    if _repo_needs_custom_env(repo):
+    if is_agent_executor(repo):
+        result = await _agent_list_archives_result(
+            db, repo, timeout_seconds=_get_list_timeout(db)
+        )
+    elif _repo_needs_custom_env(repo):
         with repository_borg_env(repo, db) as env:
             result = await borg2.list_archives(
                 repo.path,
@@ -173,12 +265,12 @@ async def list_archives(
             remote_path=repo.remote_path,
             bypass_lock=repo.bypass_lock,
         )
-    if not result["success"]:
+    if not result.get("success", bool(result.get("stdout"))):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list archives: {result['stderr']}",
+            detail=f"Failed to list archives: {result.get('stderr', 'unknown error')}",
         )
-    return {"archives": result["stdout"]}
+    return {"archives": result.get("stdout", "")}
 
 
 # ── Archive info ───────────────────────────────────────────────────────────────
@@ -196,7 +288,11 @@ async def get_archive_info(
     """Get detailed information about a Borg 2 archive."""
     repo = _get_v2_repo(repository, db)
     archive_selector = _get_archive_selector(archive_id)
-    if _repo_needs_custom_env(repo):
+    if is_agent_executor(repo):
+        result = await _agent_archive_info_result(
+            db, repo, archive_selector, timeout_seconds=_get_info_timeout(db)
+        )
+    elif _repo_needs_custom_env(repo):
         with repository_borg_env(repo, db) as env:
             result = await borg2.info_archive(
                 repo.path,
@@ -214,10 +310,10 @@ async def get_archive_info(
             remote_path=repo.remote_path,
             bypass_lock=repo.bypass_lock,
         )
-    if not result["success"]:
+    if not result.get("success", bool(result.get("stdout"))):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get archive info: {result['stderr']}",
+            detail=f"Failed to get archive info: {result.get('stderr', 'unknown error')}",
         )
 
     try:
@@ -244,7 +340,16 @@ async def get_archive_info(
         }
 
         if include_files:
-            if _repo_needs_custom_env(repo):
+            if is_agent_executor(repo):
+                list_result = await _agent_archive_contents_result(
+                    db,
+                    repo,
+                    archive=archive_selector,
+                    path="",
+                    max_lines=file_limit,
+                    timeout_seconds=_get_list_timeout(db),
+                )
+            elif _repo_needs_custom_env(repo):
                 with repository_borg_env(repo, db) as env:
                     list_result = await borg2.list_archive_contents(
                         repo.path,
@@ -262,9 +367,9 @@ async def get_archive_info(
                     remote_path=repo.remote_path,
                     bypass_lock=repo.bypass_lock,
                 )
-            if list_result["success"]:
+            if list_result.get("success", bool(list_result.get("stdout"))):
                 files = []
-                for line in list_result["stdout"].strip().split("\n"):
+                for line in (list_result.get("stdout") or "").strip().split("\n"):
                     if line and len(files) < file_limit:
                         try:
                             f = json.loads(line)
@@ -290,7 +395,7 @@ async def get_archive_info(
 
         return {"info": enhanced_info}
     except json.JSONDecodeError:
-        return {"info": result["stdout"]}
+        return {"info": result.get("stdout", "")}
 
 
 # ── Archive contents ───────────────────────────────────────────────────────────
@@ -331,7 +436,20 @@ async def get_archive_contents(
     all_items = None if fast_browse else await archive_cache.get(repo.id, raw_cache_key)
 
     if all_items is None:
-        if _repo_needs_custom_env(repo):
+        if is_agent_executor(repo):
+            # Managed agent: run the listing on the node (it can reach the repo
+            # and holds the credentials). Passing the aid:<hex> selector avoids
+            # the "matched N archives" error on a Borg 2 series; the returned
+            # stdout is the same borg2 --json-lines output parsed below.
+            result = await _agent_archive_contents_result(
+                db,
+                repo,
+                archive=archive_selector,
+                path=path if fast_browse else "",
+                max_lines=_browse_max_lines(db),
+                timeout_seconds=_get_list_timeout(db),
+            )
+        elif _repo_needs_custom_env(repo):
             with repository_borg_env(repo, db) as env:
                 kwargs = {
                     "repository": repo.path,
@@ -369,7 +487,7 @@ async def get_archive_contents(
             stdout_len=len(stdout),
             stderr=result.get("stderr", "")[:200],
         )
-        if not stdout and not result["success"]:
+        if not stdout and not result.get("success", True):
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to get archive contents: {result.get('stderr', 'unknown error')}",
