@@ -3,6 +3,7 @@ import base64
 import binascii
 import json
 import os
+import re
 import tempfile  # noqa: F401 - retained as a patch target in download endpoint tests
 from types import SimpleNamespace
 from urllib.parse import quote
@@ -122,6 +123,23 @@ def _repo_bound_agent(repo: Repository, db: Session) -> AgentMachine | None:
     return (
         db.query(AgentMachine).filter(AgentMachine.id == repo.agent_machine_id).first()
     )
+
+
+_ARCHIVE_ID_RE = re.compile(r"^[0-9a-fA-F]{16,}$")
+
+
+def _archive_extract_selector(archive: str, repo: Repository) -> str:
+    """Address a Borg 2 archive by id via the `aid:` selector.
+
+    The frontend sends the archive id (hex) for Borg 2, but a bare id is
+    interpreted by borg as an archive NAME → no match → an empty (0-byte)
+    extract for an archive series. Borg 1 names are unique and passed as-is.
+    """
+    if not archive or getattr(repo, "borg_version", 1) != 2:
+        return archive
+    if archive.startswith("aid:"):
+        return archive
+    return f"aid:{archive}" if _ARCHIVE_ID_RE.fullmatch(archive) else archive
 
 
 async def _stream_agent_archive_file(
@@ -487,6 +505,10 @@ async def download_file_from_archive(
             "viewer",
             detail_key="backend.errors.archives.repositoryNotFound",
         )
+
+        # Borg 2: address the archive by id (aid:) so extract targets exactly one
+        # archive in a series; a bare id would be read as a name → 0-byte file.
+        archive = _archive_extract_selector(archive, repo)
 
         # New agents stream the file straight through; older agents (and
         # server-side repos) fall through to the base64/local path below.

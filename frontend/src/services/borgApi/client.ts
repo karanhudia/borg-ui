@@ -92,10 +92,15 @@ export class BorgApiClient {
   readonly repoId: number
   private readonly repoPath?: string
 
+  /** Whether this is a Borg 2 repo — needed for archive addressing even on the
+   * v1 (agent) routes, where a Borg 2 archive series must be selected by id. */
+  private readonly isV2: boolean
+
   constructor(repo: Repository) {
     this.repoId = repo.id
     this.repoPath = typeof repo.path === 'string' ? repo.path : undefined
-    this.v = repo.execution_target === 'agent' ? '' : isV2Repo(repo) ? '/v2' : ''
+    this.isV2 = isV2Repo(repo)
+    this.v = repo.execution_target === 'agent' ? '' : this.isV2 ? '/v2' : ''
   }
 
   // ── Pre-creation (no repo ID yet) ────────────────────────────────────────
@@ -138,8 +143,11 @@ export class BorgApiClient {
         params: { repository: this.repoId, path },
       })
     }
-    // v1: use the browse endpoint (cached, path-filtered) — needs archive NAME not hex ID
-    return httpClient.get(`/browse/${this.repoId}/${archiveName}`, {
+    // v1 browse (cached, path-filtered). For a Borg 2 archive series the name is
+    // ambiguous (matches N archives → borg errors), so select the specific
+    // archive by its id via the `aid:` selector; Borg 1 names are unique.
+    const selector = this.isV2 && archiveId ? `aid:${archiveId}` : archiveName
+    return httpClient.get(`/browse/${this.repoId}/${encodeURIComponent(selector)}`, {
       params: { path },
     })
   }

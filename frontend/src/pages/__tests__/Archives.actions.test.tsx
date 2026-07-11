@@ -266,7 +266,8 @@ describe('Archives page actions', () => {
     await waitFor(() => {
       expect(apiModule.restoreAPI.startRestore).toHaveBeenCalledWith(
         '/repo/one',
-        'archive-1',
+        // Borg 2 series → restore targets the specific archive by id (aid:).
+        'aid:a1',
         ['/var/lib/app'],
         '/restore/here',
         1,

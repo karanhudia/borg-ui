@@ -662,3 +662,22 @@ class TestDownloadFileEndpoint:
             "params": {"error": stderr},
         }
         local_extract.assert_not_awaited()
+
+
+@pytest.mark.unit
+def test_archive_extract_selector_addresses_borg2_id_via_aid():
+    from types import SimpleNamespace
+    from app.api.archives import _archive_extract_selector
+
+    borg2 = SimpleNamespace(borg_version=2)
+    borg1 = SimpleNamespace(borg_version=1)
+    hex_id = "deadbeefdeadbeef"
+
+    # Borg 2 hex id -> aid: selector
+    assert _archive_extract_selector(hex_id, borg2) == f"aid:{hex_id}"
+    # already-prefixed selector is left alone
+    assert _archive_extract_selector(f"aid:{hex_id}", borg2) == f"aid:{hex_id}"
+    # a non-hex name (not an id) is passed through even for Borg 2
+    assert _archive_extract_selector("m3s01", borg2) == "m3s01"
+    # Borg 1 never uses aid: (unique names)
+    assert _archive_extract_selector(hex_id, borg1) == hex_id

@@ -113,6 +113,26 @@ describe('BorgApiClient', () => {
     })
   })
 
+  it('addresses a Borg 2 archive by aid: on the v1 (agent) browse route', async () => {
+    const clientModule = await import('./client')
+    const getMock = vi.spyOn(clientModule.httpClient, 'get').mockResolvedValue({} as never)
+    const { BorgApiClient } = clientModule
+    // Agent repos route to v1 (this.v === ''), but a Borg 2 series name is
+    // ambiguous, so the specific archive must be selected by id via aid:.
+    const client = new BorgApiClient({
+      id: 8,
+      borg_version: 2,
+      execution_target: 'agent',
+      path: '/repo',
+    } as never)
+
+    client.getArchiveContents('deadbeef', 'm3s01', '/etc')
+
+    expect(getMock).toHaveBeenCalledWith(`/browse/8/${encodeURIComponent('aid:deadbeef')}`, {
+      params: { path: '/etc' },
+    })
+  })
+
   it('uses v2 routes for Borg 2 repositories', async () => {
     const clientModule = await import('./client')
     const getMock = vi.spyOn(clientModule.httpClient, 'get').mockResolvedValue({} as never)

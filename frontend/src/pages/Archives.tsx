@@ -364,9 +364,16 @@ const Archives: React.FC = () => {
       destinationPath = '/'
     }
 
+    // Borg 2 series share a name, so restore must target the specific archive
+    // by id (aid:); borg extracts an ambiguous name as "matched N" (rc 4).
+    const restoreArchiveRef =
+      getBorgVersion(selectedRepository) === 2 && restoreArchive.id
+        ? `aid:${restoreArchive.id}`
+        : restoreArchive.name
+
     restoreMutation.mutate({
       repository: selectedRepository.path,
-      archive: restoreArchive.name,
+      archive: restoreArchiveRef,
       destination: destinationPath,
       paths: data.selected_paths,
       repository_id: selectedRepository.id,
@@ -433,8 +440,10 @@ const Archives: React.FC = () => {
         job.status === 'completed' || job.status === 'completed_with_warnings'
           ? EventAction.COMPLETE
           : EventAction.FAIL
+      // A Borg 2 restore stores the aid:<id> selector as job.archive, so match
+      // on the id too — otherwise the name lookup misses and the age bucket is lost.
       const archiveStart = archivesList.find(
-        (archive: Archive) => archive.name === job.archive
+        (archive: Archive) => archive.name === job.archive || `aid:${archive.id}` === job.archive
       )?.start
 
       trackArchive(action, selectedRepository ?? job.repository, {
