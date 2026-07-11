@@ -834,6 +834,42 @@ class TestV2RepositoryRoutes:
         assert fake_wait.responses == []
         assert fake_wait.timeouts == [600, 600]
 
+    def test_get_repository_info_returns_500_on_agent_info_failure(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        # Mirror the server-side failure contract for the agent path: a failed
+        # repository.info job must surface as HTTP 500, not a 200 with an empty
+        # info payload (which would mask a real error from the UI).
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(
+            test_db, name="Agent Info Fail", path="/tmp/v2-agent-info-fail"
+        )
+
+        async def fake_wait(db, agent_job_id, **kwargs):
+            return {"success": False, "stdout": "", "stderr": "boom"}
+
+        with (
+            patch("app.api.v2.repositories.is_agent_executor", return_value=True),
+            patch(
+                "app.api.v2.repositories.queue_agent_repository_operation_job",
+                return_value=SimpleNamespace(id=99),
+            ),
+            patch(
+                "app.api.v2.repositories.dispatch_agent_job_best_effort",
+                new=AsyncMock(),
+            ),
+            patch(
+                "app.api.v2.repositories.wait_for_agent_repository_operation_job",
+                new=fake_wait,
+            ),
+        ):
+            response = test_client.get(
+                f"/api/v2/repositories/{repo.id}/info", headers=admin_headers
+            )
+
+        assert response.status_code == 500
+        assert response.json()["detail"]["key"] == "backend.errors.repo.infoFailed"
+
     def test_get_repository_info_merges_rinfo_and_disk_usage(
         self, test_client: TestClient, admin_headers, test_db
     ):

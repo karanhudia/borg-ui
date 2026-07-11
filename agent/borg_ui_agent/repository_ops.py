@@ -333,8 +333,9 @@ class RepositoryOperationPayload:
             for key, flag in keep_flags:
                 value = operation.get(key)
                 # Emit only positive retentions (matches server-side `> 0`);
-                # `--keep-* 0` is meaningless and clutters the command.
-                if value:
+                # `--keep-* 0` (or negative) is meaningless and clutters the
+                # command.
+                if value and int(value) > 0:
                     cmd.extend([flag, str(int(value))])
             keep_within = operation.get("keep_within")
             if keep_within is not None and str(keep_within).strip():

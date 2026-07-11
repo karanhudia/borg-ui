@@ -140,7 +140,7 @@ describe('Archives page — delete cache invalidation (regression #352)', () => 
       data: { info: {} },
     })
     deleteArchiveMock.mockResolvedValue({
-      data: { job_id: 'job-123' },
+      data: { job_id: 123 },
     })
     // The background delete job reports completed immediately in the test so the
     // first poll (scheduled ~1s after success) invalidates the queries.
@@ -186,7 +186,7 @@ describe('Archives page — delete cache invalidation (regression #352)', () => 
     // Both queries must be invalidated — this is the regression check for #352.
     await waitFor(
       () => {
-        expect(getDeleteJobStatusMock).toHaveBeenCalledWith('job-123')
+        expect(getDeleteJobStatusMock).toHaveBeenCalledWith(123)
         expect(invalidateSpy).toHaveBeenCalledWith(
           expect.objectContaining({ queryKey: ['repository-archives', 1] })
         )

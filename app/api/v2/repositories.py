@@ -549,6 +549,13 @@ async def get_repository_info(
             info_result = await _agent_repo_read(
                 db, repo, job_kind="repository.info", timeout_seconds=info_timeout
             )
+            if not info_result.get("success", bool(info_result.get("stdout"))):
+                raise HTTPException(
+                    status_code=500,
+                    detail=_borg2_failure_detail(
+                        info_result, "backend.errors.repo.infoFailed"
+                    ),
+                )
             info_data = _parse_agent_json(info_result)
             rinfo_result = await _agent_repo_read(
                 db, repo, job_kind="repository.rinfo", timeout_seconds=info_timeout

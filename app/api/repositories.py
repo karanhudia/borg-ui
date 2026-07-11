@@ -6057,7 +6057,8 @@ async def get_repository_info(
             # *with* per-archive stats (original_size, nfiles), so surface it —
             # otherwise the panel shows a false "no backups yet". Borg 1 repo-info
             # has no archives (its panel reads cache.stats instead), yielding [].
-            archives = info_data.get("archives") or []
+            archives = info_data.get("archives")
+            archives = archives if isinstance(archives, list) else []
 
             logger.info(
                 "Agent repository info retrieved successfully",
