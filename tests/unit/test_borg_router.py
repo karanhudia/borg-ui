@@ -198,7 +198,9 @@ async def test_prune_delegates_to_agent_when_managed():
             new=AsyncMock(),
         ) as mock_v2,
     ):
-        await BorgRouter(repo).prune(7, 1, 2, 3, 4, 5, 6, dry_run=True, keep_within="1d")
+        await BorgRouter(repo).prune(
+            7, 1, 2, 3, 4, 5, 6, dry_run=True, keep_within="1d"
+        )
 
     mock_agent.assert_awaited_once_with(
         job_kind="repository.prune",
@@ -998,6 +1000,54 @@ async def test_break_lock_delegates_to_v1_core():
         remote_path="/usr/bin/borg",
         passphrase="secret",
     )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_break_lock_delegates_to_agent_when_managed():
+    repo = SimpleNamespace(
+        borg_version=2, id=41, path="/repo/path", executor_type="agent"
+    )
+
+    with (
+        patch.object(
+            BorgRouter,
+            "_run_agent_break_lock",
+            new=AsyncMock(return_value={"success": True}),
+        ) as mock_agent,
+        patch("app.core.borg2.borg2.break_lock", new=AsyncMock()) as mock_v2,
+    ):
+        result = await BorgRouter(repo).break_lock()
+
+    assert result == {"success": True}
+    mock_agent.assert_awaited_once_with()
+    mock_v2.assert_not_awaited()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_delete_archive_delegates_to_agent_when_managed():
+    repo = SimpleNamespace(borg_version=2, id=41, executor_type="agent")
+
+    with (
+        patch.object(
+            BorgRouter, "_run_agent_maintenance", new=AsyncMock()
+        ) as mock_agent,
+        patch(
+            "app.services.v2.delete_archive_service.delete_archive_v2_service"
+            ".execute_delete",
+            new=AsyncMock(),
+        ) as mock_v2,
+    ):
+        await BorgRouter(repo).delete_archive(7, "aid:deadbeef")
+
+    mock_agent.assert_awaited_once_with(
+        job_kind="repository.delete_archive",
+        maintenance_kind="delete_archive",
+        maintenance_job_id=7,
+        operation={"archive": "aid:deadbeef"},
+    )
+    mock_v2.assert_not_awaited()
 
 
 @pytest.mark.unit

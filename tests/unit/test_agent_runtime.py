@@ -1200,6 +1200,7 @@ def test_rinfo_and_archive_info_use_the_stdout_capturing_executor(monkeypatch):
         ("repository.rinfo", None),
         ("repository.archive_info", {"archive": "aid:deadbeef"}),
         ("repository.delete_archive", {"archive": "aid:deadbeef"}),
+        ("repository.break_lock", None),
     ):
         execute_repository_operation_job(
             {
@@ -1218,6 +1219,42 @@ def test_rinfo_and_archive_info_use_the_stdout_capturing_executor(monkeypatch):
         "repository.rinfo",
         "repository.archive_info",
         "repository.delete_archive",
+        "repository.break_lock",
+    ]
+
+
+@pytest.mark.unit
+def test_repository_break_lock_payload_builds_borg2_command():
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "schema_version": 1,
+            "job_kind": "repository.break_lock",
+            "repository": {"path": "/agent/repo2", "borg_version": 2},
+        }
+    )
+
+    assert payload.build_command() == [
+        "borg2",
+        "-r",
+        "/agent/repo2",
+        "break-lock",
+    ]
+
+
+@pytest.mark.unit
+def test_repository_break_lock_payload_builds_borg1_command():
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "schema_version": 1,
+            "job_kind": "repository.break_lock",
+            "repository": {"path": "/agent/repo", "borg_version": 1},
+        }
+    )
+
+    assert payload.build_command() == [
+        "borg",
+        "break-lock",
+        "/agent/repo",
     ]
 
 

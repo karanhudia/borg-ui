@@ -27,6 +27,7 @@ REPOSITORY_OPERATION_CAPABILITIES = {
     "repository.archive_info",
     "repository.list_archives",
     "repository.delete_archive",
+    "repository.break_lock",
     "repository.list_archive_contents",
     "repository.extract_archive_file",
     "repository.restore",

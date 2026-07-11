@@ -27,6 +27,7 @@ REPOSITORY_JOB_KINDS = {
     "repository.archive_info",
     "repository.list_archives",
     "repository.delete_archive",
+    "repository.break_lock",
     "repository.list_archive_contents",
     "repository.extract_archive_file",
     "repository.restore",
@@ -183,6 +184,14 @@ class RepositoryOperationPayload:
                 *self._base_borg1("delete"),
                 f"{self.repository_path}::{archive}",
             ]
+
+        if self.job_kind == "repository.break_lock":
+            # Break a stale lock on the node (mirrors borg.break_lock /
+            # borg2.break_lock). borg1 takes the repo positionally; borg2 has it
+            # in the -r base.
+            if self.borg_version == 2:
+                return [*self._base_borg2("break-lock")]
+            return [*self._base_borg1("break-lock"), self.repository_path]
 
         if self.job_kind == "repository.list_archives":
             if self.borg_version == 2:
@@ -486,6 +495,7 @@ def execute_repository_operation_job(
         "repository.archive_info",
         "repository.list_archives",
         "repository.delete_archive",
+        "repository.break_lock",
     }:
         try:
             return _execute_short_repository_operation(

@@ -270,7 +270,14 @@ class BorgRouter:
         return ["borg", "umount", mount_point]
 
     async def break_lock(self, env: dict = None) -> dict:
-        """Break a repository lock via the version-appropriate implementation."""
+        """Break a repository lock via the version-appropriate implementation.
+
+        agent: delegates to the managed agent (repository.break_lock); the node
+        holds the credentials and reaches the repo. ``env`` is server-side only
+        and ignored on the agent path.
+        """
+        if self._is_agent():
+            return await self._run_agent_break_lock()
         if self.is_v2:
             from app.core.borg2 import borg2
 
@@ -502,6 +509,47 @@ class BorgRouter:
             # exception; the linked maintenance job already records the detail.
             detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
             raise RuntimeError(f"agent {maintenance_kind} failed: {detail}") from exc
+        finally:
+            db.close()
+
+    async def _run_agent_break_lock(self) -> dict:
+        """Break the repository lock on the managed agent and wait for it.
+
+        Unlike the maintenance ops, break-lock has no linked *_jobs record and
+        returns a result dict synchronously, so it does not go through
+        ``_run_agent_maintenance``. ``wait_for_...`` raises on a failed agent
+        job, so reaching the return means success.
+        """
+        from app.config import settings
+        from app.database.database import SessionLocal
+        from app.database.models import Repository, SystemSettings
+        from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
+        from app.services.repository_executor import (
+            queue_agent_repository_operation_job,
+            wait_for_agent_repository_operation_job,
+        )
+
+        db = SessionLocal()
+        try:
+            repository = db.query(Repository).get(self.repo.id)
+            if repository is None:
+                raise ValueError(f"Repository {self.repo.id} not found")
+            system_settings = db.query(SystemSettings).first()
+            timeout_seconds = (
+                system_settings.backup_timeout
+                if system_settings and system_settings.backup_timeout
+                else settings.backup_timeout
+            )
+            agent_job = queue_agent_repository_operation_job(
+                db, repository, job_kind="repository.break_lock"
+            )
+            await dispatch_agent_job_best_effort(
+                db, agent_job, repository_id=repository.id
+            )
+            await wait_for_agent_repository_operation_job(
+                db, agent_job.id, timeout_seconds=timeout_seconds
+            )
+            return {"success": True}
         finally:
             db.close()
 
