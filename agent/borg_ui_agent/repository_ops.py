@@ -16,7 +16,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
-from agent.borg_ui_agent.backup import _extract_environment, parse_borg_progress
+from agent.borg_ui_agent.backup import (
+    _extract_environment,
+    build_borg_env,
+    parse_borg_progress,
+)
 from agent.borg_ui_agent.client import AgentClient
 
 
@@ -479,8 +483,7 @@ def execute_repository_operation_job(
             job_id=job_id, status="failed", message=error_message
         )
 
-    env = os.environ.copy()
-    env.update(payload.environment or {})
+    env = build_borg_env(payload.environment)
     sequence = 0
     client.send_log(
         job_id,
