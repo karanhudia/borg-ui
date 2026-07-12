@@ -54,6 +54,7 @@ jobs:
           echo "base_tag=${TAG_VALUE}" >> "$GITHUB_OUTPUT"
           echo "borg1=${BORG1_VERSION}" >> "$GITHUB_OUTPUT"
           echo "borg2=${BORG2_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "borgstore=${BORGSTORE_VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -73,6 +74,7 @@ jobs:
           build-args: |
             BORG1_VERSION=${{ steps.versions.outputs.borg1 }}
             BORG2_VERSION=${{ steps.versions.outputs.borg2 }}
+            BORGSTORE_VERSION=${{ steps.versions.outputs.borgstore }}
 
       - name: Smoke test runtime base
         run: |
@@ -80,7 +82,9 @@ jobs:
           docker run --rm borg-ui-runtime-base:smoke-test borg2 --version
           docker run --rm borg-ui-runtime-base:smoke-test btrfs --version
           docker run --rm borg-ui-runtime-base:smoke-test python3 -c "import pyfuse3; print('pyfuse3 ok')"
-          docker run --rm borg-ui-runtime-base:smoke-test /opt/borg2-venv/bin/python -c "import importlib.metadata as metadata; metadata.version('borgstore'); import requests; print('borgstore rclone dependencies ok')"
+          docker run --rm borg-ui-runtime-base:smoke-test /opt/borg2-venv/bin/python -c "import importlib.metadata as metadata; metadata.version('borgstore'); import requests; print('borgstore rclone/rest dependencies ok')"
+          docker run --rm borg-ui-runtime-base:smoke-test /opt/borg2-venv/bin/python -c "import paramiko; print('borgstore sftp dependencies ok')"
+          docker run --rm borg-ui-runtime-base:smoke-test /opt/borg2-venv/bin/python -c "import boto3; print('borgstore s3 dependencies ok')"
 
   build-and-push:
     runs-on: ubuntu-latest
@@ -107,6 +111,7 @@ jobs:
           echo "base_tag=${TAG_VALUE}" >> "$GITHUB_OUTPUT"
           echo "borg1=${BORG1_VERSION}" >> "$GITHUB_OUTPUT"
           echo "borg2=${BORG2_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "borgstore=${BORGSTORE_VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -143,3 +148,4 @@ jobs:
           build-args: |
             BORG1_VERSION=${{ steps.versions.outputs.borg1 }}
             BORG2_VERSION=${{ steps.versions.outputs.borg2 }}
+            BORGSTORE_VERSION=${{ steps.versions.outputs.borgstore }}

@@ -15,6 +15,7 @@ FROM python:3.10-slim AS builder
 
 ARG BORG1_VERSION=1.4.4
 ARG BORG2_VERSION=2.0.0b21
+ARG BORGSTORE_VERSION=0.4.1
 
 # Build-time only. OS packages track the base image's Debian release rather than
 # pinned versions (DL3008): upstream does not pin them either and a pin would
@@ -36,10 +37,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # pinned via ARG; pyfuse3 tracks the interpreter and is intentionally unpinned
 # (DL3013). Kept as its own layer, separate from the apt layer above (DL3059),
 # so a Borg version bump does not re-run the OS package install.
+#
+# The Borg 2 venv gets every borgstore repository backend so any repo scheme
+# works out of the box: posixfs (file://) is built in and needs no extra, while
+# sftp:// (paramiko), rclone:// (requests), rest:// (requests) and s3:// (boto3)
+# are pulled via the explicit extras below. All are listed even though some
+# share deps (rclone+rest both only need requests), so it is obvious at a glance
+# that no scheme is missing. NB: posixfs is NOT a pip extra — it is always
+# available — so it must not appear in the brackets.
 # hadolint ignore=DL3013,DL3059
 RUN pip install --no-cache-dir pyfuse3 "borgbackup[fuse]==${BORG1_VERSION}" && \
     python3 -m venv /opt/borg2-venv && \
-    /opt/borg2-venv/bin/pip install --no-cache-dir pyfuse3 "borgbackup[fuse]==${BORG2_VERSION}" "borgstore[rclone]==0.4.1"
+    /opt/borg2-venv/bin/pip install --no-cache-dir pyfuse3 "borgbackup[fuse]==${BORG2_VERSION}" "borgstore[rclone,sftp,rest,s3]==${BORGSTORE_VERSION}"
 
 # --- runtime-base: slim image, no compilers — runtime libs + operational tools -
 FROM python:3.10-slim AS runtime-base
