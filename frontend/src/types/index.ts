@@ -356,7 +356,8 @@ export interface BackupPlanRunRepository {
 
 export interface BackupPlanScriptExecution {
   id: number
-  script_id: number
+  // Null for agent-published hooks (identified by script_name/agent_script_name).
+  script_id: number | null
   script_name: string
   hook_type?: string | null
   status: string
