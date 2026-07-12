@@ -16,6 +16,7 @@ from agent.borg_ui_agent.client import AGENT_AUTH_HEADER, AgentClient
 from agent.borg_ui_agent.config import AgentConfig, load_config, save_config
 from agent.borg_ui_agent.repository_ops import (
     RepositoryOperationPayload,
+    RepositoryOperationResult,
     execute_repository_operation_job,
     _write_temp_rclone_config,
 )
@@ -489,6 +490,65 @@ def test_repository_init_payload_builds_borg1_command():
     command = payload.build_command()
 
     assert command == ["borg", "init", "--encryption", "repokey", "/agent/repo"]
+
+
+@pytest.mark.unit
+def test_repository_rinfo_payload_builds_borg2_command():
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "schema_version": 1,
+            "job_kind": "repository.rinfo",
+            "repository": {"path": "/agent/repo2", "borg_version": 2},
+        }
+    )
+
+    assert payload.build_command() == [
+        "borg2",
+        "-r",
+        "/agent/repo2",
+        "repo-info",
+        "--json",
+    ]
+
+
+@pytest.mark.unit
+def test_repository_archive_info_payload_builds_borg2_command():
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "schema_version": 1,
+            "job_kind": "repository.archive_info",
+            "repository": {"path": "/agent/repo2", "borg_version": 2},
+            "operation": {"archive": "aid:deadbeef"},
+        }
+    )
+
+    assert payload.build_command() == [
+        "borg2",
+        "-r",
+        "/agent/repo2",
+        "info",
+        "--json",
+        "aid:deadbeef",
+    ]
+
+
+@pytest.mark.unit
+def test_repository_archive_info_payload_builds_borg1_command():
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "schema_version": 1,
+            "job_kind": "repository.archive_info",
+            "repository": {"path": "/agent/repo", "borg_version": 1},
+            "operation": {"archive": "arch-1"},
+        }
+    )
+
+    assert payload.build_command() == [
+        "borg",
+        "info",
+        "--json",
+        "/agent/repo::arch-1",
+    ]
 
 
 @pytest.mark.unit
@@ -1120,6 +1180,123 @@ def test_repository_rclone_sync_removes_temp_config_when_command_build_fails(
 
 
 @pytest.mark.unit
+def test_rinfo_and_archive_info_use_the_stdout_capturing_executor(monkeypatch):
+    # info/list_archives/rinfo/archive_info must run through the short-operation
+    # path so their JSON stdout is captured in the job result; the streaming
+    # path drops stdout (which broke stats/encryption refresh for agent repos).
+    routed = []
+
+    def fake_short(job_id, payload, client, cmd, env):
+        routed.append(payload.job_kind)
+        return RepositoryOperationResult(job_id=job_id, status="completed")
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.repository_ops._execute_short_repository_operation",
+        fake_short,
+    )
+    client = FakeRuntimeClient([])
+
+    for job_kind, operation in (
+        ("repository.rinfo", None),
+        ("repository.archive_info", {"archive": "aid:deadbeef"}),
+        ("repository.delete_archive", {"archive": "aid:deadbeef"}),
+        ("repository.break_lock", None),
+    ):
+        execute_repository_operation_job(
+            {
+                "id": 1,
+                "payload": {
+                    "schema_version": 1,
+                    "job_kind": job_kind,
+                    "repository": {"path": "/agent/repo", "borg_version": 2},
+                    "operation": operation,
+                },
+            },
+            client,
+        )
+
+    assert routed == [
+        "repository.rinfo",
+        "repository.archive_info",
+        "repository.delete_archive",
+        "repository.break_lock",
+    ]
+
+
+@pytest.mark.unit
+def test_repository_break_lock_payload_builds_borg2_command():
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "schema_version": 1,
+            "job_kind": "repository.break_lock",
+            "repository": {"path": "/agent/repo2", "borg_version": 2},
+        }
+    )
+
+    assert payload.build_command() == [
+        "borg2",
+        "-r",
+        "/agent/repo2",
+        "break-lock",
+    ]
+
+
+@pytest.mark.unit
+def test_repository_break_lock_payload_builds_borg1_command():
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "schema_version": 1,
+            "job_kind": "repository.break_lock",
+            "repository": {"path": "/agent/repo", "borg_version": 1},
+        }
+    )
+
+    assert payload.build_command() == [
+        "borg",
+        "break-lock",
+        "/agent/repo",
+    ]
+
+
+@pytest.mark.unit
+def test_repository_delete_archive_payload_builds_borg2_command():
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "schema_version": 1,
+            "job_kind": "repository.delete_archive",
+            "repository": {"path": "/agent/repo2", "borg_version": 2},
+            "operation": {"archive": "aid:deadbeef"},
+        }
+    )
+
+    assert payload.build_command() == [
+        "borg2",
+        "-r",
+        "/agent/repo2",
+        "delete",
+        "aid:deadbeef",
+    ]
+
+
+@pytest.mark.unit
+def test_repository_delete_archive_payload_builds_borg1_command():
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "schema_version": 1,
+            "job_kind": "repository.delete_archive",
+            "repository": {"path": "/agent/repo", "borg_version": 1},
+            "operation": {"archive": "arch-1"},
+        }
+    )
+
+    assert payload.build_command() == [
+        "borg",
+        "delete",
+        "/agent/repo::arch-1",
+    ]
+
+
+@pytest.mark.unit
 def test_repository_rclone_sync_removes_partial_temp_config_when_write_fails(
     tmp_path: Path, monkeypatch
 ):
@@ -1249,15 +1426,43 @@ def test_repository_operation_payload_builds_agent_local_commands():
         {
             "job_kind": "repository.prune",
             "repository": {"path": "/agent/repo", "borg_version": 2},
-            "operation": {"keep_daily": 7, "keep_within": "1d", "dry_run": True},
+            "operation": {
+                "keep_daily": 7,
+                "keep_quarterly": 3,
+                "keep_within": "1d",
+                "dry_run": True,
+            },
+        }
+    )
+    prune_v1_payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "job_kind": "repository.prune",
+            "repository": {"path": "/agent/repo", "borg_version": 1},
+            "operation": {"keep_daily": 7, "keep_quarterly": 3},
         }
     )
 
     assert info_payload.build_command() == ["borg", "info", "--json", "/agent/repo"]
+    # Borg 2 prune: no --stats, quarterly -> --keep-3monthly.
     assert prune_payload.build_command() == [
         "borg2",
         "-r",
         "/agent/repo",
+        "prune",
+        "--progress",
+        "--show-rc",
+        "--log-json",
+        "--keep-daily",
+        "7",
+        "--keep-3monthly",
+        "3",
+        "--keep-within=1d",
+        "--dry-run",
+    ]
+    # Borg 1 prune keeps --stats; quarterly is --keep-3monthly on borg1 too
+    # (borg 1.4 has no --keep-quarterly), and the repo path comes last.
+    assert prune_v1_payload.build_command() == [
+        "borg",
         "prune",
         "--progress",
         "--stats",
@@ -1265,9 +1470,25 @@ def test_repository_operation_payload_builds_agent_local_commands():
         "--log-json",
         "--keep-daily",
         "7",
-        "--keep-within=1d",
-        "--dry-run",
+        "--keep-3monthly",
+        "3",
+        "/agent/repo",
     ]
+
+    # Zero retentions must not be emitted (matches server-side `> 0`): a payload
+    # with keep_hourly=0/keep_quarterly=0 yields no --keep-hourly / --keep-3monthly.
+    prune_zero_payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "job_kind": "repository.prune",
+            "repository": {"path": "/agent/repo", "borg_version": 1},
+            "operation": {"keep_hourly": 0, "keep_daily": 7, "keep_quarterly": 0},
+        }
+    )
+    zero_cmd = prune_zero_payload.build_command()
+    assert "--keep-hourly" not in zero_cmd
+    assert "--keep-3monthly" not in zero_cmd
+    assert "--keep-quarterly" not in zero_cmd
+    assert zero_cmd.count("--keep-daily") == 1
 
 
 @pytest.mark.unit

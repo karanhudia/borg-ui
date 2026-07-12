@@ -34,6 +34,7 @@ from app.database.models import (
     BackupJob,
     CheckJob,
     CompactJob,
+    DeleteArchiveJob,
     PruneJob,
     Repository,
 )
@@ -58,6 +59,7 @@ REPOSITORY_OPERATION_JOB_MODELS = {
     "check": CheckJob,
     "compact": CompactJob,
     "prune": PruneJob,
+    "delete_archive": DeleteArchiveJob,
 }
 
 

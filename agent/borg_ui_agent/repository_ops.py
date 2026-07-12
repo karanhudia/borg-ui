@@ -23,7 +23,11 @@ from agent.borg_ui_agent.client import AgentClient
 REPOSITORY_JOB_KINDS = {
     "repository.init",
     "repository.info",
+    "repository.rinfo",
+    "repository.archive_info",
     "repository.list_archives",
+    "repository.delete_archive",
+    "repository.break_lock",
     "repository.list_archive_contents",
     "repository.extract_archive_file",
     "repository.restore",
@@ -151,6 +155,44 @@ class RepositoryOperationPayload:
                 return [*self._base_borg2("info"), "--json"]
             return [*self._base_borg1("info"), "--json", self.repository_path]
 
+        if self.job_kind == "repository.rinfo":
+            # Repository-level metadata (repository id, encryption). borg2 has a
+            # dedicated repo-info; borg1 folds it into `info`.
+            if self.borg_version == 2:
+                return [*self._base_borg2("repo-info"), "--json"]
+            return [*self._base_borg1("info"), "--json", self.repository_path]
+
+        if self.job_kind == "repository.archive_info":
+            archive = _operation_archive(self.operation, self.job_kind)
+            if self.borg_version == 2:
+                return [*self._base_borg2("info"), "--json", archive]
+            return [
+                *self._base_borg1("info"),
+                "--json",
+                f"{self.repository_path}::{archive}",
+            ]
+
+        if self.job_kind == "repository.delete_archive":
+            # The server passes the exact selector (an `aid:<hex>` for a Borg 2
+            # series, a unique name for Borg 1), so a series delete removes only
+            # the intended archive. No extra flags: mirrors borg.delete_archive /
+            # borg2.delete_archive. Space is reclaimed by a later compact.
+            archive = _operation_archive(self.operation, self.job_kind)
+            if self.borg_version == 2:
+                return [*self._base_borg2("delete"), archive]
+            return [
+                *self._base_borg1("delete"),
+                f"{self.repository_path}::{archive}",
+            ]
+
+        if self.job_kind == "repository.break_lock":
+            # Break a stale lock on the node (mirrors borg.break_lock /
+            # borg2.break_lock). borg1 takes the repo positionally; borg2 has it
+            # in the -r base.
+            if self.borg_version == 2:
+                return [*self._base_borg2("break-lock")]
+            return [*self._base_borg1("break-lock"), self.repository_path]
+
         if self.job_kind == "repository.list_archives":
             if self.borg_version == 2:
                 return [*self._base_borg2("repo-list"), "--json"]
@@ -262,19 +304,21 @@ class RepositoryOperationPayload:
         if self.job_kind == "repository.prune":
             operation = self.operation or {}
             dry_run = bool(operation.get("dry_run", False))
+            # Borg 2 prune has no --stats (Borg 1 does). Both versions spell
+            # quarterly retention --keep-3monthly; borg 1.4 has no --keep-quarterly
+            # (mirrors the server-side borg.py / borg2.py commands).
             keep_flags = [
                 ("keep_hourly", "--keep-hourly"),
                 ("keep_daily", "--keep-daily"),
                 ("keep_weekly", "--keep-weekly"),
                 ("keep_monthly", "--keep-monthly"),
-                ("keep_quarterly", "--keep-quarterly"),
+                ("keep_quarterly", "--keep-3monthly"),
                 ("keep_yearly", "--keep-yearly"),
             ]
             if self.borg_version == 2:
                 cmd = [
                     *self._base_borg2("prune"),
                     "--progress",
-                    "--stats",
                     "--show-rc",
                     "--log-json",
                 ]
@@ -288,7 +332,10 @@ class RepositoryOperationPayload:
                 ]
             for key, flag in keep_flags:
                 value = operation.get(key)
-                if value is not None:
+                # Emit only positive retentions (matches server-side `> 0`);
+                # `--keep-* 0` (or negative) is meaningless and clutters the
+                # command.
+                if value and int(value) > 0:
                     cmd.extend([flag, str(int(value))])
             keep_within = operation.get("keep_within")
             if keep_within is not None and str(keep_within).strip():
@@ -443,7 +490,14 @@ def execute_repository_operation_job(
     )
     sequence += 1
 
-    if payload.job_kind in {"repository.info", "repository.list_archives"}:
+    if payload.job_kind in {
+        "repository.info",
+        "repository.rinfo",
+        "repository.archive_info",
+        "repository.list_archives",
+        "repository.delete_archive",
+        "repository.break_lock",
+    }:
         try:
             return _execute_short_repository_operation(
                 job_id, payload, client, cmd, env

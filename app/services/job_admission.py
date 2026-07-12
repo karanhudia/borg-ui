@@ -35,6 +35,11 @@ OPERATION_REPOSITORY_INFO = "repository.info"
 OPERATION_REPOSITORY_LIST_ARCHIVES = "repository.list_archives"
 OPERATION_REPOSITORY_LIST_ARCHIVE_CONTENTS = "repository.list_archive_contents"
 OPERATION_REPOSITORY_EXTRACT_ARCHIVE_FILE = "repository.extract_archive_file"
+OPERATION_BREAK_LOCK = "break_lock"
+# Sentinel for an active repository agent job whose kind we don't recognize.
+# Classed WRITE so admission fails closed -- an unknown job might hold a borg
+# lock, and break_lock must never run alongside it.
+OPERATION_UNKNOWN_REPOSITORY = "repository.unknown"
 
 OPERATION_CLASS_REPOSITORY_WRITE = "repository_write"
 OPERATION_CLASS_REPOSITORY_READ = "repository_read"
@@ -57,6 +62,12 @@ WRITE_OPERATIONS = {
     OPERATION_DELETE_ARCHIVE,
     OPERATION_REPOSITORY_WIPE,
     OPERATION_REPOSITORY_INIT,
+    # break-lock forcibly removes the repo lock, so it must not run alongside
+    # ANY active borg process on the repo (reads hold locks too) -- classing it
+    # WRITE makes it conflict with all active work. A genuinely stale lock (no
+    # active work) still passes admission and is recovered.
+    OPERATION_BREAK_LOCK,
+    OPERATION_UNKNOWN_REPOSITORY,
 }
 READ_OPERATIONS = {
     OPERATION_CHECK,
@@ -74,7 +85,11 @@ AGENT_JOB_KIND_OPERATIONS = {
     "repository.compact": OPERATION_COMPACT,
     "repository.init": OPERATION_REPOSITORY_INIT,
     "repository.info": OPERATION_REPOSITORY_INFO,
+    "repository.rinfo": OPERATION_REPOSITORY_INFO,
+    "repository.archive_info": OPERATION_REPOSITORY_INFO,
     "repository.list_archives": OPERATION_REPOSITORY_LIST_ARCHIVES,
+    "repository.delete_archive": OPERATION_DELETE_ARCHIVE,
+    "repository.break_lock": OPERATION_BREAK_LOCK,
     "repository.list_archive_contents": OPERATION_REPOSITORY_LIST_ARCHIVE_CONTENTS,
     "repository.extract_archive_file": OPERATION_REPOSITORY_EXTRACT_ARCHIVE_FILE,
     "repository.restore": OPERATION_RESTORE,
@@ -285,7 +300,10 @@ def list_active_repository_work(
         try:
             operation = operation_for_agent_job_kind(str(job_kind))
         except ValueError:
-            continue
+            # Fail closed: an unrecognized active repository job might still hold
+            # a borg lock, so count it as (write-class) conflicting work rather
+            # than ignoring it -- otherwise break_lock could run alongside it.
+            operation = OPERATION_UNKNOWN_REPOSITORY
         active.append(_active_work(repository, operation, AgentJob.__tablename__, job))
 
     return [work for work in active if not _is_ignored(work, ignore)]

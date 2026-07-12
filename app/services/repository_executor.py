@@ -23,7 +23,11 @@ TERMINAL_AGENT_STATUSES = {"completed", "failed", "canceled"}
 REPOSITORY_OPERATION_CAPABILITIES = {
     "repository.init",
     "repository.info",
+    "repository.rinfo",
+    "repository.archive_info",
     "repository.list_archives",
+    "repository.delete_archive",
+    "repository.break_lock",
     "repository.list_archive_contents",
     "repository.extract_archive_file",
     "repository.restore",
@@ -314,6 +318,7 @@ def queue_agent_repository_operation_job(
         "restore_check": "restore_check_jobs",
         "compact": "compact_jobs",
         "prune": "prune_jobs",
+        "delete_archive": "delete_archive_jobs",
     }
     ensure_repository_admission(
         db,

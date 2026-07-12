@@ -10,7 +10,7 @@ interface ArchiveCardProps {
   onView: (archive: Archive) => void
   onRestore: (archive: Archive) => void
   onMount: (archive: Archive) => void
-  onDelete: (archiveName: string) => void
+  onDelete: (archive: Archive) => void
   mountDisabled?: boolean
   canDelete?: boolean
 }
@@ -196,7 +196,7 @@ export default function ArchiveCard({
           <Tooltip title={t('archiveCard.delete')} arrow>
             <IconButton
               size="small"
-              onClick={() => onDelete(archive.name)}
+              onClick={() => onDelete(archive)}
               aria-label={t('archiveCard.delete')}
               sx={iconBtnSx(theme.palette.error.main)}
             >

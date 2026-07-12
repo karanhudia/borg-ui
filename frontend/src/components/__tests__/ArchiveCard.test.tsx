@@ -67,13 +67,15 @@ describe('ArchiveCard', () => {
     expect(mockHandlers.onMount).toHaveBeenCalledTimes(1)
   })
 
-  it('calls onDelete with archive name when delete button is clicked', () => {
+  it('calls onDelete with the archive when delete button is clicked', () => {
     render(<ArchiveCard archive={mockArchive} {...mockHandlers} />)
 
     const deleteButton = screen.getByRole('button', { name: /delete/i })
     fireEvent.click(deleteButton)
 
-    expect(mockHandlers.onDelete).toHaveBeenCalledWith('backup-2024-01-15')
+    // The whole archive is passed (not just the name) so the caller can address
+    // a Borg 2 series by id via aid:.
+    expect(mockHandlers.onDelete).toHaveBeenCalledWith(mockArchive)
     expect(mockHandlers.onDelete).toHaveBeenCalledTimes(1)
   })
 
