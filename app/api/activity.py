@@ -153,8 +153,11 @@ def _format_running_agent_script_logs(execution: ScriptExecution, db: Session) -
     stdout/stderr are captured at completion. The frontend polls this every 2s
     while the execution is ``running`` (same as a live borg job), so only the
     last ``_MAX_LIVE_LOG_ROWS`` rows are read (the most recent activity)."""
+    # Only ``message``/``stream`` are used below, and this runs on a 2s-polling
+    # hot path — project just those two columns instead of hydrating full ORM
+    # rows (mirrors ``_latest_agent_script_line`` in ``app/api/backup_plans.py``).
     rows = (
-        db.query(AgentJobLog)
+        db.query(AgentJobLog.message, AgentJobLog.stream)
         .filter(AgentJobLog.agent_job_id == execution.agent_job_id)
         .order_by(AgentJobLog.sequence.desc(), AgentJobLog.id.desc())
         .limit(_MAX_LIVE_LOG_ROWS)

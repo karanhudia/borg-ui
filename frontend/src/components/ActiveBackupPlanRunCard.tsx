@@ -175,7 +175,10 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
   const runningHookLine =
     run.script_executions?.find((exec) => exec.status === 'running' && exec.current_line)
       ?.current_line ?? null
-  const activityLine = currentFile ?? runningHookLine
+  // Prefer a live hook line: getCurrentFile() doesn't filter finished jobs, so a
+  // completed backup keeps its last current_file — during a post-backup hook that
+  // stale value would otherwise hide the running hook's live output.
+  const activityLine = runningHookLine ?? currentFile
   const firstLogJob = getPreferredViewableJob(run)
 
   const visibleStats: { key: string; label: string; value: string; valueColor?: string }[] = []

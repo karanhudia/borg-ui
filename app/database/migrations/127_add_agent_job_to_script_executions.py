@@ -23,9 +23,7 @@ def _has_table(connection, table):
 def _add_column_if_missing(connection, table, column, ddl_type):
     names = {row[1] for row in _columns(connection, table)}
     if column not in names:
-        connection.execute(
-            text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl_type}")
-        )
+        connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl_type}"))
 
 
 def upgrade(connection):
