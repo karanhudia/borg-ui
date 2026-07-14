@@ -2192,6 +2192,55 @@ class TestOidcAuthentication:
             == "backend.errors.auth.invalidAuthentication"
         )
 
+    def test_oidc_exchange_rejects_malformed_origin_header(
+        self, test_client: TestClient, test_db
+    ):
+        test_db.add(
+            SystemSettings(
+                oidc_enabled=True,
+                oidc_discovery_url="https://id.example.com/.well-known/openid-configuration",
+                oidc_client_id="borg-ui",
+                oidc_client_secret_encrypted=encrypt_secret("secret-value"),
+            )
+        )
+        test_db.commit()
+
+        create_test_oidc_exchange_grant(test_db)
+        test_client.cookies.set("oidc_exchange_grant", "grant-123")
+
+        response = test_client.post(
+            "/api/auth/oidc/exchange", headers={"Origin": "http://]"}
+        )
+
+        assert response.status_code == 403
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.auth.invalidAuthentication"
+        )
+
+    def test_oidc_same_origin_rejects_non_ascii_origin_without_type_error(self):
+        from starlette.requests import Request
+
+        from app.api.auth import _is_same_origin_request
+
+        unicode_origin = "https://\N{LATIN SMALL LETTER N WITH TILDE}.com".encode()
+        request = Request(
+            {
+                "type": "http",
+                "method": "POST",
+                "scheme": "http",
+                "server": ("testserver", 80),
+                "client": ("testclient", 50000),
+                "path": "/api/auth/oidc/exchange",
+                "headers": [
+                    (b"host", b"testserver"),
+                    (b"origin", unicode_origin),
+                ],
+            }
+        )
+
+        assert _is_same_origin_request(request) is False
+
     def test_oidc_exchange_requires_same_origin_request(
         self, test_client: TestClient, test_db
     ):

@@ -644,7 +644,10 @@ def _link_oidc_identity_to_user(
 
 
 def _origin_from_url(value: str) -> Optional[str]:
-    parsed = urlparse(value.strip())
+    try:
+        parsed = urlparse(value.strip())
+    except ValueError:
+        return None
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         return None
     return f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
@@ -668,8 +671,9 @@ def _is_same_origin_request(request: Request) -> bool:
     if received_origin is None:
         return False
 
+    received_origin_bytes = received_origin.encode("utf-8")
     return any(
-        hmac.compare_digest(received_origin, expected_origin)
+        hmac.compare_digest(received_origin_bytes, expected_origin.encode("utf-8"))
         for expected_origin in _same_origin_candidates(request)
     )
 
