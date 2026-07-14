@@ -179,7 +179,8 @@ class MountService:
     def _cleanup_orphaned_temp_dirs(self):
         """
         Clean up orphaned SSHFS temp directories from crashed processes.
-        Only removes directories that aren't being tracked by active mounts.
+        Only removes directories that aren't being tracked by active mounts or
+        visible in the kernel mount table.
         """
         try:
             import glob
@@ -204,10 +205,47 @@ class MountService:
                 if mount_info.temp_root:
                     tracked_temp_roots.add(mount_info.temp_root)
 
+            active_mount_points = self._get_active_mount_points()
+            stable_cache_parent = Path(settings.data_dir) / "sshfs-cache"
+
+            def is_stable_cache_root(temp_dir: str) -> bool:
+                temp_path = Path(temp_dir)
+                return (
+                    temp_path.parent == stable_cache_parent
+                    and temp_path.name.startswith("repository-")
+                )
+
+            def has_active_mount_inside(temp_dir: str) -> bool:
+                if active_mount_points is None:
+                    return False
+                temp_path = Path(temp_dir).resolve()
+                for mount_point in active_mount_points:
+                    try:
+                        mount_path = Path(mount_point).resolve()
+                    except OSError:
+                        mount_path = Path(mount_point)
+                    if mount_path == temp_path or mount_path.is_relative_to(temp_path):
+                        return True
+                return False
+
             # Remove orphaned directories
             orphaned_count = 0
             for temp_dir in temp_dirs:
                 if temp_dir not in tracked_temp_roots:
+                    if is_stable_cache_root(temp_dir) and active_mount_points is None:
+                        logger.debug(
+                            "Skipping stable SSHFS cache root cleanup without mount table",
+                            temp_dir=temp_dir,
+                        )
+                        continue
+                    if is_stable_cache_root(temp_dir) and has_active_mount_inside(
+                        temp_dir
+                    ):
+                        logger.debug(
+                            "Skipping mounted stable SSHFS cache root cleanup",
+                            temp_dir=temp_dir,
+                        )
+                        continue
                     try:
                         # Check if directory is empty or can be safely removed
                         shutil.rmtree(temp_dir, ignore_errors=True)

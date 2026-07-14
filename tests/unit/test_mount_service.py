@@ -181,6 +181,31 @@ class TestMountService:
         assert not orphaned_root.exists()
         assert tracked_root.exists()
 
+    def test_cleanup_orphaned_temp_dirs_preserves_mounted_stable_sshfs_cache_root(
+        self, mount_service
+    ):
+        data_dir = mount_service.mount_base_dir.parent
+        mounted_root = data_dir / "sshfs-cache" / "repository-9"
+        mounted_path = mounted_root / "srv" / "data"
+        mounted_path.mkdir(parents=True)
+
+        def glob_side_effect(pattern):
+            if pattern == "/tmp/sshfs_mount_*":
+                return []
+            return [str(mounted_root)]
+
+        with (
+            patch("glob.glob", side_effect=glob_side_effect),
+            patch.object(
+                mount_service,
+                "_get_active_mount_points",
+                return_value={str(mounted_path)},
+            ),
+        ):
+            mount_service._cleanup_orphaned_temp_dirs()
+
+        assert mounted_root.exists()
+
     def test_list_mounts(self, mount_service):
         """Test listing active mounts"""
         # Initially empty

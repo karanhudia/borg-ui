@@ -1738,6 +1738,7 @@ class BackupService:
             close_db = True
         temp_key_file = None  # Track SSH key file for cleanup
         borg_command_lock = None
+        sshfs_cache_lock = None
 
         try:
             # Get job
@@ -2239,6 +2240,25 @@ class BackupService:
             self._validate_local_source_paths_exist(
                 source_paths_for_existence_check, skip_paths=snapshot_source_paths
             )
+
+            if repo_record and repo_record.id:
+                sshfs_cache_lock = await acquire_repository_command_lock(
+                    repo_record.id,
+                    scope="sshfs-cache",
+                )
+                logger.info(
+                    "Acquired repository SSHFS cache lock for backup",
+                    job_id=job_id,
+                    repository_id=repo_record.id,
+                )
+                db.refresh(job)
+                if job.status == "cancelled":
+                    logger.info(
+                        "Backup cancelled while waiting for repository SSHFS cache lock",
+                        job_id=job_id,
+                        repository_id=repo_record.id,
+                    )
+                    return
 
             # Calculate total expected size of source directories in background
             # This runs asynchronously without blocking backup start
@@ -3528,6 +3548,17 @@ class BackupService:
                 logger.error(
                     "Failed to cleanup SSH mounts", job_id=job_id, error=str(e)
                 )
+
+            if sshfs_cache_lock is not None:
+                try:
+                    sshfs_cache_lock.release()
+                    logger.info(
+                        "Released repository SSHFS cache lock after backup cleanup",
+                        job_id=job_id,
+                    )
+                except RuntimeError:
+                    pass
+                sshfs_cache_lock = None
 
             # Clean up temporary SSH key file if it exists
             try:
