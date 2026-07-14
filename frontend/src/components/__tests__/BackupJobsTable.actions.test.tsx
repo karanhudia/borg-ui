@@ -14,13 +14,14 @@ const { cancelJobMock, deleteJobMock } = vi.hoisted(() => ({
   cancelJobMock: vi.fn(),
   deleteJobMock: vi.fn(),
 }))
-const borgDownloadFileMock = vi.fn()
+const { downloadArchiveFileMock } = vi.hoisted(() => ({ downloadArchiveFileMock: vi.fn() }))
 
 vi.mock('react-hot-toast', async () => {
   const actual = await vi.importActual<typeof import('react-hot-toast')>('react-hot-toast')
   return {
     ...actual,
     toast: {
+      loading: vi.fn(() => 'toast-id'),
       success: toastSuccess,
       error: toastError,
     },
@@ -163,12 +164,8 @@ vi.mock('../../services/api', () => ({
   },
 }))
 
-vi.mock('../../services/borgApi', () => ({
-  BorgApiClient: vi.fn(function MockBorgApiClient() {
-    return {
-      downloadFile: borgDownloadFileMock,
-    }
-  }),
+vi.mock('../../utils/downloadArchiveFile', () => ({
+  downloadArchiveFile: downloadArchiveFileMock,
 }))
 
 vi.mock('../../utils/downloadUrl', () => ({
@@ -242,7 +239,7 @@ describe('BackupJobsTable action internals', () => {
     clickSpy.mockRestore()
   })
 
-  it('downloads archive files from the finished backup archive modal through BorgApiClient', async () => {
+  it('downloads archive files from the finished backup archive modal', async () => {
     const user = userEvent.setup()
 
     renderWithProviders(
@@ -265,7 +262,10 @@ describe('BackupJobsTable action internals', () => {
     await user.click(await screen.findByRole('button', { name: /view archive/i }))
     await user.click(await screen.findByRole('button', { name: /download file/i }))
 
-    expect(borgDownloadFileMock).toHaveBeenCalledWith('archive-77', '/srv/notes.txt')
+    await waitFor(() => expect(downloadArchiveFileMock).toHaveBeenCalled())
+    const downloadCall = downloadArchiveFileMock.mock.calls[0]
+    expect(downloadCall[1]).toBe('archive-77')
+    expect(downloadCall[2]).toBe('/srv/notes.txt')
   })
 
   it('confirms and calls retry for failed manual backup jobs', async () => {

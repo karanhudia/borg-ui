@@ -498,9 +498,15 @@
     "banner": {
       "systemStatus": "Estado del sistema",
       "allNominal": "Todos los sistemas nominales",
-      "warnings": "{{count}} advertencia{{s}}",
-      "critical": "{{count}} crítico{{s}}",
+      "warnings": "{{count}} advertencia",
+      "warnings_one": "{{count}} advertencia",
+      "warnings_other": "{{count}} advertencias",
+      "critical": "{{count}} crítico",
+      "critical_one": "{{count}} crítico",
+      "critical_other": "{{count}} críticos",
       "warnChip": "{{count}} adv.",
+      "warnChip_one": "{{count}} adv.",
+      "warnChip_other": "{{count}} adv.",
       "okChip": "{{count}} ok",
       "stats": {
         "lastBackup": "Último backup",
@@ -742,6 +748,8 @@
       "meta": {
         "note": "Note",
         "prune": "Prune",
+        "keepWithin": "dentro de {{interval}}",
+        "keepWithinTooltip": "dentro={{interval}}",
         "lastPruned": "Last Pruned",
         "compact": "Compact",
         "lastCompact": "Last Compact",
@@ -1291,6 +1299,7 @@
         "prune": "Prune",
         "retention": "Retención",
         "retentionValue": "H {{hourly}} / D {{daily}} / S {{weekly}} / M {{monthly}} / T {{quarterly}} / A {{yearly}}",
+        "retentionValueWithWithin": "Dentro de {{within}} / H {{hourly}} / D {{daily}} / S {{weekly}} / M {{monthly}} / T {{quarterly}} / A {{yearly}}",
         "compact": "Compact",
         "check": "Check",
         "checkExtraFlags": "Flags de check",
@@ -1504,6 +1513,9 @@
   "activity": {
     "title": "Actividad",
     "subtitle": "Ver todas las operaciones y sus registros",
+    "actions": {
+      "refresh": "Actualizar actividad"
+    },
     "filters": {
       "type": "Tipo",
       "status": "Estado",
@@ -1523,6 +1535,7 @@
       },
       "statuses": {
         "completed": "Completado",
+        "completedWithWarnings": "Completado con advertencias",
         "needsBackup": "Necesita copia",
         "failed": "Fallido",
         "running": "En ejecución",
@@ -2463,6 +2476,10 @@
       "dryRunTip": "Consejo: ¡Ejecuta siempre el \"Simulacro\" primero para ver qué se eliminará!",
       "retentionPolicy": "Política de retención",
       "retentionDescription": "Especifica cuántas copias conservar para cada período de tiempo",
+      "keepWithin": "Mantener dentro de",
+      "keepWithinHelper": "Conserva todos los archivos creados dentro de este intervalo reciente",
+      "keepWithinPlaceholder": "1d",
+      "keepWithinSummary": "todos los archivos dentro de {{interval}}",
       "keepHourly": "Mantener por hora",
       "keepHourlyHelper": "Últimas N copias horarias (0 = deshabilitado)",
       "keepDaily": "Mantener por día",
@@ -3269,7 +3286,10 @@
     "keepQuarterly": "Mantener por trimestre",
     "keepQuarterlyHint": "Copias de seguridad trimestrales a mantener (0 = deshabilitado)",
     "keepYearly": "Mantener por año",
-    "keepYearlyHint": "Copias de seguridad anuales a mantener"
+    "keepYearlyHint": "Copias de seguridad anuales a mantener",
+    "keepWithin": "Mantener dentro de",
+    "keepWithinHint": "Conserva todos los archivos dentro de este intervalo reciente, por ejemplo 1d o 12H",
+    "keepWithinPlaceholder": "1d"
   },
   "compressionSettings": {
     "title": "Configuración de compresión",
@@ -3829,7 +3849,8 @@
       "clearAll": "Borrar todo",
       "selectDirTooltip": "Seleccionar directorio y todo su contenido",
       "helpText": "Haz clic en los archivos para seleccionarlos, o en las carpetas para navegar. Usa la casilla junto a las carpetas para seleccionar directorios completos.",
-      "failedToLoadContents": "Error al cargar el contenido del archivo"
+      "failedToLoadContents": "Error al cargar el contenido del archivo",
+      "loadContentsTimeout": "Aún cargando — este archivo está tardando más de lo esperado. Inténtalo de nuevo en un momento."
     },
     "restorePath": {
       "title": "Elegir ubicación de restauración",
@@ -3998,6 +4019,7 @@
         "pruneAfterBackup": "Poda tras la copia de seguridad",
         "enabled": "Habilitado",
         "disabled": "Deshabilitado",
+        "keepWithin": "dentro de {{interval}}",
         "compactAfterPrune": "Compactación tras la poda",
         "none": "Ninguno"
       },
@@ -4069,6 +4091,7 @@
   "archiveContents": {
     "title": "Contenido del archivo",
     "loading": "Cargando contenido del archivo...",
+    "slowLoadingHint": "Este archivo es grande, por lo que listar sus ficheros tarda un poco más. Un momento — esto solo ocurre la primera vez; después queda en caché.",
     "emptyDirectory": "Este directorio está vacío",
     "emptyArchive": "Este archivo está vacío",
     "emptyArchiveDesc": "No se respaldaron archivos en este archivo. Esto puede ocurrir si el directorio de origen estaba vacío o inaccesible durante la copia de seguridad.",
@@ -4078,7 +4101,12 @@
     "managedCanaryLabel": "Canario de Borg UI",
     "managedCanaryDescription": "Archivos canarios administrados para comprobaciones de restauración. Borg UI los añade a las copias mientras el modo canario está activado.",
     "managedCanaryBanner": "Esta carpeta la administra Borg UI para comprobaciones canarias de restauración. Es seguro dejarla intacta.",
-    "managedCanaryProbeDisabled": "Las rutas canarias se verifican automáticamente mediante el modo canario."
+    "managedCanaryProbeDisabled": "Las rutas canarias se verifican automáticamente mediante el modo canario.",
+    "failedToDownloadFile": "No se pudo descargar el archivo",
+    "downloadPreparing": "Preparando la descarga de {{name}}…",
+    "downloadingBytes": "Descargando… {{size}}",
+    "downloadingPercent": "Descargando… {{percent}} % ({{size}})",
+    "downloadComplete": "{{name}} descargado"
   },
   "codeEditor": {
     "loading": "Cargando editor..."
@@ -4255,6 +4283,7 @@
     "none": "Ninguno"
   },
   "repositoryWizard": {
+    "agentRepoUnknownWarning": "Este agente administrado no parece conocer su propio repositorio Borg. Si introduces aquí una URL ssh:// o sftp://, asegúrate de que este agente administrado pueda acceder realmente a ese repositorio.",
     "titleCreate": "Crear repositorio",
     "titleEdit": "Editar repositorio",
     "titleImport": "Importar repositorio",
@@ -4647,6 +4676,7 @@
         "permissionDeniedCreateDirectory": "Permiso denegado: no se puede crear el directorio en '{{path}}'. Para almacenar repositorios en su máquina anfitriona, use rutas que comiencen con '/local/'.",
         "permissionDeniedCreateParentDirectory": "Permiso denegado: no se puede crear el directorio padre '{{path}}'. Asegúrese de que el directorio exista en su máquina anfitriona con los permisos correctos.",
         "encryptedPassphraseRequired": "Se requiere contraseña para el modo de cifrado '{{mode}}'",
+        "agentPassphraseUnavailable": "Este agente administrado no proporcionó una BORG_PASSPHRASE, por lo que no puede abrir un repositorio cifrado. Define BORG_PASSPHRASE en el entorno del agente o introduce aquí una contraseña.",
         "encryptedPassphraseIncorrect": "El repositorio está cifrado pero la contraseña es incorrecta o falta. Proporcione la contraseña correcta.",
         "encryptionKeyfileNotRequired": "El repositorio usa cifrado '{{mode}}', que no requiere un archivo de clave. La carga del archivo de clave solo es necesaria para los modos de cifrado 'keyfile' o 'keyfile-blake2'.",
         "adminAccessRequired": "Se requiere acceso de administrador",
@@ -5016,6 +5046,9 @@
         "invalidAuthCredentials": "Credenciales de autenticación inválidas",
         "userNotFoundOrInactive": "Usuario no encontrado o inactivo",
         "failedStartEventStream": "Error al iniciar el flujo de eventos"
+      },
+      "jobs": {
+        "repositoryOperationActive": "Ya se está ejecutando otra operación en este repositorio. Espera a que finalice e inténtalo de nuevo."
       }
     },
     "success": {

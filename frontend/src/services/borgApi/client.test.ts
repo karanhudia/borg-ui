@@ -51,19 +51,18 @@ describe('BorgApiClient', () => {
     mock.restore()
   })
 
-  it('downloads files in the same tab', async () => {
-    const assignMock = vi.fn()
-    vi.spyOn(window.location, 'assign').mockImplementation(assignMock)
+  it('fetches archive files as a blob for the current backend', async () => {
     const clientModule = await import('./client')
+    const getMock = vi.spyOn(clientModule.httpClient, 'get').mockResolvedValue({} as never)
     const { BorgApiClient } = clientModule
     const client = new BorgApiClient({ id: 9, borg_version: 2 } as never)
 
-    client.downloadFile('archive-2', '/srv/data.txt')
+    client.fetchArchiveFile('archive-2', '/srv/data.txt')
 
-    expect(assignMock).toHaveBeenCalledWith(expect.stringContaining('/api/v2/archives/download?'))
-    expect(assignMock).toHaveBeenCalledWith(expect.stringContaining('repository=9'))
-    expect(assignMock).toHaveBeenCalledWith(expect.stringContaining('archive=archive-2'))
-    expect(assignMock).toHaveBeenCalledWith(expect.stringContaining('file_path=%2Fsrv%2Fdata.txt'))
+    expect(getMock).toHaveBeenCalledWith('/v2/archives/download', {
+      params: { repository: 9, archive: 'archive-2', file_path: '/srv/data.txt' },
+      responseType: 'blob',
+    })
   })
 
   it('uses v1 routes for non-v2 repositories', async () => {
@@ -81,10 +80,10 @@ describe('BorgApiClient', () => {
     client.deleteArchive('archive-1')
     client.getDeleteJobStatus(12)
     client.runBackup({ archive_name: 'nightly' })
-    client.pruneArchives({ keep_daily: 7 })
+    client.pruneArchives({ keep_daily: 7, keep_within: '1d' })
     client.compact()
     client.checkRepository(30)
-    const downloadUrl = client.getDownloadUrl('archive-1', '/etc/hosts')
+    client.fetchArchiveFile('archive-1', '/etc/hosts')
 
     expect(getMock).toHaveBeenCalledWith('/repositories/7/info')
     expect(getMock).toHaveBeenCalledWith('/repositories/7/archives')
@@ -102,13 +101,49 @@ describe('BorgApiClient', () => {
       repository: '/repo-v1',
       archive_name: 'nightly',
     })
-    expect(postMock).toHaveBeenCalledWith('/repositories/7/prune', { keep_daily: 7 })
+    expect(postMock).toHaveBeenCalledWith('/repositories/7/prune', {
+      keep_daily: 7,
+      keep_within: '1d',
+    })
     expect(postMock).toHaveBeenCalledWith('/repositories/7/compact')
     expect(postMock).toHaveBeenCalledWith('/repositories/7/check', { max_duration: 30 })
-    expect(downloadUrl).toContain('/api/archives/download?')
-    expect(downloadUrl).toContain('repository=7')
-    expect(downloadUrl).toContain('archive=archive-1')
-    expect(downloadUrl).toContain('file_path=%2Fetc%2Fhosts')
+    expect(getMock).toHaveBeenCalledWith('/archives/download', {
+      params: { repository: 7, archive: 'archive-1', file_path: '/etc/hosts' },
+      responseType: 'blob',
+    })
+  })
+
+  it('addresses a Borg 2 archive by aid: on the v1 (agent) browse route', async () => {
+    const clientModule = await import('./client')
+    const getMock = vi.spyOn(clientModule.httpClient, 'get').mockResolvedValue({} as never)
+    const { BorgApiClient } = clientModule
+    // Agent repos route to v1 (this.v === ''), but a Borg 2 series name is
+    // ambiguous, so the specific archive must be selected by id via aid:.
+    const client = new BorgApiClient({
+      id: 8,
+      borg_version: 2,
+      execution_target: 'agent',
+      path: '/repo',
+    } as never)
+
+    client.getArchiveContents('deadbeef', 'm3s01', '/etc')
+
+    expect(getMock).toHaveBeenCalledWith(`/browse/8/${encodeURIComponent('aid:deadbeef')}`, {
+      params: { path: '/etc' },
+    })
+  })
+
+  it('passes the browse poll job id on v1 archive-contents requests', async () => {
+    const clientModule = await import('./client')
+    const getMock = vi.spyOn(clientModule.httpClient, 'get').mockResolvedValue({} as never)
+    const { BorgApiClient } = clientModule
+    const client = new BorgApiClient({ id: 7, borg_version: 1, path: '/repo-v1' } as never)
+
+    client.getArchiveContents('archive-id', 'archive-name', '/etc', 42)
+
+    expect(getMock).toHaveBeenCalledWith('/browse/7/archive-name', {
+      params: { path: '/etc', job_id: 42 },
+    })
   })
 
   it('uses v2 routes for Borg 2 repositories', async () => {
@@ -120,10 +155,10 @@ describe('BorgApiClient', () => {
 
     client.runBackup({ archive_name: 'manual-v2' })
     client.getArchiveContents('archive-id', 'ignored-name', '/srv')
-    client.pruneArchives({ keep_weekly: 4 })
+    client.pruneArchives({ keep_weekly: 4, keep_within: '1d' })
     client.compact()
     client.checkRepository()
-    const downloadUrl = client.getDownloadUrl('archive-2', '/srv/data.txt')
+    client.fetchArchiveFile('archive-2', '/srv/data.txt')
 
     expect(postMock).toHaveBeenCalledWith('/v2/backup/run', {
       repository_id: 9,
@@ -135,15 +170,16 @@ describe('BorgApiClient', () => {
     expect(postMock).toHaveBeenCalledWith('/v2/backup/prune', {
       repository_id: 9,
       keep_weekly: 4,
+      keep_within: '1d',
     })
     expect(postMock).toHaveBeenCalledWith('/v2/backup/compact', { repository_id: 9 })
     expect(postMock).toHaveBeenCalledWith('/v2/backup/check', {
       repository_id: 9,
     })
-    expect(downloadUrl).toContain('/api/v2/archives/download?')
-    expect(downloadUrl).toContain('repository=9')
-    expect(downloadUrl).toContain('archive=archive-2')
-    expect(downloadUrl).toContain('file_path=%2Fsrv%2Fdata.txt')
+    expect(getMock).toHaveBeenCalledWith('/v2/archives/download', {
+      params: { repository: 9, archive: 'archive-2', file_path: '/srv/data.txt' },
+      responseType: 'blob',
+    })
   })
 
   it('passes max_duration to Borg 2 check routes', async () => {

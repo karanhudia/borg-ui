@@ -9,6 +9,11 @@ from agent.borg_ui_agent.config import AgentConfig
 
 AGENT_AUTH_HEADER = "X-Borg-Agent-Authorization"
 
+# Bound the wait for the server's response to an artifact upload. The server-side
+# relay abandons a stalled stream after ~60s, so a hung server/proxy that neither
+# reads nor closes should not pin this worker thread indefinitely.
+ARTIFACT_UPLOAD_READ_TIMEOUT_SECONDS = 120
+
 
 class AgentClientError(RuntimeError):
     pass
@@ -153,6 +158,36 @@ class AgentClient:
 
     def cancel_job(self, job_id: int) -> dict[str, Any]:
         return self._request("POST", f"/api/agents/jobs/{job_id}/cancel", json={})
+
+    def upload_artifact(self, job_id: int, data: Any) -> dict[str, Any]:
+        """Stream a job artifact (e.g. an extracted file) to the server.
+
+        `data` is any object requests can stream — a file-like object or a
+        bytes iterator — so the file is never buffered whole in memory. The
+        server relays it straight to the waiting download client.
+        """
+        if not self.agent_token:
+            raise AgentClientError("Agent token is required for this request")
+        headers = {
+            AGENT_AUTH_HEADER: f"Bearer {self.agent_token}",
+            "Content-Type": "application/octet-stream",
+        }
+        try:
+            response = self.session.post(
+                f"{self.server_url}/api/agents/jobs/{job_id}/artifact",
+                headers=headers,
+                data=data,
+                timeout=(self.timeout_seconds, ARTIFACT_UPLOAD_READ_TIMEOUT_SECONDS),
+            )
+        except requests.RequestException as exc:
+            raise AgentClientError(f"artifact upload failed: {exc}") from exc
+        if response.status_code >= 400:
+            raise AgentClientError(
+                f"artifact upload failed with HTTP {response.status_code}: {response.text}"
+            )
+        if not response.content:
+            return {}
+        return response.json()
 
     def _request(
         self,

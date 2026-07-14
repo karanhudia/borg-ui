@@ -175,6 +175,30 @@ Then use `/documents`, `/photos`, and `/backups` in the UI.
 
 For remote sources, choose a Remote Machine in the Backup Plan and select paths from that machine.
 
+### Filesystem snapshot sources
+
+Borg UI can create Btrfs or ZFS snapshots for local Backup Plan source paths.
+The snapshot command runs inside the Borg UI runtime before Borg starts; it does
+not run on Remote Machines or managed agents.
+
+For Btrfs, the `btrfs` command must be available inside the Borg UI runtime. If
+the Host requirements area says `btrfs not found`, check the Borg UI container
+or host runtime, not only the NAS shell. Custom images should include
+`btrfs-progs`.
+
+For Synology DSM 7, treat Btrfs snapshot mode as a runtime-level operation:
+
+- Mount or select the shared-folder Btrfs subvolume at the same path Borg UI can
+  see.
+- Verify the selected path from inside the Borg UI runtime with
+  `btrfs subvolume show /path/to/source`.
+- Verify the runtime user can create and remove a read-only snapshot with
+  `btrfs subvolume snapshot -r /path/to/source /path/to/staging/test` and
+  `btrfs subvolume delete /path/to/staging/test`.
+- DSM shared-folder ACLs are not enough for these commands. Use a Borg UI
+  runtime account or narrowly scoped sudo rule that can run the Btrfs subvolume
+  snapshot and delete commands.
+
 For database sources, open the Database tab in the source chooser, scan the Borg
 UI server or a Remote Machine, select the detected database or a template, then
 choose Add database. This queues the database in the Database tab; choose Use

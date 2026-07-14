@@ -554,8 +554,9 @@ def _filesystem_snapshot_provider_capabilities() -> list[
             command="btrfs",
             available=which("btrfs") is not None,
             requirements=[
-                "The selected path must be a btrfs subvolume visible to the Borg UI server.",
-                "The Borg UI runtime user needs permission to create and delete read-only subvolume snapshots.",
+                "The btrfs command must be installed and discoverable inside the Borg UI runtime/container.",
+                "The selected path must be a btrfs subvolume visible at the same path inside the Borg UI runtime.",
+                "The Borg UI runtime user needs permission to run btrfs subvolume snapshot -r and btrfs subvolume delete.",
             ],
         ),
         FilesystemSnapshotProviderCapability(

@@ -270,7 +270,14 @@ class BorgRouter:
         return ["borg", "umount", mount_point]
 
     async def break_lock(self, env: dict = None) -> dict:
-        """Break a repository lock via the version-appropriate implementation."""
+        """Break a repository lock via the version-appropriate implementation.
+
+        agent: delegates to the managed agent (repository.break_lock); the node
+        holds the credentials and reaches the repo. ``env`` is server-side only
+        and ignored on the agent path.
+        """
+        if self._is_agent():
+            return await self._run_agent_break_lock()
         if self.is_v2:
             from app.core.borg2 import borg2
 
@@ -427,12 +434,139 @@ class BorgRouter:
         cache = info_data.get("cache", {}).get("stats", {})
         return cache.get("unique_csize", 0) or 0
 
+    def _is_agent(self) -> bool:
+        """Whether this repository is executed by a managed agent.
+
+        Agent-executed repos must never run borg on the server: the server
+        typically cannot even reach the repo (no credentials/backend), and it
+        would defeat the managed-agent model. BorgRouter is the single choke
+        point for this decision, so callers do not each need their own gate.
+        """
+        from app.services.repository_executor import is_agent_executor
+
+        return is_agent_executor(self.repo)
+
+    async def _run_agent_maintenance(
+        self,
+        *,
+        job_kind: str,
+        maintenance_kind: str,
+        maintenance_job_id: int,
+        operation: Optional[dict] = None,
+    ) -> None:
+        """Delegate a maintenance op to the managed agent and wait for it.
+
+        Mirrors the agent branch of the v1 maintenance endpoints, but runs
+        synchronously so callers that expect BorgRouter to run to completion
+        (schedulers, post-backup maintenance) still observe a finished job.
+        The agent updates the linked maintenance job (``maintenance_job_id``)
+        when it reports completion, so the caller can refresh + read its status
+        exactly as with the server-side path.
+        """
+        from fastapi import HTTPException
+
+        from app.config import settings
+        from app.database.database import SessionLocal
+        from app.database.models import Repository, SystemSettings
+        from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
+        from app.services.repository_executor import (
+            queue_agent_repository_operation_job,
+            wait_for_agent_repository_operation_job,
+        )
+
+        db = SessionLocal()
+        try:
+            repository = db.query(Repository).get(self.repo.id)
+            if repository is None:
+                raise ValueError(f"Repository {self.repo.id} not found")
+            # Maintenance can run for many minutes; wait with the backup-scale
+            # timeout, not the 15s default (which would 504 mid-op while the
+            # agent keeps running and later marks the job completed).
+            system_settings = db.query(SystemSettings).first()
+            timeout_seconds = (
+                system_settings.backup_timeout
+                if system_settings and system_settings.backup_timeout
+                else settings.backup_timeout
+            )
+            agent_job = queue_agent_repository_operation_job(
+                db,
+                repository,
+                job_kind=job_kind,
+                operation=operation,
+                maintenance_job_kind=maintenance_kind,
+                maintenance_job_id=maintenance_job_id,
+            )
+            await dispatch_agent_job_best_effort(
+                db, agent_job, repository_id=repository.id
+            )
+            await wait_for_agent_repository_operation_job(
+                db, agent_job.id, timeout_seconds=timeout_seconds
+            )
+        except HTTPException as exc:
+            # queue_/wait_for_ raise HTTPException, but this runs in scheduler and
+            # post-backup flows that have no HTTP context. Translate to a plain
+            # error so background maintenance doesn't surface an HTTP-specific
+            # exception; the linked maintenance job already records the detail.
+            detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
+            raise RuntimeError(f"agent {maintenance_kind} failed: {detail}") from exc
+        finally:
+            db.close()
+
+    async def _run_agent_break_lock(self) -> dict:
+        """Break the repository lock on the managed agent and wait for it.
+
+        Unlike the maintenance ops, break-lock has no linked *_jobs record and
+        returns a result dict synchronously, so it does not go through
+        ``_run_agent_maintenance``. ``wait_for_...`` raises on a failed agent
+        job, so reaching the return means success.
+        """
+        from app.config import settings
+        from app.database.database import SessionLocal
+        from app.database.models import Repository, SystemSettings
+        from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
+        from app.services.repository_executor import (
+            queue_agent_repository_operation_job,
+            wait_for_agent_repository_operation_job,
+        )
+
+        db = SessionLocal()
+        try:
+            repository = db.query(Repository).get(self.repo.id)
+            if repository is None:
+                raise ValueError(f"Repository {self.repo.id} not found")
+            system_settings = db.query(SystemSettings).first()
+            timeout_seconds = (
+                system_settings.backup_timeout
+                if system_settings and system_settings.backup_timeout
+                else settings.backup_timeout
+            )
+            agent_job = queue_agent_repository_operation_job(
+                db, repository, job_kind="repository.break_lock"
+            )
+            await dispatch_agent_job_best_effort(
+                db, agent_job, repository_id=repository.id
+            )
+            await wait_for_agent_repository_operation_job(
+                db, agent_job.id, timeout_seconds=timeout_seconds
+            )
+            return {"success": True}
+        finally:
+            db.close()
+
     async def check(self, job_id: int) -> None:
         """Run a repository integrity check.
 
+        agent: delegates to the managed agent (repository.check).
         v2: delegates to the Borg 2 check service.
         v1: delegates to the existing check service.
         """
+        if self._is_agent():
+            await self._run_agent_maintenance(
+                job_kind="repository.check",
+                maintenance_kind="check",
+                maintenance_job_id=job_id,
+            )
+            return
         if self.is_v2:
             from app.services.v2.check_service import check_v2_service
 
@@ -444,6 +578,13 @@ class BorgRouter:
 
     async def compact(self, job_id: int) -> None:
         """Run repository compaction through the version-aware service layer."""
+        if self._is_agent():
+            await self._run_agent_maintenance(
+                job_kind="repository.compact",
+                maintenance_kind="compact",
+                maintenance_job_id=job_id,
+            )
+            return
         if self.is_v2:
             from app.services.v2.compact_service import compact_v2_service
 
@@ -463,39 +604,66 @@ class BorgRouter:
         keep_quarterly: int,
         keep_yearly: int,
         dry_run: bool = False,
+        keep_within: str | None = None,
     ) -> None:
         """Run repository pruning through the version-aware service layer."""
+        if self._is_agent():
+            await self._run_agent_maintenance(
+                job_kind="repository.prune",
+                maintenance_kind="prune",
+                maintenance_job_id=job_id,
+                operation={
+                    "keep_hourly": keep_hourly,
+                    "keep_daily": keep_daily,
+                    "keep_weekly": keep_weekly,
+                    "keep_monthly": keep_monthly,
+                    "keep_quarterly": keep_quarterly,
+                    "keep_yearly": keep_yearly,
+                    "keep_within": keep_within,
+                    "dry_run": dry_run,
+                },
+            )
+            return
+
+        kwargs = {
+            "job_id": job_id,
+            "repository_id": self.repo.id,
+            "keep_hourly": keep_hourly,
+            "keep_daily": keep_daily,
+            "keep_weekly": keep_weekly,
+            "keep_monthly": keep_monthly,
+            "keep_quarterly": keep_quarterly,
+            "keep_yearly": keep_yearly,
+            "dry_run": dry_run,
+        }
+        if keep_within is not None:
+            kwargs["keep_within"] = keep_within
+
         if self.is_v2:
             from app.services.v2.prune_service import prune_v2_service
 
-            await prune_v2_service.execute_prune(
-                job_id=job_id,
-                repository_id=self.repo.id,
-                keep_hourly=keep_hourly,
-                keep_daily=keep_daily,
-                keep_weekly=keep_weekly,
-                keep_monthly=keep_monthly,
-                keep_quarterly=keep_quarterly,
-                keep_yearly=keep_yearly,
-                dry_run=dry_run,
-            )
+            await prune_v2_service.execute_prune(**kwargs)
         else:
             from app.services.prune_service import prune_service
 
-            await prune_service.execute_prune(
-                job_id=job_id,
-                repository_id=self.repo.id,
-                keep_hourly=keep_hourly,
-                keep_daily=keep_daily,
-                keep_weekly=keep_weekly,
-                keep_monthly=keep_monthly,
-                keep_quarterly=keep_quarterly,
-                keep_yearly=keep_yearly,
-                dry_run=dry_run,
-            )
+            await prune_service.execute_prune(**kwargs)
 
     async def delete_archive(self, job_id: int, archive_name: str) -> None:
-        """Delete an archive through the version-aware service layer."""
+        """Delete an archive through the version-aware service layer.
+
+        agent: delegates to the managed agent (repository.delete_archive). The
+        caller has already resolved ``archive_name`` to the exact selector
+        (``aid:<hex>`` for a Borg 2 series, a unique name for Borg 1), so the
+        agent removes only the intended archive.
+        """
+        if self._is_agent():
+            await self._run_agent_maintenance(
+                job_kind="repository.delete_archive",
+                maintenance_kind="delete_archive",
+                maintenance_job_id=job_id,
+                operation={"archive": archive_name},
+            )
+            return
         if self.is_v2:
             from app.services.v2.delete_archive_service import delete_archive_v2_service
 

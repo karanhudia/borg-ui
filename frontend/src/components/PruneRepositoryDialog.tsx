@@ -33,6 +33,7 @@ import {
 import { Repository } from '../types'
 
 interface PruneForm {
+  keep_within: string
   keep_hourly: number
   keep_daily: number
   keep_weekly: number
@@ -59,6 +60,7 @@ interface PruneRepositoryDialogProps {
 }
 
 const defaultPruneForm: PruneForm = {
+  keep_within: '',
   keep_hourly: 0,
   keep_daily: 7,
   keep_weekly: 4,
@@ -649,12 +651,18 @@ export default function PruneRepositoryDialog({
       unit: t('dialogs.prune.retentionUnits.yearly'),
     },
   ]
+  const keepWithinValue = pruneForm.keep_within.trim()
 
   const borderColor = isDark ? alpha('#fff', 0.08) : alpha('#000', 0.09)
   const retentionSummary = formatRetentionList(
-    retentionFields
-      .filter((field) => pruneForm[field.key] > 0)
-      .map((field) => `${pruneForm[field.key]} ${field.unit}`),
+    [
+      ...(keepWithinValue
+        ? [t('dialogs.prune.keepWithinSummary', { interval: keepWithinValue })]
+        : []),
+      ...retentionFields
+        .filter((field) => pruneForm[field.key] > 0)
+        .map((field) => `${pruneForm[field.key]} ${field.unit}`),
+    ],
     i18n.resolvedLanguage || i18n.language
   )
 
@@ -753,6 +761,63 @@ export default function PruneRepositoryDialog({
               mb: 0.75,
             }}
           >
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.5,
+                px: 1.75,
+                py: 0.9,
+                borderBottom: '1px solid',
+                borderColor,
+                bgcolor: isDark ? alpha('#fff', 0.015) : alpha('#000', 0.012),
+                '&:hover': {
+                  bgcolor: isDark ? alpha('#fff', 0.03) : alpha('#000', 0.025),
+                },
+                transition: 'background-color 150ms',
+              }}
+            >
+              <Box sx={{ color: 'text.disabled', display: 'flex', flexShrink: 0 }}>
+                <Clock size={14} />
+              </Box>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>
+                  {t('dialogs.prune.keepWithin')}
+                </Typography>
+                <Typography variant="caption" color="text.disabled">
+                  {t('dialogs.prune.keepWithinHelper')}
+                </Typography>
+              </Box>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  border: '1px solid',
+                  borderColor,
+                  borderRadius: 1,
+                  px: 1,
+                  py: 0.35,
+                  bgcolor: 'background.paper',
+                  width: 96,
+                }}
+              >
+                <InputBase
+                  value={pruneForm.keep_within}
+                  onChange={(e) => setPruneForm({ ...pruneForm, keep_within: e.target.value })}
+                  inputProps={{
+                    'aria-label': t('dialogs.prune.keepWithin'),
+                    style: { textAlign: 'center', padding: 0 },
+                  }}
+                  placeholder={t('dialogs.prune.keepWithinPlaceholder')}
+                  sx={{
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                    fontVariantNumeric: 'tabular-nums',
+                    flex: 1,
+                  }}
+                />
+              </Box>
+            </Box>
             {retentionFields.map((field, i) => (
               <Box
                 key={field.key}
@@ -796,7 +861,11 @@ export default function PruneRepositoryDialog({
                     onChange={(e) =>
                       setPruneForm({ ...pruneForm, [field.key]: parseInt(e.target.value) || 0 })
                     }
-                    inputProps={{ min: 0, style: { textAlign: 'center', padding: 0 } }}
+                    inputProps={{
+                      min: 0,
+                      'aria-label': field.label,
+                      style: { textAlign: 'center', padding: 0 },
+                    }}
                     sx={{
                       fontSize: '0.85rem',
                       fontWeight: 600,

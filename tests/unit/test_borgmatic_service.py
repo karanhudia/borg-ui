@@ -91,6 +91,7 @@ class TestBorgmaticExportService:
         # New flat format - retention keys at top level
         assert "keep_daily" in config
         assert config["keep_daily"] == sample_scheduled_job.prune_keep_daily
+        assert config["keep_within"] == "1d"
 
     def test_export_to_yaml(self, db_session, sample_repository):
         """Test exporting to YAML string."""
@@ -216,6 +217,7 @@ storage:
   compression: lz4
 
 retention:
+  keep_within: 1d
   keep_daily: 7
   keep_weekly: 4
 """
@@ -233,6 +235,62 @@ retention:
         assert repo is not None
         assert repo.path == "/backup/repo.borg"
         assert repo.compression == "lz4"
+        schedule = db_session.query(ScheduledJob).filter_by(repository=repo.path).one()
+        assert schedule.prune_keep_within == "1d"
+
+    def test_import_trims_keep_within_retention(self, db_session):
+        """Test importing borgmatic retention trims keep_within."""
+        yaml_content = """
+location:
+  source_directories:
+    - /home/user
+  repositories:
+    - /backup/trimmed.borg
+
+retention:
+  keep_within: " 1d "
+"""
+
+        import_service = BorgmaticImportService(db_session)
+        result = import_service.import_from_yaml(
+            yaml_content, merge_strategy="skip_duplicates", dry_run=False
+        )
+
+        assert result["success"]
+        repo = (
+            db_session.query(Repository)
+            .filter(Repository.path == "/backup/trimmed.borg")
+            .one()
+        )
+        schedule = db_session.query(ScheduledJob).filter_by(repository=repo.path).one()
+        assert schedule.prune_keep_within == "1d"
+
+    def test_import_clears_blank_keep_within_retention(self, db_session):
+        """Test importing borgmatic retention clears blank keep_within."""
+        yaml_content = """
+location:
+  source_directories:
+    - /home/user
+  repositories:
+    - /backup/blank.borg
+
+retention:
+  keep_within: "   "
+"""
+
+        import_service = BorgmaticImportService(db_session)
+        result = import_service.import_from_yaml(
+            yaml_content, merge_strategy="skip_duplicates", dry_run=False
+        )
+
+        assert result["success"]
+        repo = (
+            db_session.query(Repository)
+            .filter(Repository.path == "/backup/blank.borg")
+            .one()
+        )
+        schedule = db_session.query(ScheduledJob).filter_by(repository=repo.path).one()
+        assert schedule.prune_keep_within is None
 
     def test_import_with_hooks(self, db_session):
         """Test importing configuration with hooks."""
@@ -425,6 +483,7 @@ def sample_scheduled_job(db_session, sample_repository):
         prune_keep_weekly=4,
         prune_keep_monthly=6,
         prune_keep_yearly=1,
+        prune_keep_within="1d",
         run_prune_after=True,
         run_compact_after=False,
     )

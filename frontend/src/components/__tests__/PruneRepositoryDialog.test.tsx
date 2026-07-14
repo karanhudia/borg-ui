@@ -98,6 +98,7 @@ describe('PruneRepositoryDialog', () => {
       )
 
       expect(screen.getByText(/Keep Hourly/i)).toBeInTheDocument()
+      expect(screen.getByLabelText(/Keep Within/i)).toBeInTheDocument()
       expect(screen.getByText(/Keep Daily/i)).toBeInTheDocument()
       expect(screen.getByText(/Keep Weekly/i)).toBeInTheDocument()
       expect(screen.getByText(/Keep Monthly/i)).toBeInTheDocument()
@@ -242,12 +243,39 @@ describe('PruneRepositoryDialog', () => {
 
       expect(onDryRun).toHaveBeenCalledWith(
         expect.objectContaining({
+          keep_within: '',
           keep_hourly: 0,
           keep_daily: 7,
           keep_weekly: 4,
           keep_monthly: 6,
           keep_quarterly: 0,
           keep_yearly: 1,
+        })
+      )
+    })
+
+    it('submits keep-within when set before dry run', async () => {
+      const user = userEvent.setup()
+      const onDryRun = vi.fn()
+
+      render(
+        <PruneRepositoryDialog
+          open={true}
+          repository={mockRepository}
+          onClose={vi.fn()}
+          onDryRun={onDryRun}
+          onConfirmPrune={vi.fn()}
+          isLoading={false}
+          results={null}
+        />
+      )
+
+      await user.type(screen.getByLabelText(/Keep Within/i), '1d')
+      await user.click(screen.getByRole('button', { name: /Dry Run/i }))
+
+      expect(onDryRun).toHaveBeenCalledWith(
+        expect.objectContaining({
+          keep_within: '1d',
         })
       )
     })

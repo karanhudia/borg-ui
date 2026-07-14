@@ -31,6 +31,8 @@ const t = ((key: string, params?: Record<string, unknown>) =>
 
 const conflictState = {
   ...createInitialState(),
+  runPruneAfter: true,
+  pruneKeepWithin: '1d',
   runCheckAfter: true,
   checkMaxDuration: 3600,
   checkExtraFlags: '--archives-only',

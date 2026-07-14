@@ -68,7 +68,7 @@ jobs:
 
       - name: Checkout source
         if: ${{ steps.visual_mode.outputs.mode != 'cleanup' }}
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           path: source
           persist-credentials: false
@@ -181,7 +181,7 @@ jobs:
           fi
 
       - name: Checkout docs source
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: main
           path: docs-source

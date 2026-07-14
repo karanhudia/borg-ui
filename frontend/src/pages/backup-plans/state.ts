@@ -49,6 +49,7 @@ export const createInitialState = (): WizardState => ({
   pruneKeepMonthly: 6,
   pruneKeepQuarterly: 0,
   pruneKeepYearly: 1,
+  pruneKeepWithin: '',
   databaseTemplateId: null,
 })
 
@@ -359,6 +360,7 @@ export function planToState(plan: BackupPlan): WizardState {
     pruneKeepMonthly: plan.prune_keep_monthly ?? 6,
     pruneKeepQuarterly: plan.prune_keep_quarterly ?? 0,
     pruneKeepYearly: plan.prune_keep_yearly ?? 1,
+    pruneKeepWithin: plan.prune_keep_within || '',
     databaseTemplateId: plan.database_template_id ?? null,
   }
 }

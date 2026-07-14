@@ -68,6 +68,7 @@ class PruneV2Request(BaseModel):
     keep_monthly: int = 6
     keep_quarterly: int = 0
     keep_yearly: int = 1
+    keep_within: Optional[str] = None
     dry_run: bool = False
 
 
@@ -103,6 +104,13 @@ def _source_dirs(repo: Repository) -> list:
         return json.loads(repo.source_directories)
     except (json.JSONDecodeError, TypeError):
         return []
+
+
+def _normalize_keep_within(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
 
 
 # ── Routes ─────────────────────────────────────────────────────────────────────
@@ -178,6 +186,8 @@ async def prune_archives(
         )
 
     repo = _get_v2_repo_by_id(data.repository_id, db, current_user)
+    keep_within = _normalize_keep_within(data.keep_within)
+    prune_kwargs = {"keep_within": keep_within} if keep_within is not None else {}
     if not data.dry_run:
         prune_job = start_background_maintenance_job(
             db,
@@ -194,6 +204,7 @@ async def prune_archives(
                 data.keep_quarterly,
                 data.keep_yearly,
                 False,
+                **prune_kwargs,
             ),
             status="running",
             extra_fields={"scheduled_prune": False},
@@ -221,6 +232,7 @@ async def prune_archives(
         keep_quarterly=data.keep_quarterly,
         keep_yearly=data.keep_yearly,
         dry_run=data.dry_run,
+        **prune_kwargs,
     )
 
     if not result["success"]:

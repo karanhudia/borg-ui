@@ -1,32 +1,50 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import os
 import shlex
+import shutil
 import signal
 import subprocess
 import tempfile
+import threading
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
-from agent.borg_ui_agent.backup import _extract_environment, parse_borg_progress
+from agent.borg_ui_agent.backup import (
+    _extract_environment,
+    build_borg_env,
+    parse_borg_progress,
+)
 from agent.borg_ui_agent.client import AgentClient
 
 
 REPOSITORY_JOB_KINDS = {
     "repository.init",
     "repository.info",
+    "repository.rinfo",
+    "repository.archive_info",
     "repository.list_archives",
+    "repository.delete_archive",
+    "repository.break_lock",
     "repository.list_archive_contents",
     "repository.extract_archive_file",
+    "repository.restore",
     "repository.check",
     "repository.prune",
     "repository.compact",
     "repository.rclone_sync",
 }
+
+# Kill a streaming extract only when no bytes have flowed for this long — a
+# wedged borg, not a slow one. Idle (not an absolute cap) so a legitimately
+# large/slow download is never truncated mid-transfer.
+STREAM_EXTRACT_IDLE_SECONDS = 300
 
 
 @dataclass(frozen=True)
@@ -141,9 +159,47 @@ class RepositoryOperationPayload:
                 return [*self._base_borg2("info"), "--json"]
             return [*self._base_borg1("info"), "--json", self.repository_path]
 
+        if self.job_kind == "repository.rinfo":
+            # Repository-level metadata (repository id, encryption). borg2 has a
+            # dedicated repo-info; borg1 folds it into `info`.
+            if self.borg_version == 2:
+                return [*self._base_borg2("repo-info"), "--json"]
+            return [*self._base_borg1("info"), "--json", self.repository_path]
+
+        if self.job_kind == "repository.archive_info":
+            archive = _operation_archive(self.operation, self.job_kind)
+            if self.borg_version == 2:
+                return [*self._base_borg2("info"), "--json", archive]
+            return [
+                *self._base_borg1("info"),
+                "--json",
+                f"{self.repository_path}::{archive}",
+            ]
+
+        if self.job_kind == "repository.delete_archive":
+            # The server passes the exact selector (an `aid:<hex>` for a Borg 2
+            # series, a unique name for Borg 1), so a series delete removes only
+            # the intended archive. No extra flags: mirrors borg.delete_archive /
+            # borg2.delete_archive. Space is reclaimed by a later compact.
+            archive = _operation_archive(self.operation, self.job_kind)
+            if self.borg_version == 2:
+                return [*self._base_borg2("delete"), archive]
+            return [
+                *self._base_borg1("delete"),
+                f"{self.repository_path}::{archive}",
+            ]
+
+        if self.job_kind == "repository.break_lock":
+            # Break a stale lock on the node (mirrors borg.break_lock /
+            # borg2.break_lock). borg1 takes the repo positionally; borg2 has it
+            # in the -r base.
+            if self.borg_version == 2:
+                return [*self._base_borg2("break-lock")]
+            return [*self._base_borg1("break-lock"), self.repository_path]
+
         if self.job_kind == "repository.list_archives":
             if self.borg_version == 2:
-                return [*self._base_borg2("list"), "--json"]
+                return [*self._base_borg2("repo-list"), "--json"]
             return [*self._base_borg1("list"), "--json", self.repository_path]
 
         if self.job_kind == "repository.list_archive_contents":
@@ -179,6 +235,46 @@ class RepositoryOperationPayload:
                 file_path,
             ]
 
+        if self.job_kind == "repository.restore":
+            archive = _operation_archive(self.operation, self.job_kind)
+            operation = self.operation or {}
+            paths = _restore_paths(operation)
+            strip_components = _restore_strip_components(operation)
+            # Mirror BorgRouter.build_restore_extract_command so agent-side
+            # restores behave identically to server-side ones. Borg only emits
+            # JSON progress events when --progress is paired with --log-json, so
+            # both borg versions get --progress here. A `--` separator guards
+            # against user-supplied paths that start with "-".
+            if self.borg_version == 2:
+                cmd = [
+                    *self._base_borg2("extract"),
+                    "--progress",
+                    "--log-json",
+                    "--umask",
+                    "0022",
+                ]
+                if strip_components:
+                    cmd.extend(["--strip-components", str(strip_components)])
+                cmd.append(archive)
+                if paths:
+                    cmd.append("--")
+                    cmd.extend(paths)
+                return cmd
+            cmd = [
+                *self._base_borg1("extract"),
+                "--progress",
+                "--log-json",
+                "--umask",
+                "0022",
+            ]
+            if strip_components:
+                cmd.extend(["--strip-components", str(strip_components)])
+            cmd.append(f"{self.repository_path}::{archive}")
+            if paths:
+                cmd.append("--")
+                cmd.extend(paths)
+            return cmd
+
         if self.job_kind == "repository.check":
             extra_flags = _split_flags((self.operation or {}).get("check_extra_flags"))
             max_duration = (self.operation or {}).get("max_duration")
@@ -212,19 +308,21 @@ class RepositoryOperationPayload:
         if self.job_kind == "repository.prune":
             operation = self.operation or {}
             dry_run = bool(operation.get("dry_run", False))
+            # Borg 2 prune has no --stats (Borg 1 does). Both versions spell
+            # quarterly retention --keep-3monthly; borg 1.4 has no --keep-quarterly
+            # (mirrors the server-side borg.py / borg2.py commands).
             keep_flags = [
                 ("keep_hourly", "--keep-hourly"),
                 ("keep_daily", "--keep-daily"),
                 ("keep_weekly", "--keep-weekly"),
                 ("keep_monthly", "--keep-monthly"),
-                ("keep_quarterly", "--keep-quarterly"),
+                ("keep_quarterly", "--keep-3monthly"),
                 ("keep_yearly", "--keep-yearly"),
             ]
             if self.borg_version == 2:
                 cmd = [
                     *self._base_borg2("prune"),
                     "--progress",
-                    "--stats",
                     "--show-rc",
                     "--log-json",
                 ]
@@ -238,8 +336,14 @@ class RepositoryOperationPayload:
                 ]
             for key, flag in keep_flags:
                 value = operation.get(key)
-                if value is not None:
+                # Emit only positive retentions (matches server-side `> 0`);
+                # `--keep-* 0` (or negative) is meaningless and clutters the
+                # command.
+                if value and int(value) > 0:
                     cmd.extend([flag, str(int(value))])
+            keep_within = operation.get("keep_within")
+            if keep_within is not None and str(keep_within).strip():
+                cmd.append(f"--keep-within={str(keep_within).strip()}")
             if dry_run:
                 cmd.append("--dry-run")
             if self.borg_version == 1:
@@ -291,6 +395,28 @@ def _operation_file_path(operation: dict[str, Any] | None, job_kind: str) -> str
     if not normalized:
         raise ValueError(f"{job_kind} requires operation.file_path")
     return normalized
+
+
+def _restore_paths(operation: dict[str, Any] | None) -> list[str]:
+    paths = (operation or {}).get("paths")
+    if paths is None:
+        return []
+    if not isinstance(paths, list):
+        raise ValueError("repository.restore requires operation.paths to be a list")
+    return [path for path in paths if isinstance(path, str) and path.strip()]
+
+
+def _restore_strip_components(operation: dict[str, Any] | None) -> Optional[int]:
+    value = (operation or {}).get("strip_components")
+    if value is None:
+        return None
+    try:
+        number = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "repository.restore strip_components must be an integer"
+        ) from exc
+    return number if number > 0 else None
 
 
 def _write_temp_rclone_config(payload: RepositoryOperationPayload) -> str:
@@ -357,8 +483,7 @@ def execute_repository_operation_job(
             job_id=job_id, status="failed", message=error_message
         )
 
-    env = os.environ.copy()
-    env.update(payload.environment or {})
+    env = build_borg_env(payload.environment)
     sequence = 0
     client.send_log(
         job_id,
@@ -368,7 +493,14 @@ def execute_repository_operation_job(
     )
     sequence += 1
 
-    if payload.job_kind in {"repository.info", "repository.list_archives"}:
+    if payload.job_kind in {
+        "repository.info",
+        "repository.rinfo",
+        "repository.archive_info",
+        "repository.list_archives",
+        "repository.delete_archive",
+        "repository.break_lock",
+    }:
         try:
             return _execute_short_repository_operation(
                 job_id, payload, client, cmd, env
@@ -387,7 +519,21 @@ def execute_repository_operation_job(
     if payload.job_kind == "repository.extract_archive_file":
         try:
             return _execute_binary_output_repository_operation(
-                job_id, payload, client, cmd, env
+                job_id, payload, client, cmd, env, should_cancel=should_cancel
+            )
+        finally:
+            _remove_temp_file(rclone_config_path)
+
+    if payload.job_kind == "repository.restore":
+        try:
+            return _execute_restore_operation(
+                job_id,
+                payload,
+                client,
+                cmd,
+                env,
+                initial_sequence=sequence,
+                should_cancel=should_cancel,
             )
         finally:
             _remove_temp_file(rclone_config_path)
@@ -572,13 +718,185 @@ def _operation_max_lines(operation: dict[str, Any] | None) -> int:
     return max(1, max_lines)
 
 
+class _ActivityTrackingReader:
+    """Wrap a readable stream and record when it last yielded data.
+
+    Lets the streaming watchdog tell an actively-transferring extract (bytes
+    flowing) from a wedged one (read blocked, no data) without capping the total
+    duration, so legitimately large/slow downloads are never truncated.
+    """
+
+    def __init__(self, stream: Any):
+        self._stream = stream
+        self.last_activity = time.monotonic()
+
+    def read(self, *args: Any) -> bytes:
+        chunk = self._stream.read(*args)
+        if chunk:
+            self.last_activity = time.monotonic()
+        return chunk
+
+    def close(self) -> None:
+        self._stream.close()
+
+
+def _execute_streaming_artifact_operation(
+    job_id: int,
+    payload: RepositoryOperationPayload,
+    client: AgentClient,
+    cmd: list[str],
+    env: dict[str, str],
+    *,
+    should_cancel: Optional[Callable[[], bool]] = None,
+) -> RepositoryOperationResult:
+    """Stream `borg extract --stdout` straight to the server over HTTP.
+
+    The file content never enters the WebSocket, so it works at any size. stderr
+    is drained on a thread so a full stderr pipe can't deadlock the stdout the
+    upload is reading. A watchdog terminates borg on cancellation or if it wedges
+    past a deadline, so a hung process can't pin this worker — terminating closes
+    stdout, which unblocks the upload read below.
+    """
+    try:
+        popen_kwargs: dict[str, Any] = {
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.PIPE,
+            "env": env,
+        }
+        if os.name == "posix":
+            # Own session so the watchdog's process-group SIGTERM hits only borg.
+            popen_kwargs["start_new_session"] = True
+        process = subprocess.Popen(cmd, **popen_kwargs)
+    except OSError as exc:
+        error_message = f"Failed to start {payload.job_kind}: {exc}"
+        client.send_log(job_id, sequence=1, stream="stderr", message=error_message)
+        client.fail_job(job_id, error_message=error_message)
+        return RepositoryOperationResult(
+            job_id=job_id, status="failed", message=error_message
+        )
+
+    stderr_chunks: list[bytes] = []
+
+    def _drain_stderr() -> None:
+        if process.stderr is not None:
+            stderr_chunks.append(process.stderr.read())
+
+    stderr_thread = threading.Thread(target=_drain_stderr, daemon=True)
+    stderr_thread.start()
+
+    cancelled = threading.Event()
+    timed_out = threading.Event()
+    watchdog_done = threading.Event()
+
+    reader = _ActivityTrackingReader(process.stdout)
+
+    def _watchdog() -> None:
+        while not watchdog_done.wait(0.5):
+            if process.poll() is not None:
+                return
+            if should_cancel is not None and should_cancel():
+                cancelled.set()
+                _terminate_process(process)
+                return
+            # Idle, not absolute: only kill borg once no bytes have flowed for
+            # the timeout, so an actively-streaming large transfer is not cut off.
+            if time.monotonic() - reader.last_activity >= STREAM_EXTRACT_IDLE_SECONDS:
+                timed_out.set()
+                _terminate_process(process)
+                return
+
+    watchdog = threading.Thread(target=_watchdog, daemon=True)
+    watchdog.start()
+
+    upload_error: Optional[BaseException] = None
+    try:
+        client.upload_artifact(job_id, reader)
+    except BaseException as exc:  # noqa: BLE001 - reported below
+        upload_error = exc
+    finally:
+        # Closing stdout makes borg see EPIPE and exit if the upload broke.
+        if process.stdout is not None:
+            try:
+                process.stdout.close()
+            except OSError:
+                pass
+
+    return_code = process.wait()
+    watchdog_done.set()
+    watchdog.join(timeout=5)
+    stderr_thread.join()
+    stderr = b"".join(stderr_chunks).decode("utf-8", errors="replace")
+
+    if cancelled.is_set():
+        client.cancel_job(job_id)
+        return RepositoryOperationResult(
+            job_id=job_id,
+            status="canceled",
+            return_code=return_code,
+            message=f"{payload.job_kind} canceled",
+        )
+
+    if timed_out.is_set():
+        error_message = (
+            f"{payload.job_kind} stalled: no output for {STREAM_EXTRACT_IDLE_SECONDS}s"
+        )
+        client.fail_job(job_id, error_message=error_message, return_code=return_code)
+        return RepositoryOperationResult(
+            job_id=job_id,
+            status="failed",
+            return_code=return_code,
+            message=error_message,
+        )
+
+    if upload_error is not None:
+        error_message = f"{payload.job_kind} artifact upload failed: {upload_error}"
+        client.fail_job(job_id, error_message=error_message, return_code=return_code)
+        return RepositoryOperationResult(
+            job_id=job_id,
+            status="failed",
+            return_code=return_code,
+            message=error_message,
+        )
+
+    if return_code == 0:
+        client.complete_job(
+            job_id,
+            result={"return_code": return_code, "command": cmd, "artifact": True},
+        )
+        return RepositoryOperationResult(
+            job_id=job_id,
+            status="completed",
+            return_code=return_code,
+            message=f"{payload.job_kind} exited with code {return_code}",
+        )
+
+    if stderr:
+        client.send_log(job_id, sequence=1, stream="stderr", message=stderr.rstrip())
+    error_message = f"{payload.job_kind} exited with code {return_code}"
+    client.fail_job(job_id, error_message=error_message, return_code=return_code)
+    return RepositoryOperationResult(
+        job_id=job_id,
+        status="failed",
+        return_code=return_code,
+        message=error_message,
+    )
+
+
 def _execute_binary_output_repository_operation(
     job_id: int,
     payload: RepositoryOperationPayload,
     client: AgentClient,
     cmd: list[str],
     env: dict[str, str],
+    *,
+    should_cancel: Optional[Callable[[], bool]] = None,
 ) -> RepositoryOperationResult:
+    operation = payload.operation or {}
+    if operation.get("delivery") == "artifact" and hasattr(client, "upload_artifact"):
+        return _execute_streaming_artifact_operation(
+            job_id, payload, client, cmd, env, should_cancel=should_cancel
+        )
+
     try:
         process = subprocess.run(cmd, capture_output=True, env=env, timeout=300)
     except OSError as exc:
@@ -713,6 +1031,242 @@ def _execute_streaming_repository_operation(
         return_code=return_code,
         message=error_message,
     )
+
+
+def _is_borg_warning_rc(return_code: Optional[int]) -> bool:
+    # Borg uses exit code 1 (and 100-127 in newer builds) for warnings that
+    # still produced output. Mirrors restore_check_service._is_borg_warning_exit_code.
+    return return_code == 1 or (return_code is not None and 100 <= return_code <= 127)
+
+
+def _resolve_restore_target(operation: dict[str, Any]) -> tuple[str, bool]:
+    """Return (target_dir, is_temp) for a repository.restore job.
+
+    `target.type == "temp"` extracts into a throwaway directory the agent owns
+    and deletes afterwards (used by restore checks); otherwise it extracts into
+    the given absolute path on the node (used by ad-hoc restores).
+    """
+    target = operation.get("target")
+    if not isinstance(target, dict):
+        raise ValueError("repository.restore requires operation.target")
+    if target.get("type") == "temp":
+        return tempfile.mkdtemp(prefix="borg-ui-restore-"), True
+    path = target.get("path")
+    if not isinstance(path, str) or not path.strip():
+        raise ValueError("repository.restore requires operation.target.path")
+    destination = Path(path.strip())
+    # borg extract runs with cwd=destination, so a relative path would extract
+    # into the agent service's working directory rather than the intended node
+    # location. Require an absolute path.
+    if not destination.is_absolute():
+        raise ValueError("repository.restore operation.target.path must be absolute")
+    destination.mkdir(parents=True, exist_ok=True)
+    return str(destination), False
+
+
+def _execute_restore_operation(
+    job_id: int,
+    payload: RepositoryOperationPayload,
+    client: AgentClient,
+    cmd: list[str],
+    env: dict[str, str],
+    *,
+    initial_sequence: int,
+    should_cancel: Optional[Callable[[], bool]],
+) -> RepositoryOperationResult:
+    """Run `borg extract` into a destination on the node, streaming progress.
+
+    Extraction is relative to the working directory, so we run it with cwd set
+    to the resolved target. Optionally verifies a restore-check canary on the
+    node afterwards and reports the verdict in the completion result; the server
+    maps that verdict onto the RestoreCheckJob status.
+    """
+    operation = payload.operation or {}
+    try:
+        target_dir, is_temp = _resolve_restore_target(operation)
+    except (OSError, ValueError) as exc:
+        error_message = f"Failed to prepare restore destination: {exc}"
+        client.send_log(
+            job_id, sequence=initial_sequence, stream="stderr", message=error_message
+        )
+        client.fail_job(job_id, error_message=error_message)
+        return RepositoryOperationResult(
+            job_id=job_id, status="failed", message=error_message
+        )
+
+    try:
+        try:
+            popen_kwargs: dict[str, Any] = {
+                "stdout": subprocess.PIPE,
+                "stderr": subprocess.STDOUT,
+                "text": True,
+                "env": env,
+                "cwd": target_dir,
+            }
+            if os.name == "posix":
+                popen_kwargs["start_new_session"] = True
+            process = subprocess.Popen(cmd, **popen_kwargs)
+        except OSError as exc:
+            error_message = f"Failed to start {payload.job_kind}: {exc}"
+            client.send_log(
+                job_id,
+                sequence=initial_sequence,
+                stream="stderr",
+                message=error_message,
+            )
+            client.fail_job(job_id, error_message=error_message)
+            return RepositoryOperationResult(
+                job_id=job_id, status="failed", message=error_message
+            )
+
+        sequence = initial_sequence
+        if process.stdout is not None:
+            for line in process.stdout:
+                message = line.rstrip("\n")
+                client.send_log(
+                    job_id, sequence=sequence, stream="stdout", message=message
+                )
+                sequence += 1
+                progress = parse_borg_progress(message)
+                if progress:
+                    client.send_progress(job_id, progress)
+                if should_cancel and should_cancel():
+                    return_code = _terminate_process(process)
+                    client.cancel_job(job_id)
+                    return RepositoryOperationResult(
+                        job_id=job_id,
+                        status="canceled",
+                        return_code=return_code,
+                        message=f"{payload.job_kind} canceled",
+                    )
+
+        return_code = process.wait()
+        warning = _is_borg_warning_rc(return_code)
+
+        # A hard borg failure has no meaningful verification verdict.
+        if return_code != 0 and not warning:
+            error_message = f"{payload.job_kind} exited with code {return_code}"
+            client.fail_job(
+                job_id, error_message=error_message, return_code=return_code
+            )
+            return RepositoryOperationResult(
+                job_id=job_id,
+                status="failed",
+                return_code=return_code,
+                message=error_message,
+            )
+
+        result_payload: dict[str, Any] = {
+            "return_code": return_code,
+            "command": cmd,
+            "status": "completed",
+            "warning": warning,
+        }
+        verify_spec = operation.get("verify")
+        if verify_spec:
+            verification = _verify_restore(target_dir, verify_spec)
+            result_payload["verification"] = verification
+            if verification.get("status") != "verified":
+                client.send_log(
+                    job_id,
+                    sequence=sequence,
+                    stream="stderr",
+                    message=verification.get(
+                        "message", "restore verification did not pass"
+                    ),
+                )
+
+        client.complete_job(job_id, result=result_payload)
+        return RepositoryOperationResult(
+            job_id=job_id,
+            status="completed",
+            return_code=return_code,
+            message=f"{payload.job_kind} exited with code {return_code}",
+        )
+    finally:
+        if is_temp:
+            shutil.rmtree(target_dir, ignore_errors=True)
+
+
+def _verify_restore(target_dir: str, verify_spec: Any) -> dict[str, Any]:
+    if isinstance(verify_spec, dict) and verify_spec.get("kind") == "canary":
+        return _verify_canary(target_dir, verify_spec)
+    # Unknown/absent verification: the extract itself succeeded, so treat as
+    # verified rather than failing a restore that actually produced files.
+    return {"status": "verified"}
+
+
+def _verify_canary(target_dir: str, verify_spec: dict[str, Any]) -> dict[str, Any]:
+    """Verify Borg UI restore-check canary files on the node.
+
+    Data-driven mirror of app.services.restore_check_canary.verify_restored_canary:
+    locate the manifest among the candidate archive-relative paths, then confirm
+    each listed file's sha256 and size. The agent package cannot import app.*, so
+    the logic is reproduced here but reads all expectations from the manifest.
+    """
+    # Resolve against the real restored root and reject any candidate/manifest
+    # entry that escapes it (via "..") so verification can only ever read files
+    # inside the just-restored tree, never arbitrary files on the agent.
+    restore_root = Path(target_dir).resolve()
+    manifest_path: Optional[Path] = None
+    for candidate in verify_spec.get("manifest_candidates") or []:
+        if not isinstance(candidate, str) or not candidate.strip():
+            continue
+        candidate_path = (restore_root / candidate.strip().strip("/")).resolve()
+        if not candidate_path.is_relative_to(restore_root):
+            continue
+        if candidate_path.is_file():
+            manifest_path = candidate_path
+            break
+
+    if manifest_path is None:
+        return {
+            "status": "needs_backup",
+            "message": (
+                "The Borg UI canary file was not found in the latest archive. "
+                "Run a backup while canary mode is enabled, then run this restore "
+                "check again."
+            ),
+        }
+
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {"status": "failed", "message": f"Could not read canary manifest: {exc}"}
+
+    base_dir = manifest_path.parent.parent
+    verified_files: list[str] = []
+    for entry in manifest.get("files", []):
+        if not isinstance(entry, dict):
+            continue
+        relative_path = entry.get("path")
+        if not isinstance(relative_path, str):
+            continue
+        target = (base_dir / relative_path).resolve()
+        if not target.is_relative_to(restore_root):
+            return {
+                "status": "failed",
+                "message": f"Canary path escapes restore root: {relative_path}",
+            }
+        if not target.is_file():
+            return {
+                "status": "failed",
+                "message": f"Canary file missing after restore: {relative_path}",
+            }
+        content = target.read_bytes()
+        if hashlib.sha256(content).hexdigest() != entry.get("sha256"):
+            return {
+                "status": "failed",
+                "message": f"Canary hash mismatch for {relative_path}",
+            }
+        if len(content) != entry.get("size"):
+            return {
+                "status": "failed",
+                "message": f"Canary size mismatch for {relative_path}",
+            }
+        verified_files.append(relative_path)
+
+    return {"status": "verified", "verified_files": verified_files}
 
 
 def _parse_json_output(stdout: str) -> Any:

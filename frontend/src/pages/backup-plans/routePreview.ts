@@ -93,8 +93,7 @@ export function buildRoutePreviews(
     }
 
     if (isAgentRepo) {
-      const repositoryPath = String(repository.path || '')
-      if (repository.connection_id || repositoryPath.startsWith('ssh://')) {
+      if (repository.connection_id) {
         return unsupported(repository, 'agent', 'backupPlans.routePreview.agentRepoSshUnsupported')
       }
       if (!firstLocation || firstLocation.source_type === 'local') {
