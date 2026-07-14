@@ -73,6 +73,11 @@ ENV ENABLE_CRON_BACKUPS=false
 ENV PORT=8081
 ENV ACTIVATION_SERVICE_URL=https://license.borgui.com
 ENV ENABLE_STARTUP_LICENSE_SYNC=true
+# Some ARM64 Docker runtimes report OpenSSL CPU capabilities that cryptography's
+# bundled OpenSSL path cannot execute, causing SIGILL during import.
+ENV OPENSSL_armcap=0
+
+RUN python3 -c "from cryptography.fernet import Fernet"
 
 EXPOSE 8081
 
@@ -136,6 +141,11 @@ ENV ENABLE_CRON_BACKUPS=false
 ENV PORT=8081
 ENV ACTIVATION_SERVICE_URL=https://license.borgui.com
 ENV ENABLE_STARTUP_LICENSE_SYNC=true
+# Some ARM64 Docker runtimes report OpenSSL CPU capabilities that cryptography's
+# bundled OpenSSL path cannot execute, causing SIGILL during import.
+ENV OPENSSL_armcap=0
+
+RUN python3 -c "from cryptography.fernet import Fernet"
 
 # Expose port
 EXPOSE 8081
