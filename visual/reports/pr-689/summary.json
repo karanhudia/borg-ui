@@ -1,22 +1,63 @@
 {
-  "generatedAt": "2026-06-16T09:54:19.744Z",
+  "generatedAt": "2026-07-14T07:25:45.983Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #689 visual report",
-    "commitSha": "5809810be084",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/27609028219"
+    "commitSha": "38182284c941",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/29314264496"
   },
   "totals": {
-    "baseline": 422,
-    "actual": 422,
-    "compared": 422,
+    "baseline": 428,
+    "actual": 438,
+    "compared": 428,
     "changed": 0,
-    "added": 0,
+    "added": 10,
     "removed": 0,
-    "unchanged": 422
+    "unchanged": 428
   },
   "changed": [],
-  "added": [],
+  "added": [
+    {
+      "fileName": "components-archivecontentsdialog--awaiting-agent-listing--mobile.png",
+      "actualPath": "images/actual/components-archivecontentsdialog--awaiting-agent-listing--mobile.png"
+    },
+    {
+      "fileName": "components-archivecontentsdialog--awaiting-agent-listing.png",
+      "actualPath": "images/actual/components-archivecontentsdialog--awaiting-agent-listing.png"
+    },
+    {
+      "fileName": "components-archivepathselector--awaiting-agent-listing--mobile.png",
+      "actualPath": "images/actual/components-archivepathselector--awaiting-agent-listing--mobile.png"
+    },
+    {
+      "fileName": "components-archivepathselector--awaiting-agent-listing.png",
+      "actualPath": "images/actual/components-archivepathselector--awaiting-agent-listing.png"
+    },
+    {
+      "fileName": "components-storagebrowserdialog--loading--mobile.png",
+      "actualPath": "images/actual/components-storagebrowserdialog--loading--mobile.png"
+    },
+    {
+      "fileName": "components-storagebrowserdialog--loading-with-hint--mobile.png",
+      "actualPath": "images/actual/components-storagebrowserdialog--loading-with-hint--mobile.png"
+    },
+    {
+      "fileName": "components-storagebrowserdialog--loading-with-hint.png",
+      "actualPath": "images/actual/components-storagebrowserdialog--loading-with-hint.png"
+    },
+    {
+      "fileName": "components-storagebrowserdialog--loading.png",
+      "actualPath": "images/actual/components-storagebrowserdialog--loading.png"
+    },
+    {
+      "fileName": "components-storagebrowserdialog--populated--mobile.png",
+      "actualPath": "images/actual/components-storagebrowserdialog--populated--mobile.png"
+    },
+    {
+      "fileName": "components-storagebrowserdialog--populated.png",
+      "actualPath": "images/actual/components-storagebrowserdialog--populated.png"
+    }
+  ],
   "removed": [],
   "unchanged": [
     {
@@ -372,6 +413,12 @@
     },
     {
       "fileName": "components-backupjobstable--transport-modes.png"
+    },
+    {
+      "fileName": "components-backupplanruncard--with-script-executions--mobile.png"
+    },
+    {
+      "fileName": "components-backupplanruncard--with-script-executions.png"
     },
     {
       "fileName": "components-backupplanrunspanel--disabled-due-to-active-run--mobile.png"
@@ -1026,6 +1073,18 @@
     },
     {
       "fileName": "components-wizard-repository-review--managed-agent-plan-sources.png"
+    },
+    {
+      "fileName": "pages-activity-activityfilters--all-activity--mobile.png"
+    },
+    {
+      "fileName": "pages-activity-activityfilters--all-activity.png"
+    },
+    {
+      "fileName": "pages-activity-activityfilters--completed-with-warnings-filter--mobile.png"
+    },
+    {
+      "fileName": "pages-activity-activityfilters--completed-with-warnings-filter.png"
     },
     {
       "fileName": "pages-backup-plans-content--community-locked-runs--mobile.png"
