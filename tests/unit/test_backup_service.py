@@ -7,7 +7,7 @@ import asyncio
 import tempfile
 from pathlib import Path
 from datetime import datetime
-from unittest.mock import Mock, patch, AsyncMock, MagicMock
+from unittest.mock import ANY, Mock, patch, AsyncMock, MagicMock
 from sqlalchemy.orm import sessionmaker
 from app.services.backup_service import BackupService
 from app.services.filesystem_snapshot_service import PreparedFilesystemSnapshot
@@ -1151,6 +1151,7 @@ class TestBackupService:
             ["/snap/job-1/0-app"],
             job.id,
             source_connection_id=None,
+            stable_sshfs_temp_root=ANY,
         )
         calculate_size.assert_called_once_with(job.id, ["/snap/job-1/0-app"], [])
         cleanup_snapshots.assert_awaited_once_with(job.id)

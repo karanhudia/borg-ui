@@ -132,6 +132,50 @@ async def test_prepare_source_paths_reuses_first_sshfs_temp_root_for_multiple_co
 
 
 @pytest.mark.asyncio
+async def test_prepare_source_paths_uses_stable_sshfs_temp_root_for_first_mount(
+    backup_service_fixture, mock_db_session
+):
+    source = SSHConnection(
+        id=11,
+        host="server-a.example",
+        username="backup-a",
+        port=22,
+    )
+
+    ssh_query = MagicMock()
+    ssh_query.filter.return_value.first.return_value = source
+
+    def query_side_effect(model):
+        m = MagicMock()
+        if model == SSHConnection:
+            return ssh_query
+        return m
+
+    mock_db_session.query.side_effect = query_side_effect
+    stable_root = "/data/sshfs-cache/repository-7"
+
+    with (
+        patch("app.services.backup_service.SessionLocal", return_value=mock_db_session),
+        patch(
+            "app.services.mount_service.mount_service.mount_ssh_paths_shared",
+            new=AsyncMock(return_value=(stable_root, [("mount-a", "home/app/data")])),
+        ) as mount_shared,
+    ):
+        (
+            processed_paths,
+            ssh_mount_info,
+        ) = await backup_service_fixture._prepare_source_paths(
+            ["ssh://backup-a@server-a.example:22/home/app/data"],
+            job_id=42,
+            stable_sshfs_temp_root=stable_root,
+        )
+
+    assert processed_paths == ["home/app/data"]
+    assert ssh_mount_info == [(stable_root, "home/app/data")]
+    assert mount_shared.await_args.kwargs["temp_root"] == stable_root
+
+
+@pytest.mark.asyncio
 async def test_execute_backup_command(
     backup_service_fixture, mock_db_session, tmp_path
 ):
@@ -228,6 +272,88 @@ async def test_execute_backup_command(
                     # Verify content of the archive argument
                     archive_arg = [a for a in create_call_args if "::" in a][0]
                     assert archive_arg.startswith("/backups/repo::manual-backup-")
+
+
+@pytest.mark.asyncio
+async def test_execute_backup_passes_repository_stable_sshfs_root_to_source_prepare(
+    backup_service_fixture, mock_db_session
+):
+    job_id = 43
+    repo = Repository(
+        id=7,
+        path="/backups/repo",
+        source_directories='["/home/app/data"]',
+        source_ssh_connection_id=11,
+        compression="lz4",
+        mode="full",
+    )
+    source = SSHConnection(
+        id=11,
+        host="server-a.example",
+        username="backup-a",
+        port=22,
+    )
+    job = BackupJob(id=job_id, status="pending")
+    stable_root = "/tmp/borg-data/sshfs-cache/repository-7"
+
+    def query_side_effect(model):
+        m = MagicMock()
+        if model == BackupJob:
+            m.filter.return_value.first.return_value = job
+        elif model == Repository:
+            m.filter.return_value.first.return_value = repo
+        elif model == SSHConnection:
+            m.filter.return_value.first.return_value = source
+        elif model == SystemSettings:
+            m.first.return_value = SystemSettings()
+        elif model == RepositoryScript:
+            m.filter.return_value.count.return_value = 0
+        return m
+
+    mock_db_session.query.side_effect = query_side_effect
+    mock_process = AsyncMock()
+    mock_process.returncode = 0
+    mock_process.stdout = AsyncMock()
+    mock_process.stdout.__aiter__.return_value = iter([])
+    prepare_source_paths = AsyncMock(
+        return_value=(["home/app/data"], [(stable_root, "home/app/data")])
+    )
+
+    with (
+        patch("app.services.backup_service.SessionLocal", return_value=mock_db_session),
+        patch(
+            "app.services.backup_service.BorgRouter.validate_local_repository_access",
+            return_value=None,
+        ),
+        patch.object(
+            backup_service_fixture,
+            "_prepare_source_paths",
+            prepare_source_paths,
+        ),
+        patch.object(
+            backup_service_fixture,
+            "_calculate_and_update_size_background",
+            new=AsyncMock(),
+        ),
+        patch(
+            "app.services.backup_service.asyncio.create_subprocess_exec",
+            return_value=mock_process,
+        ),
+        patch(
+            "app.services.backup_service.notification_service",
+            _notification_service_mock(),
+        ),
+    ):
+        await backup_service_fixture.execute_backup(
+            job_id, repo.path, db=mock_db_session
+        )
+
+    prepare_source_paths.assert_awaited_once_with(
+        ["ssh://backup-a@server-a.example:22/home/app/data"],
+        job_id,
+        source_connection_id=11,
+        stable_sshfs_temp_root=stable_root,
+    )
 
 
 @pytest.mark.asyncio
@@ -1253,6 +1379,7 @@ async def test_execute_backup_resolves_grouped_source_locations(
     mock_process.returncode = 0
     mock_process.stdout = AsyncMock()
     mock_process.stdout.__aiter__.return_value = iter([])
+    stable_root = "/tmp/borg-data/sshfs-cache/repository-1"
 
     with (
         patch("app.services.backup_service.SessionLocal", return_value=mock_db_session),
@@ -1276,10 +1403,10 @@ async def test_execute_backup_resolves_grouped_source_locations(
             "_prepare_source_paths",
             new=AsyncMock(
                 return_value=(
-                    [str(local_source), "data", "var/lib/service"],
+                    ["data", "var/lib/service", str(local_source)],
                     [
-                        ("/tmp/sshfs-a", "data"),
-                        ("/tmp/sshfs-b", "var/lib/service"),
+                        (stable_root, "data"),
+                        (stable_root, "var/lib/service"),
                     ],
                 )
             ),
@@ -1311,6 +1438,7 @@ async def test_execute_backup_resolves_grouped_source_locations(
         ],
         job_id,
         source_connection_id=None,
+        stable_sshfs_temp_root=stable_root,
     )
 
 

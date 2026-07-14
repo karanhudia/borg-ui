@@ -58,6 +58,16 @@ def _uses_remote_execution(job: BackupJob) -> bool:
     ).strip().lower() == "remote_direct"
 
 
+def _stable_sshfs_temp_root(repository_id: int | None) -> str | None:
+    if repository_id is None:
+        return None
+    return os.path.join(
+        settings.data_dir,
+        "sshfs-cache",
+        f"repository-{repository_id}",
+    )
+
+
 class BackupService:
     """Service for executing backups with real-time log streaming"""
 
@@ -891,7 +901,11 @@ class BackupService:
         return None
 
     async def _prepare_source_paths(
-        self, source_paths: list[str], job_id: int, source_connection_id: int = None
+        self,
+        source_paths: list[str],
+        job_id: int,
+        source_connection_id: int = None,
+        stable_sshfs_temp_root: str | None = None,
     ) -> tuple[list[str], list[tuple[str, str]]]:
         """
         Prepare source paths for backup by mounting SSH URLs via SSHFS
@@ -985,7 +999,9 @@ class BackupService:
             # Second pass: Mount SSH paths. Reuse the first SSHFS temp root across
             # source connections so Borg can run from one cwd and store relative
             # remote paths instead of /tmp/sshfs_mount_* implementation paths.
-            shared_ssh_temp_root = None
+            shared_ssh_temp_root = (
+                stable_sshfs_temp_root if ssh_paths_by_connection else None
+            )
             for connection_id, paths_data in ssh_paths_by_connection.items():
                 remote_paths = [parsed["path"] for _, parsed, _ in paths_data]
                 connection = paths_data[0][2]  # Get connection from first item
@@ -1416,6 +1432,7 @@ class BackupService:
             close_db = True
         temp_key_file = None  # Track SSH key file for cleanup
         borg_command_lock = None
+        sshfs_cache_lock = None
 
         try:
             # Get job
@@ -1918,6 +1935,25 @@ class BackupService:
                 source_paths_for_existence_check, skip_paths=snapshot_source_paths
             )
 
+            if repo_record and repo_record.id:
+                sshfs_cache_lock = await acquire_repository_command_lock(
+                    repo_record.id,
+                    scope="sshfs-cache",
+                )
+                logger.info(
+                    "Acquired repository SSHFS cache lock for backup",
+                    job_id=job_id,
+                    repository_id=repo_record.id,
+                )
+                db.refresh(job)
+                if job.status == "cancelled":
+                    logger.info(
+                        "Backup cancelled while waiting for repository SSHFS cache lock",
+                        job_id=job_id,
+                        repository_id=repo_record.id,
+                    )
+                    return
+
             # Calculate total expected size of source directories in background
             # This runs asynchronously without blocking backup start
             # Progress percentage will update when calculation completes
@@ -1944,6 +1980,9 @@ class BackupService:
                 source_paths,
                 job_id,
                 source_connection_id=effective_source_ssh_connection_id,
+                stable_sshfs_temp_root=_stable_sshfs_temp_root(
+                    repo_record.id if repo_record else None
+                ),
             )
             if not processed_source_paths:
                 logger.error(
@@ -3203,6 +3242,17 @@ class BackupService:
                 logger.error(
                     "Failed to cleanup SSH mounts", job_id=job_id, error=str(e)
                 )
+
+            if sshfs_cache_lock is not None:
+                try:
+                    sshfs_cache_lock.release()
+                    logger.info(
+                        "Released repository SSHFS cache lock after backup cleanup",
+                        job_id=job_id,
+                    )
+                except RuntimeError:
+                    pass
+                sshfs_cache_lock = None
 
             # Clean up temporary SSH key file if it exists
             try:
