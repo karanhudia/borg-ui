@@ -643,15 +643,39 @@ def _link_oidc_identity_to_user(
     return user
 
 
-def _is_same_origin_request(request: Request) -> bool:
+def _origin_from_url(value: str) -> Optional[str]:
+    try:
+        parsed = urlparse(value.strip())
+    except ValueError:
+        return None
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return None
+    return f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+
+
+def _same_origin_candidates(request: Request) -> set[str]:
     expected_origin = build_external_base_url(request).rstrip("/")
+    candidates = {expected_origin}
+    parsed_expected = urlparse(expected_origin)
+    if parsed_expected.scheme == "http" and parsed_expected.netloc:
+        candidates.add(f"https://{parsed_expected.netloc}".rstrip("/"))
+    return candidates
+
+
+def _is_same_origin_request(request: Request) -> bool:
     header_value = request.headers.get("origin") or request.headers.get("referer")
     if not header_value:
         return False
 
-    parsed = urlparse(header_value)
-    received_origin = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
-    return hmac.compare_digest(received_origin, expected_origin)
+    received_origin = _origin_from_url(header_value)
+    if received_origin is None:
+        return False
+
+    received_origin_bytes = received_origin.encode("utf-8")
+    return any(
+        hmac.compare_digest(received_origin_bytes, expected_origin.encode("utf-8"))
+        for expected_origin in _same_origin_candidates(request)
+    )
 
 
 def _append_redirect_params(return_to: str, params: dict[str, str]) -> str:
