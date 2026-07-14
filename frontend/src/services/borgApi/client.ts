@@ -137,7 +137,7 @@ export class BorgApiClient {
     })
   }
 
-  getArchiveContents(archiveId: string, archiveName: string, path = '') {
+  getArchiveContents(archiveId: string, archiveName: string, path = '', jobId?: number) {
     if (this.v === '/v2') {
       return httpClient.get(`/v2/archives/${archiveId}/contents`, {
         params: { repository: this.repoId, path },
@@ -146,9 +146,11 @@ export class BorgApiClient {
     // v1 browse (cached, path-filtered). For a Borg 2 archive series the name is
     // ambiguous (matches N archives → borg errors), so select the specific
     // archive by its id via the `aid:` selector; Borg 1 names are unique.
+    // Agent-backed archives are listed asynchronously: the first call may return
+    // 202 + a jobId, which the caller passes back here to poll the running job.
     const selector = this.isV2 && archiveId ? `aid:${archiveId}` : archiveName
     return httpClient.get(`/browse/${this.repoId}/${encodeURIComponent(selector)}`, {
-      params: { path },
+      params: { path, ...(jobId != null ? { job_id: jobId } : {}) },
     })
   }
 

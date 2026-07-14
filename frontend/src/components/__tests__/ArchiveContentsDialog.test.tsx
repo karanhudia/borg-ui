@@ -102,6 +102,56 @@ describe('ArchiveContentsDialog', () => {
     })
   })
 
+  it('polls a pending agent listing and shows the wait hint until items arrive', async () => {
+    // First response: 202, the agent listing is still running (slow archive).
+    // The client remembers the job id and polls; the poll then returns the items.
+    mockGetArchiveContents
+      .mockResolvedValueOnce({
+        status: 202,
+        data: { status: 'pending', jobId: 77 },
+      } as AxiosResponse)
+      .mockResolvedValue({
+        status: 200,
+        data: { items: [{ name: 'file.txt', path: 'file.txt', type: 'file', size: 5 }] },
+      } as AxiosResponse)
+
+    renderWithProviders(
+      <ArchiveContentsDialog
+        open={true}
+        archive={mockArchive}
+        repository={mockRepository}
+        {...mockHandlers}
+      />
+    )
+
+    // The friendly "taking longer" hint appears while the job runs.
+    await waitFor(() => {
+      expect(screen.getByText(/takes a little longer/i)).toBeInTheDocument()
+    })
+
+    // The poll passes the job id back so the server resumes the same job.
+    await waitFor(
+      () => {
+        expect(mockGetArchiveContents).toHaveBeenCalledWith(
+          mockArchive.id,
+          mockArchive.name,
+          '',
+          77
+        )
+      },
+      { timeout: 3000 }
+    )
+
+    // Once the job completes the items render and the hint disappears.
+    await waitFor(
+      () => {
+        expect(screen.getByText('file.txt')).toBeInTheDocument()
+      },
+      { timeout: 3000 }
+    )
+    expect(screen.queryByText(/takes a little longer/i)).not.toBeInTheDocument()
+  })
+
   it('displays empty archive message when no items', async () => {
     mockGetArchiveContents.mockResolvedValue({
       data: { items: [] },
@@ -281,7 +331,8 @@ describe('ArchiveContentsDialog', () => {
       expect(mockGetArchiveContents).toHaveBeenCalledWith(
         mockArchive.id,
         mockArchive.name,
-        'documents'
+        'documents',
+        undefined
       )
     })
   })
@@ -455,7 +506,12 @@ describe('ArchiveContentsDialog', () => {
 
     // Verify it starts at root path
     await waitFor(() => {
-      expect(mockGetArchiveContents).toHaveBeenCalledWith(mockArchive.id, mockArchive.name, '')
+      expect(mockGetArchiveContents).toHaveBeenCalledWith(
+        mockArchive.id,
+        mockArchive.name,
+        '',
+        undefined
+      )
     })
   })
 

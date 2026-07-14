@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { alpha, Box, Typography } from '@mui/material'
-import { ShieldCheck } from 'lucide-react'
+import { Hourglass, ShieldCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { BorgApiClient, type Repository } from '../services/borgApi/client'
@@ -52,12 +52,21 @@ export default function ArchiveContentsDialog({
   const { t } = useTranslation()
   const [currentPath, setCurrentPath] = useState('')
   const [downloading, setDownloading] = useState(false)
+  // Handle of an in-flight agent listing job (see getArchiveContents): a slow
+  // managed archive returns 202 + this id, which we pass back to poll the job.
+  const jobIdRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (open && archive) {
       setCurrentPath('')
+      jobIdRef.current = null
     }
   }, [open, archive])
+
+  // A new path is a fresh listing context; drop any in-flight poll handle.
+  useEffect(() => {
+    jobIdRef.current = null
+  }, [currentPath])
 
   const { data: archiveContents, isFetching } = useQuery({
     queryKey: ['archive-contents', repository?.id, archive?.name, currentPath],
@@ -65,11 +74,23 @@ export default function ArchiveContentsDialog({
       if (!repository || !archive) {
         throw new Error('Repository or archive not selected')
       }
-      return new BorgApiClient(repository).getArchiveContents(archive.id, archive.name, currentPath)
+      const response = await new BorgApiClient(repository).getArchiveContents(
+        archive.id,
+        archive.name,
+        currentPath,
+        jobIdRef.current ?? undefined
+      )
+      // 202 = the agent listing is still running; remember the job id so the next
+      // poll resumes it instead of queueing a duplicate.
+      jobIdRef.current = response.status === 202 ? (response.data?.jobId ?? jobIdRef.current) : null
+      return response
     },
     enabled: !!archive && !!repository && open,
     staleTime: 5 * 60 * 1000,
+    refetchInterval: (query) => (query.state.data?.status === 202 ? 1500 : false),
   })
+
+  const isAwaitingAgent = archiveContents?.status === 202
 
   const canaryDescription = t('archiveContents.managedCanaryDescription')
   const items = useMemo<StorageBrowserItem[] | null>(() => {
@@ -93,6 +114,28 @@ export default function ArchiveContentsDialog({
 
   const isInsideCanaryPath = isRestoreCanaryPath(currentPath)
 
+  const loadingHint = isAwaitingAgent ? (
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 1,
+        px: 1.5,
+        py: 1,
+        borderRadius: 1,
+        bgcolor: (theme) => alpha(theme.palette.info.main, 0.08),
+        border: '1px solid',
+        borderColor: (theme) => alpha(theme.palette.info.main, 0.25),
+        flexShrink: 0,
+      }}
+    >
+      <Hourglass size={17} style={{ marginTop: 2, flexShrink: 0 }} />
+      <Typography variant="body2" color="text.secondary">
+        {t('archiveContents.slowLoadingHint')}
+      </Typography>
+    </Box>
+  ) : undefined
+
   return (
     <StorageBrowserDialog
       open={open}
@@ -100,7 +143,8 @@ export default function ArchiveContentsDialog({
       subtitle={archive?.name}
       currentPath={currentPath}
       items={items}
-      isLoading={isFetching}
+      isLoading={isFetching || isAwaitingAgent}
+      loadingHint={loadingHint}
       rootLabel={t('archiveContents.root')}
       closeLabel={t('common.buttons.close')}
       emptyDirectoryLabel={t('archiveContents.emptyDirectory')}

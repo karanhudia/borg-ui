@@ -43,6 +43,10 @@ interface ArchiveItem {
 
 const RESTORE_CANARY_MANAGED_TYPE = 'restore_canary'
 
+// Give up polling a stuck agent listing after this long and surface a timeout,
+// rather than hammering the server every 1.5s forever while the dialog stays open.
+const BROWSE_POLL_TIMEOUT_MS = 10 * 60 * 1000
+
 function isRestoreCanaryPath(path?: string) {
   const normalized = (path || '').replace(/^\/+/, '').replace(/\/+$/, '')
   return normalized === '.borg-ui' || normalized.startsWith('.borg-ui/')
@@ -80,34 +84,61 @@ export default function ArchivePathSelector({
   const [currentPath, setCurrentPath] = useState<string>('')
   const [items, setItems] = useState<ArchiveItem[]>([])
   const [loading, setLoading] = useState<boolean>(false)
+  const [awaitingAgent, setAwaitingAgent] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
   const selectedPaths = new Set(data.selectedPaths || [])
   const selectedItems = data.selectedItems || []
 
   useEffect(() => {
+    let cancelled = false
+
     const fetchContents = async () => {
       setLoading(true)
       setError(null)
+      setAwaitingAgent(false)
 
       try {
-        const response = await new BorgApiClient(repository).getArchiveContents(
-          archive.id,
-          archive.name,
-          currentPath
-        )
+        const client = new BorgApiClient(repository)
+        // Agent listings are asynchronous: a 202 means the job is still running,
+        // so poll with the returned id until it completes — but give up after
+        // BROWSE_POLL_TIMEOUT_MS so a wedged job doesn't poll the server forever.
+        const deadline = Date.now() + BROWSE_POLL_TIMEOUT_MS
+        let response = await client.getArchiveContents(archive.id, archive.name, currentPath)
+        let jobId: number | undefined
+        while (response.status === 202) {
+          if (cancelled) return
+          if (Date.now() > deadline) {
+            setError(t('wizard.restoreFiles.loadContentsTimeout'))
+            return
+          }
+          setAwaitingAgent(true)
+          jobId = response.data?.jobId ?? jobId
+          await new Promise((resolve) => setTimeout(resolve, 1500))
+          if (cancelled) return
+          response = await client.getArchiveContents(archive.id, archive.name, currentPath, jobId)
+        }
+        if (cancelled) return
         setItems(response.data.items || [])
       } catch (err: unknown) {
+        if (cancelled) return
         const error = err as { response?: { data?: { detail?: string } } }
         const errorMsg =
           translateBackendKey(error.response?.data?.detail) ||
           t('wizard.restoreFiles.failedToLoadContents')
         setError(errorMsg)
       } finally {
-        setLoading(false)
+        if (!cancelled) {
+          setLoading(false)
+          setAwaitingAgent(false)
+        }
       }
     }
 
     fetchContents()
+
+    return () => {
+      cancelled = true
+    }
   }, [repository, archive.id, archive.name, currentPath, t])
 
   const pathParts = currentPath ? currentPath.split('/').filter(Boolean) : []
@@ -311,8 +342,25 @@ export default function ArchivePathSelector({
 
         <Box sx={{ flex: 1, overflow: 'auto' }}>
           {loading && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 2,
+                p: 4,
+              }}
+            >
               <CircularProgress size={32} />
+              {awaitingAgent && (
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ maxWidth: 420, textAlign: 'center' }}
+                >
+                  {t('archiveContents.slowLoadingHint')}
+                </Typography>
+              )}
             </Box>
           )}
 

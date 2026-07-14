@@ -3849,7 +3849,8 @@
       "clearAll": "Borrar todo",
       "selectDirTooltip": "Seleccionar directorio y todo su contenido",
       "helpText": "Haz clic en los archivos para seleccionarlos, o en las carpetas para navegar. Usa la casilla junto a las carpetas para seleccionar directorios completos.",
-      "failedToLoadContents": "Error al cargar el contenido del archivo"
+      "failedToLoadContents": "Error al cargar el contenido del archivo",
+      "loadContentsTimeout": "Aún cargando — este archivo está tardando más de lo esperado. Inténtalo de nuevo en un momento."
     },
     "restorePath": {
       "title": "Elegir ubicación de restauración",
@@ -4090,6 +4091,7 @@
   "archiveContents": {
     "title": "Contenido del archivo",
     "loading": "Cargando contenido del archivo...",
+    "slowLoadingHint": "Este archivo es grande, por lo que listar sus ficheros tarda un poco más. Un momento — esto solo ocurre la primera vez; después queda en caché.",
     "emptyDirectory": "Este directorio está vacío",
     "emptyArchive": "Este archivo está vacío",
     "emptyArchiveDesc": "No se respaldaron archivos en este archivo. Esto puede ocurrir si el directorio de origen estaba vacío o inaccesible durante la copia de seguridad.",
