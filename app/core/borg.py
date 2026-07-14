@@ -682,6 +682,7 @@ class BorgInterface:
         dry_run: bool = False,
         remote_path: str = None,
         passphrase: str = None,
+        keep_within: str | None = None,
     ) -> Dict:
         """Prune old archives
 
@@ -696,6 +697,7 @@ class BorgInterface:
             dry_run: Run in dry-run mode
             remote_path: Path to remote borg binary
             passphrase: Repository passphrase
+            keep_within: Keep all archives within Borg interval
         """
         cmd = [self.borg_cmd, "prune"]
         if remote_path:
@@ -717,6 +719,8 @@ class BorgInterface:
             cmd.extend(["--keep-3monthly", str(keep_quarterly)])
         if keep_yearly > 0:
             cmd.extend(["--keep-yearly", str(keep_yearly)])
+        if keep_within and keep_within.strip():
+            cmd.append(f"--keep-within={keep_within.strip()}")
 
         cmd.append("--list")
 

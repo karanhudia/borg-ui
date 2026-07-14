@@ -54,6 +54,7 @@ export interface BackupPlanPayloadState {
   pruneKeepMonthly: number
   pruneKeepQuarterly: number
   pruneKeepYearly: number
+  pruneKeepWithin?: string
   // Set when the plan source came in via the Database tab (detected DB or
   // template pick). Lets the dialog open on the right tab on edit and the
   // backend remember the template choice across reloads. Null/undefined for
@@ -116,6 +117,11 @@ function mbToKib(value: string): number | null {
   const parsed = Number(value)
   if (!Number.isFinite(parsed) || parsed <= 0) return null
   return Math.round(parsed * 1024)
+}
+
+function normalizeOptionalString(value?: string): string | null {
+  const trimmed = value?.trim() || ''
+  return trimmed || null
 }
 
 function normalizeUploadRatelimitSchedulePolicies(
@@ -402,6 +408,7 @@ export function buildBackupPlanPayload(
     prune_keep_monthly: state.pruneKeepMonthly,
     prune_keep_quarterly: state.pruneKeepQuarterly,
     prune_keep_yearly: state.pruneKeepYearly,
+    prune_keep_within: normalizeOptionalString(state.pruneKeepWithin),
     repositories: state.repositoryIds.map((repositoryId, index) => ({
       repository_id: repositoryId,
       enabled: true,

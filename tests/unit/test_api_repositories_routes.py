@@ -2,6 +2,7 @@ import asyncio
 import re
 from collections import Counter
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -389,6 +390,55 @@ class TestRepositoryHelperContracts:
         assert mock_list.await_args.kwargs["env"]["BORG_PASSPHRASE"] == "secret"
         assert mock_size.await_args.kwargs["use_bypass_lock"] is True
         assert mock_size.await_args.kwargs["env"]["BORG_PASSPHRASE"] == "secret"
+
+    @pytest.mark.asyncio
+    async def test_update_repository_stats_delegates_to_agent(self, test_db):
+        repo = _create_repo(
+            test_db, "Agent Repo", "sftp://host:23/./m3s/m3s01", passphrase="secret"
+        )
+
+        list_stdout = (
+            '{"archives":['
+            '{"name":"m3s01","id":"a1","time":"2024-02-01T12:00:00Z"},'
+            '{"name":"m3s01","id":"a2","time":"2024-01-01T10:00:00"}]}'
+        )
+        # Borg 1 repo-info carries repo-level dedup size in cache.stats.
+        rinfo_stdout = (
+            '{"encryption":{"mode":"repokey-aes-ocb"},'
+            '"cache":{"stats":{"unique_csize":2097152}}}'
+        )
+        wait_returns = [
+            {"success": True, "stdout": list_stdout},
+            {"success": True, "stdout": rinfo_stdout},
+        ]
+
+        async def fake_wait(db, job_id, **kwargs):
+            return wait_returns.pop(0)
+
+        with (
+            patch("app.api.repositories.is_agent_executor", return_value=True),
+            patch(
+                "app.services.repository_executor.queue_agent_repository_operation_job",
+                return_value=SimpleNamespace(id=1),
+            ) as mock_queue,
+            patch(
+                "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort",
+                new=AsyncMock(),
+            ),
+            patch(
+                "app.services.repository_executor.wait_for_agent_repository_operation_job",
+                new=fake_wait,
+            ),
+        ):
+            success = await repositories_api.update_repository_stats(repo, test_db)
+
+        assert success is True
+        assert repo.archive_count == 2
+        assert repo.encryption == "repokey-aes-ocb"
+        assert repo.total_size == "2.00 MB"
+        assert repo.last_backup == datetime(2024, 2, 1, 12, 0)
+        job_kinds = [c.kwargs["job_kind"] for c in mock_queue.call_args_list]
+        assert job_kinds == ["repository.list_archives", "repository.rinfo"]
 
     @pytest.mark.asyncio
     async def test_update_repository_stats_accepts_router_archive_lists(self, test_db):

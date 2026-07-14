@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "borg-ui-agent"
-version = "0.1.0"
+version = "0.1.1"
 description = "Lightweight managed agent for Borg UI"
 readme = "agent/README.md"
 requires-python = ">=3.11"

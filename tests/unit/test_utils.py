@@ -7,6 +7,7 @@ from app.utils.process_utils import (
     break_repository_lock,
     cleanup_orphaned_jobs,
     cleanup_orphaned_mounts,
+    reconcile_stale_backup_maintenance,
 )
 from app.database.models import (
     BackupJob,
@@ -304,6 +305,124 @@ class TestProcessUtils:
         db_session.refresh(backup_job)
         assert backup_job.status == "completed"
         assert backup_job.maintenance_status == "check_failed"
+
+    def test_reconcile_stale_backup_maintenance_reaps_stuck_prune_without_child(
+        self, db_session
+    ):
+        from datetime import timedelta
+
+        repo = Repository(
+            name="Stuck Prune Repo",
+            path="/repos/stuck-prune",
+            encryption="none",
+            repository_type="local",
+        )
+        db_session.add(repo)
+        db_session.flush()
+        old = datetime.utcnow() - timedelta(minutes=10)
+        backup_job = BackupJob(
+            repository=repo.path,
+            repository_id=repo.id,
+            status="completed",
+            started_at=old,
+            completed_at=old,
+            maintenance_status="running_prune",
+        )
+        db_session.add(backup_job)
+        db_session.commit()
+
+        reaped = reconcile_stale_backup_maintenance(db_session)
+
+        assert reaped == 1
+        db_session.refresh(backup_job)
+        assert backup_job.maintenance_status == "prune_failed"
+        assert backup_job.status == "completed"  # backup itself stays completed
+
+    def test_reconcile_stale_backup_maintenance_preserves_live_prune(self, db_session):
+        from datetime import timedelta
+
+        repo = Repository(
+            name="Live Prune Repo",
+            path="/repos/live-prune",
+            encryption="none",
+            repository_type="local",
+        )
+        db_session.add(repo)
+        db_session.flush()
+        old = datetime.utcnow() - timedelta(minutes=10)
+        backup_job = BackupJob(
+            repository=repo.path,
+            repository_id=repo.id,
+            status="completed",
+            started_at=old,
+            completed_at=old,
+            maintenance_status="running_prune",
+        )
+        # a genuinely running prune child for the same repo -> must be preserved
+        db_session.add(
+            PruneJob(
+                repository_id=repo.id,
+                repository_path=repo.path,
+                status="running",
+            )
+        )
+        db_session.add(backup_job)
+        db_session.commit()
+
+        reaped = reconcile_stale_backup_maintenance(db_session)
+
+        assert reaped == 0
+        db_session.refresh(backup_job)
+        assert backup_job.maintenance_status == "running_prune"
+
+    def test_reconcile_stale_backup_maintenance_skips_fresh(self, db_session):
+        repo = Repository(
+            name="Fresh Prune Repo",
+            path="/repos/fresh-prune",
+            encryption="none",
+            repository_type="local",
+        )
+        db_session.add(repo)
+        db_session.flush()
+        now = datetime.utcnow()
+        backup_job = BackupJob(
+            repository=repo.path,
+            repository_id=repo.id,
+            status="completed",
+            started_at=now,
+            completed_at=now,  # just finished -> under the age threshold
+            maintenance_status="running_prune",
+        )
+        db_session.add(backup_job)
+        db_session.commit()
+
+        reaped = reconcile_stale_backup_maintenance(db_session)
+
+        assert reaped == 0
+        db_session.refresh(backup_job)
+        assert backup_job.maintenance_status == "running_prune"
+
+    def test_reap_once_runs_agent_and_maintenance_reapers(self):
+        # The background loop must run BOTH the agent-job reaper and the new
+        # maintenance reconciler each tick.
+        with (
+            patch("app.services.agent_job_reaper.SessionLocal"),
+            patch(
+                "app.services.agent_job_reaper.reap_stale_agent_jobs",
+                return_value=2,
+            ) as m_agent,
+            patch(
+                "app.utils.process_utils.reconcile_stale_backup_maintenance",
+                return_value=3,
+            ) as m_maint,
+        ):
+            from app.services.agent_job_reaper import _reap_once
+
+            total = _reap_once()
+
+        assert total == 5
+        m_agent.assert_called_once()
+        m_maint.assert_called_once()
 
     @patch("app.utils.process_utils.is_process_alive", return_value=True)
     def test_cleanup_orphaned_jobs_preserves_running_check_with_live_child_process(

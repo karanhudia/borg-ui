@@ -10,12 +10,14 @@ describe('PruneSettingsInput', () => {
     keepMonthly: 6,
     keepQuarterly: 0,
     keepYearly: 1,
+    keepWithin: '',
   }
 
-  it('renders all six input fields', () => {
+  it('renders all retention input fields', () => {
     const onChange = vi.fn()
     render(<PruneSettingsInput values={defaultValues} onChange={onChange} />)
 
+    expect(screen.getByLabelText(/Keep Within/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/Keep Hourly/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/Keep Daily/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/Keep Weekly/i)).toBeInTheDocument()
@@ -28,6 +30,7 @@ describe('PruneSettingsInput', () => {
     const onChange = vi.fn()
     render(<PruneSettingsInput values={defaultValues} onChange={onChange} />)
 
+    expect(screen.getByLabelText(/Keep Within/i)).toHaveValue('')
     expect(screen.getByLabelText(/Keep Hourly/i)).toHaveValue(0)
     expect(screen.getByLabelText(/Keep Daily/i)).toHaveValue(7)
     expect(screen.getByLabelText(/Keep Weekly/i)).toHaveValue(4)
@@ -46,6 +49,19 @@ describe('PruneSettingsInput', () => {
     expect(onChange).toHaveBeenCalledWith({
       ...defaultValues,
       keepHourly: 24,
+    })
+  })
+
+  it('calls onChange when keep-within value changes', () => {
+    const onChange = vi.fn()
+    render(<PruneSettingsInput values={defaultValues} onChange={onChange} />)
+
+    const keepWithinInput = screen.getByLabelText(/Keep Within/i)
+    fireEvent.change(keepWithinInput, { target: { value: '1d' } })
+
+    expect(onChange).toHaveBeenCalledWith({
+      ...defaultValues,
+      keepWithin: '1d',
     })
   })
 
@@ -121,11 +137,12 @@ describe('PruneSettingsInput', () => {
       keepMonthly: 0,
       keepQuarterly: 0,
       keepYearly: 0,
+      keepWithin: '',
     }
 
     render(<PruneSettingsInput values={allZeroValues} onChange={onChange} />)
 
-    Object.values(screen.getAllByRole('spinbutton')).forEach((input) => {
+    screen.getAllByRole('spinbutton').forEach((input) => {
       expect(input).toHaveValue(0)
     })
   })

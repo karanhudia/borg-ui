@@ -20,7 +20,13 @@ from app.core.permissions import (
     normalize_repository_role_for_global_role,
 )
 from app.database.database import get_db
-from app.database.models import Repository, User, UserRepositoryPermission
+from app.database.models import (
+    ApiToken,
+    Repository,
+    User,
+    UserRepositoryPermission,
+    utc_now,
+)
 
 logger = structlog.get_logger()
 
@@ -37,17 +43,34 @@ FALLBACK_PROXY_AUTH_HEADERS = (
 # JWT token security
 security = HTTPBearer()
 
+# Personal access tokens are minted as "borgui_<random>" (see app/api/tokens.py)
+# and stored by their 12-char prefix + bcrypt hash. A JWT never starts with this
+# prefix, so it cleanly disambiguates a PAT from a JWT on the same Bearer header.
+API_TOKEN_PREFIX = "borgui_"
+API_TOKEN_PREFIX_LENGTH = 12
+
 LOGIN_CHALLENGE_TOKEN_TYPE = "login_challenge"
 TOTP_SETUP_TOKEN_TYPE = "totp_setup"
 LOGIN_CHALLENGE_EXPIRE_MINUTES = 10
 TOTP_SETUP_EXPIRE_MINUTES = 15
 
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a password against its hash"""
-    return bcrypt.checkpw(
-        plain_password.encode("utf-8"), hashed_password.encode("utf-8")
-    )
+def verify_password(plain_password: str, hashed_password: Optional[str]) -> bool:
+    """Verify a password against its bcrypt hash.
+
+    Returns False (instead of raising) when the stored hash is missing or not a
+    valid bcrypt hash — e.g. OIDC-only users have no local password. bcrypt would
+    otherwise raise ``ValueError: Invalid salt``, which surfaced as a 500 on a
+    password login attempt; a clean False lets it fail with the normal 401.
+    """
+    if not hashed_password:
+        return False
+    try:
+        return bcrypt.checkpw(
+            plain_password.encode("utf-8"), hashed_password.encode("utf-8")
+        )
+    except ValueError:
+        return False
 
 
 def get_password_hash(password: str) -> str:
@@ -403,18 +426,47 @@ def _proxy_email_is_available(
     return query.first() is None
 
 
+def _resolve_api_token_user(token: str, db: Session) -> Optional[User]:
+    """Resolve the user behind a personal access token ("borgui_…").
+
+    Mirrors the agent-token scheme (see app/core/agent_auth.py): narrow by the
+    stored prefix, then bcrypt-verify the full value. Stamps last_used_at on a
+    match. Returns None when no active token matches.
+    """
+    prefix = token[:API_TOKEN_PREFIX_LENGTH]
+    candidates = db.query(ApiToken).filter(ApiToken.prefix == prefix).all()
+    for api_token in candidates:
+        if verify_password(token, api_token.token_hash):
+            user = db.query(User).filter(User.id == api_token.user_id).first()
+            if user is None:
+                return None
+            api_token.last_used_at = utc_now()
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
+                logger.warning("Failed to update API token last_used_at", exc_info=True)
+            return user
+    return None
+
+
 def _get_active_user_from_token(
     token: Optional[str], db: Session, invalid_exception: HTTPException
 ) -> User:
-    """Resolve an active user from a JWT token."""
+    """Resolve an active user from a JWT access token or a personal access token."""
     if not token:
         raise invalid_exception
 
-    username = verify_token(token)
-    if username is None:
-        raise invalid_exception
+    # Personal access token ("borgui_…") — a JWT never carries this prefix, so we
+    # can route on it without ambiguity. Anything else is treated as a JWT.
+    if token.startswith(API_TOKEN_PREFIX):
+        user = _resolve_api_token_user(token, db)
+    else:
+        username = verify_token(token)
+        if username is None:
+            raise invalid_exception
+        user = db.query(User).filter(User.username == username).first()
 
-    user = db.query(User).filter(User.username == username).first()
     if user is None:
         raise invalid_exception
 

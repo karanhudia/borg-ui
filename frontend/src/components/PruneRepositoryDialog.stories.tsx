@@ -32,6 +32,7 @@ export const RetentionPreview: Story = {
     open: true,
     repository,
     initialForm: {
+      keep_within: '1d',
       keep_daily: 14,
       keep_weekly: 2,
       keep_monthly: 6,
@@ -55,6 +56,7 @@ export const DryRunLogMessages: Story = {
     open: true,
     repository,
     initialForm: {
+      keep_within: '12H',
       keep_daily: 1,
       keep_weekly: 1,
       keep_monthly: 1,

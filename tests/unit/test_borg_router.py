@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 import json
 
 import pytest
@@ -97,6 +97,131 @@ async def test_calculate_total_size_bytes_uses_v1_info_command():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_check_delegates_to_agent_when_managed():
+    repo = SimpleNamespace(borg_version=2, id=41, executor_type="agent")
+
+    with (
+        patch.object(
+            BorgRouter, "_run_agent_maintenance", new=AsyncMock()
+        ) as mock_agent,
+        patch(
+            "app.services.v2.check_service.check_v2_service.execute_check",
+            new=AsyncMock(),
+        ) as mock_v2,
+    ):
+        await BorgRouter(repo).check(7)
+
+    mock_agent.assert_awaited_once_with(
+        job_kind="repository.check",
+        maintenance_kind="check",
+        maintenance_job_id=7,
+    )
+    mock_v2.assert_not_awaited()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_agent_maintenance_translates_http_errors_for_background_flows():
+    # queue_/wait_for_ raise HTTPException, but _run_agent_maintenance also runs
+    # in schedulers / post-backup flows with no HTTP context, so it must not leak
+    # an HTTP-specific exception.
+    from fastapi import HTTPException
+
+    repo = SimpleNamespace(borg_version=2, id=41, executor_type="agent")
+    fake_db = MagicMock()
+    fake_db.query.return_value.get.return_value = SimpleNamespace(id=41)
+    fake_db.query.return_value.first.return_value = None
+
+    with (
+        patch("app.database.database.SessionLocal", return_value=fake_db),
+        patch(
+            "app.services.repository_executor.queue_agent_repository_operation_job",
+            return_value=SimpleNamespace(id=99),
+        ),
+        patch(
+            "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort",
+            new=AsyncMock(),
+        ),
+        patch(
+            "app.services.repository_executor.wait_for_agent_repository_operation_job",
+            new=AsyncMock(
+                side_effect=HTTPException(status_code=502, detail={"key": "boom"})
+            ),
+        ),
+        pytest.raises(RuntimeError) as excinfo,
+    ):
+        await BorgRouter(repo)._run_agent_maintenance(
+            job_kind="repository.check",
+            maintenance_kind="check",
+            maintenance_job_id=7,
+        )
+
+    assert not isinstance(excinfo.value, HTTPException)
+    assert "check" in str(excinfo.value)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_compact_delegates_to_agent_when_managed():
+    repo = SimpleNamespace(borg_version=2, id=41, executor_type="agent")
+
+    with (
+        patch.object(
+            BorgRouter, "_run_agent_maintenance", new=AsyncMock()
+        ) as mock_agent,
+        patch(
+            "app.services.v2.compact_service.compact_v2_service.execute_compact",
+            new=AsyncMock(),
+        ) as mock_v2,
+    ):
+        await BorgRouter(repo).compact(7)
+
+    mock_agent.assert_awaited_once_with(
+        job_kind="repository.compact",
+        maintenance_kind="compact",
+        maintenance_job_id=7,
+    )
+    mock_v2.assert_not_awaited()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_prune_delegates_to_agent_when_managed():
+    repo = SimpleNamespace(borg_version=2, id=41, executor_type="agent")
+
+    with (
+        patch.object(
+            BorgRouter, "_run_agent_maintenance", new=AsyncMock()
+        ) as mock_agent,
+        patch(
+            "app.services.v2.prune_service.prune_v2_service.execute_prune",
+            new=AsyncMock(),
+        ) as mock_v2,
+    ):
+        await BorgRouter(repo).prune(
+            7, 1, 2, 3, 4, 5, 6, dry_run=True, keep_within="1d"
+        )
+
+    mock_agent.assert_awaited_once_with(
+        job_kind="repository.prune",
+        maintenance_kind="prune",
+        maintenance_job_id=7,
+        operation={
+            "keep_hourly": 1,
+            "keep_daily": 2,
+            "keep_weekly": 3,
+            "keep_monthly": 4,
+            "keep_quarterly": 5,
+            "keep_yearly": 6,
+            "keep_within": "1d",
+            "dry_run": True,
+        },
+    )
+    mock_v2.assert_not_awaited()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_check_delegates_to_v2_service():
     repo = SimpleNamespace(borg_version=2, id=41)
 
@@ -172,6 +297,41 @@ async def test_prune_delegates_to_v2_service():
         keep_quarterly=5,
         keep_yearly=6,
         dry_run=True,
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_prune_delegates_keep_within_to_v2_service():
+    repo = SimpleNamespace(borg_version=2, id=41)
+
+    with patch(
+        "app.services.v2.prune_service.prune_v2_service.execute_prune",
+        new=AsyncMock(),
+    ) as mock_prune:
+        await BorgRouter(repo).prune(
+            job_id=7,
+            keep_hourly=1,
+            keep_daily=2,
+            keep_weekly=3,
+            keep_monthly=4,
+            keep_quarterly=5,
+            keep_yearly=6,
+            dry_run=True,
+            keep_within="1d",
+        )
+
+    mock_prune.assert_awaited_once_with(
+        job_id=7,
+        repository_id=41,
+        keep_hourly=1,
+        keep_daily=2,
+        keep_weekly=3,
+        keep_monthly=4,
+        keep_quarterly=5,
+        keep_yearly=6,
+        dry_run=True,
+        keep_within="1d",
     )
 
 
@@ -840,6 +1000,54 @@ async def test_break_lock_delegates_to_v1_core():
         remote_path="/usr/bin/borg",
         passphrase="secret",
     )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_break_lock_delegates_to_agent_when_managed():
+    repo = SimpleNamespace(
+        borg_version=2, id=41, path="/repo/path", executor_type="agent"
+    )
+
+    with (
+        patch.object(
+            BorgRouter,
+            "_run_agent_break_lock",
+            new=AsyncMock(return_value={"success": True}),
+        ) as mock_agent,
+        patch("app.core.borg2.borg2.break_lock", new=AsyncMock()) as mock_v2,
+    ):
+        result = await BorgRouter(repo).break_lock()
+
+    assert result == {"success": True}
+    mock_agent.assert_awaited_once_with()
+    mock_v2.assert_not_awaited()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_delete_archive_delegates_to_agent_when_managed():
+    repo = SimpleNamespace(borg_version=2, id=41, executor_type="agent")
+
+    with (
+        patch.object(
+            BorgRouter, "_run_agent_maintenance", new=AsyncMock()
+        ) as mock_agent,
+        patch(
+            "app.services.v2.delete_archive_service.delete_archive_v2_service"
+            ".execute_delete",
+            new=AsyncMock(),
+        ) as mock_v2,
+    ):
+        await BorgRouter(repo).delete_archive(7, "aid:deadbeef")
+
+    mock_agent.assert_awaited_once_with(
+        job_kind="repository.delete_archive",
+        maintenance_kind="delete_archive",
+        maintenance_job_id=7,
+        operation={"archive": "aid:deadbeef"},
+    )
+    mock_v2.assert_not_awaited()
 
 
 @pytest.mark.unit

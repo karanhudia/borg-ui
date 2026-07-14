@@ -161,7 +161,7 @@ We welcome contributions for:
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the GNU General Public License v3.0, the same license as this project.
+By contributing, you agree that your contributions will be licensed under the GNU Affero General Public License v3.0 (AGPL-3.0), the same license as this project.
 
 All contributions become part of the project and are subject to the terms in the [LICENSE](../LICENSE) file.
 

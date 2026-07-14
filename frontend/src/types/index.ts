@@ -338,6 +338,7 @@ export interface BackupPlan {
   prune_keep_monthly?: number
   prune_keep_quarterly?: number
   prune_keep_yearly?: number
+  prune_keep_within?: string | null
   created_at?: string | null
   updated_at?: string | null
 }
@@ -355,7 +356,8 @@ export interface BackupPlanRunRepository {
 
 export interface BackupPlanScriptExecution {
   id: number
-  script_id: number
+  // Null for agent-published hooks (identified by script_name/agent_script_name).
+  script_id: number | null
   script_name: string
   hook_type?: string | null
   status: string
@@ -423,6 +425,7 @@ export interface BackupPlanData {
   prune_keep_monthly: number
   prune_keep_quarterly: number
   prune_keep_yearly: number
+  prune_keep_within?: string | null
   repositories: BackupPlanRepositoryLink[]
   clear_legacy_source_repository_ids?: number[]
 }

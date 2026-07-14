@@ -54,7 +54,7 @@ def _register_agent(
             "hostname": "laptop.local",
             "os": "linux",
             "arch": "amd64",
-            "agent_version": "0.1.0",
+            "agent_version": "0.1.1",
             "borg_versions": [
                 {"major": 1, "version": "1.2.8", "path": "/usr/bin/borg"}
             ],
@@ -802,7 +802,7 @@ class TestAgentJobTransport:
             "/api/agents/heartbeat",
             json={
                 "agent_id": registered["agent_id"],
-                "agent_version": "0.1.0",
+                "agent_version": "0.1.1",
                 "borg_versions": [],
                 "capabilities": ["backup.create"],
                 "running_job_ids": [],
@@ -814,6 +814,153 @@ class TestAgentJobTransport:
         test_db.refresh(job)
         assert job.status == "queued"
         assert job.claimed_at is None
+
+    def _create_repository_job(
+        self, test_db, agent, *, job_kind, operation, stale_at
+    ) -> AgentJob:
+        job = AgentJob(
+            agent_machine_id=agent.id,
+            job_type="repository",
+            status="running",
+            payload={
+                "schema_version": 1,
+                "job_kind": job_kind,
+                "repository": {"id": 7},
+                "operation": operation,
+            },
+            created_at=stale_at,
+            started_at=stale_at,
+            updated_at=stale_at,
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+        return job
+
+    def test_heartbeat_fails_stale_request_scoped_repository_job(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        stale_at = datetime.now(timezone.utc) - timedelta(minutes=30)
+        job = self._create_repository_job(
+            test_db,
+            agent,
+            job_kind="repository.extract_archive_file",
+            operation={"archive": "a", "file_path": "f"},
+            stale_at=stale_at,
+        )
+
+        response = test_client.post(
+            "/api/agents/heartbeat",
+            json={
+                "agent_id": registered["agent_id"],
+                "agent_version": "0.1.1",
+                "borg_versions": [],
+                "capabilities": ["backup.create"],
+                "running_job_ids": [],
+            },
+            headers=_agent_headers(registered["agent_token"]),
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(job)
+        # No receiver for the timed-out download request -> fail, don't restart.
+        assert job.status == "failed"
+        assert "no client is waiting" in (job.error_message or "")
+
+    def test_heartbeat_requeues_stale_durable_repository_job(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        stale_at = datetime.now(timezone.utc) - timedelta(minutes=30)
+        job = self._create_repository_job(
+            test_db,
+            agent,
+            job_kind="repository.check",
+            operation={"maintenance_job": {"kind": "check", "id": 1}},
+            stale_at=stale_at,
+        )
+
+        response = test_client.post(
+            "/api/agents/heartbeat",
+            json={
+                "agent_id": registered["agent_id"],
+                "agent_version": "0.1.1",
+                "borg_versions": [],
+                "capabilities": ["backup.create"],
+                "running_job_ids": [],
+            },
+            headers=_agent_headers(registered["agent_token"]),
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(job)
+        # Durable maintenance op keeps its retry-on-reconnect behaviour.
+        assert job.status == "queued"
+
+    def test_heartbeat_requeues_stale_rclone_sync_job(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        stale_at = datetime.now(timezone.utc) - timedelta(minutes=30)
+        # rclone_sync owns a durable RcloneSyncJob record and also runs after
+        # backups, so it must be retried on reconnect, not failed.
+        job = self._create_repository_job(
+            test_db,
+            agent,
+            job_kind="repository.rclone_sync",
+            operation={"rclone": {"remote_name": "r", "remote_path": "p"}},
+            stale_at=stale_at,
+        )
+
+        response = test_client.post(
+            "/api/agents/heartbeat",
+            json={
+                "agent_id": registered["agent_id"],
+                "agent_version": "0.1.1",
+                "borg_versions": [],
+                "capabilities": ["backup.create"],
+                "running_job_ids": [],
+            },
+            headers=_agent_headers(registered["agent_token"]),
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(job)
+        assert job.status == "queued"
+
+    def test_upload_job_artifact_drops_body_without_consumer(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        # No download is waiting (relay channel not registered) -> the endpoint
+        # drains the body and reports it was dropped, so the agent never blocks.
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        job = _create_agent_job(test_db, agent, status="running")
+
+        response = test_client.post(
+            f"/api/agents/jobs/{job.id}/artifact",
+            content=b"orphaned-bytes",
+            headers=_agent_headers(registered["agent_token"]),
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"accepted": False, "size": 0}
 
     def test_agent_cannot_mutate_another_agents_job(
         self, test_client: TestClient, test_db, admin_headers
@@ -911,3 +1058,122 @@ class TestAgentJobTransport:
         jobs = response.json()
         assert len(jobs) == 1
         assert jobs[0]["id"] == job.id
+
+
+class TestAgentJobReaper:
+    def _stale_running_job(self, test_db, test_client, admin_headers, status="running"):
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        job = _create_agent_job(test_db, agent, status=status)
+        stale_at = datetime.now(timezone.utc) - timedelta(minutes=30)
+        job.started_at = stale_at
+        job.updated_at = stale_at
+        test_db.commit()
+        return job
+
+    def test_reaps_stale_in_flight_job(self, test_client, test_db, admin_headers):
+        from app.services.agent_job_reaper import reap_stale_agent_jobs
+
+        job = self._stale_running_job(test_db, test_client, admin_headers)
+
+        reaped = reap_stale_agent_jobs(test_db)
+
+        assert reaped == 1
+        test_db.refresh(job)
+        assert job.status == "failed"
+        assert job.completed_at is not None
+        assert "orphaned" in (job.error_message or "")
+
+    def test_spares_recently_active_job(self, test_client, test_db, admin_headers):
+        from app.services.agent_job_reaper import reap_stale_agent_jobs
+
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        job = _create_agent_job(test_db, agent, status="running")  # updated_at = now
+
+        reaped = reap_stale_agent_jobs(test_db)
+
+        assert reaped == 0
+        test_db.refresh(job)
+        assert job.status == "running"
+
+    def test_ignores_terminal_jobs(self, test_client, test_db, admin_headers):
+        from app.services.agent_job_reaper import reap_stale_agent_jobs
+
+        job = self._stale_running_job(
+            test_db, test_client, admin_headers, status="completed"
+        )
+
+        reaped = reap_stale_agent_jobs(test_db)
+
+        assert reaped == 0
+        test_db.refresh(job)
+        assert job.status == "completed"
+
+    def test_fails_linked_backup_job(self, test_client, test_db, admin_headers):
+        from app.services.agent_job_reaper import reap_stale_agent_jobs
+        from app.database.models import BackupJob
+
+        backup_job = BackupJob(
+            repository="/repo",
+            status="running",
+        )
+        test_db.add(backup_job)
+        test_db.commit()
+        test_db.refresh(backup_job)
+
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        job = _create_agent_job(test_db, agent, status="running")
+        stale_at = datetime.now(timezone.utc) - timedelta(minutes=30)
+        # Link and stale-ify in a single commit; updated_at has an onupdate, so a
+        # later separate commit would refresh the timestamp and un-stale the job.
+        job.backup_job_id = backup_job.id
+        job.started_at = stale_at
+        job.updated_at = stale_at
+        test_db.commit()
+
+        reaped = reap_stale_agent_jobs(test_db)
+
+        assert reaped == 1
+        test_db.refresh(backup_job)
+        assert backup_job.status == "failed"
+
+    def test_does_not_overwrite_terminal_backup_job(
+        self, test_client, test_db, admin_headers
+    ):
+        from app.services.agent_job_reaper import reap_stale_agent_jobs
+        from app.database.models import BackupJob
+
+        # An already-finished backup must not be flipped back to failed when its
+        # AgentJob gets stale-reaped after the fact.
+        backup_job = BackupJob(repository="/repo", status="completed")
+        test_db.add(backup_job)
+        test_db.commit()
+        test_db.refresh(backup_job)
+
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        job = _create_agent_job(test_db, agent, status="running")
+        stale_at = datetime.now(timezone.utc) - timedelta(minutes=30)
+        job.backup_job_id = backup_job.id
+        job.started_at = stale_at
+        job.updated_at = stale_at
+        test_db.commit()
+
+        reap_stale_agent_jobs(test_db)
+
+        test_db.refresh(backup_job)
+        assert backup_job.status == "completed"

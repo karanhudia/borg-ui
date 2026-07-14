@@ -1,4 +1,7 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 import os  # noqa: F401
 import structlog
@@ -15,6 +18,7 @@ from app.services.archive_browse_service import (
 )
 from app.services.cache_service import archive_cache
 from app.services.repository_executor import (
+    get_agent_archive_browse_job,
     is_agent_executor,
     queue_agent_repository_operation_job,
     wait_for_agent_repository_operation_job,
@@ -58,14 +62,30 @@ def _is_browse_result_payload(items) -> bool:
     )
 
 
-async def _list_archive_contents(
+# How long a single browse request waits for the agent's list_archive_contents
+# job before returning HTTP 202 so the client polls. Large managed archives
+# (hundreds of thousands of entries) can take longer than any single request
+# should block; small ones still resolve within this first window.
+BROWSE_AGENT_WAIT_SECONDS = 8
+
+
+async def _run_or_poll_agent_browse(
     db: Session,
     repository: Repository,
     *,
     archive_name: str,
     max_items: int,
-) -> dict:
-    if is_agent_executor(repository):
+    job_id: Optional[int],
+) -> tuple[Optional[dict], int]:
+    """Queue (``job_id`` is None) or resume (``job_id`` given) the agent's archive
+    listing job and wait a bounded window for it.
+
+    Returns ``(result, job_id)``. ``result`` is the completed job payload, or
+    ``None`` when the job is still running — the caller then returns HTTP 202 with
+    the job id so the client polls. The completed listing is parsed and cached by
+    the caller, so subsequent opens of the same archive are served from cache.
+    """
+    if job_id is None:
         agent_job = queue_agent_repository_operation_job(
             db,
             repository,
@@ -78,8 +98,31 @@ async def _list_archive_contents(
             repository_id=repository.id,
             archive_name=archive_name,
         )
-        return await wait_for_agent_repository_operation_job(db, agent_job.id)
+        job_id = agent_job.id
+    elif get_agent_archive_browse_job(db, repository, job_id, archive_name) is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"key": "backend.errors.agents.jobNotFound"},
+        )
 
+    try:
+        result = await wait_for_agent_repository_operation_job(
+            db, job_id, timeout_seconds=BROWSE_AGENT_WAIT_SECONDS
+        )
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_504_GATEWAY_TIMEOUT:
+            return None, job_id
+        raise
+    return result, job_id
+
+
+async def _list_archive_contents_local(
+    db: Session,
+    repository: Repository,
+    *,
+    archive_name: str,
+    max_items: int,
+) -> dict:
     env, temp_key_file = _build_repo_env(repository, db)
     try:
         return await BorgRouter(repository).list_archive_contents(
@@ -97,6 +140,10 @@ async def browse_archive_contents(
     repository_id: int,
     archive_name: str,
     path: str = Query("", description="Path within archive to browse"),
+    job_id: Optional[int] = Query(
+        None,
+        description="Poll an in-flight agent browse job queued by a prior call",
+    ),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -146,12 +193,29 @@ async def browse_archive_contents(
         else:
             # If not in cache, fetch from borg with streaming (prevents OOM)
             # Pass max_items as max_lines to ensure borg process is killed if limit exceeded
-            result = await _list_archive_contents(
-                db,
-                repository,
-                archive_name=archive_name,
-                max_items=max_items,
-            )
+            if is_agent_executor(repository):
+                # Agent listings run remotely and can be slow; queue/poll a job
+                # instead of blocking the request until it finishes or times out.
+                result, browse_job_id = await _run_or_poll_agent_browse(
+                    db,
+                    repository,
+                    archive_name=archive_name,
+                    max_items=max_items,
+                    job_id=job_id,
+                )
+                if result is None:
+                    # Job still running — tell the client to poll with this id.
+                    return JSONResponse(
+                        status_code=status.HTTP_202_ACCEPTED,
+                        content={"status": "pending", "jobId": browse_job_id},
+                    )
+            else:
+                result = await _list_archive_contents_local(
+                    db,
+                    repository,
+                    archive_name=archive_name,
+                    max_items=max_items,
+                )
 
             # Check if line limit was exceeded (borg process was killed to prevent OOM)
             if result.get("line_count_exceeded"):

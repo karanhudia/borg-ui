@@ -1,5 +1,6 @@
 import base64
 import json
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -7,6 +8,7 @@ import pytest
 
 from agent.borg_ui_agent.backup import (
     BackupCreatePayload,
+    build_borg_env,
     execute_backup_create_job,
     parse_borg_progress,
 )
@@ -15,6 +17,7 @@ from agent.borg_ui_agent.client import AGENT_AUTH_HEADER, AgentClient
 from agent.borg_ui_agent.config import AgentConfig, load_config, save_config
 from agent.borg_ui_agent.repository_ops import (
     RepositoryOperationPayload,
+    RepositoryOperationResult,
     execute_repository_operation_job,
     _write_temp_rclone_config,
 )
@@ -46,6 +49,28 @@ class FakeWebSocket:
         self.closed = True
 
 
+class RecordingHttpClient:
+    """Records the REST terminal-delivery calls the session makes (results,
+    errors and cancels now go over the job API instead of the WebSocket)."""
+
+    def __init__(self):
+        self.completed = []
+        self.failed = []
+        self.canceled = []
+
+    def complete_job(self, job_id, *, result):
+        self.completed.append((job_id, result))
+        return {"id": job_id, "status": "completed"}
+
+    def fail_job(self, job_id, *, error_message, return_code=None):
+        self.failed.append((job_id, error_message, return_code))
+        return {"id": job_id, "status": "failed"}
+
+    def cancel_job(self, job_id):
+        self.canceled.append(job_id)
+        return {"id": job_id, "status": "canceled"}
+
+
 class FakeResponse:
     def __init__(self, payload=None, status_code=200, text=""):
         self.payload = payload or {}
@@ -73,6 +98,16 @@ class FakeSession:
             }
         )
         return self.responses.pop(0)
+
+
+@pytest.fixture
+def patch_session_platform(monkeypatch):
+    """Stub the platform / borg detection the session runtime runs on hello."""
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session.detect_platform",
+        lambda: {"hostname": "host.local", "os": "linux", "arch": "amd64"},
+    )
+    monkeypatch.setattr("agent.borg_ui_agent.session.detect_borg_binaries", lambda: [])
 
 
 @pytest.mark.unit
@@ -150,7 +185,7 @@ def test_agent_client_register_and_authenticated_request_headers():
         hostname="laptop.local",
         os_name="linux",
         arch="amd64",
-        agent_version="0.1.0",
+        agent_version="0.1.1",
         borg_versions=[],
         capabilities=["jobs.poll"],
     )
@@ -221,6 +256,7 @@ def test_backup_create_payload_builds_borg1_command():
         "create",
         "--progress",
         "--stats",
+        "--json",
         "--show-rc",
         "--log-json",
         "--compression",
@@ -260,6 +296,7 @@ def test_backup_create_payload_builds_borg2_command_from_flat_payload():
         "/backup/repo",
         "create",
         "--stats",
+        "--json",
         "--compression",
         "none",
         "--upload-ratelimit",
@@ -489,6 +526,65 @@ def test_repository_init_payload_builds_borg1_command():
 
 
 @pytest.mark.unit
+def test_repository_rinfo_payload_builds_borg2_command():
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "schema_version": 1,
+            "job_kind": "repository.rinfo",
+            "repository": {"path": "/agent/repo2", "borg_version": 2},
+        }
+    )
+
+    assert payload.build_command() == [
+        "borg2",
+        "-r",
+        "/agent/repo2",
+        "repo-info",
+        "--json",
+    ]
+
+
+@pytest.mark.unit
+def test_repository_archive_info_payload_builds_borg2_command():
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "schema_version": 1,
+            "job_kind": "repository.archive_info",
+            "repository": {"path": "/agent/repo2", "borg_version": 2},
+            "operation": {"archive": "aid:deadbeef"},
+        }
+    )
+
+    assert payload.build_command() == [
+        "borg2",
+        "-r",
+        "/agent/repo2",
+        "info",
+        "--json",
+        "aid:deadbeef",
+    ]
+
+
+@pytest.mark.unit
+def test_repository_archive_info_payload_builds_borg1_command():
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "schema_version": 1,
+            "job_kind": "repository.archive_info",
+            "repository": {"path": "/agent/repo", "borg_version": 1},
+            "operation": {"archive": "arch-1"},
+        }
+    )
+
+    assert payload.build_command() == [
+        "borg",
+        "info",
+        "--json",
+        "/agent/repo::arch-1",
+    ]
+
+
+@pytest.mark.unit
 def test_repository_init_payload_rejects_non_mapping_operation():
     payload = RepositoryOperationPayload.from_job_payload(
         {
@@ -562,12 +658,153 @@ def test_session_runtime_connects_with_websocket_url_and_sends_hello(monkeypatch
         "type": "hello",
         "agent_id": "agt_123",
         "hostname": "host.local",
-        "agent_version": "0.1.0",
+        "agent_version": "0.1.1",
         "borg_versions": [],
         "capabilities": get_capabilities(),
         "running_job_ids": [],
     }
     assert socket.closed is True
+
+
+@pytest.mark.unit
+def test_session_runtime_sends_app_heartbeat_while_idle(monkeypatch):
+    from agent.borg_ui_agent.session import AgentSessionRuntime
+
+    # recv() raises a timeout first (idle) then yields a harmless message so the
+    # bounded loop can exit; the idle branch must emit an app-level heartbeat.
+    socket = FakeWebSocket([TimeoutError(), {"type": "noop"}])
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session.detect_platform",
+        lambda: {"hostname": "host.local", "os": "linux", "arch": "amd64"},
+    )
+    monkeypatch.setattr("agent.borg_ui_agent.session.detect_borg_binaries", lambda: [])
+
+    runtime = AgentSessionRuntime(
+        AgentConfig("https://borgui.example.com", "agt_123", "secret"),
+        connect=lambda url, *, header, timeout: socket,
+    )
+    runtime.run_session(max_messages=1)
+
+    # hello first, then the idle heartbeat; the protocol ping is also sent.
+    assert socket.sent[0]["type"] == "hello"
+    assert {"type": "heartbeat"} in socket.sent
+    assert socket.pings >= 1
+
+
+@pytest.mark.unit
+def test_session_delivers_result_over_rest_not_ws(patch_session_platform, monkeypatch):
+    """Job results are delivered over the REST job API, never over the WebSocket,
+    so a large result frame can't starve the keepalive and break the session."""
+    from agent.borg_ui_agent.session import AgentSessionRuntime
+
+    socket = FakeWebSocket(
+        [
+            {
+                "type": "command",
+                "command_id": "cmd-1",
+                "command": "filesystem.browse",
+                "job_id": 42,
+                "payload": {"path": "/home"},
+            },
+        ]
+    )
+    http = RecordingHttpClient()
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session.browse_filesystem",
+        lambda path, include_hidden=False: {
+            "success": True,
+            "current_path": path,
+            "parent_path": "/",
+            "items": [],
+        },
+    )
+
+    runtime = AgentSessionRuntime(
+        AgentConfig("https://borgui.example.com", "agt_123", "secret"),
+        connect=lambda *args, **kwargs: socket,
+        http_client=http,
+    )
+    runtime.run_session(max_messages=1)
+
+    # Result delivered over REST...
+    assert len(http.completed) == 1
+    assert http.completed[0][0] == 42
+    assert http.completed[0][1]["success"] is True
+    # ...and NOT over the WebSocket.
+    assert all(frame.get("type") != "command_result" for frame in socket.sent)
+
+
+@pytest.mark.unit
+def test_session_command_client_delivers_error_over_rest():
+    """A failed command reports via REST fail_job (with error_message/return_code
+    preserved), not over the WebSocket."""
+    from agent.borg_ui_agent.session import SessionCommandClient
+
+    socket = FakeWebSocket([])
+    http = RecordingHttpClient()
+    client = SessionCommandClient(
+        socket, command_id="cmd-1", job_id=7, http_client=http
+    )
+
+    client.fail_job(7, error_message="boom", return_code=2)
+
+    assert http.failed == [(7, "boom", 2)]
+    assert all(frame.get("type") != "command_error" for frame in socket.sent)
+
+
+@pytest.mark.unit
+def test_session_terminal_rest_failure_is_swallowed():
+    """If REST delivery raises, the worker must not crash: the failure is logged
+    and swallowed, and the client still marks the job finished."""
+    from agent.borg_ui_agent.session import SessionCommandClient
+
+    class FailingHttpClient:
+        def complete_job(self, job_id, *, result):
+            raise RuntimeError("rest unreachable")
+
+    socket = FakeWebSocket([])
+    client = SessionCommandClient(
+        socket, command_id="cmd-1", job_id=9, http_client=FailingHttpClient()
+    )
+
+    client.complete_job(9, result={"ok": True})  # must not raise
+
+    assert client.finished is True
+    assert all(frame.get("type") != "command_result" for frame in socket.sent)
+
+
+@pytest.mark.unit
+def test_session_cancel_command_cancels_target_job_not_completes(
+    patch_session_platform,
+):
+    """A cancel command must record the target job as canceled (REST /cancel),
+    never completed — otherwise it races the worker's own cancel unwind."""
+    from agent.borg_ui_agent.session import AgentSessionRuntime
+
+    socket = FakeWebSocket(
+        [
+            {
+                "type": "command",
+                "command_id": "cmd-c",
+                "command": "cancel",
+                "job_id": 55,
+                "payload": {"job_id": 55},
+            },
+        ]
+    )
+    http = RecordingHttpClient()
+
+    runtime = AgentSessionRuntime(
+        AgentConfig("https://borgui.example.com", "agt_123", "secret"),
+        connect=lambda *args, **kwargs: socket,
+        http_client=http,
+    )
+    runtime.run_session(max_messages=1)
+
+    assert http.canceled == [55]
+    assert http.completed == []
 
 
 @pytest.mark.unit
@@ -837,12 +1074,15 @@ def test_session_runtime_reports_durable_job_events(monkeypatch):
         lambda command: fake_handler if command == "backup.create" else None,
     )
 
+    http = RecordingHttpClient()
     runtime = AgentSessionRuntime(
         AgentConfig("https://borgui.example.com", "agt_123", "secret"),
         connect=lambda *args, **kwargs: socket,
+        http_client=http,
     )
     runtime.run_session(max_messages=1)
 
+    # Control + telemetry frames stay on the WebSocket...
     assert socket.sent[1]["type"] == "command_ack"
     assert socket.sent[2]["type"] == "job_started"
     assert socket.sent[3] == {
@@ -855,8 +1095,9 @@ def test_session_runtime_reports_durable_job_events(monkeypatch):
     }
     assert socket.sent[4]["type"] == "progress"
     assert socket.sent[4]["progress_percent"] == 25
-    assert socket.sent[5]["type"] == "command_result"
-    assert socket.sent[5]["result"] == {"archive_name": "archive"}
+    # ...the terminal result goes over REST.
+    assert http.completed == [(77, {"archive_name": "archive"})]
+    assert all(frame.get("type") != "command_result" for frame in socket.sent)
 
 
 @pytest.mark.unit
@@ -898,8 +1139,12 @@ def test_session_runtime_sends_ping_on_idle_recv_timeout(monkeypatch):
     runtime.run_session(max_messages=1)
 
     assert socket.pings == 1
-    assert socket.sent[1]["type"] == "command_ack"
-    assert socket.sent[2]["type"] == "command_result"
+    # Idle recv timeout now emits an app-level heartbeat before the ping, so the
+    # command handshake follows it.
+    assert socket.sent[0]["type"] == "hello"
+    assert socket.sent[1] == {"type": "heartbeat"}
+    assert socket.sent[2]["type"] == "command_ack"
+    assert socket.sent[3]["type"] == "command_result"
 
 
 @pytest.mark.unit
@@ -1087,6 +1332,123 @@ def test_repository_rclone_sync_removes_temp_config_when_command_build_fails(
 
 
 @pytest.mark.unit
+def test_rinfo_and_archive_info_use_the_stdout_capturing_executor(monkeypatch):
+    # info/list_archives/rinfo/archive_info must run through the short-operation
+    # path so their JSON stdout is captured in the job result; the streaming
+    # path drops stdout (which broke stats/encryption refresh for agent repos).
+    routed = []
+
+    def fake_short(job_id, payload, client, cmd, env):
+        routed.append(payload.job_kind)
+        return RepositoryOperationResult(job_id=job_id, status="completed")
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.repository_ops._execute_short_repository_operation",
+        fake_short,
+    )
+    client = FakeRuntimeClient([])
+
+    for job_kind, operation in (
+        ("repository.rinfo", None),
+        ("repository.archive_info", {"archive": "aid:deadbeef"}),
+        ("repository.delete_archive", {"archive": "aid:deadbeef"}),
+        ("repository.break_lock", None),
+    ):
+        execute_repository_operation_job(
+            {
+                "id": 1,
+                "payload": {
+                    "schema_version": 1,
+                    "job_kind": job_kind,
+                    "repository": {"path": "/agent/repo", "borg_version": 2},
+                    "operation": operation,
+                },
+            },
+            client,
+        )
+
+    assert routed == [
+        "repository.rinfo",
+        "repository.archive_info",
+        "repository.delete_archive",
+        "repository.break_lock",
+    ]
+
+
+@pytest.mark.unit
+def test_repository_break_lock_payload_builds_borg2_command():
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "schema_version": 1,
+            "job_kind": "repository.break_lock",
+            "repository": {"path": "/agent/repo2", "borg_version": 2},
+        }
+    )
+
+    assert payload.build_command() == [
+        "borg2",
+        "-r",
+        "/agent/repo2",
+        "break-lock",
+    ]
+
+
+@pytest.mark.unit
+def test_repository_break_lock_payload_builds_borg1_command():
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "schema_version": 1,
+            "job_kind": "repository.break_lock",
+            "repository": {"path": "/agent/repo", "borg_version": 1},
+        }
+    )
+
+    assert payload.build_command() == [
+        "borg",
+        "break-lock",
+        "/agent/repo",
+    ]
+
+
+@pytest.mark.unit
+def test_repository_delete_archive_payload_builds_borg2_command():
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "schema_version": 1,
+            "job_kind": "repository.delete_archive",
+            "repository": {"path": "/agent/repo2", "borg_version": 2},
+            "operation": {"archive": "aid:deadbeef"},
+        }
+    )
+
+    assert payload.build_command() == [
+        "borg2",
+        "-r",
+        "/agent/repo2",
+        "delete",
+        "aid:deadbeef",
+    ]
+
+
+@pytest.mark.unit
+def test_repository_delete_archive_payload_builds_borg1_command():
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "schema_version": 1,
+            "job_kind": "repository.delete_archive",
+            "repository": {"path": "/agent/repo", "borg_version": 1},
+            "operation": {"archive": "arch-1"},
+        }
+    )
+
+    assert payload.build_command() == [
+        "borg",
+        "delete",
+        "/agent/repo::arch-1",
+    ]
+
+
+@pytest.mark.unit
 def test_repository_rclone_sync_removes_partial_temp_config_when_write_fails(
     tmp_path: Path, monkeypatch
 ):
@@ -1216,15 +1578,43 @@ def test_repository_operation_payload_builds_agent_local_commands():
         {
             "job_kind": "repository.prune",
             "repository": {"path": "/agent/repo", "borg_version": 2},
-            "operation": {"keep_daily": 7, "dry_run": True},
+            "operation": {
+                "keep_daily": 7,
+                "keep_quarterly": 3,
+                "keep_within": "1d",
+                "dry_run": True,
+            },
+        }
+    )
+    prune_v1_payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "job_kind": "repository.prune",
+            "repository": {"path": "/agent/repo", "borg_version": 1},
+            "operation": {"keep_daily": 7, "keep_quarterly": 3},
         }
     )
 
     assert info_payload.build_command() == ["borg", "info", "--json", "/agent/repo"]
+    # Borg 2 prune: no --stats, quarterly -> --keep-3monthly.
     assert prune_payload.build_command() == [
         "borg2",
         "-r",
         "/agent/repo",
+        "prune",
+        "--progress",
+        "--show-rc",
+        "--log-json",
+        "--keep-daily",
+        "7",
+        "--keep-3monthly",
+        "3",
+        "--keep-within=1d",
+        "--dry-run",
+    ]
+    # Borg 1 prune keeps --stats; quarterly is --keep-3monthly on borg1 too
+    # (borg 1.4 has no --keep-quarterly), and the repo path comes last.
+    assert prune_v1_payload.build_command() == [
+        "borg",
         "prune",
         "--progress",
         "--stats",
@@ -1232,8 +1622,25 @@ def test_repository_operation_payload_builds_agent_local_commands():
         "--log-json",
         "--keep-daily",
         "7",
-        "--dry-run",
+        "--keep-3monthly",
+        "3",
+        "/agent/repo",
     ]
+
+    # Zero retentions must not be emitted (matches server-side `> 0`): a payload
+    # with keep_hourly=0/keep_quarterly=0 yields no --keep-hourly / --keep-3monthly.
+    prune_zero_payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "job_kind": "repository.prune",
+            "repository": {"path": "/agent/repo", "borg_version": 1},
+            "operation": {"keep_hourly": 0, "keep_daily": 7, "keep_quarterly": 0},
+        }
+    )
+    zero_cmd = prune_zero_payload.build_command()
+    assert "--keep-hourly" not in zero_cmd
+    assert "--keep-3monthly" not in zero_cmd
+    assert "--keep-quarterly" not in zero_cmd
+    assert zero_cmd.count("--keep-daily") == 1
 
 
 @pytest.mark.unit
@@ -1359,17 +1766,179 @@ def test_repository_extract_file_job_returns_base64_content(monkeypatch):
     ).decode("ascii")
 
 
-class FakeStdout:
-    def __init__(self, lines):
-        self.lines = lines
+@pytest.mark.unit
+def test_repository_extract_file_streams_artifact_when_delivery_requested(monkeypatch):
+    uploaded = {}
+
+    class _FakeStdout:
+        def __init__(self, data):
+            self._data = data
+            self._done = False
+
+        def read(self, *args):
+            if self._done:
+                return b""
+            self._done = True
+            return self._data
+
+        def close(self):
+            pass
+
+    def fake_popen(cmd, **kwargs):
+        assert cmd[:3] == ["borg", "extract", "--stdout"]
+        return SimpleNamespace(
+            stdout=_FakeStdout(b"\x00filebytes"),
+            stderr=SimpleNamespace(read=lambda: b""),
+            wait=lambda: 0,
+            poll=lambda: 0,
+        )
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.repository_ops.subprocess.Popen", fake_popen
+    )
+
+    class _StreamingClient(FakeRuntimeClient):
+        def upload_artifact(self, job_id, data):
+            uploaded["job_id"] = job_id
+            uploaded["bytes"] = data.read()
+            return {"accepted": True, "size": len(uploaded["bytes"])}
+
+    client = _StreamingClient([])
+
+    result = execute_repository_operation_job(
+        {
+            "id": 91,
+            "payload": {
+                "job_kind": "repository.extract_archive_file",
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+                "operation": {
+                    "archive": "archive-1",
+                    "file_path": "docs/report.txt",
+                    "delivery": "artifact",
+                },
+                "secrets": {"BORG_PASSPHRASE": {"value": "secret"}},
+            },
+        },
+        client,
+    )
+
+    assert result.status == "completed"
+    assert uploaded["job_id"] == 91
+    assert uploaded["bytes"] == b"\x00filebytes"
+    complete_call = [c for c in client.calls if c[0] == "complete_job"][0]
+    assert complete_call[2]["artifact"] is True
+    assert "content_base64" not in complete_call[2]
+
+
+@pytest.mark.unit
+def test_repository_extract_file_streaming_cancels_a_wedged_borg(monkeypatch):
+    # The watchdog must terminate borg on cancellation so a stalled process
+    # (upload read blocked) does not pin the worker.
+    terminated = threading.Event()
+
+    class _BlockingStdout:
+        def read(self, *args):
+            terminated.wait(timeout=5)  # unblocks when borg is "terminated"
+            return b""
+
+        def close(self):
+            terminated.set()
+
+    process = SimpleNamespace(
+        stdout=_BlockingStdout(),
+        stderr=SimpleNamespace(read=lambda: b""),
+        pid=4321,
+        poll=lambda: -15 if terminated.is_set() else None,
+        wait=lambda *a, **k: -15,
+    )
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.repository_ops.subprocess.Popen", lambda *a, **k: process
+    )
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.repository_ops.os.getpgid", lambda pid: 9999
+    )
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.repository_ops.os.killpg",
+        lambda pgid, sig: terminated.set(),
+    )
+
+    class _CancelClient(FakeRuntimeClient):
+        def upload_artifact(self, job_id, data):
+            data.read()  # blocks until borg is terminated
+            return {}
+
+        def cancel_job(self, job_id):
+            self.calls.append(("cancel_job", job_id))
+            return {"id": job_id, "status": "canceled"}
+
+    client = _CancelClient([])
+
+    result = execute_repository_operation_job(
+        {
+            "id": 93,
+            "payload": {
+                "job_kind": "repository.extract_archive_file",
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+                "operation": {"archive": "a", "file_path": "f", "delivery": "artifact"},
+            },
+        },
+        client,
+        should_cancel=lambda: True,
+    )
+
+    assert result.status == "canceled"
+    assert ("cancel_job", 93) in client.calls
+
+
+@pytest.mark.unit
+def test_repository_extract_file_falls_back_to_base64_without_upload(monkeypatch):
+    # delivery=artifact requested, but a client without upload_artifact (e.g. an
+    # older transport) must still work via the base64 path.
+    def fake_run(cmd, *, capture_output, env, timeout):
+        return SimpleNamespace(returncode=0, stdout=b"data", stderr=b"")
+
+    monkeypatch.setattr("agent.borg_ui_agent.repository_ops.subprocess.run", fake_run)
+    client = FakeRuntimeClient([])  # no upload_artifact attribute
+
+    result = execute_repository_operation_job(
+        {
+            "id": 92,
+            "payload": {
+                "job_kind": "repository.extract_archive_file",
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+                "operation": {"archive": "a", "file_path": "f", "delivery": "artifact"},
+            },
+        },
+        client,
+    )
+
+    assert result.status == "completed"
+    complete_call = [c for c in client.calls if c[0] == "complete_job"][0]
+    assert complete_call[2]["content_base64"] == base64.b64encode(b"data").decode(
+        "ascii"
+    )
+
+
+class FakeStream:
+    """Doubles as an iterable line stream (stderr) or a readable blob (stdout)."""
+
+    def __init__(self, lines=None, data=""):
+        self.lines = lines or []
+        self._data = data
 
     def __iter__(self):
         return iter(self.lines)
 
+    def read(self):
+        return self._data
+
 
 class FakeProcess:
-    def __init__(self, lines, return_code):
-        self.stdout = FakeStdout(lines)
+    # `lines` are the stderr progress/log lines borg streams; `stdout_data` is
+    # the final `borg create --json` result document (with the resolved name).
+    def __init__(self, lines, return_code, stdout_data=""):
+        self.stderr = FakeStream(lines=lines)
+        self.stdout = FakeStream(data=stdout_data)
         self.return_code = return_code
 
     def wait(self):
@@ -1445,11 +2014,87 @@ def test_execute_backup_create_job_completes_successfully(monkeypatch):
     assert result.status == "completed"
     assert popen_calls[0]["cmd"][-2:] == ["/repo::archive", "/src"]
     assert popen_calls[0]["env"]["BORG_PASSPHRASE"] == "secret"
+    # Unencrypted repos must not stall the non-interactive agent on borg's
+    # "previously unknown unencrypted repository [yN]" prompt (issue #741).
+    assert popen_calls[0]["env"]["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] == "yes"
     assert popen_calls[0]["kwargs"]["start_new_session"] is True
     assert any(call[0] == "send_progress" for call in client.calls)
     complete_call = [call for call in client.calls if call[0] == "complete_job"][0]
+    # No --json document on stdout -> fall back to the requested archive name.
     assert complete_call[2]["archive_name"] == "archive"
     assert complete_call[2]["return_code"] == 0
+
+
+@pytest.mark.unit
+def test_build_borg_env_sets_noninteractive_access_defaults(monkeypatch):
+    # borg 1.x and 2 both prompt "[yN]" on first access to an unknown
+    # unencrypted (or relocated) repository. The agent runs borg
+    # non-interactively, so without these flags every operation on such a repo
+    # hangs and the UI shows empty stats (0 archives / N/A / never) -> #741.
+    monkeypatch.delenv("BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK", raising=False)
+    monkeypatch.delenv("BORG_RELOCATED_REPO_ACCESS_IS_OK", raising=False)
+
+    env = build_borg_env()
+
+    assert env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] == "yes"
+    assert env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] == "yes"
+
+
+@pytest.mark.unit
+def test_build_borg_env_overrides_win_but_container_setting_is_kept(monkeypatch):
+    # A per-job override (e.g. the passphrase) is layered last and wins.
+    env = build_borg_env({"BORG_PASSPHRASE": "secret"})
+    assert env["BORG_PASSPHRASE"] == "secret"
+    assert env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] == "yes"
+
+    # An explicit container-level setting is respected over the default.
+    monkeypatch.setenv("BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK", "no")
+    env = build_borg_env()
+    assert env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] == "no"
+
+
+@pytest.mark.unit
+def test_execute_backup_create_job_reports_resolved_archive_name(monkeypatch):
+    # borg expands placeholders like {now:...} itself; the resolved name comes
+    # back on stdout as the --json document's archive.name. The agent must report
+    # that resolved name, not the template it requested.
+    json_document = json.dumps(
+        {
+            "archive": {
+                "name": "m3s02-2026-07-06-1783316999",
+                "id": "c46ef96c",
+                "stats": {"nfiles": 1},
+            },
+            "repository": {"location": "/repo"},
+        }
+    )
+
+    def fake_popen(cmd, stdout, stderr, text, env, **kwargs):
+        return FakeProcess(
+            ['{"type":"archive_progress","finished":true}\n'],
+            0,
+            stdout_data=json_document,
+        )
+
+    monkeypatch.setattr("agent.borg_ui_agent.backup.subprocess.Popen", fake_popen)
+    client = BackupClient()
+
+    result = execute_backup_create_job(
+        {
+            "id": 12,
+            "payload": {
+                "job_kind": "backup.create",
+                "repository_path": "/repo",
+                "archive_name": "m3s02-{now:%Y-%m-%d-%s}",
+                "source_paths": ["/src"],
+            },
+        },
+        client,
+    )
+
+    assert result.status == "completed"
+    complete_call = [call for call in client.calls if call[0] == "complete_job"][0]
+    assert complete_call[2]["archive_name"] == "m3s02-2026-07-06-1783316999"
 
 
 @pytest.mark.unit

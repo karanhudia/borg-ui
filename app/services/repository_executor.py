@@ -23,9 +23,14 @@ TERMINAL_AGENT_STATUSES = {"completed", "failed", "canceled"}
 REPOSITORY_OPERATION_CAPABILITIES = {
     "repository.init",
     "repository.info",
+    "repository.rinfo",
+    "repository.archive_info",
     "repository.list_archives",
+    "repository.delete_archive",
+    "repository.break_lock",
     "repository.list_archive_contents",
     "repository.extract_archive_file",
+    "repository.restore",
     "repository.check",
     "repository.prune",
     "repository.compact",
@@ -313,6 +318,7 @@ def queue_agent_repository_operation_job(
         "restore_check": "restore_check_jobs",
         "compact": "compact_jobs",
         "prune": "prune_jobs",
+        "delete_archive": "delete_archive_jobs",
     }
     ensure_repository_admission(
         db,
@@ -342,6 +348,32 @@ def queue_agent_repository_operation_job(
     db.commit()
     db.refresh(agent_job)
     return agent_job
+
+
+def get_agent_archive_browse_job(
+    db: Session,
+    repository: Repository,
+    agent_job_id: int,
+    archive_name: str,
+) -> Optional[AgentJob]:
+    """Return a previously-queued ``list_archive_contents`` job iff it belongs to
+    this repository and archive.
+
+    Archive browsing is asynchronous: the first request queues the job and the
+    client then polls with the returned job id. This validates that a polled job
+    id really is this repository's browse job for this archive, so one viewer
+    cannot poll another repository's listing by guessing an id.
+    """
+    agent_job = db.query(AgentJob).filter(AgentJob.id == agent_job_id).first()
+    if agent_job is None:
+        return None
+    payload = agent_job.payload if isinstance(agent_job.payload, dict) else {}
+    repository_matches = (payload.get("repository") or {}).get("id") == repository.id
+    kind_matches = payload.get("job_kind") == "repository.list_archive_contents"
+    archive_matches = (payload.get("operation") or {}).get("archive") == archive_name
+    return (
+        agent_job if repository_matches and kind_matches and archive_matches else None
+    )
 
 
 async def wait_for_agent_repository_operation_job(

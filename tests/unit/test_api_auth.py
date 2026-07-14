@@ -1942,6 +1942,125 @@ class TestOidcAuthentication:
         assert user.role == "operator"
         assert user.all_repositories_role == "operator"
 
+    def _oidc_settings(self, **overrides):
+        base = dict(
+            oidc_enabled=True,
+            oidc_discovery_url="https://id.example.com/.well-known/openid-configuration",
+            oidc_client_id="borg-ui",
+            oidc_client_secret_encrypted=encrypt_secret("secret-value"),
+            oidc_admin_groups="admin",
+        )
+        base.update(overrides)
+        return SystemSettings(**base)
+
+    def _oidc_admin_user(
+        self, username, *, role, subject=None, email=None, auth_source="oidc"
+    ):
+        """Build a test user for the OIDC role-sync cases (three tests below)."""
+        return User(
+            username=username,
+            password_hash="",
+            email=email or f"{username}@example.com",
+            role=role,
+            is_active=True,
+            auth_source=auth_source,
+            oidc_subject=subject,
+        )
+
+    def test_oidc_exchange_syncs_admin_role_from_group_for_existing_user(
+        self, test_client: TestClient, test_db
+    ):
+        """An existing OIDC user gains admin from group membership on re-login,
+        even though the IdP sends no role claim (only groups)."""
+        existing = self._oidc_admin_user(
+            "grp-admin", role="viewer", subject="grp-subject"
+        )
+        test_db.add(existing)
+        test_db.add(self._oidc_settings())
+        test_db.commit()
+        test_db.refresh(existing)
+
+        # Grant carries the admin group but NO role claim.
+        create_test_oidc_exchange_grant(
+            test_db,
+            username="grp-admin",
+            oidc_subject="grp-subject",
+            email="grp-admin@example.com",
+            groups=["admin"],
+            role=None,
+        )
+        test_client.cookies.set("oidc_exchange_grant", "grant-123")
+
+        response = test_client.post(
+            "/api/auth/oidc/exchange", headers={"Origin": "http://testserver"}
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(existing)
+        assert existing.role == "admin"
+
+    def test_oidc_exchange_does_not_demote_last_admin(
+        self, test_client: TestClient, test_db
+    ):
+        """The role re-sync must never demote the last active admin."""
+        admin = self._oidc_admin_user(
+            "lone-admin", role="admin", subject="lone-subject"
+        )
+        test_db.add(admin)
+        test_db.add(self._oidc_settings())
+        test_db.commit()
+        test_db.refresh(admin)
+
+        # The IdP no longer reports the admin group.
+        create_test_oidc_exchange_grant(
+            test_db,
+            username="lone-admin",
+            oidc_subject="lone-subject",
+            email="lone-admin@example.com",
+            groups=["users"],
+            role=None,
+        )
+        test_client.cookies.set("oidc_exchange_grant", "grant-123")
+
+        response = test_client.post(
+            "/api/auth/oidc/exchange", headers={"Origin": "http://testserver"}
+        )
+        assert response.status_code == 200
+        test_db.refresh(admin)
+        assert admin.role == "admin"  # kept — last admin is not demoted
+
+    def test_oidc_exchange_demotes_admin_when_another_admin_exists(
+        self, test_client: TestClient, test_db
+    ):
+        """Demotion goes through when another active admin remains."""
+        test_db.add(
+            self._oidc_admin_user("other-admin", role="admin", auth_source="local")
+        )
+        admin = self._oidc_admin_user(
+            "grp-admin2", role="admin", subject="grp-subject-2"
+        )
+        test_db.add(admin)
+        test_db.add(self._oidc_settings())
+        test_db.commit()
+        test_db.refresh(admin)
+
+        create_test_oidc_exchange_grant(
+            test_db,
+            username="grp-admin2",
+            oidc_subject="grp-subject-2",
+            email="grp-admin2@example.com",
+            groups=["users"],
+            role=None,
+        )
+        test_client.cookies.set("oidc_exchange_grant", "grant-123")
+
+        response = test_client.post(
+            "/api/auth/oidc/exchange", headers={"Origin": "http://testserver"}
+        )
+        assert response.status_code == 200
+        test_db.refresh(admin)
+        assert admin.role != "admin"  # demoted — another admin remains
+
     def test_oidc_exchange_links_existing_oidc_user_without_subject(
         self, test_client: TestClient, test_db
     ):

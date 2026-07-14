@@ -74,6 +74,13 @@ from app.services.check_flag_validation import (
     validate_check_flags_for_max_duration,
 )
 from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
+from app.services.agent_connection_manager import (
+    agent_connection_manager,
+    AgentConnectionUnavailable,
+    AgentCommandTimeout,
+    AgentCommandError,
+)
+from app.core.agent_constants import AGENT_FILESYSTEM_BROWSE_TIMEOUT_SECONDS
 from app.services.job_admission import (
     OPERATION_CHECK,
     OPERATION_COMPACT,
@@ -147,9 +154,10 @@ def _dispatch_router_prune(
     keep_monthly: int,
     keep_quarterly: int,
     keep_yearly: int,
+    keep_within: str | None,
     job: PruneJob,
 ):
-    return BorgRouter(router_repo).prune(
+    args = (
         job.id,
         keep_hourly,
         keep_daily,
@@ -159,6 +167,8 @@ def _dispatch_router_prune(
         keep_yearly,
         False,
     )
+    kwargs = {"keep_within": keep_within} if keep_within is not None else {}
+    return BorgRouter(router_repo).prune(*args, **kwargs)
 
 
 AGENT_RCLONE_SYNC_CAPABILITY = "repository.rclone_sync"
@@ -708,6 +718,7 @@ def _parse_agent_json_result(result: dict[str, Any]) -> dict[str, Any]:
 
 
 def _agent_prune_operation_payload(request: dict) -> dict[str, Any]:
+    keep_within = _normalize_prune_keep_within(request.get("keep_within"))
     return {
         "keep_hourly": request.get("keep_hourly", 0),
         "keep_daily": request.get("keep_daily", 7),
@@ -715,8 +726,21 @@ def _agent_prune_operation_payload(request: dict) -> dict[str, Any]:
         "keep_monthly": request.get("keep_monthly", 6),
         "keep_quarterly": request.get("keep_quarterly", 0),
         "keep_yearly": request.get("keep_yearly", 1),
+        "keep_within": keep_within,
         "dry_run": request.get("dry_run", False),
     }
+
+
+def _normalize_prune_keep_within(value: Any) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise HTTPException(
+            status_code=422,
+            detail={"key": "backend.errors.repo.invalidPruneKeepWithin"},
+        )
+    value = value.strip()
+    return value or None
 
 
 # Helper function to get operation timeouts from DB settings (with fallback to config)
@@ -766,18 +790,124 @@ def get_operation_timeouts(db: Session = None) -> dict:
 
 
 # Helper function to update repository archive count
+def _agent_result_archives(result) -> list:
+    """Parse the archives list out of an agent repo-list job result."""
+    try:
+        data = json.loads((result or {}).get("stdout") or "{}")
+    except (json.JSONDecodeError, TypeError):
+        return []
+    archives = data.get("archives", []) if isinstance(data, dict) else data
+    return archives if isinstance(archives, list) else []
+
+
+async def _update_agent_repository_stats(repository: Repository, db: Session) -> bool:
+    """Refresh stats for an agent repo by running list + repo-info on the node.
+
+    Sets archive_count, last_backup and encryption from the live agent results.
+    A remote Borg 2 repository has no client-computable on-disk size (borg2
+    repo-info exposes no size, and du is server/local-only), so total_size is
+    left unchanged rather than reset.
+    """
+    from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
+    from app.services.repository_executor import (
+        queue_agent_repository_operation_job,
+        wait_for_agent_repository_operation_job,
+    )
+
+    try:
+        timeouts = get_operation_timeouts(db)
+
+        list_job = queue_agent_repository_operation_job(
+            db, repository, job_kind="repository.list_archives"
+        )
+        await dispatch_agent_job_best_effort(db, list_job, repository_id=repository.id)
+        list_result = await wait_for_agent_repository_operation_job(
+            db, list_job.id, timeout_seconds=timeouts["list_timeout"]
+        )
+        archives = _agent_result_archives(list_result)
+        # A completed job can still carry a non-zero borg exit with no stdout,
+        # which parses to [] -- don't let that wipe the stored count to 0. Trust
+        # the list (incl. a legitimately empty repo) unless it explicitly failed
+        # (non-zero return_code or success=False); the result shape uses either.
+        result_meta = list_result or {}
+        list_ok = (
+            result_meta.get("return_code", 0) == 0
+            and result_meta.get("success", True) is not False
+        )
+        archive_count = len(archives)
+
+        archive_times = []
+        for archive in archives:
+            archive_time = archive.get("time") or archive.get("start")
+            if not archive_time:
+                continue
+            try:
+                parsed_time = _parse_borg_archive_time(archive_time)
+            except ValueError:
+                continue
+            if parsed_time:
+                archive_times.append(parsed_time)
+        last_backup_time = max(archive_times) if archive_times else None
+
+        encryption_mode = None
+        total_size = None
+        try:
+            rinfo_job = queue_agent_repository_operation_job(
+                db, repository, job_kind="repository.rinfo"
+            )
+            await dispatch_agent_job_best_effort(
+                db, rinfo_job, repository_id=repository.id
+            )
+            rinfo_result = await wait_for_agent_repository_operation_job(
+                db, rinfo_job.id, timeout_seconds=timeouts["info_timeout"]
+            )
+            rinfo = json.loads((rinfo_result or {}).get("stdout") or "{}")
+            encryption_mode = (rinfo.get("encryption") or {}).get("mode")
+            # Borg 1 `info --json` exposes repo-level dedup size in cache.stats;
+            # Borg 2 `repo-info --json` does not (remote size is unknowable).
+            stats = (rinfo.get("cache") or {}).get("stats") or {}
+            size_bytes = stats.get("unique_csize") or stats.get("unique_size")
+            if isinstance(size_bytes, (int, float)) and size_bytes > 0:
+                total_size = format_bytes(int(size_bytes))
+        except Exception as e:
+            logger.warning(
+                "agent repo-info for stats refresh failed",
+                repository=repository.name,
+                error=str(e),
+            )
+
+        if list_ok:
+            repository.archive_count = archive_count
+            if last_backup_time:
+                repository.last_backup = last_backup_time
+        if encryption_mode:
+            repository.encryption = encryption_mode
+        if total_size:
+            repository.total_size = total_size
+        db.commit()
+        logger.info(
+            "Updated agent repository stats",
+            repository=repository.name,
+            archive_count=archive_count,
+            encryption=encryption_mode,
+        )
+        return True
+    except Exception as e:
+        logger.error(
+            "Failed to update agent repository stats",
+            repository=repository.name,
+            error=str(e),
+        )
+        return False
+
+
 async def update_repository_stats(repository: Repository, db: Session) -> bool:
     """
     Update the archive count and repository size stats by querying Borg.
     Returns True if successful, False otherwise.
     """
     if is_agent_executor(repository):
-        logger.info(
-            "Skipping server-side stats refresh for agent-owned repository",
-            repository=repository.name,
-            repository_id=repository.id,
-        )
-        return True
+        return await _update_agent_repository_stats(repository, db)
 
     temp_key_file = None
     try:
@@ -2006,18 +2136,23 @@ def _reject_agent_repository_ssh_target(
     connection_id: Optional[int],
     execution_target: Optional[str],
 ) -> None:
-    if (
-        connection_id
-        or (path or "").strip().startswith("ssh://")
-        or (execution_target or "").strip().lower() == "ssh"
-    ):
+    """Reject only a server-managed SSH connection for an agent repository.
+
+    An agent reaches its repository over its OWN SSH setup (mounted key /
+    known_hosts), so ``ssh://`` paths and ``execution_target="ssh"`` are fully
+    supported: the agent backup/operation payload already carries the path +
+    remote_path and the agent runs ``borg ... --remote-path`` itself. Only a
+    server-managed ``connection_id`` (an ``ssh_connections`` row that only the
+    Borg UI server can use, not the agent) stays unsupported.
+    """
+    if connection_id:
         raise HTTPException(
             status_code=400,
             detail={"key": "backend.errors.repo.agentRepositorySshUnsupported"},
         )
 
 
-def _validate_agent_repository_payload(
+async def _validate_agent_repository_payload(
     repo_data: Union[RepositoryCreate, RepositoryImport], db: Session
 ) -> AgentMachine:
     _reject_agent_repository_ssh_target(
@@ -2025,8 +2160,9 @@ def _validate_agent_repository_payload(
         connection_id=repo_data.connection_id,
         execution_target=repo_data.execution_target,
     )
+    agent = _require_queueable_agent(repo_data.agent_machine_id, db)
 
-    if repo_data.encryption in [
+    encrypted = repo_data.encryption in [
         "repokey",
         "keyfile",
         "repokey-blake2",
@@ -2035,17 +2171,48 @@ def _validate_agent_repository_payload(
         "repokey-chacha20-poly1305",
         "keyfile-aes-ocb",
         "keyfile-chacha20-poly1305",
-    ]:
-        if not repo_data.passphrase or repo_data.passphrase.strip() == "":
+    ]
+    if encrypted and not (repo_data.passphrase or "").strip():
+        # Agent repos run every borg op on the agent, so the server never needs
+        # the passphrase — but confirm the agent has one, or the repo would be
+        # openable by neither. The agent returns a boolean, never the value.
+        if not await _agent_has_passphrase(agent):
             raise HTTPException(
                 status_code=400,
                 detail={
-                    "key": "backend.errors.repo.encryptedPassphraseRequired",
+                    "key": "backend.errors.repo.agentPassphraseUnavailable",
                     "params": {"mode": repo_data.encryption},
                 },
             )
 
-    return _require_queueable_agent(repo_data.agent_machine_id, db)
+    return agent
+
+
+async def _agent_has_passphrase(agent: AgentMachine) -> bool:
+    """Ask the agent whether it has a ``$BORG_PASSPHRASE`` of its own — a
+    boolean, never the passphrase value. False when the agent is offline or does
+    not set one."""
+    try:
+        result = await agent_connection_manager.send_command(
+            agent.id,
+            command="agent.repository_defaults",
+            payload={},
+            timeout_seconds=AGENT_FILESYSTEM_BROWSE_TIMEOUT_SECONDS,
+            wait_for_result=True,
+        )
+    except (AgentConnectionUnavailable, AgentCommandTimeout, AgentCommandError):
+        return False
+    except Exception:
+        # Fail closed: any unexpected error reaching the agent (e.g. the websocket
+        # layer re-raising a connection reset) must not surface as a 500 — treat it
+        # as "passphrase not confirmed" so the caller asks for one instead.
+        logger.warning(
+            "Failed to confirm agent passphrase; treating as unavailable",
+            agent_id=agent.id,
+            exc_info=True,
+        )
+        return False
+    return bool(isinstance(result, dict) and result.get("has_passphrase"))
 
 
 async def _create_agent_repository_record(
@@ -2057,7 +2224,7 @@ async def _create_agent_repository_record(
 ):
     cloud_mirror_remote = _validate_cloud_mirror_payload(repo_data, db)
     await _preflight_cloud_mirror_path(repo_data, cloud_mirror_remote)
-    agent = _validate_agent_repository_payload(repo_data, db)
+    agent = await _validate_agent_repository_payload(repo_data, db)
     if not imported:
         _require_agent_capability(agent, AGENT_REPOSITORY_INIT_CAPABILITY)
     if cloud_mirror_remote:
@@ -5287,6 +5454,7 @@ async def prune_repository(
         keep_monthly = request.get("keep_monthly", 6)
         keep_quarterly = request.get("keep_quarterly", 0)
         keep_yearly = request.get("keep_yearly", 1)
+        keep_within = _normalize_prune_keep_within(request.get("keep_within"))
         dry_run = request.get("dry_run", False)
 
         if is_agent_executor(repository):
@@ -5361,6 +5529,7 @@ async def prune_repository(
                     keep_monthly,
                     keep_quarterly,
                     keep_yearly,
+                    keep_within,
                 ),
                 extra_fields={"scheduled_prune": False},
             )
@@ -5396,6 +5565,7 @@ async def prune_repository(
         )
 
         # Wait for prune to complete and get logs
+        prune_kwargs = {"keep_within": keep_within} if keep_within is not None else {}
         await BorgRouter(repository).prune(
             prune_job.id,
             keep_hourly,
@@ -5405,6 +5575,7 @@ async def prune_repository(
             keep_quarterly,
             keep_yearly,
             dry_run,
+            **prune_kwargs,
         )
 
         # Refresh job to get updated status and logs
@@ -5880,10 +6051,20 @@ async def get_repository_info(
             await dispatch_agent_job_best_effort(db, agent_job, repository_id=repo_id)
             result = await wait_for_agent_repository_operation_job(db, agent_job.id)
             info_data = _parse_agent_json_result(result)
+
+            # The dialog's stats panel (the Borg 2 view in particular) is driven
+            # by `archives`. Borg 2 `info --json` already carries the archive list
+            # *with* per-archive stats (original_size, nfiles), so surface it —
+            # otherwise the panel shows a false "no backups yet". Borg 1 repo-info
+            # has no archives (its panel reads cache.stats instead), yielding [].
+            archives = info_data.get("archives")
+            archives = archives if isinstance(archives, list) else []
+
             logger.info(
                 "Agent repository info retrieved successfully",
                 repo_id=repo_id,
                 agent_job_id=agent_job.id,
+                archive_count=len(archives),
             )
             return {
                 "success": True,
@@ -5891,6 +6072,7 @@ async def get_repository_info(
                     "repository": info_data.get("repository", {}),
                     "cache": info_data.get("cache", {}),
                     "encryption": info_data.get("encryption", {}),
+                    "archives": archives,
                 },
                 "raw_output": info_data,
             }

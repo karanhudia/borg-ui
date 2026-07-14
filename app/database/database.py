@@ -38,6 +38,12 @@ if settings.database_url.startswith("sqlite"):
     def set_sqlite_pragma(dbapi_conn, connection_record):
         cursor = dbapi_conn.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
+        # WAL lets readers proceed without blocking the single writer, and
+        # busy_timeout retries a transiently-locked write instead of raising
+        # "database is locked" -- both matter under the concurrent multi-repo
+        # maintenance load that a plan run creates.
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA busy_timeout=5000")
         cursor.close()
 
 

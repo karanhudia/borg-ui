@@ -5,6 +5,7 @@ import os
 import shlex
 import signal
 import subprocess
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -104,6 +105,7 @@ class BackupCreatePayload:
                 self.repository_path,
                 "create",
                 "--stats",
+                "--json",
                 "--compression",
                 self.compression,
             ]
@@ -121,6 +123,7 @@ class BackupCreatePayload:
             "create",
             "--progress",
             "--stats",
+            "--json",
             "--show-rc",
             "--log-json",
             "--compression",
@@ -176,6 +179,35 @@ def _extract_environment(
     return environment
 
 
+# borg prompts interactively on first access to an unknown *unencrypted* repo
+# ("Attempting to access a previously unknown unencrypted repository! ... [yN]")
+# and again when a repository looks relocated. A managed agent runs borg
+# non-interactively, so those prompts hang (or abort with rc=2) every operation
+# on such a repository — which surfaces in the UI as empty stats (0 archives /
+# N/A size / never). Opt into non-interactive access exactly like the server
+# side does. Respected by borg 1.x and borg 2.
+_BORG_NONINTERACTIVE_ACCESS_DEFAULTS = {
+    "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK": "yes",
+    "BORG_RELOCATED_REPO_ACCESS_IS_OK": "yes",
+}
+
+
+def build_borg_env(overrides: Optional[dict[str, str]] = None) -> dict[str, str]:
+    """Build the environment for a borg subprocess launched by the agent.
+
+    Starts from the agent process environment, layers the non-interactive
+    access defaults (only where not already set, so an explicit container
+    setting still wins), then applies the per-job overrides last so a value
+    sent by the server is never clobbered.
+    """
+    env = os.environ.copy()
+    for key, value in _BORG_NONINTERACTIVE_ACCESS_DEFAULTS.items():
+        env.setdefault(key, value)
+    if overrides:
+        env.update(overrides)
+    return env
+
+
 def parse_borg_progress(line: str) -> Optional[dict[str, Any]]:
     stripped = line.strip()
     if not stripped.startswith("{"):
@@ -220,6 +252,30 @@ def parse_borg_progress(line: str) -> Optional[dict[str, Any]]:
     return None
 
 
+def _parse_created_archive_name(stdout: str) -> Optional[str]:
+    """Extract the resolved archive name from ``borg create --json`` stdout.
+
+    borg expands placeholders such as ``{now:%Y-%m-%d-%s}`` when it creates the
+    archive and reports the resolved name as ``archive.name`` in the JSON result
+    document (borg1 and borg2 alike). Returns None when the output is absent or
+    unparseable so the caller can fall back to the requested (template) name.
+    """
+    if not stdout or not stdout.strip():
+        return None
+    try:
+        data = json.loads(stdout)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    archive = data.get("archive")
+    if isinstance(archive, dict):
+        name = archive.get("name")
+        if isinstance(name, str) and name.strip():
+            return name.strip()
+    return None
+
+
 def execute_backup_create_job(
     job: dict[str, Any],
     client: AgentClient,
@@ -238,8 +294,7 @@ def execute_backup_create_job(
         )
 
     cmd = payload.build_command()
-    env = os.environ.copy()
-    env.update(payload.environment)
+    env = build_borg_env(payload.environment)
 
     sequence = 0
     client.send_log(
@@ -253,7 +308,7 @@ def execute_backup_create_job(
     try:
         popen_kwargs: dict[str, Any] = {
             "stdout": subprocess.PIPE,
-            "stderr": subprocess.STDOUT,
+            "stderr": subprocess.PIPE,
             "text": True,
             "env": env,
         }
@@ -270,10 +325,23 @@ def execute_backup_create_job(
             job_id=job_id, status="failed", message=error_message
         )
 
-    if process.stdout is not None:
-        for line in process.stdout:
+    # `borg create --json` writes its result document (with the resolved archive
+    # name) to stdout only at the very end, while --progress/--log-json stream to
+    # stderr throughout. Drain stdout in a background thread so borg never blocks
+    # on a full stdout pipe while we stream stderr line by line.
+    stdout_chunks: list[str] = []
+
+    def _drain_stdout() -> None:
+        if process.stdout is not None:
+            stdout_chunks.append(process.stdout.read())
+
+    stdout_thread = threading.Thread(target=_drain_stdout, daemon=True)
+    stdout_thread.start()
+
+    if process.stderr is not None:
+        for line in process.stderr:
             message = line.rstrip("\n")
-            client.send_log(job_id, sequence=sequence, stream="stdout", message=message)
+            client.send_log(job_id, sequence=sequence, stream="stderr", message=message)
             sequence += 1
             progress = parse_borg_progress(message)
             if progress:
@@ -284,6 +352,7 @@ def execute_backup_create_job(
                     job_id, sequence=sequence, stream="stderr", message=cancel_message
                 )
                 return_code = _terminate_process(process)
+                stdout_thread.join()
                 client.cancel_job(job_id)
                 return BackupExecutionResult(
                     job_id=job_id,
@@ -293,11 +362,15 @@ def execute_backup_create_job(
                 )
 
     return_code = process.wait()
+    stdout_thread.join()
     if return_code == 0:
+        resolved_archive_name = (
+            _parse_created_archive_name("".join(stdout_chunks)) or payload.archive_name
+        )
         client.complete_job(
             job_id,
             result={
-                "archive_name": payload.archive_name,
+                "archive_name": resolved_archive_name,
                 "return_code": return_code,
                 "command": cmd,
             },

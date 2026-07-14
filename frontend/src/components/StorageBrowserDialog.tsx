@@ -36,6 +36,7 @@ interface StorageBrowserDialogProps {
   currentPath: string
   items?: StorageBrowserItem[] | null
   isLoading?: boolean
+  loadingHint?: ReactNode
   rootLabel: string
   closeLabel: string
   emptyDirectoryLabel: string
@@ -47,7 +48,8 @@ interface StorageBrowserDialogProps {
   showModifiedColumn?: boolean
   onClose: () => void
   onNavigate: (path: string) => void
-  onDownloadFile?: (path: string) => void
+  onDownloadFile?: (path: string, size?: number | null) => void
+  downloadBusy?: boolean
   downloadLabel?: string
   formatSize?: (size: number) => string
   formatModified?: (modified: string) => string
@@ -135,6 +137,7 @@ export default function StorageBrowserDialog({
   currentPath,
   items,
   isLoading = false,
+  loadingHint,
   rootLabel,
   closeLabel,
   emptyDirectoryLabel,
@@ -147,6 +150,7 @@ export default function StorageBrowserDialog({
   onClose,
   onNavigate,
   onDownloadFile,
+  downloadBusy = false,
   downloadLabel,
   formatSize = defaultFormatSize,
   formatModified,
@@ -245,33 +249,36 @@ export default function StorageBrowserDialog({
 
           <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             {isLoading ? (
-              <Stack spacing={0.5}>
-                {[
-                  { width: '55%', isFolder: true },
-                  { width: '40%', isFolder: true },
-                  { width: '70%', isFolder: true },
-                  { width: '62%', isFolder: false },
-                  { width: '48%', isFolder: false },
-                  { width: '75%', isFolder: false },
-                  { width: '33%', isFolder: false },
-                ].map((row, index) => (
-                  <Box
-                    key={index}
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1.5,
-                      p: 1.5,
-                      borderRadius: 1,
-                      bgcolor: (theme) =>
-                        row.isFolder ? alpha(theme.palette.primary.main, 0.05) : 'action.hover',
-                    }}
-                  >
-                    <Skeleton variant="rounded" width={20} height={20} sx={{ flexShrink: 0 }} />
-                    <Skeleton variant="text" sx={{ flex: 1, maxWidth: row.width }} />
-                    <Skeleton variant="text" width={52} />
-                  </Box>
-                ))}
+              <Stack spacing={1.5} sx={{ height: '100%' }}>
+                {loadingHint}
+                <Stack spacing={0.5}>
+                  {[
+                    { width: '55%', isFolder: true },
+                    { width: '40%', isFolder: true },
+                    { width: '70%', isFolder: true },
+                    { width: '62%', isFolder: false },
+                    { width: '48%', isFolder: false },
+                    { width: '75%', isFolder: false },
+                    { width: '33%', isFolder: false },
+                  ].map((row, index) => (
+                    <Box
+                      key={index}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1.5,
+                        p: 1.5,
+                        borderRadius: 1,
+                        bgcolor: (theme) =>
+                          row.isFolder ? alpha(theme.palette.primary.main, 0.05) : 'action.hover',
+                      }}
+                    >
+                      <Skeleton variant="rounded" width={20} height={20} sx={{ flexShrink: 0 }} />
+                      <Skeleton variant="text" sx={{ flex: 1, maxWidth: row.width }} />
+                      <Skeleton variant="text" width={52} />
+                    </Box>
+                  ))}
+                </Stack>
               </Stack>
             ) : items ? (
               hasItems ? (
@@ -449,7 +456,10 @@ export default function StorageBrowserDialog({
                                   <IconButton
                                     size="small"
                                     sx={{ color: 'text.secondary' }}
-                                    onClick={() => onDownloadFile(file.downloadPath || file.path)}
+                                    disabled={downloadBusy}
+                                    onClick={() =>
+                                      onDownloadFile(file.downloadPath || file.path, file.size)
+                                    }
                                     title={downloadLabel}
                                     aria-label={downloadLabel}
                                   >

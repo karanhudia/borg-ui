@@ -498,9 +498,15 @@
     "banner": {
       "systemStatus": "System Status",
       "allNominal": "All systems nominal",
-      "warnings": "{{count}} warning{{s}}",
+      "warnings": "{{count}} warning",
+      "warnings_one": "{{count}} warning",
+      "warnings_other": "{{count}} warnings",
       "critical": "{{count}} critical",
+      "critical_one": "{{count}} critical",
+      "critical_other": "{{count}} critical",
       "warnChip": "{{count}} warn",
+      "warnChip_one": "{{count}} warn",
+      "warnChip_other": "{{count}} warn",
       "okChip": "{{count}} ok",
       "stats": {
         "lastBackup": "Last backup",
@@ -756,6 +762,8 @@
       "meta": {
         "note": "Note",
         "prune": "Prune",
+        "keepWithin": "within {{interval}}",
+        "keepWithinTooltip": "within={{interval}}",
         "lastPruned": "Last Pruned",
         "compact": "Compact",
         "lastCompact": "Last Compact",
@@ -1291,6 +1299,7 @@
         "prune": "Prune",
         "retention": "Retention",
         "retentionValue": "H {{hourly}} / D {{daily}} / W {{weekly}} / M {{monthly}} / Q {{quarterly}} / Y {{yearly}}",
+        "retentionValueWithWithin": "Within {{within}} / H {{hourly}} / D {{daily}} / W {{weekly}} / M {{monthly}} / Q {{quarterly}} / Y {{yearly}}",
         "compact": "Compact",
         "check": "Check",
         "checkExtraFlags": "Check flags",
@@ -1504,6 +1513,9 @@
   "activity": {
     "title": "Activity",
     "subtitle": "View all operations and their logs",
+    "actions": {
+      "refresh": "Refresh activity"
+    },
     "filters": {
       "type": "Type",
       "status": "Status",
@@ -1523,6 +1535,7 @@
       },
       "statuses": {
         "completed": "Completed",
+        "completedWithWarnings": "Completed with Warnings",
         "needsBackup": "Needs backup",
         "failed": "Failed",
         "running": "Running",
@@ -2463,6 +2476,10 @@
       "dryRunTip": "Tip: Always run \"Dry Run\" first to preview what will be deleted!",
       "retentionPolicy": "Retention Policy",
       "retentionDescription": "Specify how many backups to keep for each time period",
+      "keepWithin": "Keep Within",
+      "keepWithinHelper": "Keep all archives created within this recent interval",
+      "keepWithinPlaceholder": "1d",
+      "keepWithinSummary": "all archives within {{interval}}",
       "keepHourly": "Keep Hourly",
       "keepHourlyHelper": "Last N hourly backups (0 = disabled)",
       "keepDaily": "Keep Daily",
@@ -3269,7 +3286,10 @@
     "keepQuarterly": "Keep Quarterly",
     "keepQuarterlyHint": "Quarterly backups to keep (0 = disabled)",
     "keepYearly": "Keep Yearly",
-    "keepYearlyHint": "Yearly backups to keep"
+    "keepYearlyHint": "Yearly backups to keep",
+    "keepWithin": "Keep Within",
+    "keepWithinHint": "Keep all archives within this recent interval, for example 1d or 12H",
+    "keepWithinPlaceholder": "1d"
   },
   "compressionSettings": {
     "title": "Compression Settings",
@@ -3829,7 +3849,8 @@
       "clearAll": "Clear all",
       "selectDirTooltip": "Select directory and all contents",
       "helpText": "Click files to select them, or click folders to navigate. Use the checkbox next to folders to select entire directories.",
-      "failedToLoadContents": "Failed to load archive contents"
+      "failedToLoadContents": "Failed to load archive contents",
+      "loadContentsTimeout": "Still loading — this archive is taking longer than expected. Try again in a moment."
     },
     "restorePath": {
       "title": "Choose restore location",
@@ -3998,6 +4019,7 @@
         "pruneAfterBackup": "Prune After Backup",
         "enabled": "Enabled",
         "disabled": "Disabled",
+        "keepWithin": "within {{interval}}",
         "compactAfterPrune": "Compact After Prune",
         "none": "None"
       },
@@ -4069,6 +4091,7 @@
   "archiveContents": {
     "title": "Archive Contents",
     "loading": "Loading archive contents...",
+    "slowLoadingHint": "This archive is large, so listing its files takes a little longer. Hang tight — this only happens the first time; afterwards it's cached.",
     "emptyDirectory": "This directory is empty",
     "emptyArchive": "This archive is empty",
     "emptyArchiveDesc": "No files were backed up in this archive. This may happen if the source directory was empty or inaccessible during the backup.",
@@ -4078,7 +4101,12 @@
     "managedCanaryLabel": "Borg UI canary",
     "managedCanaryDescription": "Managed restore-check canary files. Borg UI adds these to backups while canary mode is enabled.",
     "managedCanaryBanner": "This folder is managed by Borg UI for canary restore checks. It is safe to leave untouched.",
-    "managedCanaryProbeDisabled": "Canary paths are verified automatically by canary mode."
+    "managedCanaryProbeDisabled": "Canary paths are verified automatically by canary mode.",
+    "failedToDownloadFile": "Failed to download file",
+    "downloadPreparing": "Preparing download of {{name}}…",
+    "downloadingBytes": "Downloading… {{size}}",
+    "downloadingPercent": "Downloading… {{percent}}% ({{size}})",
+    "downloadComplete": "Downloaded {{name}}"
   },
   "codeEditor": {
     "loading": "Loading editor..."
@@ -4255,6 +4283,7 @@
     "none": "None"
   },
   "repositoryWizard": {
+    "agentRepoUnknownWarning": "This managed agent doesn't seem to know its own Borg repository. If you enter an ssh:// or sftp:// URL here, make sure this managed agent can actually reach that repository.",
     "titleCreate": "Create Repository",
     "titleEdit": "Edit Repository",
     "titleImport": "Import Repository",
@@ -4647,6 +4676,7 @@
         "permissionDeniedCreateDirectory": "Permission denied: cannot create directory at '{{path}}'. To store repositories on your host machine, use paths starting with '/local/'.",
         "permissionDeniedCreateParentDirectory": "Permission denied: cannot create parent directory '{{path}}'. Please ensure the directory exists on your host machine with proper permissions.",
         "encryptedPassphraseRequired": "Passphrase is required for encryption mode '{{mode}}'",
+        "agentPassphraseUnavailable": "This managed agent didn't report a BORG_PASSPHRASE, so an encrypted repository can't be opened by it. Set BORG_PASSPHRASE in the agent's environment, or enter a passphrase here.",
         "encryptedPassphraseIncorrect": "Repository is encrypted but the passphrase is incorrect or missing. Please provide the correct passphrase.",
         "encryptionKeyfileNotRequired": "Repository uses '{{mode}}' encryption, which does not require a keyfile. Keyfile upload is only needed for 'keyfile' or 'keyfile-blake2' encryption modes.",
         "adminAccessRequired": "Admin access required",
@@ -5016,6 +5046,9 @@
         "invalidAuthCredentials": "Invalid authentication credentials",
         "userNotFoundOrInactive": "User not found or inactive",
         "failedStartEventStream": "Failed to start event stream"
+      },
+      "jobs": {
+        "repositoryOperationActive": "Another operation is already running on this repository. Please wait for it to finish and try again."
       }
     },
     "success": {

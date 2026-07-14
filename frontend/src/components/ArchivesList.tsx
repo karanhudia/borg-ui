@@ -40,7 +40,7 @@ interface ArchivesListProps {
   onViewArchive: (archive: Archive) => void
   onRestoreArchive: (archive: Archive) => void
   onMountArchive: (archive: Archive) => void
-  onDeleteArchive: (archiveName: string) => void
+  onDeleteArchive: (archive: Archive) => void
   mountDisabled?: boolean
   canDelete?: boolean
   defaultRowsPerPage?: number

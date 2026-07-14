@@ -13,7 +13,7 @@ import axios from 'axios'
 import { BASE_PATH } from '@/utils/basePath'
 import type { Repository } from '@/types'
 import { isV2Repo } from '@/utils/repoCapabilities'
-import { buildDownloadUrl, getApiBaseUrl } from '../remoteBackends/gateway'
+import { getApiBaseUrl } from '../remoteBackends/gateway'
 import { getActiveBackendTarget } from '../remoteBackends/storage'
 import {
   attachBackendTargetAccessHeaders,
@@ -21,7 +21,7 @@ import {
   clearAccessToken,
   type BackendTargetRequestConfig,
 } from '../authHeaders'
-import type { InternalAxiosRequestConfig } from 'axios'
+import type { AxiosProgressEvent, InternalAxiosRequestConfig } from 'axios'
 
 export const httpClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL || `${BASE_PATH}/api`,
@@ -75,6 +75,7 @@ export interface PruneOptions {
   keep_monthly?: number
   keep_quarterly?: number
   keep_yearly?: number
+  keep_within?: string
   dry_run?: boolean
 }
 
@@ -91,10 +92,15 @@ export class BorgApiClient {
   readonly repoId: number
   private readonly repoPath?: string
 
+  /** Whether this is a Borg 2 repo — needed for archive addressing even on the
+   * v1 (agent) routes, where a Borg 2 archive series must be selected by id. */
+  private readonly isV2: boolean
+
   constructor(repo: Repository) {
     this.repoId = repo.id
     this.repoPath = typeof repo.path === 'string' ? repo.path : undefined
-    this.v = repo.execution_target === 'agent' ? '' : isV2Repo(repo) ? '/v2' : ''
+    this.isV2 = isV2Repo(repo)
+    this.v = repo.execution_target === 'agent' ? '' : this.isV2 ? '/v2' : ''
   }
 
   // ── Pre-creation (no repo ID yet) ────────────────────────────────────────
@@ -131,15 +137,20 @@ export class BorgApiClient {
     })
   }
 
-  getArchiveContents(archiveId: string, archiveName: string, path = '') {
+  getArchiveContents(archiveId: string, archiveName: string, path = '', jobId?: number) {
     if (this.v === '/v2') {
       return httpClient.get(`/v2/archives/${archiveId}/contents`, {
         params: { repository: this.repoId, path },
       })
     }
-    // v1: use the browse endpoint (cached, path-filtered) — needs archive NAME not hex ID
-    return httpClient.get(`/browse/${this.repoId}/${archiveName}`, {
-      params: { path },
+    // v1 browse (cached, path-filtered). For a Borg 2 archive series the name is
+    // ambiguous (matches N archives → borg errors), so select the specific
+    // archive by its id via the `aid:` selector; Borg 1 names are unique.
+    // Agent-backed archives are listed asynchronously: the first call may return
+    // 202 + a jobId, which the caller passes back here to poll the running job.
+    const selector = this.isV2 && archiveId ? `aid:${archiveId}` : archiveName
+    return httpClient.get(`/browse/${this.repoId}/${encodeURIComponent(selector)}`, {
+      params: { path, ...(jobId != null ? { job_id: jobId } : {}) },
     })
   }
 
@@ -153,16 +164,25 @@ export class BorgApiClient {
     return httpClient.get(`${this.v}/archives/delete-jobs/${jobId}`)
   }
 
-  getDownloadUrl(archiveId: string, filePath: string) {
-    return buildDownloadUrl(`${this.v}/archives/download`, {
-      repository: this.repoId,
-      archive: archiveId,
-      file_path: filePath,
+  /**
+   * Fetch a single file from an archive as a Blob via XHR (so HTTP errors are
+   * catchable and can be surfaced in the UI). The Bearer header set by the
+   * request interceptor authenticates; `get_current_download_user` accepts it.
+   */
+  fetchArchiveFile(
+    archiveId: string,
+    filePath: string,
+    options?: { onDownloadProgress?: (event: AxiosProgressEvent) => void }
+  ) {
+    return httpClient.get(`${this.v}/archives/download`, {
+      params: {
+        repository: this.repoId,
+        archive: archiveId,
+        file_path: filePath,
+      },
+      responseType: 'blob',
+      onDownloadProgress: options?.onDownloadProgress,
     })
-  }
-
-  downloadFile(archiveId: string, filePath: string) {
-    window.location.assign(this.getDownloadUrl(archiveId, filePath))
   }
 
   // ── Backup operations ────────────────────────────────────────────────────

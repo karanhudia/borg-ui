@@ -222,7 +222,11 @@ const filesystemSnapshotCapabilities = {
       label: 'btrfs read-only subvolume snapshot',
       command: 'btrfs',
       available: true,
-      requirements: ['The selected path must be a btrfs subvolume visible to the Borg UI server.'],
+      requirements: [
+        'The btrfs command must be installed and discoverable inside the Borg UI runtime/container.',
+        'The selected path must be a btrfs subvolume visible at the same path inside the Borg UI runtime.',
+        'The Borg UI runtime user needs permission to run btrfs subvolume snapshot -r and btrfs subvolume delete.',
+      ],
     },
     {
       id: 'zfs',

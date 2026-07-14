@@ -9,7 +9,7 @@ const trackArchive = vi.fn()
 const borgListArchivesMock = vi.fn()
 const borgGetInfoMock = vi.fn()
 const borgDeleteArchiveMock = vi.fn()
-const borgDownloadFileMock = vi.fn()
+const { downloadArchiveFileMock } = vi.hoisted(() => ({ downloadArchiveFileMock: vi.fn() }))
 
 function createDeferred<T>() {
   let resolve!: (value: T) => void
@@ -41,7 +41,7 @@ vi.mock('../../components/ArchivesList', () => ({
     onViewArchive: (archive: { id: string; name: string; start: string }) => void
     onRestoreArchive: (archive: { id: string; name: string; start: string }) => void
     onMountArchive: (archive: { id: string; name: string; start: string }) => void
-    onDeleteArchive: (archiveName: string) => void
+    onDeleteArchive: (archive: { id: string; name: string; start: string }) => void
   }) => {
     const archive = { id: 'a1', name: 'archive-1', start: '2026-01-01T00:00:00Z' }
     return (
@@ -49,7 +49,7 @@ vi.mock('../../components/ArchivesList', () => ({
         <button onClick={() => onViewArchive(archive)}>View Archive</button>
         <button onClick={() => onRestoreArchive(archive)}>Restore Archive</button>
         <button onClick={() => onMountArchive(archive)}>Mount Archive</button>
-        <button onClick={() => onDeleteArchive(archive.name)}>Delete Archive</button>
+        <button onClick={() => onDeleteArchive(archive)}>Delete Archive</button>
       </div>
     )
   },
@@ -132,9 +132,12 @@ vi.mock('../../services/borgApi', () => ({
       listArchives: borgListArchivesMock,
       getInfo: borgGetInfoMock,
       deleteArchive: borgDeleteArchiveMock,
-      downloadFile: borgDownloadFileMock,
     }
   }),
+}))
+
+vi.mock('../../utils/downloadArchiveFile', () => ({
+  downloadArchiveFile: downloadArchiveFileMock,
 }))
 
 vi.mock('../../services/api', () => ({
@@ -219,7 +222,7 @@ describe('Archives page actions', () => {
     })
     borgGetInfoMock.mockResolvedValue({ data: { info: {} } })
     borgDeleteArchiveMock.mockResolvedValue({ data: { job_id: 7 } })
-    borgDownloadFileMock.mockResolvedValue(undefined)
+    downloadArchiveFileMock.mockResolvedValue(undefined)
   })
 
   it('tracks filter/view and calls download, restore, and mount APIs from archive actions', async () => {
@@ -243,7 +246,10 @@ describe('Archives page actions', () => {
     await user.click(screen.getByText('View Archive'))
     await user.click(await screen.findByText('Download File'))
 
-    expect(borgDownloadFileMock).toHaveBeenCalledWith('a1', '/etc/hosts')
+    await waitFor(() => expect(downloadArchiveFileMock).toHaveBeenCalled())
+    const downloadCall = downloadArchiveFileMock.mock.calls[0]
+    expect(downloadCall[1]).toBe('a1')
+    expect(downloadCall[2]).toBe('/etc/hosts')
     expect(trackArchive).toHaveBeenCalledWith('View', repository, {
       surface: 'archive_contents',
       operation: 'open_archive',
@@ -260,7 +266,8 @@ describe('Archives page actions', () => {
     await waitFor(() => {
       expect(apiModule.restoreAPI.startRestore).toHaveBeenCalledWith(
         '/repo/one',
-        'archive-1',
+        // Borg 2 series → restore targets the specific archive by id (aid:).
+        'aid:a1',
         ['/var/lib/app'],
         '/restore/here',
         1,
@@ -358,7 +365,9 @@ describe('Archives page actions', () => {
     await user.click(await screen.findByText('Confirm Delete Archive'))
 
     await waitFor(() => {
-      expect(borgDeleteArchiveMock).toHaveBeenCalledWith('archive-1')
+      // Borg 2 series: the id is sent (backend wraps it as aid:<hex>), not the
+      // ambiguous series name.
+      expect(borgDeleteArchiveMock).toHaveBeenCalledWith('a1')
       expect(toast.error).toHaveBeenCalledWith('Failed to delete archive')
     })
     expect(trackArchive).not.toHaveBeenCalledWith('Delete', repository)

@@ -444,6 +444,7 @@ class TestBrowseArchiveBehavior:
                 repository_id=repo.id,
                 archive_name="archive-1",
                 path="home/karan/test-backup-source",
+                job_id=None,
                 current_user=admin_user,
                 db=test_db,
             )
@@ -470,8 +471,276 @@ class TestBrowseArchiveBehavior:
             repository_id=repo.id,
             archive_name="archive-1",
         )
-        wait_for_agent.assert_awaited_once_with(test_db, agent_job.id)
+        wait_for_agent.assert_awaited_once_with(
+            test_db, agent_job.id, timeout_seconds=browse_api.BROWSE_AGENT_WAIT_SECONDS
+        )
         list_local.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_browse_agent_archive_returns_202_while_job_runs(
+        self,
+        test_db,
+        admin_user,
+    ):
+        """A slow agent listing does not block the request: when the job is still
+        running after the wait window, the endpoint returns 202 + the job id so
+        the client can poll instead of getting a 504 (and an empty dialog)."""
+        agent = _create_agent(test_db, "repository.list_archive_contents")
+        repo = Repository(
+            name="Agent Browse Pending Repo",
+            path="/agent/repositories/pending",
+            encryption="none",
+            compression="none",
+            repository_type="local",
+            executor_type="agent",
+            execution_target="agent",
+            agent_machine_id=agent.id,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with (
+            patch.object(
+                browse_api.archive_cache, "get", new=AsyncMock(return_value=None)
+            ),
+            patch.object(
+                browse_api.archive_cache, "set", new=AsyncMock(return_value=True)
+            ),
+            patch(
+                "app.api.browse.dispatch_agent_job_best_effort",
+                new=AsyncMock(return_value=True),
+            ) as dispatch_agent,
+            patch(
+                "app.api.browse.wait_for_agent_repository_operation_job",
+                new=AsyncMock(
+                    side_effect=HTTPException(
+                        status_code=504,
+                        detail={
+                            "key": "backend.errors.agents.repositoryOperationTimeout"
+                        },
+                    )
+                ),
+            ) as wait_for_agent,
+        ):
+            response = await browse_api.browse_archive_contents(
+                repository_id=repo.id,
+                archive_name="archive-1",
+                path="",
+                job_id=None,
+                current_user=admin_user,
+                db=test_db,
+            )
+
+        agent_job = test_db.query(AgentJob).one()
+        assert response.status_code == 202
+        assert json.loads(response.body) == {"status": "pending", "jobId": agent_job.id}
+        dispatch_agent.assert_awaited_once()
+        wait_for_agent.assert_awaited_once_with(
+            test_db, agent_job.id, timeout_seconds=browse_api.BROWSE_AGENT_WAIT_SECONDS
+        )
+
+    @pytest.mark.asyncio
+    async def test_browse_agent_archive_poll_resumes_existing_job(
+        self,
+        test_db,
+        admin_user,
+    ):
+        """Polling with a job_id resumes the queued job (no new job, no dispatch)
+        and returns the parsed items once it completes."""
+        agent = _create_agent(test_db, "repository.list_archive_contents")
+        repo = Repository(
+            name="Agent Browse Poll Repo",
+            path="/agent/repositories/poll",
+            encryption="none",
+            compression="none",
+            repository_type="local",
+            executor_type="agent",
+            execution_target="agent",
+            agent_machine_id=agent.id,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        existing_job = browse_api.queue_agent_repository_operation_job(
+            test_db,
+            repo,
+            job_kind="repository.list_archive_contents",
+            operation={
+                "archive": "archive-1",
+                "path": "",
+                "max_lines": browse_api.MAX_ITEMS_IN_MEMORY,
+            },
+        )
+        stdout = json.dumps(
+            {
+                "path": "home/file.txt",
+                "type": "f",
+                "size": 12,
+                "mtime": "2026-05-30T15:16:14",
+            }
+        )
+
+        with (
+            patch.object(
+                browse_api.archive_cache, "get", new=AsyncMock(return_value=None)
+            ),
+            patch.object(
+                browse_api.archive_cache, "set", new=AsyncMock(return_value=True)
+            ),
+            patch(
+                "app.api.browse.dispatch_agent_job_best_effort",
+                new=AsyncMock(return_value=True),
+            ) as dispatch_agent,
+            patch(
+                "app.api.browse.wait_for_agent_repository_operation_job",
+                new=AsyncMock(return_value={"stdout": stdout}),
+            ) as wait_for_agent,
+        ):
+            response = await browse_api.browse_archive_contents(
+                repository_id=repo.id,
+                archive_name="archive-1",
+                path="home",
+                job_id=existing_job.id,
+                current_user=admin_user,
+                db=test_db,
+            )
+
+        assert response["items"] == [
+            {
+                "name": "file.txt",
+                "type": "file",
+                "size": 12,
+                "mtime": "2026-05-30T15:16:14",
+                "path": "home/file.txt",
+            }
+        ]
+        # No second job queued and no re-dispatch — the existing job was reused.
+        assert test_db.query(AgentJob).count() == 1
+        dispatch_agent.assert_not_awaited()
+        wait_for_agent.assert_awaited_once_with(
+            test_db,
+            existing_job.id,
+            timeout_seconds=browse_api.BROWSE_AGENT_WAIT_SECONDS,
+        )
+
+    @pytest.mark.asyncio
+    async def test_browse_agent_archive_poll_rejects_foreign_job_id(
+        self,
+        test_db,
+        admin_user,
+    ):
+        """A job_id that is not this repository's browse job for this archive is
+        rejected with 404 — one viewer cannot poll another repo's listing."""
+        agent = _create_agent(test_db, "repository.list_archive_contents")
+        repo = Repository(
+            name="Agent Browse Foreign Repo",
+            path="/agent/repositories/foreign",
+            encryption="none",
+            compression="none",
+            repository_type="local",
+            executor_type="agent",
+            execution_target="agent",
+            agent_machine_id=agent.id,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with (
+            patch.object(
+                browse_api.archive_cache, "get", new=AsyncMock(return_value=None)
+            ),
+            patch(
+                "app.api.browse.wait_for_agent_repository_operation_job",
+                new=AsyncMock(),
+            ) as wait_for_agent,
+        ):
+            with pytest.raises(HTTPException) as exc_info:
+                await browse_api.browse_archive_contents(
+                    repository_id=repo.id,
+                    archive_name="archive-1",
+                    path="",
+                    job_id=999999,
+                    current_user=admin_user,
+                    db=test_db,
+                )
+
+        assert exc_info.value.status_code == 404
+        wait_for_agent.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_browse_agent_archive_poll_rejects_other_repository_job(
+        self,
+        test_db,
+        admin_user,
+    ):
+        """A real browse job that belongs to *another* repository is rejected
+        with 404 — the ownership check (not mere absence) drives the refusal, so
+        one viewer cannot poll another repository's listing by guessing a valid
+        id."""
+        agent = _create_agent(test_db, "repository.list_archive_contents")
+        own_repo = Repository(
+            name="Agent Browse Own Repo",
+            path="/agent/repositories/own",
+            encryption="none",
+            compression="none",
+            repository_type="local",
+            executor_type="agent",
+            execution_target="agent",
+            agent_machine_id=agent.id,
+        )
+        foreign_repo = Repository(
+            name="Agent Browse Foreign Repo (real job)",
+            path="/agent/repositories/foreign-real",
+            encryption="none",
+            compression="none",
+            repository_type="local",
+            executor_type="agent",
+            execution_target="agent",
+            agent_machine_id=agent.id,
+        )
+        test_db.add_all([own_repo, foreign_repo])
+        test_db.commit()
+        test_db.refresh(own_repo)
+        test_db.refresh(foreign_repo)
+
+        # A genuine, queued browse job — but for the *foreign* repository.
+        foreign_job = browse_api.queue_agent_repository_operation_job(
+            test_db,
+            foreign_repo,
+            job_kind="repository.list_archive_contents",
+            operation={
+                "archive": "archive-1",
+                "path": "",
+                "max_lines": browse_api.MAX_ITEMS_IN_MEMORY,
+            },
+        )
+
+        with (
+            patch.object(
+                browse_api.archive_cache, "get", new=AsyncMock(return_value=None)
+            ),
+            patch(
+                "app.api.browse.wait_for_agent_repository_operation_job",
+                new=AsyncMock(),
+            ) as wait_for_agent,
+        ):
+            with pytest.raises(HTTPException) as exc_info:
+                await browse_api.browse_archive_contents(
+                    repository_id=own_repo.id,
+                    archive_name="archive-1",
+                    path="",
+                    job_id=foreign_job.id,
+                    current_user=admin_user,
+                    db=test_db,
+                )
+
+        # The job exists, so this exercises the repository-ownership branch, not
+        # the "job not found" branch.
+        assert exc_info.value.status_code == 404
+        wait_for_agent.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_browse_archive_uses_repo_ssh_environment_when_cache_misses(

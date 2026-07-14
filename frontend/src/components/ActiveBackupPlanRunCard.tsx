@@ -27,14 +27,14 @@ import {
 } from 'lucide-react'
 import type { BackupJob, BackupPlan, BackupPlanRun, BackupPlanRunRepository } from '../types'
 import { formatBytes, formatDurationSeconds, formatTimeRange } from '../utils/dateUtils'
+import { PlanRunScriptsSection, type BackupPlanRunLogJob } from './PlanRunScripts'
+import { canViewBackupJobLogs as canViewLogs } from './planRunScriptLogs'
 
 // Brand emerald is reserved for the live pulse dot (the only brand touch on
 // this otherwise neutral card). Everything else uses text.primary tints.
 const LIVE_DOT = '#059669'
 
-export type ActivePlanRunLogJob =
-  | BackupJob
-  | { id: number; status: string; type: 'script_execution'; has_logs?: boolean }
+export type ActivePlanRunLogJob = BackupPlanRunLogJob
 
 interface ActiveBackupPlanRunCardProps {
   run: BackupPlanRun
@@ -46,10 +46,6 @@ interface ActiveBackupPlanRunCardProps {
 
 function isActive(status?: string): boolean {
   return status === 'pending' || status === 'running'
-}
-
-function canViewLogs(job?: BackupJob | null): job is BackupJob {
-  return Boolean(job && job.status !== 'pending' && (job.has_logs || job.status === 'running'))
 }
 
 function getRepositoryLabel(runRepository: BackupPlanRunRepository): string {
@@ -601,6 +597,12 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
             >
               {currentFile}
             </Typography>
+          </Box>
+        )}
+
+        {run.script_executions && run.script_executions.length > 0 && (
+          <Box sx={{ mt: 1.5 }}>
+            <PlanRunScriptsSection run={run} onViewLogs={onViewLogs} />
           </Box>
         )}
 

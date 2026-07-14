@@ -8,6 +8,7 @@ import { repositoriesAPI, mountsAPI, restoreAPI } from '../services/api'
 import { useRepositoryStats } from '../hooks/useRepositoryStats'
 import { BorgApiClient } from '../services/borgApi'
 import { translateBackendKey } from '../utils/translateBackendKey'
+import { downloadArchiveFile } from '../utils/downloadArchiveFile'
 import RepositorySelectorCard from '../components/RepositorySelectorCard'
 import RepositoryStatsGrid from '../components/RepositoryStatsGrid'
 import RepositoryStatsGridSkeleton from '../components/RepositoryStatsGridSkeleton'
@@ -61,7 +62,7 @@ const Archives: React.FC = () => {
     return normalizeRepositoryId(searchParams.get('repo'))
   })
   const [viewArchive, setViewArchive] = useState<Archive | null>(null)
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<Archive | null>(null)
   const [lockError, setLockError] = useState<{
     repositoryId: number
     repositoryName: string
@@ -163,15 +164,41 @@ const Archives: React.FC = () => {
     mutationFn: ({ archive }: { repository: string; archive: string }) =>
       new BorgApiClient(selectedRepository!).deleteArchive(archive),
     onSuccess: (data) => {
-      // Backend now returns job_id for background deletion
-      toast.success(t('archives.deletionStarted', { id: data.data.job_id }))
-      // Refresh archives list and repository stats after a delay to allow deletion to complete
-      setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ['repository-archives', selectedRepositoryId] })
-        queryClient.invalidateQueries({ queryKey: ['repository-info', selectedRepositoryId] })
-      }, 2000)
+      // Backend returns a job_id for background deletion. The delete runs
+      // asynchronously (agent-delegated deletes take several seconds), so poll
+      // the job until it finishes and only then refresh the list — a fixed
+      // delay refetched before the archive was actually gone, leaving it in the
+      // list until a manual page reload.
+      const jobId = data.data.job_id
+      toast.success(t('archives.deletionStarted', { id: jobId }))
       setShowDeleteConfirm(null)
       trackArchive(EventAction.DELETE, selectedRepository || undefined)
+
+      const repoId = selectedRepositoryId
+      const statusClient = new BorgApiClient(selectedRepository!)
+      const terminal = new Set(['completed', 'completed_with_warnings', 'failed', 'cancelled'])
+      const deadline = Date.now() + 5 * 60 * 1000
+      const refresh = () => {
+        queryClient.invalidateQueries({ queryKey: ['repository-archives', repoId] })
+        queryClient.invalidateQueries({ queryKey: ['repository-info', repoId] })
+      }
+      const poll = async () => {
+        let status: string | undefined
+        try {
+          status = (await statusClient.getDeleteJobStatus(jobId)).data?.status
+        } catch {
+          // Transient error — the deadline below bounds the retries.
+        }
+        if (status === 'failed') {
+          toast.error(t('archives.toasts.deleteFailed'))
+        }
+        if ((status && terminal.has(status)) || Date.now() >= deadline) {
+          refresh()
+          return
+        }
+        setTimeout(poll, 1500)
+      }
+      setTimeout(poll, 1000)
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
@@ -303,10 +330,16 @@ const Archives: React.FC = () => {
     }
   }
 
-  // Handle archive deletion
-  const handleDeleteArchive = (archive: string) => {
+  // Handle archive deletion. For a Borg 2 series the name is ambiguous, so send
+  // the archive id (the backend wraps it as aid:<hex>); Borg 1 names are unique.
+  const handleDeleteArchive = (archive: Archive) => {
     if (selectedRepository) {
-      deleteArchiveMutation.mutate({ repository: selectedRepository.path, archive })
+      const archiveRef =
+        getBorgVersion(selectedRepository) === 2 && archive.id ? archive.id : archive.name
+      deleteArchiveMutation.mutate({
+        repository: selectedRepository.path,
+        archive: archiveRef,
+      })
     }
   }
 
@@ -363,9 +396,16 @@ const Archives: React.FC = () => {
       destinationPath = '/'
     }
 
+    // Borg 2 series share a name, so restore must target the specific archive
+    // by id (aid:); borg extracts an ambiguous name as "matched N" (rc 4).
+    const restoreArchiveRef =
+      getBorgVersion(selectedRepository) === 2 && restoreArchive.id
+        ? `aid:${restoreArchive.id}`
+        : restoreArchive.name
+
     restoreMutation.mutate({
       repository: selectedRepository.path,
-      archive: restoreArchive.name,
+      archive: restoreArchiveRef,
       destination: destinationPath,
       paths: data.selected_paths,
       repository_id: selectedRepository.id,
@@ -432,8 +472,10 @@ const Archives: React.FC = () => {
         job.status === 'completed' || job.status === 'completed_with_warnings'
           ? EventAction.COMPLETE
           : EventAction.FAIL
+      // A Borg 2 restore stores the aid:<id> selector as job.archive, so match
+      // on the id too — otherwise the name lookup misses and the age bucket is lost.
       const archiveStart = archivesList.find(
-        (archive: Archive) => archive.name === job.archive
+        (archive: Archive) => archive.name === job.archive || `aid:${archive.id}` === job.archive
       )?.start
 
       trackArchive(action, selectedRepository ?? job.repository, {
@@ -548,7 +590,7 @@ const Archives: React.FC = () => {
           onViewArchive={handleViewArchive}
           onRestoreArchive={handleRestoreArchive}
           onMountArchive={openMountDialog}
-          onDeleteArchive={(archiveName) => setShowDeleteConfirm(archiveName)}
+          onDeleteArchive={(archive) => setShowDeleteConfirm(archive)}
           mountDisabled={mountArchiveMutation.isPending}
           canDelete={
             getRepoCapabilities({ mode: selectedRepository?.mode }).canDeleteArchive &&
@@ -565,7 +607,7 @@ const Archives: React.FC = () => {
         archive={viewArchive}
         repository={selectedRepository ?? null}
         onClose={() => setViewArchive(null)}
-        onDownloadFile={(archiveName, filePath) => {
+        onDownloadFile={(archiveName, filePath, size) => {
           if (selectedRepository) {
             trackArchive(EventAction.DOWNLOAD, selectedRepository, {
               operation: 'download_archive_file',
@@ -575,7 +617,9 @@ const Archives: React.FC = () => {
               getBorgVersion(selectedRepository) === 2
                 ? (viewArchive?.id ?? archiveName)
                 : archiveName
-            new BorgApiClient(selectedRepository).downloadFile(archiveRef, filePath)
+            return downloadArchiveFile(selectedRepository, archiveRef, filePath, {
+              totalSize: size ?? undefined,
+            })
           }
         }}
       />
@@ -594,9 +638,9 @@ const Archives: React.FC = () => {
       {/* Delete Confirmation Dialog */}
       <DeleteArchiveDialog
         open={!!showDeleteConfirm}
-        archiveName={showDeleteConfirm}
+        archiveName={showDeleteConfirm?.name ?? null}
         onClose={() => setShowDeleteConfirm(null)}
-        onConfirm={handleDeleteArchive}
+        onConfirm={() => showDeleteConfirm && handleDeleteArchive(showDeleteConfirm)}
         deleting={deleteArchiveMutation.isPending}
       />
 

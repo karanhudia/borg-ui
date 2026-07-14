@@ -2,6 +2,7 @@ import asyncio
 import structlog
 import json
 import os
+import time
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional
@@ -23,12 +24,60 @@ from app.utils.restore_layout import (
 
 logger = structlog.get_logger()
 
+# Statuses that mean the restore job has already reached a terminal outcome.
+_RESTORE_TERMINAL_STATUSES = {
+    "completed",
+    "completed_with_warnings",
+    "failed",
+    "cancelled",
+}
+
+# Upper bounds so a delegated restore cannot wait on the agent forever. A job the
+# agent never claims (agent offline) fails after the claim timeout; a job whose
+# agent dies mid-run fails once it stops making progress for the stall timeout.
+# requeue_stale_agent_jobs only requeues claimed/running jobs on a live agent's
+# heartbeat, so it never gives a queued or dead-agent job a terminal path.
+_AGENT_RESTORE_CLAIM_TIMEOUT_SECONDS = 120
+_AGENT_RESTORE_STALL_TIMEOUT_SECONDS = 600
+
+
+def _http_detail_text(exc) -> str:
+    detail = getattr(exc, "detail", None)
+    if isinstance(detail, dict):
+        return detail.get("message") or detail.get("key") or str(detail)
+    return str(detail)
+
+
+def _agent_result_return_code(agent_job) -> Optional[int]:
+    result = agent_job.result if isinstance(agent_job.result, dict) else {}
+    code = result.get("return_code")
+    return code if isinstance(code, int) else None
+
+
+def _terminalize_agent_job(agent_job, message: str) -> None:
+    """Force a non-terminal agent job to a terminal state.
+
+    Used when the server gives up waiting so the job cannot later be claimed and
+    executed after its restore/check was already marked failed.
+    """
+    if agent_job is None:
+        return
+    if agent_job.status in ("completed", "failed", "canceled"):
+        return
+    now = datetime.now(timezone.utc)
+    agent_job.status = "failed"
+    agent_job.error_message = message
+    agent_job.completed_at = now
+    agent_job.updated_at = now
+
 
 class RestoreService:
     """Service for managing restore operations"""
 
     def __init__(self):
         self.running_processes = {}  # Track running restore processes by job_id
+        # Track agent job ids for agent-delegated restores, keyed by restore job_id.
+        self.agent_restore_jobs = {}
 
     def _ensure_local_destination(self, destination: str) -> None:
         dest_path = Path(destination)
@@ -93,6 +142,21 @@ class RestoreService:
             restore_layout: How selected archive paths should be laid out at destination
             path_metadata: Selected path type metadata from the archive browser
         """
+        # Agent-executor repositories must run the extract on their managed
+        # agent: the server can't reach the node's filesystem (or, for
+        # agent-owned repos, the repository itself). Delegate like backups do.
+        if self._is_agent_restore(repository_path):
+            await self._execute_agent_restore(
+                job_id,
+                repository_path,
+                archive_name,
+                destination,
+                paths,
+                restore_layout=restore_layout,
+                path_metadata=path_metadata,
+            )
+            return
+
         # Determine execution mode and route to appropriate method
         execution_mode = f"{repository_type}_to_{destination_type}"
 
@@ -159,6 +223,296 @@ class RestoreService:
                 execution_mode=execution_mode,
                 job_id=job_id,
             )
+
+    def _is_agent_restore(self, repository_path: str) -> bool:
+        from app.services.repository_executor import is_agent_executor
+
+        db = SessionLocal()
+        try:
+            repo = (
+                db.query(Repository).filter(Repository.path == repository_path).first()
+            )
+            return bool(repo and is_agent_executor(repo))
+        finally:
+            db.close()
+
+    async def _execute_agent_restore(
+        self,
+        job_id: int,
+        repository_path: str,
+        archive_name: str,
+        destination: str,
+        paths: list = None,
+        *,
+        restore_layout: str = RESTORE_LAYOUT_PRESERVE_PATH,
+        path_metadata: Optional[list] = None,
+    ):
+        """Delegate a restore to the repository's managed agent.
+
+        Queues a `repository.restore` agent job (borg extract into `destination`
+        on the node), then mirrors the agent job's progress/status onto the
+        RestoreJob until it reaches a terminal state.
+        """
+        from fastapi import HTTPException
+        from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
+        from app.services.repository_executor import (
+            queue_agent_repository_operation_job,
+        )
+
+        db = SessionLocal()
+        try:
+            job = db.query(RestoreJob).filter(RestoreJob.id == job_id).first()
+            if not job:
+                logger.error("Restore job not found", job_id=job_id)
+                return
+            repository = (
+                db.query(Repository).filter(Repository.path == repository_path).first()
+            )
+            if not repository:
+                job.status = "failed"
+                job.error_message = json.dumps(
+                    {"key": "backend.errors.restore.repositoryNotFound"}
+                )
+                job.completed_at = datetime.now(timezone.utc)
+                db.commit()
+                await self._notify_agent_restore(db, job)
+                return
+
+            job.status = "running"
+            job.started_at = datetime.now(timezone.utc)
+            db.commit()
+
+            strip_components = compute_restore_strip_components(
+                paths or [],
+                restore_layout=restore_layout,
+                path_metadata=path_metadata,
+            )
+            operation = {
+                "archive": archive_name,
+                "paths": list(paths or []),
+                "target": {"type": "path", "path": destination},
+            }
+            if strip_components:
+                operation["strip_components"] = strip_components
+
+            try:
+                agent_job = queue_agent_repository_operation_job(
+                    db,
+                    repository,
+                    job_kind="repository.restore",
+                    operation=operation,
+                )
+            except HTTPException as exc:
+                job.status = "failed"
+                job.error_message = json.dumps(
+                    {
+                        "key": "backend.errors.restore.failedStartRestore",
+                        "params": {"error": _http_detail_text(exc)},
+                    }
+                )
+                job.completed_at = datetime.now(timezone.utc)
+                db.commit()
+                await self._notify_agent_restore(db, job)
+                logger.error(
+                    "Failed to queue agent restore job",
+                    job_id=job_id,
+                    error=str(exc.detail),
+                )
+                return
+
+            self.agent_restore_jobs[job_id] = agent_job.id
+            await dispatch_agent_job_best_effort(
+                db,
+                agent_job,
+                repository_id=repository.id,
+                archive=archive_name,
+            )
+            await self._await_agent_restore_job(db, job_id, agent_job.id)
+        except Exception as exc:
+            logger.error(
+                "Agent restore execution failed", job_id=job_id, error=str(exc)
+            )
+            try:
+                db.rollback()
+                job = db.query(RestoreJob).filter(RestoreJob.id == job_id).first()
+                if job and job.status not in _RESTORE_TERMINAL_STATUSES:
+                    job.status = "failed"
+                    job.error_message = json.dumps(
+                        {
+                            "key": "backend.errors.restore.failedStartRestore",
+                            "params": {"error": str(exc)},
+                        }
+                    )
+                    job.completed_at = datetime.now(timezone.utc)
+                    db.commit()
+                    await self._notify_agent_restore(db, job)
+            except Exception:
+                db.rollback()
+        finally:
+            self.agent_restore_jobs.pop(job_id, None)
+            db.close()
+
+    async def _await_agent_restore_job(
+        self,
+        db,
+        job_id: int,
+        agent_job_id: int,
+        *,
+        poll_interval_seconds: float = 1.0,
+    ):
+        from app.database.models import AgentJob
+        from app.services.repository_executor import TERMINAL_AGENT_STATUSES
+
+        started_at = time.monotonic()
+        stale_since = started_at
+        last_marker = None
+
+        while True:
+            db.expire_all()
+            job = db.query(RestoreJob).filter(RestoreJob.id == job_id).first()
+            if job is None:
+                return
+            # cancel_restore records the cancellation itself; stop mirroring.
+            if job.status == "cancelled":
+                return
+            agent_job = db.query(AgentJob).filter(AgentJob.id == agent_job_id).first()
+            if agent_job is None:
+                self._fail_agent_restore(db, job, "agent job not found")
+                await self._notify_agent_restore(db, job)
+                return
+
+            self._mirror_agent_progress(job, agent_job)
+
+            if agent_job.status in TERMINAL_AGENT_STATUSES:
+                self._apply_agent_restore_terminal(db, job, agent_job)
+                db.commit()
+                await self._notify_agent_restore(db, job)
+                return
+
+            # Bound the wait: reset the stall timer whenever the agent job shows
+            # any change, and fail if it never gets claimed or goes silent.
+            now = time.monotonic()
+            marker = (
+                agent_job.status,
+                agent_job.progress_percent,
+                agent_job.current_file,
+            )
+            if marker != last_marker:
+                last_marker = marker
+                stale_since = now
+            never_claimed = (
+                agent_job.status == "queued"
+                and now - started_at > _AGENT_RESTORE_CLAIM_TIMEOUT_SECONDS
+            )
+            went_silent = now - stale_since > _AGENT_RESTORE_STALL_TIMEOUT_SECONDS
+            if never_claimed or went_silent:
+                message = "agent did not complete the restore in time"
+                # Terminalize the agent job too: a still-queued job could
+                # otherwise be claimed later and run borg extract after we have
+                # already marked the restore failed.
+                _terminalize_agent_job(agent_job, message)
+                self._fail_agent_restore(db, job, message)
+                await self._notify_agent_restore(db, job)
+                return
+
+            db.commit()
+            await asyncio.sleep(poll_interval_seconds)
+
+    def _fail_agent_restore(self, db, job: RestoreJob, error: str) -> None:
+        job.status = "failed"
+        job.error_message = json.dumps(
+            {
+                "key": "backend.errors.restore.failedStartRestore",
+                "params": {"error": error},
+            }
+        )
+        job.completed_at = datetime.now(timezone.utc)
+        db.commit()
+
+    async def _notify_agent_restore(self, db, job: RestoreJob) -> None:
+        """Mirror the local restore notifications for agent-delegated restores."""
+        try:
+            if job.status in ("completed", "completed_with_warnings"):
+                await notification_service.send_restore_success(
+                    db, job.repository, job.archive, job.destination, None, None
+                )
+            elif job.status in ("failed", "cancelled"):
+                await notification_service.send_restore_failure(
+                    db,
+                    job.repository,
+                    job.archive,
+                    f"Agent restore of archive '{job.archive}' did not succeed "
+                    f"(status: {job.status}).",
+                    None,
+                )
+        except Exception as exc:
+            logger.warning(
+                "Failed to send agent restore notification",
+                job_id=getattr(job, "id", None),
+                error=str(exc),
+            )
+
+    def _mirror_agent_progress(self, job: RestoreJob, agent_job) -> None:
+        if agent_job.progress_percent is not None:
+            job.progress_percent = agent_job.progress_percent
+        if agent_job.current_file:
+            job.current_file = agent_job.current_file
+        if agent_job.nfiles is not None:
+            job.nfiles = agent_job.nfiles
+        if agent_job.original_size is not None:
+            job.original_size = agent_job.original_size
+
+    def _apply_agent_restore_terminal(self, db, job: RestoreJob, agent_job) -> None:
+        job.logs = self._collect_agent_job_logs(db, agent_job.id)
+        job.completed_at = datetime.now(timezone.utc)
+
+        if agent_job.status == "canceled":
+            job.status = "cancelled"
+            job.error_message = json.dumps(
+                {"key": "backend.errors.restore.cancelledByUser"}
+            )
+            return
+        if agent_job.status == "failed":
+            job.status = "failed"
+            return_code = _agent_result_return_code(agent_job)
+            job.error_message = json.dumps(
+                {
+                    "key": "backend.errors.service.restoreFailedExitCode",
+                    "params": {
+                        "exitCode": return_code if return_code is not None else -1
+                    },
+                }
+            )
+            return
+
+        # Completed. The agent only reports "completed" for exit code 0 or a borg
+        # warning; a hard borg failure fails the agent job instead.
+        result = agent_job.result if isinstance(agent_job.result, dict) else {}
+        job.progress_percent = 100.0
+        if result.get("warning"):
+            job.status = "completed_with_warnings"
+            return_code = result.get("return_code")
+            job.error_message = json.dumps(
+                {
+                    "key": "backend.errors.service.restoreCompletedWithWarnings",
+                    "params": {
+                        "exitCode": return_code if isinstance(return_code, int) else 1
+                    },
+                }
+            )
+        else:
+            job.status = "completed"
+
+    def _collect_agent_job_logs(self, db, agent_job_id: int) -> str:
+        from app.database.models import AgentJobLog
+
+        logs = (
+            db.query(AgentJobLog)
+            .filter(AgentJobLog.agent_job_id == agent_job_id)
+            .order_by(AgentJobLog.sequence.asc(), AgentJobLog.id.asc())
+            .all()
+        )
+        return "\n".join(log.message for log in logs)
 
     async def _execute_local_to_local(
         self,
@@ -734,6 +1088,11 @@ class RestoreService:
         Returns:
             True if the process was found and terminated, False otherwise
         """
+        # Agent-delegated restores are stopped by asking the agent to cancel.
+        agent_job_id = self.agent_restore_jobs.get(job_id)
+        if agent_job_id is not None:
+            return await self._cancel_agent_restore(job_id, agent_job_id)
+
         if job_id not in self.running_processes:
             logger.warning("No running process found for job", job_id=job_id)
             return False
@@ -767,6 +1126,30 @@ class RestoreService:
                 "Failed to cancel restore process", job_id=job_id, error=str(e)
             )
             return False
+
+    async def _cancel_agent_restore(self, job_id: int, agent_job_id: int) -> bool:
+        from app.database.models import AgentJob
+        from app.services.agent_job_dispatcher import (
+            dispatch_agent_cancel_if_connected,
+        )
+
+        db = SessionLocal()
+        try:
+            agent_job = db.query(AgentJob).filter(AgentJob.id == agent_job_id).first()
+            if agent_job is None:
+                return False
+            if agent_job.status not in {"completed", "failed", "canceled"}:
+                agent_job.status = "cancel_requested"
+                agent_job.updated_at = datetime.now(timezone.utc)
+                db.commit()
+            return await dispatch_agent_cancel_if_connected(agent_job)
+        except Exception as exc:
+            logger.error(
+                "Failed to cancel agent restore", job_id=job_id, error=str(exc)
+            )
+            return False
+        finally:
+            db.close()
 
     async def _execute_ssh_to_local(
         self,

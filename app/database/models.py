@@ -797,6 +797,9 @@ class ScheduledJob(Base):
         Integer, default=0
     )  # Keep N quarterly backups (0 = disabled)
     prune_keep_yearly = Column(Integer, default=1)  # Keep N yearly backups
+    prune_keep_within = Column(
+        String, nullable=True
+    )  # Keep all archives within interval
     last_prune = Column(DateTime, nullable=True)  # Last prune execution time
     last_compact = Column(DateTime, nullable=True)  # Last compact execution time
 
@@ -899,6 +902,7 @@ class BackupPlan(Base):
     prune_keep_monthly = Column(Integer, default=6, nullable=False)
     prune_keep_quarterly = Column(Integer, default=0, nullable=False)
     prune_keep_yearly = Column(Integer, default=1, nullable=False)
+    prune_keep_within = Column(String, nullable=True)
 
     created_at = Column(DateTime, default=utc_now, nullable=False)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)

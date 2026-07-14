@@ -4,10 +4,12 @@ import asyncio
 import json
 import shutil
 import tempfile
+import time
 from datetime import datetime
 from pathlib import Path
 
 import structlog
+from fastapi import HTTPException
 
 from app.config import settings
 from app.core.borg_router import BorgRouter
@@ -15,6 +17,7 @@ from app.database.database import SessionLocal
 from app.database.models import Repository, RestoreCheckJob
 from app.services.notification_service import NotificationService
 from app.services.restore_check_canary import (
+    CANARY_MANIFEST,
     get_legacy_restore_canary_archive_paths,
     get_restore_canary_archive_paths,
     verify_restored_canary,
@@ -77,6 +80,19 @@ def _get_archive_name(archive: dict | str | None) -> str:
         if isinstance(value, str) and value:
             return value
     return ""
+
+
+# Upper bounds so a delegated restore-check cannot wait on the agent forever:
+# fail if the job is never claimed (agent offline) or goes silent (agent died).
+_AGENT_OP_CLAIM_TIMEOUT_SECONDS = 120
+_AGENT_OP_STALL_TIMEOUT_SECONDS = 600
+
+
+def _http_detail_text(exc: HTTPException) -> str:
+    detail = getattr(exc, "detail", None)
+    if isinstance(detail, dict):
+        return detail.get("message") or detail.get("key") or str(detail)
+    return str(detail)
 
 
 def _is_borg_warning_exit_code(returncode: int | None) -> bool:
@@ -191,6 +207,14 @@ class RestoreCheckService:
                 job.error_message = f"Repository not found (ID: {repository_id})"
                 job.completed_at = datetime.utcnow()
                 db.commit()
+                return
+
+            from app.services.repository_executor import is_agent_executor
+
+            if is_agent_executor(repository):
+                # Agent-executor repos verify on the node: the server can't reach
+                # the node's filesystem (or, for agent-owned repos, the repo).
+                await self._execute_agent_restore_check(db, job, job_id, repository)
                 return
 
             job.status = "running"
@@ -437,6 +461,343 @@ class RestoreCheckService:
             if temp_restore_dir:
                 shutil.rmtree(temp_restore_dir, ignore_errors=True)
             db.close()
+
+    async def _execute_agent_restore_check(
+        self, db, job: RestoreCheckJob, job_id: int, repository: Repository
+    ):
+        """Run a restore check by delegating to the repository's managed agent.
+
+        Lists archives on the node, extracts the latest one into a throwaway
+        directory the agent owns, and (for canary mode) verifies the canary
+        manifest on the node. The agent's verdict is mapped onto the
+        RestoreCheckJob status.
+        """
+        from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
+        from app.services.repository_executor import (
+            queue_agent_repository_operation_job,
+        )
+
+        raw_logs: list[str] = []
+        job.status = "running"
+        job.started_at = datetime.utcnow()
+        job.progress = 5
+        job.progress_message = "Selecting latest archive for restore verification"
+        db.commit()
+
+        full_archive = bool(job.full_archive)
+        probe_paths = _parse_probe_paths(
+            job.probe_paths or repository.restore_check_paths
+        )
+        use_canary = not full_archive and not probe_paths
+        mode = (
+            "Full Archive"
+            if full_archive
+            else "Canary"
+            if use_canary
+            else "Probe Paths"
+        )
+        raw_logs.append(
+            f"Restore check started for repository: {repository.name} ({repository.id})"
+        )
+        raw_logs.append(f"Mode: {mode}")
+
+        # 1. List archives on the node and pick the latest.
+        try:
+            archives = await self._agent_list_archives(db, repository)
+        except HTTPException as exc:
+            self._finish_agent_restore_check_failure(
+                db,
+                job,
+                job_id,
+                raw_logs,
+                message=f"Could not list archives on the agent: {_http_detail_text(exc)}",
+            )
+            await self._send_completion_notification(
+                db=db, repository=repository, job=job
+            )
+            return
+
+        archive = _select_latest_archive(archives)
+        archive_name = _get_archive_name(archive)
+        if not archive_name:
+            job.status = "needs_backup" if use_canary else "failed"
+            job.error_message = (
+                "Canary mode needs a backup that contains the Borg UI canary file. "
+                "Run a backup, then run this restore check again."
+                if use_canary
+                else "No archives available for restore verification. "
+                "Run a backup, then run this restore check again."
+            )
+            job.progress = 100
+            job.progress_message = "Restore verification needs a backup first"
+            job.completed_at = datetime.utcnow()
+            raw_logs.append(job.error_message)
+            self._save_job_logs(job, job_id, raw_logs)
+            db.commit()
+            await self._send_completion_notification(
+                db=db, repository=repository, job=job
+            )
+            return
+
+        job.archive_name = archive_name
+        job.progress = 15
+        job.progress_message = (
+            f"Restoring {mode.lower()} from {archive_name} on the agent"
+        )
+        db.commit()
+
+        # 2. Build the restore operation (paths + optional canary verify).
+        if full_archive:
+            restore_paths: list[str] = []
+            verify = None
+        elif use_canary:
+            primary = get_restore_canary_archive_paths(repository)
+            legacy = get_legacy_restore_canary_archive_paths(repository)
+            # Extract both the current and legacy canary locations in one pass;
+            # borg simply warns for a path that isn't present in the archive.
+            restore_paths = list(primary) + [p for p in legacy if p not in primary]
+            verify = {
+                "kind": "canary",
+                "manifest_candidates": [
+                    f"{base}/{CANARY_MANIFEST}" for base in restore_paths
+                ],
+            }
+        else:
+            restore_paths = probe_paths
+            verify = None
+
+        raw_logs.append(f"Archive: {archive_name}")
+        raw_logs.append(
+            "Restore paths: "
+            + (", ".join(restore_paths) if restore_paths else "full archive")
+        )
+
+        operation: dict = {
+            "archive": archive_name,
+            "paths": restore_paths,
+            "target": {"type": "temp"},
+        }
+        if verify:
+            operation["verify"] = verify
+
+        # 3. Queue + dispatch the restore, then wait for the verdict.
+        try:
+            agent_job = queue_agent_repository_operation_job(
+                db,
+                repository,
+                job_kind="repository.restore",
+                operation=operation,
+                maintenance_job_kind="restore_check",
+                maintenance_job_id=job_id,
+            )
+        except HTTPException as exc:
+            self._finish_agent_restore_check_failure(
+                db,
+                job,
+                job_id,
+                raw_logs,
+                message=f"Could not start restore on the agent: {_http_detail_text(exc)}",
+            )
+            await self._send_completion_notification(
+                db=db, repository=repository, job=job
+            )
+            return
+
+        await dispatch_agent_job_best_effort(
+            db, agent_job, repository_id=repository.id, archive=archive_name
+        )
+
+        try:
+            result = await self._await_agent_operation(db, agent_job.id, job=job)
+        except HTTPException as exc:
+            self._append_agent_logs(db, raw_logs, agent_job.id)
+            self._finish_agent_restore_check_failure(
+                db,
+                job,
+                job_id,
+                raw_logs,
+                message=f"Restore verification failed on the agent: {_http_detail_text(exc)}",
+            )
+            await self._send_completion_notification(
+                db=db, repository=repository, job=job
+            )
+            return
+
+        self._append_agent_logs(db, raw_logs, agent_job.id)
+        self._apply_agent_restore_check_result(
+            db, job, job_id, repository, result, raw_logs
+        )
+        await self._send_completion_notification(db=db, repository=repository, job=job)
+
+    async def _agent_list_archives(self, db, repository: Repository) -> list:
+        from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
+        from app.services.repository_executor import (
+            queue_agent_repository_operation_job,
+            wait_for_agent_repository_operation_job,
+        )
+
+        list_job = queue_agent_repository_operation_job(
+            db, repository, job_kind="repository.list_archives"
+        )
+        await dispatch_agent_job_best_effort(db, list_job, repository_id=repository.id)
+        result = await wait_for_agent_repository_operation_job(
+            db, list_job.id, timeout_seconds=120
+        )
+        data = result.get("data") if isinstance(result, dict) else None
+        archives = (data or {}).get("archives") if isinstance(data, dict) else None
+        return archives or []
+
+    async def _await_agent_operation(
+        self, db, agent_job_id: int, *, job=None, poll_interval_seconds: float = 1.0
+    ) -> dict:
+        from app.database.models import AgentJob
+        from app.services.repository_executor import TERMINAL_AGENT_STATUSES
+
+        started_at = time.monotonic()
+        stale_since = started_at
+        last_marker = None
+
+        while True:
+            db.expire_all()
+            agent_job = db.query(AgentJob).filter(AgentJob.id == agent_job_id).first()
+            if agent_job is None:
+                raise HTTPException(
+                    status_code=502,
+                    detail={"key": "backend.errors.agents.jobNotFound"},
+                )
+            if agent_job.status == "completed":
+                return agent_job.result or {}
+            if agent_job.status in TERMINAL_AGENT_STATUSES:
+                raise HTTPException(
+                    status_code=502,
+                    detail={
+                        "key": "backend.errors.agents.repositoryOperationFailed",
+                        "message": agent_job.error_message or agent_job.status,
+                    },
+                )
+            if job is not None and agent_job.progress_percent is not None:
+                job.progress = max(15, min(99, int(agent_job.progress_percent)))
+                db.commit()
+
+            # Bound the wait so an unclaimed or dead-agent job can't hang forever.
+            now = time.monotonic()
+            marker = (
+                agent_job.status,
+                agent_job.progress_percent,
+                agent_job.current_file,
+            )
+            if marker != last_marker:
+                last_marker = marker
+                stale_since = now
+            never_claimed = (
+                agent_job.status == "queued"
+                and now - started_at > _AGENT_OP_CLAIM_TIMEOUT_SECONDS
+            )
+            if never_claimed or now - stale_since > _AGENT_OP_STALL_TIMEOUT_SECONDS:
+                # Terminalize the agent job so a still-queued job can't be claimed
+                # and run borg extract after the restore check was already failed.
+                if agent_job.status not in ("completed", "failed", "canceled"):
+                    agent_job.status = "failed"
+                    agent_job.error_message = (
+                        "restore check timed out waiting for the agent"
+                    )
+                    agent_job.completed_at = datetime.utcnow()
+                    agent_job.updated_at = datetime.utcnow()
+                    db.commit()
+                raise HTTPException(
+                    status_code=504,
+                    detail={"key": "backend.errors.agents.repositoryOperationTimeout"},
+                )
+            await asyncio.sleep(poll_interval_seconds)
+
+    def _append_agent_logs(self, db, raw_logs: list[str], agent_job_id: int) -> None:
+        from app.database.models import AgentJobLog
+
+        logs = (
+            db.query(AgentJobLog)
+            .filter(AgentJobLog.agent_job_id == agent_job_id)
+            .order_by(AgentJobLog.sequence.asc(), AgentJobLog.id.asc())
+            .all()
+        )
+        raw_logs.extend(log.message for log in logs)
+
+    def _finish_agent_restore_check_failure(
+        self,
+        db,
+        job: RestoreCheckJob,
+        job_id: int,
+        raw_logs: list[str],
+        *,
+        message: str,
+    ) -> None:
+        job.status = "failed"
+        job.error_message = message
+        job.progress = 100
+        job.progress_message = "Restore verification failed"
+        job.completed_at = datetime.utcnow()
+        raw_logs.append(message)
+        self._save_job_logs(job, job_id, raw_logs)
+        db.commit()
+
+    def _apply_agent_restore_check_result(
+        self,
+        db,
+        job: RestoreCheckJob,
+        job_id: int,
+        repository: Repository,
+        result: dict,
+        raw_logs: list[str],
+    ) -> None:
+        job.completed_at = datetime.utcnow()
+        job.progress = 100
+        warning = bool(result.get("warning")) if isinstance(result, dict) else False
+        verification = result.get("verification") if isinstance(result, dict) else None
+
+        if isinstance(verification, dict):
+            vstatus = verification.get("status")
+            if vstatus == "verified":
+                verified_files = verification.get("verified_files") or []
+                if verified_files:
+                    raw_logs.append(
+                        f"Verified canary files: {', '.join(verified_files)}"
+                    )
+                job.status = "completed_with_warnings" if warning else "completed"
+                job.progress_message = (
+                    "Restore verification completed with warnings"
+                    if warning
+                    else "Restore verification completed successfully"
+                )
+                repository.last_restore_check = datetime.utcnow()
+            elif vstatus == "needs_backup":
+                job.status = "needs_backup"
+                job.error_message = (
+                    verification.get("message")
+                    or "Restore verification needs a backup first"
+                )
+                job.progress_message = "Restore verification needs a backup first"
+                raw_logs.append(job.error_message)
+            else:
+                job.status = "failed"
+                job.error_message = (
+                    verification.get("message") or "Restore verification failed"
+                )
+                job.progress_message = "Restore verification failed"
+                raw_logs.append(job.error_message)
+        else:
+            # Full-archive / probe mode: success is the extract itself.
+            job.status = "completed_with_warnings" if warning else "completed"
+            job.progress_message = (
+                "Restore verification completed with warnings"
+                if warning
+                else "Restore verification completed successfully"
+            )
+            repository.last_restore_check = datetime.utcnow()
+
+        if warning and not job.error_message:
+            job.error_message = "Restore verification completed with warnings"
+
+        self._save_job_logs(job, job_id, raw_logs)
+        db.commit()
 
 
 restore_check_service = RestoreCheckService()
