@@ -1,39 +1,21 @@
 {
-  "generatedAt": "2026-07-15T05:58:00.361Z",
+  "generatedAt": "2026-07-15T06:21:27.154Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #689 visual report",
-    "commitSha": "5572cac799c5",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/29392611795"
+    "commitSha": "a2c7f118d645",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/29393713050"
   },
   "totals": {
     "baseline": 428,
     "actual": 440,
     "compared": 428,
-    "changed": 5,
+    "changed": 4,
     "added": 12,
     "removed": 0,
-    "unchanged": 423
+    "unchanged": 424
   },
   "changed": [
-    {
-      "fileName": "components-wizard-repository-location--community-plan-locked-destinations--mobile.png",
-      "baselinePath": "images/baseline/components-wizard-repository-location--community-plan-locked-destinations--mobile.png",
-      "actualPath": "images/actual/components-wizard-repository-location--community-plan-locked-destinations--mobile.png",
-      "diffPath": "images/diff/components-wizard-repository-location--community-plan-locked-destinations--mobile.png",
-      "diffPixels": 10,
-      "totalPixels": 329160,
-      "diffRatio": 0.000030380362133916635,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
     {
       "fileName": "components-wizard-repository-location--direct-borg-2-rclone--mobile.png",
       "baselinePath": "images/baseline/components-wizard-repository-location--direct-borg-2-rclone--mobile.png",
@@ -1124,6 +1106,9 @@
     },
     {
       "fileName": "components-wizard-repository-location--agent-execution-with-ssh-repository.png"
+    },
+    {
+      "fileName": "components-wizard-repository-location--community-plan-locked-destinations--mobile.png"
     },
     {
       "fileName": "components-wizard-repository-location--community-plan-locked-destinations.png"
