@@ -247,26 +247,26 @@ describe('BorgApiClient', () => {
     BorgApiClient.createRepository({
       name: 'direct create',
       borg_version: 2,
-      path: 'rclone://prod-s3/borg-ui/direct',
+      path: 'rclone:prod-s3:borg-ui/direct',
       storage_backend: 'rclone_direct',
     } as never)
     BorgApiClient.importRepository({
       name: 'direct import',
       borg_version: 2,
-      path: 'rclone://prod-s3/borg-ui/imported',
+      path: 'rclone:prod-s3:borg-ui/imported',
       storage_backend: 'rclone_direct',
     } as never)
 
     expect(postMock).toHaveBeenCalledWith('/repositories/', {
       name: 'direct create',
       borg_version: 2,
-      path: 'rclone://prod-s3/borg-ui/direct',
+      path: 'rclone:prod-s3:borg-ui/direct',
       storage_backend: 'rclone_direct',
     })
     expect(postMock).toHaveBeenCalledWith('/repositories/import', {
       name: 'direct import',
       borg_version: 2,
-      path: 'rclone://prod-s3/borg-ui/imported',
+      path: 'rclone:prod-s3:borg-ui/imported',
       storage_backend: 'rclone_direct',
     })
   })

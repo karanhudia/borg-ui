@@ -67,7 +67,7 @@ direct mode.
 - [ ] Add a failing test that selects Borg 2, enables direct rclone mode,
       selects `prod-s3`, opens the rclone browser, chooses
       `borg-ui/repositories`, and verifies the direct URL field becomes
-      `rclone://prod-s3/borg-ui/repositories`.
+      `rclone:prod-s3:borg-ui/repositories`.
 - [ ] Submit the wizard and assert the payload keeps
       `storage_backend: "rclone_direct"` and sends the composed URL in `path`
       without cached rclone mirror fields.

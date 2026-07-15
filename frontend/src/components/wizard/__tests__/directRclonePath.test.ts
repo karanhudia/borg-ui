@@ -6,15 +6,23 @@ import {
 } from '../directRclonePath'
 
 describe('directRclonePath', () => {
-  it('parses direct rclone URLs into remote name and normalized path', () => {
+  it('parses canonical direct rclone URLs into remote name and normalized path', () => {
+    expect(parseDirectRcloneUrl('rclone:prod-s3:/borg-ui/repos')).toEqual({
+      remoteName: 'prod-s3',
+      remotePath: 'borg-ui/repos',
+    })
+  })
+
+  it('parses legacy slash-form URLs so existing repositories can be migrated on save', () => {
     expect(parseDirectRcloneUrl('rclone://prod-s3//borg-ui/repos')).toEqual({
       remoteName: 'prod-s3',
       remotePath: 'borg-ui/repos',
     })
   })
 
-  it('returns null when parsing values without the direct rclone prefix', () => {
+  it('returns null when parsing values without a valid direct rclone prefix', () => {
     expect(parseDirectRcloneUrl('s3://bucket/path')).toBeNull()
+    expect(parseDirectRcloneUrl('rclone:prod-s3')).toBeNull()
     expect(parseDirectRcloneUrl('')).toBeNull()
   })
 
@@ -23,7 +31,7 @@ describe('directRclonePath', () => {
   })
 
   it('parses remote-only direct rclone URLs with an empty path', () => {
-    expect(parseDirectRcloneUrl('rclone://prod-s3')).toEqual({
+    expect(parseDirectRcloneUrl('rclone:prod-s3:')).toEqual({
       remoteName: 'prod-s3',
       remotePath: '',
     })
@@ -31,12 +39,12 @@ describe('directRclonePath', () => {
 
   it('formats direct rclone URLs with normalized remote names and paths', () => {
     expect(formatDirectRcloneUrl(' prod-s3 ', '/borg-ui/repos')).toBe(
-      'rclone://prod-s3/borg-ui/repos'
+      'rclone:prod-s3:borg-ui/repos'
     )
   })
 
   it('formats direct rclone URLs with empty paths and a trailing slash', () => {
-    expect(formatDirectRcloneUrl('prod-s3', '')).toBe('rclone://prod-s3/')
+    expect(formatDirectRcloneUrl('prod-s3', '')).toBe('rclone:prod-s3:')
   })
 
   it('rejects empty remote names when formatting direct rclone URLs', () => {

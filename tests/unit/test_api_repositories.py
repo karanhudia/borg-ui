@@ -3891,6 +3891,15 @@ class TestBorgEnvironmentSetup:
         assert "BORG_RELOCATED_REPO_ACCESS_IS_OK" in env
         assert env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] == "yes"
 
+    def test_setup_borg_env_sets_managed_rclone_config(self):
+        """Direct Borg 2 rclone commands must use Borg UI's managed config."""
+        from app.api.repositories import setup_borg_env
+        from app.config import settings
+
+        env = setup_borg_env()
+
+        assert env["RCLONE_CONFIG"] == f"{settings.rclone_config_root}/rclone.conf"
+
     def test_setup_borg_env_sets_unencrypted_repo_access(self):
         """Test that setup_borg_env sets BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"""
         from app.api.repositories import setup_borg_env

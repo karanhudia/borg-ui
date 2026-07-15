@@ -54,7 +54,7 @@ const directRcloneReviewData: WizardReviewData = {
   repositoryLocation: 'rclone',
   executionTarget: 'local',
   agentMachineId: '',
-  path: 'rclone://prod-s3/borg-ui/direct',
+  path: 'rclone:prod-s3:borg-ui/direct',
   repoSshConnectionId: '',
   dataSource: 'local',
   sourceDirs: ['/srv/app', '/etc/borg-ui'],

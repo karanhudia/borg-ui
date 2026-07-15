@@ -87,6 +87,7 @@ interface WizardStepLocationProps {
   sourceSshConnectionId?: number | ''
   canUseManagedAgents?: boolean
   canUseRclone?: boolean
+  directRcloneModeLocked?: boolean
   onChange: (data: Partial<LocationStepData>) => void
   onBrowsePath: () => void
   onBrowseDirectRclonePath?: () => void
@@ -103,6 +104,7 @@ export default function WizardStepLocation({
   sourceSshConnectionId,
   canUseManagedAgents = true,
   canUseRclone = true,
+  directRcloneModeLocked = false,
   onChange,
   onBrowsePath,
   onBrowseDirectRclonePath,
@@ -441,7 +443,7 @@ export default function WizardStepLocation({
             control={
               <Checkbox
                 checked={isDirectRclone}
-                disabled={!canUseRclone}
+                disabled={!canUseRclone || directRcloneModeLocked}
                 onChange={(event) => handleDirectRcloneChange(event.target.checked)}
               />
             }
@@ -459,6 +461,11 @@ export default function WizardStepLocation({
           {!canUseRclone && (
             <Alert severity="info" icon={<Lock size={18} />} sx={{ mt: 0.5 }}>
               {t('wizard.location.rcloneRequiresPro')}
+            </Alert>
+          )}
+          {directRcloneModeLocked && (
+            <Alert severity="info" sx={{ mt: 0.5 }}>
+              {t('wizard.location.directRcloneModeLocked')}
             </Alert>
           )}
         </Box>

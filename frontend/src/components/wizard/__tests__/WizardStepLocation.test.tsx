@@ -225,6 +225,52 @@ describe('WizardStepLocation', () => {
       ).toBeInTheDocument()
     })
 
+    it('locks direct rclone mode while editing an existing repository', () => {
+      render(
+        <WizardStepLocation
+          mode="edit"
+          data={{ ...defaultData, borgVersion: 2 }}
+          sshConnections={[]}
+          directRcloneModeLocked
+          onChange={vi.fn()}
+          onBrowsePath={vi.fn()}
+        />
+      )
+
+      expect(
+        screen.getByRole('checkbox', { name: /Use direct Borg 2 rclone repository/i })
+      ).toBeDisabled()
+      expect(
+        screen.getByText(/Storage mode is set when a repository is created/i)
+      ).toBeInTheDocument()
+    })
+
+    it('keeps direct rclone selected but immutable while editing a direct repository', () => {
+      render(
+        <WizardStepLocation
+          mode="edit"
+          data={{
+            ...defaultData,
+            borgVersion: 2,
+            repositoryLocation: 'rclone',
+            path: 'rclone:prod-s3:borg-ui/direct',
+          }}
+          sshConnections={[]}
+          directRcloneModeLocked
+          onChange={vi.fn()}
+          onBrowsePath={vi.fn()}
+        />
+      )
+
+      expect(
+        screen.getByRole('checkbox', { name: /Use direct Borg 2 rclone repository/i })
+      ).toBeChecked()
+      expect(
+        screen.getByRole('checkbox', { name: /Use direct Borg 2 rclone repository/i })
+      ).toBeDisabled()
+      expect(screen.getByLabelText(/Direct rclone repository URL/i)).toBeInTheDocument()
+    })
+
     it('hides destination Select when direct rclone is active', () => {
       render(
         <WizardStepLocation
@@ -233,7 +279,7 @@ describe('WizardStepLocation', () => {
             ...defaultData,
             borgVersion: 2,
             repositoryLocation: 'rclone',
-            path: 'rclone://prod-s3/borg-ui/direct',
+            path: 'rclone:prod-s3:borg-ui/direct',
           }}
           sshConnections={[]}
           onChange={vi.fn()}
@@ -254,7 +300,7 @@ describe('WizardStepLocation', () => {
             ...defaultData,
             borgVersion: 2,
             repositoryLocation: 'rclone',
-            path: 'rclone://prod-s3/borg-ui/direct',
+            path: 'rclone:prod-s3:borg-ui/direct',
           }}
           sshConnections={[]}
           onChange={vi.fn()}
@@ -264,7 +310,7 @@ describe('WizardStepLocation', () => {
 
       expect(screen.getByLabelText(/Direct rclone repository URL/i)).toBeInTheDocument()
       expect(
-        screen.getByPlaceholderText(/rclone:\/\/remote-name\/path\/to\/repository/i)
+        screen.getByPlaceholderText(/rclone:remote-name:path\/to\/repository/i)
       ).toBeInTheDocument()
       expect(screen.getByText(/Borg writes directly through rclone/i)).toBeInTheDocument()
     })
@@ -282,7 +328,7 @@ describe('WizardStepLocation', () => {
             repositoryLocation: 'rclone',
             rcloneRemoteId: 10,
             rcloneRemotePath: 'borg-ui/direct',
-            path: 'rclone://prod-s3/borg-ui/direct',
+            path: 'rclone:prod-s3:borg-ui/direct',
           }}
           sshConnections={[]}
           rcloneStatus={{ available: true, version: 'rclone v1.66.0' }}
@@ -295,7 +341,7 @@ describe('WizardStepLocation', () => {
 
       expect(screen.getByRole('combobox', { name: /Rclone Remote/i })).toHaveTextContent('prod-s3')
       expect(screen.getByLabelText(/Direct rclone repository URL/i)).toHaveValue(
-        'rclone://prod-s3/borg-ui/direct'
+        'rclone:prod-s3:borg-ui/direct'
       )
 
       const browseButton = screen.getByRole('button', { name: /Browse rclone remote/i })

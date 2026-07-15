@@ -3741,7 +3741,7 @@ def test_create_direct_borg2_rclone_repository_uses_url_without_storage_row(
         headers=admin_headers,
         json={
             "name": "Direct Borg2 Cloud Repo",
-            "path": "rclone://prod-s3/borg-ui/direct",
+            "path": "rclone:prod-s3:borg-ui/direct",
             "borg_version": 2,
             "encryption": "none",
             "storage_backend": "rclone_direct",
@@ -3755,7 +3755,7 @@ def test_create_direct_borg2_rclone_repository_uses_url_without_storage_row(
         .filter(Repository.name == "Direct Borg2 Cloud Repo")
         .one()
     )
-    assert repository.path == "rclone://prod-s3/borg-ui/direct"
+    assert repository.path == "rclone:prod-s3:borg-ui/direct"
     assert repository.repository_type == "rclone"
     assert repository.borg_version == 2
     assert (
@@ -3771,6 +3771,26 @@ def test_create_direct_borg2_rclone_repository_uses_url_without_storage_row(
     sync_mock.assert_not_awaited()
     v2_create_mock.assert_not_awaited()
     assert mqtt_reasons == ["repository creation"]
+
+
+@pytest.mark.unit
+def test_create_direct_rclone_repository_rejects_legacy_slash_url(
+    test_client: TestClient, admin_headers, test_db
+):
+    response = test_client.post(
+        "/api/repositories/",
+        headers=admin_headers,
+        json={
+            "name": "Invalid Direct Borg2 Cloud Repo",
+            "path": "rclone://prod-s3/borg-ui/direct",
+            "borg_version": 2,
+            "encryption": "none",
+            "storage_backend": "rclone_direct",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["key"] == "backend.errors.rclone.directInvalidUrl"
 
 
 @pytest.mark.unit
@@ -3802,7 +3822,7 @@ def test_import_direct_borg2_rclone_repository_verifies_url_without_hydrate(
         headers=admin_headers,
         json={
             "name": "Imported Direct Borg2 Cloud Repo",
-            "path": "rclone://prod-s3/borg-ui/imported",
+            "path": "rclone:prod-s3:borg-ui/imported",
             "borg_version": 2,
             "encryption": "none",
             "storage_backend": "rclone_direct",
@@ -3816,7 +3836,7 @@ def test_import_direct_borg2_rclone_repository_verifies_url_without_hydrate(
         .filter(Repository.name == "Imported Direct Borg2 Cloud Repo")
         .one()
     )
-    assert repository.path == "rclone://prod-s3/borg-ui/imported"
+    assert repository.path == "rclone:prod-s3:borg-ui/imported"
     assert repository.repository_type == "rclone"
     assert repository.borg_version == 2
     assert (
@@ -3839,7 +3859,7 @@ def test_import_direct_borg2_rclone_repository_persists_keyfile_before_verify(
     test_client: TestClient, admin_headers, test_db, tmp_path, monkeypatch
 ):
     _enable_borg_v2(test_db)
-    repo_path = "rclone://prod-s3/borg-ui/keyfile-import"
+    repo_path = "rclone:prod-s3:borg-ui/keyfile-import"
     keyfile_content = "BORG_KEY test-keyfile"
     monkeypatch.setenv("HOME", str(tmp_path))
 
@@ -3895,7 +3915,7 @@ def test_get_direct_borg2_rclone_repository_reports_direct_storage_backend(
 ):
     repository = Repository(
         name="Direct Repo Detail",
-        path="rclone://prod-s3/borg-ui/direct-detail",
+        path="rclone:prod-s3:borg-ui/direct-detail",
         encryption="none",
         compression="lz4",
         repository_type="rclone",
@@ -3984,7 +4004,7 @@ def test_direct_borg2_rclone_repository_validates_incompatible_create_payloads(
 
     payload = {
         "name": "Invalid Direct Borg2 Cloud Repo",
-        "path": "rclone://prod-s3/borg-ui/direct",
+        "path": "rclone:prod-s3:borg-ui/direct",
         "borg_version": 2,
         "encryption": "none",
         "storage_backend": "rclone_direct",
@@ -4025,7 +4045,7 @@ def test_update_normal_repository_rejects_switching_to_direct_rclone_mode(
         f"/api/repositories/{repository.id}",
         headers=admin_headers,
         json={
-            "path": "rclone://prod-s3/borg-ui/direct",
+            "path": "rclone:prod-s3:borg-ui/direct",
             "storage_backend": "rclone_direct",
         },
     )
@@ -4040,7 +4060,7 @@ def test_update_direct_borg2_rclone_repository_accepts_noop_form_fields(
 ):
     repository = Repository(
         name="Direct Repo",
-        path="rclone://prod-s3/borg-ui/direct",
+        path="rclone:prod-s3:borg-ui/direct",
         encryption="none",
         compression="lz4",
         repository_type="rclone",
@@ -4057,7 +4077,7 @@ def test_update_direct_borg2_rclone_repository_accepts_noop_form_fields(
         headers=admin_headers,
         json={
             "name": "Direct Repo Renamed",
-            "path": "rclone://prod-s3/borg-ui/direct",
+            "path": "rclone:prod-s3:borg-ui/direct",
             "storage_backend": "rclone_direct",
             "execution_target": "local",
             "executor_type": "server",
@@ -4076,7 +4096,7 @@ def test_update_direct_borg2_rclone_repository_accepts_noop_form_fields(
     assert response.status_code == 200
     test_db.refresh(repository)
     assert repository.name == "Direct Repo Renamed"
-    assert repository.path == "rclone://prod-s3/borg-ui/direct"
+    assert repository.path == "rclone:prod-s3:borg-ui/direct"
     assert repository.repository_type == "rclone"
     assert repository.connection_id is None
     assert repository.agent_machine_id is None
@@ -4094,7 +4114,7 @@ def test_update_direct_borg2_rclone_repository_rejects_mirror_fields(
 ):
     repository = Repository(
         name="Direct Repo",
-        path="rclone://prod-s3/borg-ui/direct",
+        path="rclone:prod-s3:borg-ui/direct",
         encryption="none",
         compression="lz4",
         repository_type="rclone",

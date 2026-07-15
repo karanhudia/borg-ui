@@ -133,10 +133,28 @@ export const DirectBorg2Rclone: Story = {
       repositoryLocation: 'rclone',
       rcloneRemoteId: 10,
       rcloneRemotePath: 'borg-ui/direct',
-      path: 'rclone://prod-s3/borg-ui/direct',
+      path: 'rclone:prod-s3:borg-ui/direct',
     },
     rcloneStatus: { available: true, version: 'rclone v1.66.0' },
     rcloneRemotes,
+  },
+  render: (args) => (
+    <Box sx={{ width: 720, maxWidth: 'calc(100vw - 32px)' }}>
+      <WizardStepLocation {...args} />
+    </Box>
+  ),
+}
+
+export const ExistingRepositoryStorageModeLocked: Story = {
+  args: {
+    ...baseArgs,
+    mode: 'edit',
+    data: {
+      ...baseArgs.data,
+      name: 'Existing Filesystem Repository',
+      borgVersion: 2,
+    },
+    directRcloneModeLocked: true,
   },
   render: (args) => (
     <Box sx={{ width: 720, maxWidth: 'calc(100vw - 32px)' }}>

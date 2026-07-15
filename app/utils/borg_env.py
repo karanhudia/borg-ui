@@ -2,8 +2,10 @@
 
 from contextlib import contextmanager
 import os
+from pathlib import Path
 from typing import Iterator, Optional
 
+from app.config import settings
 from app.utils.ssh_utils import (
     public_key_only_ssh_args,
     resolve_repo_ssh_key_file,
@@ -77,6 +79,10 @@ def setup_borg_env(
     env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
     env["BORG_LOCK_WAIT"] = lock_wait
     env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
+    # Borg 2 starts an rclone RC process for direct rclone repositories. The
+    # same managed config must be available to that process as to repository
+    # create/import commands, otherwise it falls back to an empty default config.
+    env["RCLONE_CONFIG"] = str(Path(settings.rclone_config_root) / "rclone.conf")
 
     if show_progress:
         env["BORG_SHOW_PROGRESS"] = "1"

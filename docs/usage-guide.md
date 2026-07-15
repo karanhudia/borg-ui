@@ -117,7 +117,7 @@ Use the standard Cloud Mirror flow when you want Borg UI to keep a normal local,
 4. Enter a URL such as:
 
 ```text
-rclone://remote-name/path/to/repository
+rclone:remote-name:path/to/repository
 ```
 
 5. Continue through Security, Advanced, and Review.

@@ -249,6 +249,9 @@ const RepositoryWizard = ({
     (state.executionTarget === 'local' &&
       (state.repositoryLocation === 'local' || state.repositoryLocation === 'ssh'))
   const isCachedRcloneRepositoryEdit = mode === 'edit' && isCachedRcloneRepositoryRecord(repository)
+  // Repository storage modes are creation-time choices. Preserve direct-rclone
+  // edits in place, but never let the wizard submit a mode conversion.
+  const directRcloneModeLocked = mode === 'edit' && Boolean(repository)
   const cloudMirrorPrimaryLocation: 'local' | 'ssh' | 'agent' =
     wizardState.executionTarget === 'agent'
       ? 'agent'
@@ -414,6 +417,12 @@ const RepositoryWizard = ({
 
     const repoVersion = (repository.borg_version === 2 ? 2 : 1) as 1 | 2
     const isDirectRcloneRepository = isDirectRcloneRepositoryRecord(repository)
+    if (isDirectRcloneRepository) {
+      const directRclonePath = parseDirectRcloneUrl(repoPath)
+      if (directRclonePath) {
+        repoPath = formatDirectRcloneUrl(directRclonePath.remoteName, directRclonePath.remotePath)
+      }
+    }
     const hasCloudMirror = !isDirectRcloneRepository && Boolean(repository.rclone_storage)
     const executionTarget =
       repository.executor_type === 'agent' || repository.execution_target === 'agent'
@@ -771,11 +780,16 @@ const RepositoryWizard = ({
         if (!wizardState.path.trim()) return false
         if (wizardState.repositoryLocation === 'rclone' && !canUseRclone) return false
         if (wizardState.executionTarget === 'agent' && !canUseManagedAgents) return false
-        if (
-          wizardState.repositoryLocation === 'rclone' &&
-          (wizardState.borgVersion !== 2 || !wizardState.path.trim().startsWith('rclone:'))
-        )
-          return false
+        if (wizardState.repositoryLocation === 'rclone') {
+          const directRclonePath = parseDirectRcloneUrl(wizardState.path)
+          if (
+            wizardState.borgVersion !== 2 ||
+            !directRclonePath ||
+            formatDirectRcloneUrl(directRclonePath.remoteName, directRclonePath.remotePath) !==
+              wizardState.path.trim()
+          )
+            return false
+        }
         if (wizardState.executionTarget === 'agent' && !wizardState.agentMachineId) return false
         if (wizardState.repositoryLocation === 'ssh' && !wizardState.repoSshConnectionId)
           return false
@@ -1105,6 +1119,7 @@ const RepositoryWizard = ({
               rcloneRemotes={rcloneRemotes}
               canUseManagedAgents={canUseManagedAgents}
               canUseRclone={canUseRclone}
+              directRcloneModeLocked={directRcloneModeLocked}
               dataSource={wizardState.dataSource}
               sourceSshConnectionId={wizardState.sourceSshConnectionId}
               onChange={(updates) => {
