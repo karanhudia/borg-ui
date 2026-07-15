@@ -117,7 +117,7 @@ async def test_rcreate_injects_managed_rclone_config_into_process_env(
     )
 
     result = await borg2.rcreate(
-        repository="rclone://prod-s3/borg-ui/direct",
+        repository="rclone:prod-s3:borg-ui/direct",
         encryption="none",
     )
 
@@ -125,7 +125,7 @@ async def test_rcreate_injects_managed_rclone_config_into_process_env(
     assert captured["cmd"] == (
         borg2.borg_cmd,
         "-r",
-        "rclone://prod-s3/borg-ui/direct",
+        "rclone:prod-s3:borg-ui/direct",
         "repo-create",
         "--encryption",
         "none",

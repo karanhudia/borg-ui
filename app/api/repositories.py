@@ -11,6 +11,7 @@ import structlog
 import os
 import asyncio
 import json
+import re
 import shutil
 import uuid
 
@@ -1324,11 +1325,7 @@ def _is_direct_rclone_url(path: Optional[str]) -> bool:
 
 def _normalize_direct_rclone_url(path: Optional[str]) -> str:
     repo_path = (path or "").strip()
-    if (
-        not repo_path
-        or not repo_path.startswith("rclone:")
-        or repo_path in {"rclone:", "rclone://"}
-    ):
+    if not repo_path or not re.match(r"^rclone:[^:/]+:.+$", repo_path):
         raise HTTPException(
             status_code=400,
             detail={"key": "backend.errors.rclone.directInvalidUrl"},

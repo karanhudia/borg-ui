@@ -565,7 +565,7 @@ describe('RepositoryWizard', () => {
       setInputValue(screen.getByLabelText(/Repository Name/i), 'Direct Cloud Repo')
       setInputValue(
         screen.getByLabelText(/Direct rclone repository URL/i),
-        'rclone://prod-s3/borg-ui/direct'
+        'rclone:prod-s3:borg-ui/direct'
       )
 
       await user.click(screen.getByRole('button', { name: /Next/i }))
@@ -591,7 +591,7 @@ describe('RepositoryWizard', () => {
           expect.objectContaining({
             name: 'Direct Cloud Repo',
             borg_version: 2,
-            path: 'rclone://prod-s3/borg-ui/direct',
+            path: 'rclone:prod-s3:borg-ui/direct',
             storage_backend: 'rclone_direct',
             execution_target: 'local',
             executor_type: 'server',
@@ -637,9 +637,7 @@ describe('RepositoryWizard', () => {
       const remoteListbox = await screen.findByRole('listbox')
       await user.click(within(remoteListbox).getByText('prod-s3'))
 
-      expect(screen.getByLabelText(/Direct rclone repository URL/i)).toHaveValue(
-        'rclone://prod-s3/'
-      )
+      expect(screen.getByLabelText(/Direct rclone repository URL/i)).toHaveValue('rclone:prod-s3:')
 
       await user.click(screen.getByRole('button', { name: /Browse rclone remote/i }))
       const fileExplorerDialog = await screen.findByTestId('file-explorer-dialog')
@@ -652,7 +650,7 @@ describe('RepositoryWizard', () => {
       )
 
       expect(screen.getByLabelText(/Direct rclone repository URL/i)).toHaveValue(
-        'rclone://prod-s3/borg-ui/repositories'
+        'rclone:prod-s3:borg-ui/repositories'
       )
 
       await user.click(screen.getByRole('button', { name: /Next/i }))
@@ -672,7 +670,7 @@ describe('RepositoryWizard', () => {
           expect.objectContaining({
             name: 'Browsed Direct Cloud Repo',
             borg_version: 2,
-            path: 'rclone://prod-s3/borg-ui/repositories',
+            path: 'rclone:prod-s3:borg-ui/repositories',
             storage_backend: 'rclone_direct',
             cloud_mirror_enabled: false,
             rclone_remote_id: null,
@@ -1420,7 +1418,7 @@ describe('RepositoryWizard', () => {
       })
 
       expect(screen.getByLabelText(/Direct rclone repository URL/i)).toHaveValue(
-        'rclone://prod-s3/borg-ui/direct'
+        'rclone:prod-s3:borg-ui/direct'
       )
       expect(
         screen.getByRole('checkbox', { name: /Use direct Borg 2 rclone repository/i })

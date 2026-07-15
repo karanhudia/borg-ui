@@ -24,7 +24,7 @@ direct repository use case.
   Borg 2 rclone repositories.
 - Do not create `RepositoryStorage` rows, local cache directories, rclone sync
   jobs, or cloud mirror status for direct rclone repositories.
-- Store the direct `rclone:` or `rclone://` URL as the repository path and route
+- Store the direct `rclone:remote:path` URL as the repository path and route
   Borg operations through the Borg 2 services.
 
 ## UX
@@ -40,7 +40,7 @@ When the advanced direct rclone option is enabled:
 
 - Borg version is set to 2 and the mode is disabled unless Borg 2 is selected.
 - The repository path field is labeled as a direct rclone repository URL, with
-  examples such as `rclone://remote-name/path/to/repository`.
+  examples such as `rclone:remote-name:path/to/repository`.
 - File browsing is disabled because the URL is not a local or SSH filesystem
   path.
 - The Cloud Mirror step is skipped and mirror fields are cleared.
@@ -58,8 +58,7 @@ subtle full outlines or background tinting, and no heavy left accent borders.
 - Direct rclone payloads must not include SSH repository connection fields,
   managed-agent execution, cloud mirror enablement, cached rclone remote fields,
   sync policies, extra rclone flags, or client-provided cache paths.
-- Direct rclone paths must be non-empty and start with `rclone:` or
-  `rclone://`.
+- Direct rclone paths must use Borg's non-empty `rclone:remote:path` syntax.
 - Borg 2 feature/license gating still applies.
 - Create initializes the repository with Borg 2 against the direct rclone URL and
   stores a normal `Repository` row with `repository_type="rclone"`,

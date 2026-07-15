@@ -138,7 +138,7 @@ describe('WizardStepReview', () => {
         ...defaultData,
         borgVersion: 2 as const,
         repositoryLocation: 'rclone' as const,
-        path: 'rclone://prod-s3/borg-ui/direct',
+        path: 'rclone:prod-s3:borg-ui/direct',
         cloudMirrorEnabled: false,
       }
 
@@ -152,7 +152,7 @@ describe('WizardStepReview', () => {
 
       expect(screen.getByText('Direct Borg 2 rclone')).toBeInTheDocument()
       expect(screen.getByText(/Borg writes directly through rclone/i)).toBeInTheDocument()
-      expect(screen.getByText('rclone://prod-s3/borg-ui/direct')).toBeInTheDocument()
+      expect(screen.getByText('rclone:prod-s3:borg-ui/direct')).toBeInTheDocument()
       expect(screen.queryByText('Cloud Mirror')).not.toBeInTheDocument()
       expect(screen.queryByText('Manual sync')).not.toBeInTheDocument()
       expect(screen.queryByTestId('backup-flow-preview')).not.toBeInTheDocument()
