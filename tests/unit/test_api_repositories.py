@@ -56,6 +56,18 @@ def _enable_borg_v2(test_db):
     _set_plan(test_db, "pro")
 
 
+def _set_operation_timeouts(test_db, *, info_timeout, list_timeout):
+    """Configure distinct info/list timeouts so a test can prove each endpoint
+    reads its own configuration key (not the other one)."""
+    settings_row = test_db.query(SystemSettings).first()
+    if settings_row is None:
+        settings_row = SystemSettings()
+        test_db.add(settings_row)
+    settings_row.info_timeout = info_timeout
+    settings_row.list_timeout = list_timeout
+    test_db.commit()
+
+
 def _set_plan(test_db, plan: str) -> None:
     state = test_db.query(LicensingState).first()
     if state is None:
@@ -1103,6 +1115,7 @@ class TestRepositoriesCreate:
         repo.agent_machine_id = agent.id
         test_db.commit()
         test_db.refresh(repo)
+        _set_operation_timeouts(test_db, info_timeout=615, list_timeout=627)
 
         with (
             patch(
@@ -1137,7 +1150,9 @@ class TestRepositoriesCreate:
         assert info["archives"] == [{"name": "archive-1", "stats": {"nfiles": 3}}]
         agent_job = test_db.query(AgentJob).one()
         assert agent_job.payload["job_kind"] == "repository.info"
-        wait_for_agent.assert_awaited_once_with(test_db, agent_job.id)
+        wait_for_agent.assert_awaited_once_with(
+            test_db, agent_job.id, timeout_seconds=615
+        )
         run_local.assert_not_called()
 
     async def test_agent_stats_refresh_keeps_count_when_list_job_fails(self, test_db):
@@ -1210,6 +1225,7 @@ class TestRepositoriesCreate:
         repo.agent_machine_id = agent.id
         test_db.commit()
         test_db.refresh(repo)
+        _set_operation_timeouts(test_db, info_timeout=615, list_timeout=627)
 
         with patch(
             "app.api.repositories.wait_for_agent_repository_operation_job",
@@ -1223,7 +1239,9 @@ class TestRepositoriesCreate:
         assert response.json()["archives"][0]["name"] == "archive-1"
         agent_job = test_db.query(AgentJob).one()
         assert agent_job.payload["job_kind"] == "repository.list_archives"
-        wait_for_agent.assert_awaited_once_with(test_db, agent_job.id)
+        wait_for_agent.assert_awaited_once_with(
+            test_db, agent_job.id, timeout_seconds=627
+        )
 
     def test_agent_job_completion_updates_repository_maintenance_job(
         self, test_client: TestClient, admin_headers, test_db

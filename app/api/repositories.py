@@ -5958,7 +5958,11 @@ async def list_repository_archives(
                 job_kind="repository.list_archives",
             )
             await dispatch_agent_job_best_effort(db, agent_job, repository_id=repo_id)
-            result = await wait_for_agent_repository_operation_job(db, agent_job.id)
+            result = await wait_for_agent_repository_operation_job(
+                db,
+                agent_job.id,
+                timeout_seconds=get_operation_timeouts(db)["list_timeout"],
+            )
             archives_data = _parse_agent_json_result(result)
             archives = archives_data.get("archives", [])
             archives = enrich_archives_with_backup_metadata(archives, repository, db)
@@ -6046,7 +6050,11 @@ async def get_repository_info(
                 job_kind="repository.info",
             )
             await dispatch_agent_job_best_effort(db, agent_job, repository_id=repo_id)
-            result = await wait_for_agent_repository_operation_job(db, agent_job.id)
+            result = await wait_for_agent_repository_operation_job(
+                db,
+                agent_job.id,
+                timeout_seconds=get_operation_timeouts(db)["info_timeout"],
+            )
             info_data = _parse_agent_json_result(result)
 
             # The dialog's stats panel (the Borg 2 view in particular) is driven
