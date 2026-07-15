@@ -4,9 +4,9 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 import structlog
 
 from app.core.agent_auth import AGENT_TOKEN_PREFIX_LENGTH
@@ -120,14 +120,13 @@ class AgentMachineResponse(BaseModel):
         json_encoders = {datetime: lambda v: serialize_datetime(v)}
 
 
-class AgentJobResponse(BaseModel):
+class AgentJobBase(BaseModel):
     id: int
     agent_machine_id: int
     backup_job_id: Optional[int] = None
     job_type: str
     status: str
     payload: dict[str, Any]
-    result: Optional[dict[str, Any]] = None
     claimed_at: Optional[datetime] = None
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
@@ -140,6 +139,18 @@ class AgentJobResponse(BaseModel):
     class Config:
         from_attributes = True
         json_encoders = {datetime: lambda v: serialize_datetime(v)}
+
+
+class AgentJobResponse(AgentJobBase):
+    result: Optional[dict[str, Any]] = None
+
+
+class AgentJobSummaryResponse(AgentJobBase):
+    """``AgentJobResponse`` without the ``result`` blob, for the job list.
+
+    A completed ``list_archive_contents`` job can carry a large result; the list
+    never renders it, so returning it for every job is needless overhead.
+    """
 
 
 class AgentJobLogEntryResponse(BaseModel):
@@ -711,12 +722,30 @@ async def delete_agent_machine(
         )
 
 
-@router.get("/agent-jobs", response_model=list[AgentJobResponse])
+DEFAULT_AGENT_JOBS_LIMIT = 200
+MAX_AGENT_JOBS_LIMIT = 1000
+
+
+@router.get("/agent-jobs", response_model=list[AgentJobSummaryResponse])
 async def list_agent_jobs(
+    limit: int = Query(
+        DEFAULT_AGENT_JOBS_LIMIT,
+        ge=1,
+        le=MAX_AGENT_JOBS_LIMIT,
+        description="Maximum number of most-recent jobs to return.",
+    ),
     _: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
-    return db.query(AgentJob).order_by(AgentJob.created_at.desc()).all()
+    # Never load/serialize `result` (a list_archive_contents result can be large)
+    # and bound the row count; the list view only needs metadata.
+    return (
+        db.query(AgentJob)
+        .options(defer(AgentJob.result))
+        .order_by(AgentJob.created_at.desc())
+        .limit(limit)
+        .all()
+    )
 
 
 @router.get(
