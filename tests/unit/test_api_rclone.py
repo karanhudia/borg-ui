@@ -3794,6 +3794,26 @@ def test_create_direct_rclone_repository_rejects_legacy_slash_url(
 
 
 @pytest.mark.unit
+def test_create_direct_rclone_repository_rejects_empty_remote_path(
+    test_client: TestClient, admin_headers, test_db
+):
+    response = test_client.post(
+        "/api/repositories/",
+        headers=admin_headers,
+        json={
+            "name": "Invalid Direct Borg2 Cloud Repo",
+            "path": "rclone:prod-s3:",
+            "borg_version": 2,
+            "encryption": "none",
+            "storage_backend": "rclone_direct",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["key"] == "backend.errors.rclone.directInvalidUrl"
+
+
+@pytest.mark.unit
 def test_import_direct_borg2_rclone_repository_verifies_url_without_hydrate(
     test_client: TestClient, admin_headers, test_db, monkeypatch
 ):

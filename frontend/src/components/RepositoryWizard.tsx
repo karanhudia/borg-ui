@@ -785,6 +785,7 @@ const RepositoryWizard = ({
           if (
             wizardState.borgVersion !== 2 ||
             !directRclonePath ||
+            !directRclonePath.remotePath ||
             formatDirectRcloneUrl(directRclonePath.remoteName, directRclonePath.remotePath) !==
               wizardState.path.trim()
           )
