@@ -1,21 +1,112 @@
 {
-  "generatedAt": "2026-07-14T13:35:35.720Z",
+  "generatedAt": "2026-07-15T05:58:00.361Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #689 visual report",
-    "commitSha": "05187efe645a",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/29336753713"
+    "commitSha": "5572cac799c5",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/29392611795"
   },
   "totals": {
     "baseline": 428,
-    "actual": 438,
+    "actual": 440,
     "compared": 428,
-    "changed": 0,
-    "added": 10,
+    "changed": 5,
+    "added": 12,
     "removed": 0,
-    "unchanged": 428
+    "unchanged": 423
   },
-  "changed": [],
+  "changed": [
+    {
+      "fileName": "components-wizard-repository-location--community-plan-locked-destinations--mobile.png",
+      "baselinePath": "images/baseline/components-wizard-repository-location--community-plan-locked-destinations--mobile.png",
+      "actualPath": "images/actual/components-wizard-repository-location--community-plan-locked-destinations--mobile.png",
+      "diffPath": "images/diff/components-wizard-repository-location--community-plan-locked-destinations--mobile.png",
+      "diffPixels": 10,
+      "totalPixels": 329160,
+      "diffRatio": 0.000030380362133916635,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-wizard-repository-location--direct-borg-2-rclone--mobile.png",
+      "baselinePath": "images/baseline/components-wizard-repository-location--direct-borg-2-rclone--mobile.png",
+      "actualPath": "images/actual/components-wizard-repository-location--direct-borg-2-rclone--mobile.png",
+      "diffPath": "images/diff/components-wizard-repository-location--direct-borg-2-rclone--mobile.png",
+      "diffPixels": 1564,
+      "totalPixels": 329160,
+      "diffRatio": 0.004751488637744562,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-wizard-repository-location--direct-borg-2-rclone.png",
+      "baselinePath": "images/baseline/components-wizard-repository-location--direct-borg-2-rclone.png",
+      "actualPath": "images/actual/components-wizard-repository-location--direct-borg-2-rclone.png",
+      "diffPath": "images/diff/components-wizard-repository-location--direct-borg-2-rclone.png",
+      "diffPixels": 1564,
+      "totalPixels": 1024000,
+      "diffRatio": 0.00152734375,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "components-wizard-repository-review--direct-borg-2-rclone--mobile.png",
+      "baselinePath": "images/baseline/components-wizard-repository-review--direct-borg-2-rclone--mobile.png",
+      "actualPath": "images/actual/components-wizard-repository-review--direct-borg-2-rclone--mobile.png",
+      "diffPath": "images/diff/components-wizard-repository-review--direct-borg-2-rclone--mobile.png",
+      "diffPixels": 787,
+      "totalPixels": 329160,
+      "diffRatio": 0.0023909344999392393,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-wizard-repository-review--direct-borg-2-rclone.png",
+      "baselinePath": "images/baseline/components-wizard-repository-review--direct-borg-2-rclone.png",
+      "actualPath": "images/actual/components-wizard-repository-review--direct-borg-2-rclone.png",
+      "diffPath": "images/diff/components-wizard-repository-review--direct-borg-2-rclone.png",
+      "diffPixels": 787,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0007685546875,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    }
+  ],
   "added": [
     {
       "fileName": "components-archivecontentsdialog--awaiting-agent-listing--mobile.png",
@@ -56,6 +147,14 @@
     {
       "fileName": "components-storagebrowserdialog--populated.png",
       "actualPath": "images/actual/components-storagebrowserdialog--populated.png"
+    },
+    {
+      "fileName": "components-wizard-repository-location--existing-repository-storage-mode-locked--mobile.png",
+      "actualPath": "images/actual/components-wizard-repository-location--existing-repository-storage-mode-locked--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-repository-location--existing-repository-storage-mode-locked.png",
+      "actualPath": "images/actual/components-wizard-repository-location--existing-repository-storage-mode-locked.png"
     }
   ],
   "removed": [],
@@ -1027,16 +1126,7 @@
       "fileName": "components-wizard-repository-location--agent-execution-with-ssh-repository.png"
     },
     {
-      "fileName": "components-wizard-repository-location--community-plan-locked-destinations--mobile.png"
-    },
-    {
       "fileName": "components-wizard-repository-location--community-plan-locked-destinations.png"
-    },
-    {
-      "fileName": "components-wizard-repository-location--direct-borg-2-rclone--mobile.png"
-    },
-    {
-      "fileName": "components-wizard-repository-location--direct-borg-2-rclone.png"
     },
     {
       "fileName": "components-wizard-repository-location--filesystem-destinations--mobile.png"
@@ -1061,12 +1151,6 @@
     },
     {
       "fileName": "components-wizard-repository-review--cloud-mirror.png"
-    },
-    {
-      "fileName": "components-wizard-repository-review--direct-borg-2-rclone--mobile.png"
-    },
-    {
-      "fileName": "components-wizard-repository-review--direct-borg-2-rclone.png"
     },
     {
       "fileName": "components-wizard-repository-review--managed-agent-plan-sources--mobile.png"
