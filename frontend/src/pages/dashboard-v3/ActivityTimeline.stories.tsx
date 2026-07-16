@@ -7,13 +7,19 @@ import type { DashboardOverview } from './types'
 const T = makeT(true)
 type Activity = DashboardOverview['activity_feed'][number]
 
+function todayAt(hour: number) {
+  const timestamp = new Date()
+  timestamp.setHours(hour, 0, 0, 0)
+  return timestamp.toISOString()
+}
+
 const activities: Activity[] = [
   {
     id: 3,
     type: 'backup',
     status: 'completed',
     repository: 'Latest backup',
-    timestamp: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    timestamp: todayAt(14),
     message: 'Latest backup completed',
     error: null,
   },
@@ -22,7 +28,7 @@ const activities: Activity[] = [
     type: 'backup',
     status: 'failed',
     repository: 'Earlier failed backup',
-    timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+    timestamp: todayAt(12),
     message: 'Earlier backup failed',
     error: 'Connection refused',
   },
@@ -31,7 +37,7 @@ const activities: Activity[] = [
     type: 'backup',
     status: 'completed',
     repository: 'Oldest backup',
-    timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+    timestamp: todayAt(10),
     message: 'Oldest backup completed',
     error: null,
   },

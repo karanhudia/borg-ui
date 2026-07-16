@@ -5,6 +5,8 @@
 
 set -euo pipefail
 
+source "$(dirname "$0")/semver.sh"
+
 BUMP_TYPE="${1:-patch}"
 
 if [[ ! "$BUMP_TYPE" =~ ^(major|minor|patch)$ ]]; then
@@ -13,7 +15,7 @@ if [[ ! "$BUMP_TYPE" =~ ^(major|minor|patch)$ ]]; then
 fi
 
 CURRENT_VERSION="$(tr -d '[:space:]' < VERSION)"
-if [[ ! "$CURRENT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+if [[ ! "$CURRENT_VERSION" =~ $SEMVER_STABLE_VERSION_PATTERN ]]; then
   echo "Error: VERSION must be a stable semantic version to use this wrapper." >&2
   echo "Use ./scripts/release.sh vX.Y.Z-prerelease.N for prereleases." >&2
   exit 1

@@ -5,9 +5,11 @@
 
 set -euo pipefail
 
+source "$(dirname "$0")/semver.sh"
+
 TAG="${1:-}"
 
-if [[ $# -ne 1 || ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-((alpha|beta|rc)\.[0-9]+))?$ ]]; then
+if [[ $# -ne 1 || ! "$TAG" =~ $SEMVER_TAG_PATTERN ]]; then
   echo "Usage: ./scripts/check-release-version.sh vX.Y.Z[-alpha.N|-beta.N|-rc.N]" >&2
   exit 1
 fi

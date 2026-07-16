@@ -5,13 +5,15 @@
 
 set -euo pipefail
 
+source "$(dirname "$0")/semver.sh"
+
 usage() {
   echo "Usage: ./scripts/release.sh vX.Y.Z[-alpha.N|-beta.N|-rc.N]" >&2
 }
 
 TAG="${1:-}"
 
-if [[ $# -ne 1 || ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-((alpha|beta|rc)\.[0-9]+))?$ ]]; then
+if [[ $# -ne 1 || ! "$TAG" =~ $SEMVER_TAG_PATTERN ]]; then
   usage
   exit 1
 fi
@@ -80,7 +82,6 @@ git add VERSION frontend/package.json frontend/package-lock.json app/config.py a
 git commit -m "chore(release): bump version to $VERSION"
 git tag -a "$TAG" -m "Release $TAG"
 
-git push origin main
-git push origin "$TAG"
+git push --atomic origin main "$TAG"
 
 echo "Release $TAG published. GitHub Actions will create the release and images."
