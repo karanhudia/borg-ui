@@ -1,48 +1,51 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# Release script for Borg UI
-# Usage: npm run release -- v1.51.0
-# Or directly: ./scripts/release.sh v1.51.0
+# Create and publish a Borg UI release from main.
+# Usage: ./scripts/release.sh v2.2.7
 
-set -e
+set -euo pipefail
 
-VERSION=$1
-CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+usage() {
+  echo "Usage: ./scripts/release.sh vX.Y.Z[-alpha.N|-beta.N|-rc.N]" >&2
+}
 
-if [ "$CURRENT_BRANCH" = "HEAD" ]; then
-  echo "Error: Cannot release from detached HEAD"
+TAG="${1:-}"
+
+if [[ $# -ne 1 || ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-((alpha|beta|rc)\.[0-9]+))?$ ]]; then
+  usage
   exit 1
 fi
 
-# Validate version argument
-if [ -z "$VERSION" ]; then
-  echo "Error: Version argument required"
-  echo "Usage: npm run release -- vX.Y.Z[-alpha.N|-beta.N|-rc.N]"
+if [[ "$(git rev-parse --abbrev-ref HEAD)" != "main" ]]; then
+  echo "Error: releases must be created from the main branch." >&2
   exit 1
 fi
 
-# Validate version format (vX.Y.Z or prerelease variants)
-if ! [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-((alpha|beta|rc)\.[0-9]+))?$ ]]; then
-  echo "Error: Invalid version format. Must be vX.Y.Z or vX.Y.Z-alpha.N / beta.N / rc.N"
+if [[ -n "$(git status --porcelain)" ]]; then
+  echo "Error: working tree must be clean before creating a release." >&2
   exit 1
 fi
 
-# Strip 'v' prefix for VERSION file
-VERSION_NUMBER="${VERSION#v}"
+git fetch origin main
 
-echo "Releasing version $VERSION..."
-echo "Release branch: $CURRENT_BRANCH"
+if [[ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]]; then
+  echo "Error: local main must exactly match origin/main before a release." >&2
+  exit 1
+fi
 
-# Update VERSION file
-echo "$VERSION_NUMBER" > VERSION
-echo "Updated VERSION file to $VERSION_NUMBER"
+if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null || \
+  git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+  echo "Error: tag $TAG already exists." >&2
+  exit 1
+fi
 
-# Update frontend package metadata
-npm --prefix frontend version "$VERSION_NUMBER" --no-git-tag-version
-echo "Updated frontend/package.json to $VERSION_NUMBER"
+VERSION="${TAG#v}"
 
-# Update backend fallback/OpenAPI metadata
-python3 - "$VERSION_NUMBER" <<'PY'
+echo "Preparing release $TAG from $(git rev-parse --short HEAD)..."
+npm --prefix frontend version "$VERSION" --no-git-tag-version
+printf '%s\n' "$VERSION" > VERSION
+
+python3 - "$VERSION" <<'PY'
 import re
 import sys
 from pathlib import Path
@@ -54,41 +57,30 @@ updates = {
         f'app_version: str = "{version}"',
     ),
     Path("app/main.py"): (
-        r'version="[0-9]+\.[0-9]+\.[0-9]+(?:-[^"]+)?"',
+        r'version="[^"]+"',
         f'version="{version}"',
     ),
 }
 
 for path, (pattern, replacement) in updates.items():
-    text = path.read_text()
-    updated, count = re.subn(pattern, replacement, text, count=1)
+    content = path.read_text()
+    updated, count = re.subn(pattern, replacement, content, count=1)
     if count != 1:
-        raise SystemExit(f"Could not update version in {path}")
+        raise SystemExit(f"Could not update version metadata in {path}")
     path.write_text(updated)
 PY
-echo "Updated backend app metadata to $VERSION_NUMBER"
 
-# Run tests and checks
-echo "Running checks..."
-cd frontend
-npm run typecheck
-npm run format:check
-cd ..
+./scripts/check-release-version.sh "$TAG"
+git diff --check
+npm --prefix frontend run check:locales
+npm --prefix frontend run typecheck
+npm --prefix frontend run format:check
 
-# Commit and tag
 git add VERSION frontend/package.json frontend/package-lock.json app/config.py app/main.py
-git commit -m "chore: bump version to $VERSION_NUMBER
+git commit -m "chore(release): bump version to $VERSION"
+git tag -a "$TAG" -m "Release $TAG"
 
-Co-Authored-By: Claude <noreply@anthropic.com>"
+git push origin main
+git push origin "$TAG"
 
-git tag "$VERSION"
-echo "Created tag $VERSION"
-
-# Push
-git push origin "$CURRENT_BRANCH"
-git push origin "$VERSION"
-echo "Pushed to origin"
-
-echo ""
-echo "Release $VERSION complete!"
-echo "GitHub will automatically create a release from the tag."
+echo "Release $TAG published. GitHub Actions will create the release and images."

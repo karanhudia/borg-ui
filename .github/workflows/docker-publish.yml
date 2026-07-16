@@ -33,9 +33,37 @@ env:
   NODE_VERSION: "22"
 
 jobs:
+  validate-release:
+    name: Validate release metadata
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Validate release version
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            ./scripts/check-release-version.sh "v${{ inputs.version }}"
+          else
+            git fetch origin main
+            ./scripts/check-release-version.sh "${{ github.ref_name }}"
+            git merge-base --is-ancestor "${{ github.sha }}" origin/main
+          fi
+
   frontend-build:
     name: Frontend / Release Build
     runs-on: ubuntu-latest
+    needs: [validate-release]
     permissions:
       contents: read
 
