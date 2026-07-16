@@ -155,6 +155,27 @@ pre-commit install --hook-type pre-commit --hook-type pre-push
 
 Make sure frontend dependencies are installed first, otherwise pre-push hooks that call `prettier`, `tsc`, or `eslint` will fail.
 
+## Releases
+
+Create releases only through the checked-in release command, from a clean local
+`main` that exactly matches `origin/main`:
+
+```bash
+./scripts/release.sh v2.2.7
+```
+
+For a stable semantic-version bump, `./scripts/bump-version.sh patch` (or
+`minor` / `major`) delegates to the same release command.
+
+The command updates `VERSION`, the frontend manifest and lockfile, and the
+backend/OpenAPI version metadata. It verifies that every location matches,
+commits the release, and pushes an annotated tag. GitHub Actions then refuses
+tags whose metadata does not match or whose commit is not reachable from `main`,
+before creating the GitHub release or publishing Docker images.
+
+Published tags are immutable. If a released version needs a correction, publish
+the next patch release rather than amending or re-pointing the existing tag.
+
 ## Smoke Tests
 
 Production-critical flows are covered by smoke tests against a running app.

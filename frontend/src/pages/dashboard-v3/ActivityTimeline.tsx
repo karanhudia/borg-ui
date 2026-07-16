@@ -48,8 +48,10 @@ export function ActivityTimeline({
 
   // Group activities by (day column, lane) so multiple events in the same
   // cell can be spread horizontally within the day column. The spread is
-  // deterministic (input order, capped to a small max) so repeated renders
-  // look identical.
+  // deterministic (chronological order, capped to a small max) so repeated
+  // renders look identical. The API supplies the overall feed newest-first,
+  // but positions inside a day must still run oldest-to-newest, matching the
+  // left-to-right day axis.
   type Dot = {
     x: number
     y: number
@@ -79,21 +81,25 @@ export function ActivityTimeline({
     const lane = Number(laneStr)
     const cx = ML + (col + 0.5) * colW
     const cy = MT + (lane + 0.5) * LANE_H
-    const n = bucket.length
+    const chronologicalBucket = [...bucket].sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    )
+    const n = chronologicalBucket.length
     // Horizontal spread inside the day column. Keep dots fully inside the
     // column by clamping the spread to about 60% of column width.
     const spreadW = Math.min(colW * 0.6, 14)
     for (let i = 0; i < n; i++) {
-      const date = new Date(bucket[i].timestamp)
+      const activity = chronologicalBucket[i]
+      const date = new Date(activity.timestamp)
       const offset = n === 1 ? 0 : (i / (n - 1) - 0.5) * spreadW
       const jobColor =
-        bucket[i].status === 'failed' ? T.red : (JOB_COLOR[bucket[i].type] ?? T.textMuted)
+        activity.status === 'failed' ? T.red : (JOB_COLOR[activity.type] ?? T.textMuted)
       dots.push({
         x: cx + offset,
         y: cy,
         color: jobColor,
-        failed: bucket[i].status === 'failed',
-        title: `${bucket[i].type} · ${bucket[i].repository} · ${format(date, 'HH:mm')}`,
+        failed: activity.status === 'failed',
+        title: `${activity.type} · ${activity.repository} · ${format(date, 'HH:mm')}`,
       })
     }
   })

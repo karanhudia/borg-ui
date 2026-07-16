@@ -22,6 +22,20 @@ jobs:
         with:
           fetch-depth: 0  # Fetch all history for changelog generation
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Validate release tag and metadata
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          git fetch origin main
+          ./scripts/check-release-version.sh "$RELEASE_TAG"
+          git merge-base --is-ancestor "$RELEASE_SHA" origin/main
+
       - name: Get version from tag
         id: version
         run: |
