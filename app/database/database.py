@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, MetaData
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import QueuePool
@@ -50,8 +50,21 @@ if settings.database_url.startswith("sqlite"):
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+# Every constraint needs a name it was given deliberately, not one the database
+# happened to invent: SQLite cannot ALTER a constraint, so changing one means
+# rebuilding the table and recreating the constraint by name. An unnamed
+# constraint cannot be recreated, and the rebuild fails.
+# "ix" reproduces the names SQLAlchemy already generates, so no index is renamed.
+NAMING_CONVENTION = {
+    "ix": "ix_%(column_0_label)s",
+    "uq": "uq_%(table_name)s_%(column_0_name)s",
+    "ck": "ck_%(table_name)s_%(constraint_name)s",
+    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+    "pk": "pk_%(table_name)s",
+}
+
 # Create base class for models
-Base = declarative_base()
+Base = declarative_base(metadata=MetaData(naming_convention=NAMING_CONVENTION))
 
 
 def get_db():
