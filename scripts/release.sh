@@ -47,30 +47,10 @@ echo "Preparing release $TAG from $(git rev-parse --short HEAD)..."
 npm --prefix frontend version "$VERSION" --no-git-tag-version
 printf '%s\n' "$VERSION" > VERSION
 
-python3 - "$VERSION" <<'PY'
-import re
-import sys
-from pathlib import Path
-
-version = sys.argv[1]
-updates = {
-    Path("app/config.py"): (
-        r'app_version: str = "[^"]+"',
-        f'app_version: str = "{version}"',
-    ),
-    Path("app/main.py"): (
-        r'version="[^"]+"',
-        f'version="{version}"',
-    ),
-}
-
-for path, (pattern, replacement) in updates.items():
-    content = path.read_text()
-    updated, count = re.subn(pattern, replacement, content, count=1)
-    if count != 1:
-        raise SystemExit(f"Could not update version metadata in {path}")
-    path.write_text(updated)
-PY
+# app/config.py and app/main.py used to be rewritten here as well. They read
+# VERSION now, so there is nothing left to keep in step -- which is the point:
+# this rewrite is exactly what a bump done any other way skips, and app_version
+# then keeps whatever it last said.
 
 ./scripts/check-release-version.sh "$TAG"
 git diff --check
