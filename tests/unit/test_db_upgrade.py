@@ -251,17 +251,20 @@ def test_transfer_to_postgres_advances_every_sequence(tmp_path):
 
 @pytest.mark.unit
 @requires_postgres
-def test_postgres_holding_rows_while_the_old_file_is_back_is_refused(tmp_path):
+def test_a_leftover_sqlite_file_next_to_a_migrated_postgres_is_ignored(tmp_path):
+    """Once Postgres is at head it IS the database; a SQLite file in the data dir
+    is irrelevant -- it may be a deliberately kept rollback, or one an entrypoint
+    script recreated empty. Either way the boot must not stall on it."""
     db = tmp_path / "borg.db"
     _legacy_db(db, lambda s: s.add(Repository(name="r", path="/srv/r")))
     _reset_postgres()
-    alembic_init(db, POSTGRES_URL)
+    assert alembic_init(db, POSTGRES_URL).action == "transferred"
 
-    # Someone puts the pre-upgrade file back next to a live Postgres.
-    (tmp_path / "borg_bak.db").rename(db)
-
-    with pytest.raises(RuntimeError, match="already holds rows"):
-        alembic_init(db, POSTGRES_URL)
+    # The source file is still there (the transfer left it as the rollback), and
+    # a fresh empty one could even reappear. Neither triggers another transfer.
+    assert alembic_init(db, POSTGRES_URL).action == "skipped"
+    db.write_bytes(b"")  # an empty file an entrypoint script might recreate
+    assert alembic_init(db, POSTGRES_URL).action == "skipped"
 
 
 def _reset_postgres():

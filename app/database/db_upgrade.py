@@ -233,51 +233,30 @@ def _already_upgraded(final_url: str, source_path: Path, to_postgres: bool) -> b
     Not by row count: a fresh install is legitimately empty, and treating empty
     as "not done" makes it re-migrate itself on every restart.
     """
-    if not to_postgres:
-        # The upgraded database has taken the source's place, so the source path
-        # being stamped means the work is done -- rows or no rows.
-        if not source_path.exists():
-            return False
+    if to_postgres:
+        # The target is Postgres and DATABASE_URL points at it, so it IS the
+        # database. If it is at the current schema, the work is done -- whatever
+        # SQLite file happens to sit in the data dir is irrelevant (it may be a
+        # deliberately kept rollback). Only an un-migrated Postgres means transfer.
         engine = _engine(final_url)
         try:
             return _is_at_head(engine)
         finally:
             engine.dispose()
 
+    # SQLite: the upgraded database has taken the source's place, so the source
+    # path being stamped means the work is done -- rows or no rows.
+    if not source_path.exists():
+        return False
     engine = _engine(final_url)
     try:
-        if not _is_at_head(engine):
-            return False
-        if not source_path.exists():
-            return True  # steady state: the source was consumed long ago
-        # Postgres is ready and the old file is still here. Empty means a
-        # transfer that never ran; populated means one that half-ran, or someone
-        # put an old file back. The second is not ours to guess at.
-        if _has_rows(engine):
-            raise RuntimeError(
-                f"{final_url.split('@')[-1]} already holds rows while {source_path} is "
-                "still present. Either a previous transfer was interrupted after "
-                "loading rows, or a database file was restored by hand. Refusing to "
-                f"transfer on top of existing rows -- move {source_path} aside to "
-                "confirm the Postgres database is the live one."
-            )
-        return False
+        return _is_at_head(engine)
     finally:
         engine.dispose()
 
 
 def _safe_url(url: str) -> str:
     return make_url(url).render_as_string(hide_password=True)
-
-
-def _has_rows(engine: Engine) -> bool:
-    insp = inspect(engine)
-    with engine.connect() as conn:
-        for table in Base.metadata.sorted_tables:
-            if insp.has_table(table.name):
-                if conn.execute(text(f'SELECT 1 FROM "{table.name}" LIMIT 1')).first():
-                    return True
-    return False
 
 
 def _transfer(source: Engine, target: Engine) -> UpgradeReport:

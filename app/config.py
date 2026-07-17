@@ -1,7 +1,8 @@
 import os
 import secrets
-from typing import Any, List, Union, Optional
+from typing import Any, List, Union, Optional, Mapping
 from pathlib import Path
+from urllib.parse import quote_plus
 from pydantic_settings import BaseSettings
 
 
@@ -17,6 +18,43 @@ def _packaged_version() -> str:
         return (Path(__file__).resolve().parents[1] / "VERSION").read_text().strip()
     except OSError:
         return ""
+
+
+def resolve_database_url(env: Mapping[str, str], data_dir: str) -> str:
+    """Work out which database to use, from most explicit to least.
+
+    DATABASE_URL wins, so nothing existing changes. Otherwise DB_HOST switches
+    to Postgres and the DSN is assembled here rather than handed over ready-made:
+    a generated password may contain "/", "@", ":" or "%", any of which silently
+    breaks a URL, and the resulting error points at the host or the credentials
+    rather than at the quoting. Assembling it in one place means it is escaped
+    exactly once.
+
+    With neither, the database is a SQLite file under data_dir, as before.
+    """
+    if env.get("DATABASE_URL"):
+        return env["DATABASE_URL"]
+
+    host = env.get("DB_HOST")
+    if not host:
+        return f"sqlite:///{data_dir}/borg.db"
+
+    missing = [name for name in ("DB_USER", "DB_PASSWORD") if not env.get(name)]
+    if missing:
+        # Falling back to SQLite here would start the application on a local
+        # file while the real database sits untouched, and the two would drift
+        # apart until someone noticed the data was missing.
+        raise RuntimeError(
+            f"DB_HOST is set but {' and '.join(missing)} "
+            f"{'is' if len(missing) == 1 else 'are'} not. Refusing to fall back "
+            "to SQLite, which would quietly run on the wrong database."
+        )
+
+    user = quote_plus(env["DB_USER"])
+    password = quote_plus(env["DB_PASSWORD"])
+    port = env.get("DB_PORT", "5432")
+    name = env.get("DB_NAME", "borg")
+    return f"postgresql+psycopg://{user}:{password}@{host}:{port}/{name}"
 
 
 class Settings(BaseSettings):
@@ -224,13 +262,8 @@ if not os.getenv("RCLONE_CACHE_ROOT"):
 # AUTO-DERIVE all paths from data_dir
 # Users only need to configure data_dir (via volume mount), everything else is automatic
 
-# 1. Database URL - always derived from data_dir
-env_database_url = os.getenv("DATABASE_URL")
-if env_database_url:
-    settings.database_url = env_database_url
-else:
-    # Auto-derive: sqlite:////data/borg.db
-    settings.database_url = f"sqlite:///{settings.data_dir}/borg.db"
+# 1. Database URL
+settings.database_url = resolve_database_url(os.environ, settings.data_dir)
 
 # 2. SSH keys directory - always derived from data_dir
 settings.ssh_keys_dir = f"{settings.data_dir}/ssh_keys"
