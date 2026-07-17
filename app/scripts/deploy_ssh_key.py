@@ -5,7 +5,6 @@ This ensures SSH keys are always available for borg operations.
 """
 
 import os
-import sqlite3
 import base64
 import hashlib
 import sys
@@ -33,20 +32,28 @@ def deploy_ssh_keys():
         digest = hashlib.sha256(secret_key.encode("utf-8")).digest()
         fernet = Fernet(base64.urlsafe_b64encode(digest))
 
-        # Get SSH keys from database
-        conn = sqlite3.connect("/data/borg.db")
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT private_key, key_type, public_key FROM ssh_keys WHERE is_system_key = 1"
-        )
-        row = cursor.fetchone()
+        # Read the system SSH key from whichever database the app is configured
+        # for. Going through the ORM (not a hardcoded sqlite3 path) means this
+        # follows DATABASE_URL to Postgres when set, and never creates a stray
+        # SQLite file when the real database lives elsewhere.
+        from app.database.database import SessionLocal
+        from app.database.models import SSHKey
 
-        if not row:
+        db = SessionLocal()
+        try:
+            key = db.query(SSHKey).filter(SSHKey.is_system_key.is_(True)).first()
+        finally:
+            db.close()
+
+        if not key:
             print("ℹ️  No system SSH key found in database")
-            conn.close()
             return
 
-        encrypted_key, key_type, public_key = row
+        encrypted_key, key_type, public_key = (
+            key.private_key,
+            key.key_type,
+            key.public_key,
+        )
         try:
             private_key = fernet.decrypt(encrypted_key.encode()).decode()
         except Exception:
@@ -79,8 +86,6 @@ def deploy_ssh_keys():
         print(f"✓ SSH keys deployed to {ssh_dir}")
         print(f"  - Private key: {key_file}")
         print(f"  - Public key: {pub_key_file}")
-
-        conn.close()
 
     except Exception as e:
         print(f"✗ Error deploying SSH keys: {e}", file=sys.stderr)
