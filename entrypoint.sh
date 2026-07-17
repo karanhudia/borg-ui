@@ -250,9 +250,31 @@ for GID in $(id -G); do
     fi
 done
 
+cd /app
+
+# Bring the database up to date before the application is imported. This runs
+# once, here, rather than inside the app: gunicorn forks several workers that
+# would each run it and race one another over the same database.
+#
+# As the user that will own the database afterwards -- an upgrade may replace
+# the file, and one written by root would be unwritable for the app. Mirrors the
+# PUID=0 branch used to start the server below.
+#
+# A failure here stops the boot on purpose. Starting anyway would mean serving
+# from a database in an unknown state.
+echo "[$(date)] Checking database..."
+if [ "$PUID" = "0" ]; then
+    DB_UPGRADE_CMD="python3 -m app.database.db_upgrade"
+else
+    DB_UPGRADE_CMD="gosu borg python3 -m app.database.db_upgrade"
+fi
+if ! $DB_UPGRADE_CMD; then
+    echo "[$(date)] ERROR: database upgrade failed -- refusing to start"
+    exit 1
+fi
+
 # Switch to borg user and start the application
 echo "[$(date)] Starting Borg Web UI as user borg (${PUID}:${PGID})..."
-cd /app
 PORT=${PORT:-8081}
 
 # Start package installation in background (non-blocking)

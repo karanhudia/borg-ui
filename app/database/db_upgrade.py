@@ -12,6 +12,7 @@ between source and target is reported rather than silently absorbed.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -25,6 +26,8 @@ import app.database.models  # noqa: F401  (registers every table on Base)
 
 BACKUP_SUFFIX = "_bak"
 _CHUNK = 2000
+
+log = logging.getLogger("borg_ui.db_upgrade")
 
 
 @dataclass
@@ -103,13 +106,20 @@ def _sqlite_url(path: Path) -> str:
     return f"sqlite:///{path}"
 
 
-def _engine(url: str) -> Engine:
+def _engine(url: str, *, disposable: bool = False) -> Engine:
     """An engine that enforces foreign keys on either dialect.
 
     SQLite only enforces them when a connection asks it to, so a plain engine
     would happily write a reference to a row that does not exist -- the very
     corruption this transfer exists to clean up. Postgres always enforces, and
     the two paths must not disagree about what is a valid row.
+
+    `disposable` marks the half-built target. Nothing survives a failure there:
+    the file is deleted and the transfer starts over, so paying for durability
+    while building it buys nothing -- and on NFS an fsync per statement is what
+    the whole cost is. It is dropped only until the file takes the source's
+    place; from then on the application opens it with its own settings, since
+    synchronous is a property of the connection, not of the file.
 
     Set from the connect event, never mid-transaction: the pragma is a silent
     no-op inside a transaction.
@@ -118,12 +128,34 @@ def _engine(url: str) -> Engine:
     if engine.dialect.name == "sqlite":
 
         @event.listens_for(engine, "connect")
-        def _fk_on(dbapi_conn, _record):
+        def _pragmas(dbapi_conn, _record):
             cur = dbapi_conn.cursor()
             cur.execute("PRAGMA foreign_keys=ON")
+            if disposable:
+                cur.execute("PRAGMA synchronous=OFF")
             cur.close()
 
     return engine
+
+
+def _upgrade_to_head(url: str, engine: Engine | None = None) -> None:
+    """Build the baseline schema.
+
+    With an engine, the migration runs on its connection rather than one alembic
+    opens for itself -- otherwise the target's pragmas would not apply to the
+    schema build, which is 48 tables and 131 indexes and the slowest part of an
+    upgrade over NFS.
+    """
+    log.info("building the baseline schema (48 tables, 131 indexes)")
+    config = _alembic_config(url)
+    if engine is None:
+        command.upgrade(config, "head")
+        return
+
+    with engine.connect() as connection:
+        config.attributes["connection"] = connection
+        command.upgrade(config, "head")
+        connection.commit()
 
 
 def alembic_init(
@@ -148,12 +180,14 @@ def alembic_init(
     final_url = postgres_conn if to_postgres else _sqlite_url(source_path)
 
     if _already_upgraded(final_url, source_path, to_postgres):
+        log.info("database already at the current schema, nothing to do")
         return UpgradeReport(action="skipped", target_url=_safe_url(final_url))
 
     if not source_path.exists():
         # Fresh install: no rows to move, so the baseline is built where the
         # database belongs and there is nothing to swap.
-        command.upgrade(_alembic_config(final_url), "head")
+        log.info("fresh install: creating the database at %s", _safe_url(final_url))
+        _upgrade_to_head(final_url)
         return UpgradeReport(action="fresh", target_url=_safe_url(final_url))
 
     target_path = (
@@ -163,14 +197,21 @@ def alembic_init(
     )
     target_url = postgres_conn if to_postgres else _sqlite_url(target_path)
 
+    log.info(
+        "upgrading database: %s -> %s (this can take several minutes on a large "
+        "database; the app will not start serving until it finishes)",
+        source_path,
+        _safe_url(target_url),
+    )
+
     if target_path is not None and target_path.exists():
         # Only ever left behind by a run that died before the swap; it is a
         # temporary file by construction and never the rollback.
         target_path.unlink()
 
-    target_engine = _engine(target_url)
+    target_engine = _engine(target_url, disposable=not to_postgres)
     source_engine = _engine(_sqlite_url(source_path))
-    command.upgrade(_alembic_config(target_url), "head")
+    _upgrade_to_head(target_url, target_engine)
 
     report = _transfer(source_engine, target_engine)
     report.target_url = _safe_url(target_url)
@@ -242,6 +283,7 @@ def _has_rows(engine: Engine) -> bool:
 def _transfer(source: Engine, target: Engine) -> UpgradeReport:
     report = UpgradeReport(action="transferred", target_url="")
 
+    log.info("transferring rows")
     reflected = MetaData()
     reflected.reflect(bind=source)
 
@@ -310,6 +352,11 @@ def _transfer(source: Engine, target: Engine) -> UpgradeReport:
                     batch = []
             if batch:
                 dst.execute(stmt, batch)
+
+            # Only the big tables are worth a line; agent_job_logs alone is ~90%
+            # of a real database, so without this the log looks stalled on it.
+            if tr.rows >= _CHUNK:
+                log.info("  %s: %d rows", table.name, tr.rows)
 
             report.tables.append(tr)
 
@@ -401,6 +448,22 @@ def _reset_sequences(engine: Engine) -> int:
     return n
 
 
+def upgrade_from_settings() -> UpgradeReport:
+    """Bring the configured database up to date.
+
+    The target is wherever the application is about to run: DATABASE_URL decides
+    it, so there is no second switch to keep in sync. A SQLite URL means the file
+    is upgraded in place (the new one takes its name); anything else means the
+    rows move there and the SQLite file stays behind as the rollback.
+    """
+    from app.config import settings
+
+    url = make_url(settings.database_url)
+    if url.get_backend_name() == "sqlite":
+        return alembic_init(Path(url.database))
+    return alembic_init(Path(settings.data_dir) / "borg.db", settings.database_url)
+
+
 def _finalise(source_path: Path, target_path: Path | None, to_postgres: bool) -> Path:
     """Move the source aside, and in the SQLite case put the new file in its place.
 
@@ -419,3 +482,25 @@ def _finalise(source_path: Path, target_path: Path | None, to_postgres: bool) ->
     if not to_postgres:
         target_path.rename(source_path)
     return backup
+
+
+if __name__ == "__main__":
+    # Runs once from the entrypoint, before the application is imported. It
+    # cannot live in the app: gunicorn forks several workers, each of which
+    # would import it, and they would race each other over the same swap.
+    #
+    # Configure logging to stdout here rather than at import: this makes the
+    # progress lines above visible in `kubectl logs`, and turns on alembic's own
+    # "Running upgrade ->" output (its logging is otherwise never configured,
+    # because the Config is built in code without an ini file). Without this the
+    # pod is silent for the whole migration.
+    import sys
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [db-upgrade] %(message)s",
+        stream=sys.stdout,
+    )
+    report = upgrade_from_settings()
+    for line in report.lines():
+        log.info(line)

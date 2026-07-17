@@ -21,57 +21,54 @@ class TestStartupEvent:
 
     async def test_startup_configures_mqtt(self, mock_db):
         """Test that startup configures MQTT service"""
-        with patch("app.database.migrations.run_migrations"):
-            with patch("app.core.security.create_first_user", new_callable=AsyncMock):
-                mock_settings = Mock()
-                mock_settings.mqtt_enabled = True
-                mock_settings.mqtt_beta_enabled = True
-                mock_settings.mqtt_broker_url = "mqtt://localhost:1883"
-                mock_settings.borg2_binary_path = None
-                mock_db.query.return_value.first.return_value = mock_settings
+        with patch("app.core.security.create_first_user", new_callable=AsyncMock):
+            mock_settings = Mock()
+            mock_settings.mqtt_enabled = True
+            mock_settings.mqtt_beta_enabled = True
+            mock_settings.mqtt_broker_url = "mqtt://localhost:1883"
+            mock_settings.borg2_binary_path = None
+            mock_db.query.return_value.first.return_value = mock_settings
 
-                with patch("app.database.database.SessionLocal", return_value=mock_db):
-                    with patch("app.services.cache_service.archive_cache"):
-                        with patch(
-                            "app.core.borg.borg.get_system_info", new_callable=AsyncMock
-                        ):
-                            with patch("app.services.backup_service.backup_service"):
+            with patch("app.database.database.SessionLocal", return_value=mock_db):
+                with patch("app.services.cache_service.archive_cache"):
+                    with patch(
+                        "app.core.borg.borg.get_system_info", new_callable=AsyncMock
+                    ):
+                        with patch("app.services.backup_service.backup_service"):
+                            with patch("app.utils.process_utils.cleanup_orphaned_jobs"):
                                 with patch(
-                                    "app.utils.process_utils.cleanup_orphaned_jobs"
+                                    "app.utils.process_utils.cleanup_orphaned_mounts"
                                 ):
                                     with patch(
-                                        "app.utils.process_utils.cleanup_orphaned_mounts"
-                                    ):
+                                        "app.services.mqtt_service.mqtt_service"
+                                    ) as mock_mqtt:
                                         with patch(
-                                            "app.services.mqtt_service.mqtt_service"
-                                        ) as mock_mqtt:
+                                            "app.services.mqtt_service.build_mqtt_runtime_config",
+                                            return_value={},
+                                        ):
                                             with patch(
-                                                "app.services.mqtt_service.build_mqtt_runtime_config",
-                                                return_value={},
+                                                "app.api.schedule.check_scheduled_jobs",
+                                                return_value=AsyncMock(),
                                             ):
                                                 with patch(
-                                                    "app.api.schedule.check_scheduled_jobs",
-                                                    return_value=AsyncMock(),
+                                                    "app.services.stats_refresh_scheduler.stats_refresh_scheduler"
                                                 ):
                                                     with patch(
-                                                        "app.services.stats_refresh_scheduler.stats_refresh_scheduler"
+                                                        "app.services.mqtt_sync_scheduler.start_mqtt_sync_scheduler",
+                                                        return_value=AsyncMock(),
                                                     ):
                                                         with patch(
-                                                            "app.services.mqtt_sync_scheduler.start_mqtt_sync_scheduler",
-                                                            return_value=AsyncMock(),
+                                                            "asyncio.create_task"
                                                         ):
-                                                            with patch(
-                                                                "asyncio.create_task"
-                                                            ):
-                                                                from app.main import (
-                                                                    startup_event,
-                                                                    app,
-                                                                )
+                                                            from app.main import (
+                                                                startup_event,
+                                                                app,
+                                                            )
 
-                                                                app.state.background_tasks = []
-                                                                await startup_event()
-                                                                mock_mqtt.configure.assert_called_once()
-                                                                mock_mqtt.sync_state_with_db.assert_called_once()
+                                                            app.state.background_tasks = []
+                                                            await startup_event()
+                                                            mock_mqtt.configure.assert_called_once()
+                                                            mock_mqtt.sync_state_with_db.assert_called_once()
 
     async def test_startup_configures_cache_even_when_license_sync_disabled(
         self, mock_db
@@ -83,7 +80,6 @@ class TestStartupEvent:
         mock_db.query.return_value.first.return_value = mock_settings
 
         with (
-            patch("app.database.migrations.run_migrations"),
             patch("app.core.security.create_first_user", new_callable=AsyncMock),
             patch("app.main.settings.enable_startup_license_sync", False),
             patch("app.database.database.SessionLocal", return_value=mock_db),
@@ -134,7 +130,6 @@ class TestStartupEvent:
             return Mock()
 
         with (
-            patch("app.database.migrations.run_migrations"),
             patch("app.core.security.create_first_user", new_callable=AsyncMock),
             patch("app.main.settings.enable_startup_license_sync", False),
             patch("app.database.database.SessionLocal", return_value=mock_db),

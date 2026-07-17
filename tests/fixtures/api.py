@@ -105,11 +105,8 @@ def test_db(tmp_path, monkeypatch):
         patch("app.api.schedule.SessionLocal", TestingSessionLocal),
         patch("app.api.repositories.SessionLocal", TestingSessionLocal),
         patch("app.utils.ssh_utils.SessionLocal", TestingSessionLocal),
-        # Prevent startup event from creating users or running migrations (conflicts with fixtures)
+        # Prevent the startup event from creating users (conflicts with fixtures)
         patch("app.main.create_first_user", new_callable=AsyncMock),
-        patch(
-            "app.database.migrations.run_migrations", new_callable=lambda: lambda: None
-        ),
         patch("app.main.sync_licensing_state", new_callable=AsyncMock),
     ]
 
