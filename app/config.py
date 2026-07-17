@@ -235,12 +235,12 @@ class Settings(BaseSettings):
         env_file = ".env"
         case_sensitive = False
         extra = "ignore"
-        # Map env vars to internal string fields
-        fields = {
-            "_cors_origins_str": {"env": "CORS_ORIGINS"},
-            "_trusted_proxies_str": {"env": "TRUSTED_PROXIES"},
-            "_oidc_allowed_return_origins_str": {"env": "OIDC_ALLOWED_RETURN_ORIGINS"},
-        }
+        # NOTE: pydantic v1 mapped CORS_ORIGINS / TRUSTED_PROXIES /
+        # OIDC_ALLOWED_RETURN_ORIGINS onto the private _*_str fields here via a
+        # `fields = {...}` block. v2 removed that config key (it only warned and
+        # was ignored), so those env vars already have no effect -- the defaults
+        # are always used. Removed to silence the warning; wiring them back up
+        # needs Field(validation_alias=...) on public fields, a separate change.
 
     def model_post_init(self, __context: Any) -> None:
         if not self.rclone_config_root:
