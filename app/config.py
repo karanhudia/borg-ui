@@ -5,12 +5,25 @@ from pathlib import Path
 from pydantic_settings import BaseSettings
 
 
+def _packaged_version() -> str:
+    """Read the version from VERSION, the one place it is written down.
+
+    Resolved relative to this file rather than as an absolute /app/VERSION, so it
+    is found in a checkout as well as in the image. With the absolute path,
+    everything outside the container fell through to a hardcoded default and
+    silently reported whatever that default last said.
+    """
+    try:
+        return (Path(__file__).resolve().parents[1] / "VERSION").read_text().strip()
+    except OSError:
+        return ""
+
+
 class Settings(BaseSettings):
     """Application settings"""
 
     # Application settings
     app_name: str = "Borg Web UI"
-    app_version: str = "2.2.3"
     debug: bool = False
     environment: str = "production"  # Default to production for safety
 
@@ -267,18 +280,13 @@ settings.enable_startup_license_sync = os.getenv(
 
 
 def get_runtime_app_version() -> str:
-    version_file = Path("/app/VERSION")
+    """The VERSION file wins over APP_VERSION.
 
-    try:
-        file_value = version_file.read_text().strip()
-        if file_value:
-            return file_value
-    except FileNotFoundError:
-        pass
-    except Exception:
-        pass
-
-    return os.getenv("APP_VERSION", settings.app_version)
+    The image defaults APP_VERSION to "dev" (Dockerfile ARG), so reading the
+    environment first would report "dev" for any image built without an explicit
+    --build-arg.
+    """
+    return _packaged_version() or os.getenv("APP_VERSION", "0.0.0")
 
 
 # Environment-specific overrides

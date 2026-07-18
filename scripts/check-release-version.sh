@@ -19,16 +19,15 @@ VERSION_FILE="$(tr -d '[:space:]' < VERSION)"
 PACKAGE_VERSION="$(node -p "require('./frontend/package.json').version")"
 LOCKFILE_VERSION="$(node -p "require('./frontend/package-lock.json').version")"
 LOCKFILE_PACKAGE_VERSION="$(node -p "require('./frontend/package-lock.json').packages[''].version")"
-CONFIG_VERSION="$(python3 -c 'import re; from pathlib import Path; print(re.search(r"app_version: str = \"([^\"]+)\"", Path("app/config.py").read_text()).group(1))')"
-OPENAPI_VERSION="$(python3 -c 'import re; from pathlib import Path; print(re.search(r"version=\"([^\"]+)\"", Path("app/main.py").read_text()).group(1))')"
 
+# app/config.py and app/main.py are not checked here any more: they read VERSION
+# instead of declaring their own, so they cannot disagree with it. That they do
+# is covered by tests/unit/test_version.py.
 for entry in \
   "VERSION:$VERSION_FILE" \
   "frontend/package.json:$PACKAGE_VERSION" \
   "frontend/package-lock.json:$LOCKFILE_VERSION" \
-  "frontend/package-lock.json packages root:$LOCKFILE_PACKAGE_VERSION" \
-  "app/config.py:$CONFIG_VERSION" \
-  "app/main.py:$OPENAPI_VERSION"; do
+  "frontend/package-lock.json packages root:$LOCKFILE_PACKAGE_VERSION"; do
   source="${entry%%:*}"
   actual="${entry#*:}"
   if [[ "$actual" != "$VERSION" ]]; then
