@@ -1259,6 +1259,12 @@ class RestoreService:
                 connection_id=destination_connection_id,
                 remote_paths=[destination],
                 job_id=job_id,
+                # Extract must write faithful symlinks. With follow_symlinks the
+                # mount dereferences each just-created link, so borg's attr step
+                # follows to the (often missing) target and fails with an I/O
+                # error on every symlink. no_contain_symlinks avoids that and
+                # keeps absolute/broken links intact. See _sshfs_symlink_options.
+                preserve_symlinks=True,
             )
 
             if not mount_info_list:

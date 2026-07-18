@@ -175,6 +175,32 @@ Then use `/documents`, `/photos`, and `/backups` in the UI.
 
 For remote sources, choose a Remote Machine in the Backup Plan and select paths from that machine.
 
+### Remote (SSH) source fidelity
+
+When a source is reached over SSH, Borg UI mounts it with `sshfs` and runs Borg
+over the mount. Two things are worth knowing about how the restore compares to
+the live source:
+
+- **Symbolic links are preserved as-is** — including absolute and broken links —
+  so a restore reproduces the source's link structure. Borg UI mounts backup
+  sources without dereferencing symlinks.
+- **Hard links are not preserved when backing up over SSHFS.** The SFTP protocol
+  does not transmit inode or link-count information, so `sshfs` cannot tell that
+  two paths share an inode, and each hard link is stored as an independent file.
+  The archive size is unaffected (Borg still deduplicates the content), but a
+  restore of a hard-link-heavy tree (for example a Nix store, `rsnapshot`
+  rotations, or a `.git` object store) can consume more disk than the source. If
+  faithful hard links matter, back the source up from the machine itself with a
+  managed agent (Borg runs on the source host and reads a real filesystem) rather
+  than over SSH.
+
+> **Existing archives.** SSH-source archives created before symlink-faithful
+> mounting already have their symlinks dereferenced and their absolute and broken
+> links dropped. This cannot be repaired retroactively — only new backups are
+> faithful. To check whether an older archive is affected, run `borg list` on it
+> and look for paths that should be symlinks but are stored as regular files, or
+> compare a test restore against the live source.
+
 ### Filesystem snapshot sources
 
 Borg UI can create Btrfs or ZFS snapshots for local Backup Plan source paths.

@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, Mock, call, patch
 import pytest
 from sqlalchemy.orm import sessionmaker
 
-from app.database.models import Repository, RestoreJob
+from app.database.models import Repository, RestoreJob, SSHConnection
 from app.services.restore_service import RestoreService
 
 
@@ -225,6 +225,45 @@ class TestRestoreServiceExecution:
             await service._execute_local_to_local(999, "/repo", "arch", "/dest", None)
 
         assert service.running_processes == {}
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_ssh_restore_mounts_destination_with_preserve_symlinks(
+        self, testing_session_local, db_session, restore_job
+    ):
+        # Restore-to-SSH must mount the destination faithfully (issue #751, write
+        # side): under follow_symlinks borg's attr step fails on every symlink.
+        connection = SSHConnection(host="example.com", username="borg", port=22)
+        db_session.add(connection)
+        db_session.commit()
+        db_session.refresh(connection)
+
+        captured = {}
+
+        async def fake_mount(**kwargs):
+            captured.update(kwargs)
+            return "/tmp/x", []  # empty -> aborts the restore right after the mount
+
+        service = RestoreService()
+        with (
+            patch("app.services.restore_service.SessionLocal", testing_session_local),
+            patch(
+                "app.services.mount_service.mount_service.mount_ssh_paths_shared",
+                new=fake_mount,
+            ),
+        ):
+            try:
+                await service._execute_local_to_ssh(
+                    restore_job.id,
+                    restore_job.repository,
+                    "archive-1",
+                    "/dest",
+                    destination_connection_id=connection.id,
+                )
+            except Exception:
+                pass  # only the mount kwargs matter here
+
+        assert captured.get("preserve_symlinks") is True
 
     @pytest.mark.unit
     @pytest.mark.asyncio
