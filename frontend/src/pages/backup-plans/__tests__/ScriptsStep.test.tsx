@@ -1,9 +1,15 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
 import { createInitialState } from '../state'
 import { ScriptsStep } from '../wizard-step/ScriptsStep'
+
+vi.mock('../../../services/api', () => ({
+  managedAgentsAPI: {
+    listAgentScripts: vi.fn().mockResolvedValue({ data: { scripts: [], agent_online: true } }),
+  },
+}))
 
 const translations: Record<string, string> = {
   'backupPlans.wizard.scripts.loading': 'Loading scripts...',
@@ -288,6 +294,54 @@ describe('ScriptsStep', () => {
     )
 
     expect(screen.getByRole('radio', { name: 'Always' })).toBeChecked()
+  })
+
+  it('drops agent hooks when the resolved plan agent changes', async () => {
+    const updateState = vi.fn()
+    const repositories = [
+      { id: 1, name: 'Repo A', executor_type: 'agent', agent_machine_id: 1 },
+      { id: 2, name: 'Repo B', executor_type: 'agent', agent_machine_id: 2 },
+    ]
+    const agentMachines = [
+      { id: 1, name: 'agent-a' },
+      { id: 2, name: 'agent-b' },
+    ]
+    const baseState = {
+      ...createInitialState(),
+      repositoryIds: [1],
+      scriptHooks: [
+        {
+          agent_script_name: 'dump-db',
+          is_agent_script: true,
+          hook_type: 'pre-backup' as const,
+          execution_order: 1,
+          enabled: true,
+          continue_on_error: false,
+          skip_on_failure: false,
+          parameter_values: {},
+        },
+      ],
+    }
+
+    const props = {
+      scripts: [],
+      loadingScripts: false,
+      updateState,
+      t: t as never,
+      repositories: repositories as never,
+      agentMachines: agentMachines as never,
+    }
+
+    const { rerender } = render(<ScriptsStep wizardState={baseState} {...props} />)
+    // Mounting with the plan already bound to agent 1 must not wipe saved hooks.
+    expect(updateState).not.toHaveBeenCalled()
+
+    // Re-pick the repositories so the plan now resolves to agent 2.
+    rerender(<ScriptsStep wizardState={{ ...baseState, repositoryIds: [2] }} {...props} />)
+
+    await waitFor(() =>
+      expect(updateState).toHaveBeenCalledWith(expect.objectContaining({ scriptHooks: [] }))
+    )
   })
 
   it('does not render legacy inline script controls', () => {

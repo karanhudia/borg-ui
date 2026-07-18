@@ -1232,6 +1232,16 @@ export interface AgentDiagnosticsResponse {
   tcp?: AgentDiagnosticsTcpResult | null
 }
 
+export interface AgentScript {
+  name: string
+  description?: string | null
+}
+
+export interface AgentScriptsResponse {
+  scripts: AgentScript[]
+  agent_online: boolean
+}
+
 export interface AgentEnrollmentTokenCreate {
   name: string
   default_path?: string | null
@@ -1271,6 +1281,8 @@ export const managedAgentsAPI = {
     api.get<{ repo: string | null; remote_path: string | null; has_passphrase: boolean }>(
       `/managed-machines/agents/${agentId}/repository-defaults`
     ),
+  listAgentScripts: (agentId: number) =>
+    api.get<AgentScriptsResponse>(`/managed-machines/agents/${agentId}/scripts`),
 }
 
 // Schedule API

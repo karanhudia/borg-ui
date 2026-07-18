@@ -106,10 +106,18 @@ def _paginate_log_text(log_text: str, offset: int, limit: int) -> dict:
     }
 
 
+def _script_execution_display_name(execution: ScriptExecution) -> str:
+    """Human label for a script execution: the library script name, or the
+    agent-published script name for agent hooks (which have no ``script_id``)."""
+    if execution.script:
+        return execution.script.name
+    if execution.agent_script_name:
+        return execution.agent_script_name
+    return f"Script #{execution.script_id}"
+
+
 def _format_script_execution_logs(execution: ScriptExecution) -> str:
-    script_name = (
-        execution.script.name if execution.script else f"Script #{execution.script_id}"
-    )
+    script_name = _script_execution_display_name(execution)
     lines = [
         f"SCRIPT: {script_name}",
         f"HOOK: {execution.hook_type or 'standalone'}",
@@ -131,6 +139,44 @@ def _format_script_execution_logs(execution: ScriptExecution) -> str:
     )
     if execution.error_message:
         lines.extend(["", "ERROR:", execution.error_message])
+    return "\n".join(lines)
+
+
+# Cap the live-log tail read on the 2s polling path so a verbose hook (e.g. a
+# large line-by-line DB dump) can't grow the query + string rebuild unbounded.
+_MAX_LIVE_LOG_ROWS = 500
+
+
+def _format_running_agent_script_logs(execution: ScriptExecution, db: Session) -> str:
+    """Live log for a still-running agent hook: the header plus the agent's
+    streamed ``agent_job_logs`` lines, which arrive before the terminal
+    stdout/stderr are captured at completion. The frontend polls this every 2s
+    while the execution is ``running`` (same as a live borg job), so only the
+    last ``_MAX_LIVE_LOG_ROWS`` rows are read (the most recent activity)."""
+    # Only ``message``/``stream`` are used below, and this runs on a 2s-polling
+    # hot path — project just those two columns instead of hydrating full ORM
+    # rows (mirrors ``_latest_agent_script_line`` in ``app/api/backup_plans.py``).
+    rows = (
+        db.query(AgentJobLog.message, AgentJobLog.stream)
+        .filter(AgentJobLog.agent_job_id == execution.agent_job_id)
+        .order_by(AgentJobLog.sequence.desc(), AgentJobLog.id.desc())
+        .limit(_MAX_LIVE_LOG_ROWS)
+        .all()
+    )
+    rows.reverse()  # back to chronological order after the tail fetch
+    stdout_lines = [row.message for row in rows if row.stream != "stderr"]
+    stderr_lines = [row.message for row in rows if row.stream == "stderr"]
+    lines = [
+        f"SCRIPT: {_script_execution_display_name(execution)}",
+        f"HOOK: {execution.hook_type or 'standalone'}",
+        f"STATUS: {execution.status}",
+        "",
+        "STDOUT:",
+        "\n".join(stdout_lines) if stdout_lines else "(no output yet)",
+        "",
+        "STDERR:",
+        "\n".join(stderr_lines) if stderr_lines else "(no output yet)",
+    ]
     return "\n".join(lines)
 
 
@@ -636,11 +682,7 @@ async def list_recent_activity(
         for execution in script_executions:
             if status and execution.status != status:
                 continue
-            script_name = (
-                execution.script.name
-                if execution.script
-                else f"Script #{execution.script_id}"
-            )
+            script_name = _script_execution_display_name(execution)
             backup_plan_name = None
             if execution.backup_plan:
                 backup_plan_name = execution.backup_plan.name
@@ -785,9 +827,14 @@ async def get_job_logs(
                 },
             )
         _ensure_activity_logs_visible(job_type, execution, db)
-        return _paginate_log_text(
-            _format_script_execution_logs(execution), offset, limit
-        )
+        # While an agent hook runs, stream its live agent_job_logs (the terminal
+        # stdout/stderr are only captured at completion); afterwards serve the
+        # captured result.
+        if execution.status == "running" and execution.agent_job_id is not None:
+            log_text = _format_running_agent_script_logs(execution, db)
+        else:
+            log_text = _format_script_execution_logs(execution)
+        return _paginate_log_text(log_text, offset, limit)
 
     if job_type in RCLONE_ACTIVITY_OPERATIONS:
         job = _get_rclone_job(db, job_type, job_id)

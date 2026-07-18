@@ -1101,6 +1101,63 @@ class TestActivityLogContracts:
         assert "stderr line" in contents
         assert "script failed" in contents
 
+    def test_running_agent_script_logs_stream_from_agent_job_logs(
+        self, test_client, admin_headers, test_db
+    ):
+        # While an agent hook runs, its terminal stdout is not captured yet;
+        # the log endpoint must stream the agent's live agent_job_logs instead.
+        from app.database.models import AgentJob, AgentJobLog, ScriptExecution
+
+        agent_job = AgentJob(
+            agent_machine_id=1,
+            job_type="script.run",
+            status="running",
+            payload={},
+        )
+        test_db.add(agent_job)
+        test_db.flush()
+        streamed = [
+            ("stdout", "Starting script.run: backup-cluster-mariadb"),
+            ("stdout", "Dumping database: ccnet_db -> /mnt/nfs/ccnet_db.sql.gz"),
+            ("stderr", "warning: table locked briefly"),
+        ]
+        for seq, (stream, message) in enumerate(streamed):
+            test_db.add(
+                AgentJobLog(
+                    agent_job_id=agent_job.id,
+                    sequence=seq,
+                    stream=stream,
+                    message=message,
+                    created_at=datetime.now(),
+                )
+            )
+        execution = ScriptExecution(
+            script_id=None,
+            agent_script_name="backup-cluster-mariadb",
+            hook_type="pre-backup",
+            status="running",
+            started_at=datetime.now(),
+            stdout=None,
+            stderr=None,
+            agent_job_id=agent_job.id,
+            triggered_by="backup_plan",
+        )
+        test_db.add(execution)
+        test_db.commit()
+        test_db.refresh(execution)
+
+        response = test_client.get(
+            f"/api/activity/script_execution/{execution.id}/logs",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        contents = [line["content"] for line in response.json()["lines"]]
+        assert "SCRIPT: backup-cluster-mariadb" in contents
+        assert "STATUS: running" in contents
+        assert "Dumping database: ccnet_db -> /mnt/nfs/ccnet_db.sql.gz" in contents
+        assert "warning: table locked briefly" in contents
+
     def test_get_script_execution_logs_hides_quiet_success_under_failed_only(
         self, test_client, admin_headers, test_db
     ):

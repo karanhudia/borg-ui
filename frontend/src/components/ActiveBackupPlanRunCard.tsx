@@ -169,6 +169,16 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
   const stats = aggregateStats(run)
   const progress = aggregateProgress(run)
   const currentFile = getCurrentFile(run)
+  // Live "current activity" line: a borg job's current file during the backup,
+  // or a running agent hook's latest streamed line during the pre/post phase —
+  // shown in the same terminal box so hook output tickers like borg's.
+  const runningHookLine =
+    run.script_executions?.find((exec) => exec.status === 'running' && exec.current_line)
+      ?.current_line ?? null
+  // Prefer a live hook line: getCurrentFile() doesn't filter finished jobs, so a
+  // completed backup keeps its last current_file — during a post-backup hook that
+  // stale value would otherwise hide the running hook's live output.
+  const activityLine = runningHookLine ?? currentFile
   const firstLogJob = getPreferredViewableJob(run)
 
   const visibleStats: { key: string; label: string; value: string; valueColor?: string }[] = []
@@ -433,7 +443,7 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
                 sm: `repeat(${Math.min(run.repositories.length, 3)}, 1fr)`,
               },
               gap: 1,
-              mb: currentFile ? 1.5 : 0,
+              mb: activityLine ? 1.5 : 0,
             }}
           >
             {run.repositories.map((repoRun) => {
@@ -564,8 +574,9 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
           </Box>
         )}
 
-        {/* Current file terminal box */}
-        {currentFile && (
+        {/* Live current-activity terminal box: borg current file, or a running
+            hook's latest streamed line during the pre/post-script phase. */}
+        {activityLine && (
           <Box
             sx={{
               px: 1.5,
@@ -595,7 +606,7 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
                 minWidth: 0,
               }}
             >
-              {currentFile}
+              {activityLine}
             </Typography>
           </Box>
         )}

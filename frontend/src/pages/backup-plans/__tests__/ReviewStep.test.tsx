@@ -34,6 +34,7 @@ const translations: Record<string, string> = {
   'backupPlans.wizard.review.prune': 'Prune',
   'backupPlans.wizard.review.repositories': 'Repositories',
   'backupPlans.wizard.review.repositoryScripts': 'Repository scripts',
+  'backupPlans.wizard.scripts.agentScriptBadge': 'agent',
   'backupPlans.wizard.review.retentionValue': 'daily {{daily}}, weekly {{weekly}}',
   'backupPlans.wizard.review.retentionValueWithWithin':
     'daily {{daily}}, weekly {{weekly}}, within {{within}}',
@@ -205,5 +206,28 @@ describe('ReviewStep', () => {
 
     expect(screen.getByText('Prune')).toBeInTheDocument()
     expect(screen.queryByText(/within/i)).not.toBeInTheDocument()
+  })
+
+  it('labels an agent script hook with its name and the agent badge', () => {
+    renderReview({
+      ...createInitialState(),
+      name: 'Agent hook backup',
+      sourceDirectories: ['/data'],
+      repositoryIds: [10],
+      scriptHooks: [
+        {
+          script_id: null,
+          agent_script_name: 'db-dump.sh',
+          hook_type: 'pre-backup',
+          execution_order: 1,
+          enabled: true,
+          parameter_values: {},
+        },
+      ],
+    })
+
+    // Agent hooks render `${agent_script_name} (${badge})`, distinct from the
+    // repository-script `Script #id` fallback — guards the label from regressing.
+    expect(screen.getByText('db-dump.sh (agent)')).toBeInTheDocument()
   })
 })

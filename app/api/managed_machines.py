@@ -39,6 +39,7 @@ logger = structlog.get_logger()
 router = APIRouter(prefix="/api/managed-machines", tags=["managed-machines"])
 
 AGENT_DIAGNOSTICS_TIMEOUT_SECONDS = 5.0
+AGENT_LIST_SCRIPTS_TIMEOUT_SECONDS = 5.0
 _DIAGNOSTIC_HOST_RE = re.compile(
     r"^(?=.{1,253}\.?$)"
     r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)*"
@@ -650,6 +651,61 @@ async def run_agent_machine_diagnostics(
         )
 
     return _normalize_diagnostics_result(agent, result)
+
+
+@router.get("/agents/{agent_machine_id}/scripts")
+async def list_agent_machine_scripts(
+    agent_machine_id: int,
+    _: User = Depends(require_managed_agents_admin_user),
+    db: Session = Depends(get_db),
+):
+    """Ask a connected managed agent which pre/post-backup scripts it publishes
+    (its allow-list) so the backup-plan wizard can offer them. Returns an empty
+    list when the agent is offline or reports nothing; only names are exposed,
+    never paths."""
+    agent = (
+        db.query(AgentMachine)
+        .filter(
+            AgentMachine.id == agent_machine_id,
+            AgentMachine.status != "deleted",
+        )
+        .first()
+    )
+    if not agent:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"key": "backend.errors.agents.agentNotFound"},
+        )
+    try:
+        result = await agent_connection_manager.send_command(
+            agent.id,
+            command="agent.list_scripts",
+            payload={},
+            timeout_seconds=AGENT_LIST_SCRIPTS_TIMEOUT_SECONDS,
+            wait_for_result=True,
+        )
+    except (AgentConnectionUnavailable, AgentCommandTimeout):
+        return {"scripts": [], "agent_online": False}
+    except AgentCommandError:
+        # The agent responded but rejected/failed the command (e.g. an older
+        # agent without agent.list_scripts) — it is online, just has no scripts.
+        return {"scripts": [], "agent_online": True}
+
+    scripts: list[dict[str, Any]] = []
+    raw_scripts = result.get("scripts") if isinstance(result, dict) else None
+    if isinstance(raw_scripts, list):
+        for entry in raw_scripts:
+            if not isinstance(entry, dict):
+                continue
+            name = entry.get("name")
+            if not isinstance(name, str) or not name.strip():
+                continue
+            item: dict[str, Any] = {"name": name}
+            description = entry.get("description")
+            if isinstance(description, str) and description.strip():
+                item["description"] = description.strip()
+            scripts.append(item)
+    return {"scripts": scripts, "agent_online": True}
 
 
 @router.get(

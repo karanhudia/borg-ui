@@ -4,6 +4,53 @@ import { createInitialState, planToState } from '../pages/backup-plans/state'
 import { buildBackupPlanPayload } from './backupPlanPayload'
 import type { BackupPlan } from '../types'
 
+describe('backupPlanPayload agent script hooks', () => {
+  it('keeps an agent-script hook and never mirrors it to legacy columns', () => {
+    const payload = buildBackupPlanPayload({
+      ...createInitialState(),
+      name: 'Agent plan',
+      sourceDirectories: ['/data'],
+      repositoryIds: [10],
+      scriptHooks: [
+        {
+          agent_script_name: 'pre-db-dump.sh',
+          is_agent_script: true,
+          hook_type: 'pre-backup',
+          execution_order: 1,
+          enabled: true,
+        },
+      ],
+    })
+
+    expect(payload.script_hooks).toHaveLength(1)
+    expect(payload.script_hooks?.[0]).toMatchObject({
+      agent_script_name: 'pre-db-dump.sh',
+      script_id: null,
+      hook_type: 'pre-backup',
+    })
+    // Library-only legacy column stays empty for agent hooks.
+    expect(payload.pre_backup_script_id ?? null).toBeNull()
+  })
+
+  it('drops hooks that reference neither a library nor an agent script', () => {
+    const payload = buildBackupPlanPayload({
+      ...createInitialState(),
+      name: 'Empty hook plan',
+      sourceDirectories: ['/data'],
+      repositoryIds: [10],
+      scriptHooks: [
+        {
+          hook_type: 'pre-backup',
+          execution_order: 1,
+          enabled: true,
+        },
+      ],
+    })
+
+    expect(payload.script_hooks).toHaveLength(0)
+  })
+})
+
 describe('backupPlanPayload prune keep-within', () => {
   it('includes a trimmed keep-within interval in backup plan payloads', () => {
     const payload = buildBackupPlanPayload({
