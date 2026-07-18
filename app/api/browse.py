@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 import os  # noqa: F401
 import structlog
 
-from app.database.models import User, Repository, SystemSettings
+from app.database.models import User, Repository, SystemSettings, AgentJob
 from app.database.database import get_db
 from app.api.auth import get_current_user
 from app.core.borg_router import BorgRouter
@@ -35,6 +35,29 @@ from app.utils.ssh_utils import (
 logger = structlog.get_logger(__name__)
 
 router = APIRouter()
+
+
+def _drop_agent_job_result(db: Session, agent_job_id: int) -> None:
+    """Clear a consumed browse listing from ``agent_jobs.result``.
+
+    A ``list_archive_contents`` result holds the archive's full ``borg list``
+    output and can be large. It only needs to survive until the polling browse
+    request reads it once; the parsed items are cached afterwards and the agent
+    can reproduce them on demand. Clearing it avoids keeping one copy per browse.
+    """
+    try:
+        db.query(AgentJob).filter(AgentJob.id == agent_job_id).update(
+            {AgentJob.result: None}, synchronize_session=False
+        )
+        db.commit()
+    except Exception as exc:  # best-effort cleanup; never fail the browse on it
+        db.rollback()
+        logger.warning(
+            "Failed to drop consumed agent browse job result",
+            agent_job_id=agent_job_id,
+            error=str(exc),
+        )
+
 
 # Memory safety limits
 MAX_ITEMS_IN_MEMORY = 1_000_000  # Maximum number of items to load into memory
@@ -148,6 +171,9 @@ async def browse_archive_contents(
     db: Session = Depends(get_db),
 ):
     """Browse contents of an archive at a specific path (directory-by-directory)"""
+    # Job id whose result should be cleared in `finally`, set only once a
+    # completed agent listing has been consumed (None for local repos / pending).
+    consumed_browse_job_id: Optional[int] = None
     try:
         repository = db.query(Repository).filter(Repository.id == repository_id).first()
         if not repository:
@@ -204,11 +230,12 @@ async def browse_archive_contents(
                     job_id=job_id,
                 )
                 if result is None:
-                    # Job still running — tell the client to poll with this id.
+                    # Still running — client polls with this id; not consumed yet.
                     return JSONResponse(
                         status_code=status.HTTP_202_ACCEPTED,
                         content={"status": "pending", "jobId": browse_job_id},
                     )
+                consumed_browse_job_id = browse_job_id
             else:
                 result = await _list_archive_contents_local(
                     db,
@@ -321,3 +348,6 @@ async def browse_archive_contents(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to browse archive: {str(e)}",
         )
+    finally:
+        if consumed_browse_job_id is not None:
+            _drop_agent_job_result(db, consumed_browse_job_id)

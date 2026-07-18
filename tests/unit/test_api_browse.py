@@ -3,6 +3,7 @@ Unit tests for browse/filesystem API endpoints
 """
 
 import json
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -941,3 +942,32 @@ class TestFilesystemEndpoints:
         )
 
         assert response.status_code == 404
+
+
+def test_drop_agent_job_result_nulls_persisted_listing(test_db):
+    """The consumed browse result (a potentially huge list_archive_contents
+    payload) must be dropped from agent_jobs.result so the app DB does not
+    accumulate it."""
+    agent = _create_agent(test_db, "repository.list_archive_contents")
+    now = datetime.now(timezone.utc)
+    job = AgentJob(
+        agent_machine_id=agent.id,
+        job_type="repository",
+        status="completed",
+        payload={
+            "schema_version": 1,
+            "job_kind": "repository.list_archive_contents",
+        },
+        result={"stdout": "x" * 4096},
+        created_at=now,
+        updated_at=now,
+    )
+    test_db.add(job)
+    test_db.commit()
+    test_db.refresh(job)
+    assert job.result is not None
+
+    browse_api._drop_agent_job_result(test_db, job.id)
+
+    test_db.refresh(job)
+    assert job.result is None

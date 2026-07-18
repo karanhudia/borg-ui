@@ -136,6 +136,53 @@ def test_managed_machine_admin_list_api_remains_readable_without_pro_plan(
     assert jobs_response.json()[0]["id"] == job.id
 
 
+def test_agent_jobs_list_omits_result_blob_and_honors_limit(
+    test_client: TestClient, admin_headers, test_db
+):
+    """The job list must never serialize the (possibly hundreds-of-MB) `result`
+    blob and must bound the number of rows returned."""
+    agent = _agent(test_db)
+    now = datetime.now(timezone.utc)
+    older = AgentJob(
+        agent_machine_id=agent.id,
+        job_type="repository",
+        status="completed",
+        payload={"schema_version": 1, "job_kind": "repository.list_archive_contents"},
+        result={"stdout": "x" * 100_000},
+        created_at=now - timedelta(minutes=5),
+        updated_at=now - timedelta(minutes=5),
+    )
+    newer = AgentJob(
+        agent_machine_id=agent.id,
+        job_type="backup",
+        status="completed",
+        payload={"schema_version": 1, "job_kind": "backup.create"},
+        result={"archive_name": "a"},
+        created_at=now,
+        updated_at=now,
+    )
+    test_db.add_all([older, newer])
+    test_db.commit()
+    test_db.refresh(newer)
+
+    response = test_client.get(
+        "/api/managed-machines/agent-jobs", headers=admin_headers
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 2
+    assert body[0]["id"] == newer.id  # newest first
+    assert all("result" not in job for job in body)
+
+    limited = test_client.get(
+        "/api/managed-machines/agent-jobs",
+        params={"limit": 1},
+        headers=admin_headers,
+    )
+    assert limited.status_code == 200
+    assert [job["id"] for job in limited.json()] == [newer.id]
+
+
 def test_managed_machine_admin_write_api_requires_pro_plan(
     test_client: TestClient, admin_headers, test_db
 ):
