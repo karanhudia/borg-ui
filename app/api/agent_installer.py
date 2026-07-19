@@ -366,6 +366,27 @@ else
     --name "${AGENT_NAME}"
 fi
 
+# Backing up a whole machine means reading files the service user does not own.
+# Without this, only --service-user root can produce a complete backup, and any
+# operator wanting one is pushed to running the agent as root.
+#
+# CAP_DAC_READ_SEARCH grants exactly what a backup needs — read any file — and
+# nothing else: no writing, no chown, no command execution. It inherits to the
+# Borg child process, is scoped to this service rather than to a binary anyone
+# can execute, and is compatible with NoNewPrivileges, so the unit keeps its
+# hardened baseline.
+#
+# Restoring to paths the service user cannot write needs more than this and is
+# deliberately not granted.
+#
+# A root service already holds every capability, and a bounding set there would
+# restrict it rather than extend it, so the block is left out in that case.
+SERVICE_CAPABILITIES=""
+if [[ "${SERVICE_USER}" != "root" ]]; then
+  SERVICE_CAPABILITIES="AmbientCapabilities=CAP_DAC_READ_SEARCH
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH"
+fi
+
 cat >/etc/systemd/system/borg-ui-agent.service <<SERVICE
 [Unit]
 Description=Borg UI managed agent
@@ -383,6 +404,7 @@ WorkingDirectory=${SERVICE_HOME}
 NoNewPrivileges=true
 PrivateTmp=true
 ReadWritePaths=${SERVICE_READ_WRITE_PATHS}
+${SERVICE_CAPABILITIES}
 
 [Install]
 WantedBy=multi-user.target
