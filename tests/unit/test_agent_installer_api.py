@@ -126,6 +126,31 @@ def test_agent_installer_script_prepares_config_for_selected_service_user(
     assert "chmod 0600 /etc/borg-ui-agent/config.toml" in response.text
 
 
+def test_agent_installer_grants_read_capability_to_non_root_service(
+    test_client: TestClient,
+):
+    """A non-root service cannot read files it does not own, so without this a
+    complete backup requires --service-user root."""
+    response = test_client.get("/agent/install.sh")
+
+    assert "AmbientCapabilities=CAP_DAC_READ_SEARCH" in response.text
+    assert "CapabilityBoundingSet=CAP_DAC_READ_SEARCH" in response.text
+    # The capability is compatible with the hardened baseline, which stays.
+    assert "NoNewPrivileges=true" in response.text
+    assert "${SERVICE_CAPABILITIES}" in response.text
+
+
+def test_agent_installer_omits_capabilities_for_a_root_service(
+    test_client: TestClient,
+):
+    """Root already holds every capability; a bounding set would only take
+    capabilities away from it."""
+    response = test_client.get("/agent/install.sh")
+
+    assert 'SERVICE_CAPABILITIES=""' in response.text
+    assert 'if [[ "${SERVICE_USER}" != "root" ]]; then' in response.text
+
+
 def test_agent_installer_script_allows_borg2_prereleases(test_client: TestClient):
     response = test_client.get("/agent/install.sh")
 
