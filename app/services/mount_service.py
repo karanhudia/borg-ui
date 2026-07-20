@@ -64,6 +64,30 @@ def _decrypt_with_module_secret(encrypted_value: str) -> str:
     return cipher.decrypt(encrypted_value.encode()).decode()
 
 
+def _sshfs_symlink_options(preserve_symlinks: bool) -> list[str]:
+    """SSHFS options controlling how symlinks in the remote tree are presented.
+
+    ``preserve_symlinks=True`` is the fidelity path, used for both directions:
+
+    - Backup source (read): the archive must reproduce the source, so do NOT
+      dereference symlinks and keep absolute/broken ones. Without this,
+      ``follow_symlinks`` dereferences them and sshfs's ``contain_symlinks``
+      sandbox (on by default in sshfs 3.x) drops absolute links (``readlink``
+      EPERM). Safe: borg in nofollow mode only reads the target string.
+    - Restore destination (write): ``borg extract`` creates the links, then sets
+      their attributes. Under ``follow_symlinks`` the mount dereferences each new
+      link so the attr step follows to the (often missing) target and fails with
+      an I/O error on every symlink. ``no_contain_symlinks`` avoids that; it does
+      NOT block link *creation*, so absolute/broken links extract cleanly.
+
+    Only browse and cloud-mirror keep the historical ``follow_symlinks`` — a UX
+    choice for interactive browsing, not a fidelity path — via ``preserve_symlinks=False``.
+    """
+    if preserve_symlinks:
+        return ["-o", "no_contain_symlinks"]
+    return ["-o", "follow_symlinks"]
+
+
 def _sshfs_missing_remote_path(error_message: str) -> bool:
     normalized = (error_message or "").lower()
     return any(marker in normalized for marker in SSHFS_NO_SUCH_FILE_MARKERS)
@@ -535,6 +559,7 @@ class MountService:
         remote_paths: List[str],
         job_id: Optional[int] = None,
         temp_root: Optional[str] = None,
+        preserve_symlinks: bool = False,
     ) -> Tuple[str, List[Tuple[str, str]]]:
         """
         Mount multiple remote SSH directories from the same connection under a single shared temp root.
@@ -545,6 +570,8 @@ class MountService:
             remote_paths: List of remote paths to mount (all from the same connection)
             job_id: Optional backup job ID for tracking
             temp_root: Optional existing temporary root to reuse across source connections
+            preserve_symlinks: Mount for faithful symlink fidelity (backup sources
+                and restore destinations); browse/cloud-mirror keep follow_symlinks
 
         Returns:
             Tuple of (temp_root, mount_info_list)
@@ -782,6 +809,7 @@ class MountService:
                         remote_path=mount_remote_path,
                         mount_point=mount_dir,
                         temp_key_file=temp_key_file,
+                        preserve_symlinks=preserve_symlinks,
                     )
 
                     # Verify mount with READ-ONLY check (NEVER write to user data!)
@@ -1587,8 +1615,14 @@ class MountService:
         remote_path: str,
         mount_point: str,
         temp_key_file: str,
+        preserve_symlinks: bool = False,
     ):
-        """Execute SSHFS mount command with SSH key authentication"""
+        """Execute SSHFS mount command with SSH key authentication.
+
+        ``preserve_symlinks`` selects faithful symlink handling for backup sources
+        and restore destinations (see ``_sshfs_symlink_options``); browse and
+        cloud-mirror keep the default ``follow_symlinks`` behavior.
+        """
         sftp_server_path = None
         use_sudo = getattr(connection, "use_sudo", False)
 
@@ -1673,8 +1707,7 @@ class MountService:
                 "ServerAliveCountMax=3",
                 "-o",
                 "reconnect",
-                "-o",
-                "follow_symlinks",
+                *_sshfs_symlink_options(preserve_symlinks),
                 "-o",
                 "allow_other",
                 "-o",

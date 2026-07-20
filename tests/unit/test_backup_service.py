@@ -2496,9 +2496,12 @@ class TestBackupServicePeriodicSync:
 
         captured = {}
 
-        async def mock_mount_ssh_paths_shared(connection_id, remote_paths, job_id):
+        async def mock_mount_ssh_paths_shared(
+            connection_id, remote_paths, job_id, preserve_symlinks=False
+        ):
             captured["connection_id"] = connection_id
             captured["remote_paths"] = remote_paths
+            captured["preserve_symlinks"] = preserve_symlinks
             return "/tmp/sshfs_mount_test", [("mount-1", "etc/komodo")]
 
         monkeypatch.setattr(
@@ -2519,6 +2522,8 @@ class TestBackupServicePeriodicSync:
 
         assert captured["connection_id"] == connection.id
         assert captured["remote_paths"] == ["/etc/komodo"]
+        # Backup sources must mount with faithful symlink handling (issue #751).
+        assert captured["preserve_symlinks"] is True
         assert processed_paths == ["etc/komodo"]
         assert ssh_mount_info == [("/tmp/sshfs_mount_test", "etc/komodo")]
 
@@ -2542,7 +2547,9 @@ class TestBackupServicePeriodicSync:
         (canary_dir / "manifest.json").write_text("{}", encoding="utf-8")
         temp_root = tmp_path / "sshfs_mount_test"
 
-        async def mock_mount_ssh_paths_shared(connection_id, remote_paths, job_id):
+        async def mock_mount_ssh_paths_shared(
+            connection_id, remote_paths, job_id, preserve_symlinks=False
+        ):
             return str(temp_root), [("mount-1", "etc/komodo")]
 
         monkeypatch.setattr(

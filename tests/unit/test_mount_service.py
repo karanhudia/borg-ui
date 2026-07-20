@@ -31,6 +31,68 @@ class TestMountService:
         assert mount_service.active_mounts == {}
         assert mount_service.mount_base_dir.exists()
 
+    def test_sshfs_symlink_options_preserve_is_faithful(self):
+        """Backup sources disable the contain_symlinks sandbox and do not follow."""
+        from app.services.mount_service import _sshfs_symlink_options
+
+        opts = _sshfs_symlink_options(True)
+        assert "no_contain_symlinks" in opts
+        assert "follow_symlinks" not in opts
+
+    def test_sshfs_symlink_options_default_follows(self):
+        """Browse/restore/cloud-mirror keep the historical follow_symlinks."""
+        from app.services.mount_service import _sshfs_symlink_options
+
+        opts = _sshfs_symlink_options(False)
+        assert "follow_symlinks" in opts
+        assert "no_contain_symlinks" not in opts
+
+    async def _capture_sshfs_argv(self, mount_service, *, preserve_symlinks):
+        """Run _execute_sshfs_mount with a stubbed subprocess and return its argv."""
+        from types import SimpleNamespace
+
+        connection = SimpleNamespace(
+            username="u", host="h", port=22, use_sudo=False, default_path=None
+        )
+        captured = {}
+        proc = Mock()
+        proc.returncode = 0
+        proc.communicate = AsyncMock(return_value=(b"", b""))
+
+        async def fake_exec(*args, **kwargs):
+            captured["argv"] = list(args)
+            return proc
+
+        with (
+            patch(
+                "app.services.mount_service.asyncio.create_subprocess_exec",
+                new=fake_exec,
+            ),
+            patch("app.services.mount_service.asyncio.sleep", new=AsyncMock()),
+        ):
+            await mount_service._execute_sshfs_mount(
+                connection=connection,
+                remote_path="/srv/data",
+                mount_point="/mnt/x",
+                temp_key_file="/tmp/key",
+                preserve_symlinks=preserve_symlinks,
+            )
+        return captured["argv"]
+
+    @pytest.mark.asyncio
+    async def test_execute_sshfs_mount_backup_source_preserves_symlinks(
+        self, mount_service
+    ):
+        argv = await self._capture_sshfs_argv(mount_service, preserve_symlinks=True)
+        assert "no_contain_symlinks" in argv
+        assert "follow_symlinks" not in argv
+
+    @pytest.mark.asyncio
+    async def test_execute_sshfs_mount_default_follows_symlinks(self, mount_service):
+        argv = await self._capture_sshfs_argv(mount_service, preserve_symlinks=False)
+        assert "follow_symlinks" in argv
+        assert "no_contain_symlinks" not in argv
+
     def test_validate_mount_point_sensitive_paths(self, mount_service):
         """Test mount point validation rejects sensitive system paths"""
         sensitive_paths = [
@@ -468,7 +530,11 @@ class TestMountService:
             mount_calls = []
 
             async def mock_execute_mount(
-                connection, remote_path, mount_point, temp_key_file
+                connection,
+                remote_path,
+                mount_point,
+                temp_key_file,
+                preserve_symlinks=False,
             ):
                 assert os.path.exists(mount_point)
                 assert os.path.exists(temp_key_file)

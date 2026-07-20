@@ -1021,6 +1021,10 @@ class BackupService:
                         "connection_id": connection_id,
                         "remote_paths": remote_paths,
                         "job_id": job_id,
+                        # Backup sources must reproduce the source on restore: mount
+                        # with faithful symlink handling (no dereference, keep
+                        # absolute/broken links). See mount_service._sshfs_symlink_options.
+                        "preserve_symlinks": True,
                     }
                     if shared_ssh_temp_root is not None:
                         mount_kwargs["temp_root"] = shared_ssh_temp_root
