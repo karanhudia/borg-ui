@@ -106,6 +106,21 @@ class AgentConnection:
 
 
 class AgentConnectionManager:
+    """Registry of live agent WebSocket sessions and their pending commands.
+
+    State is process-local: both the socket and the Future a caller waits on live
+    in the *process* that accepted the session, so a request needing an agent
+    must be served by that same process. Any request handled elsewhere sees the
+    agent as unconnected (``AgentConnectionUnavailable``) even though the session
+    is healthy.
+
+    Today this holds because entrypoint.sh pins gunicorn to ``--workers 1`` and
+    deployments run a single replica — note that raising either one breaks it,
+    not just adding replicas. Serving agent requests from more than one process
+    needs process-level sticky routing or a shared broker (e.g. Redis pub/sub
+    keyed by command_id).
+    """
+
     def __init__(self, *, max_log_entries_per_agent: int = 200):
         self._connections: dict[int, AgentConnection] = {}
         self._logs: dict[int, Deque[dict[str, Any]]] = {}

@@ -1,5 +1,6 @@
 import base64
 import json
+import queue
 import threading
 from pathlib import Path
 from types import SimpleNamespace
@@ -24,14 +25,30 @@ from agent.borg_ui_agent.repository_ops import (
 from agent.borg_ui_agent.runtime import AgentRuntime, get_capabilities
 
 
+def _drain(outbox):
+    """Return every frame a worker queued for the session thread."""
+    frames = []
+    while not outbox.empty():
+        frames.append(outbox.get_nowait())
+    return frames
+
+
 class FakeWebSocket:
     def __init__(self, incoming):
         self.incoming = list(incoming)
         self.sent = []
         self.closed = False
         self.pings = 0
+        self.timeout = None
+        self.send_timeouts = []
+
+    def settimeout(self, timeout):
+        self.timeout = timeout
 
     def send(self, payload):
+        # The socket timeout bounds writes too, so record what was in force for
+        # each one: a write must never run under the short recv poll interval.
+        self.send_timeouts.append(self.timeout)
         self.sent.append(json.loads(payload))
 
     def recv(self):
@@ -658,7 +675,7 @@ def test_session_runtime_connects_with_websocket_url_and_sends_hello(monkeypatch
         "type": "hello",
         "agent_id": "agt_123",
         "hostname": "host.local",
-        "agent_version": "0.1.1",
+        "agent_version": "0.1.2",
         "borg_versions": [],
         "capabilities": get_capabilities(),
         "running_job_ids": [],
@@ -690,6 +707,8 @@ def test_session_runtime_sends_app_heartbeat_while_idle(monkeypatch):
     assert socket.sent[0]["type"] == "hello"
     assert {"type": "heartbeat"} in socket.sent
     assert socket.pings >= 1
+    # Both writes ran under the full session timeout, not the recv poll interval.
+    assert set(socket.send_timeouts) == {30}
 
 
 @pytest.mark.unit
@@ -742,16 +761,18 @@ def test_session_command_client_delivers_error_over_rest():
     preserved), not over the WebSocket."""
     from agent.borg_ui_agent.session import SessionCommandClient
 
-    socket = FakeWebSocket([])
+    outbox = queue.Queue()
     http = RecordingHttpClient()
     client = SessionCommandClient(
-        socket, command_id="cmd-1", job_id=7, http_client=http
+        command_id="cmd-1", job_id=7, outbox=outbox, http_client=http
     )
 
     client.fail_job(7, error_message="boom", return_code=2)
 
     assert http.failed == [(7, "boom", 2)]
-    assert all(frame.get("type") != "command_error" for frame in socket.sent)
+    assert all(
+        json.loads(frame).get("type") != "command_error" for frame in _drain(outbox)
+    )
 
 
 @pytest.mark.unit
@@ -764,15 +785,17 @@ def test_session_terminal_rest_failure_is_swallowed():
         def complete_job(self, job_id, *, result):
             raise RuntimeError("rest unreachable")
 
-    socket = FakeWebSocket([])
+    outbox = queue.Queue()
     client = SessionCommandClient(
-        socket, command_id="cmd-1", job_id=9, http_client=FailingHttpClient()
+        command_id="cmd-1", job_id=9, outbox=outbox, http_client=FailingHttpClient()
     )
 
     client.complete_job(9, result={"ok": True})  # must not raise
 
     assert client.finished is True
-    assert all(frame.get("type") != "command_result" for frame in socket.sent)
+    assert all(
+        json.loads(frame).get("type") != "command_result" for frame in _drain(outbox)
+    )
 
 
 @pytest.mark.unit
@@ -1098,6 +1121,84 @@ def test_session_runtime_reports_durable_job_events(monkeypatch):
     # ...the terminal result goes over REST.
     assert http.completed == [(77, {"archive_name": "archive"})]
     assert all(frame.get("type") != "command_result" for frame in socket.sent)
+
+
+@pytest.mark.unit
+def test_session_runtime_writes_the_socket_from_one_thread_only(monkeypatch):
+    """Single-writer invariant: only the session thread may touch the socket.
+
+    An ssl.SSLSocket is not thread-safe and websocket-client guards send and recv
+    with separate locks, so a worker sending while the session loop reads corrupts
+    the TLS state and kills a wss:// session mid-write.
+    """
+    from agent.borg_ui_agent.session import AgentSessionRuntime
+
+    class ThreadRecordingWebSocket(FakeWebSocket):
+        def __init__(self, incoming):
+            super().__init__(incoming)
+            self.sender_threads = set()
+
+        def send(self, payload):
+            self.sender_threads.add(threading.get_ident())
+            super().send(payload)
+
+    socket = ThreadRecordingWebSocket(
+        [
+            {
+                "type": "command",
+                "command_id": "cmd-3",
+                "command": "backup.create",
+                "job_id": 88,
+                "payload": {},
+            }
+        ]
+    )
+
+    worker_threads = []
+
+    def fake_handler(job, client, *, should_cancel=None):
+        worker_threads.append(threading.get_ident())
+        client.start_job(88)
+        client.send_log(88, sequence=1, stream="stdout", message="running")
+        client.send_progress(88, {"progress_percent": 50})
+        return SimpleNamespace(job_id=88, status="completed", message="done")
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session.detect_platform",
+        lambda: {"hostname": "host.local", "os": "linux", "arch": "amd64"},
+    )
+    monkeypatch.setattr("agent.borg_ui_agent.session.detect_borg_binaries", lambda: [])
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session.get_job_handler",
+        lambda command: fake_handler if command == "backup.create" else None,
+    )
+
+    runtime = AgentSessionRuntime(
+        AgentConfig("https://borgui.example.com", "agt_123", "secret"),
+        connect=lambda *args, **kwargs: socket,
+        http_client=RecordingHttpClient(),
+    )
+    runtime.run_session(max_messages=1)
+
+    # The handler really did run off-thread, and none of its frames were written
+    # by it -- every send came from the session thread.
+    assert worker_threads and worker_threads[0] != threading.get_ident()
+    assert socket.sender_threads == {threading.get_ident()}
+    # The frames still arrive, in order.
+    assert [frame["type"] for frame in socket.sent] == [
+        "hello",
+        "command_ack",
+        "job_started",
+        "log",
+        "progress",
+    ]
+    # The recv loop shortens the socket timeout so queued frames are not held
+    # back for the full connect timeout...
+    assert socket.timeout == 1.0
+    # ...but the timeout also bounds writes, so *every* write -- hello and
+    # keepalive included, not just a large flushed result -- runs under the full
+    # session timeout. A one-second budget on a slow link would kill the session.
+    assert set(socket.send_timeouts) == {30}
 
 
 @pytest.mark.unit

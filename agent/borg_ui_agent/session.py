@@ -3,10 +3,12 @@ from __future__ import annotations
 import json
 import logging
 import os
+import queue
 import socket as socket_module
 import threading
 import time
 from collections.abc import Callable
+from contextlib import contextmanager
 from typing import Any, Optional
 from urllib.parse import urlparse, urlunparse
 
@@ -24,6 +26,17 @@ try:
     from websocket import WebSocketTimeoutException
 except Exception:  # pragma: no cover - only used when optional dep is unavailable.
     WebSocketTimeoutException = TimeoutError
+
+
+# How long the session thread blocks in recv() before it looks at the outbox
+# again; also the worst-case delay before a worker's frame reaches the server.
+OUTBOX_POLL_SECONDS = 1.0
+# How often an idle session emits its application heartbeat + protocol ping.
+KEEPALIVE_INTERVAL_SECONDS = 30.0
+# Outbox capacity. Frames are drained once per poll interval, so this only fills
+# up if the socket has stopped accepting writes; frames are then dropped rather
+# than growing without bound.
+OUTBOX_MAX_FRAMES = 1000
 
 
 def _default_connect(url: str, *, header: list[str], timeout: int):
@@ -61,24 +74,32 @@ def _open_tcp_connection(host: str, port: int, timeout_seconds: float) -> None:
 
 
 class SessionCommandClient:
+    """Command-scoped client handed to a job handler in a worker thread.
+
+    It deliberately has no socket handle: worker threads never write to the
+    WebSocket, they hand frames to the session thread through ``outbox``. See
+    the single-writer invariant on :meth:`AgentSessionRuntime.run_session`.
+    """
+
     def __init__(
         self,
-        socket,
         *,
         command_id: str,
         job_id: Optional[int],
-        send_lock: Optional[threading.Lock] = None,
+        outbox: "queue.Queue[str]",
         closing: Optional[threading.Event] = None,
         artifact_uploader: Optional[Callable[[int, Any], dict[str, Any]]] = None,
         http_client: Optional[AgentClient] = None,
         http_lock: Optional[threading.Lock] = None,
     ):
-        self.socket = socket
         self.command_id = command_id
         self.job_id = job_id
         self.finished = False
         self.started = False
-        self._send_lock = send_lock or threading.Lock()
+        # Required, deliberately without a default: a client built without the
+        # session's outbox would queue frames nobody drains, i.e. drop them
+        # silently. Forgetting it must fail loudly at construction.
+        self._outbox = outbox
         self._closing = closing
         self._artifact_uploader = artifact_uploader
         # Terminal job outcomes (result/error/canceled) are delivered over the
@@ -191,20 +212,17 @@ class SessionCommandClient:
 
         A **persisted** job (``job_id`` set) is reported over the REST job API,
         NOT the WebSocket. A job result can be large (an archive listing is
-        hundreds of KB); sending it as one WebSocket frame holds websocket-client's
-        per-connection send lock for the whole write, which starves the keepalive
-        pong the recv loop must emit. The server then hits its ws-ping timeout and
-        tears the session down mid-send — the result is lost and the job orphaned
-        (empty browse dialogs) until the reaper cleans it up 15 minutes later.
-        REST keeps the socket free for small control frames + keepalive, and
-        /complete, /fail and /cancel are idempotent so a retry/late delivery is a
-        no-op. The client wraps one requests.Session shared by all worker threads,
-        so calls are serialized under _http_lock.
+        hundreds of KB), and REST keeps the socket free for small control frames
+        and keepalive. It also survives a session drop: /complete, /fail and
+        /cancel are idempotent, so a retry or late delivery is a no-op, whereas a
+        WebSocket frame lost with the session orphans the job until the reaper
+        cleans it up 15 minutes later. The client wraps one requests.Session
+        shared by all worker threads, so calls are serialized under _http_lock.
 
         An **ephemeral** command (``job_id`` is None, e.g. an interactive
         filesystem browse) has no job row, so its result is correlated by
-        command_id and returned over the WebSocket. These payloads are small
-        directory listings, not large archive results.
+        command_id and must come back over the same session that carries the
+        pending request. It is queued for the session thread like any other frame.
         """
         if self.job_id is not None and self._http_client is not None:
             with self._http_lock:
@@ -220,28 +238,33 @@ class SessionCommandClient:
                         exc_info=True,
                     )
             return
-        self._try_ws_send(ws_payload)
+        self.enqueue(ws_payload)
 
     def _send(self, payload: dict[str, Any]) -> None:
         """Best-effort telemetry send (job_started/progress/log/cancel). Losing
         one is harmless; terminal results go through _deliver_terminal instead."""
-        self._try_ws_send(payload)
+        self.enqueue(payload)
 
-    def _try_ws_send(self, payload: dict[str, Any]) -> bool:
-        """Serialize one frame onto the socket under the shared send lock. Skip
-        (reporting failure) once the session is closing, so a worker never
-        touches a connection the drop handler has already torn down."""
+    def enqueue(self, payload: dict[str, Any]) -> bool:
+        """Hand one frame to the session thread, which owns the socket.
+
+        Returns False when the frame was not queued: the session is already
+        closing (nothing queued now can still be delivered), or the outbox is
+        full because the socket has stopped draining.
+        """
         if self._closing is not None and self._closing.is_set():
             return False
         message = json.dumps({"command_id": self.command_id, **payload})
-        with self._send_lock:
-            if self._closing is not None and self._closing.is_set():
-                return False
-            try:
-                self.socket.send(message)
-                return True
-            except Exception:
-                return False
+        try:
+            self._outbox.put_nowait(message)
+        except queue.Full:
+            logger.warning(
+                "Agent session outbox is full; dropping %s frame for command %s",
+                payload.get("type"),
+                self.command_id,
+            )
+            return False
+        return True
 
     def _ensure_started(self, job_id: int) -> None:
         if not self.started:
@@ -271,7 +294,6 @@ class AgentSessionRuntime:
         # Serializes REST terminal deliveries across worker threads (the client
         # wraps one requests.Session).
         self._http_lock = threading.Lock()
-        self._send_lock = threading.Lock()
         self._registry_lock = threading.Lock()
         self._cancel_events: dict[int, threading.Event] = {}
         self._pending_cancels: set[int] = set()
@@ -302,49 +324,57 @@ class AgentSessionRuntime:
             backoff_seconds = min(backoff_seconds * 2, max_backoff_seconds)
 
     def run_session(self, *, max_messages: Optional[int] = None) -> None:
-        """Open a session and dispatch each server command to a worker thread,
-        keeping the main loop in ``recv()`` so the library auto-pongs the
-        server's keepalive pings and the session survives long-running jobs."""
+        """Open a session and dispatch each server command to a worker thread.
+
+        **Single-writer invariant: this thread is the only one that ever touches
+        the socket.** Worker threads hand outgoing frames to ``outbox`` and this
+        loop drains them between ``recv()`` calls. The socket may be a TLS
+        connection (``wss://``), and an ``ssl.SSLSocket`` is not thread-safe:
+        websocket-client guards send and recv with two *different* locks, so a
+        worker sending while this loop reads corrupts the OpenSSL state and the
+        session dies mid-write. A single lock over both is not an option either —
+        the blocking ``recv()`` would lock every sender out.
+
+        The loop also stays in ``recv()`` while a job runs, so websocket-client
+        keeps auto-ponging the server's keepalive pings and the session survives
+        long backups and checks.
+        """
         socket = self.connect(
             _session_url(self.config.server_url),
             header=[f"{AGENT_AUTH_HEADER}: Bearer {self.config.agent_token}"],
             timeout=self.timeout_seconds,
         )
+        # The connect timeout covers the TCP/TLS handshake; once established the
+        # loop wants a short recv timeout so queued frames are not held back.
+        self._set_socket_timeout(socket, OUTBOX_POLL_SECONDS)
+        outbox: "queue.Queue[str]" = queue.Queue(maxsize=OUTBOX_MAX_FRAMES)
         workers: list[threading.Thread] = []
-        # Per-session guard: once set, in-flight workers stop sending, so they
-        # never write to a socket the drop handler has already torn down.
+        # Per-session guard: once set, in-flight workers stop queueing frames
+        # that this loop will never get to deliver.
         closing = threading.Event()
         clean_exit = False
         try:
             self._send_hello(socket)
             handled = 0
+            last_keepalive_at = None
             while max_messages is None or handled < max_messages:
+                self._flush_outbox(socket, outbox)
                 try:
                     raw_message = socket.recv()
                 except (TimeoutError, WebSocketTimeoutException):
-                    # Idle keep-alive. The key property of this loop is that it
-                    # stays in recv() *even while a job runs in a worker thread*,
-                    # so websocket-client keeps auto-ponging the server's pings
-                    # and the session survives long backups/checks.
-                    #
-                    # The protocol ping keeps the socket alive but never reaches
-                    # application code, so it cannot refresh the server's
-                    # last_seen_at. Send an application-level heartbeat too so an
-                    # idle-but-healthy agent stays "live" server-side.
-                    with self._send_lock:
-                        try:
-                            socket.send(json.dumps({"type": "heartbeat"}))
-                        except Exception:
-                            pass
-                        ping = getattr(socket, "ping", None)
-                        if callable(ping):
-                            ping()
+                    now = time.monotonic()
+                    if (
+                        last_keepalive_at is None
+                        or now - last_keepalive_at >= KEEPALIVE_INTERVAL_SECONDS
+                    ):
+                        last_keepalive_at = now
+                        self._send_keepalive(socket)
                     continue
                 message = json.loads(raw_message)
                 if isinstance(message, dict) and message.get("type") == "command":
                     worker = threading.Thread(
                         target=self._handle_command,
-                        args=(socket, message, closing),
+                        args=(outbox, message, closing),
                         daemon=True,
                     )
                     worker.start()
@@ -355,15 +385,18 @@ class AgentSessionRuntime:
         finally:
             if clean_exit:
                 # Orderly shutdown (e.g. max_messages reached): let in-flight jobs
-                # finish so their final results are sent before the socket closes.
+                # finish, then flush what they queued before the socket closes.
                 for worker in workers:
                     worker.join()
+                try:
+                    self._flush_outbox(socket, outbox)
+                except Exception:
+                    pass
             else:
-                # The session dropped. Suppress any further frames so daemon
-                # workers don't write to the dead socket, signal cancellation,
-                # and return *without* joining -- so run_forever reconnects right
-                # away instead of blocking on a possibly-slow job. The cancelled
-                # daemon workers wind down on their own.
+                # The session dropped. Suppress any further frames, signal
+                # cancellation, and return *without* joining -- so run_forever
+                # reconnects right away instead of blocking on a possibly-slow
+                # job. The cancelled daemon workers wind down on their own.
                 closing.set()
                 with self._registry_lock:
                     for event in self._cancel_events.values():
@@ -372,6 +405,58 @@ class AgentSessionRuntime:
                 socket.close()
             except Exception:
                 pass
+
+    @contextmanager
+    def _writing(self, socket):
+        """Raise the socket timeout to the full session timeout for the duration
+        of a write, then drop back to the recv poll interval.
+
+        ``settimeout`` bounds writes as well as reads, so every write has to run
+        under it: a frame can be hundreds of KB, and on a slow link the poll
+        interval would abort it. Wrap *all* writes, not just the large ones —
+        a one-second budget is a session-killer wherever it applies.
+        """
+        self._set_socket_timeout(socket, self.timeout_seconds)
+        try:
+            yield
+        finally:
+            self._set_socket_timeout(socket, OUTBOX_POLL_SECONDS)
+
+    def _flush_outbox(self, socket, outbox: "queue.Queue[str]") -> None:
+        """Write every queued worker frame. Session thread only — see the
+        single-writer invariant on run_session. A failing write propagates so
+        the loop tears the session down and run_forever reconnects."""
+        try:
+            message = outbox.get_nowait()
+        except queue.Empty:
+            return
+        with self._writing(socket):
+            while True:
+                socket.send(message)
+                try:
+                    message = outbox.get_nowait()
+                except queue.Empty:
+                    return
+
+    @staticmethod
+    def _set_socket_timeout(socket, timeout_seconds: float) -> None:
+        settimeout = getattr(socket, "settimeout", None)
+        if callable(settimeout):
+            settimeout(timeout_seconds)
+
+    def _send_keepalive(self, socket) -> None:
+        """Keep an idle session alive. The protocol ping keeps the socket open
+        but never reaches application code, so it cannot refresh the server's
+        last_seen_at — send an application-level heartbeat too, otherwise an
+        idle-but-healthy agent looks stale."""
+        with self._writing(socket):
+            try:
+                socket.send(json.dumps({"type": "heartbeat"}))
+            except Exception:
+                pass
+            ping = getattr(socket, "ping", None)
+            if callable(ping):
+                ping()
 
     def _send_hello(self, socket) -> None:
         """Announce this agent (id, host, borg versions, capabilities) to the server."""
@@ -388,15 +473,19 @@ class AgentSessionRuntime:
                 "running_job_ids": [],
             }
         )
-        with self._send_lock:
+        with self._writing(socket):
             socket.send(message)
 
     def _handle_command(
-        self, socket, message: dict[str, Any], closing: Optional[threading.Event] = None
+        self,
+        outbox: "queue.Queue[str]",
+        message: dict[str, Any],
+        closing: Optional[threading.Event] = None,
     ) -> None:
         """Handle one server command (runs in a worker thread): ack it, then run
-        the matching handler with cooperative cancellation wired in. ``closing``
-        suppresses sends once the owning session has been torn down."""
+        the matching handler with cooperative cancellation wired in. Outgoing
+        frames go to ``outbox`` for the session thread to write; ``closing``
+        suppresses them once the owning session has been torn down."""
         command_id = str(message.get("command_id") or "")
         command = str(message.get("command") or "")
         raw_job_id = message.get("job_id")
@@ -405,26 +494,16 @@ class AgentSessionRuntime:
             message.get("payload") if isinstance(message.get("payload"), dict) else {}
         )
         client = SessionCommandClient(
-            socket,
             command_id=command_id,
             job_id=job_id,
-            send_lock=self._send_lock,
+            outbox=outbox,
             closing=closing,
             artifact_uploader=self._artifact_client.upload_artifact,
             http_client=self._http_client,
             http_lock=self._http_lock,
         )
 
-        ack = json.dumps(
-            {
-                "type": "command_ack",
-                "command_id": command_id,
-                "job_id": job_id,
-            }
-        )
-        if closing is None or not closing.is_set():
-            with self._send_lock:
-                socket.send(ack)
+        client.enqueue({"type": "command_ack", "job_id": job_id})
 
         if command == "filesystem.browse":
             self._handle_filesystem_browse(client, payload)
