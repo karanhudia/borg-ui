@@ -21,7 +21,10 @@ class TestStartupEvent:
 
     async def test_startup_configures_mqtt(self, mock_db):
         """Test that startup configures MQTT service"""
-        with patch("app.core.security.create_first_user", new_callable=AsyncMock):
+        with (
+            patch("app.core.security.create_first_user", new_callable=AsyncMock),
+            patch("app.database.db_upgrade.ensure_schema"),
+        ):
             mock_settings = Mock()
             mock_settings.mqtt_enabled = True
             mock_settings.mqtt_beta_enabled = True
@@ -81,6 +84,7 @@ class TestStartupEvent:
 
         with (
             patch("app.core.security.create_first_user", new_callable=AsyncMock),
+            patch("app.database.db_upgrade.ensure_schema"),
             patch("app.main.settings.enable_startup_license_sync", False),
             patch("app.database.database.SessionLocal", return_value=mock_db),
             patch("app.services.cache_service.archive_cache") as mock_cache,
@@ -131,6 +135,7 @@ class TestStartupEvent:
 
         with (
             patch("app.core.security.create_first_user", new_callable=AsyncMock),
+            patch("app.database.db_upgrade.ensure_schema"),
             patch("app.main.settings.enable_startup_license_sync", False),
             patch("app.database.database.SessionLocal", return_value=mock_db),
             patch("app.main.get_runtime_app_version", return_value="9.9.9"),
@@ -354,3 +359,42 @@ class TestCatchAll:
             media_type="application/json",
         )
         assert response is sentinel_response
+
+
+class TestStartupBuildsSchema:
+    """The regression the smoke tests caught: startup left the database empty.
+
+    The schema was prepared only by the container entrypoint, so a start that
+    does not go through it — `uvicorn app.main:app` — served an application
+    whose every database read failed.
+    """
+
+    async def test_startup_ensures_the_schema_before_touching_the_database(self):
+        recorder = Mock()
+
+        with (
+            patch("app.database.db_upgrade.ensure_schema") as mock_ensure,
+            patch("app.database.database.SessionLocal") as mock_session,
+            patch("app.core.security.create_first_user", new_callable=AsyncMock),
+            patch("app.services.cache_service.archive_cache"),
+            patch("app.core.borg.borg.get_system_info", new_callable=AsyncMock),
+            patch("app.services.backup_service.backup_service"),
+            patch("app.utils.process_utils.cleanup_orphaned_jobs"),
+            patch("app.utils.process_utils.cleanup_orphaned_mounts"),
+            patch("app.api.schedule.check_scheduled_jobs", return_value=AsyncMock()),
+            patch("app.services.stats_refresh_scheduler.stats_refresh_scheduler"),
+            patch("asyncio.create_task"),
+        ):
+            recorder.attach_mock(mock_ensure, "ensure_schema")
+            recorder.attach_mock(mock_session, "SessionLocal")
+
+            from app.main import startup_event, app
+
+            app.state.background_tasks = []
+            await startup_event()
+
+        mock_ensure.assert_called_once()
+        called = [name.split(".")[0] for name, _, _ in recorder.mock_calls]
+        assert called[0] == "ensure_schema", (
+            f"the schema has to exist before anything opens a session, got {called[:3]}"
+        )

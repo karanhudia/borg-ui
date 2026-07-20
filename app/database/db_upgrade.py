@@ -21,6 +21,7 @@ from alembic.config import Config
 from sqlalchemy import MetaData, create_engine, event, inspect, text
 from sqlalchemy.engine import Engine, make_url
 
+from app.config import settings
 from app.database.database import Base
 import app.database.models  # noqa: F401  (registers every table on Base)
 
@@ -156,6 +157,48 @@ def _upgrade_to_head(url: str, engine: Engine | None = None) -> None:
         config.attributes["connection"] = connection
         command.upgrade(config, "head")
         connection.commit()
+
+
+def _has_legacy_schema(engine: Engine) -> bool:
+    """Tables, but no Alembic bookkeeping — a database from before the cutover."""
+    with engine.connect() as conn:
+        names = set(inspect(conn).get_table_names())
+    return bool(names) and "alembic_version" not in names
+
+
+def ensure_schema() -> None:
+    """Give the configured database its schema, if it has none.
+
+    The application builds its own schema at startup however it is launched: a
+    container entrypoint, `uvicorn app.main:app`, a test harness. Leaving this
+    to the entrypoint alone would mean the app starts against an empty database
+    whenever it is started any other way, and every request that touches the
+    database fails.
+
+    Cheap when there is nothing to do: one query for the recorded revision.
+
+    A database that predates Alembic is deliberately left alone. Moving one onto
+    the baseline copies every row and can change where the database lives, which
+    is a one-time operation with a rollback (`python -m app.database.db_upgrade`)
+    and not something to do behind a server that is already coming up.
+    """
+    url = settings.database_url
+    engine = _engine(url)
+    try:
+        if _is_at_head(engine):
+            return
+
+        if _has_legacy_schema(engine):
+            log.error(
+                "database predates Alembic and was left untouched; "
+                "run 'python -m app.database.db_upgrade' to migrate it"
+            )
+            return
+
+        log.info("no schema found at %s, building it", _safe_url(url))
+        _upgrade_to_head(url, engine)
+    finally:
+        engine.dispose()
 
 
 def alembic_init(

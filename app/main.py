@@ -244,6 +244,15 @@ async def startup_event():
     logger.info("Starting Borg Web UI")
     _log_insecure_no_auth_warning()
     _log_proxy_auth_security_warnings()
+
+    # Before anything touches the database. The container entrypoint also
+    # prepares the schema, but the app is not always started through it —
+    # `uvicorn app.main:app` has to work too, and without this it comes up
+    # against an empty database and fails every request that reads from it.
+    from app.database.db_upgrade import ensure_schema
+
+    ensure_schema()
+
     from app.database.database import SessionLocal
 
     app_version = get_runtime_app_version()
