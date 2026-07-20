@@ -13,6 +13,7 @@ between source and target is reported rather than silently absorbed.
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -181,6 +182,11 @@ def ensure_schema() -> None:
     the baseline copies every row and can change where the database lives, which
     is a one-time operation with a rollback (`python -m app.database.db_upgrade`)
     and not something to do behind a server that is already coming up.
+
+    Safe to call from several processes at once. The entrypoint builds the
+    schema once before gunicorn forks, so workers normally find it already
+    there; but nothing guarantees that ordering when the app is started some
+    other way, and losing the race must not take a worker down.
     """
     url = settings.database_url
     engine = _engine(url)
@@ -196,9 +202,28 @@ def ensure_schema() -> None:
             return
 
         log.info("no schema found at %s, building it", _safe_url(url))
-        _upgrade_to_head(url, engine)
+        try:
+            _upgrade_to_head(url, engine)
+        except Exception:
+            # Another process may be building the same schema. Only its own
+            # failure is worth reporting, so wait for the build to finish
+            # before deciding: a database mid-build is not yet at head, and
+            # checking once would call a won race lost.
+            if _await_head(engine):
+                log.info("schema was built by another process")
+                return
+            raise
     finally:
         engine.dispose()
+
+
+def _await_head(engine: Engine, attempts: int = 20, delay: float = 0.5) -> bool:
+    """Whether the schema reaches head within roughly ten seconds."""
+    for _ in range(attempts):
+        if _is_at_head(engine):
+            return True
+        time.sleep(delay)
+    return False
 
 
 def alembic_init(

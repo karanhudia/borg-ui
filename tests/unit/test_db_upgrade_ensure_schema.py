@@ -8,6 +8,9 @@ tests caught.
 
 from __future__ import annotations
 
+import logging
+from unittest.mock import Mock
+
 import pytest
 from sqlalchemy import create_engine, inspect, text
 
@@ -67,3 +70,40 @@ def test_leaves_a_pre_alembic_database_alone(sqlite_url, caplog):
     assert "alembic_version" not in names, "must not stamp a database it did not build"
     assert names == {"users"}, "must not add the baseline on top of a legacy schema"
     assert "db_upgrade" in caplog.text
+
+
+class TestConcurrentStart:
+    """Several processes may call this at once once the app runs multiple
+    workers. Losing the race is normal and must not take a worker down; a build
+    that genuinely failed still has to surface.
+    """
+
+    def test_a_lost_race_is_not_an_error(self, sqlite_url, monkeypatch, caplog):
+        caplog.set_level(logging.INFO, logger=db_upgrade.log.name)
+        built_by_someone_else = iter([False, False, True])
+
+        monkeypatch.setattr(
+            db_upgrade, "_is_at_head", lambda engine: next(built_by_someone_else)
+        )
+        monkeypatch.setattr(
+            db_upgrade,
+            "_upgrade_to_head",
+            Mock(side_effect=RuntimeError("table already exists")),
+        )
+        monkeypatch.setattr(db_upgrade.time, "sleep", lambda _: None)
+
+        db_upgrade.ensure_schema()  # must not raise
+
+        assert "built by another process" in caplog.text
+
+    def test_a_build_that_really_failed_still_raises(self, sqlite_url, monkeypatch):
+        monkeypatch.setattr(db_upgrade, "_is_at_head", lambda engine: False)
+        monkeypatch.setattr(
+            db_upgrade,
+            "_upgrade_to_head",
+            Mock(side_effect=RuntimeError("disk is full")),
+        )
+        monkeypatch.setattr(db_upgrade.time, "sleep", lambda _: None)
+
+        with pytest.raises(RuntimeError, match="disk is full"):
+            db_upgrade.ensure_schema()
