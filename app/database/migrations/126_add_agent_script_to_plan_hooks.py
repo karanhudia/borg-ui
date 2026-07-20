@@ -9,7 +9,9 @@ Purely additive: existing rows keep their ``script_id``; ``agent_script_name`` i
 NULL for every current hook. SQLite cannot ALTER a column's nullability in place,
 so ``script_id`` is relaxed with the established table-recreation pattern
 (see migration 067). The rebuild is PRAGMA-driven so it preserves columns added
-by later migrations, foreign keys (with their ON DELETE actions) and indexes.
+by later migrations, foreign keys (with their ON DELETE actions), indexes and
+whether the primary key is AUTOINCREMENT -- ``script_executions`` is declared
+that way (migration 027), ``backup_plan_scripts`` is not (migration 118).
 
 Idempotent: adding the column is guarded on its presence, and the rebuild is
 skipped once ``script_id`` is already nullable.
@@ -40,6 +42,20 @@ def _script_id_is_notnull(connection, table):
     return False
 
 
+def _uses_autoincrement(connection, table):
+    """Whether ``table``'s primary key is declared AUTOINCREMENT.
+
+    PRAGMA table_info does not report it, so the stored DDL is inspected. SQLite
+    permits AUTOINCREMENT on a single INTEGER PRIMARY KEY only, so matching the
+    keyword against the table's DDL is unambiguous.
+    """
+    row = connection.execute(
+        text("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = :table"),
+        {"table": table},
+    ).fetchone()
+    return bool(row and row[0] and "AUTOINCREMENT" in row[0].upper())
+
+
 def _relax_script_id_notnull(connection, table, *, extra_unique=None):
     """Recreate ``table`` with ``script_id`` nullable, preserving everything else."""
     if not _has_table(connection, table) or not _script_id_is_notnull(
@@ -48,11 +64,15 @@ def _relax_script_id_notnull(connection, table, *, extra_unique=None):
         return
 
     col_rows = _columns(connection, table)
+    autoincrement = _uses_autoincrement(connection, table)
 
     col_defs = []
     for _cid, name, type_, notnull, dflt_value, pk in col_rows:
         if pk:
-            col_defs.append(f"    {name} {type_} PRIMARY KEY AUTOINCREMENT")
+            pk_def = f"    {name} {type_} PRIMARY KEY"
+            if autoincrement:
+                pk_def += " AUTOINCREMENT"
+            col_defs.append(pk_def)
             continue
         parts = [f"    {name}", type_ or ""]
         if notnull and name != "script_id":  # relax script_id only
