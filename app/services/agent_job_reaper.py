@@ -140,15 +140,22 @@ def reap_stale_agent_jobs(
 
 def _reap_once() -> int:
     """One reap pass with its own session (runs in a worker thread)."""
-    from app.utils.process_utils import reconcile_stale_backup_maintenance
+    from app.utils.process_utils import (
+        reconcile_orphaned_maintenance_jobs,
+        reconcile_stale_backup_maintenance,
+    )
 
     db = SessionLocal()
     try:
         reaped = reap_stale_agent_jobs(db)
-        # Also reconcile backup rows stuck in a running maintenance state whose
+        # Reconcile backup rows stuck in a running maintenance state whose
         # maintenance op died without writing a terminal status (startup-only
         # cleanup previously left these "running" until the next restart).
         reaped += reconcile_stale_backup_maintenance(db)
+        # Fail maintenance *_jobs left 'pending' with no agent job to run them
+        # (e.g. the agent job could not be queued under a db-lock) -- otherwise
+        # they block the repository via admission control forever.
+        reaped += reconcile_orphaned_maintenance_jobs(db)
         return reaped
     finally:
         db.close()

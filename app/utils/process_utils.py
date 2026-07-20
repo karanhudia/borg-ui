@@ -9,16 +9,18 @@ from pathlib import Path
 from typing import Optional
 import structlog
 from datetime import datetime, timedelta
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 from app.config import settings
 from app.core.borg_router import BorgRouter
 from app.database.models import (
+    AgentJob,
     BackupPlanRun,
     BackupPlanRunRepository,
     CheckJob,
     CompactJob,
     BackupJob,
+    DeleteArchiveJob,
     PruneJob,
     RestoreCheckJob,
     RestoreJob,
@@ -288,6 +290,115 @@ def reconcile_stale_backup_maintenance(
 
     if reaped:
         db.commit()
+
+    return reaped
+
+
+# An agent maintenance job carries no backup_job_id, so a *_job is correlated to
+# its agent job via the payload's maintenance_job {kind, id}.
+_ACTIVE_AGENT_STATUSES = ("queued", "claimed", "cancel_requested", "running")
+_ORPHAN_MAINTENANCE_MODELS = (
+    ("prune", PruneJob),
+    ("compact", CompactJob),
+    ("check", CheckJob),
+    ("delete_archive", DeleteArchiveJob),
+)
+
+
+def _has_active_agent_job_for(
+    db: Session, maintenance_kind: str, maintenance_job_id: int
+) -> bool:
+    """True if a live agent job exists for this maintenance ``*_job``."""
+    active = (
+        db.query(AgentJob)
+        .filter(
+            AgentJob.job_type == "repository",
+            AgentJob.status.in_(_ACTIVE_AGENT_STATUSES),
+        )
+        .all()
+    )
+    for agent_job in active:
+        payload = agent_job.payload if isinstance(agent_job.payload, dict) else {}
+        maintenance_job = (payload.get("operation") or {}).get("maintenance_job") or {}
+        if (
+            maintenance_job.get("kind") == maintenance_kind
+            and maintenance_job.get("id") == maintenance_job_id
+        ):
+            return True
+    return False
+
+
+def reconcile_orphaned_maintenance_jobs(
+    db: Session,
+    *,
+    now: Optional[datetime] = None,
+    reap_after: timedelta = MAINTENANCE_RECONCILE_AFTER,
+) -> int:
+    """Fail maintenance ``*_jobs`` left 'pending' with no agent job to run them.
+
+    The ``*_job`` row (PruneJob/CompactJob/CheckJob/DeleteArchiveJob) is created
+    before its agent job is queued; if the queue fails (e.g. ``database is
+    locked``) no agent job exists, so the row stays 'pending' forever and blocks
+    the repository via admission control. Reap old pending rows that have no
+    active agent job.
+
+    Only 'pending' is reaped here: 'running' rows are covered by the existing
+    process-liveness reapers, and a server-side maintenance op runs in-process
+    without an agent job (so absence of an agent job does not imply orphaned for
+    a running row). The age guard bounds a legitimately just-created row.
+    """
+    now = _strip_tz(now or datetime.utcnow())
+    cutoff = now - reap_after
+
+    reaped = 0
+    for kind, model in _ORPHAN_MAINTENANCE_MODELS:
+        candidates = (
+            db.query(model.id, model.created_at, model.repository_id)
+            .filter(model.status == "pending")
+            .all()
+        )
+        for job_id, created_at, repository_id in candidates:
+            if created_at is not None and _strip_tz(created_at) > cutoff:
+                continue  # too fresh; its agent job may be queued a moment later
+            if _has_active_agent_job_for(db, kind, job_id):
+                continue  # dispatched, waiting for the agent
+            # Fail closed with a guarded UPDATE: it only touches a row that is
+            # STILL 'pending', so a concurrent dispatch that has meanwhile moved
+            # it to 'running' is left untouched. A load-then-mutate would instead
+            # overwrite that live transition on commit. coalesce keeps any
+            # error_message/completed_at already set.
+            updated = (
+                db.query(model)
+                .filter(model.id == job_id, model.status == "pending")
+                .update(
+                    {
+                        model.status: "failed",
+                        model.error_message: func.coalesce(
+                            model.error_message,
+                            "orphaned: no agent job was queued for this maintenance",
+                        ),
+                        model.completed_at: func.coalesce(model.completed_at, now),
+                    },
+                    synchronize_session=False,
+                )
+            )
+            if not updated:
+                continue  # another transaction claimed the row first
+            # Re-check correlation now the row is claimed: an agent job could have
+            # been queued between the check above and this UPDATE (status was
+            # still 'pending' then). If so, preserve the dispatched job by
+            # reverting rather than committing a spurious 'failed'.
+            if _has_active_agent_job_for(db, kind, job_id):
+                db.rollback()
+                continue
+            db.commit()
+            reaped += 1
+            logger.info(
+                "Reaped orphaned pending maintenance job",
+                job_model=model.__name__,
+                job_id=job_id,
+                repository_id=repository_id,
+            )
 
     return reaped
 

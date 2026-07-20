@@ -160,6 +160,93 @@ async def test_run_agent_maintenance_translates_http_errors_for_background_flows
     assert "check" in str(excinfo.value)
 
 
+@pytest.mark.parametrize(
+    "maintenance_kind, job_kind, model_name, extra",
+    [
+        ("prune", "repository.prune", "PruneJob", {}),
+        ("compact", "repository.compact", "CompactJob", {}),
+        ("check", "repository.check", "CheckJob", {}),
+        (
+            "delete_archive",
+            "repository.delete_archive",
+            "DeleteArchiveJob",
+            {"archive_name": "arch-1"},
+        ),
+    ],
+)
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_agent_maintenance_fails_the_job_when_queue_fails(
+    db_session, maintenance_kind, job_kind, model_name, extra
+):
+    # If the agent job cannot even be queued (e.g. database is locked), the
+    # already-created maintenance *_job must be failed closed so it does not
+    # orphan and block the repo via admission. A real "database is locked" dooms
+    # the session's transaction, so the fail-closed helper has to recover it and
+    # still persist 'failed' -- exercise the real helper against a real row, not
+    # a mock that would hide that defect. Parameterized across every maintenance
+    # kind so a wrong entry in the kind->model mapping cannot slip through.
+    from datetime import datetime
+
+    import app.database.models as models_mod
+    from app.database.models import PruneJob, Repository
+
+    model = getattr(models_mod, model_name)
+    repo_row = Repository(
+        name=f"Locked {model_name}",
+        path=f"/repos/locked-{maintenance_kind}",
+        encryption="none",
+        repository_type="local",
+    )
+    db_session.add(repo_row)
+    db_session.flush()
+    job = model(
+        repository_id=repo_row.id,
+        repository_path=repo_row.path,
+        status="pending",
+        created_at=datetime.utcnow(),
+        **extra,
+    )
+    db_session.add(job)
+    db_session.commit()
+    job_id = job.id
+
+    repo = SimpleNamespace(borg_version=2, id=repo_row.id, executor_type="agent")
+
+    def _doom_then_fail(*args, **kwargs):
+        # Emulate a "database is locked" style failure that dooms the session's
+        # transaction: a failed flush (here a NOT NULL violation, stand-in for a
+        # failed commit) leaves it requiring a rollback before any further query
+        # can run -- exactly the state the fail-closed helper must recover from.
+        try:
+            db_session.add(PruneJob(repository_path="/x", status="pending"))
+            db_session.flush()  # repository_id is NOT NULL -> IntegrityError
+        except Exception:
+            pass
+        raise RuntimeError("database is locked")
+
+    with (
+        patch("app.database.database.SessionLocal", return_value=db_session),
+        patch(
+            "app.services.repository_executor.queue_agent_repository_operation_job",
+            side_effect=_doom_then_fail,
+        ),
+        pytest.raises(RuntimeError, match="database is locked"),
+    ):
+        await BorgRouter(repo)._run_agent_maintenance(
+            job_kind=job_kind,
+            maintenance_kind=maintenance_kind,
+            maintenance_job_id=job_id,
+        )
+
+    # The real _fail_orphaned_maintenance_job ran despite the doomed transaction
+    # and persisted the failed state.
+    refreshed = db_session.query(model).get(job_id)
+    assert refreshed.status == "failed"
+    assert refreshed.completed_at is not None
+    assert refreshed.error_message
+
+
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_compact_delegates_to_agent_when_managed():
