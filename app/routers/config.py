@@ -73,7 +73,7 @@ async def export_borgmatic_config(
 async def import_borgmatic_config(
     file: UploadFile = File(...),
     merge_strategy: str = Query(
-        "skip_duplicates", regex="^(skip_duplicates|replace|rename)$"
+        "skip_duplicates", pattern="^(skip_duplicates|replace|rename)$"
     ),
     dry_run: bool = Query(False),
     db: Session = Depends(get_db),
