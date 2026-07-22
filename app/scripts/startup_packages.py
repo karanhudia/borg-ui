@@ -3,12 +3,36 @@
 Start package installation jobs on container startup.
 This ensures packages are automatically installed when the container starts.
 Non-blocking - jobs run in the background via the FastAPI app's package service.
+
+Talks to whatever database the application itself uses (DATABASE_URL — SQLite
+or Postgres), not to a hard-coded SQLite path: with an external database there
+is no /data/borg.db, and the old raw-sqlite3 access crashed on every boot.
 """
 
 import os
 import sys
-import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
+
+# Run as a file by entrypoint.sh (`python3 /app/app/scripts/startup_packages.py`),
+# so the repository root is not on sys.path by itself.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from sqlalchemy import create_engine, text  # noqa: E402
+
+from app.config import settings  # noqa: E402
+from app.database.url_utils import sqlite_database_missing  # noqa: E402
+
+engine = create_engine(settings.database_url)
+
+
+def _now():
+    return datetime.now(timezone.utc)
+
+
+def _database_absent():
+    """True when there is provably no database yet (fresh SQLite install)."""
+    return sqlite_database_missing(settings.database_url)
 
 
 def is_package_actually_installed(package_name):
@@ -32,28 +56,24 @@ def get_packages_to_install():
     Verifies actual OS installation status, not just database status.
     """
     try:
-        db_path = Path("/data/borg.db")
-        if not db_path.exists():
+        if _database_absent():
             print("ℹ️  No database found, skipping package startup")
             return []
 
-        conn = sqlite3.connect(str(db_path))
-        cursor = conn.cursor()
-
         # Get ALL packages from database (regardless of status)
         # We'll verify actual installation below
-        cursor.execute("""
-            SELECT p.id, p.name, p.status, p.install_command
-            FROM installed_packages p
-            WHERE NOT EXISTS (
-                SELECT 1 FROM package_install_jobs j
-                WHERE j.package_id = p.id
-                AND j.status IN ('pending', 'installing')
-            )
-        """)
-
-        all_packages = cursor.fetchall()
-        conn.close()
+        with engine.connect() as conn:
+            all_packages = conn.execute(
+                text("""
+                    SELECT p.id, p.name, p.status, p.install_command
+                    FROM installed_packages p
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM package_install_jobs j
+                        WHERE j.package_id = p.id
+                        AND j.status IN ('pending', 'installing')
+                    )
+                """)
+            ).fetchall()
 
         # Filter packages: only install if NOT actually installed in OS
         packages_to_install = []
@@ -69,14 +89,7 @@ def get_packages_to_install():
 
                 # Update DB status to pending if it was marked as installed
                 if db_status == "installed":
-                    conn = sqlite3.connect(str(db_path))
-                    cursor = conn.cursor()
-                    cursor.execute(
-                        "UPDATE installed_packages SET status='pending' WHERE id=?",
-                        (pkg_id,),
-                    )
-                    conn.commit()
-                    conn.close()
+                    _update_package(pkg_id, status="pending")
             else:
                 print(f"✓ Package '{pkg_name}' already installed in OS")
 
@@ -88,6 +101,16 @@ def get_packages_to_install():
 
         traceback.print_exc()
         return []
+
+
+def _update_package(package_id, **columns):
+    """UPDATE installed_packages with the given columns for one package."""
+    assignments = ", ".join(f"{name} = :{name}" for name in columns)
+    with engine.begin() as conn:
+        conn.execute(
+            text(f"UPDATE installed_packages SET {assignments} WHERE id = :id"),
+            {**columns, "id": package_id},
+        )
 
 
 def trigger_package_installations(packages):
@@ -114,14 +137,7 @@ def trigger_package_installations(packages):
             print(f"Command: {install_command}")
 
             # Update package status to installing
-            conn = sqlite3.connect("/data/borg.db")
-            cursor = conn.cursor()
-            cursor.execute(
-                "UPDATE installed_packages SET status='installing' WHERE id=?",
-                (package_id,),
-            )
-            conn.commit()
-            conn.close()
+            _update_package(package_id, status="installing")
 
             # Run installation command
             start_time = time.time()
@@ -136,36 +152,22 @@ def trigger_package_installations(packages):
             duration = time.time() - start_time
 
             # Update database with results
-            conn = sqlite3.connect("/data/borg.db")
-            cursor = conn.cursor()
-
             if result.returncode == 0:
-                cursor.execute(
-                    """
-                    UPDATE installed_packages
-                    SET status='installed',
-                        installed_at=datetime('now'),
-                        install_log=?,
-                        last_check=datetime('now')
-                    WHERE id=?
-                """,
-                    (
-                        f"STDOUT:\n{result.stdout}\n\nSTDERR:\n{result.stderr}",
-                        package_id,
-                    ),
+                _update_package(
+                    package_id,
+                    status="installed",
+                    installed_at=_now(),
+                    install_log=f"STDOUT:\n{result.stdout}\n\nSTDERR:\n{result.stderr}",
+                    last_check=_now(),
                 )
                 print(f"✓ Successfully installed {package_name} in {duration:.1f}s")
             else:
-                cursor.execute(
-                    """
-                    UPDATE installed_packages
-                    SET status='failed',
-                        install_log=?
-                    WHERE id=?
-                """,
-                    (
-                        f"Exit code: {result.returncode}\n\nSTDOUT:\n{result.stdout}\n\nSTDERR:\n{result.stderr}",
-                        package_id,
+                _update_package(
+                    package_id,
+                    status="failed",
+                    install_log=(
+                        f"Exit code: {result.returncode}\n\n"
+                        f"STDOUT:\n{result.stdout}\n\nSTDERR:\n{result.stderr}"
                     ),
                 )
                 print(
@@ -173,30 +175,15 @@ def trigger_package_installations(packages):
                 )
                 print(f"STDERR: {result.stderr[:200]}")
 
-            conn.commit()
-            conn.close()
-
         except subprocess.TimeoutExpired:
             print(f"✗ Installation of {package_name} timed out (5 minute limit)")
-            conn = sqlite3.connect("/data/borg.db")
-            cursor = conn.cursor()
-            cursor.execute(
-                "UPDATE installed_packages SET status='failed', install_log='Installation timed out' WHERE id=?",
-                (package_id,),
+            _update_package(
+                package_id, status="failed", install_log="Installation timed out"
             )
-            conn.commit()
-            conn.close()
 
         except Exception as e:
             print(f"✗ Error installing {package_name}: {e}")
-            conn = sqlite3.connect("/data/borg.db")
-            cursor = conn.cursor()
-            cursor.execute(
-                "UPDATE installed_packages SET status='failed', install_log=? WHERE id=?",
-                (str(e), package_id),
-            )
-            conn.commit()
-            conn.close()
+            _update_package(package_id, status="failed", install_log=str(e))
 
 
 def main():
