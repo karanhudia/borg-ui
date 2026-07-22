@@ -476,6 +476,27 @@ def _finish_linked_repository_operation_job(
             repository.last_compact = completed_at
         repository.updated_at = _now_utc()
 
+    # Archives that no longer exist take their job records with them - same
+    # cascade the server-side prune/delete paths run.
+    if status_value in ("completed", "completed_with_warnings"):
+        from app.services.job_history_retention import (
+            archive_names_from_prune_output,
+            purge_jobs_for_pruned_archives,
+        )
+
+        if isinstance(operation_job, PruneJob):
+            purge_jobs_for_pruned_archives(
+                db,
+                operation_job.repository_id,
+                archive_names_from_prune_output(operation_job.logs or ""),
+            )
+        elif isinstance(operation_job, DeleteArchiveJob) and getattr(
+            operation_job, "archive_name", None
+        ):
+            purge_jobs_for_pruned_archives(
+                db, operation_job.repository_id, {operation_job.archive_name}
+            )
+
 
 def _get_agent_token_from_websocket(websocket: WebSocket) -> Optional[str]:
     auth_header = websocket.headers.get(AGENT_AUTH_HEADER)
