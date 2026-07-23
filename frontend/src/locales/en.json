@@ -5041,7 +5041,8 @@
         "restoreFailedZeroFilesPathNotFound": "Restore failed: 0 files extracted (exit code {{exitCode}}). Path not found in archive or destination doesn't exist.",
         "restoreFailedZeroFilesNoOutput": "Restore failed: 0 files extracted (exit code {{exitCode}}). No error output from borg. Files may not exist in archive or permission denied.",
         "restoreFailedExitCode": "Restore process exited with code {{exitCode}}",
-        "restoreFailed": "Restore failed"
+        "restoreFailed": "Restore failed",
+        "jobCompletedWithWarning": "Completed with warning (exit code {{exitCode}})"
       },
       "dashboard": {
         "failedGetSystemMetrics": "Failed to get system metrics",

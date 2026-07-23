@@ -5041,7 +5041,8 @@
         "restoreFailedZeroFilesPathNotFound": "Restauración fallida: 0 archivos extraídos (código de salida {{exitCode}}). Ruta no encontrada en el archivo o el destino no existe.",
         "restoreFailedZeroFilesNoOutput": "Restauración fallida: 0 archivos extraídos (código de salida {{exitCode}}). Sin salida de error de Borg. Es posible que los archivos no existan en el archivo o que el acceso esté denegado.",
         "restoreFailedExitCode": "El proceso de restauración terminó con el código {{exitCode}}",
-        "restoreFailed": "La restauración falló"
+        "restoreFailed": "La restauración falló",
+        "jobCompletedWithWarning": "Completado con advertencia (código de salida {{exitCode}})"
       },
       "dashboard": {
         "failedGetSystemMetrics": "Error al obtener las métricas del sistema",

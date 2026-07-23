@@ -5041,7 +5041,8 @@
         "restoreFailedZeroFilesPathNotFound": "Ripristino fallito: 0 file estratti (codice uscita {{exitCode}}). Percorso non trovato nell'archivio o destinazione non esistente.",
         "restoreFailedZeroFilesNoOutput": "Ripristino fallito: 0 file estratti (codice uscita {{exitCode}}). Nessun output di errore da borg. I file potrebbero non esistere nell'archivio o permesso negato.",
         "restoreFailedExitCode": "Il processo di ripristino è uscito con codice {{exitCode}}",
-        "restoreFailed": "Ripristino fallito"
+        "restoreFailed": "Ripristino fallito",
+        "jobCompletedWithWarning": "Completato con avviso (codice di uscita {{exitCode}})"
       },
       "dashboard": {
         "failedGetSystemMetrics": "Impossibile ottenere le metriche di sistema",

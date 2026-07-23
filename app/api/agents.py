@@ -1,4 +1,5 @@
 import asyncio
+import json
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
@@ -53,7 +54,26 @@ logger = structlog.get_logger()
 router = APIRouter(prefix="/api/agents", tags=["agents"])
 AGENT_SESSION_HELLO_TIMEOUT_SECONDS = 10.0
 
-FINAL_AGENT_JOB_STATUSES = {"completed", "failed", "canceled"}
+FINAL_AGENT_JOB_STATUSES = {
+    "completed",
+    "completed_with_warnings",
+    "failed",
+    "canceled",
+}
+
+
+def _is_borg_warning_return_code(return_code: Any) -> bool:
+    """Borg's warning exit codes: legacy rc 1, modern range 100-127.
+
+    Same classification the server-side services apply to their own borg
+    processes - the agent path finally speaks it too instead of collapsing
+    every non-zero exit into "failed".
+    """
+    return isinstance(return_code, int) and (
+        return_code == 1 or 100 <= return_code <= 127
+    )
+
+
 STALE_AGENT_JOB_REQUEUE_AFTER = timedelta(minutes=15)
 REPOSITORY_OPERATION_JOB_MODELS = {
     "check": CheckJob,
@@ -395,7 +415,7 @@ def _finish_linked_backup_job(
     backup_job.error_message = error_message
     backup_job.logs = _collect_agent_logs(agent_job, db)
     _sync_backup_progress(agent_job, backup_job)
-    if status_value == "completed":
+    if status_value in ("completed", "completed_with_warnings"):
         backup_job.progress = 100
         backup_job.progress_percent = 100.0
         archive_name = (agent_job.result or {}).get("archive_name")
@@ -461,7 +481,9 @@ def _finish_linked_repository_operation_job(
     operation_job.error_message = error_message
     operation_job.logs = _collect_agent_logs(agent_job, db)
     operation_job.has_logs = bool(operation_job.logs)
-    if status_value == "completed" and hasattr(operation_job, "progress"):
+    if status_value in ("completed", "completed_with_warnings") and hasattr(
+        operation_job, "progress"
+    ):
         operation_job.progress = 100
 
     repository = (
@@ -469,7 +491,7 @@ def _finish_linked_repository_operation_job(
         .filter(Repository.id == operation_job.repository_id)
         .first()
     )
-    if repository and status_value == "completed":
+    if repository and status_value in ("completed", "completed_with_warnings"):
         if isinstance(operation_job, CheckJob):
             repository.last_check = completed_at
         elif isinstance(operation_job, CompactJob):
@@ -575,15 +597,58 @@ def _complete_agent_job(
 ) -> None:
     if job.status in FINAL_AGENT_JOB_STATUSES:
         return
+    return_code = result.get("return_code") if isinstance(result, dict) else None
+    warning = _is_borg_warning_return_code(return_code)
+    if isinstance(return_code, int) and return_code != 0 and not warning:
+        # A completion report carrying an explicit borg *error* code is a
+        # failure, no matter which transport delivered it - the server is
+        # authoritative over the classification.
+        _fail_agent_job(
+            job,
+            db,
+            error_message=f"borg exited with code {return_code}",
+            return_code=return_code,
+            completed_at=completed_at,
+        )
+        return
+
     completed = _normalize_agent_timestamp(completed_at)
-    job.status = "completed"
+    status_value = "completed_with_warnings" if warning else "completed"
+    warning_message = (
+        json.dumps(
+            {
+                "key": "backend.errors.service.jobCompletedWithWarning",
+                "params": {"exitCode": return_code},
+            }
+        )
+        if warning
+        else None
+    )
+    job.status = status_value
     job.completed_at = completed
     job.result = result
-    job.error_message = None
+    job.error_message = warning_message
     job.updated_at = _now_utc()
-    _finish_linked_backup_job(job, db, status_value="completed", completed_at=completed)
+    _finish_linked_backup_job(
+        job,
+        db,
+        status_value=status_value,
+        completed_at=completed,
+        error_message=json.dumps(
+            {
+                "key": "backend.errors.service.backupCompletedWithWarning",
+                "params": {"exitCode": return_code},
+            }
+        )
+        if warning
+        else None,
+    )
     _finish_linked_repository_operation_job(
-        job, db, status_value="completed", completed_at=completed
+        job,
+        db,
+        status_value=status_value,
+        completed_at=completed,
+        error_message=warning_message,
     )
 
 
@@ -1211,23 +1276,10 @@ async def complete_job(
     if job.status in FINAL_AGENT_JOB_STATUSES:
         return AgentJobStatusResponse(id=job.id, status=job.status)
 
-    now = _now_utc()
-    job.status = "completed"
-    job.completed_at = _normalize_agent_timestamp(payload.completed_at)
-    job.result = payload.result
-    job.error_message = None
-    job.updated_at = now
-    _finish_linked_backup_job(
-        job,
-        db,
-        status_value="completed",
-        completed_at=job.completed_at,
-    )
-    _finish_linked_repository_operation_job(
-        job,
-        db,
-        status_value="completed",
-        completed_at=job.completed_at,
+    # Same path the WebSocket transport takes - one place decides how a
+    # completion (including borg warning exit codes) is classified.
+    _complete_agent_job(
+        job, db, result=payload.result, completed_at=payload.completed_at
     )
     db.commit()
 

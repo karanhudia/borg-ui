@@ -2127,6 +2127,70 @@ def test_execute_backup_create_job_completes_successfully(monkeypatch):
 
 
 @pytest.mark.unit
+def test_execute_backup_create_job_warning_exit_completes_with_warnings(monkeypatch):
+    """rc=1 (borg warning: file changed, path missing) still produced an
+    archive: the agent completes the job with the return code instead of
+    failing it, and the server derives completed_with_warnings from that."""
+
+    def fake_popen(cmd, stdout, stderr, text, env, **kwargs):
+        return FakeProcess(
+            ['{"type":"archive_progress","finished":true}\n'],
+            1,
+        )
+
+    monkeypatch.setattr("agent.borg_ui_agent.backup.subprocess.Popen", fake_popen)
+    client = BackupClient()
+
+    result = execute_backup_create_job(
+        {
+            "id": 8,
+            "payload": {
+                "job_kind": "backup.create",
+                "repository_path": "/repo",
+                "archive_name": "archive",
+                "source_paths": ["/src"],
+            },
+        },
+        client,
+    )
+
+    assert result.status == "completed_with_warnings"
+    assert result.return_code == 1
+    complete_calls = [call for call in client.calls if call[0] == "complete_job"]
+    assert len(complete_calls) == 1
+    assert complete_calls[0][2]["return_code"] == 1
+    assert all(call[0] != "fail_job" for call in client.calls)
+
+
+@pytest.mark.unit
+def test_execute_backup_create_job_error_exit_still_fails(monkeypatch):
+    """rc=2 (borg error) keeps the failure semantics untouched."""
+
+    def fake_popen(cmd, stdout, stderr, text, env, **kwargs):
+        return FakeProcess([], 2)
+
+    monkeypatch.setattr("agent.borg_ui_agent.backup.subprocess.Popen", fake_popen)
+    client = BackupClient()
+
+    result = execute_backup_create_job(
+        {
+            "id": 9,
+            "payload": {
+                "job_kind": "backup.create",
+                "repository_path": "/repo",
+                "archive_name": "archive",
+                "source_paths": ["/src"],
+            },
+        },
+        client,
+    )
+
+    assert result.status == "failed"
+    assert any(call[0] == "fail_job" for call in client.calls)
+    assert all(call[0] != "complete_job" for call in client.calls)
+
+
+@pytest.mark.unit
 def test_build_borg_env_sets_noninteractive_access_defaults(monkeypatch):
     # borg 1.x and 2 both prompt "[yN]" on first access to an unknown
     # unencrypted (or relocated) repository. The agent runs borg

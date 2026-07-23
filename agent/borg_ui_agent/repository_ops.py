@@ -21,6 +21,7 @@ from agent.borg_ui_agent.backup import (
     build_borg_env,
     parse_borg_progress,
 )
+from agent.borg_ui_agent.borg import is_warning_return_code
 from agent.borg_ui_agent.client import AgentClient
 
 
@@ -596,7 +597,10 @@ def _execute_short_repository_operation(
             job_id, sequence=2, stream="stderr", message=process.stderr.rstrip()
         )
 
-    if process.returncode == 0:
+    if process.returncode == 0 or is_warning_return_code(process.returncode):
+        # Warnings (rc 1 / 100-127) mean the operation ran through; the server
+        # records completed_with_warnings from the return code, matching the
+        # classification its own borg processes get.
         parsed = _parse_json_output(process.stdout)
         client.complete_job(
             job_id,
@@ -610,7 +614,9 @@ def _execute_short_repository_operation(
         )
         return RepositoryOperationResult(
             job_id=job_id,
-            status="completed",
+            status="completed"
+            if process.returncode == 0
+            else "completed_with_warnings",
             return_code=process.returncode,
             message=f"{payload.job_kind} exited with code {process.returncode}",
         )
