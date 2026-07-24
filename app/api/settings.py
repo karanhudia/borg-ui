@@ -1868,17 +1868,38 @@ async def cleanup_system(
             db.commit()
             db.refresh(settings)
 
-        # Perform cleanup tasks (placeholder implementation)
-        cleanup_results = {
-            "logs_cleaned": 0,
-            "old_backups_removed": 0,
-            "temp_files_cleaned": 0,
-        }
+        # Apply the DB retention windows now (log content after
+        # log_retention_days, finished job rows after cleanup_retention_days —
+        # the same pass the daily scheduler runs).
+        import asyncio
 
-        # TODO: Implement actual cleanup logic
-        # - Clean old logs based on log_retention_days
-        # - Remove old backup archives based on cleanup_retention_days
-        # - Clean temporary files
+        from app.services.job_history_retention import run_retention_once
+
+        # Runs on its own session created inside the worker thread — SQLite
+        # connections are thread-affine, so the request session must not cross.
+        cleanup_results = await asyncio.to_thread(run_retention_once)
+
+        # SQLite only frees pages internally on DELETE; VACUUM rewrites the
+        # file so it actually shrinks. Deliberately manual-only (this endpoint,
+        # not the scheduler): it rewrites the whole database and blocks other
+        # writers while it runs. Postgres handles this via autovacuum.
+        from app.database.database import engine
+
+        # Release this request session's read transaction first: VACUUM runs
+        # on its own connection and needs exclusive access - an open snapshot
+        # here would make it wait on us.
+        db.commit()
+
+        if engine.dialect.name == "sqlite":
+
+            def _vacuum():
+                with engine.connect().execution_options(
+                    isolation_level="AUTOCOMMIT"
+                ) as conn:
+                    conn.exec_driver_sql("VACUUM")
+
+            await asyncio.to_thread(_vacuum)
+            cleanup_results["vacuumed"] = True
 
         logger.info(
             "System cleanup completed",

@@ -41,6 +41,7 @@ interface SystemSettings {
   log_save_policy: string
   log_max_total_size_mb: number
   log_cleanup_on_startup: boolean
+  cleanup_retention_days: number
 }
 
 const LogManagementTab: React.FC = () => {
@@ -53,6 +54,7 @@ const LogManagementTab: React.FC = () => {
   const [retentionDays, setRetentionDays] = useState(30)
   const [maxTotalSizeMb, setMaxTotalSizeMb] = useState(500)
   const [cleanupOnStartup, setCleanupOnStartup] = useState(true)
+  const [historyRetentionDays, setHistoryRetentionDays] = useState(90)
   const [hasChanges, setHasChanges] = useState(false)
 
   // Fetch system settings
@@ -84,6 +86,8 @@ const LogManagementTab: React.FC = () => {
       setRetentionDays(settings.log_retention_days || 30)
       setMaxTotalSizeMb(settings.log_max_total_size_mb || 500)
       setCleanupOnStartup(settings.log_cleanup_on_startup ?? true)
+      // Clamp stored values from before the 7-90 scale (or API writes) into range.
+      setHistoryRetentionDays(Math.min(90, Math.max(7, settings.cleanup_retention_days ?? 90)))
       setHasChanges(false)
     }
   }, [settings])
@@ -95,10 +99,18 @@ const LogManagementTab: React.FC = () => {
         logSavePolicy !== (settings.log_save_policy || 'failed_and_warnings') ||
         retentionDays !== (settings.log_retention_days || 30) ||
         maxTotalSizeMb !== (settings.log_max_total_size_mb || 500) ||
-        cleanupOnStartup !== (settings.log_cleanup_on_startup ?? true)
+        cleanupOnStartup !== (settings.log_cleanup_on_startup ?? true) ||
+        historyRetentionDays !== Math.min(90, Math.max(7, settings.cleanup_retention_days ?? 90))
       setHasChanges(changed)
     }
-  }, [logSavePolicy, retentionDays, maxTotalSizeMb, cleanupOnStartup, settings])
+  }, [
+    logSavePolicy,
+    retentionDays,
+    maxTotalSizeMb,
+    cleanupOnStartup,
+    historyRetentionDays,
+    settings,
+  ])
 
   // Save settings mutation
   const saveSettingsMutation = useMutation({
@@ -108,6 +120,7 @@ const LogManagementTab: React.FC = () => {
         log_retention_days: retentionDays,
         log_max_total_size_mb: maxTotalSizeMb,
         log_cleanup_on_startup: cleanupOnStartup,
+        cleanup_retention_days: historyRetentionDays,
       })
       return response.data
     },
@@ -127,6 +140,7 @@ const LogManagementTab: React.FC = () => {
         retention_days: retentionDays,
         max_total_size_mb: maxTotalSizeMb,
         cleanup_on_startup: cleanupOnStartup,
+        cleanup_retention_days: historyRetentionDays,
       })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -162,17 +176,13 @@ const LogManagementTab: React.FC = () => {
   }
 
   const handleCleanup = () => {
-    if (
-      window.confirm(
-        'Are you sure you want to run log cleanup? This will delete old log files according to your settings.'
-      )
-    ) {
+    if (window.confirm(t('logManagement.cleanupConfirm'))) {
       cleanupMutation.mutate()
     }
   }
 
   const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return 'N/A'
+    if (!dateStr) return t('logManagement.notAvailable')
     return new Date(dateStr).toLocaleDateString(undefined, {
       year: 'numeric',
       month: 'short',
@@ -209,7 +219,7 @@ const LogManagementTab: React.FC = () => {
             {t('logManagement.title')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Configure log storage, retention, and cleanup policies for job logs
+            {t('logManagement.subtitle')}
           </Typography>
         </Box>
         <Button
@@ -233,11 +243,11 @@ const LogManagementTab: React.FC = () => {
               <Box display="flex" alignItems="center" gap={1} mb={1}>
                 <HardDrive size={20} />
                 <Typography variant="subtitle1" fontWeight={600}>
-                  Storage Usage
+                  {t('logManagement.storageUsage')}
                 </Typography>
               </Box>
               <Typography variant="body2" color="text.secondary">
-                Current log storage utilization and statistics
+                {t('logManagement.storageUsageDesc')}
               </Typography>
             </Box>
 
@@ -262,7 +272,7 @@ const LogManagementTab: React.FC = () => {
                       color="text.secondary"
                       sx={{ textTransform: 'uppercase', fontWeight: 600 }}
                     >
-                      Total Size
+                      {t('logManagement.totalSize')}
                     </Typography>
                     <Typography variant="h5" fontWeight={600} sx={{ mt: 0.5 }}>
                       {logStorage?.total_size_mb || 0} MB
@@ -274,7 +284,7 @@ const LogManagementTab: React.FC = () => {
                       color="text.secondary"
                       sx={{ textTransform: 'uppercase', fontWeight: 600 }}
                     >
-                      File Count
+                      {t('logManagement.fileCount')}
                     </Typography>
                     <Typography variant="h5" fontWeight={600} sx={{ mt: 0.5 }}>
                       {logStorage?.file_count || 0}
@@ -286,7 +296,7 @@ const LogManagementTab: React.FC = () => {
                       color="text.secondary"
                       sx={{ textTransform: 'uppercase', fontWeight: 600 }}
                     >
-                      Oldest Log
+                      {t('logManagement.oldestLog')}
                     </Typography>
                     <Typography variant="body1" sx={{ mt: 0.5 }}>
                       {formatDate(logStorage?.oldest_log_date || null)}
@@ -298,7 +308,7 @@ const LogManagementTab: React.FC = () => {
                       color="text.secondary"
                       sx={{ textTransform: 'uppercase', fontWeight: 600 }}
                     >
-                      Newest Log
+                      {t('logManagement.newestLog')}
                     </Typography>
                     <Typography variant="body1" sx={{ mt: 0.5 }}>
                       {formatDate(logStorage?.newest_log_date || null)}
@@ -309,11 +319,18 @@ const LogManagementTab: React.FC = () => {
                 <Box>
                   <Box display="flex" justifyContent="space-between" mb={1}>
                     <Typography variant="body2" fontWeight={600}>
-                      {usagePercent}% of {logStorage?.limit_mb || 0} MB
+                      {t('logManagement.usageOfLimit', {
+                        percent: usagePercent,
+                        limit: logStorage?.limit_mb || 0,
+                      })}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      {Math.max(0, (logStorage?.limit_mb || 0) - (logStorage?.total_size_mb || 0))}{' '}
-                      MB available
+                      {t('logManagement.mbAvailable', {
+                        count: Math.max(
+                          0,
+                          (logStorage?.limit_mb || 0) - (logStorage?.total_size_mb || 0)
+                        ),
+                      })}
                     </Typography>
                   </Box>
                   <LinearProgress
@@ -326,8 +343,7 @@ const LogManagementTab: React.FC = () => {
 
                 {isHighUsage && (
                   <Alert severity="warning" icon={<AlertTriangle size={20} />}>
-                    Log storage usage is at {usagePercent}%. Consider running cleanup or increasing
-                    the size limit.
+                    {t('logManagement.highUsageWarning', { percent: usagePercent })}
                   </Alert>
                 )}
 
@@ -360,10 +376,10 @@ const LogManagementTab: React.FC = () => {
           <Stack spacing={3}>
             <Box>
               <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                Log Storage Policy
+                {t('logManagement.storagePolicy')}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Choose which job types should have their logs saved to disk
+                {t('logManagement.storagePolicyDesc')}
               </Typography>
             </Box>
 
@@ -377,10 +393,10 @@ const LogManagementTab: React.FC = () => {
                   label={
                     <Box sx={{ py: 1 }}>
                       <Typography variant="body1" fontWeight={500}>
-                        Failed Jobs Only
+                        {t('logManagement.policyFailedOnly')}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        Save logs only for failed or cancelled jobs (minimal disk usage)
+                        {t('logManagement.policyFailedOnlyDesc')}
                       </Typography>
                     </Box>
                   }
@@ -392,10 +408,10 @@ const LogManagementTab: React.FC = () => {
                   label={
                     <Box sx={{ py: 1 }}>
                       <Typography variant="body1" fontWeight={500}>
-                        Failed Jobs and Warnings (Recommended)
+                        {t('logManagement.policyFailedAndWarnings')}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        Save logs for failed jobs and any job with warnings or errors
+                        {t('logManagement.policyFailedAndWarningsDesc')}
                       </Typography>
                     </Box>
                   }
@@ -407,10 +423,10 @@ const LogManagementTab: React.FC = () => {
                   label={
                     <Box sx={{ py: 1 }}>
                       <Typography variant="body1" fontWeight={500}>
-                        All Jobs
+                        {t('logManagement.policyAllJobs')}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        Save logs for all jobs, including successful ones (maximum disk usage)
+                        {t('logManagement.policyAllJobsDesc')}
                       </Typography>
                     </Box>
                   }
@@ -426,10 +442,10 @@ const LogManagementTab: React.FC = () => {
           <Stack spacing={3}>
             <Box>
               <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                Retention Settings
+                {t('logManagement.retentionSettings')}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Configure how long logs are kept and maximum storage size
+                {t('logManagement.retentionSettingsDesc')}
               </Typography>
             </Box>
 
@@ -437,7 +453,7 @@ const LogManagementTab: React.FC = () => {
 
             <Box>
               <Typography variant="body2" fontWeight={600} gutterBottom>
-                Log Retention Period: {retentionDays} days
+                {t('logManagement.logRetentionPeriod', { days: retentionDays })}
               </Typography>
               <Box sx={{ px: 1, pt: 1 }}>
                 <Slider
@@ -456,20 +472,47 @@ const LogManagementTab: React.FC = () => {
                 />
               </Box>
               <Typography variant="caption" color="text.secondary">
-                Logs older than this will be automatically deleted during cleanup
+                {t('logManagement.logRetentionCaption')}
               </Typography>
             </Box>
 
             <Box>
               <TextField
-                label="Maximum Total Size (MB)"
+                label={t('logManagement.maxTotalSize')}
                 type="number"
                 value={maxTotalSizeMb}
-                onChange={(e) => setMaxTotalSizeMb(Math.max(10, parseInt(e.target.value) || 10))}
+                onChange={(e) =>
+                  setMaxTotalSizeMb(Math.min(10000, Math.max(10, parseInt(e.target.value) || 10)))
+                }
                 inputProps={{ min: 10, max: 10000, step: 50 }}
                 fullWidth
-                helperText="Total size limit for all log files. Min: 10 MB, Max: 10,000 MB (10 GB)"
+                helperText={t('logManagement.maxTotalSizeHelper')}
               />
+            </Box>
+
+            <Box>
+              <Typography variant="body2" fontWeight={600} gutterBottom>
+                {t('logManagement.historyRetentionPeriod', { days: historyRetentionDays })}
+              </Typography>
+              <Box sx={{ px: 1, pt: 1 }}>
+                <Slider
+                  value={historyRetentionDays}
+                  onChange={(_, value) => setHistoryRetentionDays(value as number)}
+                  min={7}
+                  max={90}
+                  step={1}
+                  marks={[
+                    { value: 7, label: '7d' },
+                    { value: 30, label: '30d' },
+                    { value: 60, label: '60d' },
+                    { value: 90, label: '90d' },
+                  ]}
+                  valueLabelDisplay="auto"
+                />
+              </Box>
+              <Typography variant="caption" color="text.secondary">
+                {t('logManagement.historyRetentionCaption')}
+              </Typography>
             </Box>
           </Stack>
         </SettingsCard>
@@ -479,10 +522,10 @@ const LogManagementTab: React.FC = () => {
           <Stack spacing={3}>
             <Box>
               <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                Automatic Cleanup
+                {t('logManagement.automaticCleanup')}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Configure when log cleanup runs automatically
+                {t('logManagement.automaticCleanupDesc')}
               </Typography>
             </Box>
 
@@ -498,10 +541,10 @@ const LogManagementTab: React.FC = () => {
               label={
                 <Box>
                   <Typography variant="body1" fontWeight={500}>
-                    Run cleanup on application startup
+                    {t('logManagement.cleanupOnStartup')}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Automatically clean old logs when the application starts
+                    {t('logManagement.cleanupOnStartupDesc')}
                   </Typography>
                 </Box>
               }

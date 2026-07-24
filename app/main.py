@@ -455,6 +455,15 @@ async def startup_event():
     app.state.background_tasks.append(task5)
     logger.info("Agent job reaper started")
 
+    # Start job-history retention (background task): drops DB-stored job log
+    # content after log_retention_days and finished job rows after
+    # cleanup_retention_days, so the database stops growing without bound.
+    from app.services.job_history_retention import start_job_history_retention
+
+    task6 = asyncio.create_task(start_job_history_retention())
+    app.state.background_tasks.append(task6)
+    logger.info("Job history retention scheduler started")
+
     logger.info("Borg Web UI started successfully")
 
 

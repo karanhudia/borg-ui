@@ -289,6 +289,20 @@ class PruneService:
                     "Prune failed", job_id=job_id, exit_code=process.returncode
                 )
 
+            # Archives that no longer exist take their job records with them:
+            # parse the pruned names from the --list output and cascade.
+            if not dry_run and job.status in ("completed", "completed_with_warnings"):
+                from app.services.job_history_retention import (
+                    archive_names_from_prune_output,
+                    purge_jobs_for_pruned_archives,
+                )
+
+                purge_jobs_for_pruned_archives(
+                    db,
+                    repository_id,
+                    archive_names_from_prune_output("\n".join(log_buffer)),
+                )
+
             # Save logs for all completed/failed/cancelled/warning jobs
             if job.status in [
                 "failed",

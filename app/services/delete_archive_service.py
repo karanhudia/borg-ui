@@ -245,6 +245,15 @@ class DeleteArchiveService:
                     "Delete job failed", job_id=job_id, return_code=process.returncode
                 )
 
+            # A deleted archive takes its job records with it - same cascade
+            # the prune paths run.
+            if job.status in ("completed", "completed_with_warnings"):
+                from app.services.job_history_retention import (
+                    purge_jobs_for_pruned_archives,
+                )
+
+                purge_jobs_for_pruned_archives(db, repository_id, {archive_name})
+
             # Save logs
             if log_buffer:
                 log_file_path = self.log_dir / f"delete_archive_{job_id}.log"

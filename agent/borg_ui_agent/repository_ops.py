@@ -320,9 +320,12 @@ class RepositoryOperationPayload:
                 ("keep_quarterly", "--keep-3monthly"),
                 ("keep_yearly", "--keep-yearly"),
             ]
+            # --list names every removed archive; the server parses those
+            # lines to drop the job records of pruned archives.
             if self.borg_version == 2:
                 cmd = [
                     *self._base_borg2("prune"),
+                    "--list",
                     "--progress",
                     "--show-rc",
                     "--log-json",
@@ -330,6 +333,7 @@ class RepositoryOperationPayload:
             else:
                 cmd = [
                     *self._base_borg1("prune"),
+                    "--list",
                     "--progress",
                     "--stats",
                     "--show-rc",
