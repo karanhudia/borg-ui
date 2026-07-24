@@ -7,14 +7,61 @@ Handles sending notifications for backup/restore events.
 import apprise
 from typing import Optional, List
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 import structlog
 import socket
 import re
 
-from app.database.models import NotificationSettings, Repository
+from app.database.models import NotificationSettings, Repository, SystemSettings
+from app.utils.datetime_utils import serialize_datetime
+from app.utils.schedule_time import (
+    DEFAULT_SCHEDULE_TIMEZONE,
+    get_container_timezone,
+    normalize_schedule_timezone,
+)
 
 logger = structlog.get_logger()
+
+
+def _resolve_report_timezone(db: Session) -> ZoneInfo:
+    """Timezone that notification timestamps should render in.
+
+    Mirrors the weekly-report path, trying each source in order: the
+    configured ``backup_reports_timezone``, then the container timezone,
+    then UTC. An invalid or unreadable earlier source falls through to
+    the next rather than short-circuiting to UTC. Never raises.
+    """
+    configured = None
+    try:
+        settings = db.query(SystemSettings).first()
+        configured = (
+            getattr(settings, "backup_reports_timezone", None) if settings else None
+        )
+    except Exception:
+        configured = None
+
+    for candidate in (configured, get_container_timezone(DEFAULT_SCHEDULE_TIMEZONE)):
+        if not candidate:
+            continue
+        try:
+            return ZoneInfo(normalize_schedule_timezone(candidate))
+        except Exception:
+            continue
+    return ZoneInfo("UTC")
+
+
+def _format_event_time(dt: Optional[datetime], tz: ZoneInfo) -> str:
+    """Render an event timestamp in ``tz``.
+
+    Naive datetimes are treated as UTC (the database stores naive UTC); a
+    ``None`` value means the current time.
+    """
+    if dt is None:
+        dt = datetime.now(timezone.utc)
+    elif dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(tz).strftime("%Y-%m-%d %H:%M:%S %Z")
 
 
 def _sanitize_ssh_url(url: str) -> str:
@@ -486,7 +533,7 @@ def _build_json_data(event_type: str, data: dict, compact: bool = False) -> str:
 
     json_data = {
         "event_type": event_type,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         **data,
     }
 
@@ -609,9 +656,10 @@ class NotificationService:
                 {"label": "Expected Size", "value": _format_bytes(expected_size)}
             )
 
-        # Create timestamp
-        start_time = datetime.now()
-        timestamp_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
+        # Create timestamp in the configured report timezone
+        report_tz = _resolve_report_timezone(db)
+        start_time = datetime.now(timezone.utc)
+        timestamp_str = _format_event_time(start_time, report_tz)
 
         # Create HTML body for email with professional badge
         html_title = f"{_get_status_badge('started', is_html=True)} Backup Started"
@@ -659,7 +707,7 @@ class NotificationService:
                         "job_name": job_name,
                         "source_directories": source_directories,
                         "expected_size": expected_size,
-                        "started_at": start_time.isoformat(),
+                        "started_at": serialize_datetime(start_time),
                     },
                     compact=_is_json_webhook(setting.service_url),
                 )
@@ -815,8 +863,9 @@ class NotificationService:
             content_blocks.append({"html": stats_html})
 
         # Use provided completion time or current time as fallback
-        completed_at = completion_time or datetime.now()
-        timestamp_str = completed_at.strftime("%Y-%m-%d %H:%M:%S")
+        report_tz = _resolve_report_timezone(db)
+        completed_at = completion_time or datetime.now(timezone.utc)
+        timestamp_str = _format_event_time(completed_at, report_tz)
 
         # Build footer with elapsed time if available
         footer = f"Completed at {timestamp_str}"
@@ -891,9 +940,7 @@ class NotificationService:
                         "archive_name": archive_name,
                         "job_name": job_name,
                         "stats": stats,
-                        "completed_at": completed_at.isoformat()
-                        if completed_at
-                        else None,
+                        "completed_at": serialize_datetime(completed_at),
                     },
                     compact=_is_json_webhook(setting.service_url),
                 )
@@ -973,14 +1020,16 @@ class NotificationService:
         content_blocks.append({"html": error_html})
 
         # Capture failure time
-        failure_time = datetime.now()
+        report_tz = _resolve_report_timezone(db)
+        failure_time = datetime.now(timezone.utc)
+        timestamp_str = _format_event_time(failure_time, report_tz)
 
         # Create HTML body with professional badge
         html_title = f"{_get_status_badge('failed', is_html=True)} Backup Failed"
         html_body = _create_html_email(
             title=html_title,
             content_blocks=content_blocks,
-            footer=f"Failed at {failure_time.strftime('%Y-%m-%d %H:%M:%S')}",
+            footer=f"Failed at {timestamp_str}",
         )
 
         # Create markdown body with professional badge (without HTML error box)
@@ -1004,7 +1053,7 @@ class NotificationService:
         markdown_body = _create_markdown_message(
             title=markdown_title,
             content_blocks=markdown_blocks,
-            footer=f"Failed at {failure_time.strftime('%Y-%m-%d %H:%M:%S')}",
+            footer=f"Failed at {timestamp_str}",
         )
 
         for setting in settings:
@@ -1035,7 +1084,7 @@ class NotificationService:
                         "job_name": job_name,
                         "job_id": job_id,
                         "error_message": error_message,
-                        "failed_at": failure_time.isoformat(),
+                        "failed_at": serialize_datetime(failure_time),
                     },
                     compact=_is_json_webhook(setting.service_url),
                 )
@@ -1203,12 +1252,14 @@ class NotificationService:
         content_blocks.append({"html": warning_html})
 
         # Capture completion time
-        completed_at = completion_time or datetime.now()
+        report_tz = _resolve_report_timezone(db)
+        completed_at = completion_time or datetime.now(timezone.utc)
+        timestamp_str = _format_event_time(completed_at, report_tz)
 
         # Build footer with elapsed time if available
-        footer = f"Completed at {completed_at.strftime('%Y-%m-%d %H:%M:%S')}"
+        footer = f"Completed at {timestamp_str}"
         if elapsed_time_str:
-            footer = f"Completed at {completed_at.strftime('%Y-%m-%d %H:%M:%S')} (took {elapsed_time_str})"
+            footer = f"Completed at {timestamp_str} (took {elapsed_time_str})"
 
         # Create HTML body with professional badge
         html_title = f"{_get_status_badge('warning', is_html=True)} Backup Completed with Warnings"
@@ -1281,7 +1332,7 @@ class NotificationService:
                         "job_name": job_name,
                         "warning_message": warning_message,
                         "stats": stats,
-                        "completed_at": completed_at.isoformat(),
+                        "completed_at": serialize_datetime(completed_at),
                     },
                     compact=_is_json_webhook(setting.service_url),
                 )
@@ -1354,8 +1405,9 @@ class NotificationService:
         content_blocks.append({"label": "Destination", "value": target_path})
 
         # Use provided completion time or current time as fallback
-        completed_at = completion_time or datetime.now()
-        timestamp_str = completed_at.strftime("%Y-%m-%d %H:%M:%S")
+        report_tz = _resolve_report_timezone(db)
+        completed_at = completion_time or datetime.now(timezone.utc)
+        timestamp_str = _format_event_time(completed_at, report_tz)
 
         html_title = f"{_get_status_badge('success', is_html=True)} Restore Successful"
         html_body = _create_html_email(
@@ -1401,7 +1453,7 @@ class NotificationService:
                         "archive_name": archive_name,
                         "job_name": job_name,
                         "target_path": target_path,
-                        "completed_at": completed_at.isoformat(),
+                        "completed_at": serialize_datetime(completed_at),
                     },
                     compact=_is_json_webhook(setting.service_url),
                 )
@@ -1477,11 +1529,15 @@ class NotificationService:
         </div>"""
         content_blocks.append({"html": error_html})
 
+        report_tz = _resolve_report_timezone(db)
+        failure_time = datetime.now(timezone.utc)
+        timestamp_str = _format_event_time(failure_time, report_tz)
+
         html_title = f"{_get_status_badge('failed', is_html=True)} Restore Failed"
         html_body = _create_html_email(
             title=html_title,
             content_blocks=content_blocks,
-            footer=f"Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            footer=f"Failed at {timestamp_str}",
         )
 
         # Create markdown body
@@ -1505,11 +1561,8 @@ class NotificationService:
         markdown_body = _create_markdown_message(
             title=markdown_title,
             content_blocks=markdown_blocks,
-            footer=f"Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            footer=f"Failed at {timestamp_str}",
         )
-
-        # Capture failure time for JSON
-        failure_time = datetime.now()
 
         for setting in settings:
             # Check if this notification applies to this repository
@@ -1539,7 +1592,7 @@ class NotificationService:
                         "archive_name": archive_name,
                         "job_name": job_name,
                         "error_message": error_message,
-                        "failed_at": failure_time.isoformat(),
+                        "failed_at": serialize_datetime(failure_time),
                     },
                     compact=_is_json_webhook(setting.service_url),
                 )
@@ -1603,13 +1656,17 @@ class NotificationService:
         </div>"""
         content_blocks.append({"html": error_html})
 
+        report_tz = _resolve_report_timezone(db)
+        failure_time = datetime.now(timezone.utc)
+        timestamp_str = _format_event_time(failure_time, report_tz)
+
         html_title = (
             f"{_get_status_badge('failed', is_html=True)} Scheduled Backup Failed"
         )
         html_body = _create_html_email(
             title=html_title,
             content_blocks=content_blocks,
-            footer=f"Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            footer=f"Failed at {timestamp_str}",
         )
 
         # Create markdown body
@@ -1632,11 +1689,8 @@ class NotificationService:
         markdown_body = _create_markdown_message(
             title=markdown_title,
             content_blocks=markdown_blocks,
-            footer=f"Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            footer=f"Failed at {timestamp_str}",
         )
-
-        # Capture failure time for JSON
-        failure_time = datetime.now()
 
         for setting in settings:
             # Check if this notification applies to this repository
@@ -1665,7 +1719,7 @@ class NotificationService:
                         "repository_name": repo.name if repo else repository_name,
                         "repository_path": repo.path if repo else repository_name,
                         "error_message": error_message,
-                        "failed_at": failure_time.isoformat(),
+                        "failed_at": serialize_datetime(failure_time),
                     },
                     compact=_is_json_webhook(setting.service_url),
                 )
@@ -1995,8 +2049,9 @@ class NotificationService:
             )
             content_blocks.append({"label": "Details", "value": error_display})
 
-        completion_time = datetime.now()
-        timestamp_str = completion_time.strftime("%Y-%m-%d %H:%M:%S")
+        report_tz = _resolve_report_timezone(db)
+        completion_time = datetime.now(timezone.utc)
+        timestamp_str = _format_event_time(completion_time, report_tz)
 
         html_title = f"{_get_status_badge(badge_type, is_html=True)} {title_text}"
         html_body = _create_html_email(
@@ -2043,7 +2098,7 @@ class NotificationService:
                         "error_message": error_message
                         if status != "completed"
                         else None,
-                        "completed_at": completion_time.isoformat(),
+                        "completed_at": serialize_datetime(completion_time),
                     },
                     compact=_is_json_webhook(setting.service_url),
                 )
@@ -2138,8 +2193,9 @@ class NotificationService:
             content_blocks.append({"label": "Error", "value": error_display})
 
         # Create timestamp
-        completion_time = datetime.now()
-        timestamp_str = completion_time.strftime("%Y-%m-%d %H:%M:%S")
+        report_tz = _resolve_report_timezone(db)
+        completion_time = datetime.now(timezone.utc)
+        timestamp_str = _format_event_time(completion_time, report_tz)
 
         # Choose title and badge based on status
         if status == "completed":
@@ -2201,7 +2257,7 @@ class NotificationService:
                         "status": status,
                         "duration_seconds": duration_seconds,
                         "error_message": error_message if status == "failed" else None,
-                        "completed_at": completion_time.isoformat(),
+                        "completed_at": serialize_datetime(completion_time),
                     },
                     compact=_is_json_webhook(setting.service_url),
                 )

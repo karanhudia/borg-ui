@@ -1200,3 +1200,91 @@ async def test_local_repo_urls_unchanged(test_db, mock_apprise):
     call_args = apprise_instance.notify.call_args[1]
     body = call_args["body"]
     assert "/local/path/to/repo" in body
+
+
+@pytest.mark.asyncio
+async def test_completed_at_uses_configured_report_timezone(
+    test_db, mock_apprise, mock_repository, email_notification_setting
+):
+    """Completed-at footer renders in backup_reports_timezone, not GMT (issue #771)."""
+    from datetime import datetime
+    from app.database.models import SystemSettings
+
+    test_db.add(SystemSettings(backup_reports_timezone="Asia/Kolkata"))
+    test_db.commit()
+
+    apprise_instance = mock_apprise.return_value
+    apprise_instance.add.return_value = True
+    apprise_instance.notify.return_value = True
+
+    # Naive UTC value, exactly as stored on BackupJob.completed_at
+    await notification_service.send_backup_success(
+        test_db,
+        mock_repository.name,
+        "archive-2024",
+        completion_time=datetime(2025, 11, 9, 14, 56, 53),
+    )
+
+    body = apprise_instance.notify.call_args[1]["body"]
+    # Asia/Kolkata is UTC+5:30 -> 20:26:53 IST, never the raw 14:56:53 UTC
+    assert "Completed at 2025-11-09 20:26:53 IST" in body
+    assert "14:56:53" not in body
+
+
+@pytest.mark.asyncio
+async def test_backup_start_and_success_use_same_timezone(
+    test_db, mock_apprise, mock_repository
+):
+    """Started-at and Completed-at must render in the same configured zone."""
+    from datetime import datetime
+    from app.database.models import SystemSettings
+
+    test_db.add(SystemSettings(backup_reports_timezone="Asia/Kolkata"))
+    setting = NotificationSettings(
+        name="Both",
+        service_url="slack://token/channel",
+        enabled=True,
+        notify_on_backup_start=True,
+        notify_on_backup_success=True,
+        monitor_all_repositories=True,
+    )
+    test_db.add(setting)
+    test_db.commit()
+
+    apprise_instance = mock_apprise.return_value
+    apprise_instance.add.return_value = True
+    apprise_instance.notify.return_value = True
+
+    await notification_service.send_backup_start(
+        test_db, mock_repository.name, "archive-2024"
+    )
+    start_body = apprise_instance.notify.call_args[1]["body"]
+
+    await notification_service.send_backup_success(
+        test_db,
+        mock_repository.name,
+        "archive-2024",
+        completion_time=datetime(2025, 11, 9, 14, 56, 53),
+    )
+    complete_body = apprise_instance.notify.call_args[1]["body"]
+
+    assert "Started at" in start_body and "IST" in start_body
+    assert "Completed at 2025-11-09 20:26:53 IST" in complete_body
+
+
+def test_resolve_report_timezone_invalid_config_falls_back_to_container(test_db):
+    """An invalid configured timezone falls through to the container zone, not UTC."""
+    from app.database.models import SystemSettings
+    from app.services.notification_service import _resolve_report_timezone
+
+    test_db.add(SystemSettings(backup_reports_timezone="Not/AZone"))
+    test_db.commit()
+
+    with patch(
+        "app.services.notification_service.get_container_timezone",
+        return_value="Asia/Kolkata",
+    ):
+        tz = _resolve_report_timezone(test_db)
+
+    # Invalid configured value must not short-circuit to UTC
+    assert str(tz) == "Asia/Kolkata"
