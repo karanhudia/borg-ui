@@ -67,6 +67,22 @@ jobs:
         ports:
           - 6379:6379
 
+      # SQLite forgives what Postgres rejects: it enforces a foreign key only
+      # when asked to, and works the next id out from the data instead of a
+      # sequence. Anything resting on either can only be proven here.
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: borg_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -122,6 +138,7 @@ jobs:
         env:
           REDIS_HOST: localhost
           REDIS_PORT: 6379
+          BORG_TEST_POSTGRES_URL: postgresql+psycopg://postgres:postgres@localhost:5432/borg_test
           COVERAGE_FILE: coverage-data/unit-${{ matrix.shard }}.coverage
 
       - name: Upload backend coverage data

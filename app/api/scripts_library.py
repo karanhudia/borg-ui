@@ -249,8 +249,8 @@ async def list_scripts(
     if search:
         search_pattern = f"%{search}%"
         query = query.filter(
-            (Script.name.like(search_pattern))
-            | (Script.description.like(search_pattern))
+            (Script.name.ilike(search_pattern))
+            | (Script.description.ilike(search_pattern))
         )
 
     scripts = query.order_by(Script.created_at.desc()).all()
