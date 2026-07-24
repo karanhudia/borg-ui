@@ -21,21 +21,28 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - name: Enable auto-merge for minor and patch updates
-        # Auto-merge patch and minor updates for production dependencies
-        # Major updates require manual review
-        if: |
-          (steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
-           steps.metadata.outputs.update-type == 'version-update:semver-minor')
+      - name: Decide auto-merge policy
+        id: policy
+        env:
+          UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
+        run: |
+          if [ "$UPDATE_TYPE" = "version-update:semver-patch" ]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Enable auto-merge for patch updates
+        # Minor updates can be breaking for dependencies below 1.0.0. Grouped
+        # updates also hide their individual version changes behind one label.
+        if: steps.policy.outputs.allowed == 'true'
         run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Comment on PR
-        if: |
-          (steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
-           steps.metadata.outputs.update-type == 'version-update:semver-minor')
+        if: steps.policy.outputs.allowed == 'true'
         uses: actions/github-script@v9
         with:
           script: |
