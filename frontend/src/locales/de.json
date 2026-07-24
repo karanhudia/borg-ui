@@ -5041,7 +5041,8 @@
         "restoreFailedZeroFilesPathNotFound": "Wiederherstellung fehlgeschlagen: 0 Dateien extrahiert (Exitcode {{exitCode}}). Pfad nicht im Archiv gefunden oder Ziel existiert nicht.",
         "restoreFailedZeroFilesNoOutput": "Wiederherstellung fehlgeschlagen: 0 Dateien extrahiert (Exitcode {{exitCode}}). Keine Fehlerausgabe von Borg. Dateien existieren möglicherweise nicht im Archiv oder der Zugriff wurde verweigert.",
         "restoreFailedExitCode": "Der Wiederherstellungsprozess wurde mit Code {{exitCode}} beendet",
-        "restoreFailed": "Wiederherstellung fehlgeschlagen"
+        "restoreFailed": "Wiederherstellung fehlgeschlagen",
+        "jobCompletedWithWarning": "Mit Warnung abgeschlossen (Exitcode {{exitCode}})"
       },
       "dashboard": {
         "failedGetSystemMetrics": "Fehler beim Abrufen der Systemmetriken",

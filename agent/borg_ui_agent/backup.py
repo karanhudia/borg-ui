@@ -10,6 +10,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+from agent.borg_ui_agent.borg import is_warning_return_code
 from agent.borg_ui_agent.client import AgentClient
 
 
@@ -363,7 +364,10 @@ def execute_backup_create_job(
 
     return_code = process.wait()
     stdout_thread.join()
-    if return_code == 0:
+    if return_code == 0 or is_warning_return_code(return_code):
+        # Warnings (rc 1 / 100-127) still produced an archive: complete the
+        # job and let the server record completed_with_warnings from the
+        # return code, matching how server-side backups are classified.
         resolved_archive_name = (
             _parse_created_archive_name("".join(stdout_chunks)) or payload.archive_name
         )
@@ -377,7 +381,7 @@ def execute_backup_create_job(
         )
         return BackupExecutionResult(
             job_id=job_id,
-            status="completed",
+            status="completed" if return_code == 0 else "completed_with_warnings",
             return_code=return_code,
             message=f"borg create exited with code {return_code}",
         )

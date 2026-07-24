@@ -93,3 +93,15 @@ def detect_borg_binaries(
         )
 
     return binaries
+
+
+def is_warning_return_code(return_code) -> bool:
+    """Borg's warning exit codes: legacy rc 1, modern range 100-127.
+
+    Warnings mean the operation ran to completion but something was worth
+    telling the operator (a file changed mid-read, a path was missing). They
+    are not failures, and the server records them as completed_with_warnings.
+    """
+    return isinstance(return_code, int) and (
+        return_code == 1 or 100 <= return_code <= 127
+    )

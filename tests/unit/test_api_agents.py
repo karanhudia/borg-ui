@@ -11,6 +11,7 @@ from app.database.models import (
     AgentJob,
     AgentJobLog,
     AgentMachine,
+    BackupJob,
     LicensingState,
 )
 
@@ -755,6 +756,101 @@ class TestAgentJobTransport:
             headers=headers,
         )
         assert after_complete.status_code == 409
+
+    def test_warning_return_code_completes_with_warnings(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        """Borg warning exit codes (legacy 1, modern 100-127) are not failures:
+        the job and its linked backup job end completed_with_warnings, the
+        archive name is still captured, and the warning is surfaced as the
+        same i18n message server-side backups use."""
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        job = _create_agent_job(test_db, agent, status="running")
+        backup_job = BackupJob(repository="/repo", status="running")
+        test_db.add(backup_job)
+        test_db.commit()
+        job.backup_job_id = backup_job.id
+        test_db.commit()
+        headers = _agent_headers(registered["agent_token"])
+
+        complete = test_client.post(
+            f"/api/agents/jobs/{job.id}/complete",
+            json={
+                "result": {
+                    "archive_name": "warned-archive",
+                    "return_code": 1,
+                }
+            },
+            headers=headers,
+        )
+        assert complete.status_code == 200
+        assert complete.json()["status"] == "completed_with_warnings"
+
+        test_db.refresh(job)
+        test_db.refresh(backup_job)
+        assert job.status == "completed_with_warnings"
+        assert "jobCompletedWithWarning" in (job.error_message or "")
+        assert backup_job.status == "completed_with_warnings"
+        assert backup_job.archive_name == "warned-archive"
+        assert backup_job.progress == 100
+        assert "backupCompletedWithWarning" in (backup_job.error_message or "")
+
+        # A repeated report must stay idempotent for the new terminal status.
+        repeated = test_client.post(
+            f"/api/agents/jobs/{job.id}/complete",
+            json={"result": {"return_code": 1}},
+            headers=headers,
+        )
+        assert repeated.status_code == 200
+
+    def test_modern_warning_range_counts_as_warning(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        job = _create_agent_job(test_db, agent, status="running")
+        headers = _agent_headers(registered["agent_token"])
+
+        complete = test_client.post(
+            f"/api/agents/jobs/{job.id}/complete",
+            json={"result": {"return_code": 104}},
+            headers=headers,
+        )
+        assert complete.status_code == 200
+        test_db.refresh(job)
+        assert job.status == "completed_with_warnings"
+
+    def test_error_return_code_in_completion_report_fails_the_job(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        """A completion report carrying an explicit borg error code (2-99) is
+        a failure - the server classifies, not the transport."""
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        job = _create_agent_job(test_db, agent, status="running")
+        headers = _agent_headers(registered["agent_token"])
+
+        complete = test_client.post(
+            f"/api/agents/jobs/{job.id}/complete",
+            json={"result": {"return_code": 2}},
+            headers=headers,
+        )
+        assert complete.status_code == 200
+        assert complete.json()["status"] == "failed"
+
+        test_db.refresh(job)
+        assert job.status == "failed"
+        assert "exited with code 2" in (job.error_message or "")
 
     def test_repeated_complete_report_is_idempotent(
         self, test_client: TestClient, test_db, admin_headers
