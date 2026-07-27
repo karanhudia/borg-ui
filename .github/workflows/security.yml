@@ -41,8 +41,17 @@ jobs:
         run: |
           # Audit production dependencies only (omit dev) — devDependencies like eslint
           # and their transitive deps (brace-expansion, minimatch) never ship to production
-          # and are not part of the runtime attack surface.
-          npm audit --omit=dev --audit-level=moderate
+          # and are not part of the runtime attack surface. npm audit has no ignore
+          # flag, so a wrapper gates the JSON against a tracked allowlist of reviewed,
+          # non-applicable advisories (security/npm-audit-known-vulns.json).
+          #
+          # `|| true` keeps npm's exit code from failing the step (it exits non-zero
+          # whenever vulnerabilities exist, which is the case we want to filter, not
+          # abort on). That is only safe because the gate validates the report shape:
+          # an npm error payload, an empty file, or a report without a
+          # `vulnerabilities` object fails the gate instead of parsing as clean.
+          npm audit --omit=dev --json > npm-audit.json || true
+          python3 ../scripts/npm_audit_known_vulns.py gate --file npm-audit.json --level moderate
         continue-on-error: false
 
       - name: Generate npm audit report
