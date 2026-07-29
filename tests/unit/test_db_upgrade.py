@@ -8,13 +8,13 @@ setval, so the sequence step can only ever be proven against Postgres.
 import os
 
 import pytest
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 
 from app.database.database import Base
 from app.database.db_upgrade import (
     _TRANSFORM_SENTINELS,
-    _source_too_old,
+    _unresolved_transforms,
     alembic_init,
 )
 from app.database.models import BackupJob, BackupPlanRun, BackupPlanRunRepository
@@ -128,7 +128,11 @@ def test_a_column_no_model_has_is_dropped_and_reported(tmp_path):
     report = alembic_init(db)
 
     users = next(t for t in report.tables if t.name == "users")
-    assert users.dropped_columns == ["organization_name"]
+    # organization_name is in no model, so the copy leaves it behind and reports it.
+    # The catch-up ladder can add other columns the baseline dropped (profile_type,
+    # from migration 082), dropped and reported the same way -- so assert membership,
+    # not the exact set.
+    assert "organization_name" in users.dropped_columns
     assert users.rows == 1
     assert any("organization_name" in line for line in report.lines())
 
@@ -280,28 +284,133 @@ def _reset_postgres():
 
 
 @pytest.mark.unit
-def test_a_source_that_skipped_a_data_transform_is_refused(tmp_path):
-    """A database that never ran migration 034 still has
-    repositories.check_interval_days, which the baseline dropped. Copying it
-    forward by column name would lose the schedule, so the upgrade refuses rather
-    than migrate it silently."""
+def test_a_pre_transform_source_is_migrated_then_transferred(tmp_path):
+    """A database from before migration 034 still keeps its check schedule as
+    repositories.check_interval_days, a column the baseline dropped. The catch-up
+    runs the legacy ladder on a throwaway copy first, so 034 turns the interval
+    into a cron expression before a single row is copied -- the schedule is carried
+    forward, not lost, and no manual stop on an intermediate release is needed."""
     db = tmp_path / "borg.db"
-    _legacy_db(db, extra_columns=[("repositories", "check_interval_days", "INTEGER")])
+    _legacy_db(
+        db,
+        lambda s: s.add(Repository(id=1, name="r", path="/srv/r")),
+        extra_columns=[("repositories", "check_interval_days", "INTEGER")],
+    )
+    # a weekly schedule stored the old way -- an interval, not yet a cron expression
+    with create_engine(f"sqlite:///{db}").begin() as conn:
+        conn.execute(text("UPDATE repositories SET check_interval_days = 7 WHERE id = 1"))
 
-    with pytest.raises(RuntimeError, match="2.2.5"):
-        alembic_init(db)
+    report = alembic_init(db)
+
+    assert report.action == "transferred"
+    session = _open(db)
+    # migration 034's conversion: 7 days -> weekly on Sunday at 2 AM
+    assert session.get(Repository, 1).check_cron_expression == "0 2 * * 0"
+    session.close()
+
+    # the interval was transformed away by the ladder, not dropped by the copy: the
+    # copy never saw the column, so it is not among the report's dropped columns.
+    repos = next((t for t in report.tables if t.name == "repositories"), None)
+    assert "check_interval_days" not in (repos.dropped_columns if repos else [])
 
 
 @pytest.mark.unit
-def test_source_too_old_ignores_a_fully_migrated_source():
-    assert _source_too_old({"repositories": {"id", "check_cron_expression"}}) == []
-    assert _source_too_old({}) == []
+def test_a_database_too_old_for_the_catch_up_is_refused_and_left_untouched(
+    tmp_path, monkeypatch
+):
+    """The safety net. The ladder is lenient, so a sentinel can survive it -- a
+    database older than the oldest migration, or a migration that raised. When one
+    does, the upgrade refuses before copying anything: the source is untouched and
+    remains the database, with no half-built target and no rollback invented."""
+    db = tmp_path / "borg.db"
+    _legacy_db(
+        db,
+        lambda s: s.add(Repository(id=1, name="r", path="/srv/r")),
+        extra_columns=[("repositories", "check_interval_days", "INTEGER")],
+    )
+    # a ladder that could not perform the transform (here: 034 raised and was skipped)
+    monkeypatch.setattr(
+        "app.database.migrations.run_migrations",
+        lambda engine: ["034_convert_check_interval_to_cron"],
+    )
+
+    with pytest.raises(RuntimeError, match="older than the automatic upgrade"):
+        alembic_init(db)
+
+    assert db.exists()
+    assert not (tmp_path / "borg_bak.db").exists()
+    assert not (tmp_path / "borg_new.db").exists()
+    assert not (tmp_path / "borg_catchup.db").exists()
+    cols = {c["name"] for c in inspect(create_engine(f"sqlite:///{db}")).get_columns(
+        "repositories"
+    )}
+    assert "check_interval_days" in cols  # the source was not migrated in place
+
+
+def _boom(*_args, **_kwargs):
+    raise AssertionError("the legacy ladder must not run on an Alembic database")
+
+
+@pytest.mark.unit
+def test_an_alembic_database_at_head_is_left_to_alembic_not_the_ladder(
+    tmp_path, monkeypatch
+):
+    """Steady state: a restart of a migrated database does nothing, and never
+    reaches for the legacy ladder. A sentinel column added by hand would trip the
+    catch-up if it ran -- proof by silence that it does not."""
+    db = tmp_path / "borg.db"
+    alembic_init(db)  # now Alembic-managed and at head
+    with create_engine(f"sqlite:///{db}").begin() as conn:
+        conn.execute(text("ALTER TABLE repositories ADD COLUMN check_interval_days INT"))
+
+    import app.database.migrations as legacy
+
+    monkeypatch.setattr(legacy, "run_migrations", _boom)
+
+    assert alembic_init(db).action == "skipped"
+
+
+@pytest.mark.unit
+def test_an_alembic_database_behind_head_follows_alembic_not_the_ladder(
+    tmp_path, monkeypatch
+):
+    """The durable fork, for the day a second revision exists. A managed database
+    that is merely behind head is moved forward by Alembic -- not misread as legacy
+    and dragged through the ladder. Simulate a pending revision by reporting the
+    baseline as behind head."""
+    db = tmp_path / "borg.db"
+    alembic_init(db)  # Alembic-managed
+    with create_engine(f"sqlite:///{db}").begin() as conn:
+        conn.execute(text("ALTER TABLE repositories ADD COLUMN check_interval_days INT"))
+
+    import app.database.db_upgrade as dbu
+    import app.database.migrations as legacy
+
+    monkeypatch.setattr(legacy, "run_migrations", _boom)
+    monkeypatch.setattr(dbu, "_is_at_head", lambda engine: False)  # look one behind
+
+    report = alembic_init(db)
+
+    assert report.action == "migrated"
+    # the ladder never ran (it would have raised), and the source was upgraded in
+    # place -- no transfer, no rollback file, the hand-added column untouched.
+    assert not (tmp_path / "borg_bak.db").exists()
+    cols = {c["name"] for c in inspect(create_engine(f"sqlite:///{db}")).get_columns(
+        "repositories"
+    )}
+    assert "check_interval_days" in cols
+
+
+@pytest.mark.unit
+def test_unresolved_transforms_ignores_a_fully_migrated_source():
+    assert _unresolved_transforms({"repositories": {"id", "check_cron_expression"}}) == []
+    assert _unresolved_transforms({}) == []
 
 
 @pytest.mark.unit
 def test_sentinel_columns_are_absent_from_the_baseline():
     """A sentinel only holds while its column is genuinely gone from the baseline.
-    If a future baseline re-adds one, the copy would preserve it and the guard
+    If a future baseline re-adds one, the copy would preserve it and the safety net
     would wrongly refuse a healthy database -- catch that here."""
     baseline = {
         name: {c.name for c in table.columns}

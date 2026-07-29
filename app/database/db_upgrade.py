@@ -6,6 +6,13 @@ database is kept as the rollback. That the target may be Postgres instead of a
 new SQLite file is not a special case -- it is the same code path with a
 different URL, which is the whole reason Postgres costs so little here.
 
+A database from before Alembic is first walked up the frozen legacy migration
+ladder, on a throwaway copy, so the data transforms those migrations performed
+(an interval turned into a cron expression, a timeout split in two) are already
+done before the copy runs -- copying by column name cannot reproduce them. Any
+user can upgrade straight from an old release to the latest; no manual stop on an
+intermediate version is required.
+
 Nothing is destroyed. The source is renamed, never deleted, and every deviation
 between source and target is reported rather than silently absorbed.
 """
@@ -43,7 +50,7 @@ class TableReport:
 
 @dataclass
 class UpgradeReport:
-    action: str  # "fresh" | "transferred" | "skipped"
+    action: str  # "fresh" | "transferred" | "skipped" | "migrated"
     target_url: str
     source_kept_at: Path | None = None
     tables: list[TableReport] = field(default_factory=list)
@@ -148,7 +155,7 @@ def _upgrade_to_head(url: str, engine: Engine | None = None) -> None:
     schema build, which is 48 tables and 131 indexes and the slowest part of an
     upgrade over NFS.
     """
-    log.info("building the baseline schema (48 tables, 131 indexes)")
+    log.info("applying database migrations up to head")
     config = _alembic_config(url)
     if engine is None:
         command.upgrade(config, "head")
@@ -226,14 +233,17 @@ def _await_head(engine: Engine, attempts: int = 20, delay: float = 0.5) -> bool:
     return False
 
 
-# Columns whose data an old migration moved elsewhere and then dropped from the
-# schema. The upgrade copies rows by column name -- it does not re-run migrations
-# -- so if a source still HAS one of these, that transform never ran, the column
-# is gone from the baseline, and copying forward would silently drop the data it
-# holds. Refuse instead. (Columns a migration merely deprecated, or backfilled
-# without dropping, are not here: their data survives the copy; the report still
-# lists every dropped column for visibility. Add a row here when a future data
-# transform drops its source column.)
+# Columns whose data an old migration moved elsewhere and then dropped. A legacy
+# database is walked up the migration ladder (on a throwaway copy) before its rows
+# are copied, so by the time the copy runs each of these is already gone and its
+# data already lives in its new home. They stay listed here as the post-condition
+# of that catch-up: if one is STILL present after the ladder ran, its transform did
+# not take -- the ladder could not handle this database -- and copying forward would
+# silently drop the data the column holds. That is the one case the upgrade refuses.
+# (Columns a migration merely deprecated, or backfilled without dropping, are not
+# here: their data survives the copy regardless, and the report still lists every
+# dropped column for visibility. Add a row when a future data transform drops its
+# source column.)
 _TRANSFORM_SENTINELS: tuple[tuple[str, str, str], ...] = (
     (
         "repositories",
@@ -245,43 +255,107 @@ _TRANSFORM_SENTINELS: tuple[tuple[str, str, str], ...] = (
 )
 
 
-def _source_too_old(source_columns: dict[str, set[str]]) -> list[str]:
-    """Reasons the source predates a data transform the copy cannot reproduce.
+def _unresolved_transforms(columns: dict[str, set[str]]) -> list[str]:
+    """Data transforms the migration ladder should have completed but did not.
 
-    Pure over a {table: {columns}} view of the source, so it is exercised without
-    a database. Empty means the source is safe to copy structurally.
+    Pure over a {table: {columns}} view, so it is exercised without a database. A
+    sentinel column still present means its transform never ran; empty means every
+    transform this upgrade depends on is done and the rows are safe to copy.
     """
     reasons = []
     for table, column, why in _TRANSFORM_SENTINELS:
-        if column in source_columns.get(table, set()):
+        if column in columns.get(table, set()):
             reasons.append(f"{table}.{column}: {why}")
     return reasons
 
 
-def _reject_too_old_source(engine: Engine) -> None:
-    """Stop, loudly, before copying a database that skipped a data transform.
+def _snapshot_sqlite(source: Path, dest: Path) -> None:
+    """A transactionally consistent copy of a live SQLite database.
 
-    The last release with the full migration runner (2.2.5) applies those
-    transforms; upgrading through it first is the supported path. Refusing here
-    turns a silent, skipping-user data loss into an actionable error.
+    Not a file copy: a write-ahead log that has not been checkpointed would be left
+    behind, silently copying a stale image of a database still in use. The online
+    backup API reads a consistent snapshot and does not touch the source, which has
+    to stay exactly as it was to serve as the rollback.
+    """
+    import sqlite3
+
+    src = sqlite3.connect(str(source))
+    dst = sqlite3.connect(str(dest))
+    try:
+        with dst:
+            src.backup(dst)
+    finally:
+        dst.close()
+        src.close()
+
+
+def _remove_sqlite(path: Path) -> None:
+    """Delete a SQLite file and any write-ahead sidecars beside it."""
+    for p in (path, path.with_name(f"{path.name}-wal"), path.with_name(f"{path.name}-shm")):
+        if p.exists():
+            p.unlink()
+
+
+def _require_transforms_applied(engine: Engine, failed_migrations: list[str]) -> None:
+    """Refuse, loudly, if the catch-up left a data transform undone.
+
+    The ladder is lenient -- a migration that raised was skipped -- so a run that
+    finished is not proof the transforms took. This is that proof: it reads the
+    caught-up copy and, if a sentinel column survived, stops before anything is
+    copied. The source is untouched and remains the rollback.
     """
     inspector = inspect(engine)
     present = set(inspector.get_table_names())
-    source_columns = {
+    columns = {
         table: {col["name"] for col in inspector.get_columns(table)}
         for table, _, _ in _TRANSFORM_SENTINELS
         if table in present
     }
-    reasons = _source_too_old(source_columns)
+    reasons = _unresolved_transforms(columns)
     if reasons:
         detail = "\n  - ".join(reasons)
-        raise RuntimeError(
-            "This database predates a data transformation the one-time upgrade "
-            "cannot reproduce, so migrating it directly would lose data:\n"
-            f"  - {detail}\n"
-            "Upgrade to a 2.2.5 release first (it runs the full migration chain), "
-            "then run this upgrade."
+        note = (
+            f"\n  (legacy migrations that raised and were skipped: "
+            f"{', '.join(failed_migrations)})"
+            if failed_migrations
+            else ""
         )
+        raise RuntimeError(
+            "The built-in catch-up could not bring this database up to the current "
+            "schema; a data transformation did not complete, so copying it forward "
+            f"would lose data:\n  - {detail}{note}\n"
+            "This database is older than the automatic upgrade can handle."
+        )
+
+
+def _catch_up_source(source_path: Path, catch_up_path: Path) -> None:
+    """Walk a pre-Alembic database up the legacy ladder, on a throwaway copy.
+
+    Copying rows by column name cannot reproduce what the old migrations did to the
+    data -- an interval became a cron expression, a timeout was split in two. So the
+    ladder runs first, and on a copy, never the source: it rewrites tables, and the
+    source must stay intact to be the rollback. Afterwards the transforms the copy
+    step depends on must be done; if one is not, refuse before anything is copied.
+    """
+    from app.database.migrations import run_migrations
+
+    _remove_sqlite(catch_up_path)  # a leftover from a run that died mid-catch-up
+    _snapshot_sqlite(source_path, catch_up_path)
+
+    # A plain engine, matching how these migrations ran at startup: several rebuild
+    # a table with foreign keys switched off, and enforcing them here would break
+    # the ladder on exactly the databases it exists to rescue.
+    ladder_engine = create_engine(_sqlite_url(catch_up_path))
+    try:
+        failed = run_migrations(ladder_engine)
+        _require_transforms_applied(ladder_engine, failed)
+    except Exception:
+        # The copy is scaffolding; a refused upgrade must not leave it behind to be
+        # mistaken for unfinished work on the next boot. The source is untouched.
+        _remove_sqlite(catch_up_path)
+        raise
+    finally:
+        ladder_engine.dispose()
 
 
 def alembic_init(
@@ -305,9 +379,21 @@ def alembic_init(
     # migrated database on the next pod restart.
     final_url = postgres_conn if to_postgres else _sqlite_url(source_path)
 
-    if _already_upgraded(final_url, source_path, to_postgres):
-        log.info("database already at the current schema, nothing to do")
-        return UpgradeReport(action="skipped", target_url=_safe_url(final_url))
+    # The durable fork. A database that already speaks Alembic is only ever moved
+    # forward by Alembic -- never by the legacy ladder, however far behind it is.
+    # This is the steady state, and the one correct path the moment a second
+    # revision exists. Ask only where the target genuinely lives: for SQLite that is
+    # the source file, and only if it exists -- connecting would otherwise create an
+    # empty file and mask a fresh install.
+    if to_postgres or source_path.exists():
+        state = _alembic_state(final_url)
+        if state == "head":
+            log.info("database already at the current schema, nothing to do")
+            return UpgradeReport(action="skipped", target_url=_safe_url(final_url))
+        if state == "behind":
+            log.info("database is on Alembic but behind head; applying revisions")
+            _upgrade_to_head(final_url)
+            return UpgradeReport(action="migrated", target_url=_safe_url(final_url))
 
     if not source_path.exists():
         # Fresh install: no rows to move, so the baseline is built where the
@@ -335,50 +421,53 @@ def alembic_init(
         # temporary file by construction and never the rollback.
         target_path.unlink()
 
+    # Bring the source up the legacy ladder first, on a throwaway copy, so its data
+    # is in the shape the baseline expects before a single row is copied. Refuses
+    # here, source untouched, if a transform the copy depends on did not take.
+    catch_up_path = source_path.with_name(
+        f"{source_path.stem}_catchup{source_path.suffix}"
+    )
+    _catch_up_source(source_path, catch_up_path)
+    source_engine = create_engine(_sqlite_url(catch_up_path))
     target_engine = _engine(target_url, disposable=not to_postgres)
-    source_engine = _engine(_sqlite_url(source_path))
-    # Refuse a source too old to copy structurally, before building the target.
-    _reject_too_old_source(source_engine)
-    _upgrade_to_head(target_url, target_engine)
+    try:
+        _upgrade_to_head(target_url, target_engine)
 
-    report = _transfer(source_engine, target_engine)
-    report.target_url = _safe_url(target_url)
+        report = _transfer(source_engine, target_engine)
+        report.target_url = _safe_url(target_url)
 
-    if to_postgres:
-        report.sequences_reset = _reset_sequences(target_engine)
-
-    source_engine.dispose()
-    target_engine.dispose()
+        if to_postgres:
+            report.sequences_reset = _reset_sequences(target_engine)
+    finally:
+        source_engine.dispose()
+        target_engine.dispose()
+        # The rollback is the untouched source; the caught-up copy was scaffolding.
+        _remove_sqlite(catch_up_path)
 
     report.source_kept_at = _finalise(source_path, target_path, to_postgres)
     report.action = "transferred"
     return report
 
 
-def _already_upgraded(final_url: str, source_path: Path, to_postgres: bool) -> bool:
-    """Decide by state whether there is anything left to do.
+def _alembic_state(url: str) -> str | None:
+    """Where an existing database stands relative to Alembic.
 
-    Not by row count: a fresh install is legitimately empty, and treating empty
-    as "not done" makes it re-migrate itself on every restart.
+    ``None``     -- not Alembic-managed (no alembic_version): legacy, or empty.
+    ``"head"``   -- managed and at the current revision: nothing to do.
+    ``"behind"`` -- managed but older: apply the pending revisions, nothing else.
+
+    The distinction the legacy ladder hangs on. It runs only for ``None``; a
+    managed database, however far behind, is moved forward by Alembic alone. Once
+    on Alembic, whatever SQLite file happens to sit in the data dir is irrelevant
+    -- it may be a deliberately kept rollback -- because this asks the target that
+    DATABASE_URL points at, which after a migration into Postgres IS Postgres.
     """
-    if to_postgres:
-        # The target is Postgres and DATABASE_URL points at it, so it IS the
-        # database. If it is at the current schema, the work is done -- whatever
-        # SQLite file happens to sit in the data dir is irrelevant (it may be a
-        # deliberately kept rollback). Only an un-migrated Postgres means transfer.
-        engine = _engine(final_url)
-        try:
-            return _is_at_head(engine)
-        finally:
-            engine.dispose()
-
-    # SQLite: the upgraded database has taken the source's place, so the source
-    # path being stamped means the work is done -- rows or no rows.
-    if not source_path.exists():
-        return False
-    engine = _engine(final_url)
+    engine = _engine(url)
     try:
-        return _is_at_head(engine)
+        with engine.connect() as conn:
+            if not inspect(conn).has_table("alembic_version"):
+                return None
+        return "head" if _is_at_head(engine) else "behind"
     finally:
         engine.dispose()
 
