@@ -12,7 +12,11 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from app.database.database import Base
-from app.database.db_upgrade import alembic_init
+from app.database.db_upgrade import (
+    _TRANSFORM_SENTINELS,
+    _source_too_old,
+    alembic_init,
+)
 from app.database.models import BackupJob, BackupPlanRun, BackupPlanRunRepository
 from app.database.models import Repository, User
 
@@ -273,3 +277,37 @@ def _reset_postgres():
         conn.execute(text("DROP SCHEMA public CASCADE"))
         conn.execute(text("CREATE SCHEMA public"))
     engine.dispose()
+
+
+@pytest.mark.unit
+def test_a_source_that_skipped_a_data_transform_is_refused(tmp_path):
+    """A database that never ran migration 034 still has
+    repositories.check_interval_days, which the baseline dropped. Copying it
+    forward by column name would lose the schedule, so the upgrade refuses rather
+    than migrate it silently."""
+    db = tmp_path / "borg.db"
+    _legacy_db(db, extra_columns=[("repositories", "check_interval_days", "INTEGER")])
+
+    with pytest.raises(RuntimeError, match="2.2.5"):
+        alembic_init(db)
+
+
+@pytest.mark.unit
+def test_source_too_old_ignores_a_fully_migrated_source():
+    assert _source_too_old({"repositories": {"id", "check_cron_expression"}}) == []
+    assert _source_too_old({}) == []
+
+
+@pytest.mark.unit
+def test_sentinel_columns_are_absent_from_the_baseline():
+    """A sentinel only holds while its column is genuinely gone from the baseline.
+    If a future baseline re-adds one, the copy would preserve it and the guard
+    would wrongly refuse a healthy database -- catch that here."""
+    baseline = {
+        name: {c.name for c in table.columns}
+        for name, table in Base.metadata.tables.items()
+    }
+    for table, column, _ in _TRANSFORM_SENTINELS:
+        assert column not in baseline.get(table, set()), (
+            f"{table}.{column} is a sentinel but still exists in the baseline"
+        )

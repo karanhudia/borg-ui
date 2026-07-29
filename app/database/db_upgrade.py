@@ -226,6 +226,64 @@ def _await_head(engine: Engine, attempts: int = 20, delay: float = 0.5) -> bool:
     return False
 
 
+# Columns whose data an old migration moved elsewhere and then dropped from the
+# schema. The upgrade copies rows by column name -- it does not re-run migrations
+# -- so if a source still HAS one of these, that transform never ran, the column
+# is gone from the baseline, and copying forward would silently drop the data it
+# holds. Refuse instead. (Columns a migration merely deprecated, or backfilled
+# without dropping, are not here: their data survives the copy; the report still
+# lists every dropped column for visibility. Add a row here when a future data
+# transform drops its source column.)
+_TRANSFORM_SENTINELS: tuple[tuple[str, str, str], ...] = (
+    (
+        "repositories",
+        "check_interval_days",
+        "check schedules were stored as an interval and converted to a cron "
+        "expression (migration 034); the interval column is gone from the current "
+        "schema, so copying it forward would drop the schedule",
+    ),
+)
+
+
+def _source_too_old(source_columns: dict[str, set[str]]) -> list[str]:
+    """Reasons the source predates a data transform the copy cannot reproduce.
+
+    Pure over a {table: {columns}} view of the source, so it is exercised without
+    a database. Empty means the source is safe to copy structurally.
+    """
+    reasons = []
+    for table, column, why in _TRANSFORM_SENTINELS:
+        if column in source_columns.get(table, set()):
+            reasons.append(f"{table}.{column}: {why}")
+    return reasons
+
+
+def _reject_too_old_source(engine: Engine) -> None:
+    """Stop, loudly, before copying a database that skipped a data transform.
+
+    The last release with the full migration runner (2.2.5) applies those
+    transforms; upgrading through it first is the supported path. Refusing here
+    turns a silent, skipping-user data loss into an actionable error.
+    """
+    inspector = inspect(engine)
+    present = set(inspector.get_table_names())
+    source_columns = {
+        table: {col["name"] for col in inspector.get_columns(table)}
+        for table, _, _ in _TRANSFORM_SENTINELS
+        if table in present
+    }
+    reasons = _source_too_old(source_columns)
+    if reasons:
+        detail = "\n  - ".join(reasons)
+        raise RuntimeError(
+            "This database predates a data transformation the one-time upgrade "
+            "cannot reproduce, so migrating it directly would lose data:\n"
+            f"  - {detail}\n"
+            "Upgrade to a 2.2.5 release first (it runs the full migration chain), "
+            "then run this upgrade."
+        )
+
+
 def alembic_init(
     sqlite_db: str | Path,
     postgres_conn: str | None = None,
@@ -279,6 +337,8 @@ def alembic_init(
 
     target_engine = _engine(target_url, disposable=not to_postgres)
     source_engine = _engine(_sqlite_url(source_path))
+    # Refuse a source too old to copy structurally, before building the target.
+    _reject_too_old_source(source_engine)
     _upgrade_to_head(target_url, target_engine)
 
     report = _transfer(source_engine, target_engine)
