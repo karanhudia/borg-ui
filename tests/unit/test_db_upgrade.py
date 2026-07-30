@@ -347,6 +347,54 @@ def test_a_database_too_old_for_the_catch_up_is_refused_and_left_untouched(
     assert "check_interval_days" in cols  # the source was not migrated in place
 
 
+@pytest.mark.unit
+def test_the_whole_legacy_ladder_runs_clean_on_a_representative_schema(tmp_path):
+    """The automated twin of running the upgrade against a real database.
+
+    Every one of the 135 frozen migrations either applies or defensively no-ops
+    against a populated, current-shaped schema, and none raises. A future migration
+    that is not idempotent on an already-migrated database would surface here as a
+    non-empty failure list -- rather than as a silent skip the safety net then has
+    to catch in production. This is the coverage a faithful "database at version N"
+    cannot give us: the old startup built its schema with create_all first, so a
+    historical schema cannot be reconstructed from the current models alone."""
+    from app.database.migrations import run_migrations
+
+    db = tmp_path / "borg.db"
+    _legacy_db(db, lambda s: s.add(Repository(id=1, name="r", path="/srv/r")))
+
+    failed = run_migrations(create_engine(f"sqlite:///{db}"))
+
+    assert failed == [], f"legacy migrations raised: {failed}"
+
+
+@pytest.mark.unit
+def test_a_pre_028_source_is_split_and_keeps_its_original(tmp_path):
+    """The second data-moving transform (028). An old database carries a single
+    repositories.hook_timeout; the ladder backfills the pre_/post_hook_timeout
+    split from it. Unlike 034 the baseline kept hook_timeout, so its value survives
+    the copy regardless -- which is why it is not a sentinel -- but the split still
+    has to be reproduced, and this proves it end to end."""
+    db = tmp_path / "borg.db"
+    _legacy_db(db, lambda s: s.add(Repository(id=1, name="r", path="/srv/r")))
+    with create_engine(f"sqlite:///{db}").begin() as conn:
+        # a source from before the split: the two halves do not exist yet
+        conn.execute(text("ALTER TABLE repositories DROP COLUMN pre_hook_timeout"))
+        conn.execute(text("ALTER TABLE repositories DROP COLUMN post_hook_timeout"))
+        conn.execute(text("UPDATE repositories SET hook_timeout = 120 WHERE id = 1"))
+
+    assert alembic_init(db).action == "transferred"
+
+    with create_engine(f"sqlite:///{db}").connect() as conn:
+        row = conn.execute(
+            text(
+                "SELECT hook_timeout, pre_hook_timeout, post_hook_timeout "
+                "FROM repositories WHERE id = 1"
+            )
+        ).one()
+    assert row == (120, 120, 120)
+
+
 def _boom(*_args, **_kwargs):
     raise AssertionError("the legacy ladder must not run on an Alembic database")
 
