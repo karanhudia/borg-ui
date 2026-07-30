@@ -298,7 +298,9 @@ def test_a_pre_transform_source_is_migrated_then_transferred(tmp_path):
     )
     # a weekly schedule stored the old way -- an interval, not yet a cron expression
     with create_engine(f"sqlite:///{db}").begin() as conn:
-        conn.execute(text("UPDATE repositories SET check_interval_days = 7 WHERE id = 1"))
+        conn.execute(
+            text("UPDATE repositories SET check_interval_days = 7 WHERE id = 1")
+        )
 
     report = alembic_init(db)
 
@@ -341,9 +343,10 @@ def test_a_database_too_old_for_the_catch_up_is_refused_and_left_untouched(
     assert not (tmp_path / "borg_bak.db").exists()
     assert not (tmp_path / "borg_new.db").exists()
     assert not (tmp_path / "borg_catchup.db").exists()
-    cols = {c["name"] for c in inspect(create_engine(f"sqlite:///{db}")).get_columns(
-        "repositories"
-    )}
+    cols = {
+        c["name"]
+        for c in inspect(create_engine(f"sqlite:///{db}")).get_columns("repositories")
+    }
     assert "check_interval_days" in cols  # the source was not migrated in place
 
 
@@ -409,7 +412,9 @@ def test_an_alembic_database_at_head_is_left_to_alembic_not_the_ladder(
     db = tmp_path / "borg.db"
     alembic_init(db)  # now Alembic-managed and at head
     with create_engine(f"sqlite:///{db}").begin() as conn:
-        conn.execute(text("ALTER TABLE repositories ADD COLUMN check_interval_days INT"))
+        conn.execute(
+            text("ALTER TABLE repositories ADD COLUMN check_interval_days INT")
+        )
 
     import app.database.migrations as legacy
 
@@ -429,7 +434,9 @@ def test_an_alembic_database_behind_head_follows_alembic_not_the_ladder(
     db = tmp_path / "borg.db"
     alembic_init(db)  # Alembic-managed
     with create_engine(f"sqlite:///{db}").begin() as conn:
-        conn.execute(text("ALTER TABLE repositories ADD COLUMN check_interval_days INT"))
+        conn.execute(
+            text("ALTER TABLE repositories ADD COLUMN check_interval_days INT")
+        )
 
     import app.database.db_upgrade as dbu
     import app.database.migrations as legacy
@@ -443,15 +450,18 @@ def test_an_alembic_database_behind_head_follows_alembic_not_the_ladder(
     # the ladder never ran (it would have raised), and the source was upgraded in
     # place -- no transfer, no rollback file, the hand-added column untouched.
     assert not (tmp_path / "borg_bak.db").exists()
-    cols = {c["name"] for c in inspect(create_engine(f"sqlite:///{db}")).get_columns(
-        "repositories"
-    )}
+    cols = {
+        c["name"]
+        for c in inspect(create_engine(f"sqlite:///{db}")).get_columns("repositories")
+    }
     assert "check_interval_days" in cols
 
 
 @pytest.mark.unit
 def test_unresolved_transforms_ignores_a_fully_migrated_source():
-    assert _unresolved_transforms({"repositories": {"id", "check_cron_expression"}}) == []
+    assert (
+        _unresolved_transforms({"repositories": {"id", "check_cron_expression"}}) == []
+    )
     assert _unresolved_transforms({}) == []
 
 

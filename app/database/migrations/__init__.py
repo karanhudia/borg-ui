@@ -48,7 +48,9 @@ def run_migrations(engine: Engine) -> list[str]:
             try:
                 module = importlib.import_module(f"app.database.migrations.{name}")
                 if not hasattr(module, "upgrade"):
-                    logger.warning(f"migration {name} has no upgrade function, skipping")
+                    logger.warning(
+                        f"migration {name} has no upgrade function, skipping"
+                    )
                     continue
                 module.upgrade(connection)
                 connection.commit()

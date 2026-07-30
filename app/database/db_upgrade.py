@@ -291,7 +291,11 @@ def _snapshot_sqlite(source: Path, dest: Path) -> None:
 
 def _remove_sqlite(path: Path) -> None:
     """Delete a SQLite file and any write-ahead sidecars beside it."""
-    for p in (path, path.with_name(f"{path.name}-wal"), path.with_name(f"{path.name}-shm")):
+    for p in (
+        path,
+        path.with_name(f"{path.name}-wal"),
+        path.with_name(f"{path.name}-shm"),
+    ):
         if p.exists():
             p.unlink()
 
