@@ -125,7 +125,7 @@ jobs:
           exit-code: '0'  # Report but don't fail (we have known Python 3.9 limitations)
 
       - name: Upload Trivy results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@v4.37.3
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'
@@ -201,7 +201,7 @@ jobs:
           exit-code: '0'  # Report but don't fail (we have known Python 3.9 limitations)
 
       - name: Upload Trivy Docker results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@v4.37.3
         if: always()
         with:
           sarif_file: 'trivy-docker-results.sarif'
