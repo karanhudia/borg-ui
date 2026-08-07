@@ -13,7 +13,8 @@ done before the copy runs -- copying by column name cannot reproduce them. Any
 user can upgrade straight from an old release to the latest; no manual stop on an
 intermediate version is required.
 
-Nothing is destroyed. The source is renamed, never deleted, and every deviation
+Nothing is destroyed. The source is kept as the rollback -- moved aside for a
+SQLite upgrade, left exactly where it is for a Postgres one -- and every deviation
 between source and target is reported rather than silently absorbed.
 """
 
@@ -675,12 +676,24 @@ def upgrade_from_settings() -> UpgradeReport:
 
 
 def _finalise(source_path: Path, target_path: Path | None, to_postgres: bool) -> Path:
-    """Move the source aside, and in the SQLite case put the new file in its place.
+    """Settle where the databases live once the transfer has succeeded.
 
-    The source becomes the backup in both cases, so "the old file is still there
-    and the target is empty" always means "not upgraded yet" -- one rule instead
-    of two, and no way to re-import a stale snapshot over a live database.
+    SQLite, in place: the new file takes the source's name and the source becomes
+    the `_bak` rollback -- so "the old file is still there and the target is empty"
+    always means "not upgraded yet", one rule with no way to re-import a stale
+    snapshot over a live database.
+
+    Postgres: the target is Postgres and `DATABASE_URL` points at it, so Postgres
+    alone decides whether the work is done -- the SQLite file is never consulted
+    again (see `_alembic_state`). It is therefore left exactly where it is, as the
+    rollback: reverting is removing `DATABASE_URL`, with nothing to rename back.
+    Leaving it also means a `_bak` an earlier in-place SQLite upgrade put beside it
+    is not in the way -- the source keeps its own name, so there is nothing to
+    collide with.
     """
+    if to_postgres:
+        return source_path
+
     backup = source_path.with_name(
         f"{source_path.stem}{BACKUP_SUFFIX}{source_path.suffix}"
     )
@@ -689,8 +702,7 @@ def _finalise(source_path: Path, target_path: Path | None, to_postgres: bool) ->
             f"{backup} already exists -- refusing to overwrite the rollback"
         )
     source_path.rename(backup)
-    if not to_postgres:
-        target_path.rename(source_path)
+    target_path.rename(source_path)
     return backup
 
 

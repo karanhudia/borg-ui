@@ -15,6 +15,7 @@ from app.database.database import Base
 from app.database.db_upgrade import (
     _TRANSFORM_SENTINELS,
     _catch_up_source,
+    _finalise,
     _unresolved_transforms,
     alembic_init,
 )
@@ -212,6 +213,39 @@ def test_an_existing_rollback_is_never_overwritten(tmp_path):
 
     assert (tmp_path / "borg_bak.db").read_text() == "an older rollback nobody may lose"
     assert db.exists()
+
+
+@pytest.mark.unit
+def test_a_postgres_migration_leaves_the_sqlite_in_place(tmp_path):
+    """Postgres is the live database after the transfer, so the SQLite file is not
+    moved aside -- it stays under its own name as the rollback, and reverting is
+    just removing DATABASE_URL. Exercised on `_finalise` directly, where the source
+    is settled; the full Postgres transfer path needs a running Postgres."""
+    db = tmp_path / "borg.db"
+    db.write_text("the live sqlite database")
+
+    kept = _finalise(db, None, to_postgres=True)
+
+    assert kept == db
+    assert db.exists() and db.read_text() == "the live sqlite database"
+    assert not (tmp_path / "borg_bak.db").exists()  # not renamed, no rollback minted
+
+
+@pytest.mark.unit
+def test_a_postgres_migration_does_not_collide_with_an_earlier_rollback(tmp_path):
+    """A database taken SQLite -> Alembic in place, then later to Postgres, has a
+    `_bak` beside it from the first step. Because the Postgres path leaves the
+    source under its own name, that older rollback is never in the way."""
+    db = tmp_path / "borg.db"
+    db.write_text("the live sqlite database")
+    (tmp_path / "borg_bak.db").write_text("the rollback from the in-place upgrade")
+
+    kept = _finalise(db, None, to_postgres=True)  # must not raise
+
+    assert kept == db
+    assert (
+        tmp_path / "borg_bak.db"
+    ).read_text() == "the rollback from the in-place upgrade"
 
 
 @pytest.mark.unit
