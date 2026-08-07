@@ -29,6 +29,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+        with:
+          # This write-enabled job needs no persisted git credentials: the PR is
+          # pushed by create-pull-request with its own token, so the checkout's
+          # credentials are not left behind in the environment (artipacked).
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -36,7 +41,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install packaging
+        run: pip install "packaging==24.2"
 
       - name: Adopt newer Borg releases
         id: refresh

@@ -1,3 +1,4 @@
+import asyncio
 import os
 import re
 from pathlib import Path
@@ -530,7 +531,9 @@ install_rclone() {
   local version
 
   if ! command -v rclone >/dev/null 2>&1; then
-    apt-get install -y rclone
+    # Non-fatal under `set -e`: a failed install must fall through to the warning
+    # below, not abort the whole installer and leave Borg 2 without an agent.
+    apt-get install -y rclone || true
   fi
 
   if ! command -v rclone >/dev/null 2>&1; then
@@ -752,7 +755,11 @@ def render_installer_script() -> str:
 
 @router.get("/agent/install.sh")
 async def get_agent_installer() -> Response:
-    return Response(content=render_installer_script(), media_type="text/x-shellscript")
+    # render_installer_script runs `borg --version` (a blocking subprocess) and
+    # touches the filesystem, so it is offloaded to a worker thread rather than run
+    # on the event loop of this public endpoint.
+    script = await asyncio.to_thread(render_installer_script)
+    return Response(content=script, media_type="text/x-shellscript")
 
 
 @router.get("/agent/package/{filename}")

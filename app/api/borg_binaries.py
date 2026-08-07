@@ -13,12 +13,12 @@ The manifest is checked in rather than fetched at runtime so that the
 installer can verify what it downloaded against a value the server did not
 learn from the same place it got the file.
 
-To adopt a new Borg version, change the version in ``Dockerfile.runtime-base``
+To adopt a new Borg version, change the version in ``docker/runtime-base.env``
 and run::
 
     python scripts/refresh_borg_binary_manifest.py
 
-which reads that version and rewrites this manifest.
+which reads that file and rewrites this manifest.
 ``tests/unit/test_borg_binaries.py`` fails if the two ever disagree.
 """
 

@@ -96,7 +96,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y borgbackup
+          sudo apt-get install -y borgbackup shellcheck
 
       - name: Verify Borg installation
         run: |
@@ -239,7 +239,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y borgbackup
+          sudo apt-get install -y borgbackup shellcheck
 
       - name: Verify Borg installation
         run: |

@@ -47,7 +47,7 @@ pure Python, so there is nothing to compile for it on any platform, and its
 dependency closure is six wheels totalling under 1 MB, each available in
 universal (`py3-none-any`) form:
 
-```
+```text
 requests  urllib3  idna  certifi  charset_normalizer  websocket-client
 ```
 
