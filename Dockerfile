@@ -1,6 +1,9 @@
 # syntax=docker/dockerfile:1
 
-ARG BASE_IMAGE=docker.io/ainullcode/borg-ui-runtime-base:runtime-borg1-1.4.4-borg2-2.0.0b21-r5
+ARG BASE_IMAGE=docker.io/ainullcode/borg-ui-runtime-base:runtime-borg1-1.4.5-borg2-2.0.0b21-r1
+# The Python the builder stages use — kept in step with runtime-base.env by a
+# guard test; the site-packages COPY paths derive from it.
+ARG PYTHON_VERSION=3.12
 
 # --- frontend (Vite): built in-image, once on the builder arch for multi-arch ---
 # Building the bundle here (instead of copying one prepared out-of-band in CI)
@@ -15,8 +18,21 @@ RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
+# --- managed agent package: built in-image, served to enrolling nodes ---
+# A node installs the agent belonging to the server it enrolls against instead
+# of whatever the upstream default branch holds, which matters whenever a
+# deployment runs ahead of it. The agent is pure Python, so one py3-none-any
+# wheel covers every target platform.
+FROM python:${PYTHON_VERSION}-slim AS agent-builder
+WORKDIR /agent-src
+COPY pyproject.toml ./
+COPY agent/ ./agent/
+# hadolint ignore=DL3013
+RUN pip install --no-cache-dir build && \
+    python -m build --wheel --outdir /agent-dist
+
 # Build stage for backend
-FROM python:3.10-slim AS backend-builder
+FROM python:${PYTHON_VERSION}-slim AS backend-builder
 WORKDIR /app
 
 # Install build dependencies for psutil and other packages.
@@ -48,11 +64,12 @@ FROM ${BASE_IMAGE} AS development
 # Build arguments
 ARG APP_VERSION=dev
 ENV APP_VERSION=${APP_VERSION}
+ARG PYTHON_VERSION
 
 WORKDIR /app
 
 # Copy Python dependencies
-COPY --from=backend-builder /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
+COPY --from=backend-builder /usr/local/lib/python${PYTHON_VERSION}/site-packages /usr/local/lib/python${PYTHON_VERSION}/site-packages
 COPY --from=backend-builder /usr/local/bin /usr/local/bin
 
 # Copy application code. Frontend assets are not required in dev because
@@ -91,6 +108,7 @@ FROM ${BASE_IMAGE} AS production
 # Build arguments
 ARG APP_VERSION=dev
 ENV APP_VERSION=${APP_VERSION}
+ARG PYTHON_VERSION
 
 # Docker image metadata
 LABEL org.opencontainers.image.title="Borg Web UI"
@@ -106,12 +124,15 @@ LABEL com.borg-ui.icon.color="#00dd00"
 WORKDIR /app
 
 # Copy Python dependencies
-COPY --from=backend-builder /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
+COPY --from=backend-builder /usr/local/lib/python${PYTHON_VERSION}/site-packages /usr/local/lib/python${PYTHON_VERSION}/site-packages
 COPY --from=backend-builder /usr/local/bin /usr/local/bin
 
 # Frontend assets built hermetically in the frontend-builder stage above (once
 # on the builder arch), so `docker build` alone is fully reproducible.
 COPY --from=frontend-builder /frontend/build ./app/static/
+
+# Agent wheel served at /agent/package/<filename> to enrolling nodes.
+COPY --from=agent-builder /agent-dist/ /opt/borg-ui/agent-dist/
 
 # Copy application code
 COPY app/ ./app/

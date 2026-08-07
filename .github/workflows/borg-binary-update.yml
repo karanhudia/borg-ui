@@ -1,0 +1,81 @@
+name: Borg binary update
+
+# Watches borgbackup for releases newer than the ones this repo pins, and opens
+# a PR that bumps Dockerfile.runtime-base and regenerates app/api/borg_binaries.json.
+#
+# The PR is expected to fail CI: the version is also written into the tests on
+# purpose (the string tests are the checklist for adopting a version), and the
+# runtime-base image tag carries a manual -rN revision. Finishing those and going
+# green is the human half of the adoption; this job does the mechanical half so it
+# never silently falls behind the server it enrols against.
+
+on:
+  schedule:
+    - cron: "0 4 * * 1" # Mondays, 04:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: borg-binary-update
+  cancel-in-progress: false
+
+jobs:
+  adopt:
+    name: Adopt newer Borg releases
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install packaging
+
+      - name: Adopt newer Borg releases
+        id: refresh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/refresh_borg_binary_manifest.py --latest
+
+      - name: Open or update the adoption PR
+        if: steps.refresh.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          # A PR opened with the default GITHUB_TOKEN does not trigger other
+          # workflows, so the tests that make this PR usefully red never run. A PAT
+          # (or GitHub App token) in BORG_BINARY_BOT_TOKEN restores that; without
+          # one the PR is still opened, but someone has to kick its checks off.
+          token: ${{ secrets.BORG_BINARY_BOT_TOKEN || github.token }}
+          branch: automation/borg-binaries
+          title: ${{ steps.refresh.outputs.title }}
+          commit-message: ${{ steps.refresh.outputs.title }}
+          body: |
+            ${{ steps.refresh.outputs.summary }}.
+
+            ${{ steps.refresh.outputs.warnings_md }}
+
+            Opened automatically because borgbackup published a release newer than
+            the one this repo pins. `docker/runtime-base.env` (versions + revision
+            reset to 1), the Dockerfile ARG that mirrors it, and the binary manifest
+            are already updated here; the tests derive their expectations from those,
+            so they stay green.
+
+            **This PR is expected to be red on the base-image check.** The remaining,
+            human half of adopting a version:
+
+            - [ ] Rebuild and push the runtime-base image for the new Borg version,
+              then point `borg-ui/Dockerfile`'s `BASE_IMAGE` at its tag — until then
+              the base-image guard is red, because the computed tag names an image
+              that does not exist yet.
+            - [ ] Skim the borgbackup changelog for anything the installer or the
+              runtime base has to account for.
+
+            Re-running the job updates this same PR rather than opening another.
+          labels: dependencies

@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 
@@ -93,15 +94,62 @@ def test_runtime_base_ci_smoke_checks_btrfs_tooling():
     assert "btrfs --version" in content
 
 
-def test_app_dockerfile_uses_rclone_runtime_base_tag():
+def _runtime_base_env(repo_root):
+    text = (repo_root / "docker" / "runtime-base.env").read_text()
+    return dict(re.findall(r"^(\w+)=(\S+)", text, re.M))
+
+
+def _expected_runtime_tag(env):
+    return (
+        f"runtime-borg1-{env['BORG1_VERSION']}"
+        f"-borg2-{env['BORG2_VERSION']}"
+        f"-r{env['RUNTIME_BASE_REVISION']}"
+    )
+
+
+def test_app_dockerfile_base_image_uses_the_computed_runtime_tag():
+    """The app image's BASE_IMAGE default must name the runtime-base tag computed
+    from the versions file. A forgotten re-tag would pull a base that was never
+    built."""
     repo_root = Path(__file__).resolve().parents[2]
     dockerfile = (repo_root / "Dockerfile").read_text()
-    runtime_env = (repo_root / "docker" / "runtime-base.env").read_text()
+    expected_tag = _expected_runtime_tag(_runtime_base_env(repo_root))
 
-    expected_tag = "runtime-borg1-1.4.4-borg2-2.0.0b21-r5"
-
-    assert f"BORG_RUNTIME_BASE_TAG={expected_tag}" in runtime_env
     assert (
         f"ARG BASE_IMAGE=docker.io/ainullcode/borg-ui-runtime-base:{expected_tag}"
         in dockerfile
-    )
+    ), f"BASE_IMAGE default does not name {expected_tag}"
+
+
+def test_runtime_base_env_agrees_with_the_dockerfile_args():
+    """The tag is computed from runtime-base.env, so it names the Borg versions by
+    construction; what still has to hold is that the env file and the ARGs the
+    runtime base is built with state the same versions."""
+    repo_root = Path(__file__).resolve().parents[2]
+    dockerfile = (repo_root / "Dockerfile.runtime-base").read_text()
+    env = _runtime_base_env(repo_root)
+
+    for major in ("1", "2"):
+        arg = re.search(rf"^ARG BORG{major}_VERSION=(\S+)", dockerfile, re.M).group(1)
+        assert env[f"BORG{major}_VERSION"] == arg, (
+            f"runtime-base.env pins Borg {major} {env[f'BORG{major}_VERSION']}, "
+            f"Dockerfile.runtime-base builds {arg}"
+        )
+
+
+def test_python_version_is_single_sourced():
+    """runtime-base.env states the Python version once; both Dockerfiles take it
+    as ARG PYTHON_VERSION and interpolate it into their FROM lines and COPY paths,
+    so the 3.10-vs-3.12 split that made this image uncopyable cannot creep back."""
+    repo_root = Path(__file__).resolve().parents[2]
+    truth = _runtime_base_env(repo_root)["PYTHON_VERSION"]
+
+    for name in ("Dockerfile", "Dockerfile.runtime-base"):
+        text = (repo_root / name).read_text()
+        assert not re.search(r"python:3\.\d+|/python3\.\d+/", text), (
+            f"{name} hardcodes a Python version — use ${{PYTHON_VERSION}}"
+        )
+        arg = re.search(r"^ARG PYTHON_VERSION=(\S+)", text, re.M)
+        assert arg and arg.group(1) == truth, (
+            f"{name} ARG PYTHON_VERSION default != runtime-base.env ({truth})"
+        )

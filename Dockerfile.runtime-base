@@ -10,10 +10,14 @@
 # stage ships just the shared libraries Borg links against plus the operational
 # tooling, so the toolchain never reaches the published image.
 
-# --- builder: compile the Borg wheels (needs the toolchain + -dev headers) ----
-FROM python:3.10-slim AS builder
+# The Python the image is built on — kept in step with runtime-base.env by a
+# guard test. The FROM lines and the site-packages COPY paths derive from it.
+ARG PYTHON_VERSION=3.12
 
-ARG BORG1_VERSION=1.4.4
+# --- builder: compile the Borg wheels (needs the toolchain + -dev headers) ----
+FROM python:${PYTHON_VERSION}-slim AS builder
+
+ARG BORG1_VERSION=1.4.5
 ARG BORG2_VERSION=2.0.0b21
 ARG BORGSTORE_VERSION=0.4.1
 
@@ -46,14 +50,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # that no scheme is missing. NB: posixfs is NOT a pip extra — it is always
 # available — so it must not appear in the brackets.
 # hadolint ignore=DL3013,DL3059
-RUN pip install --no-cache-dir pyfuse3 "borgbackup[fuse]==${BORG1_VERSION}" && \
+RUN pip install --no-cache-dir pyfuse3 "borgbackup==${BORG1_VERSION}" && \
     python3 -m venv /opt/borg2-venv && \
-    /opt/borg2-venv/bin/pip install --no-cache-dir pyfuse3 "borgbackup[fuse]==${BORG2_VERSION}" "borgstore[rclone,sftp,rest,s3]==${BORGSTORE_VERSION}"
+    /opt/borg2-venv/bin/pip install --no-cache-dir pyfuse3 "borgbackup==${BORG2_VERSION}" "borgstore[rclone,sftp,rest,s3]==${BORGSTORE_VERSION}"
 
 # --- runtime-base: slim image, no compilers — runtime libs + operational tools -
-FROM python:3.10-slim AS runtime-base
+FROM python:${PYTHON_VERSION}-slim AS runtime-base
 
-ARG BORG1_VERSION=1.4.4
+ARG PYTHON_VERSION
+ARG BORG1_VERSION=1.4.5
 ARG BORG2_VERSION=2.0.0b21
 ENV BORG1_VERSION=${BORG1_VERSION}
 ENV BORG2_VERSION=${BORG2_VERSION}
@@ -98,7 +103,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Borg was compiled in the builder stage — copy the artifacts, not the toolchain.
-COPY --from=builder /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
+COPY --from=builder /usr/local/lib/python${PYTHON_VERSION}/site-packages /usr/local/lib/python${PYTHON_VERSION}/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 COPY --from=builder /opt/borg2-venv /opt/borg2-venv
 

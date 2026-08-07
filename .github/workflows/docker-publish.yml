@@ -180,7 +180,7 @@ jobs:
           set -a
           source docker/runtime-base.env
           set +a
-          TAG_VALUE="${BORG_RUNTIME_BASE_TAG}"
+          TAG_VALUE="$(bash docker/runtime-base-tag.sh)"
           if [ -n "${{ inputs.base_tag_override }}" ]; then
             TAG_VALUE="${{ inputs.base_tag_override }}"
           fi
@@ -311,7 +311,7 @@ jobs:
           set -a
           source docker/runtime-base.env
           set +a
-          TAG_VALUE="${BORG_RUNTIME_BASE_TAG}"
+          TAG_VALUE="$(bash docker/runtime-base-tag.sh)"
           if [ -n "${{ inputs.base_tag_override }}" ]; then
             TAG_VALUE="${{ inputs.base_tag_override }}"
           fi

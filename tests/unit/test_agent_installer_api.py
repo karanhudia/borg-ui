@@ -1,6 +1,12 @@
+import shutil
 import subprocess
+from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
+
+from app.api import agent_installer
+from app.api.borg_binaries import BORG_BINARIES, CURRENT_VERSIONS, binary_table
 
 
 def test_agent_installer_script_is_public_and_token_free(test_client: TestClient):
@@ -23,8 +29,10 @@ def test_agent_installer_script_supports_borg_install_modes(test_client: TestCli
     assert "--borg-version both" in response.text
     assert "--skip-borg-install" in response.text
     assert 'BORG_VERSION="1"' in response.text
+    # The distribution fallback still verifies by name; the pinned-binary path
+    # verifies whichever name it just installed, for both majors.
     assert 'verify_borg_major "borg" "1"' in response.text
-    assert 'verify_borg_major "borg2" "2"' in response.text
+    assert 'verify_borg_major "${path_name}" "${major}"' in response.text
 
 
 def test_agent_installer_script_supports_tokenless_reinstall_mode(
@@ -151,26 +159,101 @@ def test_agent_installer_omits_capabilities_for_a_root_service(
     assert 'if [[ "${SERVICE_USER}" != "root" ]]; then' in response.text
 
 
-def test_agent_installer_script_allows_borg2_prereleases(test_client: TestClient):
+def test_agent_installer_script_installs_borg_without_a_build_toolchain(
+    test_client: TestClient,
+):
+    """Borg publishes no wheels, so a pip install would compile on every node."""
     response = test_client.get("/agent/install.sh")
 
-    assert (
-        '"${BORG2_VENV}/bin/pip" install --pre "borgbackup>=2.0.0b1,<3"'
-        in response.text
-    )
-    assert '"borgbackup>=2,<3"' not in response.text
+    assert "sha256sum -c -" in response.text
+    assert 'install -o root -g root -m 0755 "${tmp}" "${dest}"' in response.text
+    assert "borgbackup>=2.0.0b1,<3" not in response.text
+    assert "build-essential" not in response.text
+    assert "libxxhash-dev" not in response.text
 
 
-def test_agent_installer_script_reuses_existing_borg2_venv(
+def test_agent_installer_script_refuses_an_unverified_binary(
     test_client: TestClient,
 ):
     response = test_client.get("/agent/install.sh")
 
-    assert 'if [[ -x "${BORG2_VENV}/bin/borg" ]]; then' in response.text
-    assert "Existing Borg 2 virtualenv detected; linking without reinstalling." in (
+    assert "Checksum mismatch for Borg ${version}; refusing to install it." in (
         response.text
     )
-    assert 'ln -s "${BORG2_VENV}/bin/borg" "${BORG2_LINK}"' in response.text
+
+
+def test_agent_installer_script_names_the_fallback_for_unsupported_platforms(
+    test_client: TestClient,
+):
+    """32-bit ARM and musl have no published binary; say so instead of failing
+    on a download that was never going to work."""
+    response = test_client.get("/agent/install.sh")
+
+    assert "Borg publishes no static binary for 32-bit ARM or musl systems." in (
+        response.text
+    )
+    assert "Re-run with --borg-source distro" in response.text
+
+
+def test_agent_installer_installs_rclone_with_borg2(test_client: TestClient):
+    """No Borg release bundles rclone: it is a separate Go program, and without
+    it an entire class of Borg 2 repositories fails at use time."""
+    response = test_client.get("/agent/install.sh")
+
+    install_borg2 = response.text.split("install_borg2() {", 1)[1].split("\n}", 1)[0]
+    assert "install_rclone" in install_borg2
+    # borgstore refuses anything older, and Debian 11 ships 1.53.
+    assert '"1.57.0"' in response.text
+    assert "is older than the 1.57.0 borgstore requires" in response.text
+
+
+def test_agent_installer_forwarders_do_not_escalate(
+    test_client: TestClient,
+):
+    """A forwarder in /usr/local/bin is executable by every user on the machine,
+    so it must not carry elevation."""
+    response = test_client.get("/agent/install.sh")
+
+    forwarder = response.text.split("write_forwarder() {", 1)[1].split("\n}", 1)[0]
+    assert "sudo" not in forwarder
+    assert 'exec ${target} "\\$@"' in forwarder
+
+
+def test_agent_installer_installs_the_agent_from_the_enrolling_server(
+    test_client: TestClient,
+):
+    response = test_client.get("/agent/install.sh")
+
+    assert 'AGENT_SOURCE="server"' in response.text
+    assert (
+        'AGENT_PACKAGE_SOURCE="${SERVER%/}/agent/package/${PINNED_AGENT_PACKAGE}"'
+        in (response.text)
+    )
+    # Reinstall takes no --server, so the URL comes from the enrolled config.
+    assert "s/^server_url[[:space:]]*=" in response.text
+
+
+def test_agent_package_failure_stops_the_install(test_client: TestClient):
+    """An `exit` inside a command substitution only leaves the subshell, so the
+    source must be resolved into a variable or a failure would reach pip as an
+    empty argument."""
+    response = test_client.get("/agent/install.sh")
+
+    assert "$(agent_package_source)" not in response.text
+    assert "resolve_agent_package_source\n" in response.text
+    assert '"${AGENT_PACKAGE_SOURCE}"' in response.text
+
+
+def test_agent_installer_distinguishes_a_server_without_a_package(
+    test_client: TestClient,
+):
+    """The script may well have been served by a Borg UI instance whose image
+    simply carries no agent wheel; saying otherwise sends people hunting in the
+    wrong place."""
+    response = test_client.get("/agent/install.sh")
+
+    assert "This Borg UI server offers no agent package to install." in response.text
+    assert "No server URL is known" in response.text
 
 
 def test_agent_installer_script_keeps_agent_ref_separate_from_os_release(
@@ -185,6 +268,97 @@ def test_agent_installer_script_keeps_agent_ref_separate_from_os_release(
     assert "@${VERSION}" not in response.text
 
 
+def test_agent_installer_pins_the_versions_the_server_runs(monkeypatch):
+    """The node must get the Borg the server runs, not what a distribution
+    happens to ship. The server reads its own versions rather than keeping a
+    second constant that can drift from the image."""
+    borg1, borg2 = CURRENT_VERSIONS["1"], CURRENT_VERSIONS["2"]
+    monkeypatch.setattr(
+        agent_installer,
+        "_installed_borg_version",
+        lambda factory, label: {"borg1": borg1, "borg2": borg2}[label],
+    )
+    monkeypatch.setattr(
+        agent_installer,
+        "agent_package_path",
+        lambda: Path("/opt/borg-ui/agent-dist/borg_ui_agent-0.1.2-py3-none-any.whl"),
+    )
+
+    script = agent_installer.render_installer_script()
+
+    assert f'PINNED_BORG1_VERSION="{borg1}"' in script
+    assert f'PINNED_BORG2_VERSION="{borg2}"' in script
+    assert 'PINNED_AGENT_PACKAGE="borg_ui_agent-0.1.2-py3-none-any.whl"' in script
+    # The binary rows are exactly what the manifest renders for these versions —
+    # derived, not hardcoded, so a version bump does not turn this into a chore.
+    assert binary_table({"1": borg1, "2": borg2}) in script
+    assert any(b.arch == "x86_64" for b in BORG_BINARIES[borg1]), (
+        f"no x86_64 binary recorded for Borg {borg1}"
+    )
+
+
+def test_agent_installer_survives_a_server_without_borg(monkeypatch):
+    """An unknown version contributes no rows, and the script then says so
+    instead of installing some other version."""
+    monkeypatch.setattr(
+        agent_installer, "_installed_borg_version", lambda factory, label: None
+    )
+    monkeypatch.setattr(agent_installer, "agent_package_path", lambda: None)
+
+    script = agent_installer.render_installer_script()
+
+    assert 'PINNED_BORG1_VERSION=""' in script
+    assert 'PINNED_BORG_BINARIES=""' in script
+    assert "did not report a Borg ${major} version" in script
+
+
+def test_agent_installer_rewrites_only_the_pinning_block(monkeypatch):
+    """Everything outside the delimited block is served verbatim, so the script
+    in the repository stays the script that runs."""
+    monkeypatch.setattr(
+        agent_installer,
+        "_installed_borg_version",
+        lambda factory, label: CURRENT_VERSIONS["1"],
+    )
+    monkeypatch.setattr(agent_installer, "agent_package_path", lambda: None)
+
+    script = agent_installer.render_installer_script()
+    raw = agent_installer.INSTALLER_SCRIPT
+
+    assert script.count(agent_installer.PINNING_BEGIN) == 1
+    assert script.count(agent_installer.PINNING_END) == 1
+    head, _, tail = script.partition(agent_installer.PINNING_END)
+    raw_tail = raw.partition(agent_installer.PINNING_END)[2]
+    assert tail == raw_tail
+    assert head.startswith("#!/usr/bin/env bash\nset -euo pipefail\n")
+
+
+def test_agent_package_is_served_under_its_wheel_filename(
+    test_client: TestClient, tmp_path, monkeypatch
+):
+    """pip needs a parseable wheel filename in the URL, so the package is served
+    at its own name rather than from a generic path."""
+    wheel = tmp_path / "borg_ui_agent-0.1.2-py3-none-any.whl"
+    wheel.write_bytes(b"not really a wheel")
+    monkeypatch.setenv("AGENT_PACKAGE_DIR", str(tmp_path))
+
+    response = test_client.get(f"/agent/package/{wheel.name}")
+    assert response.status_code == 200
+    assert response.content == b"not really a wheel"
+
+    assert test_client.get("/agent/package/other-0.1.0.whl").status_code == 404
+
+
+def test_agent_package_missing_returns_not_found(
+    test_client: TestClient, tmp_path, monkeypatch
+):
+    monkeypatch.setenv("AGENT_PACKAGE_DIR", str(tmp_path))
+
+    response = test_client.get("/agent/package/borg_ui_agent-0.1.2-py3-none-any.whl")
+
+    assert response.status_code == 404
+
+
 def test_agent_installer_script_is_valid_bash(test_client: TestClient):
     response = test_client.get("/agent/install.sh")
 
@@ -197,3 +371,20 @@ def test_agent_installer_script_is_valid_bash(test_client: TestClient):
     )
 
     assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.skipif(
+    shutil.which("shellcheck") is None, reason="shellcheck is not installed"
+)
+def test_agent_installer_script_passes_shellcheck(test_client: TestClient):
+    response = test_client.get("/agent/install.sh")
+
+    result = subprocess.run(
+        ["shellcheck", "--shell=bash", "--severity=warning", "-"],
+        input=response.text,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout
