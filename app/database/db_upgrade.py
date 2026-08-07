@@ -340,6 +340,13 @@ def _catch_up_source(source_path: Path, catch_up_path: Path) -> None:
     ladder runs first, and on a copy, never the source: it rewrites tables, and the
     source must stay intact to be the rollback. Afterwards the transforms the copy
     step depends on must be done; if one is not, refuse before anything is copied.
+
+    A source that already speaks Alembic is past the ladder: it is skipped. This
+    only happens when an Alembic SQLite database is moved into a fresh Postgres --
+    the target has no schema, so it is not the durable-fork "already upgraded" case
+    -- and running the legacy ladder against an Alembic database is the very thing
+    the target side forbids. The snapshot is still copied from; it just is not
+    walked up a ladder it has already climbed.
     """
     from app.database.migrations import run_migrations
 
@@ -351,6 +358,9 @@ def _catch_up_source(source_path: Path, catch_up_path: Path) -> None:
     # the ladder on exactly the databases it exists to rescue.
     ladder_engine = create_engine(_sqlite_url(catch_up_path))
     try:
+        with ladder_engine.connect() as conn:
+            if inspect(conn).has_table("alembic_version"):
+                return  # already on Alembic; the snapshot is copied from as-is
         failed = run_migrations(ladder_engine)
         _require_transforms_applied(ladder_engine, failed)
     except Exception:

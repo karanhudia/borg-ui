@@ -14,6 +14,7 @@ from sqlalchemy.orm import sessionmaker
 from app.database.database import Base
 from app.database.db_upgrade import (
     _TRANSFORM_SENTINELS,
+    _catch_up_source,
     _unresolved_transforms,
     alembic_init,
 )
@@ -455,6 +456,57 @@ def test_an_alembic_database_behind_head_follows_alembic_not_the_ladder(
         for c in inspect(create_engine(f"sqlite:///{db}")).get_columns("repositories")
     }
     assert "check_interval_days" in cols
+
+
+@pytest.mark.unit
+def test_catch_up_skips_the_ladder_on_an_already_alembic_source(tmp_path, monkeypatch):
+    """The source side of the same rule: the legacy ladder must never run against a
+    database that already has alembic_version. It is only reached when an Alembic
+    SQLite database is moved into a fresh Postgres (the target is empty, so the
+    durable fork does not short-circuit); the ladder would be a no-op there, but it
+    must not run at all. Exercise the function directly -- the SQLite-to-SQLite path
+    never reaches it, because an Alembic source is caught by the fork first."""
+    db = tmp_path / "borg.db"
+    alembic_init(db)  # a fresh Alembic-managed database, stamped at head
+
+    import app.database.migrations as legacy
+
+    monkeypatch.setattr(legacy, "run_migrations", _boom)  # blow up if the ladder runs
+
+    catch_up = tmp_path / "borg_catchup.db"
+    _catch_up_source(db, catch_up)  # must not raise
+
+    # the snapshot is kept for the transfer to copy from, and it carries the stamp
+    assert catch_up.exists()
+    with create_engine(f"sqlite:///{catch_up}").connect() as conn:
+        assert inspect(conn).has_table("alembic_version")
+
+
+@pytest.mark.unit
+@requires_postgres
+def test_an_alembic_sqlite_moves_to_postgres_without_running_the_ladder(
+    tmp_path, monkeypatch
+):
+    """End to end: a SQLite database already on Alembic, then pointed at Postgres,
+    copies its rows across without walking the legacy ladder again."""
+    db = tmp_path / "borg.db"
+    alembic_init(db)  # fresh Alembic SQLite, at head, no rollback file to collide
+    session = sessionmaker(bind=create_engine(f"sqlite:///{db}"))()
+    session.add(Repository(name="r", path="/srv/r"))
+    session.commit()
+    session.close()
+    _reset_postgres()
+
+    import app.database.migrations as legacy
+
+    monkeypatch.setattr(legacy, "run_migrations", _boom)  # the ladder must not run
+
+    report = alembic_init(db, POSTGRES_URL)
+
+    assert report.action == "transferred"
+    session = sessionmaker(bind=create_engine(POSTGRES_URL))()
+    assert session.query(Repository).count() == 1
+    session.close()
 
 
 @pytest.mark.unit
