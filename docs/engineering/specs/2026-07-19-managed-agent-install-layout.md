@@ -87,10 +87,11 @@ route rather than fail on a download that was never going to work.
 
 The `server` source is only as current as the checksum manifest it verifies
 against, and the version parity it promises only holds while that manifest tracks
-what the runtime base builds. The version is stated once, in the Dockerfile ARG,
-and `refresh_borg_binary_manifest.py` derives the manifest from it; a `--latest`
-mode asks GitHub which releases exist and, when a newer one publishes the Linux
-binaries this installer needs, bumps the ARG and regenerates the manifest. A
+what the runtime base builds. The Borg version is stated once, in
+`docker/runtime-base.env`, and `refresh_borg_binary_manifest.py` derives the
+manifest from it; a `--latest` mode asks GitHub which releases exist and, when a
+newer one publishes the Linux binaries this installer needs, bumps the version in
+that file and regenerates the manifest. A
 weekly workflow runs that mode and opens a PR, so the pin drifts behind
 borgbackup by at most a release rather than by however long nobody happened to
 look.
@@ -105,13 +106,16 @@ warning in its body. It flags rather than blocks: the affected machines fall bac
 to `--borg-source distro`, so the regression is a decision for the reviewer, not
 a reason to withhold the release.
 
-That PR is deliberately incomplete. The version is also written into the string
-tests on purpose — they are the checklist for adopting a version — and the
-runtime-base image tag carries a manual revision, so the PR fails CI until a
-human reconciles both. The workflow does the mechanical half and makes the
-remaining half visible; it does not merge. This keeps the repository's pin
-current, which is distinct from the non-goal of upgrading Borg on an
-already-installed node.
+That PR is deliberately incomplete. `--latest` resets the runtime-base revision,
+but the image still has to be rebuilt and the guard tests have to agree — the
+computed tag, the Dockerfiles' `ARG` defaults, and the versions file all derive
+from one another — so the PR fails CI until a human closes that half. The workflow
+does the mechanical half and makes the remaining half visible; it does not merge.
+This keeps the repository's pin current, which is distinct from the non-goal of
+upgrading Borg on an already-installed node.
+
+How the version becomes that one fact — the file, the computed tag, and the guards
+that hold them together — is `2026-07-27-version-single-source-of-truth.md`.
 
 ## Platform support
 
@@ -122,6 +126,14 @@ abstracting those two, not of new architecture — which is what makes problem 4
 tractable rather than open-ended.
 
 ## Provisioning
+
+**This section and the next are target picture, and the maintainer's to take or
+leave.** They describe what the installer *could* grow into once the agent and
+Borg come from the right places; neither is part of this change, which stops at
+enrolment. Each is an option to adopt or decline — including how far provisioning
+should go by default, and whether the agent should hold a scoped credential of its
+own so the installer never carries an administrator token — not a commitment this
+change makes.
 
 An installed agent is not yet a working one. Before it backs anything up it
 needs, on the server side: an enrolment, a registered repository, and a backup
@@ -151,6 +163,8 @@ too.
 
 ## Interactive mode
 
+Target picture as well, and equally the maintainer's call (see Provisioning).
+
 The values this needs — server URL, agent name, repository URL and passphrase,
 whether to register a plan — are exactly what an interactive installer can ask
 for, which is friendlier than a command line of eight flags. Non-interactive use
@@ -159,18 +173,6 @@ and supplying the flag suppresses the prompt.
 
 The passphrase is entered once and handed to the server, which is where
 repository credentials already live. It is not written to the node.
-
-## Open decisions
-
-- **Who creates the Borg repository?** Registering it with Borg UI is not the
-  same as it existing. Creating it during installation needs the passphrase and
-  a reachable target at that moment, and moves a class of failure into the
-  installer; requiring it to exist beforehand puts a manual step in front of
-  installation.
-- **How far does provisioning go by default?** Enrolment alone is defensible, and
-  so is the full chain whenever an administrator token is supplied.
-- **Whether the agent should carry a scoped credential of its own**, so that the
-  installer never holds an administrator token, even transiently.
 
 ## Non-goals
 
