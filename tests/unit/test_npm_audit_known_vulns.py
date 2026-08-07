@@ -101,6 +101,11 @@ def test_the_dompurify_advisory_stays_non_applicable():
 
     repo = Path(__file__).resolve().parents[2]
     frontend_src = repo / "frontend" / "src"
+    assert frontend_src.is_dir(), (
+        f"{frontend_src} is missing: without it the scan finds nothing and the guard "
+        "would pass vacuously, hiding the very DOMPurify usage it exists to catch. "
+        "Run from a full checkout."
+    )
     offenders = [
         str(path.relative_to(repo))
         for path in frontend_src.rglob("*")
