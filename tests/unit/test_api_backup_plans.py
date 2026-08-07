@@ -5032,3 +5032,61 @@ class TestBackupPlanRoutes:
 
         test_db.expire_all()
         assert test_db.get(BackupPlanRun, run.id).status == "cancelled"
+
+
+class TestUniquePlanName:
+    """Plan names are unique case-sensitively (`name = Column(String, unique=True)`),
+    and `_unique_backup_plan_name` exists to produce a name that will not collide.
+
+    The prefix query uses `ilike` so both dialects behave alike — SQLite's LIKE
+    is already case-insensitive, Postgres' is not. Because the comparison that
+    follows is exact, widening the query cannot change the answer; these tests
+    pin that, so the difference stays a dialect detail rather than a behaviour.
+    """
+
+    @staticmethod
+    def _plan(test_db, name: str) -> None:
+        test_db.add(
+            BackupPlan(
+                name=name,
+                enabled=True,
+                source_type="local",
+                source_directories=json.dumps(["/srv/project"]),
+                created_at=datetime.utcnow(),
+            )
+        )
+        test_db.commit()
+
+    def test_a_name_differing_only_in_case_is_free(self, test_db):
+        from app.api.backup_plans import _unique_backup_plan_name
+
+        self._plan(test_db, "Nightly")
+
+        # Not "nightly (2)": the unique constraint is case-sensitive, so this
+        # name is available and suffixing it would be wrong.
+        assert _unique_backup_plan_name(test_db, "nightly") == "nightly"
+
+    def test_an_exact_collision_is_suffixed(self, test_db):
+        from app.api.backup_plans import _unique_backup_plan_name
+
+        self._plan(test_db, "Nightly")
+
+        assert _unique_backup_plan_name(test_db, "Nightly") == "Nightly (2)"
+
+    def test_suffixes_skip_over_what_already_exists(self, test_db):
+        from app.api.backup_plans import _unique_backup_plan_name
+
+        self._plan(test_db, "Nightly")
+        self._plan(test_db, "Nightly (2)")
+
+        assert _unique_backup_plan_name(test_db, "Nightly") == "Nightly (3)"
+
+    def test_a_case_variant_does_not_consume_a_suffix(self, test_db):
+        """The widened query returns "NIGHTLY (2)", but it does not collide with
+        "Nightly (2)" under a case-sensitive constraint, so the suffix stays free."""
+        from app.api.backup_plans import _unique_backup_plan_name
+
+        self._plan(test_db, "Nightly")
+        self._plan(test_db, "NIGHTLY (2)")
+
+        assert _unique_backup_plan_name(test_db, "Nightly") == "Nightly (2)"

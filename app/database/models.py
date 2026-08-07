@@ -8,9 +8,11 @@ from sqlalchemy import (
     ForeignKey,
     Float,
     BigInteger,
+    Index,
     Table,
     UniqueConstraint,
     JSON,
+    func,
 )
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
@@ -122,13 +124,19 @@ class AgentEnrollmentToken(Base):
 
 class AgentJob(Base):
     __tablename__ = "agent_jobs"
+    __table_args__ = (
+        Index("ix_agent_jobs_agent_status", "agent_machine_id", "status"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     agent_machine_id = Column(
         Integer, ForeignKey("agent_machines.id", ondelete="CASCADE"), nullable=False
     )
     backup_job_id = Column(
-        Integer, ForeignKey("backup_jobs.id", ondelete="SET NULL"), nullable=True
+        Integer,
+        ForeignKey("backup_jobs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     job_type = Column(String, nullable=False)
     status = Column(String, default="queued", index=True, nullable=False)
@@ -159,7 +167,10 @@ class AgentJobLog(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     agent_job_id = Column(
-        Integer, ForeignKey("agent_jobs.id", ondelete="CASCADE"), nullable=False
+        Integer,
+        ForeignKey("agent_jobs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     sequence = Column(Integer, nullable=False)
     stream = Column(String, default="stdout", nullable=False)
@@ -208,6 +219,7 @@ class UserRepositoryPermission(Base):
 
 class Repository(Base):
     __tablename__ = "repositories"
+    __table_args__ = (Index("idx_repositories_source_ssh", "source_ssh_connection_id"),)
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True)
@@ -252,13 +264,13 @@ class Repository(Base):
         String, nullable=True
     )  # Path to borg binary on remote server (e.g., /usr/local/bin/borg)
     execution_target = Column(
-        String, default="local", nullable=False
+        String, default="local", nullable=False, index=True
     )  # Where borg create executes: local, ssh, or agent
     executor_type = Column(
-        String, default="server", nullable=False
+        String, default="server", nullable=False, index=True
     )  # First-class executor: server or agent
     agent_machine_id = Column(
-        Integer, ForeignKey("agent_machines.id"), nullable=True
+        Integer, ForeignKey("agent_machines.id"), nullable=True, index=True
     )  # Agent machine that executes backups for this repository
 
     # New fields for authentication status
@@ -542,7 +554,7 @@ class RepositoryStorage(Base):
     sync_cron_expression = Column(String, nullable=True)
     sync_timezone = Column(String, default="UTC", nullable=False)
     last_scheduled_sync_at = Column(DateTime, nullable=True)
-    next_scheduled_sync_at = Column(DateTime, nullable=True)
+    next_scheduled_sync_at = Column(DateTime, nullable=True, index=True)
     last_synced_at = Column(DateTime, nullable=True)
     last_hydrated_at = Column(DateTime, nullable=True)
     last_remote_check_at = Column(DateTime, nullable=True)
@@ -597,6 +609,7 @@ class Configuration(Base):
 
 class BackupJob(Base):
     __tablename__ = "backup_jobs"
+    __table_args__ = (Index("idx_backup_jobs_source_ssh", "source_ssh_connection_id"),)
 
     id = Column(Integer, primary_key=True, index=True)
     repository = Column(String)  # Repository path/name
@@ -657,14 +670,20 @@ class BackupJob(Base):
     # Retry lineage metadata. Original attempts default to attempt 1; retry
     # attempts point at the original and immediate source rows.
     retry_original_job_id = Column(
-        Integer, ForeignKey("backup_jobs.id", ondelete="SET NULL"), nullable=True
+        Integer,
+        ForeignKey("backup_jobs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     retry_source_job_id = Column(
-        Integer, ForeignKey("backup_jobs.id", ondelete="SET NULL"), nullable=True
+        Integer,
+        ForeignKey("backup_jobs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     retry_attempt = Column(Integer, default=1, nullable=False)
     retry_requested_by_user_id = Column(
-        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
     retry_requested_at = Column(DateTime, nullable=True)
 
@@ -679,18 +698,27 @@ class BackupJobRetryLineage(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     original_job_id = Column(
-        Integer, ForeignKey("backup_jobs.id", ondelete="SET NULL"), nullable=True
+        Integer,
+        ForeignKey("backup_jobs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     retry_source_job_id = Column(
-        Integer, ForeignKey("backup_jobs.id", ondelete="SET NULL"), nullable=True
+        Integer,
+        ForeignKey("backup_jobs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     attempt_number = Column(Integer, nullable=False)
     requested_by_user_id = Column(
-        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
     requested_at = Column(DateTime, default=utc_now, nullable=False)
     created_job_id = Column(
-        Integer, ForeignKey("backup_jobs.id", ondelete="SET NULL"), nullable=True
+        Integer,
+        ForeignKey("backup_jobs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     request_snapshot = Column(JSON, nullable=False)
 
@@ -744,6 +772,9 @@ class RestoreJob(Base):
 
 class ScheduledJob(Base):
     __tablename__ = "scheduled_jobs"
+    __table_args__ = (
+        Index("idx_scheduled_jobs_source_ssh", "source_ssh_connection_id"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, nullable=False, index=True)
@@ -772,10 +803,10 @@ class ScheduledJob(Base):
         Boolean, default=False, nullable=False
     )  # Whether to run per-repository pre/post scripts
     pre_backup_script_id = Column(
-        Integer, ForeignKey("scripts.id"), nullable=True
+        Integer, ForeignKey("scripts.id", ondelete="SET NULL"), nullable=True
     )  # Schedule-level pre-backup script (runs once)
     post_backup_script_id = Column(
-        Integer, ForeignKey("scripts.id"), nullable=True
+        Integer, ForeignKey("scripts.id", ondelete="SET NULL"), nullable=True
     )  # Schedule-level post-backup script (runs once)
     pre_backup_script_parameters = Column(
         JSON, nullable=True
@@ -823,7 +854,7 @@ class ScheduledJobRepository(Base):
         ),
     )
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     scheduled_job_id = Column(
         Integer,
         ForeignKey("scheduled_jobs.id", ondelete="CASCADE"),
@@ -840,7 +871,9 @@ class ScheduledJobRepository(Base):
         Integer, nullable=False
     )  # Order in which repositories should be backed up
 
-    created_at = Column(DateTime, default=utc_now)
+    # func.now() so the default renders per dialect; a literal CURRENT_TIMESTAMP
+    # would be accepted by SQLite and rejected by Postgres, and vice versa.
+    created_at = Column(DateTime, default=utc_now, server_default=func.now())
 
     def __repr__(self):
         return f"<ScheduledJobRepository(schedule_id={self.scheduled_job_id}, repo_id={self.repository_id}, order={self.execution_order})>"
@@ -1022,14 +1055,20 @@ class BackupPlanRun(Base):
     created_at = Column(DateTime, default=utc_now, nullable=False)
 
     retry_original_run_id = Column(
-        Integer, ForeignKey("backup_plan_runs.id", ondelete="SET NULL"), nullable=True
+        Integer,
+        ForeignKey("backup_plan_runs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     retry_source_run_id = Column(
-        Integer, ForeignKey("backup_plan_runs.id", ondelete="SET NULL"), nullable=True
+        Integer,
+        ForeignKey("backup_plan_runs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     retry_attempt = Column(Integer, default=1, nullable=False)
     retry_requested_by_user_id = Column(
-        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
     retry_requested_at = Column(DateTime, nullable=True)
 
@@ -1052,18 +1091,27 @@ class BackupPlanRunRetryLineage(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     original_run_id = Column(
-        Integer, ForeignKey("backup_plan_runs.id", ondelete="SET NULL"), nullable=True
+        Integer,
+        ForeignKey("backup_plan_runs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     retry_source_run_id = Column(
-        Integer, ForeignKey("backup_plan_runs.id", ondelete="SET NULL"), nullable=True
+        Integer,
+        ForeignKey("backup_plan_runs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     attempt_number = Column(Integer, nullable=False)
     requested_by_user_id = Column(
-        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
     requested_at = Column(DateTime, default=utc_now, nullable=False)
     created_run_id = Column(
-        Integer, ForeignKey("backup_plan_runs.id", ondelete="SET NULL"), nullable=True
+        Integer,
+        ForeignKey("backup_plan_runs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     request_snapshot = Column(JSON, nullable=False)
 
@@ -1136,6 +1184,10 @@ class CheckJob(Base):
 
 class RestoreCheckJob(Base):
     __tablename__ = "restore_check_jobs"
+    __table_args__ = (
+        Index("idx_restore_check_jobs_repository_id", "repository_id"),
+        Index("idx_restore_check_jobs_status", "status"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     repository_id = Column(Integer, ForeignKey("repositories.id"), nullable=False)
@@ -1267,6 +1319,10 @@ class DeleteArchiveJob(Base):
 
 class RepositoryWipeJob(Base):
     __tablename__ = "repository_wipe_jobs"
+    __table_args__ = (
+        Index("idx_repository_wipe_jobs_repository_id", "repository_id"),
+        Index("idx_repository_wipe_jobs_status", "status"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     repository_id = Column(
@@ -1940,3 +1996,15 @@ class ScriptExecution(Base):
 
     def __repr__(self):
         return f"<ScriptExecution(id={self.id}, script_id={self.script_id}, status='{self.status}')>"
+
+
+# SQLite recycles the id of a deleted row unless the primary key is declared
+# AUTOINCREMENT; Postgres never does. Apply it to every table that can carry it,
+# so ids mean the same thing on both dialects. Derived from the primary key
+# rather than declared per table: a new model then cannot forget it, and
+# AUTOINCREMENT is invisible to reflection, so a table that forgets it drifts
+# silently and no tooling can see it afterwards.
+for _table in Base.metadata.tables.values():
+    _pk_columns = list(_table.primary_key.columns)
+    if len(_pk_columns) == 1 and isinstance(_pk_columns[0].type, Integer):
+        _table.dialect_options["sqlite"]["autoincrement"] = True

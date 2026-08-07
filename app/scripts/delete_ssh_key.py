@@ -7,69 +7,75 @@ Usage:
   python3 delete_ssh_key.py --id <key_id>
   python3 delete_ssh_key.py --name <key_name>
   python3 delete_ssh_key.py --system  # Delete the system key
+
+Operates on whatever database the application uses (DATABASE_URL — SQLite or
+Postgres), not on a hard-coded SQLite path.
 """
 
-import sys
-import sqlite3
 import argparse
+import sys
 from pathlib import Path
+
+# Run as a file (`python3 delete_ssh_key.py`), so the repository root is not on
+# sys.path by itself.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from sqlalchemy import create_engine, text  # noqa: E402
+
+from app.config import settings  # noqa: E402
+from app.database.url_utils import sqlite_database_missing  # noqa: E402
 
 
 def delete_ssh_key(key_id=None, key_name=None, is_system=False, force=False):
     """Delete SSH key from database and filesystem"""
     try:
-        # Connect to database
-        db_path = Path("/data/borg.db")
-        if not db_path.exists():
-            print("✗ Error: Database not found at /data/borg.db", file=sys.stderr)
+        # Connecting would create a missing SQLite file; fail instead. A server
+        # database is always "present".
+        if sqlite_database_missing(settings.database_url):
+            print(
+                f"✗ Error: Database not found ({settings.database_url})",
+                file=sys.stderr,
+            )
             return 1
 
-        conn = sqlite3.connect(str(db_path))
-        cursor = conn.cursor()
+        engine = create_engine(settings.database_url)
 
         # Find the key to delete
+        select = (
+            "SELECT id, name, key_type, is_system_key FROM ssh_keys WHERE {}".format
+        )
         if is_system:
-            cursor.execute(
-                "SELECT id, name, key_type, is_system_key FROM ssh_keys WHERE is_system_key = 1"
-            )
+            statement, params = select("is_system_key = :yes"), {"yes": True}
         elif key_id:
-            cursor.execute(
-                "SELECT id, name, key_type, is_system_key FROM ssh_keys WHERE id = ?",
-                (key_id,),
-            )
+            statement, params = select("id = :key_id"), {"key_id": key_id}
         elif key_name:
-            cursor.execute(
-                "SELECT id, name, key_type, is_system_key FROM ssh_keys WHERE name = ?",
-                (key_name,),
-            )
+            statement, params = select("name = :key_name"), {"key_name": key_name}
         else:
             print("✗ Error: Must specify --id, --name, or --system", file=sys.stderr)
-            conn.close()
             return 1
 
-        row = cursor.fetchone()
-        if not row:
-            if is_system:
-                print("ℹ️  No system SSH key found")
-            elif key_id:
-                print(f"ℹ️  No SSH key found with ID {key_id}")
-            elif key_name:
-                print(f"ℹ️  No SSH key found with name '{key_name}'")
-            conn.close()
-            return 0
+        with engine.connect() as conn:
+            row = conn.execute(text(statement), params).fetchone()
+            if not row:
+                if is_system:
+                    print("ℹ️  No system SSH key found")
+                elif key_id:
+                    print(f"ℹ️  No SSH key found with ID {key_id}")
+                elif key_name:
+                    print(f"ℹ️  No SSH key found with name '{key_name}'")
+                return 0
 
-        found_id, found_name, key_type, is_system_key = row
+            found_id, found_name, key_type, is_system_key = row
 
-        # Check for active connections and repositories
-        cursor.execute(
-            "SELECT COUNT(*) FROM ssh_connections WHERE ssh_key_id = ?", (found_id,)
-        )
-        connection_count = cursor.fetchone()[0]
-
-        cursor.execute(
-            "SELECT COUNT(*) FROM repositories WHERE ssh_key_id = ?", (found_id,)
-        )
-        repository_count = cursor.fetchone()[0]
+            # Check for active connections and repositories
+            connection_count = conn.execute(
+                text("SELECT COUNT(*) FROM ssh_connections WHERE ssh_key_id = :id"),
+                {"id": found_id},
+            ).scalar()
+            repository_count = conn.execute(
+                text("SELECT COUNT(*) FROM repositories WHERE ssh_key_id = :id"),
+                {"id": found_id},
+            ).scalar()
 
         # Show warning and ask for confirmation
         print(f"\n⚠️  WARNING: You are about to delete the following SSH key:")
@@ -104,33 +110,47 @@ def delete_ssh_key(key_id=None, key_name=None, is_system=False, force=False):
             confirmation = input().strip().lower()
             if confirmation != "yes":
                 print("Deletion cancelled.")
-                conn.close()
                 return 0
 
-        # Clear SSH key from repositories
+        # One transaction for the whole mutation: clearing references and
+        # deleting the key either all happen or none do.
+        with engine.begin() as conn:
+            # Clear SSH key from repositories
+            if repository_count > 0:
+                conn.execute(
+                    text(
+                        "UPDATE repositories SET ssh_key_id = NULL"
+                        " WHERE ssh_key_id = :id"
+                    ),
+                    {"id": found_id},
+                )
+
+            # Preserve SSH connections but mark them as failed
+            if connection_count > 0:
+                error_msg = (
+                    f"SSH key '{found_name}' was deleted."
+                    " Deploy a new key to restore access."
+                )
+                conn.execute(
+                    text(
+                        "UPDATE ssh_connections SET ssh_key_id = NULL,"
+                        " status = 'failed', error_message = :error"
+                        " WHERE ssh_key_id = :id"
+                    ),
+                    {"error": error_msg, "id": found_id},
+                )
+
+            # Delete the SSH key
+            conn.execute(text("DELETE FROM ssh_keys WHERE id = :id"), {"id": found_id})
+
         if repository_count > 0:
-            cursor.execute(
-                "UPDATE repositories SET ssh_key_id = NULL WHERE ssh_key_id = ?",
-                (found_id,),
-            )
             print(
                 f"\n✓ Cleared SSH key from {repository_count} repository/repositories"
             )
-
-        # Preserve SSH connections but mark them as failed
         if connection_count > 0:
-            error_msg = f"SSH key '{found_name}' was deleted. Deploy a new key to restore access."
-            cursor.execute(
-                "UPDATE ssh_connections SET ssh_key_id = NULL, status = 'failed', error_message = ? WHERE ssh_key_id = ?",
-                (error_msg, found_id),
-            )
             print(
                 f"✓ Preserved {connection_count} SSH connection(s) (marked as failed)"
             )
-
-        # Delete the SSH key
-        cursor.execute("DELETE FROM ssh_keys WHERE id = ?", (found_id,))
-        conn.commit()
         print(f"✓ Deleted SSH key: {found_name} (ID: {found_id})")
 
         # Remove key files from filesystem
@@ -145,8 +165,6 @@ def delete_ssh_key(key_id=None, key_name=None, is_system=False, force=False):
         if public_key_file.exists():
             public_key_file.unlink()
             print(f"✓ Removed public key file: {public_key_file}")
-
-        conn.close()
 
         print("\n✓ SSH key deletion completed successfully")
         return 0
