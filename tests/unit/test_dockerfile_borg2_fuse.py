@@ -1,4 +1,5 @@
 import re
+import subprocess
 from pathlib import Path
 
 
@@ -105,6 +106,22 @@ def _expected_runtime_tag(env):
         f"-borg2-{env['BORG2_VERSION']}"
         f"-r{env['RUNTIME_BASE_REVISION']}"
     )
+
+
+def test_the_tag_script_produces_the_computed_tag():
+    """`docker/runtime-base-tag.sh` is what the build scripts and workflows call, so
+    exercise the script itself, not just the formula re-derived in Python -- a drift
+    in the script would otherwise publish a tag no test catches."""
+    repo_root = Path(__file__).resolve().parents[2]
+    expected_tag = _expected_runtime_tag(_runtime_base_env(repo_root))
+
+    result = subprocess.run(
+        ["bash", str(repo_root / "docker" / "runtime-base-tag.sh")],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert result.stdout.strip() == expected_tag
 
 
 def test_app_dockerfile_base_image_uses_the_computed_runtime_tag():

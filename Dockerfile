@@ -24,8 +24,13 @@ RUN npm run build
 # runs ahead of it. The agent and its whole dependency closure are staged as
 # wheels and served together, so a node installs everything from this one server
 # with no PyPI and no compiler. Forced to py3-none-any (--platform any) so a
-# single wheelhouse serves nodes of any architecture, not just the build host's.
-FROM python:${PYTHON_VERSION}-slim AS agent-builder
+# single wheelhouse serves nodes of any architecture, not just the build host's --
+# which also means it need not be built per target arch, so it is pinned to the
+# build platform like frontend-builder to avoid an emulated (QEMU) second pass.
+# The closure is version-pinned via agent/constraints.txt so the same commit
+# always stages the same wheels (no hashes -- see that file for why).
+# hadolint ignore=DL3029
+FROM --platform=$BUILDPLATFORM python:${PYTHON_VERSION}-slim AS agent-builder
 WORKDIR /agent-src
 COPY pyproject.toml ./
 COPY agent/ ./agent/
@@ -34,6 +39,7 @@ RUN pip install --no-cache-dir build && \
     python -m build --wheel --outdir /agent-dist && \
     pip download --no-cache-dir --only-binary=:all: \
         --implementation py --abi none --platform any \
+        --constraint agent/constraints.txt \
         --dest /agent-dist /agent-dist/borg_ui_agent-*.whl
 
 # Build stage for backend
