@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -80,6 +81,42 @@ def test_the_tracked_allowlist_loads_and_every_entry_carries_a_reason():
     assert any(e["id"] == "GHSA-qwww-vcr4-c8h2" for e in known)
     for entry in known:
         assert entry.get("reason"), f"{entry['id']} must carry a reason"
+
+
+def test_the_dompurify_advisory_stays_non_applicable():
+    """Enforce the invariant the DOMPurify allowlist entry rests on.
+
+    GHSA-55q2-fjhq-7xh7 (IN_PLACE hook removal leaving a detached subtree
+    executable) is allowlisted as non-applicable because nothing in the app uses
+    DOMPurify: it is a transitive dependency, never imported, never run with
+    IN_PLACE. That assumption is what makes the entry correct, so tie it to a
+    check -- if a change introduces DOMPurify usage this fails, and the entry is
+    re-reviewed rather than silently masking a now-reachable sink.
+    """
+    known = load_known_vulns(DEFAULT_KNOWN_VULNS_FILE)
+    assert any(e["id"] == "GHSA-55q2-fjhq-7xh7" for e in known), (
+        "expected the DOMPurify advisory in the allowlist; update this guard if it "
+        "was removed"
+    )
+
+    repo = Path(__file__).resolve().parents[2]
+    frontend_src = repo / "frontend" / "src"
+    assert frontend_src.is_dir(), (
+        f"{frontend_src} is missing: without it the scan finds nothing and the guard "
+        "would pass vacuously, hiding the very DOMPurify usage it exists to catch. "
+        "Run from a full checkout."
+    )
+    offenders = [
+        str(path.relative_to(repo))
+        for path in frontend_src.rglob("*")
+        if path.suffix in {".ts", ".tsx", ".js", ".jsx"}
+        and re.search(r"dompurify", path.read_text(encoding="utf-8"), re.IGNORECASE)
+    ]
+    assert not offenders, (
+        f"DOMPurify is referenced in {offenders}: the GHSA-55q2-fjhq-7xh7 allowlist "
+        "entry assumes DOMPurify is unused (transitive only, no IN_PLACE, no hooks) "
+        "-- that no longer holds; re-review the entry."
+    )
 
 
 def test_validate_report_rejects_an_error_payload():
