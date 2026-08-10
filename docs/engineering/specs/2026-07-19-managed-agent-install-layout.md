@@ -77,6 +77,8 @@ of which compiles anything:
   so this is not uniformly a downgrade.
 - **`detect`** — use whatever is already installed, verify its major version,
   and report when it differs from the server's instead of proceeding silently.
+  Not built yet (`--borg-source` today takes `server` or `distro`);
+  `--skip-borg-install` is the nearest equivalent.
 
 Compiling Borg on the target stays possible but should not be a default: it
 reintroduces exactly the toolchain that problem 2 is about. Where no static

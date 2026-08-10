@@ -136,7 +136,7 @@ COPY --from=backend-builder /usr/local/bin /usr/local/bin
 # on the builder arch), so `docker build` alone is fully reproducible.
 COPY --from=frontend-builder /frontend/build ./app/static/
 
-# Agent wheel served at /agent/package/<filename> to enrolling nodes.
+# Agent wheelhouse served at /agent/dist/<filename> to enrolling nodes.
 COPY --from=agent-builder /agent-dist/ /opt/borg-ui/agent-dist/
 
 # Copy application code

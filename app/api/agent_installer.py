@@ -624,6 +624,15 @@ resolve_agent_package_source() {
 AGENT_PIP_ARGS=()
 resolve_agent_package_source
 
+# The agent wheel requires Python 3.11+. Under --no-index pip reports only "no
+# matching distribution", which hides the real cause, so name it here. Every
+# source needs it -- the wheel does not change with --agent-source git.
+if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)'; then
+  echo "The agent package needs Python 3.11 or newer; this machine has $(python3 -V 2>&1)." >&2
+  echo "Install a newer python3 and re-run." >&2
+  exit 1
+fi
+
 python3 -m venv "${AGENT_ROOT}/.venv"
 "${AGENT_ROOT}/.venv/bin/pip" install --upgrade --force-reinstall "${AGENT_PIP_ARGS[@]}"
 

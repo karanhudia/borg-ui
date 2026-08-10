@@ -1,13 +1,14 @@
 name: Borg binary update
 
 # Watches borgbackup for releases newer than the ones this repo pins, and opens
-# a PR that bumps Dockerfile.runtime-base and regenerates app/api/borg_binaries.json.
+# a PR that bumps docker/runtime-base.env and regenerates app/api/borg_binaries.json.
 #
-# The PR is expected to fail CI: the version is also written into the tests on
-# purpose (the string tests are the checklist for adopting a version), and the
-# runtime-base image tag carries a manual -rN revision. Finishing those and going
-# green is the human half of the adoption; this job does the mechanical half so it
-# never silently falls behind the server it enrols against.
+# The tests derive their expectations from the versions file, so they stay green.
+# The one check that fails is the base-image guard: the computed runtime-base tag
+# names an image that has not been built yet. Rebuilding and pushing that image,
+# then pointing the app Dockerfile's BASE_IMAGE at its tag, is the human half of
+# the adoption; this job does the mechanical half so the pin never silently falls
+# behind the server it enrols against.
 
 on:
   schedule:

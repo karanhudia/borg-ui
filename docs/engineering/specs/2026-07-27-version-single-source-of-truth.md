@@ -31,7 +31,7 @@ every consumer derives from it. This extends that discipline to the rest.
 
 `docker/runtime-base.env` states each primitive fact once:
 
-```
+```ini
 BORG1_VERSION=1.4.5
 BORG2_VERSION=2.0.0b21
 BORGSTORE_VERSION=0.4.1
@@ -53,12 +53,15 @@ The agent version is a separate lifecycle — it versions the package, not the i
 `docker/runtime-base-tag.sh` computes the runtime-base tag, in one place, from the
 file above:
 
-```
+```text
 runtime-borg1-${BORG1_VERSION}-borg2-${BORG2_VERSION}-r${RUNTIME_BASE_REVISION}
 ```
 
-No tag literal lives in any Dockerfile or build script. This is what makes a tag
-that names a non-existent image structurally impossible.
+No tag literal lives in a build script, and the runtime-base Dockerfile takes it
+from the file. The app Dockerfile's `BASE_IMAGE` still carries the tag as a
+literal -- a build needs a concrete base -- but a guard test pins that literal to
+this computed value, so a tag naming an image that was never built fails CI
+rather than slipping through.
 
 ## Everything else derives
 
