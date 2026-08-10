@@ -195,7 +195,7 @@ def _unique_backup_plan_name(db: Session, base_name: str) -> str:
     existing_names = {
         name
         for (name,) in db.query(BackupPlan.name)
-        .filter(BackupPlan.name.like(f"{candidate}%"))
+        .filter(BackupPlan.name.ilike(f"{candidate}%"))
         .all()
     }
     if candidate not in existing_names:

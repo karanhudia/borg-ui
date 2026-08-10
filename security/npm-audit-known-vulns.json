@@ -5,5 +5,12 @@
     "reason": "RSC Mode CSRF bypass. This app is a Vite SPA using <BrowserRouter> (see frontend/src/main.tsx), not React Router's RSC mode, so the vector does not apply. The only published fix is react-router 8.3.0, a v7->v8 major upgrade out of scope for a security-hygiene change.",
     "reviewed_at": "2026-07-27",
     "source": "https://github.com/advisories/GHSA-qwww-vcr4-c8h2"
+  },
+  {
+    "id": "GHSA-55q2-fjhq-7xh7",
+    "package": "dompurify",
+    "reason": "IN_PLACE hook removal leaving a detached subtree executable requires DOMPurify.sanitize with { IN_PLACE: true } and a removed hook. dompurify is a transitive dependency here; the app does not import or call DOMPurify, uses no IN_PLACE mode, and removes no hooks (verified: no DOMPurify usage and no IN_PLACE anywhere in frontend/src), so the vulnerable path is unreachable.",
+    "reviewed_at": "2026-08-07",
+    "source": "https://github.com/advisories/GHSA-55q2-fjhq-7xh7"
   }
 ]

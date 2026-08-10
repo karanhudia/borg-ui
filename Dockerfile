@@ -66,7 +66,9 @@ RUN chmod +x /entrypoint.sh
 
 ENV PYTHONPATH=/app
 ENV DATA_DIR=/data
-ENV DATABASE_URL=sqlite:////data/borg.db
+# No DATABASE_URL default: the app derives sqlite:///$DATA_DIR/borg.db itself
+# when none is set. A default here would always win over DB_HOST (DATABASE_URL
+# takes precedence), so the Postgres switch could never take effect.
 ENV BORG_BACKUP_PATH=/backups
 ENV BORG_CACHE_DIR=/home/borg/.cache/borg
 ENV ENABLE_CRON_BACKUPS=false
@@ -134,7 +136,9 @@ RUN chmod +x /entrypoint.sh
 # Set environment variables
 ENV PYTHONPATH=/app
 ENV DATA_DIR=/data
-ENV DATABASE_URL=sqlite:////data/borg.db
+# No DATABASE_URL default: the app derives sqlite:///$DATA_DIR/borg.db itself
+# when none is set. A default here would always win over DB_HOST (DATABASE_URL
+# takes precedence), so the Postgres switch could never take effect.
 ENV BORG_BACKUP_PATH=/backups
 ENV BORG_CACHE_DIR=/home/borg/.cache/borg
 ENV ENABLE_CRON_BACKUPS=false

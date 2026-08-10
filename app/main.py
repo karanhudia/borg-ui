@@ -42,8 +42,6 @@ from app.api import (
 )
 from app.api.v2 import router as v2_router
 from app.routers import config
-from app.database.database import engine
-from app.database.models import Base
 from app.config import get_runtime_app_version, settings
 from app.core.proxy_auth import inspect_proxy_auth_config
 from app.core.security import create_first_user
@@ -162,9 +160,6 @@ structlog.configure(
 
 logger = structlog.get_logger()
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
-
 # Create FastAPI app
 app = FastAPI(
     title="Borg Web UI",
@@ -249,16 +244,16 @@ async def startup_event():
     logger.info("Starting Borg Web UI")
     _log_insecure_no_auth_warning()
     _log_proxy_auth_security_warnings()
+
+    # Before anything touches the database. The container entrypoint also
+    # prepares the schema, but the app is not always started through it —
+    # `uvicorn app.main:app` has to work too, and without this it comes up
+    # against an empty database and fails every request that reads from it.
+    from app.database.db_upgrade import ensure_schema
+
+    ensure_schema()
+
     from app.database.database import SessionLocal
-
-    # Run database migrations
-    from app.database.migrations import run_migrations
-
-    try:
-        run_migrations()
-    except Exception as e:
-        logger.error("Failed to run migrations", error=str(e))
-        # Don't fail startup, just log the error
 
     app_version = get_runtime_app_version()
 
