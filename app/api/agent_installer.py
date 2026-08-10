@@ -35,7 +35,7 @@ set -euo pipefail
 PINNED_BORG1_VERSION=""
 PINNED_BORG2_VERSION=""
 PINNED_BORG_BINARIES=""
-PINNED_AGENT_PACKAGE=""
+PINNED_AGENT_VERSION=""
 # END server-provided pinning
 
 SERVER=""
@@ -592,7 +592,7 @@ fi
 # hand pip an empty argument instead of stopping the install.
 resolve_agent_package_source() {
   if [[ "${AGENT_SOURCE}" == "git" ]]; then
-    AGENT_PACKAGE_SOURCE="git+https://github.com/karanhudia/borg-ui.git@${AGENT_REF}"
+    AGENT_PIP_ARGS=("git+https://github.com/karanhudia/borg-ui.git@${AGENT_REF}")
     return
   fi
 
@@ -602,7 +602,7 @@ resolve_agent_package_source() {
     exit 1
   fi
 
-  if [[ -z "${PINNED_AGENT_PACKAGE}" ]]; then
+  if [[ -z "${PINNED_AGENT_VERSION}" ]]; then
     echo "This Borg UI server offers no agent package to install." >&2
     echo "Its image predates server-provided agent packages, or was built" >&2
     echo "without one. Re-run with --agent-source git to install from the" >&2
@@ -610,18 +610,22 @@ resolve_agent_package_source() {
     exit 1
   fi
 
-  # pip needs a parseable wheel filename in the URL, so the server pins the
-  # filename and the base URL comes from --server (or, on reinstall, from the
-  # config of the server this machine is already enrolled against).
-  AGENT_PACKAGE_SOURCE="${SERVER%/}/agent/package/${PINNED_AGENT_PACKAGE}"
+  # Air-gapped by construction: the agent wheel and its dependency wheels are all
+  # served by this one server, so pip resolves the whole closure from --find-links
+  # with the index switched off. No PyPI, no compiler on the node -- it reaches
+  # exactly one host, the one it is enrolling against.
+  AGENT_PIP_ARGS=(
+    --no-index
+    --find-links "${SERVER%/}/agent/dist/"
+    "borg-ui-agent==${PINNED_AGENT_VERSION}"
+  )
 }
 
-AGENT_PACKAGE_SOURCE=""
+AGENT_PIP_ARGS=()
 resolve_agent_package_source
 
 python3 -m venv "${AGENT_ROOT}/.venv"
-"${AGENT_ROOT}/.venv/bin/pip" install --upgrade --force-reinstall \
-  "${AGENT_PACKAGE_SOURCE}"
+"${AGENT_ROOT}/.venv/bin/pip" install --upgrade --force-reinstall "${AGENT_PIP_ARGS[@]}"
 
 if [[ "${REINSTALL}" == "1" ]]; then
   echo "Preserving existing agent registration at /etc/borg-ui-agent/config.toml."
@@ -717,11 +721,28 @@ def _installed_borg_version(interface_factory, label: str) -> str | None:
     return match.group(0) if match else None
 
 
+def _agent_dist_dir() -> Path:
+    return Path(os.getenv("AGENT_PACKAGE_DIR", DEFAULT_AGENT_PACKAGE_DIR))
+
+
 def agent_package_path() -> Path | None:
     """The agent wheel built into this image, if present."""
-    package_dir = Path(os.getenv("AGENT_PACKAGE_DIR", DEFAULT_AGENT_PACKAGE_DIR))
-    wheels = sorted(package_dir.glob("*.whl"))
+    wheels = sorted(_agent_dist_dir().glob("borg_ui_agent-*.whl"))
     return wheels[-1] if wheels else None
+
+
+def agent_package_version() -> str | None:
+    """The version of the agent wheel this image serves, if any.
+
+    The installer pins the version and installs `borg-ui-agent==<version>` from the
+    served wheelhouse, so the node runs the agent this server was built with.
+    """
+    package = agent_package_path()
+    if package is None:
+        return None
+    # Wheel filename: {name}-{version}-{python}-{abi}-{platform}.whl
+    parts = package.stem.split("-")
+    return parts[1] if len(parts) >= 2 else None
 
 
 def render_installer_script() -> str:
@@ -734,7 +755,6 @@ def render_installer_script() -> str:
         "1": _installed_borg_version(BorgInterface, "borg1"),
         "2": _installed_borg_version(Borg2Interface, "borg2"),
     }
-    package = agent_package_path()
 
     pinning = "\n".join(
         [
@@ -743,7 +763,7 @@ def render_installer_script() -> str:
             f'PINNED_BORG1_VERSION="{versions["1"] or ""}"',
             f'PINNED_BORG2_VERSION="{versions["2"] or ""}"',
             f'PINNED_BORG_BINARIES="{binary_table(versions)}"',
-            f'PINNED_AGENT_PACKAGE="{package.name if package else ""}"',
+            f'PINNED_AGENT_VERSION="{agent_package_version() or ""}"',
             PINNING_END,
         ]
     )
@@ -762,19 +782,40 @@ async def get_agent_installer() -> Response:
     return Response(content=script, media_type="text/x-shellscript")
 
 
-@router.get("/agent/package/{filename}")
-async def get_agent_package(filename: str) -> FileResponse:
-    """Serve the agent package built into this image.
+@router.get("/agent/dist/")
+async def get_agent_dist_index() -> Response:
+    """A find-links index of the agent wheelhouse this image serves.
 
-    A node installs the agent belonging to the server it enrolls against, which
-    matters whenever a deployment runs ahead of the upstream default branch.
+    The installer runs `pip install --no-index --find-links <server>/agent/dist/`,
+    so the agent and its whole dependency closure come from this one server and the
+    install is air-gapped: pip reads this page, follows the wheel links, and never
+    touches an index. A node installs the agent belonging to the server it enrols
+    against, which matters whenever a deployment runs ahead of the default branch.
     """
-    package = agent_package_path()
-    if package is None or filename != package.name:
-        raise HTTPException(status_code=404, detail="Agent package not available")
+    wheels = sorted(_agent_dist_dir().glob("*.whl"))
+    links = "\n".join(f'    <a href="{w.name}">{w.name}</a><br>' for w in wheels)
+    html = (
+        "<!DOCTYPE html>\n"
+        "<html><head><title>borg-ui-agent wheelhouse</title></head>\n"
+        f"<body>\n{links}\n</body></html>\n"
+    )
+    return Response(content=html, media_type="text/html")
+
+
+@router.get("/agent/dist/{filename}")
+async def get_agent_wheel(filename: str) -> FileResponse:
+    """Serve one wheel from the agent wheelhouse."""
+    # A path parameter never spans '/', but reject anything that is not a plain
+    # wheel filename sitting directly in the dist dir, so nothing outside it can be
+    # reached.
+    if filename != Path(filename).name or not filename.endswith(".whl"):
+        raise HTTPException(status_code=404, detail="Not found")
+    wheel = _agent_dist_dir() / filename
+    if not wheel.is_file():
+        raise HTTPException(status_code=404, detail="Not found")
 
     return FileResponse(
-        package,
+        wheel,
         media_type="application/octet-stream",
-        filename=package.name,
+        filename=filename,
     )

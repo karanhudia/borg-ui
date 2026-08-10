@@ -225,10 +225,11 @@ def test_agent_installer_installs_the_agent_from_the_enrolling_server(
     response = test_client.get("/agent/install.sh")
 
     assert 'AGENT_SOURCE="server"' in response.text
-    assert (
-        'AGENT_PACKAGE_SOURCE="${SERVER%/}/agent/package/${PINNED_AGENT_PACKAGE}"'
-        in (response.text)
-    )
+    # Air-gapped: pip resolves the agent and its dependency wheels from the served
+    # wheelhouse with the index off, rather than pulling dependencies from PyPI.
+    assert "--no-index" in response.text
+    assert '--find-links "${SERVER%/}/agent/dist/"' in response.text
+    assert '"borg-ui-agent==${PINNED_AGENT_VERSION}"' in response.text
     # Reinstall takes no --server, so the URL comes from the enrolled config.
     assert "s/^server_url[[:space:]]*=" in response.text
 
@@ -241,7 +242,7 @@ def test_agent_package_failure_stops_the_install(test_client: TestClient):
 
     assert "$(agent_package_source)" not in response.text
     assert "resolve_agent_package_source\n" in response.text
-    assert '"${AGENT_PACKAGE_SOURCE}"' in response.text
+    assert '"${AGENT_PIP_ARGS[@]}"' in response.text
 
 
 def test_agent_installer_distinguishes_a_server_without_a_package(
@@ -288,7 +289,7 @@ def test_agent_installer_pins_the_versions_the_server_runs(monkeypatch):
 
     assert f'PINNED_BORG1_VERSION="{borg1}"' in script
     assert f'PINNED_BORG2_VERSION="{borg2}"' in script
-    assert 'PINNED_AGENT_PACKAGE="borg_ui_agent-0.1.2-py3-none-any.whl"' in script
+    assert 'PINNED_AGENT_VERSION="0.1.2"' in script
     # The binary rows are exactly what the manifest renders for these versions —
     # derived, not hardcoded, so a version bump does not turn this into a chore.
     assert binary_table({"1": borg1, "2": borg2}) in script
@@ -333,30 +334,39 @@ def test_agent_installer_rewrites_only_the_pinning_block(monkeypatch):
     assert head.startswith("#!/usr/bin/env bash\nset -euo pipefail\n")
 
 
-def test_agent_package_is_served_under_its_wheel_filename(
+def test_the_agent_wheelhouse_is_served_as_a_find_links_index(
     test_client: TestClient, tmp_path, monkeypatch
 ):
-    """pip needs a parseable wheel filename in the URL, so the package is served
-    at its own name rather than from a generic path."""
-    wheel = tmp_path / "borg_ui_agent-0.1.2-py3-none-any.whl"
-    wheel.write_bytes(b"not really a wheel")
+    """The installer runs `pip --no-index --find-links <server>/agent/dist/`, so
+    the server serves an index page linking every wheel -- the agent and its
+    dependencies -- and each wheel under its own name."""
+    (tmp_path / "borg_ui_agent-0.1.2-py3-none-any.whl").write_bytes(b"agent wheel")
+    (tmp_path / "requests-2.32.3-py3-none-any.whl").write_bytes(b"a dependency wheel")
     monkeypatch.setenv("AGENT_PACKAGE_DIR", str(tmp_path))
 
-    response = test_client.get(f"/agent/package/{wheel.name}")
-    assert response.status_code == 200
-    assert response.content == b"not really a wheel"
+    index = test_client.get("/agent/dist/")
+    assert index.status_code == 200
+    # Both the agent and its dependency wheel are offered, so the install is
+    # air-gapped rather than reaching PyPI for the dependencies.
+    assert 'href="borg_ui_agent-0.1.2-py3-none-any.whl"' in index.text
+    assert 'href="requests-2.32.3-py3-none-any.whl"' in index.text
 
-    assert test_client.get("/agent/package/other-0.1.0.whl").status_code == 404
+    wheel = test_client.get("/agent/dist/requests-2.32.3-py3-none-any.whl")
+    assert wheel.status_code == 200
+    assert wheel.content == b"a dependency wheel"
 
 
-def test_agent_package_missing_returns_not_found(
+def test_the_wheelhouse_rejects_non_wheels_and_missing_files(
     test_client: TestClient, tmp_path, monkeypatch
 ):
     monkeypatch.setenv("AGENT_PACKAGE_DIR", str(tmp_path))
 
-    response = test_client.get("/agent/package/borg_ui_agent-0.1.2-py3-none-any.whl")
+    # a wheel that is not there, and a request that is not a wheel at all
+    assert test_client.get("/agent/dist/absent-0.1.0.whl").status_code == 404
+    assert test_client.get("/agent/dist/notes.txt").status_code == 404
 
-    assert response.status_code == 404
+    # an empty wheelhouse still serves a valid (empty) index rather than an error
+    assert test_client.get("/agent/dist/").status_code == 200
 
 
 def test_agent_installer_script_is_valid_bash(test_client: TestClient):

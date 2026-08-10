@@ -18,18 +18,23 @@ RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
-# --- managed agent package: built in-image, served to enrolling nodes ---
-# A node installs the agent belonging to the server it enrolls against instead
-# of whatever the upstream default branch holds, which matters whenever a
-# deployment runs ahead of it. The agent is pure Python, so one py3-none-any
-# wheel covers every target platform.
+# --- managed agent wheelhouse: built in-image, served to enrolling nodes ---
+# A node installs the agent belonging to the server it enrols against instead of
+# whatever the upstream default branch holds, which matters whenever a deployment
+# runs ahead of it. The agent and its whole dependency closure are staged as
+# wheels and served together, so a node installs everything from this one server
+# with no PyPI and no compiler. Forced to py3-none-any (--platform any) so a
+# single wheelhouse serves nodes of any architecture, not just the build host's.
 FROM python:${PYTHON_VERSION}-slim AS agent-builder
 WORKDIR /agent-src
 COPY pyproject.toml ./
 COPY agent/ ./agent/
 # hadolint ignore=DL3013
 RUN pip install --no-cache-dir build && \
-    python -m build --wheel --outdir /agent-dist
+    python -m build --wheel --outdir /agent-dist && \
+    pip download --no-cache-dir --only-binary=:all: \
+        --implementation py --abi none --platform any \
+        --dest /agent-dist /agent-dist/borg_ui_agent-*.whl
 
 # Build stage for backend
 FROM python:${PYTHON_VERSION}-slim AS backend-builder

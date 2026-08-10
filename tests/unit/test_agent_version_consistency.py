@@ -1,7 +1,7 @@
 """The agent wheel version must match the package's declared __version__.
 
 The wheel is built from pyproject.toml (`python -m build`), so its filename — and
-the version the installer pins as PINNED_AGENT_PACKAGE — comes from pyproject's
+the version the installer pins as PINNED_AGENT_VERSION — comes from pyproject's
 [project] version, not from borg_ui_agent.__version__. Bumping only one drifts
 silently: __init__.py read 0.1.3 while the wheel shipped 0.1.2, so a server built
 from that tree offered every node an agent a release behind its own code.
