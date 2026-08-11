@@ -29,11 +29,36 @@ def test_runtime_base_env_pins_borgstore_version():
     assert "BORGSTORE_VERSION=0.4.1" in runtime_env
 
 
-def test_runtime_base_installs_rclone():
+def test_runtime_base_installs_rclone_from_official_static_binary():
+    """rclone must come from the official static release (downloads.rclone.org),
+    checksum-verified — not the distro package, whose years-behind "-DEV" build
+    breaks OneDrive cloud-mirror sync (issue #798)."""
     dockerfile = Path(__file__).resolve().parents[2] / "Dockerfile.runtime-base"
     content = dockerfile.read_text()
 
-    assert "rclone" in content
+    assert "downloads.rclone.org" in content
+    assert "sha256sum -c" in content
+    assert re.search(r"^ARG RCLONE_VERSION=\S+", content, re.M)
+    # The binary is delivered from the builder stage, not apt.
+    assert "COPY --from=builder /out/rclone" in content
+    assert not re.search(r"^\s+rclone \\", content, re.M), (
+        "rclone must not be installed via the apt package list"
+    )
+
+
+def test_runtime_base_env_agrees_with_the_dockerfile_rclone_version():
+    """rclone is single-sourced in runtime-base.env and passed to the Dockerfile
+    as a build ARG; the ARG default must state the same version so a local build
+    (no build-arg) matches CI."""
+    repo_root = Path(__file__).resolve().parents[2]
+    dockerfile = (repo_root / "Dockerfile.runtime-base").read_text()
+    env = _runtime_base_env(repo_root)
+
+    arg = re.search(r"^ARG RCLONE_VERSION=(\S+)", dockerfile, re.M).group(1)
+    assert env["RCLONE_VERSION"] == arg, (
+        f"runtime-base.env pins rclone {env['RCLONE_VERSION']}, "
+        f"Dockerfile.runtime-base builds {arg}"
+    )
 
 
 def test_runtime_base_installs_btrfs_snapshot_tooling():
@@ -81,6 +106,20 @@ def test_runtime_base_ci_smoke_checks_s3_backend_dependency():
 
     assert "import boto3" in content
     assert "borgstore s3 dependencies ok" in content
+
+
+def test_runtime_base_ci_smoke_checks_rclone_binary():
+    """The smoke test must exercise the rclone binary itself, so a broken or
+    missing static-binary install fails CI before the image is published."""
+    workflow = (
+        Path(__file__).resolve().parents[2]
+        / ".github"
+        / "workflows"
+        / "docker-runtime-base.yml"
+    )
+    content = workflow.read_text()
+
+    assert "rclone version" in content
 
 
 def test_runtime_base_ci_smoke_checks_btrfs_tooling():
