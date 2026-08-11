@@ -14,6 +14,8 @@ from sqlalchemy.orm import sessionmaker
 from app.database.database import Base
 from app.database.db_upgrade import (
     _TRANSFORM_SENTINELS,
+    _catch_up_source,
+    _finalise,
     _unresolved_transforms,
     alembic_init,
 )
@@ -211,6 +213,39 @@ def test_an_existing_rollback_is_never_overwritten(tmp_path):
 
     assert (tmp_path / "borg_bak.db").read_text() == "an older rollback nobody may lose"
     assert db.exists()
+
+
+@pytest.mark.unit
+def test_a_postgres_migration_leaves_the_sqlite_in_place(tmp_path):
+    """Postgres is the live database after the transfer, so the SQLite file is not
+    moved aside -- it stays under its own name as the rollback, and reverting is
+    just removing DATABASE_URL. Exercised on `_finalise` directly, where the source
+    is settled; the full Postgres transfer path needs a running Postgres."""
+    db = tmp_path / "borg.db"
+    db.write_text("the live sqlite database")
+
+    kept = _finalise(db, None, to_postgres=True)
+
+    assert kept == db
+    assert db.exists() and db.read_text() == "the live sqlite database"
+    assert not (tmp_path / "borg_bak.db").exists()  # not renamed, no rollback minted
+
+
+@pytest.mark.unit
+def test_a_postgres_migration_does_not_collide_with_an_earlier_rollback(tmp_path):
+    """A database taken SQLite -> Alembic in place, then later to Postgres, has a
+    `_bak` beside it from the first step. Because the Postgres path leaves the
+    source under its own name, that older rollback is never in the way."""
+    db = tmp_path / "borg.db"
+    db.write_text("the live sqlite database")
+    (tmp_path / "borg_bak.db").write_text("the rollback from the in-place upgrade")
+
+    kept = _finalise(db, None, to_postgres=True)  # must not raise
+
+    assert kept == db
+    assert (
+        tmp_path / "borg_bak.db"
+    ).read_text() == "the rollback from the in-place upgrade"
 
 
 @pytest.mark.unit
@@ -455,6 +490,57 @@ def test_an_alembic_database_behind_head_follows_alembic_not_the_ladder(
         for c in inspect(create_engine(f"sqlite:///{db}")).get_columns("repositories")
     }
     assert "check_interval_days" in cols
+
+
+@pytest.mark.unit
+def test_catch_up_skips_the_ladder_on_an_already_alembic_source(tmp_path, monkeypatch):
+    """The source side of the same rule: the legacy ladder must never run against a
+    database that already has alembic_version. It is only reached when an Alembic
+    SQLite database is moved into a fresh Postgres (the target is empty, so the
+    durable fork does not short-circuit); the ladder would be a no-op there, but it
+    must not run at all. Exercise the function directly -- the SQLite-to-SQLite path
+    never reaches it, because an Alembic source is caught by the fork first."""
+    db = tmp_path / "borg.db"
+    alembic_init(db)  # a fresh Alembic-managed database, stamped at head
+
+    import app.database.migrations as legacy
+
+    monkeypatch.setattr(legacy, "run_migrations", _boom)  # blow up if the ladder runs
+
+    catch_up = tmp_path / "borg_catchup.db"
+    _catch_up_source(db, catch_up)  # must not raise
+
+    # the snapshot is kept for the transfer to copy from, and it carries the stamp
+    assert catch_up.exists()
+    with create_engine(f"sqlite:///{catch_up}").connect() as conn:
+        assert inspect(conn).has_table("alembic_version")
+
+
+@pytest.mark.unit
+@requires_postgres
+def test_an_alembic_sqlite_moves_to_postgres_without_running_the_ladder(
+    tmp_path, monkeypatch
+):
+    """End to end: a SQLite database already on Alembic, then pointed at Postgres,
+    copies its rows across without walking the legacy ladder again."""
+    db = tmp_path / "borg.db"
+    alembic_init(db)  # fresh Alembic SQLite, at head, no rollback file to collide
+    session = sessionmaker(bind=create_engine(f"sqlite:///{db}"))()
+    session.add(Repository(name="r", path="/srv/r"))
+    session.commit()
+    session.close()
+    _reset_postgres()
+
+    import app.database.migrations as legacy
+
+    monkeypatch.setattr(legacy, "run_migrations", _boom)  # the ladder must not run
+
+    report = alembic_init(db, POSTGRES_URL)
+
+    assert report.action == "transferred"
+    session = sessionmaker(bind=create_engine(POSTGRES_URL))()
+    assert session.query(Repository).count() == 1
+    session.close()
 
 
 @pytest.mark.unit
