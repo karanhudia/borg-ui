@@ -361,7 +361,8 @@
     "failed": "Fallido",
     "running": "En ejecución",
     "pending": "Pendiente",
-    "cancelled": "Cancelado"
+    "cancelled": "Cancelado",
+    "skipped": "Omitido"
   },
   "dashboard": {
     "title": "Panel",
@@ -555,7 +556,7 @@
     "tabs": {
       "ariaLabel": "Tipo de operación de copia de seguridad",
       "backupPlans": "Planes de copia",
-      "legacyBackup": "Copia heredada"
+      "legacyBackup": "Automatizaciones de copia de seguridad"
     },
     "planRun": {
       "title": "Ejecutar un plan de copia",
@@ -691,7 +692,7 @@
     "createBackup": "Crear programación de copia de seguridad",
     "createBackupPlan": "Crear plan de copia",
     "createSchedule": "Crear programación",
-    "createLegacySchedule": "Crear programación heredada",
+    "createLegacySchedule": "Crear automatización de copia de seguridad",
     "addCheck": "Agregar comprobación programada",
     "addRestoreCheck": "Agregar comprobación de restauración",
     "tabs": {
@@ -726,8 +727,19 @@
       "runCheckTip": "La comprobación de integridad se ejecuta después de cada copia (además de cualquier comprobación programada abajo)"
     },
     "noRepositories": "Necesitas crear al menos un repositorio antes de programar copias de seguridad.",
-    "legacyBackupSchedulesTitle": "Programaciones de copia heredadas",
-    "legacyBackupSchedulesDescription": "Las programaciones existentes basadas en repositorio siguen ejecutándose aquí. Las nuevas copias programadas deberían crearse como planes de copia.",
+    "legacyBackupSchedulesTitle": "Automatizaciones de copia de seguridad",
+    "legacyBackupSchedulesDescription": "Automatizaciones de copia basadas en repositorios personalizados, incluidas ejecuciones programadas y por disponibilidad.",
+    "trigger": {
+      "catchUp": "Ejecutar copias omitidas cuando la fuente esté disponible",
+      "label": "Activador de ejecución",
+      "fixedTime": "A una hora fija",
+      "whenAvailable": "Cuando la fuente esté disponible",
+      "availabilityDescription": "Borg UI comprueba si la fuente está accesible y ejecuta la copia cuando ha transcurrido el intervalo mínimo.",
+      "checkInterval": "Comprobar cada (minutos)",
+      "checkIntervalHelper": "Con qué frecuencia Borg UI comprueba si la fuente está disponible.",
+      "minimumInterval": "Intervalo mínimo después de una ejecución correcta (horas)",
+      "minimumIntervalHelper": "Borg UI no inicia otra copia hasta que haya transcurrido este intervalo."
+    },
     "confirmRunNow": "¿Ejecutar \"{{name}}\" ahora?",
     "maintenance": {
       "pruning": "Podando archivos...",
@@ -1536,7 +1548,8 @@
         "package": "Paquete",
         "rcloneSync": "Sincronización en la nube",
         "rcloneHydrate": "Hidratación en la nube",
-        "scriptExecution": "Script"
+        "scriptExecution": "Script",
+        "availabilityCheck": "Comprobación de disponibilidad"
       },
       "statuses": {
         "completed": "Completado",
@@ -1544,12 +1557,19 @@
         "needsBackup": "Necesita copia",
         "failed": "Fallido",
         "running": "En ejecución",
-        "pending": "Pendiente"
+        "pending": "Pendiente",
+        "skipped": "Omitido"
       }
     },
     "empty": {
       "title": "Sin actividad",
       "message": "No hay operaciones que coincidan con tus filtros"
+    }
+  },
+  "availabilitySchedule": {
+    "skipReasons": {
+      "minimumIntervalNotElapsed": "El intervalo mínimo no ha transcurrido",
+      "sourceUnavailable": "Fuente no disponible"
     }
   },
   "cloudStorageJobs": {
@@ -2234,8 +2254,8 @@
       "rcloneHydrate": "Hidratar caché local",
       "enableCloudMirror": "Activar réplica en la nube",
       "backupNow": "Copia ahora",
-      "legacyBackup": "Copia heredada",
-      "legacyBackupTooltip": "Ejecuta la copia antigua basada en repositorio usando las rutas de origen heredadas de este repositorio",
+      "legacyBackup": "Ejecutar automatización de copia",
+      "legacyBackupTooltip": "Ejecutar la automatización de copia basada en repositorio usando las rutas de origen configuradas de este repositorio",
       "backupPlanRequired": "Crea un plan de copia para definir fuentes",
       "viewArchives": "Ver archivos",
       "viewBackupPlans": "Ver planes de copia vinculados",
@@ -2589,7 +2609,8 @@
       "package": "Instalación de paquete",
       "rcloneSync": "Sincronización en la nube",
       "rcloneHydrate": "Hidratación en la nube",
-      "scriptExecution": "Script"
+      "scriptExecution": "Script",
+      "availabilityCheck": "Comprobación de disponibilidad"
     },
     "scheduledById": "Programado (ID: {{id}})",
     "backupPlanByName": "Plan de copia: {{name}}",

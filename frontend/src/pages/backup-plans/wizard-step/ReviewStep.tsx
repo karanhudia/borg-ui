@@ -535,14 +535,42 @@ export function ReviewStep({
           }
         >
           {wizardState.scheduleEnabled ? (
-            <>
-              <ReviewAttrRow label={t('backupPlans.wizard.fields.cronExpression')}>
-                <ReviewCodePill>{wizardState.cronExpression}</ReviewCodePill>
-              </ReviewAttrRow>
-              <ReviewAttrRow label={t('backupPlans.wizard.fields.timezone')}>
-                <ReviewCodePill maxChars={20}>{wizardState.timezone}</ReviewCodePill>
-              </ReviewAttrRow>
-            </>
+            wizardState.scheduleMode === 'availability' ? (
+              <>
+                <ReviewAttrRow label={t('schedule.trigger.label', { defaultValue: 'Run trigger' })}>
+                  <Typography variant="body2" fontSize="0.75rem" fontWeight={600}>
+                    {t('schedule.trigger.whenAvailable', {
+                      defaultValue: 'When source is available',
+                    })}
+                  </Typography>
+                </ReviewAttrRow>
+                <ReviewAttrRow
+                  label={t('schedule.trigger.checkInterval', {
+                    defaultValue: 'Check every (minutes)',
+                  })}
+                >
+                  <ReviewCodePill>
+                    {wizardState.availabilityCheckIntervalMinutes} min
+                  </ReviewCodePill>
+                </ReviewAttrRow>
+                <ReviewAttrRow
+                  label={t('schedule.trigger.minimumInterval', {
+                    defaultValue: 'Minimum interval after a successful run (hours)',
+                  })}
+                >
+                  <ReviewCodePill>{wizardState.minimumSuccessIntervalHours} h</ReviewCodePill>
+                </ReviewAttrRow>
+              </>
+            ) : (
+              <>
+                <ReviewAttrRow label={t('backupPlans.wizard.fields.cronExpression')}>
+                  <ReviewCodePill>{wizardState.cronExpression}</ReviewCodePill>
+                </ReviewAttrRow>
+                <ReviewAttrRow label={t('backupPlans.wizard.fields.timezone')}>
+                  <ReviewCodePill maxChars={20}>{wizardState.timezone}</ReviewCodePill>
+                </ReviewAttrRow>
+              </>
+            )
           ) : (
             <Typography
               variant="caption"

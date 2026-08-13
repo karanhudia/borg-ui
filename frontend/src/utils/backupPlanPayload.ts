@@ -35,8 +35,11 @@ export interface BackupPlanPayloadState {
   maxParallelRepositories: number
   failureBehavior: 'continue' | 'stop'
   scheduleEnabled: boolean
+  scheduleMode?: 'cron' | 'availability'
   cronExpression: string
   timezone: string
+  availabilityCheckIntervalMinutes?: number
+  minimumSuccessIntervalHours?: number
   preBackupScriptId: number | null
   postBackupScriptId: number | null
   preBackupScriptParameters: Record<string, string>
@@ -397,8 +400,18 @@ export function buildBackupPlanPayload(
       state.repositoryRunMode === 'parallel' ? state.maxParallelRepositories : 1,
     failure_behavior: state.failureBehavior,
     schedule_enabled: state.scheduleEnabled,
-    cron_expression: state.scheduleEnabled ? state.cronExpression : null,
+    schedule_mode: state.scheduleMode || 'cron',
+    cron_expression:
+      state.scheduleEnabled && (state.scheduleMode || 'cron') === 'cron'
+        ? state.cronExpression
+        : null,
     timezone: state.timezone,
+    availability_check_interval_minutes:
+      state.scheduleMode === 'availability' ? (state.availabilityCheckIntervalMinutes ?? 30) : null,
+    min_success_interval_minutes:
+      state.scheduleMode === 'availability'
+        ? Math.round((state.minimumSuccessIntervalHours ?? 20) * 60)
+        : null,
     pre_backup_script_id: firstPreHook?.script_id ?? state.preBackupScriptId,
     post_backup_script_id: firstPostHook?.script_id ?? state.postBackupScriptId,
     pre_backup_script_parameters:

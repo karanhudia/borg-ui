@@ -361,7 +361,8 @@
     "failed": "Failed",
     "running": "Running",
     "pending": "Pending",
-    "cancelled": "Cancelled"
+    "cancelled": "Cancelled",
+    "skipped": "Skipped"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -555,7 +556,7 @@
     "tabs": {
       "ariaLabel": "Backup operation type",
       "backupPlans": "Backup Plans",
-      "legacyBackup": "Legacy Backup"
+      "legacyBackup": "Backup automations"
     },
     "planRun": {
       "title": "Run a Backup Plan",
@@ -691,7 +692,7 @@
     "createBackup": "Create Backup Schedule",
     "createBackupPlan": "Create Backup Plan",
     "createSchedule": "Create Schedule",
-    "createLegacySchedule": "Create legacy schedule",
+    "createLegacySchedule": "Create backup automation",
     "addCheck": "Add Check Schedule",
     "addRestoreCheck": "Add Restore Check",
     "tabs": {
@@ -726,8 +727,19 @@
       "runCheckTip": "Integrity check runs after each backup (in addition to any scheduled check below)"
     },
     "noRepositories": "You need to create at least one repository before scheduling backups.",
-    "legacyBackupSchedulesTitle": "Legacy Backup Schedules",
-    "legacyBackupSchedulesDescription": "Existing repository-based schedules continue to run here. New scheduled backups should be created as Backup Plans.",
+    "legacyBackupSchedulesTitle": "Backup automations",
+    "legacyBackupSchedulesDescription": "Custom repository-based backup automations, including fixed-time and availability-triggered runs.",
+    "trigger": {
+      "catchUp": "Run missed backups when the source becomes available",
+      "label": "Run trigger",
+      "fixedTime": "At a fixed time",
+      "whenAvailable": "When source is available",
+      "availabilityDescription": "Borg UI checks for a reachable source and runs after the minimum interval has elapsed.",
+      "checkInterval": "Check every (minutes)",
+      "checkIntervalHelper": "How often Borg UI checks whether the source is available.",
+      "minimumInterval": "Minimum interval after a successful run (hours)",
+      "minimumIntervalHelper": "Borg UI will not start another backup before this interval has elapsed."
+    },
     "confirmRunNow": "Run \"{{name}}\" now?",
     "maintenance": {
       "pruning": "Pruning archives...",
@@ -1536,7 +1548,8 @@
         "package": "Package",
         "rcloneSync": "Cloud Sync",
         "rcloneHydrate": "Cloud Hydrate",
-        "scriptExecution": "Script"
+        "scriptExecution": "Script",
+        "availabilityCheck": "Availability check"
       },
       "statuses": {
         "completed": "Completed",
@@ -1544,12 +1557,19 @@
         "needsBackup": "Needs backup",
         "failed": "Failed",
         "running": "Running",
-        "pending": "Pending"
+        "pending": "Pending",
+        "skipped": "Skipped"
       }
     },
     "empty": {
       "title": "No activity found",
       "message": "There are no operations matching your filters"
+    }
+  },
+  "availabilitySchedule": {
+    "skipReasons": {
+      "minimumIntervalNotElapsed": "Minimum interval not elapsed",
+      "sourceUnavailable": "Source unavailable"
     }
   },
   "cloudStorageJobs": {
@@ -2234,8 +2254,8 @@
       "rcloneHydrate": "Hydrate local cache",
       "enableCloudMirror": "Enable cloud mirror",
       "backupNow": "Backup Now",
-      "legacyBackup": "Legacy Backup",
-      "legacyBackupTooltip": "Run the old repository-based backup using this repository's legacy source paths",
+      "legacyBackup": "Run backup automation",
+      "legacyBackupTooltip": "Run the repository-based backup automation using this repository's configured source paths",
       "backupPlanRequired": "Create a Backup Plan to define sources",
       "viewArchives": "View Archives",
       "viewBackupPlans": "View linked backup plans",
@@ -2589,7 +2609,8 @@
       "package": "Package Install",
       "rcloneSync": "Cloud Sync",
       "rcloneHydrate": "Cloud Hydrate",
-      "scriptExecution": "Script"
+      "scriptExecution": "Script",
+      "availabilityCheck": "Availability check"
     },
     "scheduledById": "Scheduled (ID: {{id}})",
     "backupPlanByName": "Backup Plan: {{name}}",

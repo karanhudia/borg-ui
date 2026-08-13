@@ -1,6 +1,7 @@
 import React from 'react'
 import { Chip, Tooltip } from '@mui/material'
 import { useTranslation } from 'react-i18next'
+import { CircleMinus } from 'lucide-react'
 
 interface StatusBadgeProps {
   status: string
@@ -11,7 +12,7 @@ interface StatusBadgeProps {
 
 /**
  * Standardized status badge component used across Activity, Schedule, and Dashboard views
- * Shows consistent color and label representation for all job statuses (no icon)
+ * Shows consistent color and label representation for all job statuses.
  */
 export const StatusBadge: React.FC<StatusBadgeProps> = ({
   status,
@@ -36,6 +37,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
       case 'in_progress':
         return 'info'
       case 'pending':
+      case 'skipped':
         return 'default'
       default:
         return 'default'
@@ -59,6 +61,8 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
         return t('status.pending')
       case 'cancelled':
         return t('status.cancelled')
+      case 'skipped':
+        return t('status.skipped')
       default:
         return status.charAt(0).toUpperCase() + status.slice(1)
     }
@@ -69,6 +73,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
   return (
     <Tooltip title={tooltip || label} arrow>
       <Chip
+        icon={status.toLowerCase() === 'skipped' ? <CircleMinus size={15} /> : undefined}
         label={label}
         color={getStatusColor(status)}
         size={size}

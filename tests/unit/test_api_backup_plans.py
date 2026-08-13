@@ -325,6 +325,54 @@ class TestBackupPlanRoutes:
         )
         assert get_response.status_code == 404
 
+    def test_create_plan_with_availability_trigger_persists_policy(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+
+        response = test_client.post(
+            "/api/backup-plans/",
+            json=_payload(
+                [repo.id],
+                schedule_enabled=True,
+                schedule_mode="availability",
+                availability_check_interval_minutes=15,
+                min_success_interval_minutes=20 * 60,
+                cron_expression="not a valid cron expression",
+            ),
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 201
+        created = response.json()
+        assert created["schedule_mode"] == "availability"
+        assert created["availability_check_interval_minutes"] == 15
+        assert created["min_success_interval_minutes"] == 20 * 60
+        assert created["cron_expression"] is None
+        assert created["next_run"] is not None
+
+    def test_create_plan_rejects_invalid_availability_interval(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+
+        response = test_client.post(
+            "/api/backup-plans/",
+            json=_payload(
+                [repo.id],
+                schedule_enabled=True,
+                schedule_mode="availability",
+                availability_check_interval_minutes=0,
+            ),
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 422
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.schedule.invalidAvailabilityInterval"
+        )
+
     def test_create_plan_persists_upload_ratelimit_schedule_policies(
         self, test_client: TestClient, admin_headers, test_db
     ):
@@ -2463,7 +2511,8 @@ class TestBackupPlanRoutes:
         assert plan.enabled is False
         assert plan.next_run is None
 
-    def test_dispatch_due_runs_starts_scheduled_plan_and_advances_next_run(
+    @pytest.mark.asyncio
+    async def test_dispatch_due_runs_starts_scheduled_plan_and_advances_next_run(
         self, test_db
     ):
         _set_plan(test_db, "community")
@@ -2483,7 +2532,9 @@ class TestBackupPlanRoutes:
             "app.services.backup_plan_execution_service.asyncio.create_task",
             side_effect=close_background_task,
         ) as mock_create_task:
-            dispatched = backup_plan_execution_service.dispatch_due_runs(test_db, now)
+            dispatched = await backup_plan_execution_service.dispatch_due_runs(
+                test_db, now
+            )
 
         assert dispatched == 1
         mock_create_task.assert_called_once()
@@ -2495,7 +2546,45 @@ class TestBackupPlanRoutes:
         assert run.trigger == "schedule"
         assert run.status == "pending"
 
-    def test_dispatch_due_runs_skips_and_advances_paid_only_plan_after_downgrade(
+    @pytest.mark.asyncio
+    async def test_availability_plan_records_minimum_interval_skip(self, test_db):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        now = datetime(2026, 1, 2, 12, 0)
+        plan = _create_scheduled_plan(
+            test_db,
+            [repo],
+            next_run=now - timedelta(minutes=1),
+        )
+        plan.schedule_mode = "availability"
+        plan.availability_check_interval_minutes = 30
+        plan.min_success_interval_minutes = 20 * 60
+        test_db.add(
+            BackupPlanRun(
+                backup_plan_id=plan.id,
+                trigger="schedule",
+                status="completed",
+                started_at=now - timedelta(hours=1, minutes=5),
+                completed_at=now - timedelta(hours=1),
+                created_at=now - timedelta(hours=1, minutes=5),
+            )
+        )
+        test_db.commit()
+
+        dispatched = await backup_plan_execution_service.dispatch_due_runs(test_db, now)
+
+        assert dispatched == 0
+        skipped = (
+            test_db.query(BackupPlanRun)
+            .filter_by(backup_plan_id=plan.id, status="skipped")
+            .one()
+        )
+        assert skipped.trigger == "availability"
+        assert skipped.skip_reason == "minimum_interval_not_elapsed"
+        assert len(skipped.repositories) == 1
+        assert skipped.repositories[0].status == "skipped"
+
+    @pytest.mark.asyncio
+    async def test_dispatch_due_runs_skips_and_advances_paid_only_plan_after_downgrade(
         self, test_db
     ):
         _set_plan(test_db, "community")
@@ -2511,7 +2600,9 @@ class TestBackupPlanRoutes:
         with patch(
             "app.services.backup_plan_execution_service.asyncio.create_task"
         ) as mock_create_task:
-            dispatched = backup_plan_execution_service.dispatch_due_runs(test_db, now)
+            dispatched = await backup_plan_execution_service.dispatch_due_runs(
+                test_db, now
+            )
 
         assert dispatched == 0
         mock_create_task.assert_not_called()
@@ -2522,7 +2613,8 @@ class TestBackupPlanRoutes:
         assert plan.last_run is None
         assert plan.next_run > now
 
-    def test_dispatch_due_runs_skips_plan_with_active_run(self, test_db):
+    @pytest.mark.asyncio
+    async def test_dispatch_due_runs_skips_plan_with_active_run(self, test_db):
         repo = _create_repo(test_db, "Primary", "/repos/primary")
         now = datetime(2026, 1, 1, 2, 0)
         plan = _create_scheduled_plan(
@@ -2542,7 +2634,9 @@ class TestBackupPlanRoutes:
         with patch(
             "app.services.backup_plan_execution_service.asyncio.create_task"
         ) as mock_create_task:
-            dispatched = backup_plan_execution_service.dispatch_due_runs(test_db, now)
+            dispatched = await backup_plan_execution_service.dispatch_due_runs(
+                test_db, now
+            )
 
         assert dispatched == 0
         mock_create_task.assert_not_called()
@@ -2550,7 +2644,8 @@ class TestBackupPlanRoutes:
             test_db.query(BackupPlanRun).filter_by(backup_plan_id=plan.id).count() == 1
         )
 
-    def test_dispatch_due_runs_ignores_disabled_plan_schedule(self, test_db):
+    @pytest.mark.asyncio
+    async def test_dispatch_due_runs_ignores_disabled_plan_schedule(self, test_db):
         repo = _create_repo(test_db, "Primary", "/repos/primary")
         now = datetime(2026, 1, 1, 2, 0)
         _create_scheduled_plan(
@@ -2563,7 +2658,9 @@ class TestBackupPlanRoutes:
         with patch(
             "app.services.backup_plan_execution_service.asyncio.create_task"
         ) as mock_create_task:
-            dispatched = backup_plan_execution_service.dispatch_due_runs(test_db, now)
+            dispatched = await backup_plan_execution_service.dispatch_due_runs(
+                test_db, now
+            )
 
         assert dispatched == 0
         mock_create_task.assert_not_called()

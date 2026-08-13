@@ -19,6 +19,7 @@ export interface Job {
   started_at?: string | null
   completed_at?: string | null
   error_message?: string | null
+  skip_reason?: 'minimum_interval_not_elapsed' | 'source_unavailable' | null
   archive_name?: string | null
   package_name?: string | null
   has_logs?: boolean

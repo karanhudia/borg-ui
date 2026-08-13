@@ -54,8 +54,8 @@ function isActiveRun(status?: string): boolean {
 
 function runStatusColor(status?: string): 'default' | 'primary' | 'success' | 'warning' | 'error' {
   if (status === 'completed') return 'success'
-  if (status === 'completed_with_warnings' || status === 'partial' || status === 'skipped')
-    return 'warning'
+  if (status === 'completed_with_warnings' || status === 'partial') return 'warning'
+  if (status === 'skipped') return 'default'
   if (status === 'failed' || status === 'cancelled') return 'error'
   if (isActiveRun(status)) return 'primary'
   return 'default'
@@ -598,7 +598,28 @@ export default function BackupPlanRunsPanel({
       width: '160px',
       render: (run) => (
         <Stack spacing={0.75}>
-          <StatusBadge status={run.status} />
+          <StatusBadge
+            status={run.status}
+            tooltip={
+              run.skip_reason === 'minimum_interval_not_elapsed'
+                ? t('availabilitySchedule.skipReasons.minimumIntervalNotElapsed')
+                : run.skip_reason === 'source_unavailable'
+                  ? t('availabilitySchedule.skipReasons.sourceUnavailable')
+                  : undefined
+            }
+          />
+          {run.skip_reason && (
+            <Chip
+              size="small"
+              variant="outlined"
+              label={
+                run.skip_reason === 'minimum_interval_not_elapsed'
+                  ? t('availabilitySchedule.skipReasons.minimumIntervalNotElapsed')
+                  : t('availabilitySchedule.skipReasons.sourceUnavailable')
+              }
+              sx={{ alignSelf: 'flex-start' }}
+            />
+          )}
           {isActiveRun(run.status) && (
             <LinearProgress
               variant={getRunProgress(run) === 0 ? 'indeterminate' : 'determinate'}

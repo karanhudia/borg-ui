@@ -53,6 +53,7 @@ from app.database.models import (
     BackupJob,
     BackupJobRetryLineage,
     BackupPlanRun,
+    AvailabilityScheduleSkip,
     CheckJob,
     CompactJob,
     DeleteArchiveJob,
@@ -95,6 +96,7 @@ _JOB_TABLES = (
     (PackageInstallJob, ("stdout", "stderr")),
     (ScriptExecution, ("stdout", "stderr")),
     (BackupPlanRun, ()),
+    (AvailabilityScheduleSkip, ()),
 )
 
 
@@ -108,14 +110,19 @@ def _older_than(model, cutoff):
     the freshest timestamp the table has: completed_at, then updated_at
     (refreshed on every agent log line), then started_at, then created_at.
     """
-    columns = [model.completed_at]
-    if hasattr(model, "updated_at"):
-        columns.append(model.updated_at)
-    if hasattr(model, "started_at"):
-        columns.append(model.started_at)
-    if hasattr(model, "created_at"):
-        columns.append(model.created_at)
-    return (func.coalesce(*columns) < cutoff,)
+    columns = []
+    for name in (
+        "completed_at",
+        "occurred_at",
+        "updated_at",
+        "started_at",
+        "created_at",
+    ):
+        column = getattr(model, name, None)
+        if column is not None:
+            columns.append(column)
+    timestamp = columns[0] if len(columns) == 1 else func.coalesce(*columns)
+    return (timestamp < cutoff,)
 
 
 def _delete_chunked(db: Session, model, filters) -> int:

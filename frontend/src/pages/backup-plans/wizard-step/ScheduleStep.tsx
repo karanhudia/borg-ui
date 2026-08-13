@@ -76,6 +76,10 @@ export function ScheduleStep({
             cronExpression={wizardState.cronExpression}
             timezone={wizardState.timezone}
             onChange={(updates) => updateState(updates)}
+            scheduleMode={wizardState.scheduleMode}
+            availabilityCheckIntervalMinutes={wizardState.availabilityCheckIntervalMinutes}
+            minimumSuccessIntervalHours={wizardState.minimumSuccessIntervalHours}
+            showTriggerMode
             required
             size="medium"
             cronLabel={t('backupPlans.wizard.fields.cronExpression')}

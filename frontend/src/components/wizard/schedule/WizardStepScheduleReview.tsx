@@ -12,6 +12,9 @@ interface WizardStepScheduleReviewProps {
     repositoryIds: number[]
     cronExpression: string
     timezone?: string
+    scheduleMode?: 'cron' | 'availability'
+    availabilityCheckIntervalMinutes?: number
+    minimumSuccessIntervalHours?: number
     archiveNameTemplate: string
     preBackupScriptId: number | null
     postBackupScriptId: number | null
@@ -268,12 +271,42 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
               </Typography>
             </AttrRow>
           )}
-          <AttrRow label={t('wizard.scheduleWizard.review.schedule')}>
-            <CodePill>{data.cronExpression}</CodePill>
-          </AttrRow>
-          <AttrRow label={t('wizard.scheduleWizard.review.timezone', { defaultValue: 'Timezone' })}>
-            <CodePill>{data.timezone || 'UTC'}</CodePill>
-          </AttrRow>
+          {data.scheduleMode === 'availability' ? (
+            <>
+              <AttrRow label={t('schedule.trigger.label', { defaultValue: 'Run trigger' })}>
+                <Typography variant="body2" fontSize="0.75rem" fontWeight={600}>
+                  {t('schedule.trigger.whenAvailable', {
+                    defaultValue: 'When source is available',
+                  })}
+                </Typography>
+              </AttrRow>
+              <AttrRow
+                label={t('schedule.trigger.checkInterval', {
+                  defaultValue: 'Check every (minutes)',
+                })}
+              >
+                <CodePill>{data.availabilityCheckIntervalMinutes ?? 30} min</CodePill>
+              </AttrRow>
+              <AttrRow
+                label={t('schedule.trigger.minimumInterval', {
+                  defaultValue: 'Minimum interval after a successful run (hours)',
+                })}
+              >
+                <CodePill>{data.minimumSuccessIntervalHours ?? 20} h</CodePill>
+              </AttrRow>
+            </>
+          ) : (
+            <>
+              <AttrRow label={t('wizard.scheduleWizard.review.schedule')}>
+                <CodePill>{data.cronExpression}</CodePill>
+              </AttrRow>
+              <AttrRow
+                label={t('wizard.scheduleWizard.review.timezone', { defaultValue: 'Timezone' })}
+              >
+                <CodePill>{data.timezone || 'UTC'}</CodePill>
+              </AttrRow>
+            </>
+          )}
           <AttrRow label={t('wizard.scheduleWizard.review.archiveNameTemplate')}>
             <CodePill>{data.archiveNameTemplate}</CodePill>
           </AttrRow>

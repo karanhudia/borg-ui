@@ -53,6 +53,32 @@ def _create_schedule(
 
 @pytest.mark.unit
 class TestScheduleRouteContracts:
+    def test_create_availability_schedule_without_cron_expression(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repository = _create_repo(test_db, "Availability Repo", "/repos/availability")
+
+        response = test_client.post(
+            "/api/schedule/",
+            json={
+                "name": "Availability backup",
+                "schedule_mode": "availability",
+                "availability_check_interval_minutes": 30,
+                "min_success_interval_minutes": 20 * 60,
+                "cron_expression": None,
+                "timezone": "UTC",
+                "repository_id": repository.id,
+                "enabled": True,
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        created = response.json()["job"]
+        assert created["schedule_mode"] == "availability"
+        assert created["cron_expression"] is None
+        assert created["next_run"] is not None
+
     def test_list_schedules_includes_deduped_repository_ids(
         self, test_client: TestClient, admin_headers, test_db
     ):

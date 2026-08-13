@@ -10,6 +10,7 @@ from app.database.models import (
     User,
     ScheduledJob,
     ScheduledJobRepository,
+    AvailabilityScheduleSkip,
     BackupJob,
     CompactJob,
     PruneJob,
@@ -47,10 +48,36 @@ from app.utils.schedule_time import (
     normalize_schedule_timezone,
     to_utc_naive,
 )
+from app.services.schedule_availability import (
+    DEFAULT_AVAILABILITY_CHECK_INTERVAL_MINUTES,
+    repositories_available,
+    validate_availability_intervals,
+)
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["schedule"], dependencies=[Depends(authorize_request)])
 _active_scheduled_backup_runs: set[str] = set()
+
+
+def _record_availability_skip(
+    db: Session,
+    job: ScheduledJob,
+    now: datetime,
+    *,
+    reason: str,
+    detail: str,
+) -> None:
+    """Persist a neutral availability decision for Activity history."""
+    db.add(
+        AvailabilityScheduleSkip(
+            scheduled_job_id=job.id,
+            reason=reason,
+            detail=detail,
+            occurred_at=now,
+            next_check_at=job.next_run,
+        )
+    )
+
 
 # Pydantic models
 from pydantic import BaseModel
@@ -58,7 +85,12 @@ from pydantic import BaseModel
 
 class ScheduledJobCreate(BaseModel):
     name: str
-    cron_expression: str
+    cron_expression: Optional[str] = None
+    schedule_mode: str = "cron"
+    availability_check_interval_minutes: int = (
+        DEFAULT_AVAILABILITY_CHECK_INTERVAL_MINUTES
+    )
+    min_success_interval_minutes: int = 0
     timezone: Optional[str] = None
     repository: Optional[str] = None  # Legacy single-repo (by path)
     repository_id: Optional[int] = None  # Single-repo (by ID)
@@ -95,6 +127,9 @@ class ScheduledJobCreate(BaseModel):
 class ScheduledJobUpdate(BaseModel):
     name: Optional[str] = None
     cron_expression: Optional[str] = None
+    schedule_mode: Optional[str] = None
+    availability_check_interval_minutes: Optional[int] = None
+    min_success_interval_minutes: Optional[int] = None
     timezone: Optional[str] = None
     repository: Optional[str] = None  # Legacy single-repo (by path)
     repository_id: Optional[int] = None  # Single-repo (by ID)
@@ -422,6 +457,9 @@ async def get_scheduled_jobs(
                     "id": job.id,
                     "name": job.name,
                     "cron_expression": job.cron_expression,
+                    "schedule_mode": job.schedule_mode,
+                    "availability_check_interval_minutes": job.availability_check_interval_minutes,
+                    "min_success_interval_minutes": job.min_success_interval_minutes,
                     "timezone": job.timezone or DEFAULT_SCHEDULE_TIMEZONE,
                     "repository": job.repository,
                     "repository_id": job.repository_id,
@@ -581,13 +619,33 @@ async def create_scheduled_job(
             )
             # Continue anyway - the atomic transaction + rollback will protect us
 
-        # Validate timezone and cron expression
+        if job_data.schedule_mode not in {"cron", "availability"}:
+            raise HTTPException(
+                status_code=422, detail={"key": "backend.errors.schedule.invalidMode"}
+            )
+        try:
+            validate_availability_intervals(
+                job_data.availability_check_interval_minutes,
+                job_data.min_success_interval_minutes,
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail={"key": "backend.errors.schedule.invalidAvailabilityInterval"},
+            ) from exc
+
+        # Validate timezone for both trigger types. Cron parsing only applies
+        # to the fixed-time trigger; availability schedules start polling now.
         try:
             schedule_timezone = normalize_schedule_timezone(job_data.timezone)
-            next_run = _calculate_next_schedule_run(
-                job_data.cron_expression,
-                schedule_timezone=schedule_timezone,
-            )
+            if job_data.schedule_mode == "availability":
+                next_run = to_utc_naive(datetime.now(timezone.utc))
+            else:
+                if not job_data.cron_expression:
+                    raise ValueError("cron expression is required")
+                next_run = _calculate_next_schedule_run(
+                    job_data.cron_expression, schedule_timezone=schedule_timezone
+                )
         except InvalidScheduleTimezone as e:
             _raise_invalid_schedule_timezone(e)
         except Exception as e:
@@ -633,7 +691,12 @@ async def create_scheduled_job(
         # Create scheduled job
         scheduled_job = ScheduledJob(
             name=job_data.name,
-            cron_expression=job_data.cron_expression,
+            cron_expression=(
+                job_data.cron_expression if job_data.schedule_mode == "cron" else None
+            ),
+            schedule_mode=job_data.schedule_mode,
+            availability_check_interval_minutes=job_data.availability_check_interval_minutes,
+            min_success_interval_minutes=job_data.min_success_interval_minutes,
             timezone=schedule_timezone,
             repository=job_data.repository,  # Legacy
             repository_id=job_data.repository_id,  # Single-repo by ID
@@ -777,6 +840,13 @@ async def create_scheduled_job(
                 "id": scheduled_job.id,
                 "name": scheduled_job.name,
                 "cron_expression": scheduled_job.cron_expression,
+                "schedule_mode": scheduled_job.schedule_mode,
+                "availability_check_interval_minutes": (
+                    scheduled_job.availability_check_interval_minutes
+                ),
+                "min_success_interval_minutes": (
+                    scheduled_job.min_success_interval_minutes
+                ),
                 "timezone": scheduled_job.timezone or DEFAULT_SCHEDULE_TIMEZONE,
                 "repository": scheduled_job.repository,
                 "enabled": scheduled_job.enabled,
@@ -1040,6 +1110,9 @@ async def get_scheduled_job(
                 "id": job.id,
                 "name": job.name,
                 "cron_expression": job.cron_expression,
+                "schedule_mode": job.schedule_mode,
+                "availability_check_interval_minutes": job.availability_check_interval_minutes,
+                "min_success_interval_minutes": job.min_success_interval_minutes,
                 "timezone": job.timezone or DEFAULT_SCHEDULE_TIMEZONE,
                 "repository": job.repository,
                 "enabled": job.enabled,
@@ -1121,23 +1194,58 @@ async def update_scheduled_job(
         schedule_definition_changed = (
             job_data.cron_expression is not None
             or "timezone" in job_data.model_fields_set
+            or job_data.schedule_mode is not None
+            or job_data.availability_check_interval_minutes is not None
+            or job_data.min_success_interval_minutes is not None
         )
         if schedule_definition_changed:
-            next_cron_expression = (
-                job_data.cron_expression
-                if job_data.cron_expression is not None
-                else job.cron_expression
+            next_schedule_mode = job_data.schedule_mode or job.schedule_mode
+            next_check_interval = (
+                job_data.availability_check_interval_minutes
+                if job_data.availability_check_interval_minutes is not None
+                else job.availability_check_interval_minutes
             )
+            next_min_success_interval = (
+                job_data.min_success_interval_minutes
+                if job_data.min_success_interval_minutes is not None
+                else job.min_success_interval_minutes
+            )
+            if next_schedule_mode not in {"cron", "availability"}:
+                raise HTTPException(
+                    status_code=422,
+                    detail={"key": "backend.errors.schedule.invalidMode"},
+                )
+            try:
+                validate_availability_intervals(
+                    next_check_interval, next_min_success_interval
+                )
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "key": "backend.errors.schedule.invalidAvailabilityInterval"
+                    },
+                ) from exc
             try:
                 next_schedule_timezone = normalize_schedule_timezone(
                     job_data.timezone
                     if "timezone" in job_data.model_fields_set
                     else job.timezone
                 )
-                next_run = _calculate_next_schedule_run(
-                    next_cron_expression,
-                    schedule_timezone=next_schedule_timezone,
-                )
+                if next_schedule_mode == "availability":
+                    next_cron_expression = None
+                    next_run = to_utc_naive(datetime.now(timezone.utc))
+                else:
+                    next_cron_expression = (
+                        job_data.cron_expression
+                        if job_data.cron_expression is not None
+                        else job.cron_expression
+                    )
+                    if not next_cron_expression:
+                        raise ValueError("cron expression is required")
+                    next_run = _calculate_next_schedule_run(
+                        next_cron_expression, schedule_timezone=next_schedule_timezone
+                    )
             except InvalidScheduleTimezone as e:
                 _raise_invalid_schedule_timezone(e)
             except Exception as e:
@@ -1150,6 +1258,9 @@ async def update_scheduled_job(
                 )
 
             job.cron_expression = next_cron_expression
+            job.schedule_mode = next_schedule_mode
+            job.availability_check_interval_minutes = next_check_interval
+            job.min_success_interval_minutes = next_min_success_interval
             job.timezone = next_schedule_timezone
             job.next_run = next_run
 
@@ -1162,9 +1273,13 @@ async def update_scheduled_job(
             job.enabled = job_data.enabled
             if job.enabled and not was_enabled and not schedule_definition_changed:
                 try:
-                    job.next_run = _calculate_next_schedule_run(
-                        job.cron_expression,
-                        schedule_timezone=job.timezone or DEFAULT_SCHEDULE_TIMEZONE,
+                    job.next_run = (
+                        to_utc_naive(datetime.now(timezone.utc))
+                        if job.schedule_mode == "availability"
+                        else _calculate_next_schedule_run(
+                            job.cron_expression,
+                            schedule_timezone=job.timezone or DEFAULT_SCHEDULE_TIMEZONE,
+                        )
                     )
                 except InvalidScheduleTimezone as e:
                     _raise_invalid_schedule_timezone(e)
@@ -1358,9 +1473,13 @@ async def toggle_scheduled_job(
         job.enabled = not job.enabled
         if job.enabled:
             try:
-                job.next_run = _calculate_next_schedule_run(
-                    job.cron_expression,
-                    schedule_timezone=job.timezone or DEFAULT_SCHEDULE_TIMEZONE,
+                job.next_run = (
+                    to_utc_naive(datetime.now(timezone.utc))
+                    if job.schedule_mode == "availability"
+                    else _calculate_next_schedule_run(
+                        job.cron_expression,
+                        schedule_timezone=job.timezone or DEFAULT_SCHEDULE_TIMEZONE,
+                    )
                 )
             except InvalidScheduleTimezone as e:
                 _raise_invalid_schedule_timezone(e)
@@ -1427,11 +1546,16 @@ async def duplicate_scheduled_job(
             counter += 1
             new_name = f"{base_name} ({counter})"
 
-        # Calculate next run time from cron expression
+        # Calculate the appropriate first run for the duplicate.
         try:
-            next_run = _calculate_next_schedule_run(
-                original_job.cron_expression,
-                schedule_timezone=original_job.timezone or DEFAULT_SCHEDULE_TIMEZONE,
+            next_run = (
+                to_utc_naive(datetime.now(timezone.utc))
+                if original_job.schedule_mode == "availability"
+                else _calculate_next_schedule_run(
+                    original_job.cron_expression,
+                    schedule_timezone=original_job.timezone
+                    or DEFAULT_SCHEDULE_TIMEZONE,
+                )
             )
         except InvalidScheduleTimezone as e:
             _raise_invalid_schedule_timezone(e)
@@ -1448,6 +1572,11 @@ async def duplicate_scheduled_job(
         duplicated_job = ScheduledJob(
             name=new_name,
             cron_expression=original_job.cron_expression,
+            schedule_mode=original_job.schedule_mode,
+            availability_check_interval_minutes=(
+                original_job.availability_check_interval_minutes
+            ),
+            min_success_interval_minutes=original_job.min_success_interval_minutes,
             timezone=original_job.timezone or DEFAULT_SCHEDULE_TIMEZONE,
             repository=original_job.repository,
             repository_id=original_job.repository_id,
@@ -2794,10 +2923,99 @@ async def dispatch_due_scheduled_backups(
         return
 
     dispatched = 0
+    skipped = 0
     for job in jobs:
         if dispatched >= available_slots:
             break
         try:
+            if job.schedule_mode == "availability":
+                last_success = (
+                    db.query(BackupJob.completed_at)
+                    .filter(
+                        BackupJob.scheduled_job_id == job.id,
+                        BackupJob.status.in_(["completed", "completed_with_warnings"]),
+                        BackupJob.completed_at.isnot(None),
+                    )
+                    .order_by(BackupJob.completed_at.desc())
+                    .first()
+                )
+                if last_success and job.min_success_interval_minutes:
+                    allowed_at = to_utc_naive(last_success[0]) + timedelta(
+                        minutes=job.min_success_interval_minutes
+                    )
+                    if now < allowed_at:
+                        job.next_run = min(
+                            allowed_at,
+                            now
+                            + timedelta(
+                                minutes=job.availability_check_interval_minutes
+                            ),
+                        )
+                        _record_availability_skip(
+                            db,
+                            job,
+                            now,
+                            reason="minimum_interval_not_elapsed",
+                            detail="Minimum interval after the last successful backup has not elapsed.",
+                        )
+                        db.commit()
+                        skipped += 1
+                        logger.info(
+                            "Availability schedule skipped: minimum success interval",
+                            job_id=job.id,
+                        )
+                        continue
+                linked_repositories = (
+                    db.query(Repository)
+                    .join(
+                        ScheduledJobRepository,
+                        ScheduledJobRepository.repository_id == Repository.id,
+                    )
+                    .filter(ScheduledJobRepository.scheduled_job_id == job.id)
+                    .all()
+                )
+                if not linked_repositories and job.repository_id:
+                    repository = db.get(Repository, job.repository_id)
+                    linked_repositories = [repository] if repository else []
+                if not linked_repositories and job.repository:
+                    repository = (
+                        db.query(Repository)
+                        .filter(Repository.path == job.repository)
+                        .first()
+                    )
+                    linked_repositories = [repository] if repository else []
+                if not linked_repositories:
+                    decision_reason = (
+                        "No repositories are configured for this automation."
+                    )
+                else:
+                    decision = await repositories_available(db, linked_repositories)
+                    decision_reason = decision.reason
+                if not linked_repositories or not decision.available:
+                    job.next_run = now + timedelta(
+                        minutes=job.availability_check_interval_minutes
+                    )
+                    _record_availability_skip(
+                        db,
+                        job,
+                        now,
+                        reason="source_unavailable",
+                        detail=(
+                            decision_reason
+                            if linked_repositories
+                            else "No repositories are configured for this automation."
+                        ),
+                    )
+                    db.commit()
+                    skipped += 1
+                    logger.info(
+                        "Availability schedule skipped: source unavailable",
+                        job_id=job.id,
+                        reason=decision_reason
+                        if linked_repositories
+                        else "no repositories configured",
+                    )
+                    continue
             run_key = _dispatch_due_scheduled_job(db, job, now)
             if run_key:
                 dispatched += 1
@@ -2818,7 +3036,7 @@ async def dispatch_due_scheduled_backups(
                     error=str(notif_error),
                 )
 
-    deferred = len(jobs) - dispatched
+    deferred = len(jobs) - dispatched - skipped
     if deferred > 0:
         logger.info(
             "Deferred due scheduled backups until capacity is available",
@@ -2839,7 +3057,7 @@ async def check_scheduled_jobs():
                 backup_plan_execution_service,
             )
 
-            backup_plan_execution_service.dispatch_due_runs(db, now)
+            await backup_plan_execution_service.dispatch_due_runs(db, now)
             await run_due_scheduled_checks(db, now)
             await run_due_scheduled_restore_checks(db, now)
             dispatch_due_scheduled_rclone_mirrors(db, now)

@@ -778,9 +778,10 @@ class ScheduledJob(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, nullable=False, index=True)
-    cron_expression = Column(
-        String, nullable=False
-    )  # e.g., "0 2 * * *" for daily at 2 AM
+    cron_expression = Column(String, nullable=True)  # Required for cron mode
+    schedule_mode = Column(String, default="cron", nullable=False)
+    availability_check_interval_minutes = Column(Integer, default=30, nullable=False)
+    min_success_interval_minutes = Column(Integer, default=0, nullable=False)
     timezone = Column(
         String, default="UTC", nullable=False
     )  # IANA timezone used to interpret cron_expression
@@ -842,6 +843,26 @@ class ScheduledJob(Base):
 
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, nullable=True)
+
+
+class AvailabilityScheduleSkip(Base):
+    """A neutral, durable decision not to dispatch an availability automation."""
+
+    __tablename__ = "availability_schedule_skips"
+
+    id = Column(Integer, primary_key=True, index=True)
+    scheduled_job_id = Column(
+        Integer,
+        ForeignKey("scheduled_jobs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    reason = Column(String, nullable=False)
+    detail = Column(Text, nullable=True)
+    occurred_at = Column(DateTime, default=utc_now, nullable=False, index=True)
+    next_check_at = Column(DateTime, nullable=True)
+
+    scheduled_job = relationship("ScheduledJob")
 
 
 class ScheduledJobRepository(Base):
@@ -913,6 +934,9 @@ class BackupPlan(Base):
     failure_behavior = Column(String, default="continue", nullable=False)
 
     schedule_enabled = Column(Boolean, default=False, nullable=False)
+    schedule_mode = Column(String, default="cron", nullable=False)
+    availability_check_interval_minutes = Column(Integer, default=30, nullable=False)
+    min_success_interval_minutes = Column(Integer, default=0, nullable=False)
     cron_expression = Column(String, nullable=True)
     timezone = Column(String, default="UTC", nullable=False)
     last_run = Column(DateTime, nullable=True)
@@ -1052,6 +1076,9 @@ class BackupPlanRun(Base):
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
     error_message = Column(Text, nullable=True)
+    # A scheduler decision that deliberately did not dispatch work. This remains
+    # separate from error_message so API consumers can render it as neutral.
+    skip_reason = Column(String, nullable=True)
     created_at = Column(DateTime, default=utc_now, nullable=False)
 
     retry_original_run_id = Column(

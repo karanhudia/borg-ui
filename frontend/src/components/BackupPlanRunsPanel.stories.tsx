@@ -110,6 +110,19 @@ const noFailedRepositoriesRun: BackupPlanRun = {
   ],
 }
 
+const skippedAvailabilityRun: BackupPlanRun = {
+  id: 343,
+  backup_plan_id: plan.id,
+  trigger: 'availability',
+  status: 'skipped',
+  skip_reason: 'minimum_interval_not_elapsed',
+  error_message: 'Minimum interval after the last successful backup has not elapsed.',
+  started_at: '2026-05-22T08:15:00Z',
+  completed_at: '2026-05-22T08:15:00Z',
+  created_at: '2026-05-22T08:15:00Z',
+  repositories: [],
+}
+
 const allowRetry = (_run: BackupPlanRun): boolean => true
 const denyRetry = (_run: BackupPlanRun): boolean => false
 
@@ -162,5 +175,11 @@ export const DisabledNoFailedRepositories: Story = {
 export const DisabledNoPermission: Story = {
   args: {
     canRetryRun: denyRetry,
+  },
+}
+
+export const SkippedAvailabilityCheck: Story = {
+  args: {
+    runs: [skippedAvailabilityRun],
   },
 }

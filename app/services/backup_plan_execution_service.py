@@ -6,7 +6,7 @@ import os
 import shlex
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Optional
 
@@ -59,8 +59,9 @@ from app.services.template_service import get_system_variables
 from app.utils.archive_names import build_archive_name
 from app.utils.script_params import SYSTEM_VARIABLE_PREFIX
 from app.utils.ssh_utils import ssh_key_auth_args, write_ssh_key_to_tempfile
-from app.utils.source_locations import decode_source_locations
 from app.utils.schedule_time import calculate_next_cron_run, to_utc_naive
+from app.utils.source_locations import decode_source_locations
+from app.services.schedule_availability import source_locations_available
 
 logger = structlog.get_logger()
 
@@ -574,7 +575,7 @@ def _remote_script_body(script: str, env: dict[str, str]) -> str:
 
 
 class BackupPlanExecutionService:
-    def dispatch_due_runs(self, db: Session, now: datetime) -> int:
+    async def dispatch_due_runs(self, db: Session, now: datetime) -> int:
         now = to_utc_naive(now)
         due_plans = (
             db.query(BackupPlan)
@@ -596,6 +597,66 @@ class BackupPlanExecutionService:
         for plan in due_plans:
             if self.has_active_run(db, plan.id):
                 continue
+            if plan.schedule_mode == "availability":
+                last_success = (
+                    db.query(BackupPlanRun.completed_at)
+                    .filter(
+                        BackupPlanRun.backup_plan_id == plan.id,
+                        BackupPlanRun.status.in_(SUCCESS_BACKUP_STATUSES),
+                        BackupPlanRun.completed_at.isnot(None),
+                    )
+                    .order_by(BackupPlanRun.completed_at.desc())
+                    .first()
+                )
+                if last_success and plan.min_success_interval_minutes:
+                    allowed_at = to_utc_naive(last_success[0]) + timedelta(
+                        minutes=plan.min_success_interval_minutes
+                    )
+                    if now < allowed_at:
+                        plan.next_run = min(
+                            allowed_at,
+                            now
+                            + timedelta(
+                                minutes=plan.availability_check_interval_minutes
+                            ),
+                        )
+                        self._record_availability_skip(
+                            db,
+                            plan,
+                            now,
+                            reason="minimum_interval_not_elapsed",
+                            detail="Minimum interval after the last successful backup has not elapsed.",
+                        )
+                        db.commit()
+                        logger.info(
+                            "Availability schedule skipped: minimum success interval",
+                            backup_plan_id=plan.id,
+                        )
+                        continue
+                decision = await source_locations_available(
+                    db,
+                    decode_source_locations(plan.source_locations),
+                    fallback_source_type=plan.source_type,
+                    fallback_ssh_connection_id=plan.source_ssh_connection_id,
+                )
+                if not decision.available:
+                    plan.next_run = now + timedelta(
+                        minutes=plan.availability_check_interval_minutes
+                    )
+                    self._record_availability_skip(
+                        db,
+                        plan,
+                        now,
+                        reason="source_unavailable",
+                        detail=decision.reason or "The backup source is unavailable.",
+                    )
+                    db.commit()
+                    logger.info(
+                        "Availability schedule skipped: source unavailable",
+                        backup_plan_id=plan.id,
+                        reason=decision.reason,
+                    )
+                    continue
             access_decision = evaluate_backup_plan_access(db, plan)
             if not access_decision.allowed:
                 logger.warning(
@@ -639,6 +700,43 @@ class BackupPlanExecutionService:
                 )
                 db.rollback()
         return dispatched
+
+    @staticmethod
+    def _record_availability_skip(
+        db: Session,
+        plan: BackupPlan,
+        now: datetime,
+        *,
+        reason: str,
+        detail: str,
+    ) -> None:
+        """Persist a neutral availability decision for the plan run history.
+
+        A skipped poll is useful operator evidence, but it must not look like a
+        failed backup or affect the successful-run interval calculation.
+        """
+        run = BackupPlanRun(
+            backup_plan_id=plan.id,
+            trigger="availability",
+            status="skipped",
+            started_at=now,
+            completed_at=now,
+            skip_reason=reason,
+            created_at=now,
+        )
+        db.add(run)
+        db.flush()
+        for link in plan.repositories:
+            if link.enabled:
+                db.add(
+                    BackupPlanRunRepository(
+                        backup_plan_run_id=run.id,
+                        repository_id=link.repository_id,
+                        status="skipped",
+                        started_at=now,
+                        completed_at=now,
+                    )
+                )
 
     def has_active_run(self, db: Session, plan_id: int) -> bool:
         return (

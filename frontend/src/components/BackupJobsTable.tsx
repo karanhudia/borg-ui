@@ -115,6 +115,8 @@ const getTypeLabel = (type: string, t: (key: string) => string): string => {
       return t('backupJobsTable.types.rcloneHydrate')
     case 'script_execution':
       return t('backupJobsTable.types.scriptExecution')
+    case 'availability_check':
+      return t('backupJobsTable.types.availabilityCheck')
     default:
       return type
   }
@@ -144,6 +146,8 @@ const getTypeColor = (
       return 'primary'
     case 'script_execution':
       return 'secondary'
+    case 'availability_check':
+      return 'default'
     default:
       return 'default'
   }
@@ -164,6 +168,17 @@ const getTransportLabel = (
   }
   if (!executionMode) return null
   return t('backupJobsTable.transport.server')
+}
+
+const getSkipReasonLabel = (job: Job, t: (key: string) => string): string | null => {
+  if (job.status !== 'skipped') return null
+  if (job.skip_reason === 'minimum_interval_not_elapsed') {
+    return t('availabilitySchedule.skipReasons.minimumIntervalNotElapsed')
+  }
+  if (job.skip_reason === 'source_unavailable') {
+    return t('availabilitySchedule.skipReasons.sourceUnavailable')
+  }
+  return job.error_message || null
 }
 
 const RETRYABLE_BACKUP_JOB_STATUSES = new Set(['failed', 'cancelled'])
@@ -505,6 +520,10 @@ export const BackupJobsTable = <T extends Job = Job>({
           return <Typography variant="body2">{displayName}</Typography>
         }
 
+        if (job.type === 'availability_check') {
+          return <Typography variant="body2">{job.repository || '-'}</Typography>
+        }
+
         // For backup/restore/check/compact in Activity tab
         if (job.repository_path) {
           return (
@@ -592,9 +611,13 @@ export const BackupJobsTable = <T extends Job = Job>({
       width: '180px',
       render: (job: T) => {
         const transportLabel = getTransportLabel(job.execution_mode, job.route_strategy, t)
+        const skipReasonLabel = getSkipReasonLabel(job, t)
         return (
           <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
-            <StatusBadge status={job.status} />
+            <StatusBadge status={job.status} tooltip={skipReasonLabel || undefined} />
+            {skipReasonLabel && (
+              <Chip size="small" variant="outlined" color="default" label={skipReasonLabel} />
+            )}
             {transportLabel && <Chip size="small" variant="outlined" label={transportLabel} />}
           </Stack>
         )
@@ -782,7 +805,7 @@ export const BackupJobsTable = <T extends Job = Job>({
       onClick: handleDeleteClick,
       color: 'error',
       tooltip: t('backupJobsTable.actions.delete'),
-      show: (job) => job.status !== 'running', // Allow deleting pending jobs (useful for stuck jobs)
+      show: (job) => job.status !== 'running' && job.type !== 'availability_check', // Availability decisions are immutable history, not jobs.
     })
   }
 

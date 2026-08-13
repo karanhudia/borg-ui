@@ -13,6 +13,7 @@ import RunningCloudStorageJobsSection from '../components/RunningCloudStorageJob
 import { ActivityFilters } from './activity/ActivityFilters'
 
 export interface ActivityItem {
+  activity_key?: string | null
   id: number
   type: string
   status: string
@@ -31,6 +32,7 @@ export interface ActivityItem {
   backup_plan_id?: number | null
   backup_plan_run_id?: number | null
   backup_plan_name?: string | null
+  skip_reason?: 'minimum_interval_not_elapsed' | 'source_unavailable' | null
   has_logs?: boolean
 }
 
@@ -138,7 +140,7 @@ export function ActivityContent({
           canBreakLocks={canBreakLockForActivity}
           lockBreakingEnabled={lockBreakingEnabled}
           canDeleteJobs={canManageActivityJobs}
-          getRowKey={(activity) => `${activity.type}-${activity.id}`}
+          getRowKey={(activity) => activity.activity_key ?? `${activity.type}-${activity.id}`}
           headerBgColor="background.default"
           enableHover={true}
           tableId="activity"
@@ -159,7 +161,7 @@ export function ActivityContent({
           canBreakLocks={canBreakLockForActivity}
           lockBreakingEnabled={lockBreakingEnabled}
           canDeleteJobs={canManageActivityJobs}
-          getRowKey={(activity) => `${activity.type}-${activity.id}`}
+          getRowKey={(activity) => activity.activity_key ?? `${activity.type}-${activity.id}`}
           headerBgColor="background.default"
           enableHover={true}
           tableId="activity"
