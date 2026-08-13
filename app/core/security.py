@@ -1,8 +1,9 @@
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Annotated, Optional
 import jwt
 from jwt.exceptions import PyJWTError as JWTError
 import bcrypt
+from pydantic import AfterValidator
 import hashlib
 from fastapi import HTTPException, status, Depends, Request
 from fastapi.security import HTTPBearer
@@ -76,6 +77,26 @@ def verify_password(plain_password: str, hashed_password: Optional[str]) -> bool
 def get_password_hash(password: str) -> str:
     """Hash a password"""
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+# bcrypt hashes at most 72 bytes of input; bcrypt 5 raises ValueError on longer
+# input rather than truncating it. Left unchecked that surfaces as a 500 when a
+# user sets a long (or multibyte) password. Validating at the request boundary
+# turns it into a clean 422 on registration, password change, and reset.
+BCRYPT_MAX_PASSWORD_BYTES = 72
+
+
+def enforce_bcrypt_password_length(password: str) -> str:
+    if len(password.encode("utf-8")) > BCRYPT_MAX_PASSWORD_BYTES:
+        raise ValueError(
+            f"Password must not exceed {BCRYPT_MAX_PASSWORD_BYTES} bytes when "
+            "UTF-8 encoded"
+        )
+    return password
+
+
+# Use on request-model password fields that are hashed with get_password_hash.
+BcryptPassword = Annotated[str, AfterValidator(enforce_bcrypt_password_length)]
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
