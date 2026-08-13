@@ -212,7 +212,7 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
         <Tooltip title={t('wizard.scheduleWizard.review.readyToCreate')} placement="top" arrow>
           <Chip
             icon={<Rocket size={11} />}
-            label="Ready"
+            label={t('wizard.scheduleWizard.review.ready')}
             size="small"
             sx={{
               height: 20,
@@ -273,25 +273,15 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
           )}
           {data.scheduleMode === 'availability' ? (
             <>
-              <AttrRow label={t('schedule.trigger.label', { defaultValue: 'Run trigger' })}>
+              <AttrRow label={t('schedule.trigger.label')}>
                 <Typography variant="body2" fontSize="0.75rem" fontWeight={600}>
-                  {t('schedule.trigger.whenAvailable', {
-                    defaultValue: 'When source is available',
-                  })}
+                  {t('schedule.trigger.whenAvailable')}
                 </Typography>
               </AttrRow>
-              <AttrRow
-                label={t('schedule.trigger.checkInterval', {
-                  defaultValue: 'Check every (minutes)',
-                })}
-              >
+              <AttrRow label={t('schedule.trigger.checkInterval')}>
                 <CodePill>{data.availabilityCheckIntervalMinutes ?? 30} min</CodePill>
               </AttrRow>
-              <AttrRow
-                label={t('schedule.trigger.minimumInterval', {
-                  defaultValue: 'Minimum interval after a successful run (hours)',
-                })}
-              >
+              <AttrRow label={t('schedule.trigger.minimumInterval')}>
                 <CodePill>{data.minimumSuccessIntervalHours ?? 20} h</CodePill>
               </AttrRow>
             </>
@@ -300,9 +290,7 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
               <AttrRow label={t('wizard.scheduleWizard.review.schedule')}>
                 <CodePill>{data.cronExpression}</CodePill>
               </AttrRow>
-              <AttrRow
-                label={t('wizard.scheduleWizard.review.timezone', { defaultValue: 'Timezone' })}
-              >
+              <AttrRow label={t('wizard.scheduleWizard.review.timezone')}>
                 <CodePill>{data.timezone || 'UTC'}</CodePill>
               </AttrRow>
             </>
@@ -397,7 +385,7 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
             />
           </AttrRow>
           {data.runPruneAfter && (
-            <AttrRow label="Keep:">
+            <AttrRow label={t('wizard.scheduleWizard.review.keep')}>
               <CodePill>{pruneKeeps}</CodePill>
             </AttrRow>
           )}

@@ -289,7 +289,7 @@ export default function WizardStepRestoreDestination({
                           {conn.username}@{conn.host}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          Port {conn.port}
+                          {t('wizard.restoreDestination.port', { port: conn.port })}
                           {conn.mount_point && ` • ${conn.mount_point}`}
                         </Typography>
                       </Box>
@@ -301,7 +301,7 @@ export default function WizardStepRestoreDestination({
                             borderRadius: '50%',
                             bgcolor: 'success.main',
                           }}
-                          title="Connected"
+                          title={t('wizard.restoreDestination.connected')}
                         />
                       )}
                     </Box>

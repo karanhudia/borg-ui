@@ -148,7 +148,7 @@ export default function AnnouncementModal({
               {announcement.type === 'update_available' ? (
                 <Chip
                   size="small"
-                  label="Latest release"
+                  label={t('announcements.latestRelease')}
                   sx={{
                     height: 24,
                     bgcolor: alpha(accentColor, 0.16),
@@ -183,7 +183,7 @@ export default function AnnouncementModal({
             <IconButton
               onClick={onAcknowledge}
               size="small"
-              aria-label="Close announcement"
+              aria-label={t('announcements.close')}
               sx={{
                 color: secondaryText,
                 border: `1px solid ${borderAlpha}`,

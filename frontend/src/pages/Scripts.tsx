@@ -603,12 +603,12 @@ export default function Scripts() {
                           <Box sx={{ display: 'flex', gap: 1, mt: 0.5 }}>
                             {param.default && (
                               <Typography variant="caption" color="text.secondary">
-                                Default: {param.default}
+                                {t('common.default')} {param.default}
                               </Typography>
                             )}
                             {param.required && (
                               <Chip
-                                label="Required"
+                                label={t('common.required')}
                                 size="small"
                                 color="error"
                                 variant="outlined"

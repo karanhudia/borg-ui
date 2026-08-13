@@ -1,5 +1,6 @@
 import { Alert, type AlertColor, Chip, type SxProps, type Theme } from '@mui/material'
 import { CalendarCheck } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { SourceType } from '../../types'
 import RichSelect, { type RichSelectOption } from './RichSelect'
 
@@ -47,22 +48,26 @@ export default function BackupPlanSelect({
   hideEmptyAlert,
   emptySeverity = 'info',
   sx,
-  formatSecondary = formatBackupPlanSecondary,
-  getIndicatorLabel = getDefaultIndicatorLabel,
+  formatSecondary,
+  getIndicatorLabel,
 }: BackupPlanSelectProps) {
+  const { t } = useTranslation()
+
   if (!Array.isArray(plans) || plans.length === 0) {
     if (hideEmptyAlert) return null
     return <Alert severity={emptySeverity}>{emptyMessage}</Alert>
   }
 
   const options: RichSelectOption[] = plans.map((plan) => {
-    const indicatorLabel = getIndicatorLabel(plan)
+    const indicatorLabel = getIndicatorLabel
+      ? getIndicatorLabel(plan)
+      : getDefaultIndicatorLabel(plan, t)
 
     return {
       value: String(plan.id),
       icon: <CalendarCheck size={16} />,
       primary: plan.name,
-      secondary: formatSecondary(plan),
+      secondary: formatSecondary?.(plan) ?? formatBackupPlanSecondary(plan, t),
       indicator: indicatorLabel ? (
         <Chip
           size="small"
@@ -91,21 +96,27 @@ export default function BackupPlanSelect({
   )
 }
 
-function formatBackupPlanSecondary(plan: BackupPlanSummary): string {
-  return `${formatSourceType(plan.source_type)} · ${formatRepositoryCount(plan.repository_count)}`
+function formatBackupPlanSecondary(
+  plan: BackupPlanSummary,
+  t: (key: string, options?: Record<string, unknown>) => string
+): string {
+  return `${formatSourceType(plan.source_type, t)} · ${formatRepositoryCount(plan.repository_count, t)}`
 }
 
-function formatSourceType(sourceType: SourceType): string {
-  if (sourceType === 'remote') return 'Remote source'
-  if (sourceType === 'agent') return 'Managed agent'
-  if (sourceType === 'mixed') return 'Multiple sources'
-  return 'Local source'
+function formatSourceType(sourceType: SourceType, t: (key: string) => string): string {
+  if (sourceType === 'remote') return t('backupPlans.select.source.remote')
+  if (sourceType === 'agent') return t('backupPlans.select.source.agent')
+  if (sourceType === 'mixed') return t('backupPlans.select.source.mixed')
+  return t('backupPlans.select.source.local')
 }
 
-function formatRepositoryCount(count: number): string {
-  return count === 1 ? '1 repository' : `${count} repositories`
+function formatRepositoryCount(
+  count: number,
+  t: (key: string, options?: Record<string, unknown>) => string
+): string {
+  return t('backupPlans.select.repositories', { count })
 }
 
-function getDefaultIndicatorLabel(plan: BackupPlanSummary): string {
-  return plan.schedule_enabled ? 'Scheduled' : 'Manual'
+function getDefaultIndicatorLabel(plan: BackupPlanSummary, t: (key: string) => string): string {
+  return plan.schedule_enabled ? t('backupPlans.select.scheduled') : t('backupPlans.select.manual')
 }

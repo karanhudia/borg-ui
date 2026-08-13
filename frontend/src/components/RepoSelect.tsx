@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   FormControl,
   InputLabel,
@@ -43,9 +44,9 @@ export default function RepoSelect({
   onChange,
   loading = false,
   valueKey = 'path',
-  label = 'Repository',
-  loadingLabel = 'Loading…',
-  placeholderLabel = 'Select a repository',
+  label,
+  loadingLabel,
+  placeholderLabel,
   fallbackDisplayValue,
   maintenanceLabel,
   size = 'medium',
@@ -55,7 +56,11 @@ export default function RepoSelect({
   fullWidth = true,
   sx,
 }: RepoSelectProps) {
+  const { t } = useTranslation()
   const theme = useTheme()
+  const resolvedLabel = label ?? t('repoSelect.label')
+  const resolvedLoadingLabel = loadingLabel ?? t('common.loading')
+  const resolvedPlaceholderLabel = placeholderLabel ?? t('repoSelect.placeholder')
 
   // Find selected repo for rich renderValue
   const selectedRepo =
@@ -87,18 +92,18 @@ export default function RepoSelect({
       size={size}
       sx={{ minWidth: { xs: '100%', sm: 300 }, ...sx }}
     >
-      {label && <InputLabel>{label}</InputLabel>}
+      {resolvedLabel && <InputLabel>{resolvedLabel}</InputLabel>}
       <Select
         value={value}
         onChange={(e) => onChange(e.target.value as number | string)}
-        label={label || undefined}
+        label={resolvedLabel || undefined}
         disabled={disabled || loading}
         sx={selectSx}
         renderValue={(val) => {
           if (loading) {
             return (
               <Typography variant="body2" color="text.secondary">
-                {loadingLabel}
+                {resolvedLoadingLabel}
               </Typography>
             )
           }
@@ -112,7 +117,7 @@ export default function RepoSelect({
             }
             return (
               <Typography variant="body2" color="text.disabled">
-                {placeholderLabel}
+                {resolvedPlaceholderLabel}
               </Typography>
             )
           }
@@ -168,7 +173,7 @@ export default function RepoSelect({
         {prefixItems}
         {!prefixItems && (
           <MenuItem value="" disabled>
-            {loading ? loadingLabel : placeholderLabel}
+            {loading ? resolvedLoadingLabel : resolvedPlaceholderLabel}
           </MenuItem>
         )}
         {repositories.map((repo) => (

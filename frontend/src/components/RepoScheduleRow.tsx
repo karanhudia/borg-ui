@@ -215,27 +215,27 @@ const RepoScheduleRow: React.FC<RepoScheduleRowProps> = ({
       <Box sx={{ pl: 2.5 }}>
         <ScheduleLine
           kind="check"
-          label={t('schedule.byPlan.check', { defaultValue: 'Check' })}
+          label={t('schedule.byPlan.check')}
           cron={checkCron}
           timezone={checkTimezone}
           enabled={checkEnabled}
           onClick={() => onEditCheck(repositoryId)}
           canManage={canManage}
-          setLabel={t('schedule.byPlan.setSchedule', { defaultValue: 'Set schedule' })}
-          editLabel={t('schedule.byPlan.edit', { defaultValue: 'Edit' })}
-          pausedLabel={t('schedule.byPlan.paused', { defaultValue: 'Paused' })}
+          setLabel={t('schedule.byPlan.setSchedule')}
+          editLabel={t('schedule.byPlan.edit')}
+          pausedLabel={t('schedule.byPlan.paused')}
         />
         <ScheduleLine
           kind="restore"
-          label={t('schedule.byPlan.restore', { defaultValue: 'Restore' })}
+          label={t('schedule.byPlan.restore')}
           cron={restoreCron}
           timezone={restoreTimezone}
           enabled={restoreEnabled}
           onClick={() => onEditRestore(repositoryId)}
           canManage={canManage}
-          setLabel={t('schedule.byPlan.setSchedule', { defaultValue: 'Set schedule' })}
-          editLabel={t('schedule.byPlan.edit', { defaultValue: 'Edit' })}
-          pausedLabel={t('schedule.byPlan.paused', { defaultValue: 'Paused' })}
+          setLabel={t('schedule.byPlan.setSchedule')}
+          editLabel={t('schedule.byPlan.edit')}
+          pausedLabel={t('schedule.byPlan.paused')}
         />
       </Box>
     </Box>

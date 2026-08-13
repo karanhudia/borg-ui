@@ -420,7 +420,9 @@ export default function Login() {
                       <button
                         type="button"
                         onClick={() => setShowPassword((v) => !v)}
-                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        aria-label={
+                          showPassword ? t('common.password.hide') : t('common.password.show')
+                        }
                         style={{
                           position: 'absolute',
                           right: 12,

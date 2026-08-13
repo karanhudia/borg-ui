@@ -1,0 +1,20 @@
+# Pinned dependency closure for the managed-agent wheelhouse.
+#
+# The Dockerfile stages these wheels so an enrolling node installs the agent
+# offline (--no-index, no PyPI). Without a pin, `pip download` resolves each
+# dependency from its range at build time, so two builds of the same commit
+# could stage different versions; these pins make the wheelhouse reproducible.
+#
+# No hashes: the wheels come from the trusted image build, and a hashed lock
+# would add a regeneration-and-verify burden this closure -- six small, stable
+# packages -- does not warrant. Regenerate on a dependency change by re-resolving
+# the closure and updating the versions below to match:
+#   python -m build --wheel --outdir dist
+#   pip download --only-binary=:all: --implementation py --abi none \
+#       --platform any --dest dist dist/borg_ui_agent-*.whl
+certifi==2026.7.22
+charset-normalizer==3.4.9
+idna==3.18
+requests==2.34.2
+urllib3==2.7.0
+websocket-client==1.9.0

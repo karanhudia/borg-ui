@@ -56,26 +56,28 @@ interface NotificationCardProps {
   isTesting?: boolean
 }
 
-function getServiceType(url: string): string {
+function getServiceType(url: string, t: (key: string) => string): string {
   const match = url.match(/^([a-z]+):\/\//)
-  if (!match) return 'Webhook'
+  if (!match) return t('notifications.card.serviceTypes.webhook')
   const scheme = match[1].toLowerCase()
   const map: Record<string, string> = {
-    slack: 'Slack',
-    discord: 'Discord',
-    tgram: 'Telegram',
-    tgrams: 'Telegram',
-    mailto: 'Email',
-    msteams: 'Teams',
-    pover: 'Pushover',
-    ntfy: 'Ntfy',
-    json: 'Webhook',
-    xml: 'Webhook',
-    form: 'Webhook',
-    gotify: 'Gotify',
-    matrix: 'Matrix',
+    slack: 'slack',
+    discord: 'discord',
+    tgram: 'telegram',
+    tgrams: 'telegram',
+    mailto: 'email',
+    msteams: 'teams',
+    pover: 'pushover',
+    ntfy: 'ntfy',
+    json: 'webhook',
+    xml: 'webhook',
+    form: 'webhook',
+    gotify: 'gotify',
+    matrix: 'matrix',
   }
-  return map[scheme] ?? scheme.charAt(0).toUpperCase() + scheme.slice(1)
+  return map[scheme]
+    ? t(`notifications.card.serviceTypes.${map[scheme]}`)
+    : scheme.charAt(0).toUpperCase() + scheme.slice(1)
 }
 
 export default function NotificationCard({
@@ -110,7 +112,7 @@ export default function NotificationCard({
     {
       icon: <Bell size={11} />,
       label: t('notifications.card.stats.service'),
-      value: getServiceType(notification.service_url),
+      value: getServiceType(notification.service_url, t),
       color: 'primary',
     },
     {

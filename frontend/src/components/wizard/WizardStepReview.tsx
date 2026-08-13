@@ -205,7 +205,7 @@ export default function WizardStepReview({
           <Tooltip title={t('wizard.review.repositoryInitialized')} placement="top" arrow>
             <Chip
               icon={<Rocket size={11} />}
-              label="Ready to Initialize"
+              label={t('wizard.review.readyToInitialize')}
               size="small"
               sx={{
                 height: 20,
@@ -398,9 +398,19 @@ export default function WizardStepReview({
                 >
                   {showPassphrase ? data.passphrase : '••••••••'}
                 </Typography>
-                <Tooltip title={showPassphrase ? 'Hide passphrase' : 'Show passphrase'}>
+                <Tooltip
+                  title={
+                    showPassphrase
+                      ? t('wizard.review.hidePassphrase')
+                      : t('wizard.review.showPassphrase')
+                  }
+                >
                   <IconButton
-                    aria-label={showPassphrase ? 'Hide passphrase' : 'Show passphrase'}
+                    aria-label={
+                      showPassphrase
+                        ? t('wizard.review.hidePassphrase')
+                        : t('wizard.review.showPassphrase')
+                    }
                     onClick={() => setShowPassphrase((v) => !v)}
                     size="small"
                     sx={{ p: 0.2 }}

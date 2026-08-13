@@ -361,7 +361,7 @@ export default function WizardStepDataSource({
 
           <Alert severity="info">
             <Typography variant="body2">
-              <strong>Note:</strong> {t('wizard.dataSource.remoteSshNote')}
+              <strong>{t('wizard.dataSource.note')}</strong> {t('wizard.dataSource.remoteSshNote')}
             </Typography>
           </Alert>
         </>

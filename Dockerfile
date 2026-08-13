@@ -1,6 +1,9 @@
 # syntax=docker/dockerfile:1
 
-ARG BASE_IMAGE=docker.io/ainullcode/borg-ui-runtime-base:runtime-borg1-1.4.4-borg2-2.0.0b21-r5
+ARG BASE_IMAGE=docker.io/ainullcode/borg-ui-runtime-base:runtime-borg1-1.4.5-borg2-2.0.0b21-r1
+# The Python the builder stages use — kept in step with runtime-base.env by a
+# guard test; the site-packages COPY paths derive from it.
+ARG PYTHON_VERSION=3.12
 
 # --- frontend (Vite): built in-image, once on the builder arch for multi-arch ---
 # Building the bundle here (instead of copying one prepared out-of-band in CI)
@@ -15,8 +18,32 @@ RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
+# --- managed agent wheelhouse: built in-image, served to enrolling nodes ---
+# A node installs the agent belonging to the server it enrols against instead of
+# whatever the upstream default branch holds, which matters whenever a deployment
+# runs ahead of it. The agent and its whole dependency closure are staged as
+# wheels and served together, so a node installs everything from this one server
+# with no PyPI and no compiler. Forced to py3-none-any (--platform any) so a
+# single wheelhouse serves nodes of any architecture, not just the build host's --
+# which also means it need not be built per target arch, so it is pinned to the
+# build platform like frontend-builder to avoid an emulated (QEMU) second pass.
+# The closure is version-pinned via agent/constraints.txt so the same commit
+# always stages the same wheels (no hashes -- see that file for why).
+# hadolint ignore=DL3029
+FROM --platform=$BUILDPLATFORM python:${PYTHON_VERSION}-slim AS agent-builder
+WORKDIR /agent-src
+COPY pyproject.toml ./
+COPY agent/ ./agent/
+# hadolint ignore=DL3013
+RUN pip install --no-cache-dir build && \
+    python -m build --wheel --outdir /agent-dist && \
+    pip download --no-cache-dir --only-binary=:all: \
+        --implementation py --abi none --platform any \
+        --constraint agent/constraints.txt \
+        --dest /agent-dist /agent-dist/borg_ui_agent-*.whl
+
 # Build stage for backend
-FROM python:3.10-slim AS backend-builder
+FROM python:${PYTHON_VERSION}-slim AS backend-builder
 WORKDIR /app
 
 # Install build dependencies for psutil and other packages.
@@ -48,11 +75,12 @@ FROM ${BASE_IMAGE} AS development
 # Build arguments
 ARG APP_VERSION=dev
 ENV APP_VERSION=${APP_VERSION}
+ARG PYTHON_VERSION
 
 WORKDIR /app
 
 # Copy Python dependencies
-COPY --from=backend-builder /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
+COPY --from=backend-builder /usr/local/lib/python${PYTHON_VERSION}/site-packages /usr/local/lib/python${PYTHON_VERSION}/site-packages
 COPY --from=backend-builder /usr/local/bin /usr/local/bin
 
 # Copy application code. Frontend assets are not required in dev because
@@ -91,6 +119,7 @@ FROM ${BASE_IMAGE} AS production
 # Build arguments
 ARG APP_VERSION=dev
 ENV APP_VERSION=${APP_VERSION}
+ARG PYTHON_VERSION
 
 # Docker image metadata
 LABEL org.opencontainers.image.title="Borg Web UI"
@@ -106,12 +135,15 @@ LABEL com.borg-ui.icon.color="#00dd00"
 WORKDIR /app
 
 # Copy Python dependencies
-COPY --from=backend-builder /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
+COPY --from=backend-builder /usr/local/lib/python${PYTHON_VERSION}/site-packages /usr/local/lib/python${PYTHON_VERSION}/site-packages
 COPY --from=backend-builder /usr/local/bin /usr/local/bin
 
 # Frontend assets built hermetically in the frontend-builder stage above (once
 # on the builder arch), so `docker build` alone is fully reproducible.
 COPY --from=frontend-builder /frontend/build ./app/static/
+
+# Agent wheelhouse served at /agent/dist/<filename> to enrolling nodes.
+COPY --from=agent-builder /agent-dist/ /opt/borg-ui/agent-dist/
 
 # Copy application code
 COPY app/ ./app/

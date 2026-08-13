@@ -250,7 +250,7 @@ export default function WizardStepLocation({
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
               <Typography variant="body2" color="text.secondary" sx={{ flexShrink: 0 }}>
-                Borg Version
+                {t('wizard.location.borgVersion')}
               </Typography>
               <Box
                 sx={{
@@ -289,7 +289,7 @@ export default function WizardStepLocation({
               {(data.borgVersion ?? 1) === 2 && (
                 <Tooltip title={t('wizard.location.borgV2Warning')} arrow placement="right">
                   <Chip
-                    label="Beta"
+                    label={t('wizard.location.beta')}
                     size="small"
                     color="warning"
                     variant="outlined"
@@ -432,7 +432,7 @@ export default function WizardStepLocation({
               {t('wizard.location.directRcloneAdvancedTitle')}
             </Typography>
             <Chip
-              label="Borg 2"
+              label={t('wizard.location.borg2')}
               size="small"
               variant="outlined"
               color="warning"

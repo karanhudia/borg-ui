@@ -114,7 +114,8 @@ const WizardStepMaintenance: React.FC<WizardStepMaintenanceProps> = ({ data, onC
             />
             <Alert severity="warning" sx={{ mt: 2, py: 0.5 }}>
               <Typography variant="caption">
-                <strong>Caution:</strong> {t('wizard.scheduleWizard.maintenance.pruneCaution')}
+                <strong>{t('wizard.scheduleWizard.maintenance.caution')}</strong>{' '}
+                {t('wizard.scheduleWizard.maintenance.pruneCaution')}
               </Typography>
             </Alert>
           </Box>

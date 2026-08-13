@@ -202,10 +202,10 @@ export default function ArchivesList({
         color: 'text.disabled',
       }}
     >
-      <span>{t('archivesList.columnArchive', 'Archive')}</span>
-      <span>{t('archivesList.columnType', 'Type')}</span>
-      <span>{t('archivesList.columnDate', 'Date')}</span>
-      <Box sx={{ textAlign: 'right' }}>{t('archivesList.columnActions', 'Actions')}</Box>
+      <span>{t('archivesList.columnArchive')}</span>
+      <span>{t('archivesList.columnType')}</span>
+      <span>{t('archivesList.columnDate')}</span>
+      <Box sx={{ textAlign: 'right' }}>{t('archivesList.columnActions')}</Box>
     </Box>
   )
 
@@ -309,7 +309,7 @@ export default function ArchivesList({
       >
         <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.25, flexShrink: 0 }}>
           <Typography variant="h6" fontWeight={700} sx={{ fontSize: '0.95rem' }}>
-            Archives
+            {t('archivesList.archives')}
           </Typography>
           <Typography
             variant="body2"

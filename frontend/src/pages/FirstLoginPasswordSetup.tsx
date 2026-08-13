@@ -142,7 +142,7 @@ export default function PasswordSetupCard({ onComplete }: { onComplete: () => vo
               <button
                 type="button"
                 onClick={() => setShowNewPassword((v) => !v)}
-                aria-label={showNewPassword ? 'Hide password' : 'Show password'}
+                aria-label={showNewPassword ? t('common.password.hide') : t('common.password.show')}
                 style={{
                   position: 'absolute',
                   right: 12,
@@ -195,7 +195,9 @@ export default function PasswordSetupCard({ onComplete }: { onComplete: () => vo
               <button
                 type="button"
                 onClick={() => setShowConfirmPassword((v) => !v)}
-                aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                aria-label={
+                  showConfirmPassword ? t('common.password.hide') : t('common.password.show')
+                }
                 style={{
                   position: 'absolute',
                   right: 12,
@@ -299,7 +301,7 @@ export default function PasswordSetupCard({ onComplete }: { onComplete: () => vo
               fontFamily: 'inherit',
             }}
           >
-            {skipSetupMutation.isPending ? 'Loading...' : t('firstLoginSetup.skip')}
+            {skipSetupMutation.isPending ? t('common.loading') : t('firstLoginSetup.skip')}
           </button>
         </div>
       </form>

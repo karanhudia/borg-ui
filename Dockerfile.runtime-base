@@ -10,10 +10,14 @@
 # stage ships just the shared libraries Borg links against plus the operational
 # tooling, so the toolchain never reaches the published image.
 
-# --- builder: compile the Borg wheels (needs the toolchain + -dev headers) ----
-FROM python:3.10-slim AS builder
+# The Python the image is built on — kept in step with runtime-base.env by a
+# guard test. The FROM lines and the site-packages COPY paths derive from it.
+ARG PYTHON_VERSION=3.12
 
-ARG BORG1_VERSION=1.4.4
+# --- builder: compile the Borg wheels (needs the toolchain + -dev headers) ----
+FROM python:${PYTHON_VERSION}-slim AS builder
+
+ARG BORG1_VERSION=1.4.5
 ARG BORG2_VERSION=2.0.0b21
 ARG BORGSTORE_VERSION=0.4.1
 
@@ -31,6 +35,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libzstd-dev \
     libxxhash-dev \
     libfuse3-dev \
+    ca-certificates \
+    curl \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
 
 # Borg 1.x into the image Python, Borg 2.x into its own venv. Borg versions are
@@ -46,14 +53,46 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # that no scheme is missing. NB: posixfs is NOT a pip extra — it is always
 # available — so it must not appear in the brackets.
 # hadolint ignore=DL3013,DL3059
-RUN pip install --no-cache-dir pyfuse3 "borgbackup[fuse]==${BORG1_VERSION}" && \
+RUN pip install --no-cache-dir pyfuse3 "borgbackup==${BORG1_VERSION}" && \
     python3 -m venv /opt/borg2-venv && \
-    /opt/borg2-venv/bin/pip install --no-cache-dir pyfuse3 "borgbackup[fuse]==${BORG2_VERSION}" "borgstore[rclone,sftp,rest,s3]==${BORGSTORE_VERSION}"
+    /opt/borg2-venv/bin/pip install --no-cache-dir pyfuse3 "borgbackup==${BORG2_VERSION}" "borgstore[rclone,sftp,rest,s3]==${BORGSTORE_VERSION}"
+
+# rclone: fetch the official static binary from downloads.rclone.org rather than
+# the Debian package. The distro package lags upstream by years and ships as a
+# "-DEV" build (bookworm carries v1.60.1-DEV), predating the OneDrive
+# chunked-upload auth fix (rclone v1.65.1) — so cloud-mirror sync to OneDrive
+# fails with "unauthenticated" on every file. Version single-sourced from
+# runtime-base.env; the download+unzip tooling stays in this builder stage and
+# only the verified binary is copied into the runtime image. Bump RCLONE_VERSION
+# and both checksums together to upgrade.
+ARG RCLONE_VERSION=1.75.0
+ARG RCLONE_SHA256_AMD64=aa2804e08f48250e71009c727124b6341cd0288465804a9a09d14663cabafbaa
+ARG RCLONE_SHA256_ARM64=d0ad88ba4c8e285b7c9efa591e0ab643280a91741e13c27f3a9c0957ccfa5203
+# TARGETARCH is provided automatically by BuildKit for each target platform.
+ARG TARGETARCH
+RUN set -eux; \
+    case "${TARGETARCH}" in \
+      amd64) rclone_sha="${RCLONE_SHA256_AMD64}" ;; \
+      arm64) rclone_sha="${RCLONE_SHA256_ARM64}" ;; \
+      *) echo "unsupported TARGETARCH for rclone: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    zip="rclone-v${RCLONE_VERSION}-linux-${TARGETARCH}.zip"; \
+    curl -fsSL -o /tmp/rclone.zip "https://downloads.rclone.org/v${RCLONE_VERSION}/${zip}"; \
+    printf '%s  /tmp/rclone.zip\n' "${rclone_sha}" > /tmp/rclone.sha256; \
+    sha256sum -c /tmp/rclone.sha256; \
+    unzip -j -o /tmp/rclone.zip "*/rclone" -d /out; \
+    chmod 0755 /out/rclone; \
+    # rclone reads RCLONE_* env vars as flags, and BuildKit exposes these ARGs
+    # as env vars in RUN, so RCLONE_VERSION collides with the --version flag —
+    # clear them for the verification call (the final runtime image sets none).
+    env -u RCLONE_VERSION -u RCLONE_SHA256_AMD64 -u RCLONE_SHA256_ARM64 /out/rclone version; \
+    rm -f /tmp/rclone.zip /tmp/rclone.sha256
 
 # --- runtime-base: slim image, no compilers — runtime libs + operational tools -
-FROM python:3.10-slim AS runtime-base
+FROM python:${PYTHON_VERSION}-slim AS runtime-base
 
-ARG BORG1_VERSION=1.4.4
+ARG PYTHON_VERSION
+ARG BORG1_VERSION=1.4.5
 ARG BORG2_VERSION=2.0.0b21
 ENV BORG1_VERSION=${BORG1_VERSION}
 ENV BORG2_VERSION=${BORG2_VERSION}
@@ -84,7 +123,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libfuse3-4 \
     fuse3 \
     rsync \
-    rclone \
     btrfs-progs \
     openssh-client \
     sshfs \
@@ -98,9 +136,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Borg was compiled in the builder stage — copy the artifacts, not the toolchain.
-COPY --from=builder /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
+COPY --from=builder /usr/local/lib/python${PYTHON_VERSION}/site-packages /usr/local/lib/python${PYTHON_VERSION}/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 COPY --from=builder /opt/borg2-venv /opt/borg2-venv
+
+# rclone was fetched and checksum-verified in the builder stage — copy just the
+# binary (see the builder for why the distro package is unusable).
+COPY --from=builder /out/rclone /usr/bin/rclone
 
 # Symlink borg2, create the runtime directories, and set up the borg user.
 RUN ln -sf /opt/borg2-venv/bin/borg /usr/local/bin/borg2 && \

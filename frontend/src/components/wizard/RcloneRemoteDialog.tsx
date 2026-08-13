@@ -73,11 +73,11 @@ interface RcloneRemoteDialogProps {
   ) => Promise<unknown> | unknown
 }
 
-const DEFAULT_PROVIDERS: RcloneProvider[] = [
+const getDefaultProviders = (t: (key: string) => string): RcloneProvider[] => [
   {
     type: 'local',
-    label: 'Local filesystem',
-    description: 'Local path remote.',
+    label: t('wizard.location.rcloneDefaultProviders.localLabel'),
+    description: t('wizard.location.rcloneDefaultProviders.localDescription'),
     auth_type: 'none',
     type_editable: false,
     docs_url: 'https://rclone.org/local/',
@@ -86,8 +86,8 @@ const DEFAULT_PROVIDERS: RcloneProvider[] = [
   },
   {
     type: 'custom',
-    label: 'Custom rclone backend',
-    description: 'Manual setup for any rclone backend.',
+    label: t('wizard.location.rcloneDefaultProviders.customLabel'),
+    description: t('wizard.location.rcloneDefaultProviders.customDescription'),
     auth_type: 'manual',
     type_editable: true,
     docs_url: 'https://rclone.org/docs/',
@@ -160,7 +160,7 @@ export default function RcloneRemoteDialog({
   isCreating = false,
   error = null,
   disablePortal = false,
-  providers = DEFAULT_PROVIDERS,
+  providers = [],
   onClose,
   onCreate,
   onStartOAuth,
@@ -168,6 +168,7 @@ export default function RcloneRemoteDialog({
   onSaveOAuthCredentials,
 }: RcloneRemoteDialogProps) {
   const { t } = useTranslation()
+  const defaultProviders = useMemo(() => getDefaultProviders(t), [t])
   const [name, setName] = useState('')
   const [providerType, setProviderType] = useState('local')
   const [customProvider, setCustomProvider] = useState('')
@@ -190,7 +191,7 @@ export default function RcloneRemoteDialog({
   const resolvedProviderRef = useRef('local')
   const initializedRemoteKeyRef = useRef<string | null>(null)
 
-  const providerOptions = providers.length ? providers : DEFAULT_PROVIDERS
+  const providerOptions = providers.length ? providers : defaultProviders
   const sortedProviderOptions = useMemo(
     () => sortRcloneProviders(providerOptions),
     [providerOptions]

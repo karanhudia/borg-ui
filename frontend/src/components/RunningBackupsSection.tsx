@@ -85,7 +85,7 @@ const RunningBackupsSection: React.FC<RunningBackupsSectionProps> = ({
         label: t('backup.runningJobs.progress.originalSize'),
         value: job.progress_details?.original_size
           ? formatBytesUtil(job.progress_details.original_size)
-          : job.processed_size || 'Unknown',
+          : job.processed_size || t('common.unknown'),
       },
       {
         key: 'compressed',
@@ -110,7 +110,7 @@ const RunningBackupsSection: React.FC<RunningBackupsSectionProps> = ({
         value:
           job.progress_details?.total_expected_size && job.progress_details.total_expected_size > 0
             ? formatBytesUtil(job.progress_details.total_expected_size)
-            : 'Unknown',
+            : t('common.unknown'),
         valueColor: 'success.main',
       },
       {
@@ -119,7 +119,7 @@ const RunningBackupsSection: React.FC<RunningBackupsSectionProps> = ({
         value:
           job.status === 'running' && job.progress_details?.backup_speed
             ? `${job.progress_details.backup_speed.toFixed(2)} MB/s`
-            : 'N/A',
+            : t('common.na'),
         valueColor: 'primary.main',
       },
       {
@@ -128,7 +128,7 @@ const RunningBackupsSection: React.FC<RunningBackupsSectionProps> = ({
         value:
           (job.progress_details?.estimated_time_remaining || 0) > 0
             ? formatDurationSeconds(job.progress_details?.estimated_time_remaining || 0)
-            : 'N/A',
+            : t('common.na'),
         valueColor: 'success.main',
       },
     ].filter((stat) => stat.value !== null)
