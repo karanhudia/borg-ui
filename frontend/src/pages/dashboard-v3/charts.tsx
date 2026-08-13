@@ -154,7 +154,14 @@ export function StorageDonut({
       </Box>
       <Box sx={{ mt: 1.5, display: 'flex', flexDirection: 'column', gap: 0.65 }}>
         {slices.map((s, i) => (
-          <Stack key={s.name} direction="row" alignItems="center" spacing={0.75}>
+          <Stack
+            key={s.name}
+            direction="row"
+            spacing={0.75}
+            sx={{
+              alignItems: 'center',
+            }}
+          >
             <Box
               sx={{
                 width: 8,

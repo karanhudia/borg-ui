@@ -142,7 +142,13 @@ export default function RichSelect({
         renderValue={(selected) => {
           if (selected === '' && placeholder) {
             return (
-              <Typography variant="body2" color="text.secondary" noWrap>
+              <Typography
+                variant="body2"
+                noWrap
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {placeholder}
               </Typography>
             )
@@ -155,25 +161,27 @@ export default function RichSelect({
         }}
         MenuProps={{
           autoFocus: !searchEnabled,
-          MenuListProps: {
-            autoFocusItem: !searchEnabled,
-            sx: {
-              width: '100%',
-              py: 0.5,
-            },
-          },
-          PaperProps: {
-            sx: [
-              {
-                mt: 0.5,
-                width: menuWidth ?? undefined,
-                minWidth: menuWidth ?? undefined,
-                maxWidth: menuWidth ?? undefined,
-                maxHeight: 430,
-                overflowX: 'hidden',
+          slotProps: {
+            list: {
+              autoFocusItem: !searchEnabled,
+              sx: {
+                width: '100%',
+                py: 0.5,
               },
-              ...menuPaperSxList,
-            ],
+            },
+            paper: {
+              sx: [
+                {
+                  mt: 0.5,
+                  width: menuWidth ?? undefined,
+                  minWidth: menuWidth ?? undefined,
+                  maxWidth: menuWidth ?? undefined,
+                  maxHeight: 430,
+                  overflowX: 'hidden',
+                },
+                ...menuPaperSxList,
+              ],
+            },
           },
         }}
         sx={[
@@ -213,19 +221,27 @@ export default function RichSelect({
               onClick={handleSearchClick}
               onMouseDown={handleSearchClick}
               onKeyDown={handleSearchKeyDown}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Search size={14} />
-                  </InputAdornment>
-                ),
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Search size={14} />
+                    </InputAdornment>
+                  ),
+                },
               }}
             />
           </ListSubheader>
         )}
         {placeholder && (
           <MenuItem disabled value="" sx={menuItemSx}>
-            <Typography variant="body2" color="text.secondary" noWrap>
+            <Typography
+              variant="body2"
+              noWrap
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {placeholder}
             </Typography>
           </MenuItem>
@@ -262,7 +278,13 @@ export default function RichSelect({
           ])
         ) : (
           <MenuItem disabled sx={menuItemSx}>
-            <Typography variant="body2" color="text.secondary" noWrap>
+            <Typography
+              variant="body2"
+              noWrap
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {resolvedNoResultsText}
             </Typography>
           </MenuItem>

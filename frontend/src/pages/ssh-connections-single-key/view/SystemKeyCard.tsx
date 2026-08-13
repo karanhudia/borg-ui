@@ -63,7 +63,14 @@ export function SystemKeyCard({
       }}
     >
       <Box sx={{ px: { xs: 2, sm: 2.5 }, pt: { xs: 2, sm: 2.5 }, pb: { xs: 2, sm: 2.5 } }}>
-        <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 2 }}>
+        <Stack
+          direction="row"
+          spacing={1.5}
+          sx={{
+            alignItems: 'center',
+            mb: 2,
+          }}
+        >
           <Box
             sx={{
               width: 34,
@@ -81,7 +88,13 @@ export function SystemKeyCard({
           >
             <Key size={18} />
           </Box>
-          <Typography variant="h6" fontWeight={600} sx={{ flex: 1 }}>
+          <Typography
+            variant="h6"
+            sx={{
+              fontWeight: 600,
+              flex: 1,
+            }}
+          >
             {t('sshConnections.systemKey.title')}
           </Typography>
           {keyExists && (
@@ -120,18 +133,40 @@ export function SystemKeyCard({
           <Box>
             <Stack spacing={2}>
               <Box>
-                <Typography variant="caption" color="text.secondary">
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                  }}
+                >
                   {t('sshConnections.systemKey.type')}
                 </Typography>
-                <Typography variant="body2" fontWeight={500}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontWeight: 500,
+                  }}
+                >
                   {systemKey?.key_type?.toUpperCase() || t('common.unknown')}
                 </Typography>
               </Box>
 
               {systemKey?.fingerprint && (
                 <Box>
-                  <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mb: 0.25 }}>
-                    <Typography variant="caption" color="text.secondary">
+                  <Stack
+                    direction="row"
+                    spacing={0.5}
+                    sx={{
+                      alignItems: 'center',
+                      mb: 0.25,
+                    }}
+                  >
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: 'text.secondary',
+                      }}
+                    >
                       {t('sshConnections.systemKey.fingerprint')}
                     </Typography>
                     <Tooltip
@@ -157,8 +192,8 @@ export function SystemKeyCard({
                   </Stack>
                   <Typography
                     variant="body2"
-                    fontWeight={500}
                     sx={{
+                      fontWeight: 500,
                       fontFamily: 'monospace',
                       fontSize: '0.85rem',
                       wordBreak: 'break-all',
@@ -173,8 +208,20 @@ export function SystemKeyCard({
               )}
 
               <Box>
-                <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mb: 0.5 }}>
-                  <Typography variant="caption" color="text.secondary">
+                <Stack
+                  direction="row"
+                  spacing={0.5}
+                  sx={{
+                    alignItems: 'center',
+                    mb: 0.5,
+                  }}
+                >
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: 'text.secondary',
+                    }}
+                  >
                     {t('sshConnections.systemKey.publicKey')}
                   </Typography>
                   <Tooltip
@@ -238,7 +285,13 @@ export function SystemKeyCard({
                 </Box>
               </Box>
 
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} flexWrap="wrap">
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                spacing={2}
+                sx={{
+                  flexWrap: 'wrap',
+                }}
+              >
                 <Tooltip title={t('sshConnections.systemKey.tooltips.deploy')}>
                   <Button
                     variant="contained"

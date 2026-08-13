@@ -61,12 +61,21 @@ export default function MountSuccessToast({ toastId, command }: MountSuccessToas
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography
             variant="body2"
-            fontWeight={600}
-            sx={{ fontSize: '0.82rem', lineHeight: 1.3 }}
+            sx={{
+              fontWeight: 600,
+              fontSize: '0.82rem',
+              lineHeight: 1.3,
+            }}
           >
             {t('mountSuccess.title')}
           </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.72rem' }}>
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'text.secondary',
+              fontSize: '0.72rem',
+            }}
+          >
             {t('mountSuccess.accessViaDocker')}
           </Typography>
         </Box>

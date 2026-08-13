@@ -27,7 +27,12 @@ export default function RetryJobDialog({
           <Box sx={{ color: 'info.main', lineHeight: 0 }}>
             <RotateCcw size={24} />
           </Box>
-          <Typography variant="h6" fontWeight={600}>
+          <Typography
+            variant="h6"
+            sx={{
+              fontWeight: 600,
+            }}
+          >
             {title}
           </Typography>
         </Box>

@@ -51,7 +51,14 @@ export default function ExcludePatternInput({
       <Typography variant="subtitle2" gutterBottom>
         {t('excludePatterns.title')}
       </Typography>
-      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
+      <Typography
+        variant="caption"
+        sx={{
+          color: 'text.secondary',
+          display: 'block',
+          mb: 1.5,
+        }}
+      >
         {t('excludePatterns.hint')}
       </Typography>
 
@@ -79,20 +86,22 @@ export default function ExcludePatternInput({
           size="small"
           fullWidth
           disabled={disabled}
-          InputProps={{
-            endAdornment: onBrowseClick && (
-              <InputAdornment position="end">
-                <IconButton
-                  onClick={onBrowseClick}
-                  edge="end"
-                  size="small"
-                  title={t('excludePatterns.browseToExclude')}
-                  disabled={disabled}
-                >
-                  <FolderOpenIcon fontSize="small" />
-                </IconButton>
-              </InputAdornment>
-            ),
+          slotProps={{
+            input: {
+              endAdornment: onBrowseClick && (
+                <InputAdornment position="end">
+                  <IconButton
+                    onClick={onBrowseClick}
+                    edge="end"
+                    size="small"
+                    title={t('excludePatterns.browseToExclude')}
+                    disabled={disabled}
+                  >
+                    <FolderOpenIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ),
+            },
           }}
         />
         <Button variant="outlined" size="small" onClick={handleAdd} disabled={disabled}>

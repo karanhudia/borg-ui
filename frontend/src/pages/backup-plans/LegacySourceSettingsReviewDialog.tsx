@@ -197,8 +197,12 @@ export function LegacySourceSettingsReviewDialog({
         </Box>
         <Typography
           variant="body2"
-          color="text.secondary"
-          sx={{ fontSize: '0.8rem', lineHeight: 1.5, pl: 3.5 }}
+          sx={{
+            color: 'text.secondary',
+            fontSize: '0.8rem',
+            lineHeight: 1.5,
+            pl: 3.5,
+          }}
         >
           {t('backupPlans.wizard.repositories.legacyReview.description')}
         </Typography>
@@ -218,7 +222,13 @@ export function LegacySourceSettingsReviewDialog({
               px: 0.25,
             }}
           >
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.72rem' }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+                fontSize: '0.72rem',
+              }}
+            >
               {selectedIds.length} / {reviews.length}
             </Typography>
             <Link

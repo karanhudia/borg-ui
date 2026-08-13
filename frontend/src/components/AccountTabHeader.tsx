@@ -6,10 +6,21 @@ export default function AccountTabHeader() {
 
   return (
     <Box>
-      <Typography variant="h5" fontWeight={700} gutterBottom>
+      <Typography
+        variant="h5"
+        gutterBottom
+        sx={{
+          fontWeight: 700,
+        }}
+      >
         {t('settings.account.title')}
       </Typography>
-      <Typography variant="body2" color="text.secondary">
+      <Typography
+        variant="body2"
+        sx={{
+          color: 'text.secondary',
+        }}
+      >
         {t('settings.account.description')}
       </Typography>
     </Box>

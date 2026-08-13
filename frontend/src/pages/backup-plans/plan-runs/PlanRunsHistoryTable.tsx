@@ -71,7 +71,12 @@ export function PlanRunsHistoryTable({
   if (runs.length === 0) {
     return (
       <Box sx={{ px: 3, py: 2 }}>
-        <Typography variant="caption" color="text.disabled">
+        <Typography
+          variant="caption"
+          sx={{
+            color: 'text.disabled',
+          }}
+        >
           {t('backupPlans.runsTable.empty', { defaultValue: 'No past runs yet.' })}
         </Typography>
       </Box>
@@ -138,7 +143,13 @@ export function PlanRunsHistoryTable({
                         color: 'text.secondary',
                       }}
                     >
-                      <Stack direction="row" spacing={0.25} alignItems="center">
+                      <Stack
+                        direction="row"
+                        spacing={0.25}
+                        sx={{
+                          alignItems: 'center',
+                        }}
+                      >
                         {scriptCount > 0 ? (
                           <IconButton
                             size="small"
@@ -168,20 +179,34 @@ export function PlanRunsHistoryTable({
                         <Tooltip title={formatDateTimeFull(startedAt)} arrow>
                           <Typography
                             variant="body2"
-                            color="text.secondary"
-                            sx={{ cursor: 'help', display: 'inline-block' }}
+                            sx={{
+                              color: 'text.secondary',
+                              cursor: 'help',
+                              display: 'inline-block',
+                            }}
                           >
                             {formatRelativeTime(startedAt)}
                           </Typography>
                         </Tooltip>
                       ) : (
-                        <Typography variant="body2" color="text.disabled">
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            color: 'text.disabled',
+                          }}
+                        >
                           —
                         </Typography>
                       )}
                     </TableCell>
                     <TableCell>
-                      <Stack direction="row" spacing={0.5} alignItems="center">
+                      <Stack
+                        direction="row"
+                        spacing={0.5}
+                        sx={{
+                          alignItems: 'center',
+                        }}
+                      >
                         <Box
                           sx={{
                             display: 'flex',
@@ -197,8 +222,8 @@ export function PlanRunsHistoryTable({
                     <TableCell>
                       <Typography
                         variant="body2"
-                        color="text.secondary"
                         sx={{
+                          color: 'text.secondary',
                           fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace',
                           fontSize: '0.78rem',
                         }}
@@ -207,7 +232,13 @@ export function PlanRunsHistoryTable({
                       </Typography>
                     </TableCell>
                     <TableCell align="right">
-                      <Stack direction="row" spacing={0.25} justifyContent="flex-end">
+                      <Stack
+                        direction="row"
+                        spacing={0.25}
+                        sx={{
+                          justifyContent: 'flex-end',
+                        }}
+                      >
                         {logJob && (
                           <Tooltip
                             title={t('backupPlans.runsDialog.viewLogs', {

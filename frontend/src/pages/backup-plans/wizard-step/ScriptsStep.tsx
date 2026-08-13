@@ -327,7 +327,13 @@ export function ScriptsStep({
     return (
       <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 2 }}>
         <Stack spacing={1.5}>
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{
+              alignItems: 'center',
+            }}
+          >
             <FileCode size={18} aria-hidden="true" />
             <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
               {title}
@@ -357,7 +363,12 @@ export function ScriptsStep({
                       {script.name}
                     </Typography>
                     {script.description && (
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          color: 'text.secondary',
+                        }}
+                      >
                         {script.description}
                       </Typography>
                     )}
@@ -391,7 +402,12 @@ export function ScriptsStep({
                         {script.name}
                       </Typography>
                       {script.description && (
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: 'text.secondary',
+                          }}
+                        >
                           {script.description}
                         </Typography>
                       )}
@@ -402,7 +418,12 @@ export function ScriptsStep({
             </FormControl>
           )}
           {planAgent && !loadingAgentScripts && agentScripts.length === 0 && (
-            <Typography variant="caption" color="text.secondary">
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {agentScriptsError
                 ? t('backupPlans.wizard.scripts.agentScriptsError', { agent: planAgentLabel })
                 : agentOnline
@@ -412,7 +433,12 @@ export function ScriptsStep({
           )}
 
           {entries.length === 0 ? (
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {emptyText}
             </Typography>
           ) : (
@@ -443,7 +469,13 @@ export function ScriptsStep({
                     }}
                   >
                     <Stack spacing={1.25}>
-                      <Stack direction="row" spacing={1} alignItems="center">
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        sx={{
+                          alignItems: 'center',
+                        }}
+                      >
                         <Chip
                           size="small"
                           variant="outlined"
@@ -614,7 +646,12 @@ export function ScriptsStep({
               <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                 {t('backupPlans.wizard.scripts.databaseSourceScripts')}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {t('backupPlans.wizard.scripts.databaseSourceScriptsDescription')}
               </Typography>
             </Box>
@@ -632,15 +669,23 @@ export function ScriptsStep({
                       py: 1.25,
                     }}
                   >
-                    <Stack direction="row" spacing={1.25} alignItems="flex-start">
+                    <Stack
+                      direction="row"
+                      spacing={1.25}
+                      sx={{
+                        alignItems: 'flex-start',
+                      }}
+                    >
                       <DatabaseIcon size={18} />
                       <Stack spacing={0.75} sx={{ minWidth: 0, flex: 1 }}>
                         <Stack
                           direction="row"
                           spacing={1}
-                          alignItems="center"
                           useFlexGap
-                          flexWrap="wrap"
+                          sx={{
+                            alignItems: 'center',
+                            flexWrap: 'wrap',
+                          }}
                         >
                           <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                             {row.database.display_name}
@@ -718,12 +763,22 @@ export function ScriptsStep({
                           </Box>
                         </Stack>
                         {row.preScriptName && (
-                          <Typography variant="body2" color="text.secondary">
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              color: 'text.secondary',
+                            }}
+                          >
                             {preSourceScriptLabel}: {row.preScriptName}
                           </Typography>
                         )}
                         {row.postScriptName && (
-                          <Typography variant="body2" color="text.secondary">
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              color: 'text.secondary',
+                            }}
+                          >
                             {postSourceScriptLabel}: {row.postScriptName}
                           </Typography>
                         )}
@@ -760,7 +815,12 @@ export function ScriptsStep({
             <Typography variant="body2">
               {t('backupPlans.wizard.scripts.runRepositoryScripts')}
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {t('backupPlans.wizard.scripts.runRepositoryScriptsHelper')}
             </Typography>
           </Box>

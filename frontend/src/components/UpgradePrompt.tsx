@@ -50,7 +50,13 @@ export default function UpgradePrompt({ requiredPlan, message }: UpgradePromptPr
             fontSize: '0.7rem',
           }}
         />
-        <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 280 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+            maxWidth: 280,
+          }}
+        >
           {message ?? t('upgradePrompt.defaultMessage', { plan: planLabel })}
         </Typography>
         <Button

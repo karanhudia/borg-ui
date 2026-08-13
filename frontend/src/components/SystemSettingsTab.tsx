@@ -668,10 +668,21 @@ const SystemSettingsTab: React.FC = () => {
           }}
         >
           <Box>
-            <Typography variant="h5" fontWeight={700} gutterBottom>
+            <Typography
+              variant="h5"
+              gutterBottom
+              sx={{
+                fontWeight: 700,
+              }}
+            >
               {t('systemSettings.title')}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {t('systemSettings.subtitle')}
             </Typography>
           </Box>

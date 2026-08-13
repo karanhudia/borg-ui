@@ -230,7 +230,12 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
       </Box>
 
       <Alert severity="success">
-        <Typography variant="body2" fontWeight={700}>
+        <Typography
+          variant="body2"
+          sx={{
+            fontWeight: 700,
+          }}
+        >
           {t('wizard.scheduleWizard.review.readyToCreate')}
         </Typography>
         <Typography variant="body2">
@@ -255,7 +260,13 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
           accentColor={BLUE}
         >
           <AttrRow label={t('wizard.scheduleWizard.review.name')}>
-            <Typography variant="body2" fontWeight={700} fontSize="0.8rem">
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: 700,
+                fontSize: '0.8rem',
+              }}
+            >
               {data.name}
             </Typography>
           </AttrRow>
@@ -263,9 +274,11 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
             <AttrRow label={t('wizard.scheduleWizard.basicInfo.descriptionLabel')}>
               <Typography
                 variant="body2"
-                fontSize="0.75rem"
-                color="text.secondary"
-                sx={{ textAlign: 'right' }}
+                sx={{
+                  fontSize: '0.75rem',
+                  color: 'text.secondary',
+                  textAlign: 'right',
+                }}
               >
                 {data.description}
               </Typography>
@@ -274,7 +287,13 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
           {data.scheduleMode === 'availability' ? (
             <>
               <AttrRow label={t('schedule.trigger.label')}>
-                <Typography variant="body2" fontSize="0.75rem" fontWeight={600}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                  }}
+                >
                   {t('schedule.trigger.whenAvailable')}
                 </Typography>
               </AttrRow>
@@ -307,7 +326,13 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
           accentColor={AMBER}
         >
           {selectedRepos.length === 0 ? (
-            <Typography variant="body2" fontSize="0.75rem" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                fontSize: '0.75rem',
+                color: 'text.secondary',
+              }}
+            >
               {t('wizard.scheduleWizard.review.none')}
             </Typography>
           ) : (
@@ -332,22 +357,46 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
         >
           <AttrRow label={t('wizard.scheduleWizard.review.preBackupScript')}>
             {preScript ? (
-              <Typography variant="body2" fontSize="0.75rem" fontWeight={500}>
+              <Typography
+                variant="body2"
+                sx={{
+                  fontSize: '0.75rem',
+                  fontWeight: 500,
+                }}
+              >
                 {preScript.name}
               </Typography>
             ) : (
-              <Typography variant="body2" fontSize="0.75rem" color="text.disabled">
+              <Typography
+                variant="body2"
+                sx={{
+                  fontSize: '0.75rem',
+                  color: 'text.disabled',
+                }}
+              >
                 {t('wizard.scheduleWizard.review.none')}
               </Typography>
             )}
           </AttrRow>
           <AttrRow label={t('wizard.scheduleWizard.review.postBackupScript')}>
             {postScript ? (
-              <Typography variant="body2" fontSize="0.75rem" fontWeight={500}>
+              <Typography
+                variant="body2"
+                sx={{
+                  fontSize: '0.75rem',
+                  fontWeight: 500,
+                }}
+              >
                 {postScript.name}
               </Typography>
             ) : (
-              <Typography variant="body2" fontSize="0.75rem" color="text.disabled">
+              <Typography
+                variant="body2"
+                sx={{
+                  fontSize: '0.75rem',
+                  color: 'text.disabled',
+                }}
+              >
                 {t('wizard.scheduleWizard.review.none')}
               </Typography>
             )}

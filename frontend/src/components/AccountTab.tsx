@@ -471,7 +471,12 @@ const AccountTab: React.FC = () => {
                       ) : undefined
                     }
                   >
-                    <Typography variant="body2" fontWeight={600}>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: 600,
+                      }}
+                    >
                       {isOidcLinked
                         ? t('settings.account.security.ssoLinkedTitle')
                         : t('settings.account.security.ssoLinkTitle')}
@@ -556,7 +561,12 @@ const AccountTab: React.FC = () => {
       >
         <DialogTitle>{t('settings.account.profile.title')}</DialogTitle>
         <DialogContent sx={{ display: 'grid', gap: 2, pt: 1 }}>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {t('settings.account.profile.description')}
           </Typography>
           <TextField
@@ -630,7 +640,12 @@ const AccountTab: React.FC = () => {
         <DialogContent sx={{ display: 'grid', gap: 2, pt: 1 }}>
           {!totpSetupToken ? (
             <>
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {t('settings.account.security.totpSetupIntro')}
               </Typography>
               <TextField
@@ -644,7 +659,12 @@ const AccountTab: React.FC = () => {
             </>
           ) : (
             <>
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {t('settings.account.security.totpSetupInstructions')}
               </Typography>
               {totpQrCodeDataUrl ? (
@@ -670,13 +690,24 @@ const AccountTab: React.FC = () => {
                       p: 1,
                     }}
                   />
-                  <Typography variant="caption" color="text.secondary" align="center">
+                  <Typography
+                    variant="caption"
+                    align="center"
+                    sx={{
+                      color: 'text.secondary',
+                    }}
+                  >
                     {t('settings.account.security.totpQrCodeHint')}
                   </Typography>
                 </Box>
               ) : null}
               <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'action.hover' }}>
-                <Typography variant="caption" color="text.secondary">
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                  }}
+                >
                   {t('settings.account.security.manualSecret')}
                 </Typography>
                 <Typography
@@ -687,10 +718,22 @@ const AccountTab: React.FC = () => {
                 </Typography>
               </Box>
               <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'action.hover' }}>
-                <Typography variant="caption" color="text.secondary">
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                  }}
+                >
                   {t('settings.account.security.recoveryCodesTitle')}
                 </Typography>
-                <Stack direction="row" flexWrap="wrap" gap={1} sx={{ mt: 1 }}>
+                <Stack
+                  direction="row"
+                  sx={{
+                    flexWrap: 'wrap',
+                    gap: 1,
+                    mt: 1,
+                  }}
+                >
                   {totpRecoveryCodes.map((code) => (
                     <Typography
                       key={code}
@@ -743,7 +786,12 @@ const AccountTab: React.FC = () => {
       >
         <DialogTitle>{t('settings.account.security.disableTotp')}</DialogTitle>
         <DialogContent sx={{ display: 'grid', gap: 2, pt: 1 }}>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {t('settings.account.security.totpDisableIntro')}
           </Typography>
           <TextField
@@ -787,7 +835,12 @@ const AccountTab: React.FC = () => {
       >
         <DialogTitle>{t('settings.account.security.addPasskey')}</DialogTitle>
         <DialogContent sx={{ display: 'grid', gap: 2, pt: 1 }}>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {t('settings.account.security.passkeySetupIntro')}
           </Typography>
           <TextField

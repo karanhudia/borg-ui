@@ -163,7 +163,12 @@ const SchedulePicker: React.FC<SchedulePickerProps> = ({
 
       {scheduleMode === 'availability' && (
         <Stack spacing={2}>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {t('schedule.trigger.availabilityDescription', {
               defaultValue:
                 'Borg UI checks for a reachable source and runs after the minimum interval has elapsed.',
@@ -181,11 +186,13 @@ const SchedulePicker: React.FC<SchedulePickerProps> = ({
                 availabilityCheckIntervalMinutes: Math.max(1, Number(event.target.value) || 1),
               })
             }
-            inputProps={{ min: 1 }}
             required={required}
             disabled={disabled}
             size={size}
             fullWidth
+            slotProps={{
+              htmlInput: { min: 1 },
+            }}
           />
           <TextField
             label={t('schedule.trigger.minimumInterval', {
@@ -202,11 +209,13 @@ const SchedulePicker: React.FC<SchedulePickerProps> = ({
                 minimumSuccessIntervalHours: Math.max(0, Number(event.target.value) || 0),
               })
             }
-            inputProps={{ min: 0, step: 'any' }}
             required={required}
             disabled={disabled}
             size={size}
             fullWidth
+            slotProps={{
+              htmlInput: { min: 0, step: 'any' },
+            }}
           />
         </Stack>
       )}
@@ -216,7 +225,12 @@ const SchedulePicker: React.FC<SchedulePickerProps> = ({
           <Tooltip
             title={
               <Stack spacing={0.75} sx={{ py: 0.25 }}>
-                <Typography variant="caption" fontWeight={600}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontWeight: 600,
+                  }}
+                >
                   {t('wizard.scheduleWizard.config.nextRunTimes')}
                 </Typography>
                 {nextRunTimes.map((time, index) => (
@@ -255,7 +269,12 @@ const SchedulePicker: React.FC<SchedulePickerProps> = ({
               <Info size={14} />
             </Box>
           </Tooltip>
-          <Typography variant="caption" color="text.secondary">
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {t('wizard.scheduleWizard.config.nextRunTimes')} {formatRunTime(nextRunTimes[0])}
           </Typography>
         </Box>

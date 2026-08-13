@@ -221,7 +221,13 @@ export default function AddAgentDialog({
   const renderTargetStep = () => (
     <Stack spacing={2.5}>
       <Stack spacing={1.25}>
-        <Typography variant="overline" color="text.secondary" sx={{ letterSpacing: 0.6 }}>
+        <Typography
+          variant="overline"
+          sx={{
+            color: 'text.secondary',
+            letterSpacing: 0.6,
+          }}
+        >
           {t('managedAgents.add.platform')}
         </Typography>
         <Box
@@ -241,9 +247,21 @@ export default function AddAgentDialog({
             }}
           >
             <Stack spacing={1}>
-              <Stack direction="row" spacing={1} alignItems="center">
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{
+                  alignItems: 'center',
+                }}
+              >
                 <Server size={18} />
-                <Typography fontWeight={700}>{t('managedAgents.add.platforms.linux')}</Typography>
+                <Typography
+                  sx={{
+                    fontWeight: 700,
+                  }}
+                >
+                  {t('managedAgents.add.platforms.linux')}
+                </Typography>
               </Stack>
               <Chip
                 size="small"
@@ -263,9 +281,21 @@ export default function AddAgentDialog({
               sx={{ p: 1.5, borderRadius: 1, opacity: 0.62, bgcolor: 'background.paper' }}
             >
               <Stack spacing={1}>
-                <Stack direction="row" spacing={1} alignItems="center">
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  sx={{
+                    alignItems: 'center',
+                  }}
+                >
                   <Icon size={18} />
-                  <Typography fontWeight={700}>{label}</Typography>
+                  <Typography
+                    sx={{
+                      fontWeight: 700,
+                    }}
+                  >
+                    {label}
+                  </Typography>
                 </Stack>
                 <Chip
                   size="small"
@@ -278,7 +308,13 @@ export default function AddAgentDialog({
         </Box>
       </Stack>
       <Stack spacing={1.25}>
-        <Typography variant="overline" color="text.secondary" sx={{ letterSpacing: 0.6 }}>
+        <Typography
+          variant="overline"
+          sx={{
+            color: 'text.secondary',
+            letterSpacing: 0.6,
+          }}
+        >
           {t('managedAgents.add.serverUrl')}
         </Typography>
         <TextField
@@ -293,16 +329,18 @@ export default function AddAgentDialog({
               t('managedAgents.add.serverUrlHelper')
             )
           }
-          FormHelperTextProps={{
-            component: 'div',
-            sx: {
-              mx: 0,
-              ...(isLocalAgentServerUrl(normalizedServerUrl) && !serverUrlIsInvalid
-                ? { color: 'warning.main' }
-                : null),
+          fullWidth
+          slotProps={{
+            formHelperText: {
+              component: 'div',
+              sx: {
+                mx: 0,
+                ...(isLocalAgentServerUrl(normalizedServerUrl) && !serverUrlIsInvalid
+                  ? { color: 'warning.main' }
+                  : null),
+              },
             },
           }}
-          fullWidth
         />
       </Stack>
     </Stack>
@@ -352,10 +390,19 @@ export default function AddAgentDialog({
           {serviceUserOptions.map((option) => (
             <MenuItem key={option} value={option}>
               <Stack spacing={0.25}>
-                <Typography fontWeight={700}>
+                <Typography
+                  sx={{
+                    fontWeight: 700,
+                  }}
+                >
                   {t(`managedAgents.add.serviceUsers.${option}.label`)}
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: 'text.secondary',
+                  }}
+                >
                   {t(`managedAgents.add.serviceUsers.${option}.description`)}
                 </Typography>
               </Stack>
@@ -394,10 +441,19 @@ export default function AddAgentDialog({
                 control={<Radio />}
                 label={
                   <Stack spacing={0.35} sx={{ minWidth: 0 }}>
-                    <Typography fontWeight={700}>
+                    <Typography
+                      sx={{
+                        fontWeight: 700,
+                      }}
+                    >
                       {t(`managedAgents.add.borgOptions.${option}.label`)}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: 'text.secondary',
+                      }}
+                    >
                       {t(`managedAgents.add.borgOptions.${option}.description`)}
                     </Typography>
                   </Stack>
@@ -444,7 +500,13 @@ export default function AddAgentDialog({
       open={open}
       onClose={onClose}
       title={
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{
+            alignItems: 'center',
+          }}
+        >
           <Terminal size={19} />
           <span>{t('managedAgents.add.title')}</span>
         </Stack>

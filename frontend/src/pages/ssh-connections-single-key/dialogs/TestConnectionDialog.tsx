@@ -43,7 +43,13 @@ export function TestConnectionDialog({
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
           <Alert severity="info" sx={{ fontSize: '0.85rem' }}>
-            <Typography variant="body2" fontWeight={600} gutterBottom>
+            <Typography
+              variant="body2"
+              gutterBottom
+              sx={{
+                fontWeight: 600,
+              }}
+            >
               {t('sshConnections.manualConnectionDialog.instructions.title')}
             </Typography>
             <Typography variant="caption" component="div" sx={{ mb: 0.5 }}>
@@ -75,7 +81,9 @@ export function TestConnectionDialog({
               setTestConnectionForm({ ...testConnectionForm, username: e.target.value })
             }
             placeholder="root"
-            InputLabelProps={{ shrink: true }}
+            slotProps={{
+              inputLabel: { shrink: true },
+            }}
           />
           <TextField
             label={t('sshConnections.deployDialog.port')}
@@ -85,7 +93,9 @@ export function TestConnectionDialog({
             onChange={(e) =>
               setTestConnectionForm({ ...testConnectionForm, port: parseInt(e.target.value) })
             }
-            InputLabelProps={{ shrink: true }}
+            slotProps={{
+              inputLabel: { shrink: true },
+            }}
           />
 
           <Alert severity="success" sx={{ fontSize: '0.85rem' }}>

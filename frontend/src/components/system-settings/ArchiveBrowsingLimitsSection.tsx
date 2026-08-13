@@ -32,7 +32,6 @@ const ArchiveBrowsingLimitsSection: React.FC<ArchiveBrowsingLimitsSectionProps> 
         fullWidth
         value={browseMaxItems}
         onChange={(e) => setBrowseMaxItems(Number(e.target.value))}
-        inputProps={{ min: MIN_FILES, max: MAX_FILES, step: 100_000 }}
         error={browseMaxItems < MIN_FILES || browseMaxItems > MAX_FILES}
         helperText={
           browseMaxItems < MIN_FILES || browseMaxItems > MAX_FILES
@@ -44,6 +43,9 @@ const ArchiveBrowsingLimitsSection: React.FC<ArchiveBrowsingLimitsSectionProps> 
                 current: (browseMaxItems / 1_000_000).toFixed(1),
               })
         }
+        slotProps={{
+          htmlInput: { min: MIN_FILES, max: MAX_FILES, step: 100_000 },
+        }}
       />
 
       <TextField
@@ -52,7 +54,6 @@ const ArchiveBrowsingLimitsSection: React.FC<ArchiveBrowsingLimitsSectionProps> 
         fullWidth
         value={browseMaxMemoryMb}
         onChange={(e) => setBrowseMaxMemoryMb(Number(e.target.value))}
-        inputProps={{ min: MIN_MEMORY, max: MAX_MEMORY, step: 128 }}
         error={browseMaxMemoryMb < MIN_MEMORY || browseMaxMemoryMb > MAX_MEMORY}
         helperText={
           browseMaxMemoryMb < MIN_MEMORY || browseMaxMemoryMb > MAX_MEMORY
@@ -64,6 +65,9 @@ const ArchiveBrowsingLimitsSection: React.FC<ArchiveBrowsingLimitsSectionProps> 
                 current: (browseMaxMemoryMb / 1024).toFixed(2),
               })
         }
+        slotProps={{
+          htmlInput: { min: MIN_MEMORY, max: MAX_MEMORY, step: 128 },
+        }}
       />
     </Box>
   )

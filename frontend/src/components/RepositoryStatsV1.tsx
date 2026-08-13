@@ -22,7 +22,13 @@ export default function RepositoryStatsV1({ stats }: RepositoryStatsV1Props) {
 
   return (
     <>
-      <Typography variant="h6" fontWeight={600} sx={{ mt: 1 }}>
+      <Typography
+        variant="h6"
+        sx={{
+          fontWeight: 600,
+          mt: 1,
+        }}
+      >
         {t('dialogs.repositoryInfo.storageStatistics')}
       </Typography>
       <Box
@@ -36,11 +42,23 @@ export default function RepositoryStatsV1({ stats }: RepositoryStatsV1Props) {
           <CardContent sx={{ py: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
               <DataUsage sx={{ color: '#2e7d32', fontSize: 24 }} />
-              <Typography variant="caption" color="text.secondary" fontWeight={500}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                  fontWeight: 500,
+                }}
+              >
                 {t('dialogs.repositoryInfo.totalSize')}
               </Typography>
             </Box>
-            <Typography variant="h6" fontWeight={700} sx={{ color: '#2e7d32' }}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 700,
+                color: '#2e7d32',
+              }}
+            >
               {formatBytes(stats.total_size || 0)}
             </Typography>
           </CardContent>
@@ -49,11 +67,23 @@ export default function RepositoryStatsV1({ stats }: RepositoryStatsV1Props) {
           <CardContent sx={{ py: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
               <Compress sx={{ color: '#1565c0', fontSize: 24 }} />
-              <Typography variant="caption" color="text.secondary" fontWeight={500}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                  fontWeight: 500,
+                }}
+              >
                 {t('dialogs.repositoryInfo.usedOnDisk')}
               </Typography>
             </Box>
-            <Typography variant="h6" fontWeight={700} sx={{ color: '#1565c0' }}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 700,
+                color: '#1565c0',
+              }}
+            >
               {formatBytes(stats.unique_csize || 0)}
             </Typography>
           </CardContent>
@@ -62,11 +92,23 @@ export default function RepositoryStatsV1({ stats }: RepositoryStatsV1Props) {
           <CardContent sx={{ py: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
               <Inventory sx={{ color: '#e65100', fontSize: 24 }} />
-              <Typography variant="caption" color="text.secondary" fontWeight={500}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                  fontWeight: 500,
+                }}
+              >
                 {t('dialogs.repositoryInfo.uniqueData')}
               </Typography>
             </Box>
-            <Typography variant="h6" fontWeight={700} sx={{ color: '#e65100' }}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 700,
+                color: '#e65100',
+              }}
+            >
               {formatBytes(stats.unique_size || 0)}
             </Typography>
           </CardContent>
@@ -81,20 +123,42 @@ export default function RepositoryStatsV1({ stats }: RepositoryStatsV1Props) {
       >
         <Card variant="outlined">
           <CardContent sx={{ py: 1.5 }}>
-            <Typography variant="caption" color="text.secondary" display="block">
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+                display: 'block',
+              }}
+            >
               {t('dialogs.repositoryInfo.totalChunks')}
             </Typography>
-            <Typography variant="h6" fontWeight={600}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 600,
+              }}
+            >
               {stats.total_chunks?.toLocaleString()}
             </Typography>
           </CardContent>
         </Card>
         <Card variant="outlined">
           <CardContent sx={{ py: 1.5 }}>
-            <Typography variant="caption" color="text.secondary" display="block">
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+                display: 'block',
+              }}
+            >
               {t('dialogs.repositoryInfo.uniqueChunks')}
             </Typography>
-            <Typography variant="h6" fontWeight={600}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 600,
+              }}
+            >
               {stats.total_unique_chunks?.toLocaleString()}
             </Typography>
           </CardContent>

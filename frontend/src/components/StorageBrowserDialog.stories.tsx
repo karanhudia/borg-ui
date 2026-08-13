@@ -38,7 +38,12 @@ const items: StorageBrowserItem[] = [
 const slowLoadingHint = (
   <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, px: 1.5, py: 1 }}>
     <Hourglass size={17} style={{ marginTop: 2, flexShrink: 0 }} />
-    <Typography variant="body2" color="text.secondary">
+    <Typography
+      variant="body2"
+      sx={{
+        color: 'text.secondary',
+      }}
+    >
       This archive is large, so listing its files takes a little longer. Hang tight.
     </Typography>
   </Box>

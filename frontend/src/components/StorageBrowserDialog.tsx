@@ -115,14 +115,23 @@ function StorageBrowserEmptyState({
         <Inbox size={32} style={{ opacity: 0.5 }} />
       </Box>
       {title ? (
-        <Typography variant="h6" fontWeight={600} gutterBottom>
+        <Typography
+          variant="h6"
+          gutterBottom
+          sx={{
+            fontWeight: 600,
+          }}
+        >
           {title}
         </Typography>
       ) : null}
       <Typography
         variant={title ? 'body2' : 'body1'}
-        color="text.secondary"
-        sx={{ maxWidth: 380, lineHeight: 1.7 }}
+        sx={{
+          color: 'text.secondary',
+          maxWidth: 380,
+          lineHeight: 1.7,
+        }}
       >
         {description || fallback}
       </Typography>
@@ -188,14 +197,31 @@ export default function StorageBrowserDialog({
       }
     >
       <DialogTitle>
-        <Stack direction="row" alignItems="center" spacing={2}>
+        <Stack
+          direction="row"
+          spacing={2}
+          sx={{
+            alignItems: 'center',
+          }}
+        >
           <FolderOpen size={24} />
           <Box sx={{ minWidth: 0 }}>
-            <Typography variant="h6" fontWeight={600}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 600,
+              }}
+            >
               {title}
             </Typography>
             {subtitle ? (
-              <Typography variant="body2" color="text.secondary" noWrap>
+              <Typography
+                variant="body2"
+                noWrap
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {subtitle}
               </Typography>
             ) : null}
@@ -223,7 +249,13 @@ export default function StorageBrowserDialog({
             {breadcrumbs.map((crumb, index) => (
               <Box key={crumb.path || 'root'} sx={{ display: 'flex', alignItems: 'center' }}>
                 {index > 0 ? (
-                  <Typography variant="body2" color="text.secondary" sx={{ mx: 0.5 }}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: 'text.secondary',
+                      mx: 0.5,
+                    }}
+                  >
                     /
                   </Typography>
                 ) : null}
@@ -336,11 +368,20 @@ export default function StorageBrowserDialog({
                               <Stack
                                 direction="row"
                                 spacing={1.5}
-                                alignItems="center"
-                                sx={{ minWidth: 0, flex: 1 }}
+                                sx={{
+                                  alignItems: 'center',
+                                  minWidth: 0,
+                                  flex: 1,
+                                }}
                               >
                                 {highlighted ? <ShieldCheck size={20} /> : <Folder size={20} />}
-                                <Typography variant="body2" fontWeight={500} noWrap>
+                                <Typography
+                                  variant="body2"
+                                  noWrap
+                                  sx={{
+                                    fontWeight: 500,
+                                  }}
+                                >
                                   {folder.name}
                                 </Typography>
                                 {folder.badgeLabel ? (
@@ -354,7 +395,13 @@ export default function StorageBrowserDialog({
                                 ) : null}
                               </Stack>
                               {renderSize(folder.size) ? (
-                                <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    color: 'text.secondary',
+                                    ml: 2,
+                                  }}
+                                >
                                   {renderSize(folder.size)}
                                 </Typography>
                               ) : null}
@@ -401,8 +448,12 @@ export default function StorageBrowserDialog({
                               <Stack
                                 direction="row"
                                 spacing={1.5}
-                                alignItems="center"
-                                sx={{ flex: 1, minWidth: 0, color: 'text.primary' }}
+                                sx={{
+                                  alignItems: 'center',
+                                  flex: 1,
+                                  minWidth: 0,
+                                  color: 'text.primary',
+                                }}
                               >
                                 {highlighted ? <ShieldCheck size={20} /> : <FileText size={20} />}
                                 <Typography
@@ -425,12 +476,18 @@ export default function StorageBrowserDialog({
                                   />
                                 ) : null}
                               </Stack>
-                              <Stack direction="row" spacing={2} alignItems="center">
+                              <Stack
+                                direction="row"
+                                spacing={2}
+                                sx={{
+                                  alignItems: 'center',
+                                }}
+                              >
                                 {hasModifiedColumn ? (
                                   <Typography
                                     variant="body2"
-                                    color="text.secondary"
                                     sx={{
+                                      color: 'text.secondary',
                                       minWidth: 165,
                                       textAlign: 'right',
                                       fontFamily: 'monospace',
@@ -446,8 +503,11 @@ export default function StorageBrowserDialog({
                                 {renderSize(file.size) ? (
                                   <Typography
                                     variant="body2"
-                                    color="text.secondary"
-                                    sx={{ width: 80, textAlign: 'right' }}
+                                    sx={{
+                                      color: 'text.secondary',
+                                      width: 80,
+                                      textAlign: 'right',
+                                    }}
                                   >
                                     {renderSize(file.size)}
                                   </Typography>
@@ -476,7 +536,12 @@ export default function StorageBrowserDialog({
                 </Box>
               ) : normalizedPath ? (
                 <Box sx={{ textAlign: 'center', py: 4 }}>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: 'text.secondary',
+                    }}
+                  >
                     {emptyDirectoryLabel}
                   </Typography>
                 </Box>

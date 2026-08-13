@@ -23,7 +23,7 @@ interface WizardDialogProps {
   footer?: ReactNode
   maxWidth?: DialogProps['maxWidth']
   fullWidth?: boolean
-  PaperProps?: DialogProps['PaperProps']
+  PaperProps?: { sx?: SxProps<Theme> }
   stepContentSx?: SxProps<Theme>
 }
 
@@ -70,11 +70,23 @@ export default function WizardDialog({
       footer={footer}
     >
       <DialogTitle sx={{ pt: 3, pb: 1 }}>
-        <Typography variant="h5" component="div" fontWeight={700}>
+        <Typography
+          variant="h5"
+          component="div"
+          sx={{
+            fontWeight: 700,
+          }}
+        >
           {title}
         </Typography>
         {subtitle && (
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+              mt: 0.5,
+            }}
+          >
             {subtitle}
           </Typography>
         )}

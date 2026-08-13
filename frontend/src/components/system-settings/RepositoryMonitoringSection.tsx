@@ -179,7 +179,6 @@ const RepositoryMonitoringSection: React.FC<RepositoryMonitoringSectionProps> = 
           type="number"
           value={statsRefreshInterval}
           onChange={(e) => setStatsRefreshInterval(Number(e.target.value))}
-          inputProps={{ min: 0, max: MAX_STATS_REFRESH, step: 15 }}
           error={statsRefreshInterval < 0 || statsRefreshInterval > MAX_STATS_REFRESH}
           helperText={
             statsRefreshInterval === 0
@@ -190,6 +189,9 @@ const RepositoryMonitoringSection: React.FC<RepositoryMonitoringSectionProps> = 
                     interval: statsRefreshInterval,
                   })
           }
+          slotProps={{
+            htmlInput: { min: 0, max: MAX_STATS_REFRESH, step: 15 },
+          }}
         />
         <Button
           variant="outlined"
@@ -214,12 +216,14 @@ const RepositoryMonitoringSection: React.FC<RepositoryMonitoringSectionProps> = 
           type="number"
           value={maxConcurrentScheduledBackups}
           onChange={(e) => setMaxConcurrentScheduledBackups(Number(e.target.value))}
-          inputProps={{ min: 0, max: MAX_SCHEDULE_CONCURRENCY, step: 1 }}
           error={
             maxConcurrentScheduledBackups < 0 ||
             maxConcurrentScheduledBackups > MAX_SCHEDULE_CONCURRENCY
           }
           helperText={t('systemSettings.maxConcurrentScheduledBackupsHelper')}
+          slotProps={{
+            htmlInput: { min: 0, max: MAX_SCHEDULE_CONCURRENCY, step: 1 },
+          }}
         />
 
         <TextField
@@ -227,12 +231,14 @@ const RepositoryMonitoringSection: React.FC<RepositoryMonitoringSectionProps> = 
           type="number"
           value={maxConcurrentScheduledChecks}
           onChange={(e) => setMaxConcurrentScheduledChecks(Number(e.target.value))}
-          inputProps={{ min: 0, max: MAX_SCHEDULE_CONCURRENCY, step: 1 }}
           error={
             maxConcurrentScheduledChecks < 0 ||
             maxConcurrentScheduledChecks > MAX_SCHEDULE_CONCURRENCY
           }
           helperText={t('systemSettings.maxConcurrentScheduledChecksHelper')}
+          slotProps={{
+            htmlInput: { min: 0, max: MAX_SCHEDULE_CONCURRENCY, step: 1 },
+          }}
         />
       </Box>
 
@@ -240,10 +246,20 @@ const RepositoryMonitoringSection: React.FC<RepositoryMonitoringSectionProps> = 
 
       <Stack spacing={1.5}>
         <Box>
-          <Typography variant="subtitle1" fontWeight={700}>
+          <Typography
+            variant="subtitle1"
+            sx={{
+              fontWeight: 700,
+            }}
+          >
             {t('systemSettings.dashboardHealthThresholdsTitle')}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {t('systemSettings.dashboardHealthThresholdsDescription')}
           </Typography>
         </Box>
@@ -262,13 +278,15 @@ const RepositoryMonitoringSection: React.FC<RepositoryMonitoringSectionProps> = 
               type="number"
               value={field.value}
               onChange={(event) => field.setValue(Number(event.target.value))}
-              inputProps={thresholdInputProps}
               error={field.error}
               helperText={
                 field.error
                   ? t('systemSettings.dashboardHealthThresholdError')
                   : thresholdRangeHelper
               }
+              slotProps={{
+                htmlInput: thresholdInputProps,
+              }}
             />
           ))}
         </Box>

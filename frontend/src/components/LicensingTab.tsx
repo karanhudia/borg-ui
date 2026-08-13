@@ -168,34 +168,70 @@ export default function LicensingTab() {
   return (
     <Stack spacing={3}>
       <Box>
-        <Typography variant="h6" fontWeight={700}>
+        <Typography
+          variant="h6"
+          sx={{
+            fontWeight: 700,
+          }}
+        >
           {t('licensing.title')}
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           {t('licensing.subtitle')}
         </Typography>
       </Box>
       <SettingsCard>
         <Stack spacing={2}>
           <Box>
-            <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+            <Typography
+              variant="subtitle2"
+              gutterBottom
+              sx={{
+                fontWeight: 700,
+              }}
+            >
               {t('licensing.currentState')}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {t('licensing.currentPlanValue', { plan: statusLabel })}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {t('licensing.instanceIdValue', {
                 instanceId: entitlement?.instance_id ?? t('navigation.loading'),
               })}
             </Typography>
             {entitlement?.license_id && (
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {t('licensing.licenseIdValue', { licenseId: entitlement.license_id })}
               </Typography>
             )}
             {entitlement?.expires_at && (
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {t('licensing.expiresAtValue', {
                   date: new Date(entitlement.expires_at).toLocaleDateString(),
                 })}
@@ -289,7 +325,12 @@ export default function LicensingTab() {
           </Stack>
 
           <Stack spacing={1.25} sx={{ pt: 0.5 }}>
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {t('plan.licenseManagementHelp')}
             </Typography>
             <Link

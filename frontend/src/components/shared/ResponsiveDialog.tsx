@@ -12,6 +12,10 @@ type ResponsiveDialogProps = DialogProps & {
    *  The drawer's default borderRadius / display / maxHeight stay in place unless
    *  explicitly overridden here. */
   mobilePaperSx?: SxProps<Theme>
+  /** Desktop-only Paper slot props (mobile uses mobilePaperSx). A convenience
+   *  alias forwarded to the Dialog's `paper` slot — MUI 9 replaced the old
+   *  top-level `PaperProps` with `slotProps.paper`. */
+  PaperProps?: NonNullable<DialogProps['slotProps']>['paper']
 }
 
 export default function ResponsiveDialog({
@@ -24,6 +28,8 @@ export default function ResponsiveDialog({
   maxWidth,
   fullWidth,
   mobilePaperSx,
+  PaperProps,
+  slotProps,
   ...rest
 }: ResponsiveDialogProps) {
   const theme = useTheme()
@@ -43,20 +49,22 @@ export default function ResponsiveDialog({
         disableSwipeToOpen
         disableDiscovery
         ModalProps={{ keepMounted: false }}
-        PaperProps={{
-          sx: [
-            {
-              borderRadius: '16px 16px 0 0',
-              maxHeight: '90vh',
-              display: 'flex',
-              flexDirection: 'column',
-            },
-            ...(Array.isArray(mobilePaperSx)
-              ? mobilePaperSx
-              : mobilePaperSx
-                ? [mobilePaperSx]
-                : []),
-          ],
+        slotProps={{
+          paper: {
+            sx: [
+              {
+                borderRadius: '16px 16px 0 0',
+                maxHeight: '90vh',
+                display: 'flex',
+                flexDirection: 'column',
+              },
+              ...(Array.isArray(mobilePaperSx)
+                ? mobilePaperSx
+                : mobilePaperSx
+                  ? [mobilePaperSx]
+                  : []),
+            ],
+          },
         }}
       >
         {/* Drag handle row with X close button */}
@@ -106,7 +114,14 @@ export default function ResponsiveDialog({
   }
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth={maxWidth} fullWidth={fullWidth} {...rest}>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth={maxWidth}
+      fullWidth={fullWidth}
+      {...rest}
+      slotProps={{ ...slotProps, paper: PaperProps ?? slotProps?.paper }}
+    >
       {children}
       {footer}
     </Dialog>

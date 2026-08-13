@@ -203,10 +203,13 @@ export default function RemoteMachineCard({
           {/* Machine name — full width, no competing badge */}
           <Typography
             variant="subtitle1"
-            fontWeight={700}
             noWrap
             title={machine.mount_point || machine.host}
-            sx={{ lineHeight: 1.3, mb: 0.25 }}
+            sx={{
+              fontWeight: 700,
+              lineHeight: 1.3,
+              mb: 0.25,
+            }}
           >
             {machine.mount_point || machine.host}
           </Typography>

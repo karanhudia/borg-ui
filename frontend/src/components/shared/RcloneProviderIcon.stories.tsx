@@ -52,8 +52,8 @@ export const OAuthProviderCoverage: Story = {
           key={provider.type}
           direction="row"
           spacing={1.25}
-          alignItems="center"
           sx={{
+            alignItems: 'center',
             minWidth: 0,
             border: '1px solid',
             borderColor: 'divider',
@@ -63,10 +63,22 @@ export const OAuthProviderCoverage: Story = {
         >
           <RcloneProviderIcon provider={provider.type} size={32} iconSize={17} />
           <Box sx={{ minWidth: 0 }}>
-            <Typography variant="body2" fontWeight={600} noWrap>
+            <Typography
+              variant="body2"
+              noWrap
+              sx={{
+                fontWeight: 600,
+              }}
+            >
               {provider.label}
             </Typography>
-            <Typography variant="caption" color="text.secondary" noWrap>
+            <Typography
+              variant="caption"
+              noWrap
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {provider.status}
             </Typography>
           </Box>

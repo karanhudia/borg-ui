@@ -37,8 +37,19 @@ export const WithHeader: Story = {
         }
       >
         <Paper variant="outlined" sx={{ p: 3, borderRadius: 2 }}>
-          <Typography fontWeight={700}>Content area</Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.5 }}>
+          <Typography
+            sx={{
+              fontWeight: 700,
+            }}
+          >
+            Content area
+          </Typography>
+          <Typography
+            sx={{
+              color: 'text.secondary',
+              mt: 0.5,
+            }}
+          >
             The tab body can be replaced, gated, or loaded while the header remains stable.
           </Typography>
         </Paper>

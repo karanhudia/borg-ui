@@ -192,10 +192,21 @@ const MqttSettingsTab: React.FC = () => {
           }}
         >
           <Box>
-            <Typography variant="h5" fontWeight={700} gutterBottom>
+            <Typography
+              variant="h5"
+              gutterBottom
+              sx={{
+                fontWeight: 700,
+              }}
+            >
               {t('mqttSettings.title')}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {t('mqtt.subtitle')}
             </Typography>
           </Box>
@@ -217,7 +228,12 @@ const MqttSettingsTab: React.FC = () => {
               <Wifi size={24} />
               <Typography variant="h6">{t('mqtt.connectionTitle')}</Typography>
             </Box>
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {t('mqtt.connectionDescription')}
             </Typography>
             <Divider />
@@ -259,8 +275,10 @@ const MqttSettingsTab: React.FC = () => {
                     value={mqttBrokerPort}
                     onChange={(e) => setMqttBrokerPort(Number(e.target.value))}
                     fullWidth
-                    inputProps={{ min: 1, max: 65535, step: 1 }}
                     helperText={t('mqtt.brokerPortHelper')}
+                    slotProps={{
+                      htmlInput: { min: 1, max: 65535, step: 1 },
+                    }}
                   />
 
                   <TextField
@@ -270,12 +288,14 @@ const MqttSettingsTab: React.FC = () => {
                     onChange={(e) => setMqttUsername(e.target.value)}
                     fullWidth
                     helperText={t('mqtt.usernameHelper')}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <Key size={16} color="#666" />
-                        </InputAdornment>
-                      ),
+                    slotProps={{
+                      input: {
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <Key size={16} color="#666" />
+                          </InputAdornment>
+                        ),
+                      },
                     }}
                   />
 
@@ -290,19 +310,21 @@ const MqttSettingsTab: React.FC = () => {
                         ? t('mqtt.passwordIsSet')
                         : t('mqtt.passwordHelper')
                     }
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <Lock size={16} color="#666" />
-                        </InputAdornment>
-                      ),
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          <IconButton onClick={togglePasswordVisibility} edge="end" size="small">
-                            {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                          </IconButton>
-                        </InputAdornment>
-                      ),
+                    slotProps={{
+                      input: {
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <Lock size={16} color="#666" />
+                          </InputAdornment>
+                        ),
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <IconButton onClick={togglePasswordVisibility} edge="end" size="small">
+                              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </IconButton>
+                          </InputAdornment>
+                        ),
+                      },
                     }}
                   />
 
@@ -320,8 +342,10 @@ const MqttSettingsTab: React.FC = () => {
                     value={mqttQos}
                     onChange={(e) => setMqttQos(Math.min(Math.max(0, Number(e.target.value)), 2))}
                     fullWidth
-                    inputProps={{ min: 0, max: 2, step: 1 }}
                     helperText={t('mqtt.qosLevelHelper')}
+                    slotProps={{
+                      htmlInput: { min: 0, max: 2, step: 1 },
+                    }}
                   />
                 </Box>
 
@@ -349,7 +373,12 @@ const MqttSettingsTab: React.FC = () => {
                 <Shield size={24} />
                 <Typography variant="h6">{t('mqtt.tlsConfigTitle')}</Typography>
               </Box>
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {t('mqtt.tlsConfigDescription')}
               </Typography>
               <Divider />

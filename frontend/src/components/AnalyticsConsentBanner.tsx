@@ -57,18 +57,39 @@ export default function AnalyticsConsentBanner({ onConsentGiven }: AnalyticsCons
       }}
     >
       <Stack spacing={2}>
-        <Stack direction="row" spacing={1.5} alignItems="center">
+        <Stack
+          direction="row"
+          spacing={1.5}
+          sx={{
+            alignItems: 'center',
+          }}
+        >
           <BarChart3 size={24} />
-          <Typography variant="h6" fontWeight={600}>
+          <Typography
+            variant="h6"
+            sx={{
+              fontWeight: 600,
+            }}
+          >
             {t('analyticsConsent.title')}
           </Typography>
         </Stack>
 
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           {t('analyticsConsent.message')}
         </Typography>
 
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           <Link
             href={PUBLIC_ANALYTICS_DASHBOARD_URL}
             target="_blank"
@@ -83,8 +104,10 @@ export default function AnalyticsConsentBanner({ onConsentGiven }: AnalyticsCons
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
           spacing={2}
-          alignItems={{ xs: 'stretch', sm: 'center' }}
-          justifyContent="space-between"
+          sx={{
+            alignItems: { xs: 'stretch', sm: 'center' },
+            justifyContent: 'space-between',
+          }}
         >
           <FormControlLabel
             control={
@@ -95,7 +118,12 @@ export default function AnalyticsConsentBanner({ onConsentGiven }: AnalyticsCons
               />
             }
             label={
-              <Typography variant="body2" fontWeight={500}>
+              <Typography
+                variant="body2"
+                sx={{
+                  fontWeight: 500,
+                }}
+              >
                 {t('analyticsConsent.enableToggle')}
               </Typography>
             }
@@ -111,7 +139,12 @@ export default function AnalyticsConsentBanner({ onConsentGiven }: AnalyticsCons
           </Button>
         </Stack>
 
-        <Typography variant="caption" color="text.secondary">
+        <Typography
+          variant="caption"
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           {t('analyticsBanner.changeAnytimeNote')}
         </Typography>
       </Stack>

@@ -75,7 +75,14 @@ export default function SourceDirectoriesInput({
           </Tooltip>
         )}
       </Box>
-      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
+      <Typography
+        variant="caption"
+        sx={{
+          color: 'text.secondary',
+          display: 'block',
+          mb: 1.5,
+        }}
+      >
         {t('sourceDirectories.subtitle')}
         {required
           ? t('sourceDirectories.atLeastOneRequired')
@@ -106,20 +113,22 @@ export default function SourceDirectoriesInput({
           size="small"
           fullWidth
           disabled={disabled}
-          InputProps={{
-            endAdornment: onBrowseClick && (
-              <InputAdornment position="end">
-                <IconButton
-                  onClick={onBrowseClick}
-                  edge="end"
-                  size="small"
-                  title={t('sourceDirectories.browseTitle')}
-                  disabled={disabled}
-                >
-                  <FolderOpenIcon fontSize="small" />
-                </IconButton>
-              </InputAdornment>
-            ),
+          slotProps={{
+            input: {
+              endAdornment: onBrowseClick && (
+                <InputAdornment position="end">
+                  <IconButton
+                    onClick={onBrowseClick}
+                    edge="end"
+                    size="small"
+                    title={t('sourceDirectories.browseTitle')}
+                    disabled={disabled}
+                  >
+                    <FolderOpenIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ),
+            },
           }}
         />
         <Button variant="outlined" size="small" onClick={handleAdd} disabled={disabled}>

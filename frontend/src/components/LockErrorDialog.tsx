@@ -72,7 +72,12 @@ export default function LockErrorDialog({
           <AlertCircle size={24} color="#f57c00" />
           <Box sx={{ display: 'flex', flexDirection: 'column' }}>
             <Typography variant="h6">{t('dialogs.lockError.title')}</Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {t('dialogs.lockError.lockedDescription', { repositoryName })}
             </Typography>
           </Box>
@@ -84,14 +89,24 @@ export default function LockErrorDialog({
           <Typography variant="body2">{t('dialogs.lockError.staleLockInfo')}</Typography>
         </Alert>
 
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+            mb: 0.5,
+          }}
+        >
           <strong>{t('dialogs.lockError.whatCausesThis')}</strong>
         </Typography>
         <Typography
           variant="body2"
-          color="text.secondary"
           component="ul"
-          sx={{ pl: 2, mb: 1.5, mt: 0 }}
+          sx={{
+            color: 'text.secondary',
+            pl: 2,
+            mb: 1.5,
+            mt: 0,
+          }}
         >
           <li>{t('dialogs.lockError.causeInterrupted')}</li>
           <li>{t('dialogs.lockError.causeNetworkDrop')}</li>
@@ -99,14 +114,24 @@ export default function LockErrorDialog({
           <li>{t('dialogs.lockError.causeCacheLocks')}</li>
         </Typography>
 
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+            mb: 0.5,
+          }}
+        >
           <strong>{t('dialogs.lockError.beforeBreaking')}</strong>
         </Typography>
         <Typography
           variant="body2"
-          color="text.secondary"
           component="ul"
-          sx={{ pl: 2, mt: 0, mb: 0 }}
+          sx={{
+            color: 'text.secondary',
+            pl: 2,
+            mt: 0,
+            mb: 0,
+          }}
         >
           <li>{t('dialogs.lockError.beforeBreakingCheck1')}</li>
           <li>{t('dialogs.lockError.beforeBreakingCheck2')}</li>

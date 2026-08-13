@@ -64,11 +64,23 @@ export const RepositoryAccessDialog: React.FC<RepositoryAccessDialogProps> = ({
   return (
     <ResponsiveDialog open={!!accessUser} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle sx={{ pb: 1 }}>
-        <Typography variant="h6" fontWeight={600} lineHeight={1.2}>
+        <Typography
+          variant="h6"
+          sx={{
+            fontWeight: 600,
+            lineHeight: 1.2,
+          }}
+        >
           {t('settings.users.repositoryAccess.title')}
         </Typography>
         {accessUser && (
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+              mt: 0.5,
+            }}
+          >
             {accessUser.full_name || accessUser.username}
           </Typography>
         )}
@@ -77,13 +89,30 @@ export const RepositoryAccessDialog: React.FC<RepositoryAccessDialogProps> = ({
         {accessUser && (
           <Stack spacing={2.5} sx={{ pt: 1, pb: 1 }}>
             <Box>
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{
+                  alignItems: 'center',
+                  mb: 0.5,
+                }}
+              >
                 <ShieldCheck size={14} style={{ opacity: 0.6 }} />
-                <Typography variant="body2" fontWeight={600}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontWeight: 600,
+                  }}
+                >
                   {getRolePresentation(accessUser.role).label}
                 </Typography>
               </Stack>
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {getRepositoryAccessSummary(accessUser)}
               </Typography>
             </Box>
@@ -104,10 +133,20 @@ export const RepositoryAccessDialog: React.FC<RepositoryAccessDialogProps> = ({
               >
                 <ShieldCheck size={15} style={{ color: '#7c3aed', flexShrink: 0 }} />
                 <Box>
-                  <Typography variant="body2" fontWeight={600}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontWeight: 600,
+                    }}
+                  >
                     {t('settings.users.repositoryAccess.globalAccess')}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: 'text.secondary',
+                    }}
+                  >
                     {t('settings.users.repositoryAccess.globalAccessDesc')}
                   </Typography>
                 </Box>
@@ -194,7 +233,13 @@ export const UserFormDialog: React.FC<UserFormDialogProps> = ({
             />
 
             <FormControl fullWidth>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                  mb: 0.5,
+                }}
+              >
                 {t('settings.users.fields.role')}
               </Typography>
               <Select
@@ -330,7 +375,13 @@ export const DeleteUserDialog: React.FC<DeleteUserDialogProps> = ({
   return (
     <Dialog open={!!user} onClose={onClose} maxWidth="xs" fullWidth>
       <DialogTitle>
-        <Stack direction="row" spacing={2} alignItems="center">
+        <Stack
+          direction="row"
+          spacing={2}
+          sx={{
+            alignItems: 'center',
+          }}
+        >
           <Box
             sx={{
               width: 48,
@@ -344,7 +395,12 @@ export const DeleteUserDialog: React.FC<DeleteUserDialogProps> = ({
           >
             <AlertCircle size={24} color="#d32f2f" />
           </Box>
-          <Typography variant="h6" fontWeight={600}>
+          <Typography
+            variant="h6"
+            sx={{
+              fontWeight: 600,
+            }}
+          >
             {t('settings.users.deleteDialog.title')}
           </Typography>
         </Stack>
@@ -353,7 +409,13 @@ export const DeleteUserDialog: React.FC<DeleteUserDialogProps> = ({
         <Typography variant="body2">
           {t('settings.users.deleteDialog.message', { username: user?.username })}
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+            mt: 1,
+          }}
+        >
           {t('settings.users.deleteDialog.warning')}
         </Typography>
       </DialogContent>

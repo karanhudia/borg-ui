@@ -26,10 +26,22 @@ export default function AccountPasskeysSection({
 
   return (
     <Box>
-      <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+      <Typography
+        variant="subtitle2"
+        gutterBottom
+        sx={{
+          fontWeight: 700,
+        }}
+      >
         {t('settings.account.security.passkeysTitle')}
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+      <Typography
+        variant="body2"
+        sx={{
+          color: 'text.secondary',
+          mb: 2,
+        }}
+      >
         {t('settings.account.security.passkeysDescription')}
       </Typography>
       <Box
@@ -48,10 +60,18 @@ export default function AccountPasskeysSection({
         <Stack
           direction={{ xs: 'column', md: 'row' }}
           spacing={2}
-          justifyContent="space-between"
-          alignItems={{ xs: 'flex-start', md: 'center' }}
+          sx={{
+            justifyContent: 'space-between',
+            alignItems: { xs: 'flex-start', md: 'center' },
+          }}
         >
-          <Stack direction="row" spacing={1.5} alignItems="center">
+          <Stack
+            direction="row"
+            spacing={1.5}
+            sx={{
+              alignItems: 'center',
+            }}
+          >
             <Box
               sx={{
                 width: 40,
@@ -81,12 +101,22 @@ export default function AccountPasskeysSection({
                   ? t('settings.account.security.statusReady')
                   : t('settings.account.security.statusNotConfigured')}
               </Typography>
-              <Typography variant="body2" fontWeight={700}>
+              <Typography
+                variant="body2"
+                sx={{
+                  fontWeight: 700,
+                }}
+              >
                 {passkeys.length > 0
                   ? t('settings.account.security.passkeysCount', { count: passkeys.length })
                   : t('settings.account.security.noPasskeys')}
               </Typography>
-              <Typography variant="caption" color="text.secondary">
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {passkeys.length > 0
                   ? t('settings.account.security.passkeysManageHint')
                   : t('settings.account.security.passkeyEmptyHint')}
@@ -125,13 +155,29 @@ export default function AccountPasskeysSection({
                 gap: 2,
               }}
             >
-              <Stack direction="row" spacing={1.5} alignItems="center">
+              <Stack
+                direction="row"
+                spacing={1.5}
+                sx={{
+                  alignItems: 'center',
+                }}
+              >
                 <KeyRound size={16} />
                 <Box>
-                  <Typography variant="body2" fontWeight={600}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontWeight: 600,
+                    }}
+                  >
                     {passkey.name}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: 'text.secondary',
+                    }}
+                  >
                     {passkey.last_used_at
                       ? t('settings.account.security.passkeyLastUsed', {
                           date: new Date(passkey.last_used_at).toLocaleString(),

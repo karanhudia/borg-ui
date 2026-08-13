@@ -66,8 +66,11 @@ export function DatabaseBrandTile({ database, detectedLabel, onClick }: Database
         <Stack
           direction="row"
           spacing={1.25}
-          alignItems="center"
-          sx={{ width: '100%', minWidth: 0 }}
+          sx={{
+            alignItems: 'center',
+            width: '100%',
+            minWidth: 0,
+          }}
         >
           <Box
             sx={{
@@ -91,7 +94,13 @@ export function DatabaseBrandTile({ database, detectedLabel, onClick }: Database
               {database.engine}
             </Typography>
             {isDetected && (
-              <Stack direction="row" spacing={0.5} alignItems="center">
+              <Stack
+                direction="row"
+                spacing={0.5}
+                sx={{
+                  alignItems: 'center',
+                }}
+              >
                 <Box
                   sx={{
                     width: 6,
@@ -101,7 +110,14 @@ export function DatabaseBrandTile({ database, detectedLabel, onClick }: Database
                     flexShrink: 0,
                   }}
                 />
-                <Typography variant="caption" color="success.main" sx={{ fontWeight: 500 }} noWrap>
+                <Typography
+                  variant="caption"
+                  noWrap
+                  sx={{
+                    color: 'success.main',
+                    fontWeight: 500,
+                  }}
+                >
                   {detectedLabel}
                 </Typography>
               </Stack>
@@ -124,8 +140,8 @@ export function DatabaseBrandTile({ database, detectedLabel, onClick }: Database
               >
                 <Typography
                   variant="caption"
-                  color="text.secondary"
                   sx={{
+                    color: 'text.secondary',
                     fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace',
                     fontSize: '0.6875rem',
                     lineHeight: 1.25,

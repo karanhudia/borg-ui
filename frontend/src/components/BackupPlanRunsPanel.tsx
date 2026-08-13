@@ -188,22 +188,43 @@ function RepositoryRunRow({
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
           spacing={1}
-          alignItems={{ xs: 'flex-start', sm: 'center' }}
-          justifyContent="space-between"
+          sx={{
+            alignItems: { xs: 'flex-start', sm: 'center' },
+            justifyContent: 'space-between',
+          }}
         >
           <Box sx={{ minWidth: 0 }}>
             <Typography variant="subtitle2">
               {getRepositoryLabel(runRepository, t('backupPlans.status.repositoryFallback'))}
             </Typography>
-            <Typography variant="caption" color="text.secondary" noWrap component="div">
+            <Typography
+              variant="caption"
+              noWrap
+              component="div"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {getRepositoryPath(runRepository)}
             </Typography>
           </Box>
-          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{
+              alignItems: 'center',
+              flexWrap: 'wrap',
+            }}
+          >
             <Chip size="small" label={statusLabel} color={runStatusColor(runRepository.status)} />
             {transportLabel && <Chip size="small" variant="outlined" label={transportLabel} />}
             {job && (
-              <Typography variant="caption" color="text.secondary">
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {t('backupPlans.runsDialog.jobNumber', { id: job.id })}
               </Typography>
             )}
@@ -232,10 +253,19 @@ function RepositoryRunRow({
         <Stack
           direction={{ xs: 'column', md: 'row' }}
           spacing={1}
-          alignItems={{ xs: 'flex-start', md: 'center' }}
-          justifyContent="space-between"
+          sx={{
+            alignItems: { xs: 'flex-start', md: 'center' },
+            justifyContent: 'space-between',
+          }}
         >
-          <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap>
+          <Stack
+            direction="row"
+            spacing={1.5}
+            useFlexGap
+            sx={{
+              flexWrap: 'wrap',
+            }}
+          >
             {progressDetails?.nfiles !== undefined && (
               <InlineMetric
                 icon={<FileText size={13} />}
@@ -259,8 +289,19 @@ function RepositoryRunRow({
             )}
           </Stack>
 
-          <Stack direction="row" spacing={1} alignItems="center">
-            <Typography variant="caption" color="text.secondary">
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{
+              alignItems: 'center',
+            }}
+          >
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {job?.archive_name
                 ? t('backupPlans.runsDialog.archiveName', { name: job.archive_name })
                 : t('backupPlans.runsDialog.archivePending')}
@@ -281,8 +322,8 @@ function RepositoryRunRow({
         {progressDetails?.current_file && (
           <Typography
             variant="caption"
-            color="text.secondary"
             sx={{
+              color: 'text.secondary',
               display: 'block',
               fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace',
               overflow: 'hidden',
@@ -314,12 +355,29 @@ function InlineMetric({
   value: React.ReactNode
 }) {
   return (
-    <Stack direction="row" spacing={0.5} alignItems="center" sx={{ minWidth: 0 }}>
+    <Stack
+      direction="row"
+      spacing={0.5}
+      sx={{
+        alignItems: 'center',
+        minWidth: 0,
+      }}
+    >
       <Box sx={{ color: 'text.secondary', display: 'flex', flexShrink: 0 }}>{icon}</Box>
-      <Typography variant="caption" color="text.secondary">
+      <Typography
+        variant="caption"
+        sx={{
+          color: 'text.secondary',
+        }}
+      >
         {label}
       </Typography>
-      <Typography variant="caption" fontWeight={600}>
+      <Typography
+        variant="caption"
+        sx={{
+          fontWeight: 600,
+        }}
+      >
         {value}
       </Typography>
     </Stack>
@@ -339,10 +397,21 @@ function SummaryPill({ label, value }: { label: string; value: React.ReactNode }
         py: 1,
       }}
     >
-      <Typography variant="caption" color="text.secondary">
+      <Typography
+        variant="caption"
+        sx={{
+          color: 'text.secondary',
+        }}
+      >
         {label}
       </Typography>
-      <Typography variant="body2" fontWeight={600} noWrap>
+      <Typography
+        variant="body2"
+        noWrap
+        sx={{
+          fontWeight: 600,
+        }}
+      >
         {value}
       </Typography>
     </Box>
@@ -381,19 +450,39 @@ export function BackupPlanRunCard({
           <Stack
             direction={{ xs: 'column', sm: 'row' }}
             spacing={1.5}
-            alignItems={{ xs: 'flex-start', sm: 'center' }}
-            justifyContent="space-between"
+            sx={{
+              alignItems: { xs: 'flex-start', sm: 'center' },
+              justifyContent: 'space-between',
+            }}
           >
             <Box sx={{ minWidth: 0 }}>
-              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                }}
+              >
                 {active && <RefreshCw size={16} className="animate-spin" />}
-                <Typography variant="subtitle1" fontWeight={700} noWrap>
+                <Typography
+                  variant="subtitle1"
+                  noWrap
+                  sx={{
+                    fontWeight: 700,
+                  }}
+                >
                   {planName}
                 </Typography>
                 <Chip size="small" label={t('backupPlans.runsDialog.runNumber', { id: run.id })} />
                 <Chip size="small" label={statusLabel} color={runStatusColor(run.status)} />
               </Stack>
-              <Typography variant="caption" color="text.secondary">
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {t('backupPlans.runsPanel.repositoryProgress', {
                   completed: getFinishedCount(run),
                   total: run.repositories.length,
@@ -538,10 +627,23 @@ export default function BackupPlanRunsPanel({
       width: '90px',
       render: (run) => (
         <Box sx={{ minWidth: 0 }}>
-          <Typography variant="body2" fontWeight={700} color="primary">
+          <Typography
+            variant="body2"
+            color="primary"
+            sx={{
+              fontWeight: 700,
+            }}
+          >
             #{run.id}
           </Typography>
-          <Typography variant="caption" color="text.secondary" noWrap component="div">
+          <Typography
+            variant="caption"
+            noWrap
+            component="div"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {run.trigger}
           </Typography>
         </Box>
@@ -554,7 +656,13 @@ export default function BackupPlanRunsPanel({
       mobileFullWidth: true,
       render: (run) => (
         <Box sx={{ minWidth: 0 }}>
-          <Typography variant="body2" fontWeight={700} noWrap>
+          <Typography
+            variant="body2"
+            noWrap
+            sx={{
+              fontWeight: 700,
+            }}
+          >
             {getPlanName(run)}
           </Typography>
           <RepositoryCell
@@ -573,7 +681,13 @@ export default function BackupPlanRunsPanel({
               sx={{ mt: 0.5 }}
             />
           )}
-          <Typography variant="caption" color="text.secondary" component="div">
+          <Typography
+            variant="caption"
+            component="div"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {t('backupPlans.runsPanel.repositoryProgress', {
               completed: getFinishedCount(run),
               total: run.repositories.length,
@@ -582,9 +696,9 @@ export default function BackupPlanRunsPanel({
           {getCurrentFile(run) && (
             <Typography
               variant="caption"
-              color="text.secondary"
               component="div"
               sx={{
+                color: 'text.secondary',
                 fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -634,8 +748,11 @@ export default function BackupPlanRunsPanel({
         >
           <Typography
             variant="body2"
-            color="text.secondary"
-            sx={{ cursor: getStartedAt(run) ? 'help' : 'default', display: 'inline-block' }}
+            sx={{
+              color: 'text.secondary',
+              cursor: getStartedAt(run) ? 'help' : 'default',
+              display: 'inline-block',
+            }}
           >
             {getStartedAt(run) ? formatDate(getStartedAt(run) as string) : '-'}
           </Typography>
@@ -647,7 +764,13 @@ export default function BackupPlanRunsPanel({
       label: t('backupPlans.runsPanel.columns.duration'),
       width: '140px',
       render: (run) => (
-        <Typography variant="body2" color="text.secondary" noWrap>
+        <Typography
+          variant="body2"
+          noWrap
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           {formatTimeRange(run.started_at, run.completed_at, run.status)}
         </Typography>
       ),
@@ -705,8 +828,11 @@ export default function BackupPlanRunsPanel({
         <Stack
           direction="row"
           spacing={1.5}
-          alignItems="center"
-          sx={{ mb: 1, color: 'text.secondary' }}
+          sx={{
+            alignItems: 'center',
+            mb: 1,
+            color: 'text.secondary',
+          }}
         >
           <Box
             sx={{
@@ -718,12 +844,24 @@ export default function BackupPlanRunsPanel({
           >
             {icon}
           </Box>
-          <Typography id={sectionId} variant="h6" fontWeight={600}>
+          <Typography
+            id={sectionId}
+            variant="h6"
+            sx={{
+              fontWeight: 600,
+            }}
+          >
             {title}
           </Typography>
           {countChip}
         </Stack>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+            mb: 3,
+          }}
+        >
           {subtitle}
         </Typography>
 
@@ -759,13 +897,22 @@ export default function BackupPlanRunsPanel({
           <Stack
             direction="row"
             spacing={1.5}
-            alignItems="center"
-            sx={{ mb: 1, color: 'text.secondary' }}
+            sx={{
+              alignItems: 'center',
+              mb: 1,
+              color: 'text.secondary',
+            }}
           >
             <Box sx={{ display: 'flex', color: 'success.main' }}>
               <RefreshCw size={20} className="animate-spin" />
             </Box>
-            <Typography id="backup-plan-active-runs-heading" variant="h6" fontWeight={600}>
+            <Typography
+              id="backup-plan-active-runs-heading"
+              variant="h6"
+              sx={{
+                fontWeight: 600,
+              }}
+            >
               {t('backupPlans.runsPanel.activeTitle')}
             </Typography>
             <Chip
@@ -774,7 +921,13 @@ export default function BackupPlanRunsPanel({
               label={t('backupPlans.runsPanel.activeCount', { count: activeRuns.length })}
             />
           </Stack>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+              mb: 2.5,
+            }}
+          >
             {t('backupPlans.runsPanel.activeSubtitle')}
           </Typography>
 

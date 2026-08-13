@@ -554,8 +554,10 @@ export default function Scripts() {
               value={formData.timeout}
               onChange={(e) => setFormData({ ...formData, timeout: parseInt(e.target.value) })}
               fullWidth
-              inputProps={{ min: 30, max: 3600 }}
               helperText={t('scripts.fields.timeoutHint')}
+              slotProps={{
+                htmlInput: { min: 30, max: 3600 },
+              }}
             />
 
             <CodeEditor

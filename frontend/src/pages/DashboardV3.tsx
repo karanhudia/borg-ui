@@ -159,7 +159,13 @@ export default function DashboardV3() {
             borderColor: alpha(sc.color, 0.33),
           }}
         >
-          <Stack direction="row" spacing={2} alignItems="center">
+          <Stack
+            direction="row"
+            spacing={2}
+            sx={{
+              alignItems: 'center',
+            }}
+          >
             <PulseDot color={sc.color} />
             <Box>
               <Typography
@@ -364,9 +370,11 @@ export default function DashboardV3() {
                   The donut below is a glanceable shape, not the focal point. */}
               <Stack
                 direction="row"
-                alignItems="baseline"
-                justifyContent="space-between"
-                sx={{ mb: 1.75 }}
+                sx={{
+                  alignItems: 'baseline',
+                  justifyContent: 'space-between',
+                  mb: 1.75,
+                }}
               >
                 <Typography sx={{ fontSize: '0.8125rem', fontWeight: 600, color: T.textPrimary }}>
                   {t('dashboard.successDonut.label')}
@@ -393,8 +401,21 @@ export default function DashboardV3() {
                 good={summary.successful_jobs_30d}
                 total={summary.total_jobs_30d}
               />
-              <Stack direction="row" justifyContent="space-between" sx={{ mt: 1.75, px: 0.5 }}>
-                <Stack direction="row" alignItems="baseline" spacing={0.75}>
+              <Stack
+                direction="row"
+                sx={{
+                  justifyContent: 'space-between',
+                  mt: 1.75,
+                  px: 0.5,
+                }}
+              >
+                <Stack
+                  direction="row"
+                  spacing={0.75}
+                  sx={{
+                    alignItems: 'baseline',
+                  }}
+                >
                   <Typography
                     sx={{
                       fontFamily: T.mono,
@@ -410,7 +431,13 @@ export default function DashboardV3() {
                     {t('dashboard.successDonut.passed')}
                   </Typography>
                 </Stack>
-                <Stack direction="row" alignItems="baseline" spacing={0.75}>
+                <Stack
+                  direction="row"
+                  spacing={0.75}
+                  sx={{
+                    alignItems: 'baseline',
+                  }}
+                >
                   <Typography
                     sx={{
                       fontFamily: T.mono,
@@ -430,7 +457,14 @@ export default function DashboardV3() {
             </Box>
 
             <Box sx={{ ...surface, p: 2 }}>
-              <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 2 }}>
+              <Stack
+                direction="row"
+                spacing={0.75}
+                sx={{
+                  alignItems: 'center',
+                  mb: 2,
+                }}
+              >
                 <Cpu size={14} color={T.textMuted} />
                 <Typography
                   sx={{
@@ -487,11 +521,19 @@ export default function DashboardV3() {
                   centered hero number. */}
               <Stack
                 direction="row"
-                alignItems="baseline"
-                justifyContent="space-between"
-                sx={{ mb: 1.75 }}
+                sx={{
+                  alignItems: 'baseline',
+                  justifyContent: 'space-between',
+                  mb: 1.75,
+                }}
               >
-                <Stack direction="row" spacing={0.75} alignItems="center">
+                <Stack
+                  direction="row"
+                  spacing={0.75}
+                  sx={{
+                    alignItems: 'center',
+                  }}
+                >
                   <HardDrive size={14} color={T.textMuted} />
                   <Typography sx={{ fontSize: '0.8125rem', fontWeight: 600, color: T.textPrimary }}>
                     {t('dashboard.banner.stats.storage')}
@@ -570,11 +612,19 @@ export default function DashboardV3() {
             <Box sx={{ ...surface, p: 2.5 }}>
               <Stack
                 direction="row"
-                alignItems="center"
-                justifyContent="space-between"
-                sx={{ mb: 1.75 }}
+                sx={{
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  mb: 1.75,
+                }}
               >
-                <Stack direction="row" spacing={1} alignItems="center">
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  sx={{
+                    alignItems: 'center',
+                  }}
+                >
                   <Activity size={14} color={T.textMuted} />
                   <Typography
                     sx={{
@@ -586,12 +636,24 @@ export default function DashboardV3() {
                     {t('dashboard.recentActivity.last14Days')}
                   </Typography>
                 </Stack>
-                <Stack direction="row" spacing={1.5} alignItems="center">
+                <Stack
+                  direction="row"
+                  spacing={1.5}
+                  sx={{
+                    alignItems: 'center',
+                  }}
+                >
                   {/* Failed-marker legend lives in the header next to the
                       Full Log button so it does not claim its own row under
                       the chart. The ringed circle here visually matches the
                       ring drawn around failed dots in the SVG. */}
-                  <Stack direction="row" spacing={0.65} alignItems="center">
+                  <Stack
+                    direction="row"
+                    spacing={0.65}
+                    sx={{
+                      alignItems: 'center',
+                    }}
+                  >
                     <Box
                       sx={{
                         width: 8,
