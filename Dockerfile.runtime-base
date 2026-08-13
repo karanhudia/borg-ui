@@ -82,7 +82,10 @@ RUN set -eux; \
     sha256sum -c /tmp/rclone.sha256; \
     unzip -j -o /tmp/rclone.zip "*/rclone" -d /out; \
     chmod 0755 /out/rclone; \
-    /out/rclone version; \
+    # rclone reads RCLONE_* env vars as flags, and BuildKit exposes these ARGs
+    # as env vars in RUN, so RCLONE_VERSION collides with the --version flag —
+    # clear them for the verification call (the final runtime image sets none).
+    env -u RCLONE_VERSION -u RCLONE_SHA256_AMD64 -u RCLONE_SHA256_ARM64 /out/rclone version; \
     rm -f /tmp/rclone.zip /tmp/rclone.sha256
 
 # --- runtime-base: slim image, no compilers — runtime libs + operational tools -
