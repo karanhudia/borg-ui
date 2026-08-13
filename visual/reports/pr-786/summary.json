@@ -1,40 +1,21 @@
 {
-  "generatedAt": "2026-08-01T08:01:55.177Z",
+  "generatedAt": "2026-08-13T02:48:39.877Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #786 visual report",
-    "commitSha": "ce58d0221b52",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/30690728799"
+    "commitSha": "bf04c35b240d",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/31661700015"
   },
   "totals": {
     "baseline": 452,
     "actual": 452,
     "compared": 452,
-    "changed": 1,
+    "changed": 0,
     "added": 0,
     "removed": 0,
-    "unchanged": 451
+    "unchanged": 452
   },
-  "changed": [
-    {
-      "fileName": "components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png",
-      "baselinePath": "images/baseline/components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png",
-      "actualPath": "images/actual/components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png",
-      "diffPath": "images/diff/components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png",
-      "diffPixels": 62504,
-      "totalPixels": 329160,
-      "diffRatio": 0.18988941548183255,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    }
-  ],
+  "changed": [],
   "added": [],
   "removed": [],
   "unchanged": [
@@ -1033,6 +1014,9 @@
     },
     {
       "fileName": "components-wizard-rclone-remote-dialog--create-managed-remote.png"
+    },
+    {
+      "fileName": "components-wizard-rclone-remote-dialog--custom-backend-remote--mobile.png"
     },
     {
       "fileName": "components-wizard-rclone-remote-dialog--custom-backend-remote.png"
