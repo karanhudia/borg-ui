@@ -1,0 +1,85 @@
+name: rclone binary update
+
+# Watches downloads.rclone.org for a stable release newer than the one this repo
+# pins, and opens a PR that bumps RCLONE_VERSION and its per-arch checksums in
+# docker/runtime-base.env / Dockerfile.runtime-base.
+#
+# The env-vs-Dockerfile agreement tests derive from the versions file, so they
+# stay green. The one check that fails is the base-image guard: an rclone bump
+# increments RUNTIME_BASE_REVISION (the Borg versions do not move), so the
+# computed runtime-base tag names an image that has not been built yet.
+# Rebuilding and pushing that image, then pointing the app Dockerfile's
+# BASE_IMAGE at its tag, is the human half of the adoption; this job does the
+# mechanical half so the pin never silently falls behind upstream rclone.
+
+on:
+  schedule:
+    - cron: "0 4 * * 1" # Mondays, 04:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: rclone-binary-update
+  cancel-in-progress: false
+
+jobs:
+  adopt:
+    name: Adopt a newer rclone release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          # This write-enabled job needs no persisted git credentials: the PR is
+          # pushed by create-pull-request with its own token, so the checkout's
+          # credentials are not left behind in the environment (artipacked).
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"  # keep in sync with docker/runtime-base.env
+
+      - name: Install dependencies
+        run: pip install "packaging==24.2"
+
+      - name: Adopt a newer rclone release
+        id: refresh
+        run: python scripts/refresh_rclone_binary_version.py --latest
+
+      - name: Open or update the adoption PR
+        if: steps.refresh.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          # A PR opened with the default GITHUB_TOKEN does not trigger other
+          # workflows, so the tests that make this PR usefully red never run. A PAT
+          # (or GitHub App token) in BORG_BINARY_BOT_TOKEN restores that; without
+          # one the PR is still opened, but someone has to kick its checks off.
+          token: ${{ secrets.BORG_BINARY_BOT_TOKEN || github.token }}
+          branch: automation/rclone-binary
+          title: ${{ steps.refresh.outputs.title }}
+          commit-message: ${{ steps.refresh.outputs.title }}
+          body: |
+            ${{ steps.refresh.outputs.summary }}.
+
+            Opened automatically because rclone published a stable release newer
+            than the one this repo pins. `docker/runtime-base.env` (RCLONE_VERSION
+            + revision bump), the Dockerfile ARG that mirrors it, and both
+            per-arch `RCLONE_SHA256_*` checksums are already updated here; the
+            env-vs-Dockerfile tests derive from those, so they stay green.
+
+            **This PR is expected to be red on the base-image check.** The
+            remaining, human half of adopting a version:
+
+            - [ ] Rebuild and push the runtime-base image for the new revision,
+              then point `Dockerfile`'s `BASE_IMAGE` at its tag — until then the
+              base-image guard is red, because the computed tag names an image
+              that does not exist yet.
+            - [ ] Skim the rclone changelog for anything that affects how the
+              cloud backends are invoked (flags, subcommands, backend behaviour).
+
+            Re-running the job updates this same PR rather than opening another.
+          labels: dependencies
