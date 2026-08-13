@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-08-13T13:08:34.370Z",
+  "generatedAt": "2026-08-13T13:21:01.572Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #811 visual report",
-    "commitSha": "2dca8fc7f410",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/31702953626"
+    "commitSha": "beee4c7cb51d",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/31704006506"
   },
   "totals": {
     "baseline": 458,
     "actual": 458,
     "compared": 458,
-    "changed": 11,
+    "changed": 14,
     "added": 0,
     "removed": 0,
-    "unchanged": 447
+    "unchanged": 444
   },
   "changed": [
     {
@@ -32,6 +32,60 @@
       "actual": {
         "width": 1280,
         "height": 800
+      }
+    },
+    {
+      "fileName": "components-wizard-rclone-remote-dialog--borg-ui-o-auth-credentials-partially-saved--mobile.png",
+      "baselinePath": "images/baseline/components-wizard-rclone-remote-dialog--borg-ui-o-auth-credentials-partially-saved--mobile.png",
+      "actualPath": "images/actual/components-wizard-rclone-remote-dialog--borg-ui-o-auth-credentials-partially-saved--mobile.png",
+      "diffPath": "images/diff/components-wizard-rclone-remote-dialog--borg-ui-o-auth-credentials-partially-saved--mobile.png",
+      "diffPixels": 15,
+      "totalPixels": 329160,
+      "diffRatio": 0.00004557054320087495,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-wizard-rclone-remote-dialog--borg-ui-o-auth-setup-missing--mobile.png",
+      "baselinePath": "images/baseline/components-wizard-rclone-remote-dialog--borg-ui-o-auth-setup-missing--mobile.png",
+      "actualPath": "images/actual/components-wizard-rclone-remote-dialog--borg-ui-o-auth-setup-missing--mobile.png",
+      "diffPath": "images/diff/components-wizard-rclone-remote-dialog--borg-ui-o-auth-setup-missing--mobile.png",
+      "diffPixels": 15,
+      "totalPixels": 329160,
+      "diffRatio": 0.00004557054320087495,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-wizard-rclone-remote-dialog--guided-google-drive-remote--mobile.png",
+      "baselinePath": "images/baseline/components-wizard-rclone-remote-dialog--guided-google-drive-remote--mobile.png",
+      "actualPath": "images/actual/components-wizard-rclone-remote-dialog--guided-google-drive-remote--mobile.png",
+      "diffPath": "images/diff/components-wizard-rclone-remote-dialog--guided-google-drive-remote--mobile.png",
+      "diffPixels": 110,
+      "totalPixels": 329160,
+      "diffRatio": 0.000334183983473083,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
       }
     },
     {
@@ -1200,13 +1254,7 @@
       "fileName": "components-wizard-rclone-remote-dialog--borg-ui-o-auth-credentials-missing.png"
     },
     {
-      "fileName": "components-wizard-rclone-remote-dialog--borg-ui-o-auth-credentials-partially-saved--mobile.png"
-    },
-    {
       "fileName": "components-wizard-rclone-remote-dialog--borg-ui-o-auth-credentials-partially-saved.png"
-    },
-    {
-      "fileName": "components-wizard-rclone-remote-dialog--borg-ui-o-auth-setup-missing--mobile.png"
     },
     {
       "fileName": "components-wizard-rclone-remote-dialog--borg-ui-o-auth-setup-missing.png"
@@ -1228,9 +1276,6 @@
     },
     {
       "fileName": "components-wizard-rclone-remote-dialog--custom-backend-remote.png"
-    },
-    {
-      "fileName": "components-wizard-rclone-remote-dialog--guided-google-drive-remote--mobile.png"
     },
     {
       "fileName": "components-wizard-rclone-remote-dialog--guided-google-drive-remote.png"
