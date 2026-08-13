@@ -362,7 +362,7 @@
     "running": "In esecuzione",
     "pending": "In attesa",
     "cancelled": "Annullato",
-    "skipped": "Ignorato"
+    "skipped": "Saltato"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -1558,7 +1558,7 @@
         "failed": "Fallito",
         "running": "In Esecuzione",
         "pending": "In Attesa",
-        "skipped": "Ignorato"
+        "skipped": "Saltato"
       }
     },
     "empty": {

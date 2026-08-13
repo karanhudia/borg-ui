@@ -65,6 +65,7 @@ def _get_agent_log_lines(db: Session, agent_job_id: int) -> list[str]:
 
 
 class ActivityItem(BaseModel):
+    activity_key: Optional[str] = None
     id: int
     type: str  # backup, restore, check, restore_check, compact, package, rclone_*
     status: str  # 'pending', 'running', 'completed', 'needs_backup', 'failed', 'completed_with_warnings'
@@ -418,6 +419,7 @@ async def list_recent_activity(
             )
             activities.append(
                 {
+                    "activity_key": f"backup-plan-run-{run.id}",
                     "id": run.id,
                     "type": "availability_check",
                     "status": "skipped",
@@ -452,12 +454,13 @@ async def list_recent_activity(
             schedule = db.get(ScheduledJob, skip.scheduled_job_id)
             activities.append(
                 {
+                    "activity_key": f"availability-schedule-skip-{skip.id}",
                     "id": skip.id,
                     "type": "availability_check",
                     "status": "skipped",
                     "started_at": skip.occurred_at,
                     "completed_at": skip.occurred_at,
-                    "error_message": skip.detail,
+                    "error_message": None,
                     "repository": schedule.name if schedule else "Backup automation",
                     "repository_path": None,
                     "log_file_path": None,

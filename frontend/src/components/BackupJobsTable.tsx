@@ -520,6 +520,10 @@ export const BackupJobsTable = <T extends Job = Job>({
           return <Typography variant="body2">{displayName}</Typography>
         }
 
+        if (job.type === 'availability_check') {
+          return <Typography variant="body2">{job.repository || '-'}</Typography>
+        }
+
         // For backup/restore/check/compact in Activity tab
         if (job.repository_path) {
           return (

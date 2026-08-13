@@ -2923,6 +2923,7 @@ async def dispatch_due_scheduled_backups(
         return
 
     dispatched = 0
+    skipped = 0
     for job in jobs:
         if dispatched >= available_slots:
             break
@@ -2958,6 +2959,7 @@ async def dispatch_due_scheduled_backups(
                             detail="Minimum interval after the last successful backup has not elapsed.",
                         )
                         db.commit()
+                        skipped += 1
                         logger.info(
                             "Availability schedule skipped: minimum success interval",
                             job_id=job.id,
@@ -2982,7 +2984,13 @@ async def dispatch_due_scheduled_backups(
                         .first()
                     )
                     linked_repositories = [repository] if repository else []
-                decision = repositories_available(db, linked_repositories)
+                if not linked_repositories:
+                    decision_reason = (
+                        "No repositories are configured for this automation."
+                    )
+                else:
+                    decision = await repositories_available(db, linked_repositories)
+                    decision_reason = decision.reason
                 if not linked_repositories or not decision.available:
                     job.next_run = now + timedelta(
                         minutes=job.availability_check_interval_minutes
@@ -2993,16 +3001,17 @@ async def dispatch_due_scheduled_backups(
                         now,
                         reason="source_unavailable",
                         detail=(
-                            decision.reason
+                            decision_reason
                             if linked_repositories
                             else "No repositories are configured for this automation."
                         ),
                     )
                     db.commit()
+                    skipped += 1
                     logger.info(
                         "Availability schedule skipped: source unavailable",
                         job_id=job.id,
-                        reason=decision.reason
+                        reason=decision_reason
                         if linked_repositories
                         else "no repositories configured",
                     )
@@ -3027,7 +3036,7 @@ async def dispatch_due_scheduled_backups(
                     error=str(notif_error),
                 )
 
-    deferred = len(jobs) - dispatched
+    deferred = len(jobs) - dispatched - skipped
     if deferred > 0:
         logger.info(
             "Deferred due scheduled backups until capacity is available",
@@ -3048,7 +3057,7 @@ async def check_scheduled_jobs():
                 backup_plan_execution_service,
             )
 
-            backup_plan_execution_service.dispatch_due_runs(db, now)
+            await backup_plan_execution_service.dispatch_due_runs(db, now)
             await run_due_scheduled_checks(db, now)
             await run_due_scheduled_restore_checks(db, now)
             dispatch_due_scheduled_rclone_mirrors(db, now)

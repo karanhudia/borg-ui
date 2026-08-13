@@ -36,6 +36,7 @@ def test_availability_automation_skip_is_durable_and_neutral(db_session):
     )
     db_session.add(job)
     db_session.commit()
+    db_session.expire_all()
 
     now = datetime.now(timezone.utc)
     job.next_run = now + timedelta(minutes=30)
@@ -51,6 +52,10 @@ def test_availability_automation_skip_is_durable_and_neutral(db_session):
     skip = db_session.query(AvailabilityScheduleSkip).one()
     assert skip.scheduled_job_id == job.id
     assert skip.reason == "minimum_interval_not_elapsed"
+    assert (
+        skip.detail
+        == "Minimum interval after the last successful backup has not elapsed."
+    )
     assert skip.next_check_at == job.next_run
 
 

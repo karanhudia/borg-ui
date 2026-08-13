@@ -357,10 +357,7 @@ export function planToState(plan: BackupPlan): WizardState {
     cronExpression: plan.cron_expression || '0 21 * * *',
     timezone: plan.timezone || getBrowserTimeZone(),
     availabilityCheckIntervalMinutes: plan.availability_check_interval_minutes ?? 30,
-    minimumSuccessIntervalHours: Math.max(
-      1,
-      Math.round((plan.min_success_interval_minutes ?? 20 * 60) / 60)
-    ),
+    minimumSuccessIntervalHours: (plan.min_success_interval_minutes ?? 20 * 60) / 60,
     preBackupScriptId: firstPreHook?.script_id ?? plan.pre_backup_script_id ?? null,
     postBackupScriptId: firstPostHook?.script_id ?? plan.post_backup_script_id ?? null,
     preBackupScriptParameters:

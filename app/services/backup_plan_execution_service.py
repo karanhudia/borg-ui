@@ -575,7 +575,7 @@ def _remote_script_body(script: str, env: dict[str, str]) -> str:
 
 
 class BackupPlanExecutionService:
-    def dispatch_due_runs(self, db: Session, now: datetime) -> int:
+    async def dispatch_due_runs(self, db: Session, now: datetime) -> int:
         now = to_utc_naive(now)
         due_plans = (
             db.query(BackupPlan)
@@ -633,7 +633,7 @@ class BackupPlanExecutionService:
                             backup_plan_id=plan.id,
                         )
                         continue
-                decision = source_locations_available(
+                decision = await source_locations_available(
                     db,
                     decode_source_locations(plan.source_locations),
                     fallback_source_type=plan.source_type,
@@ -721,7 +721,6 @@ class BackupPlanExecutionService:
             status="skipped",
             started_at=now,
             completed_at=now,
-            error_message=detail,
             skip_reason=reason,
             created_at=now,
         )
@@ -736,7 +735,6 @@ class BackupPlanExecutionService:
                         status="skipped",
                         started_at=now,
                         completed_at=now,
-                        error_message=detail,
                     )
                 )
 

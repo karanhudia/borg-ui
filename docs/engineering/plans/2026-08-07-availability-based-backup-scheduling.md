@@ -25,7 +25,7 @@ Vitest, Storybook.
 - `app/api/backup_plans.py`
 - `app/api/schedule.py`
 - `app/services/backup_plan_execution_service.py`
-- `app/services/availability_schedule_service.py` (new)
+- `app/services/schedule_availability.py` (new)
 - scheduler startup/tick code that currently dispatches scheduled jobs
 - backup notification/monitoring service(s)
 - schedule and backup-plan API, execution, and scheduler tests
@@ -39,36 +39,36 @@ Vitest, Storybook.
 
 ## Task 1: Map current contracts and write failing backend tests
 
-- [ ] Identify the exact scheduled-job dispatch loop, plan dispatch loop,
+- [x] Identify the exact scheduled-job dispatch loop, plan dispatch loop,
   active-run locking, current history records, and notification decision points.
-- [ ] Add failing migration/model tests for trigger fields on `BackupPlan` and
+- [x] Add failing migration/model tests for trigger fields on `BackupPlan` and
   `ScheduledJob`, `skip_reason` on plan runs, and durable automation run
   history.
-- [ ] Add API tests for both resources: cron remains valid/default; availability
+- [x] Add API tests for both resources: cron remains valid/default; availability
   requires positive bounded polling and minimum intervals; incompatible fields
   are rejected; responses round-trip the selected mode.
-- [ ] Add resolver tests for local, healthy/unhealthy managed-agent, reachable/
+- [x] Add resolver tests for local, healthy/unhealthy managed-agent, reachable/
   unreachable SSH, elapsed/not-elapsed intervals, active run, and target
   readiness.
 - [ ] Add concurrency tests proving two scheduler workers/ticks cannot claim
   two availability runs for the same entity.
-- [ ] Add history/notification tests proving each non-dispatch reason is
+- [x] Add history/notification tests proving each non-dispatch reason is
   `skipped`, not failure-notified, and does not update successful-run state.
 
 ## Task 2: Persist and validate trigger settings
 
-- [ ] Add nullable `schedule_trigger`, `availability_check_interval_minutes`,
-  and `minimum_success_interval_minutes` columns to `backup_plans` and
-  `scheduled_jobs` through the Alembic availability-schedule revision. Backfill trigger to
-  `cron`.
-- [ ] Add `ScheduledJobRun` with entity ID, trigger, status, skip reason,
+- [x] Add `schedule_mode`, `availability_check_interval_minutes`, and
+  `min_success_interval_minutes` columns to `backup_plans` and
+  `scheduled_jobs` through the Alembic availability-schedule revision. They are
+  `NOT NULL` with server defaults, and existing rows backfill to `cron`.
+- [x] Add `AvailabilityScheduleSkip` with entity ID, skip reason,
   timestamps, detail/error message, and indexes for latest state/history.
-- [ ] Add nullable `skip_reason` to `BackupPlanRun`; use existing status values
+- [x] Add nullable `skip_reason` to `BackupPlanRun`; use existing status values
   where possible.
-- [ ] Implement a single validation/normalization helper shared by plan and
+- [x] Implement a single validation/normalization helper shared by plan and
   automation APIs. It must enforce the mode-specific contract and preserve
   legacy cron behavior.
-- [ ] Serialize trigger configuration, last successful run, next poll, and run
+- [x] Serialize trigger configuration, last successful run, next poll, and run
   history data without removing existing response fields.
 
 ## Task 3: Implement safe dispatch and history

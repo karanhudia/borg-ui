@@ -6,6 +6,7 @@ skip, never a failed backup job or notification-worthy scheduler exception.
 
 from __future__ import annotations
 
+import asyncio
 import socket
 from dataclasses import dataclass
 from typing import Iterable
@@ -53,7 +54,7 @@ def _ssh_reachable(connection: SSHConnection) -> bool:
         return False
 
 
-def repositories_available(
+async def repositories_available(
     db: Session, repositories: Iterable[Repository]
 ) -> AvailabilityDecision:
     """Require every selected source to be available; local sources are available."""
@@ -66,14 +67,16 @@ def repositories_available(
             continue
         if repository.source_ssh_connection_id is not None:
             connection = db.get(SSHConnection, repository.source_ssh_connection_id)
-            if connection is None or not _ssh_reachable(connection):
+            if connection is None or not await asyncio.to_thread(
+                _ssh_reachable, connection
+            ):
                 return AvailabilityDecision(
                     False, f"SSH source unavailable for {repository.name}"
                 )
     return AvailabilityDecision(True)
 
 
-def source_locations_available(
+async def source_locations_available(
     db: Session,
     locations: Iterable[dict],
     *,
@@ -102,6 +105,8 @@ def source_locations_available(
             connection = (
                 db.get(SSHConnection, int(connection_id)) if connection_id else None
             )
-            if connection is None or not _ssh_reachable(connection):
+            if connection is None or not await asyncio.to_thread(
+                _ssh_reachable, connection
+            ):
                 return AvailabilityDecision(False, "SSH source unavailable")
     return AvailabilityDecision(True)

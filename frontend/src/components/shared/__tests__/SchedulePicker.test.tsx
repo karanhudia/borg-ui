@@ -55,7 +55,8 @@ describe('SchedulePicker', () => {
       />
     )
 
-    expect(screen.getByDisplayValue('0 2 * * *')).toBeInTheDocument()
+    expect(screen.queryByDisplayValue('0 2 * * *')).not.toBeInTheDocument()
+    expect(screen.queryByDisplayValue('UTC')).not.toBeInTheDocument()
     fireEvent.change(screen.getByLabelText(/check every/i), { target: { value: '45' } })
     expect(onChange).toHaveBeenCalledWith({ availabilityCheckIntervalMinutes: 45 })
     fireEvent.change(screen.getByLabelText(/minimum interval/i), { target: { value: '24' } })

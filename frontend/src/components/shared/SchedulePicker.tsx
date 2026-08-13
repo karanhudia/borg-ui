@@ -123,41 +123,43 @@ const SchedulePicker: React.FC<SchedulePickerProps> = ({
         />
       )}
 
-      <>
-        <CronExpressionInput
-          value={cronExpression}
-          onChange={(cron) => onChange({ cronExpression: cron })}
-          label={cronLabel ?? t('wizard.scheduleWizard.config.scheduleLabel')}
-          helperText={cronHelperText ?? t('wizard.scheduleWizard.config.scheduleHelper')}
-          required={required}
-          disabled={disabled}
-          size={size}
-        />
+      {scheduleMode === 'cron' && (
+        <>
+          <CronExpressionInput
+            value={cronExpression}
+            onChange={(cron) => onChange({ cronExpression: cron })}
+            label={cronLabel ?? t('wizard.scheduleWizard.config.scheduleLabel')}
+            helperText={cronHelperText ?? t('wizard.scheduleWizard.config.scheduleHelper')}
+            required={required}
+            disabled={disabled}
+            size={size}
+          />
 
-        <Autocomplete
-          options={timezoneOptions}
-          value={effectiveTimezone}
-          onChange={(_, value) => {
-            if (value) onChange({ timezone: value })
-          }}
-          disableClearable
-          disabled={disabled}
-          fullWidth
-          size={size}
-          autoHighlight
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              label={
-                timezoneLabel ??
-                t('wizard.scheduleWizard.config.timezoneLabel', { defaultValue: 'Timezone' })
-              }
-              required={required}
-              placeholder="Asia/Kolkata"
-            />
-          )}
-        />
-      </>
+          <Autocomplete
+            options={timezoneOptions}
+            value={effectiveTimezone}
+            onChange={(_, value) => {
+              if (value) onChange({ timezone: value })
+            }}
+            disableClearable
+            disabled={disabled}
+            fullWidth
+            size={size}
+            autoHighlight
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label={
+                  timezoneLabel ??
+                  t('wizard.scheduleWizard.config.timezoneLabel', { defaultValue: 'Timezone' })
+                }
+                required={required}
+                placeholder="Asia/Kolkata"
+              />
+            )}
+          />
+        </>
+      )}
 
       {scheduleMode === 'availability' && (
         <Stack spacing={2}>
@@ -197,10 +199,10 @@ const SchedulePicker: React.FC<SchedulePickerProps> = ({
             value={minimumSuccessIntervalHours}
             onChange={(event) =>
               onChange({
-                minimumSuccessIntervalHours: Math.max(1, Number(event.target.value) || 1),
+                minimumSuccessIntervalHours: Math.max(0, Number(event.target.value) || 0),
               })
             }
-            inputProps={{ min: 1 }}
+            inputProps={{ min: 0, step: 'any' }}
             required={required}
             disabled={disabled}
             size={size}

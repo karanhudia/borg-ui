@@ -409,7 +409,9 @@ export function buildBackupPlanPayload(
     availability_check_interval_minutes:
       state.scheduleMode === 'availability' ? (state.availabilityCheckIntervalMinutes ?? 30) : null,
     min_success_interval_minutes:
-      state.scheduleMode === 'availability' ? (state.minimumSuccessIntervalHours ?? 20) * 60 : null,
+      state.scheduleMode === 'availability'
+        ? Math.round((state.minimumSuccessIntervalHours ?? 20) * 60)
+        : null,
     pre_backup_script_id: firstPreHook?.script_id ?? state.preBackupScriptId,
     post_backup_script_id: firstPostHook?.script_id ?? state.postBackupScriptId,
     pre_backup_script_parameters:

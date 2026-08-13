@@ -1336,17 +1336,16 @@ def _apply_payload(plan: BackupPlan, payload: BackupPlanPayload) -> None:
         else None
     )
     plan.timezone = payload.timezone
-    plan.next_run = (
-        calculate_next_cron_run(
-            payload.cron_expression, schedule_timezone=payload.timezone
+    if not payload.schedule_enabled:
+        plan.next_run = None
+    elif payload.schedule_mode == "availability":
+        plan.next_run = datetime.utcnow()
+    elif plan.cron_expression:
+        plan.next_run = calculate_next_cron_run(
+            plan.cron_expression, schedule_timezone=payload.timezone
         )
-        if payload.schedule_enabled and payload.cron_expression
-        else (
-            datetime.utcnow()
-            if payload.schedule_enabled and payload.schedule_mode == "availability"
-            else None
-        )
-    )
+    else:
+        plan.next_run = None
     plan.pre_backup_script_id = payload.pre_backup_script_id
     plan.post_backup_script_id = payload.post_backup_script_id
     plan.pre_backup_script_parameters = payload.pre_backup_script_parameters

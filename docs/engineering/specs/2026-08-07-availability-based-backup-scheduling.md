@@ -55,16 +55,16 @@ Each scheduled entity has these settings:
 
 | Field | Fixed time | When available |
 | --- | --- | --- |
-| `schedule_trigger` | `cron` (default) | `availability` |
+| `schedule_mode` | `cron` (default) | `availability` |
 | `cron_expression` | required | `NULL` |
 | `timezone` | required, current behavior | retained for display/API consistency; not used to evaluate elapsed intervals |
 | `availability_check_interval_minutes` | `NULL` | required positive bounded integer |
-| `minimum_success_interval_minutes` | `NULL` | required positive bounded integer |
+| `min_success_interval_minutes` | `NULL` | bounded integer (default `0`) |
 
-The initial bounds are 5 minutes through 7 days for the poll interval and 1
-hour through 30 days for the minimum interval. Defaults for a newly selected
-availability trigger are 30 minutes and 20 hours. These are product defaults,
-not an implicit migration of existing cron schedules.
+The poll interval is bounded from 1 through 1,440 minutes. The minimum-success
+interval is bounded from 0 through 525,600 minutes and defaults to 0. The UI
+starts availability schedules at 30 minutes and 20 hours; these are product
+defaults, not an implicit migration of existing cron schedules.
 
 Elapsed time is calculated from UTC timestamps, never local clock dates. A
 successful run at 23:55 therefore cannot be followed by an availability run at
@@ -105,10 +105,10 @@ Every availability poll that does not dispatch creates an event with status
 Initial reason values are:
 
 - `source_unavailable`
-- `target_unavailable`
+- `target_unavailable` (planned)
 - `minimum_interval_not_elapsed`
-- `run_already_active`
-- `disabled_or_reconfigured` (only when a claimed poll becomes invalid before
+- `run_already_active` (planned)
+- `disabled_or_reconfigured` (planned; only when a claimed poll becomes invalid before
   dispatch; normally not shown as a user-visible issue)
 
 Backup Plan skips use `BackupPlanRun` records with an availability-specific
@@ -126,9 +126,9 @@ availability summaries, but none is sent initially.
 ## API and Persistence Contract
 
 `POST`/`PUT` Backup Plan and Backup Automation payloads accept and return the
-trigger fields above. Validation requires exactly the fields appropriate to the
-selected trigger; it rejects cron in availability mode and availability fields
-in cron mode rather than retaining ambiguous hidden configuration.
+trigger fields above. Validation accepts both field groups for compatibility;
+when `schedule_mode` is `availability`, it discards `cron_expression` and
+starts polling immediately. Cron mode retains its normal cron validation.
 
 The Alembic availability-schedule revision adds trigger fields to `backup_plans` and
 `scheduled_jobs`, plus an indexed `availability_schedule_skips` table and

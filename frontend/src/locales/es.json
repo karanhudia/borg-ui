@@ -734,7 +734,7 @@
       "label": "Activador de ejecución",
       "fixedTime": "A una hora fija",
       "whenAvailable": "Cuando la fuente esté disponible",
-      "availabilityDescription": "Borg UI busca una fuente accesible y se ejecuta cuando ha transcurrido el intervalo mínimo.",
+      "availabilityDescription": "Borg UI comprueba si la fuente está accesible y ejecuta la copia cuando ha transcurrido el intervalo mínimo.",
       "checkInterval": "Comprobar cada (minutos)",
       "checkIntervalHelper": "Con qué frecuencia Borg UI comprueba si la fuente está disponible.",
       "minimumInterval": "Intervalo mínimo después de una ejecución correcta (horas)",

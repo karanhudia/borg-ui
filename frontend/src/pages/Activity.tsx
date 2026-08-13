@@ -13,6 +13,7 @@ import RunningCloudStorageJobsSection from '../components/RunningCloudStorageJob
 import { ActivityFilters } from './activity/ActivityFilters'
 
 export interface ActivityItem {
+  activity_key?: string | null
   id: number
   type: string
   status: string
@@ -139,7 +140,7 @@ export function ActivityContent({
           canBreakLocks={canBreakLockForActivity}
           lockBreakingEnabled={lockBreakingEnabled}
           canDeleteJobs={canManageActivityJobs}
-          getRowKey={(activity) => `${activity.type}-${activity.id}`}
+          getRowKey={(activity) => activity.activity_key ?? `${activity.type}-${activity.id}`}
           headerBgColor="background.default"
           enableHover={true}
           tableId="activity"
@@ -160,7 +161,7 @@ export function ActivityContent({
           canBreakLocks={canBreakLockForActivity}
           lockBreakingEnabled={lockBreakingEnabled}
           canDeleteJobs={canManageActivityJobs}
-          getRowKey={(activity) => `${activity.type}-${activity.id}`}
+          getRowKey={(activity) => activity.activity_key ?? `${activity.type}-${activity.id}`}
           headerBgColor="background.default"
           enableHover={true}
           tableId="activity"
