@@ -51,6 +51,18 @@ router = APIRouter()
 
 RETRYABLE_BACKUP_STATUSES = {"failed", "cancelled"}
 
+# asyncio keeps only a weak reference to a bare create_task() result, so a
+# fire-and-forget backup task can be garbage-collected mid-execution — leaving
+# the job stuck in "pending". Hold a strong reference until the task finishes.
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _run_in_background(coro) -> asyncio.Task:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task
+
 
 def _get_job_repository(
     db: Session, repository_path: Optional[str]
@@ -435,7 +447,7 @@ async def _start_backup_impl(
                     repository_id=repo_record.id,
                 )
             else:
-                asyncio.create_task(
+                _run_in_background(
                     backup_service.execute_backup(
                         backup_job.id,
                         backup_request.repository,
@@ -582,7 +594,7 @@ async def retry_backup_job(
     )
     db.commit()
     db.refresh(retry_job)
-    asyncio.create_task(
+    _run_in_background(
         backup_service.execute_backup(
             retry_job.id,
             repo.path,

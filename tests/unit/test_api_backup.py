@@ -68,7 +68,7 @@ class TestBackupStart:
             patch(
                 "app.api.backup.backup_service.execute_backup", return_value=object()
             ),
-            patch("app.api.backup.asyncio.create_task"),
+            patch("app.api.backup._run_in_background") as run_background,
         ):
             response = test_client.post(
                 "/api/backup/start",
@@ -80,6 +80,9 @@ class TestBackupStart:
             data = response.json()
             assert "job_id" in data
             assert data["status"] == "pending"
+            # The happy path must actually dispatch the backup, not just create
+            # the pending row.
+            run_background.assert_called_once()
 
     def test_run_backup_alias_success(
         self, test_client: TestClient, admin_headers, test_db
@@ -275,7 +278,7 @@ class TestBackupStart:
             patch(
                 "app.api.backup.backup_service.execute_backup", new_callable=AsyncMock
             ) as execute_backup,
-            patch("app.api.backup.asyncio.create_task") as create_task,
+            patch("app.api.backup._run_in_background") as run_background,
         ):
             response = test_client.post(
                 "/api/backup/start",
@@ -289,7 +292,7 @@ class TestBackupStart:
             == "backend.errors.backup.concurrentLimitReached"
         )
         execute_backup.assert_not_called()
-        create_task.assert_not_called()
+        run_background.assert_not_called()
         assert test_db.query(BackupJob).filter_by(repository=repo.path).count() == 1
 
     def test_start_backup_multiple_sources(
@@ -738,9 +741,9 @@ class TestBackupRetry:
                 new_callable=AsyncMock,
             ) as execute_backup,
             patch(
-                "app.api.backup.asyncio.create_task",
+                "app.api.backup._run_in_background",
                 side_effect=_close_background_task,
-            ) as create_task,
+            ) as run_background,
         ):
             response = test_client.post(
                 f"/api/backup/jobs/{source_job.id}/retry", headers=admin_headers
@@ -794,7 +797,7 @@ class TestBackupRetry:
         assert snapshot["backup"]["custom_flags"] == "--one-file-system"
 
         execute_backup.assert_called_once()
-        create_task.assert_called_once()
+        run_background.assert_called_once()
 
     def test_retry_failed_agent_backup_creates_agent_job_with_lineage(
         self, test_client: TestClient, admin_headers, test_db
@@ -1017,7 +1020,7 @@ class TestBackupRetry:
                 new_callable=AsyncMock,
             ),
             patch(
-                "app.api.backup.asyncio.create_task",
+                "app.api.backup._run_in_background",
                 side_effect=_close_background_task,
             ),
         ):
