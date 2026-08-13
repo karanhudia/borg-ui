@@ -134,11 +134,11 @@ const Archives: React.FC = () => {
     if (responseStatus === 423 && selectedRepositoryId) {
       setLockError({
         repositoryId: selectedRepositoryId,
-        repositoryName: selectedRepository?.name || 'Unknown',
+        repositoryName: selectedRepository?.name || t('common.unknown'),
         borgVersion: getBorgVersion(selectedRepository),
       })
     }
-  }, [archivesError, selectedRepositoryId, selectedRepository])
+  }, [archivesError, selectedRepositoryId, selectedRepository, t])
 
   // Get restore jobs
   const { data: restoreJobsData } = useQuery({
@@ -153,11 +153,11 @@ const Archives: React.FC = () => {
     if (repoInfoError && (repoInfoError as any)?.response?.status === 423 && selectedRepositoryId) {
       setLockError({
         repositoryId: selectedRepositoryId,
-        repositoryName: selectedRepository?.name || 'Unknown',
+        repositoryName: selectedRepository?.name || t('common.unknown'),
         borgVersion: getBorgVersion(selectedRepository),
       })
     }
-  }, [repoInfoError, selectedRepositoryId, selectedRepository])
+  }, [repoInfoError, selectedRepositoryId, selectedRepository, t])
 
   // Delete archive mutation
   const deleteArchiveMutation = useMutation({

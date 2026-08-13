@@ -7,6 +7,7 @@ import {
   Stack,
   TextField,
 } from '@mui/material'
+import { useTranslation } from 'react-i18next'
 import ResponsiveDialog from './shared/ResponsiveDialog'
 
 interface AccountPasswordDialogProps {
@@ -36,11 +37,12 @@ export default function AccountPasswordDialog({
   onFormChange,
   onSubmit,
 }: AccountPasswordDialogProps) {
+  const { t } = useTranslation()
   const passwordsMismatch = confirmPassword !== '' && newPassword !== confirmPassword
 
   return (
     <ResponsiveDialog open={open} onClose={(_, reason) => onClose(reason)} maxWidth="sm" fullWidth>
-      <DialogTitle>Change password</DialogTitle>
+      <DialogTitle>{t('accountPassword.title')}</DialogTitle>
       <form
         onSubmit={(e) => {
           e.preventDefault()
@@ -50,7 +52,7 @@ export default function AccountPasswordDialog({
         <DialogContent>
           <Stack spacing={2}>
             <TextField
-              label="Current password"
+              label={t('accountPassword.current')}
               type="password"
               value={currentPassword}
               onChange={(e) => onFormChange({ current_password: e.target.value })}
@@ -59,7 +61,7 @@ export default function AccountPasswordDialog({
               size="small"
             />
             <TextField
-              label="New password"
+              label={t('accountPassword.new')}
               type="password"
               value={newPassword}
               onChange={(e) => onFormChange({ new_password: e.target.value })}
@@ -68,7 +70,7 @@ export default function AccountPasswordDialog({
               size="small"
             />
             <TextField
-              label="Confirm password"
+              label={t('accountPassword.confirm')}
               type="password"
               value={confirmPassword}
               onChange={(e) => onFormChange({ confirm_password: e.target.value })}
@@ -76,19 +78,19 @@ export default function AccountPasswordDialog({
               fullWidth
               size="small"
               error={passwordsMismatch}
-              helperText={passwordsMismatch ? 'Passwords do not match' : ''}
+              helperText={passwordsMismatch ? t('accountPassword.mismatch') : ''}
             />
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => onClose('closeButton')}>Cancel</Button>
+          <Button onClick={() => onClose('closeButton')}>{t('common.buttons.cancel')}</Button>
           <Button
             type="submit"
             variant="contained"
             disabled={isSubmitting}
             startIcon={isSubmitting ? <CircularProgress size={14} /> : null}
           >
-            {isSubmitting ? 'Saving' : 'Update password'}
+            {isSubmitting ? t('accountPassword.saving') : t('accountPassword.update')}
           </Button>
         </DialogActions>
       </form>

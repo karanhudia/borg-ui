@@ -68,7 +68,7 @@ describe('ArchivesList', () => {
       />
     )
 
-    expect(screen.getByText('Archives')).toBeInTheDocument()
+    expect(screen.getByText('archives')).toBeInTheDocument()
     expect(screen.getByText('3')).toBeInTheDocument()
   })
 

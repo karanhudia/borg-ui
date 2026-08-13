@@ -61,8 +61,8 @@ function runStatusColor(status?: string): 'default' | 'primary' | 'success' | 'w
   return 'default'
 }
 
-function formatRunStatus(status?: string): string {
-  if (!status) return 'Unknown'
+function formatRunStatus(status?: string, unknownLabel = 'Unknown'): string {
+  if (!status) return unknownLabel
   return status.replace(/_/g, ' ')
 }
 
@@ -92,8 +92,11 @@ function getTransportLabel(
   return null
 }
 
-function getRepositoryLabel(runRepository: BackupPlanRunRepository): string {
-  return runRepository.repository?.name || runRepository.backup_job?.repository || 'Repository'
+function getRepositoryLabel(
+  runRepository: BackupPlanRunRepository,
+  fallback = 'Repository'
+): string {
+  return runRepository.repository?.name || runRepository.backup_job?.repository || fallback
 }
 
 function getRepositoryPath(runRepository: BackupPlanRunRepository): string {
@@ -170,7 +173,7 @@ function RepositoryRunRow({
   const progressDetails = job?.progress_details
   const maintenanceStatus = job?.maintenance_status
   const statusLabel = t(`backupPlans.statuses.${runRepository.status}`, {
-    defaultValue: formatRunStatus(runRepository.status),
+    defaultValue: formatRunStatus(runRepository.status, t('common.unknown')),
   })
   const transportLabel = getTransportLabel(runRepository, t)
 
@@ -192,7 +195,9 @@ function RepositoryRunRow({
           justifyContent="space-between"
         >
           <Box sx={{ minWidth: 0 }}>
-            <Typography variant="subtitle2">{getRepositoryLabel(runRepository)}</Typography>
+            <Typography variant="subtitle2">
+              {getRepositoryLabel(runRepository, t('backupPlans.status.repositoryFallback'))}
+            </Typography>
             <Typography variant="caption" color="text.secondary" noWrap component="div">
               {getRepositoryPath(runRepository)}
             </Typography>
@@ -212,7 +217,7 @@ function RepositoryRunRow({
                 color={maintenanceStatus.includes('failed') ? 'warning' : 'default'}
                 label={t('backupPlans.runsDialog.maintenanceStatus', {
                   status: t(`backupPlans.statuses.${maintenanceStatus}`, {
-                    defaultValue: formatRunStatus(maintenanceStatus),
+                    defaultValue: formatRunStatus(maintenanceStatus, t('common.unknown')),
                   }),
                 })}
               />
@@ -364,7 +369,7 @@ export function BackupPlanRunCard({
   const active = isActiveRun(run.status)
   const progress = getRunProgress(run)
   const statusLabel = t(`backupPlans.statuses.${run.status}`, {
-    defaultValue: formatRunStatus(run.status),
+    defaultValue: formatRunStatus(run.status, t('common.unknown')),
   })
   const planName =
     plan?.name ||

@@ -25,9 +25,16 @@
       "clear": "Clear",
       "reset": "Reset",
       "deploy": "Deploy",
-      "view": "View"
+      "view": "View",
+      "collapse": "Collapse",
+      "expand": "Expand"
     },
     "status": "Status",
+    "loading": "Loading...",
+    "password": {
+      "show": "Show password",
+      "hide": "Hide password"
+    },
     "never": "Never",
     "na": "N/A",
     "unknown": "Unknown",
@@ -148,6 +155,9 @@
       "beta": "Beta"
     },
     "menu": {
+      "openDrawer": "Open navigation",
+      "userMenu": "User menu",
+      "enterpriseDeployment": "Enterprise deployment",
       "accountAndSecurityDesc": "Profile, password, 2FA, passkeys",
       "appearanceDesc": "Theme",
       "notificationsDesc": "Alerts & preferences",
@@ -257,7 +267,242 @@
   "managedAgents": {
     "planGate": {
       "message": "Managed Agents need Pro or Enterprise. Upgrade to enroll remote machines and run agent-backed jobs."
+    },
+    "agent": "Agent",
+    "page": {
+      "title": "Managed Agents",
+      "subtitle": "Lightweight machines connected to this Borg UI server",
+      "refresh": "Refresh",
+      "refreshing": "Refreshing agents",
+      "addAgent": "Add Agent",
+      "unknownAgent": "Unknown agent",
+      "never": "Never",
+      "none": "None",
+      "noneReported": "None reported",
+      "notReported": "Not reported",
+      "os": "OS",
+      "lastSeen": "Last seen",
+      "agentVersion": "Agent version",
+      "borg": "Borg",
+      "capabilities": "Capabilities",
+      "emptyAgents": "No agents enrolled.",
+      "emptyJobs": "No agent jobs yet.",
+      "emptyTokens": "No enrollment tokens created.",
+      "tabs": { "agents": "Agents", "jobs": "Jobs", "tokens": "Enrollment Tokens" },
+      "toasts": {
+        "tokenCreated": "Enrollment token created",
+        "tokenRevoked": "Enrollment token revoked",
+        "agentRevoked": "Agent revoked",
+        "agentDeleted": "Agent deleted",
+        "cancellationRequested": "Cancellation requested",
+        "copied": "Copied"
+      },
+      "errors": {
+        "revokeToken": "Failed to revoke enrollment token",
+        "revokeAgent": "Failed to revoke agent",
+        "deleteAgent": "Failed to delete agent",
+        "cancelJob": "Failed to cancel job",
+        "runDiagnostics": "Failed to run diagnostics"
+      },
+      "table": {
+        "job": "Job",
+        "status": "Status",
+        "progress": "Progress",
+        "updated": "Updated",
+        "actions": "Actions",
+        "name": "Name",
+        "prefix": "Prefix",
+        "expires": "Expires"
+      },
+      "actions": {
+        "runDiagnostics": "Run diagnostics",
+        "viewAgentLogs": "View agent logs",
+        "reinstallAgent": "Reinstall agent",
+        "revokeAccess": "Revoke access",
+        "revokeAgent": "Revoke agent",
+        "deleteAgent": "Delete agent",
+        "viewLogs": "View logs",
+        "cancelJob": "Cancel job",
+        "revokeToken": "Revoke token"
+      },
+      "noBorg": {
+        "title": "No usable Borg binary reported",
+        "description": "Install Borg on this agent or regenerate the setup command with Borg installation enabled."
+      },
+      "deleteDialog": {
+        "title": "Delete agent",
+        "confirm": "Delete agent",
+        "description": "Deleting removes it from the fleet list. The local service may still run until removed on the client."
+      },
+      "reinstallDialog": {
+        "title": "Reinstall agent",
+        "copyCommand": "Copy reinstall command",
+        "description": "Run this on the enrolled machine to update the Borg UI agent package and restart the systemd service. No enrollment token or registration step is required.",
+        "configPreserved": "The script preserves the existing agent config at"
+      },
+      "logs": {
+        "agent": "Agent Logs",
+        "agentTitle": "Agent Logs - {{name}}",
+        "job": "Agent Job",
+        "jobTitle": "Agent Job Logs - Job #{{id}}"
+      },
+      "diagnostics": {
+        "title": "Agent diagnostics",
+        "running": "Running diagnostics",
+        "runCheck": "Run check",
+        "description": "Verify the outbound agent session and optionally test a TCP target from the agent host.",
+        "invalidPort": "Enter a TCP port between 1 and 65535.",
+        "invalidTimeout": "Enter a timeout between 0.5 and 10 seconds.",
+        "advancedSummary": "Advanced: test another service",
+        "advancedDescription": "Checks whether this agent can reach a separate service. Leave blank for normal diagnostics.",
+        "serviceHost": "Service host",
+        "serviceHostHelper": "Optional service to test from this agent",
+        "servicePort": "Service port",
+        "timeout": "Timeout",
+        "seconds": "Seconds",
+        "timeoutRange": "0.5-10 seconds",
+        "sessionHealthy": "Session healthy",
+        "agentOffline": "Agent offline",
+        "timedOut": "Timed out",
+        "sessionFailed": "Session failed",
+        "tcpReachable": "TCP reachable",
+        "tcpFailed": "TCP failed",
+        "emptyResult": "Run a check to verify the active agent session. Add a host and port to test TCP reachability from the agent host.",
+        "unavailable": "Diagnostics are unavailable in this story or test surface."
+      }
+    },
+    "installCommand": {
+      "title": "Install command",
+      "copy": "Copy install command",
+      "description": "Run the command on the Linux machine. The installer registers the agent and enables the systemd service by default.",
+      "connected": "{{name}} connected",
+      "waiting": "Waiting for agent to connect…",
+      "connectedDescription": "You can close this dialog; the agent will keep running.",
+      "waitingDescription": "This page will update automatically once the install completes."
+    },
+    "setupGuide": {
+      "summary": "Run this on a remote machine to register it with this Borg UI server.",
+      "help": "Setup Help",
+      "title": "Agent Setup Help",
+      "copySetupCommand": "Copy setup command",
+      "copyInstallCommands": "Copy install commands",
+      "copyStatusCommand": "Copy status command",
+      "copySystemdCommands": "Copy systemd commands",
+      "steps": {
+        "install": {
+          "title": "1. Run the Linux installer",
+          "description": "Run this on the Linux machine that owns the files Borg should back up. The installer installs dependencies, registers the agent, and enables the systemd service. By default, the service runs as the user who invoked sudo, so repository and source paths must be accessible to that user."
+        },
+        "server": {
+          "title": "2. Server URL and token",
+          "description": "The server URL must be reachable from the client machine. localhost only works when the agent and Borg UI are on the same machine; remote clients should use the Borg UI host name, IP address, or HTTPS URL they can reach. Enrollment tokens are temporary setup credentials; the enrolled agent keeps its own credential until revoked or deleted."
+        },
+        "troubleshooting": {
+          "title": "3. Manual troubleshooting",
+          "descriptionPrefix": "Manual installation remains useful for troubleshooting. The agent source is in the",
+          "link": "Borg UI agent directory"
+        },
+        "service": {
+          "title": "4. Service checks",
+          "description": "The installer enables systemd by default so the agent survives reboot. Use these commands only when inspecting or repairing a manual installation."
+        }
+      }
+    },
+    "add": {
+      "title": "Add Agent",
+      "steps": { "target": "Target", "details": "Details", "install": "Install" },
+      "errors": { "createToken": "Failed to create enrollment token" },
+      "platform": "Platform",
+      "platforms": { "linux": "Linux", "macos": "macOS", "windows": "Windows" },
+      "selected": "Selected",
+      "comingLater": "Coming later",
+      "serverUrl": "Server URL",
+      "localhostWarning": "localhost only works when the agent runs on the same machine as Borg UI. Remote machines need a reachable host name, IP, or HTTPS URL.",
+      "serverUrlHelper": "This URL must be reachable from the agent machine.",
+      "agentName": "Agent name",
+      "defaultPath": "Default path",
+      "defaultPathHelper": "Starting directory for browsing this agent's files.",
+      "tokenExpiry": "Token expiry",
+      "expiry": {
+        "1h": "1 hour",
+        "24h": "24 hours",
+        "7d": "7 days",
+        "30d": "30 days",
+        "never": "Never"
+      },
+      "serviceUser": "Service user",
+      "serviceUsers": {
+        "current": {
+          "label": "Installing user",
+          "description": "The agent can access the same files as the user running the installer."
+        },
+        "dedicated": {
+          "label": "Dedicated borg-ui-agent user",
+          "description": "Use a separate low-privilege service account for stricter isolation."
+        },
+        "root": {
+          "label": "Root",
+          "description": "Use only when the agent must back up root-owned paths."
+        }
+      },
+      "rootWarning": "Root mode lets this agent run root-level Borg operations. Use it only for root-owned paths.",
+      "borgInstallation": "Borg installation",
+      "borgOptions": {
+        "borg1": {
+          "label": "Borg 1.x",
+          "description": "Default. Installs or verifies Borg 1 as 'borg'."
+        },
+        "borg2": {
+          "label": "Borg 2.x beta only",
+          "description": "Advanced experimental option. Installs or verifies Borg 2 as 'borg2'."
+        },
+        "both": {
+          "label": "Borg 1.x and Borg 2.x beta",
+          "description": "Advanced experimental option. Keeps Borg 1 as 'borg' and Borg 2 as 'borg2'."
+        },
+        "skip": {
+          "label": "Skip Borg install",
+          "description": "Use this when Borg is managed separately on the agent machine."
+        }
+      },
+      "generateInstallCommand": "Generate install command"
     }
+  },
+  "apiTokens": {
+    "title": "API Tokens",
+    "description": "Programmatic access, shown only once when generated",
+    "empty": "No tokens yet",
+    "prefix": "Prefix",
+    "created": "Created",
+    "lastUsed": "Last used",
+    "revoke": "Revoke token",
+    "revoked": "Token revoked",
+    "name": "Token name",
+    "namePlaceholder": "e.g. CI deploy, Home automation",
+    "generateTitle": "Generate API Token",
+    "newTokenTitle": "Your new API token",
+    "copyWarning": "Copy this token now. You won't be able to see it again.",
+    "copied": "Copied!",
+    "copyToClipboard": "Copy to clipboard",
+    "closeWithoutCopyingTitle": "Close without copying?",
+    "closeWithoutCopyingDescription": "You haven't copied the token. Once you close this dialog, the token cannot be retrieved.",
+    "closeAnyway": "Close anyway",
+    "errors": { "generate": "Failed to generate token", "revoke": "Failed to revoke token" }
+  },
+  "accountPassword": {
+    "title": "Change password",
+    "current": "Current password",
+    "new": "New password",
+    "confirm": "Confirm password",
+    "mismatch": "Passwords do not match",
+    "saving": "Saving",
+    "update": "Update password"
+  },
+  "mountSuccess": {
+    "title": "Archive Mounted",
+    "accessViaDocker": "Access via Docker:",
+    "copied": "Copied!",
+    "copyCommand": "Copy command"
   },
   "cloudStorage": {
     "title": "Cloud Storage",
@@ -286,6 +531,9 @@
     "storagePercentUsed": "{{value}}% used",
     "noStorageInfo": "No storage info",
     "configSourceLabel": "Config",
+    "configSource": {
+      "managed": "Managed"
+    },
     "managedConfig": "Server-managed rclone.conf",
     "editRemote": "Edit remote",
     "deleteRemote": "Delete remote",
@@ -724,7 +972,10 @@
       "runCompact": "Compact",
       "runCompactTip": "Repository is compacted after each backup",
       "runCheck": "Check",
-      "runCheckTip": "Integrity check runs after each backup (in addition to any scheduled check below)"
+      "runCheckTip": "Integrity check runs after each backup (in addition to any scheduled check below)",
+      "collapse": "Collapse",
+      "expand": "Expand",
+      "togglePlan": "{{action}} {{name}}"
     },
     "noRepositories": "You need to create at least one repository before scheduling backups.",
     "legacyBackupSchedulesTitle": "Backup automations",
@@ -833,6 +1084,18 @@
     "title": "Backup Plans",
     "subtitle": "Define sources, settings, schedules, and the repositories each backup writes to.",
     "loading": "Loading backup plans...",
+    "select": {
+      "source": {
+        "local": "Local source",
+        "remote": "Remote source",
+        "agent": "Managed agent",
+        "mixed": "Multiple sources"
+      },
+      "repositories_one": "{{count}} repository",
+      "repositories_other": "{{count}} repositories",
+      "scheduled": "Scheduled",
+      "manual": "Manual"
+    },
     "runTooltipPro": "This plan uses multiple repositories or parallel execution. Edit it or upgrade to Pro to run it.",
     "runTooltipProFeature": "This plan uses {{feature}}, which requires Pro. Edit it or upgrade to Pro to run it.",
     "runTooltipProFeatures": "This plan uses Pro-only features: {{features}}. Edit it or upgrade to Pro to run it.",
@@ -1460,6 +1723,7 @@
       "encryption": "Encryption"
     },
     "observeOnly": "Observe Only",
+    "deleteConfirmation": "Are you sure you want to delete repository \"{{name}}\"?",
     "buttons": {
       "info": "Info",
       "check": "Check",
@@ -1943,6 +2207,7 @@
     },
     "systemKey": {
       "title": "System SSH Key",
+      "defaultDescription": "System SSH key for all remote connections",
       "noKey": "No system SSH key found. Generate a new one or import an existing one.",
       "generate": "Generate System SSH Key",
       "import": "Import Existing Key",
@@ -3497,6 +3762,8 @@
     "noScheduledChecks": "No scheduled checks",
     "noScheduledChecksDesc": "Configure automatic repository checks to ensure data integrity",
     "needRepository": "You need to create at least one repository before scheduling checks.",
+    "repositoryNotFound": "Repository not found",
+    "status": { "cancelled": "Cancelled", "running": "Running" },
     "historyTitle": "Scheduled Check History",
     "historyShowing": "Showing {{filtered}} of {{total}} scheduled check jobs",
     "historyShowingFiltered": "Showing {{filtered}} of {{total}} scheduled check jobs (filtered)",
@@ -3705,6 +3972,9 @@
       "remoteSshNote": "The Borg UI server will SSH into the remote machine to browse and back up the selected directories. Ensure the SSH connection is properly configured with the necessary permissions."
     },
     "location": {
+      "borgVersion": "Borg Version",
+      "beta": "Beta",
+      "borg2": "Borg 2",
       "repositoryNameLabel": "Repository Name",
       "repositoryNameHelper": "A friendly name to identify this repository",
       "repositoryModeLabel": "Repository Mode",
@@ -4002,6 +4272,9 @@
       "compression": "Compression",
       "customFlags": "Custom Flags",
       "repositoryInitialized": "Repository will be initialized",
+      "readyToInitialize": "Ready to Initialize",
+      "hidePassphrase": "Hide passphrase",
+      "showPassphrase": "Show passphrase",
       "repositoryImportNote": "Repository will be verified before import. Ensure the passphrase is correct.",
       "repositoryEditNote": "Changes will be saved to the repository configuration."
     },
@@ -4022,6 +4295,38 @@
       "passphrasePlaceholderCreate": "Enter passphrase",
       "passphraseHelperEdit": "Optional - leave blank to keep last saved passphrase",
       "passphraseHelperCreate": "Keep this safe - you cannot access backups without it!",
+      "options": {
+        "repokey": {
+          "label": "Repository Key",
+          "description": "Key stored in repository (recommended)"
+        },
+        "repokey-blake2": {
+          "label": "Repository Key (BLAKE2)",
+          "description": "Faster hashing variant"
+        },
+        "keyfile": { "label": "Key File", "description": "Key stored in a separate file" },
+        "keyfile-blake2": {
+          "label": "Key File (BLAKE2)",
+          "description": "Key file with faster hashing"
+        },
+        "repokey-aes-ocb": {
+          "label": "Repository Key (AES-OCB)",
+          "description": "Default for Borg 2 · recommended"
+        },
+        "repokey-chacha20-poly1305": {
+          "label": "Repository Key (ChaCha20)",
+          "description": "Alternative AEAD cipher"
+        },
+        "keyfile-aes-ocb": {
+          "label": "Key File (AES-OCB)",
+          "description": "Key stored in a separate file"
+        },
+        "keyfile-chacha20-poly1305": {
+          "label": "Key File (ChaCha20)",
+          "description": "Key file with ChaCha20"
+        },
+        "none": { "label": "None", "description": "No encryption (not recommended)" }
+      },
       "borgKeyfileTitle": "Borg Keyfile (Optional)",
       "borgKeyfileDesc": "Borg keyfiles are typically stored without a file extension in ~/.config/borg/keys/",
       "uploadFile": "Upload File",
@@ -4063,6 +4368,8 @@
       },
       "review": {
         "readyToCreate": "Ready to create schedule!",
+        "ready": "Ready",
+        "keep": "Keep:",
         "reviewAndConfirm": "Review and confirm below.",
         "jobSummary": "Job Summary",
         "name": "Name",
@@ -4452,6 +4759,17 @@
     "selectPath": "Select Path"
   },
   "cache": {
+    "redis": "Redis",
+    "inMemory": "In-Memory",
+    "connection": "Connection",
+    "externalRedis": "External Redis",
+    "localDocker": "Local Docker",
+    "durationDays_one": "{{count}} day",
+    "durationDays_other": "{{count}} days",
+    "durationHours_one": "{{count}} hour",
+    "durationHours_other": "{{count}} hours",
+    "durationMinutes_one": "{{count}} minute",
+    "durationMinutes_other": "{{count}} minutes",
     "subtitle": "Monitor and configure the Redis-based archive caching system for faster browsing",
     "cacheStatus": "Cache Status",
     "cachedArchives": "Cached Entities",
@@ -4570,6 +4888,8 @@
     },
     "confirmRemove": "Remove this script from the repository?",
     "parametersConfigured": "{{count}} parameter(s) configured",
+    "parameterCount_one": "{{count}} parameter",
+    "parameterCount_other": "{{count}} parameters",
     "tooltips": {
       "testScript": "Test run this script",
       "parametersOutOfSync": "Parameters need attention - script definition has changed",
@@ -4588,7 +4908,13 @@
       "continueOnErrorHelperText": "Override default: If checked, the backup will proceed even if this script fails.",
       "onFailureLabel": "If this script fails:",
       "cancel": "Cancel",
-      "assignScript": "Assign Script"
+      "assignScript": "Assign Script",
+      "inlineScriptReplacementWarning": "Adding a library script will replace the current inline script for this hook."
+    },
+    "testDialog": {
+      "title": "Test: {{scriptName}}",
+      "exitCode": "Exit: {{code}}",
+      "duration": "{{seconds}}s"
     },
     "parametersDialog": {
       "title": "Configure Script Parameters: {{scriptName}}",
@@ -5289,6 +5615,8 @@
     "learnMore": "See what's included →"
   },
   "announcements": {
+    "latestRelease": "Latest release",
+    "close": "Close announcement",
     "highlights": "What's new",
     "viewDetails": "View details",
     "remindLater": "Remind me later",

@@ -86,8 +86,8 @@ const EMPTY_TOKENS: AgentEnrollmentTokenSummary[] = []
 const EMPTY_JOBS: AgentJobResponse[] = []
 const EMPTY_LOG_RESULT = { lines: [], total_lines: 0, has_more: false }
 
-function formatDate(value?: string | null): string {
-  if (!value) return 'Never'
+function formatDate(value: string | null | undefined, neverLabel: string): string {
+  if (!value) return neverLabel
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: 'medium',
     timeStyle: 'short',
@@ -118,8 +118,8 @@ function statusChipColor(
   }
 }
 
-function getAgentLabel(agent?: AgentMachineResponse): string {
-  if (!agent) return 'Unknown agent'
+function getAgentLabel(agent: AgentMachineResponse | undefined, unknownLabel: string): string {
+  if (!agent) return unknownLabel
   return agent.hostname || agent.name || agent.agent_id
 }
 
@@ -141,8 +141,8 @@ function formatBorgBinary(binary: Record<string, unknown>): string {
   return installSource ? `${label} (${installSource})` : label
 }
 
-function formatElapsedMs(value?: number | null): string {
-  if (typeof value !== 'number') return 'Not reported'
+function formatElapsedMs(value: number | null | undefined, notReportedLabel: string): string {
+  if (typeof value !== 'number') return notReportedLabel
   return `${Math.round(value)} ms`
 }
 
@@ -161,14 +161,15 @@ function parseDiagnosticsTimeout(value: string): number | null {
 function getDiagnosticsTargetError(
   hostValue: string,
   portValue: string,
-  timeoutValue: string
+  timeoutValue: string,
+  messages: { invalidPort: string; invalidTimeout: string }
 ): string | null {
   if (!hostValue.trim()) return null
   if (parseDiagnosticsPort(portValue) === null) {
-    return 'Enter a TCP port between 1 and 65535.'
+    return messages.invalidPort
   }
   if (parseDiagnosticsTimeout(timeoutValue) === null) {
-    return 'Enter a timeout between 0.5 and 10 seconds.'
+    return messages.invalidTimeout
   }
   return null
 }
@@ -193,21 +194,21 @@ function buildDiagnosticsPayload(
   }
 }
 
-function sessionStatusLabel(status: string): string {
+function sessionStatusLabel(status: string, labels: Record<string, string>): string {
   switch (status) {
     case 'success':
-      return 'Session healthy'
+      return labels.healthy
     case 'offline':
-      return 'Agent offline'
+      return labels.offline
     case 'timeout':
-      return 'Timed out'
+      return labels.timedOut
     default:
-      return 'Session failed'
+      return labels.failed
   }
 }
 
-function tcpStatusLabel(status: string): string {
-  return status === 'success' ? 'TCP reachable' : 'TCP failed'
+function tcpStatusLabel(status: string, labels: Record<string, string>): string {
+  return status === 'success' ? labels.reachable : labels.failed
 }
 
 export function ManagedAgentsPreview({
@@ -225,6 +226,7 @@ export function ManagedAgentsPreview({
   jobs?: AgentJobResponse[]
   isLoading?: boolean
 }) {
+  const { t } = useTranslation()
   const setupCommand = buildAgentInstallCommand(
     defaultAgentServerUrl,
     '<enrollment-token>',
@@ -237,15 +239,18 @@ export function ManagedAgentsPreview({
   return (
     <Box>
       <PageHeader
-        title="Managed Agents"
-        subtitle="Lightweight machines connected to this Borg UI server"
+        title={t('managedAgents.page.title')}
+        subtitle={t('managedAgents.page.subtitle')}
         actions={
           <>
-            <IconButton aria-label="Refresh" title="Refresh">
+            <IconButton
+              aria-label={t('managedAgents.page.refresh')}
+              title={t('managedAgents.page.refresh')}
+            >
               <RefreshCw size={20} />
             </IconButton>
             <Button variant="contained" startIcon={<Plus size={18} />}>
-              Add Agent
+              {t('managedAgents.page.addAgent')}
             </Button>
           </>
         }
@@ -254,9 +259,9 @@ export function ManagedAgentsPreview({
       <AgentSetupGuide command={setupCommand} onCopy={() => {}} />
 
       <PageTabs value={activeTab} onChange={() => {}}>
-        <Tab label="Agents" value="agents" />
-        <Tab label="Jobs" value="jobs" />
-        <Tab label="Enrollment Tokens" value="tokens" />
+        <Tab label={t('managedAgents.page.tabs.agents')} value="agents" />
+        <Tab label={t('managedAgents.page.tabs.jobs')} value="jobs" />
+        <Tab label={t('managedAgents.page.tabs.tokens')} value="tokens" />
       </PageTabs>
 
       {isLoading ? (
@@ -337,6 +342,7 @@ export function ManagedAgentsPlanGate({
 }
 
 export default function ManagedAgents() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { hasGlobalPermission } = useAuth()
   const { trackSystem, EventAction } = useAnalytics()
@@ -422,10 +428,10 @@ export default function ManagedAgents() {
         has_default_path: Boolean(payload.default_path),
         expires_never: Boolean(payload.expires_never),
       })
-      toast.success('Enrollment token created')
+      toast.success(t('managedAgents.page.toasts.tokenCreated'))
     },
     onError: (error: unknown) => {
-      toast.error(extractBackendMessage(error, 'Failed to create enrollment token'))
+      toast.error(extractBackendMessage(error, t('managedAgents.add.errors.createToken')))
     },
   })
 
@@ -441,10 +447,10 @@ export default function ManagedAgents() {
         surface: MANAGED_AGENTS_ANALYTICS_SECTION,
         operation: 'revoke_enrollment_token',
       })
-      toast.success('Enrollment token revoked')
+      toast.success(t('managedAgents.page.toasts.tokenRevoked'))
     },
     onError: (error: unknown) => {
-      toast.error(extractBackendMessage(error, 'Failed to revoke enrollment token'))
+      toast.error(extractBackendMessage(error, t('managedAgents.page.errors.revokeToken')))
     },
   })
 
@@ -460,10 +466,10 @@ export default function ManagedAgents() {
         surface: MANAGED_AGENTS_ANALYTICS_SECTION,
         operation: 'revoke_agent',
       })
-      toast.success('Agent revoked')
+      toast.success(t('managedAgents.page.toasts.agentRevoked'))
     },
     onError: (error: unknown) => {
-      toast.error(extractBackendMessage(error, 'Failed to revoke agent'))
+      toast.error(extractBackendMessage(error, t('managedAgents.page.errors.revokeAgent')))
     },
   })
 
@@ -479,10 +485,10 @@ export default function ManagedAgents() {
         surface: MANAGED_AGENTS_ANALYTICS_SECTION,
         operation: 'delete_agent',
       })
-      toast.success('Agent deleted')
+      toast.success(t('managedAgents.page.toasts.agentDeleted'))
     },
     onError: (error: unknown) => {
-      toast.error(extractBackendMessage(error, 'Failed to delete agent'))
+      toast.error(extractBackendMessage(error, t('managedAgents.page.errors.deleteAgent')))
     },
   })
 
@@ -500,10 +506,10 @@ export default function ManagedAgents() {
         operation: 'cancel_job',
         job_id_present: Boolean(jobId),
       })
-      toast.success('Cancellation requested')
+      toast.success(t('managedAgents.page.toasts.cancellationRequested'))
     },
     onError: (error: unknown) => {
-      toast.error(extractBackendMessage(error, 'Failed to cancel job'))
+      toast.error(extractBackendMessage(error, t('managedAgents.page.errors.cancelJob')))
     },
   })
 
@@ -536,7 +542,7 @@ export default function ManagedAgents() {
       operation: 'copy_command',
       source,
     })
-    toast.success('Copied')
+    toast.success(t('managedAgents.page.toasts.copied'))
   }
 
   const setupCommand = buildAgentInstallCommand(
@@ -548,14 +554,22 @@ export default function ManagedAgents() {
   return (
     <Box>
       <PageHeader
-        title="Managed Agents"
-        subtitle="Lightweight machines connected to this Borg UI server"
+        title={t('managedAgents.page.title')}
+        subtitle={t('managedAgents.page.subtitle')}
         actions={
           <>
             <IconButton
               onClick={() => void refreshAll()}
-              aria-label={manualRefreshInFlight ? 'Refreshing agents' : 'Refresh'}
-              title={manualRefreshInFlight ? 'Refreshing agents' : 'Refresh'}
+              aria-label={
+                manualRefreshInFlight
+                  ? t('managedAgents.page.refreshing')
+                  : t('managedAgents.page.refresh')
+              }
+              title={
+                manualRefreshInFlight
+                  ? t('managedAgents.page.refreshing')
+                  : t('managedAgents.page.refresh')
+              }
               disabled={manualRefreshInFlight}
             >
               <RefreshCw size={20} />
@@ -576,7 +590,7 @@ export default function ManagedAgents() {
               }}
               sx={{ width: { xs: '100%', md: 'auto' } }}
             >
-              Add Agent
+              {t('managedAgents.page.addAgent')}
             </Button>
           </>
         }
@@ -595,9 +609,9 @@ export default function ManagedAgents() {
           setActiveTab(value)
         }}
       >
-        <Tab label="Agents" value="agents" />
-        <Tab label="Jobs" value="jobs" />
-        <Tab label="Enrollment Tokens" value="tokens" />
+        <Tab label={t('managedAgents.page.tabs.agents')} value="agents" />
+        <Tab label={t('managedAgents.page.tabs.jobs')} value="jobs" />
+        <Tab label={t('managedAgents.page.tabs.tokens')} value="tokens" />
       </PageTabs>
 
       {isLoading ? (
@@ -708,6 +722,7 @@ export function AgentSetupGuide({
   command: string
   onCopy: (value: string) => void
 }) {
+  const { t } = useTranslation()
   const [helpOpen, setHelpOpen] = useState(false)
 
   return (
@@ -721,9 +736,7 @@ export function AgentSetupGuide({
       >
         <Stack direction="row" spacing={1} alignItems="center" color="text.secondary">
           <Terminal size={16} />
-          <Typography variant="body2">
-            Run this on a remote machine to register it with this Borg UI server.
-          </Typography>
+          <Typography variant="body2">{t('managedAgents.setupGuide.summary')}</Typography>
         </Stack>
         <Button
           variant="text"
@@ -731,23 +744,23 @@ export function AgentSetupGuide({
           startIcon={<Info size={16} />}
           onClick={() => setHelpOpen(true)}
         >
-          Setup Help
+          {t('managedAgents.setupGuide.help')}
         </Button>
       </Stack>
 
       <CopyableCodeBlock
         value={command}
-        copyLabel="Copy setup command"
+        copyLabel={t('managedAgents.setupGuide.copySetupCommand')}
         onCopy={() => onCopy(command)}
       />
 
       <Dialog open={helpOpen} onClose={() => setHelpOpen(false)} fullWidth maxWidth="md">
-        <DialogTitle>Agent Setup Help</DialogTitle>
+        <DialogTitle>{t('managedAgents.setupGuide.title')}</DialogTitle>
         <DialogContent>
           <AgentSetupHelpContent command={command} onCopy={onCopy} />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setHelpOpen(false)}>Close</Button>
+          <Button onClick={() => setHelpOpen(false)}>{t('common.buttons.close')}</Button>
         </DialogActions>
       </Dialog>
     </Box>
@@ -761,6 +774,7 @@ export function AgentSetupHelpContent({
   command: string
   onCopy: (value: string) => void
 }) {
+  const { t } = useTranslation()
   const manualInstallCommand = [
     'git clone https://github.com/karanhudia/borg-ui.git',
     'cd borg-ui',
@@ -779,72 +793,65 @@ export function AgentSetupHelpContent({
     <Stack spacing={2.5} sx={{ mt: 1 }}>
       <Box>
         <Typography variant="subtitle2" fontWeight={700} gutterBottom>
-          1. Run the Linux installer
+          {t('managedAgents.setupGuide.steps.install.title')}
         </Typography>
         <Typography color="text.secondary" sx={{ mb: 1 }}>
-          Run this on the Linux machine that owns the files Borg should back up. The installer
-          installs dependencies, registers the agent, and enables the systemd service. By default,
-          the service runs as the user who invoked sudo, so repository and source paths must be
-          accessible to that user.
+          {t('managedAgents.setupGuide.steps.install.description')}
         </Typography>
         <CopyableCodeBlock
           value={command}
-          copyLabel="Copy install command"
+          copyLabel={t('managedAgents.installCommand.copy')}
           onCopy={() => onCopy(command)}
         />
       </Box>
 
       <Box>
         <Typography variant="subtitle2" fontWeight={700} gutterBottom>
-          2. Server URL and token
+          {t('managedAgents.setupGuide.steps.server.title')}
         </Typography>
         <Typography color="text.secondary" sx={{ mb: 1 }}>
-          The server URL must be reachable from the client machine. localhost only works when the
-          agent and Borg UI are on the same machine; remote clients should use the Borg UI host
-          name, IP address, or HTTPS URL they can reach. Enrollment tokens are temporary setup
-          credentials; the enrolled agent keeps its own credential until revoked or deleted.
+          {t('managedAgents.setupGuide.steps.server.description')}
         </Typography>
       </Box>
 
       <Box>
         <Typography variant="subtitle2" fontWeight={700} gutterBottom>
-          3. Manual troubleshooting
+          {t('managedAgents.setupGuide.steps.troubleshooting.title')}
         </Typography>
         <Typography color="text.secondary" sx={{ mb: 1 }}>
-          Manual installation remains useful for troubleshooting. The agent source is in the{' '}
+          {t('managedAgents.setupGuide.steps.troubleshooting.descriptionPrefix')}{' '}
           <MuiLink
             href="https://github.com/karanhudia/borg-ui/tree/main/agent"
             target="_blank"
             rel="noreferrer"
           >
-            Borg UI agent directory
+            {t('managedAgents.setupGuide.steps.troubleshooting.link')}
           </MuiLink>
           .
         </Typography>
         <CopyableCodeBlock
           value={manualInstallCommand}
-          copyLabel="Copy install commands"
+          copyLabel={t('managedAgents.setupGuide.copyInstallCommands')}
           onCopy={() => onCopy(manualInstallCommand)}
         />
       </Box>
 
       <Box>
         <Typography variant="subtitle2" fontWeight={700} gutterBottom>
-          4. Service checks
+          {t('managedAgents.setupGuide.steps.service.title')}
         </Typography>
         <Typography color="text.secondary" sx={{ mb: 1 }}>
-          The installer enables systemd by default so the agent survives reboot. Use these commands
-          only when inspecting or repairing a manual installation.
+          {t('managedAgents.setupGuide.steps.service.description')}
         </Typography>
         <CopyableCodeBlock
           value={runCommand}
-          copyLabel="Copy status command"
+          copyLabel={t('managedAgents.setupGuide.copyStatusCommand')}
           onCopy={() => onCopy(runCommand)}
         />
         <Box sx={{ mt: 1 }}>
           <CopyableCodeBlock
             value={linuxStartupCommand}
-            copyLabel="Copy systemd commands"
+            copyLabel={t('managedAgents.setupGuide.copySystemdCommands')}
             onCopy={() => onCopy(linuxStartupCommand)}
           />
         </Box>
@@ -952,13 +959,23 @@ export function AgentDiagnosticsDialog({
     payload: AgentDiagnosticsRequest
   ) => Promise<AgentDiagnosticsResponse>
 }) {
+  const { t } = useTranslation()
   const [targetHost, setTargetHost] = useState('')
   const [targetPort, setTargetPort] = useState('')
   const [targetTimeout, setTargetTimeout] = useState('3')
   const [result, setResult] = useState<AgentDiagnosticsResponse | null>(initialResult)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
-  const targetError = getDiagnosticsTargetError(targetHost, targetPort, targetTimeout)
+  const diagnosticsMessages = {
+    invalidPort: t('managedAgents.page.diagnostics.invalidPort'),
+    invalidTimeout: t('managedAgents.page.diagnostics.invalidTimeout'),
+  }
+  const targetError = getDiagnosticsTargetError(
+    targetHost,
+    targetPort,
+    targetTimeout,
+    diagnosticsMessages
+  )
   const hasTarget = Boolean(targetHost.trim())
   const portInvalid = hasTarget && parseDiagnosticsPort(targetPort) === null
   const timeoutInvalid = hasTarget && parseDiagnosticsTimeout(targetTimeout) === null
@@ -972,7 +989,12 @@ export function AgentDiagnosticsDialog({
 
   const runDiagnostics = async () => {
     if (!agent || !onRunDiagnostics) return
-    const validationError = getDiagnosticsTargetError(targetHost, targetPort, targetTimeout)
+    const validationError = getDiagnosticsTargetError(
+      targetHost,
+      targetPort,
+      targetTimeout,
+      diagnosticsMessages
+    )
     if (validationError) {
       setErrorMessage(validationError)
       return
@@ -986,7 +1008,7 @@ export function AgentDiagnosticsDialog({
       )
       setResult(nextResult)
     } catch (error) {
-      setErrorMessage(extractBackendMessage(error, 'Failed to run diagnostics'))
+      setErrorMessage(extractBackendMessage(error, t('managedAgents.page.errors.runDiagnostics')))
     } finally {
       setRunning(false)
     }
@@ -999,7 +1021,7 @@ export function AgentDiagnosticsDialog({
 
   const footer = (
     <DialogActions sx={{ px: 3, py: 2 }}>
-      <Button onClick={onClose}>Close</Button>
+      <Button onClick={onClose}>{t('common.buttons.close')}</Button>
       <Button
         variant="contained"
         onClick={() => void runDiagnostics()}
@@ -1008,21 +1030,24 @@ export function AgentDiagnosticsDialog({
           running ? <CircularProgress color="inherit" size={16} /> : <Activity size={16} />
         }
       >
-        {running ? 'Running diagnostics' : 'Run check'}
+        {running
+          ? t('managedAgents.page.diagnostics.running')
+          : t('managedAgents.page.diagnostics.runCheck')}
       </Button>
     </DialogActions>
   )
 
   return (
     <ResponsiveDialog open={open} onClose={onClose} fullWidth maxWidth="md" footer={footer}>
-      <DialogTitle>Agent diagnostics</DialogTitle>
+      <DialogTitle>{t('managedAgents.page.diagnostics.title')}</DialogTitle>
       <DialogContent>
         <Stack spacing={2.25} sx={{ pt: 0.5, pb: 1 }}>
           <Box>
-            <Typography fontWeight={700}>{getAgentLabel(agent || undefined)}</Typography>
+            <Typography fontWeight={700}>
+              {getAgentLabel(agent || undefined, t('managedAgents.page.unknownAgent'))}
+            </Typography>
             <Typography color="text.secondary" variant="body2" sx={{ mt: 0.25 }}>
-              Verify the outbound agent session and optionally test a TCP target from the agent
-              host.
+              {t('managedAgents.page.diagnostics.description')}
             </Typography>
           </Box>
 
@@ -1038,18 +1063,17 @@ export function AgentDiagnosticsDialog({
             timeoutInvalid={timeoutInvalid}
             timeoutInputProps={{ min: 0.5, max: 10, step: 0.5 }}
             labels={{
-              summary: 'Advanced: test another service',
-              description:
-                'Checks whether this agent can reach a separate service. Leave blank for normal diagnostics.',
-              host: 'Service host',
+              summary: t('managedAgents.page.diagnostics.advancedSummary'),
+              description: t('managedAgents.page.diagnostics.advancedDescription'),
+              host: t('managedAgents.page.diagnostics.serviceHost'),
               hostPlaceholder: 'postgres.internal',
-              hostHelper: 'Optional service to test from this agent',
-              port: 'Service port',
+              hostHelper: t('managedAgents.page.diagnostics.serviceHostHelper'),
+              port: t('managedAgents.page.diagnostics.servicePort'),
               portPlaceholder: '5432',
               portError: '1-65535',
-              timeout: 'Timeout',
-              timeoutHelper: 'Seconds',
-              timeoutError: '0.5-10 seconds',
+              timeout: t('managedAgents.page.diagnostics.timeout'),
+              timeoutHelper: t('managedAgents.page.diagnostics.seconds'),
+              timeoutError: t('managedAgents.page.diagnostics.timeoutRange'),
             }}
           />
 
@@ -1080,12 +1104,26 @@ export function AgentDiagnosticsDialog({
               }}
             >
               {[
-                ['Status', diagnosticAgent?.status ?? agent?.status ?? 'unknown'],
-                ['Last seen', formatDate(diagnosticAgent?.last_seen_at ?? agent?.last_seen_at)],
-                ['Agent version', diagnosticAgent?.agent_version ?? agent?.agent_version ?? '—'],
                 [
-                  'Borg',
-                  borgVersions.length ? borgVersions.map(formatBorgBinary).join(', ') : 'None',
+                  t('managedAgents.page.table.status'),
+                  diagnosticAgent?.status ?? agent?.status ?? 'unknown',
+                ],
+                [
+                  t('managedAgents.page.lastSeen'),
+                  formatDate(
+                    diagnosticAgent?.last_seen_at ?? agent?.last_seen_at,
+                    t('managedAgents.page.never')
+                  ),
+                ],
+                [
+                  t('managedAgents.page.agentVersion'),
+                  diagnosticAgent?.agent_version ?? agent?.agent_version ?? '—',
+                ],
+                [
+                  t('managedAgents.page.borg'),
+                  borgVersions.length
+                    ? borgVersions.map(formatBorgBinary).join(', ')
+                    : t('managedAgents.page.none'),
                 ],
               ].map(([label, value], index) => (
                 <Box
@@ -1112,7 +1150,7 @@ export function AgentDiagnosticsDialog({
 
           <Stack spacing={1}>
             <Typography variant="caption" color="text.secondary" fontWeight={700}>
-              Capabilities
+              {t('managedAgents.page.capabilities')}
             </Typography>
             <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
               {capabilities.length ? (
@@ -1120,7 +1158,11 @@ export function AgentDiagnosticsDialog({
                   <Chip key={capability} label={capability} size="small" variant="outlined" />
                 ))
               ) : (
-                <Chip label="None reported" size="small" variant="outlined" />
+                <Chip
+                  label={t('managedAgents.page.noneReported')}
+                  size="small"
+                  variant="outlined"
+                />
               )}
             </Stack>
           </Stack>
@@ -1134,7 +1176,12 @@ export function AgentDiagnosticsDialog({
           {result ? (
             <Stack spacing={1.25} aria-live="polite">
               <DiagnosticResultRow
-                title={sessionStatusLabel(result.session.status)}
+                title={sessionStatusLabel(result.session.status, {
+                  healthy: t('managedAgents.page.diagnostics.sessionHealthy'),
+                  offline: t('managedAgents.page.diagnostics.agentOffline'),
+                  timedOut: t('managedAgents.page.diagnostics.timedOut'),
+                  failed: t('managedAgents.page.diagnostics.sessionFailed'),
+                })}
                 elapsed={result.session.elapsed_ms}
                 error={result.session.error}
                 message={result.session.message}
@@ -1142,7 +1189,10 @@ export function AgentDiagnosticsDialog({
               />
               {result.tcp ? (
                 <DiagnosticResultRow
-                  title={tcpStatusLabel(result.tcp.status)}
+                  title={tcpStatusLabel(result.tcp.status, {
+                    reachable: t('managedAgents.page.diagnostics.tcpReachable'),
+                    failed: t('managedAgents.page.diagnostics.tcpFailed'),
+                  })}
                   elapsed={result.tcp.elapsed_ms}
                   target={`${result.tcp.target.host}:${result.tcp.target.port}`}
                   error={result.tcp.error}
@@ -1153,8 +1203,7 @@ export function AgentDiagnosticsDialog({
             </Stack>
           ) : (
             <Alert severity="info" sx={{ borderRadius: 1.5 }}>
-              Run a check to verify the active agent session. Add a host and port to test TCP
-              reachability from the agent host.
+              {t('managedAgents.page.diagnostics.emptyResult')}
             </Alert>
           )}
         </Stack>
@@ -1178,6 +1227,7 @@ function DiagnosticResultRow({
   target?: string
   severity: 'success' | 'warning' | 'error'
 }) {
+  const { t } = useTranslation()
   return (
     <Box
       sx={{
@@ -1199,7 +1249,11 @@ function DiagnosticResultRow({
           )}
           <Typography fontWeight={700}>{title}</Typography>
         </Stack>
-        <Chip label={formatElapsedMs(elapsed)} size="small" variant="outlined" />
+        <Chip
+          label={formatElapsedMs(elapsed, t('managedAgents.page.notReported'))}
+          size="small"
+          variant="outlined"
+        />
       </Stack>
       {target && (
         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
@@ -1236,20 +1290,22 @@ export function AgentDeleteConfirmationDialog({
   onCancel: () => void
   onConfirm: (agent: AgentMachineResponse) => void
 }) {
+  const { t } = useTranslation()
   return (
     <Dialog open={open} onClose={onCancel} fullWidth maxWidth="xs">
-      <DialogTitle>Delete agent</DialogTitle>
+      <DialogTitle>{t('managedAgents.page.deleteDialog.title')}</DialogTitle>
       <DialogContent>
         <Stack spacing={1.5} sx={{ mt: 0.5 }}>
-          <Typography fontWeight={700}>{getAgentLabel(agent || undefined)}</Typography>
+          <Typography fontWeight={700}>
+            {getAgentLabel(agent || undefined, t('managedAgents.page.unknownAgent'))}
+          </Typography>
           <Typography color="text.secondary">
-            Deleting removes it from the fleet list. The local service may still run until removed
-            on the client.
+            {t('managedAgents.page.deleteDialog.description')}
           </Typography>
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onCancel}>Cancel</Button>
+        <Button onClick={onCancel}>{t('common.buttons.cancel')}</Button>
         <Button
           color="error"
           variant="contained"
@@ -1259,7 +1315,7 @@ export function AgentDeleteConfirmationDialog({
             onConfirm(agent)
           }}
         >
-          Delete agent
+          {t('managedAgents.page.deleteDialog.confirm')}
         </Button>
       </DialogActions>
     </Dialog>
@@ -1279,33 +1335,35 @@ export function AgentReinstallDialog({
   onCancel: () => void
   onCopy: (value: string) => void
 }) {
+  const { t } = useTranslation()
   const command = buildAgentReinstallCommand(serverUrl)
 
   return (
     <Dialog open={open} onClose={onCancel} fullWidth maxWidth="md">
-      <DialogTitle>Reinstall agent</DialogTitle>
+      <DialogTitle>{t('managedAgents.page.reinstallDialog.title')}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 0.5 }}>
           <Box>
-            <Typography fontWeight={700}>{getAgentLabel(agent || undefined)}</Typography>
+            <Typography fontWeight={700}>
+              {getAgentLabel(agent || undefined, t('managedAgents.page.unknownAgent'))}
+            </Typography>
             <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-              Run this on the enrolled machine to update the Borg UI agent package and restart the
-              systemd service. No enrollment token or registration step is required.
+              {t('managedAgents.page.reinstallDialog.description')}
             </Typography>
           </Box>
           <CopyableCodeBlock
             value={command}
-            copyLabel="Copy reinstall command"
+            copyLabel={t('managedAgents.page.reinstallDialog.copyCommand')}
             onCopy={() => onCopy(command)}
           />
           <Alert severity="info" sx={{ borderRadius: 1.5 }}>
-            The script preserves the existing agent config at{' '}
+            {t('managedAgents.page.reinstallDialog.configPreserved')}{' '}
             <Box component="code">/etc/borg-ui-agent/config.toml</Box>.
           </Alert>
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onCancel}>Close</Button>
+        <Button onClick={onCancel}>{t('common.buttons.close')}</Button>
       </DialogActions>
     </Dialog>
   )
@@ -1336,6 +1394,7 @@ export function AgentList({
   isDeleting: boolean
 }) {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { trackSystem, EventAction } = useAnalytics()
   const isDark = theme.palette.mode === 'dark'
   const [deleteTarget, setDeleteTarget] = useState<AgentMachineResponse | null>(null)
@@ -1360,13 +1419,13 @@ export function AgentList({
         status: 'failed',
         elapsed_ms: null,
         error: 'diagnostics_unavailable',
-        message: 'Diagnostics are unavailable in this story or test surface.',
+        message: t('managedAgents.page.diagnostics.unavailable'),
       },
       tcp: null,
     }))
 
   if (!agents.length) {
-    return <Alert severity="info">No agents enrolled.</Alert>
+    return <Alert severity="info">{t('managedAgents.page.emptyAgents')}</Alert>
   }
 
   return (
@@ -1382,12 +1441,20 @@ export function AgentList({
           const accent = getAgentStatusAccent(agent.status)
           const borgVersions = agent.borg_versions ?? []
           const hasUsableBorg = borgVersions.length > 0
-          const borgValue = hasUsableBorg ? borgVersions.map(formatBorgBinary).join(', ') : 'None'
+          const borgValue = hasUsableBorg
+            ? borgVersions.map(formatBorgBinary).join(', ')
+            : t('managedAgents.page.none')
           const stats = [
-            { label: 'OS', value: [agent.os, agent.arch].filter(Boolean).join(' / ') || '—' },
-            { label: 'Agent', value: agent.agent_version || '—' },
-            { label: 'Last Seen', value: formatDate(agent.last_seen_at) },
-            { label: 'Borg', value: borgValue },
+            {
+              label: t('managedAgents.page.os'),
+              value: [agent.os, agent.arch].filter(Boolean).join(' / ') || '—',
+            },
+            { label: t('managedAgents.agent'), value: agent.agent_version || '—' },
+            {
+              label: t('managedAgents.page.lastSeen'),
+              value: formatDate(agent.last_seen_at, t('managedAgents.page.never')),
+            },
+            { label: t('managedAgents.page.borg'), value: borgValue },
           ]
 
           return (
@@ -1466,10 +1533,10 @@ export function AgentList({
                     variant="subtitle1"
                     fontWeight={700}
                     noWrap
-                    title={getAgentLabel(agent)}
+                    title={getAgentLabel(agent, t('managedAgents.page.unknownAgent'))}
                     sx={{ lineHeight: 1.3, mb: 0.25 }}
                   >
-                    {getAgentLabel(agent)}
+                    {getAgentLabel(agent, t('managedAgents.page.unknownAgent'))}
                   </Typography>
 
                   <Typography
@@ -1577,11 +1644,10 @@ export function AgentList({
                     }}
                   >
                     <Typography variant="body2" fontWeight={700}>
-                      No usable Borg binary reported
+                      {t('managedAgents.page.noBorg.title')}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      Install Borg on this agent or regenerate the setup command with Borg
-                      installation enabled.
+                      {t('managedAgents.page.noBorg.description')}
                     </Typography>
                   </Alert>
                 )}
@@ -1598,10 +1664,10 @@ export function AgentList({
                     borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.07),
                   }}
                 >
-                  <Tooltip title="Run diagnostics" arrow>
+                  <Tooltip title={t('managedAgents.page.actions.runDiagnostics')} arrow>
                     <IconButton
                       size="small"
-                      aria-label="Run diagnostics"
+                      aria-label={t('managedAgents.page.actions.runDiagnostics')}
                       onClick={() => {
                         trackSystem(EventAction.START, {
                           section: MANAGED_AGENTS_ANALYTICS_SECTION,
@@ -1624,10 +1690,10 @@ export function AgentList({
                       <Activity size={16} />
                     </IconButton>
                   </Tooltip>
-                  <Tooltip title="View agent logs" arrow>
+                  <Tooltip title={t('managedAgents.page.actions.viewAgentLogs')} arrow>
                     <IconButton
                       size="small"
-                      aria-label="View agent logs"
+                      aria-label={t('managedAgents.page.actions.viewAgentLogs')}
                       onClick={() => onViewLogs(agent)}
                       sx={{
                         width: { xs: 40, sm: 34 },
@@ -1643,10 +1709,10 @@ export function AgentList({
                       <Eye size={16} />
                     </IconButton>
                   </Tooltip>
-                  <Tooltip title="Reinstall agent" arrow>
+                  <Tooltip title={t('managedAgents.page.actions.reinstallAgent')} arrow>
                     <IconButton
                       size="small"
-                      aria-label="Reinstall agent"
+                      aria-label={t('managedAgents.page.actions.reinstallAgent')}
                       onClick={() => {
                         trackSystem(EventAction.VIEW, {
                           section: MANAGED_AGENTS_ANALYTICS_SECTION,
@@ -1670,11 +1736,11 @@ export function AgentList({
                       <RefreshCw size={16} />
                     </IconButton>
                   </Tooltip>
-                  <Tooltip title="Revoke access" arrow>
+                  <Tooltip title={t('managedAgents.page.actions.revokeAccess')} arrow>
                     <span>
                       <IconButton
                         size="small"
-                        aria-label="Revoke agent"
+                        aria-label={t('managedAgents.page.actions.revokeAgent')}
                         onClick={() => onRevoke(agent)}
                         disabled={isRevoking || agent.status === 'revoked'}
                         sx={{
@@ -1693,11 +1759,11 @@ export function AgentList({
                       </IconButton>
                     </span>
                   </Tooltip>
-                  <Tooltip title="Delete agent" arrow>
+                  <Tooltip title={t('managedAgents.page.actions.deleteAgent')} arrow>
                     <span>
                       <IconButton
                         size="small"
-                        aria-label="Delete agent"
+                        aria-label={t('managedAgents.page.actions.deleteAgent')}
                         onClick={() => setDeleteTarget(agent)}
                         disabled={isDeleting}
                         sx={{
@@ -1760,6 +1826,7 @@ export function AgentSessionLogsDialog({
   loading?: boolean
   onClose: () => void
 }) {
+  const { t } = useTranslation()
   const handleFetchLogs = useCallback<LogViewerFetchLogs>(
     async (offset: number) => {
       if (!agent || loading) return EMPTY_LOG_RESULT
@@ -1778,8 +1845,14 @@ export function AgentSessionLogsDialog({
       job={agent ? { id: agent.id, status, type: 'agent' } : null}
       open={!!agent}
       onClose={onClose}
-      title={agent ? `Agent Logs - ${getAgentLabel(agent)}` : 'Agent Logs'}
-      jobTypeLabel="Agent"
+      title={
+        agent
+          ? t('managedAgents.page.logs.agentTitle', {
+              name: getAgentLabel(agent, t('managedAgents.page.unknownAgent')),
+            })
+          : t('managedAgents.page.logs.agent')
+      }
+      jobTypeLabel={t('managedAgents.agent')}
       onFetchLogs={handleFetchLogs}
     />
   )
@@ -1794,6 +1867,7 @@ export function AgentJobLogsDialog({
   logs?: AgentJobLogEntryResponse[]
   onClose: () => void
 }) {
+  const { t } = useTranslation()
   const handleFetchLogs = useCallback<LogViewerFetchLogs>(
     async (offset: number) => {
       if (!job) return EMPTY_LOG_RESULT
@@ -1810,8 +1884,12 @@ export function AgentJobLogsDialog({
       job={job ? { ...job, type: 'agent job' } : null}
       open={!!job}
       onClose={onClose}
-      title={job ? `Agent Job Logs - Job #${job.id}` : 'Agent Job Logs'}
-      jobTypeLabel="Agent Job"
+      title={
+        job
+          ? t('managedAgents.page.logs.jobTitle', { id: job.id })
+          : t('managedAgents.page.logs.job')
+      }
+      jobTypeLabel={t('managedAgents.page.logs.job')}
       onFetchLogs={handleFetchLogs}
     />
   )
@@ -1830,8 +1908,9 @@ export function JobsTable({
   onViewLogs: (job: AgentJobResponse) => void
   isCanceling: boolean
 }) {
+  const { t } = useTranslation()
   if (!jobs.length) {
-    return <Alert severity="info">No agent jobs yet.</Alert>
+    return <Alert severity="info">{t('managedAgents.page.emptyJobs')}</Alert>
   }
 
   return (
@@ -1839,12 +1918,12 @@ export function JobsTable({
       <Table>
         <TableHead>
           <TableRow>
-            <TableCell>Job</TableCell>
-            <TableCell>Agent</TableCell>
-            <TableCell>Status</TableCell>
-            <TableCell>Progress</TableCell>
-            <TableCell>Updated</TableCell>
-            <TableCell align="right">Actions</TableCell>
+            <TableCell>{t('managedAgents.page.table.job')}</TableCell>
+            <TableCell>{t('managedAgents.agent')}</TableCell>
+            <TableCell>{t('managedAgents.page.table.status')}</TableCell>
+            <TableCell>{t('managedAgents.page.table.progress')}</TableCell>
+            <TableCell>{t('managedAgents.page.table.updated')}</TableCell>
+            <TableCell align="right">{t('managedAgents.page.table.actions')}</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -1859,7 +1938,7 @@ export function JobsTable({
                     {getJobKind(job)}
                   </Typography>
                 </TableCell>
-                <TableCell>{getAgentLabel(agent)}</TableCell>
+                <TableCell>{getAgentLabel(agent, t('managedAgents.page.unknownAgent'))}</TableCell>
                 <TableCell>
                   <Chip label={job.status} color={statusChipColor(job.status)} size="small" />
                 </TableCell>
@@ -1873,14 +1952,14 @@ export function JobsTable({
                     {Math.round(job.progress_percent ?? 0)}%
                   </Typography>
                 </TableCell>
-                <TableCell>{formatDate(job.updated_at)}</TableCell>
+                <TableCell>{formatDate(job.updated_at, t('managedAgents.page.never'))}</TableCell>
                 <TableCell align="right">
-                  <Tooltip title="View logs">
+                  <Tooltip title={t('managedAgents.page.actions.viewLogs')}>
                     <IconButton onClick={() => onViewLogs(job)}>
                       <Eye size={18} />
                     </IconButton>
                   </Tooltip>
-                  <Tooltip title="Cancel job">
+                  <Tooltip title={t('managedAgents.page.actions.cancelJob')}>
                     <span>
                       <IconButton
                         color="warning"
@@ -1917,8 +1996,9 @@ export function TokensTable({
   onRevoke: (tokenId: number) => void
   isRevoking: boolean
 }) {
+  const { t } = useTranslation()
   if (!tokens.length) {
-    return <Alert severity="info">No enrollment tokens created.</Alert>
+    return <Alert severity="info">{t('managedAgents.page.emptyTokens')}</Alert>
   }
 
   return (
@@ -1926,11 +2006,11 @@ export function TokensTable({
       <Table>
         <TableHead>
           <TableRow>
-            <TableCell>Name</TableCell>
-            <TableCell>Prefix</TableCell>
-            <TableCell>Status</TableCell>
-            <TableCell>Expires</TableCell>
-            <TableCell align="right">Actions</TableCell>
+            <TableCell>{t('managedAgents.page.table.name')}</TableCell>
+            <TableCell>{t('managedAgents.page.table.prefix')}</TableCell>
+            <TableCell>{t('managedAgents.page.table.status')}</TableCell>
+            <TableCell>{t('managedAgents.page.table.expires')}</TableCell>
+            <TableCell align="right">{t('managedAgents.page.table.actions')}</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -1956,9 +2036,9 @@ export function TokensTable({
                     size="small"
                   />
                 </TableCell>
-                <TableCell>{formatDate(token.expires_at)}</TableCell>
+                <TableCell>{formatDate(token.expires_at, t('managedAgents.page.never'))}</TableCell>
                 <TableCell align="right">
-                  <Tooltip title="Revoke token">
+                  <Tooltip title={t('managedAgents.page.actions.revokeToken')}>
                     <span>
                       <IconButton
                         color="error"

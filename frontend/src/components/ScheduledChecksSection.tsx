@@ -199,7 +199,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
     mutationFn: async (check: ScheduledCheck) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const repo = repositories.find((r: any) => r.id === check.repository_id)
-      if (!repo) throw new Error('Repository not found')
+      if (!repo) throw new Error(t('scheduledChecks.repositoryNotFound'))
       return new BorgApiClient(repo).checkRepository({
         maxDuration: check.check_max_duration,
         checkExtraFlags: check.check_extra_flags || '',
@@ -454,8 +454,8 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
               <MenuItem value="all">{t('scheduledChecks.allStatus')}</MenuItem>
               <MenuItem value="completed">{t('backupHistory.completed')}</MenuItem>
               <MenuItem value="failed">{t('backupHistory.failed')}</MenuItem>
-              <MenuItem value="cancelled">Cancelled</MenuItem>
-              <MenuItem value="running">Running</MenuItem>
+              <MenuItem value="cancelled">{t('scheduledChecks.status.cancelled')}</MenuItem>
+              <MenuItem value="running">{t('scheduledChecks.status.running')}</MenuItem>
             </Select>
           </Box>
 

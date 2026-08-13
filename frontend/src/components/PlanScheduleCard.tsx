@@ -93,7 +93,10 @@ const PlanScheduleCard: React.FC<PlanScheduleCardProps> = ({
         role="button"
         tabIndex={0}
         aria-expanded={expanded}
-        aria-label={`${expanded ? 'Collapse' : 'Expand'} ${plan.name}`}
+        aria-label={t('schedule.byPlan.togglePlan', {
+          action: expanded ? t('schedule.byPlan.collapse') : t('schedule.byPlan.expand'),
+          name: plan.name,
+        })}
         onClick={() => setExpanded((v) => !v)}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
@@ -155,7 +158,7 @@ const PlanScheduleCard: React.FC<PlanScheduleCardProps> = ({
         {!plan.enabled && (
           <Chip
             size="small"
-            label={t('schedule.byPlan.paused', { defaultValue: 'Paused' })}
+            label={t('schedule.byPlan.paused')}
             sx={{
               height: 20,
               fontSize: '0.65rem',
@@ -168,18 +171,14 @@ const PlanScheduleCard: React.FC<PlanScheduleCardProps> = ({
           />
         )}
         {canManagePlan && (
-          <Tooltip
-            title={t('schedule.byPlan.editPlan', { defaultValue: 'Edit plan' })}
-            arrow
-            placement="left"
-          >
+          <Tooltip title={t('schedule.byPlan.editPlan')} arrow placement="left">
             <IconButton
               size="small"
               onClick={(e) => {
                 e.stopPropagation()
                 onEditPlan(plan.id)
               }}
-              aria-label={t('schedule.byPlan.editPlan', { defaultValue: 'Edit plan' })}
+              aria-label={t('schedule.byPlan.editPlan')}
               sx={{
                 width: 28,
                 height: 28,
@@ -232,7 +231,7 @@ const PlanScheduleCard: React.FC<PlanScheduleCardProps> = ({
             flexShrink: 0,
           }}
         >
-          {t('schedule.byPlan.backup', { defaultValue: 'Backup' })}
+          {t('schedule.byPlan.backup')}
         </Typography>
         {hasBackupSchedule ? (
           <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }} noWrap>
@@ -252,10 +251,8 @@ const PlanScheduleCard: React.FC<PlanScheduleCardProps> = ({
           <Box sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 0.75 }}>
             <Typography variant="body2" sx={{ fontStyle: 'italic' }} color="text.disabled" noWrap>
               {plan.schedule_enabled
-                ? t('schedule.byPlan.notScheduled', { defaultValue: 'Not scheduled' })
-                : t('schedule.byPlan.scheduleDisabled', {
-                    defaultValue: 'Schedule disabled',
-                  })}
+                ? t('schedule.byPlan.notScheduled')
+                : t('schedule.byPlan.scheduleDisabled')}
             </Typography>
             {canManagePlan && (
               <Button
@@ -275,7 +272,7 @@ const PlanScheduleCard: React.FC<PlanScheduleCardProps> = ({
                   },
                 }}
               >
-                {t('schedule.byPlan.setSchedule', { defaultValue: 'Set schedule' })}
+                {t('schedule.byPlan.setSchedule')}
               </Button>
             )}
           </Box>
@@ -325,51 +322,35 @@ const PlanScheduleCard: React.FC<PlanScheduleCardProps> = ({
                   flexShrink: 0,
                 }}
               >
-                {t('schedule.byPlan.afterLabel', { defaultValue: 'After backup' })}
+                {t('schedule.byPlan.afterLabel')}
               </Typography>
               <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
                 {plan.run_prune_after && (
-                  <Tooltip
-                    title={t('schedule.byPlan.runPruneTip', {
-                      defaultValue: 'Old archives are pruned after each backup',
-                    })}
-                    arrow
-                  >
+                  <Tooltip title={t('schedule.byPlan.runPruneTip')} arrow>
                     <Chip
                       size="small"
                       icon={<Scissors size={11} aria-hidden />}
-                      label={t('schedule.byPlan.runPrune', { defaultValue: 'Prune' })}
+                      label={t('schedule.byPlan.runPrune')}
                       sx={chipSxFor(pruneColor)}
                     />
                   </Tooltip>
                 )}
                 {plan.run_compact_after && (
-                  <Tooltip
-                    title={t('schedule.byPlan.runCompactTip', {
-                      defaultValue: 'Repository is compacted after each backup',
-                    })}
-                    arrow
-                  >
+                  <Tooltip title={t('schedule.byPlan.runCompactTip')} arrow>
                     <Chip
                       size="small"
                       icon={<Archive size={11} aria-hidden />}
-                      label={t('schedule.byPlan.runCompact', { defaultValue: 'Compact' })}
+                      label={t('schedule.byPlan.runCompact')}
                       sx={chipSxFor(compactColor)}
                     />
                   </Tooltip>
                 )}
                 {plan.run_check_after && (
-                  <Tooltip
-                    title={t('schedule.byPlan.runCheckTip', {
-                      defaultValue:
-                        'Integrity check runs after each backup (in addition to any scheduled check below)',
-                    })}
-                    arrow
-                  >
+                  <Tooltip title={t('schedule.byPlan.runCheckTip')} arrow>
                     <Chip
                       size="small"
                       icon={<ShieldCheck size={11} aria-hidden />}
-                      label={t('schedule.byPlan.runCheck', { defaultValue: 'Check' })}
+                      label={t('schedule.byPlan.runCheck')}
                       sx={chipSxFor(checkColor)}
                     />
                   </Tooltip>
@@ -391,9 +372,7 @@ const PlanScheduleCard: React.FC<PlanScheduleCardProps> = ({
             }}
           >
             <Typography variant="body2" color="text.secondary">
-              {t('schedule.byPlan.noRepos', {
-                defaultValue: 'No repositories attached to this plan.',
-              })}
+              {t('schedule.byPlan.noRepos')}
             </Typography>
           </Box>
         ) : (

@@ -28,32 +28,13 @@ interface RepositoryEncryptionFieldsProps {
   onChange: (data: Partial<RepositoryEncryptionData>) => void
 }
 
-const BORG1_ENCRYPTION_OPTIONS = [
-  { value: 'repokey', label: 'Repository Key', desc: 'Key stored in repository (recommended)' },
-  { value: 'repokey-blake2', label: 'Repository Key (BLAKE2)', desc: 'Faster hashing variant' },
-  { value: 'keyfile', label: 'Key File', desc: 'Key stored in a separate file' },
-  { value: 'keyfile-blake2', label: 'Key File (BLAKE2)', desc: 'Key file with faster hashing' },
-  { value: 'none', label: 'None', desc: 'No encryption (not recommended)' },
-]
-
+const BORG1_ENCRYPTION_OPTIONS = ['repokey', 'repokey-blake2', 'keyfile', 'keyfile-blake2', 'none']
 const BORG2_ENCRYPTION_OPTIONS = [
-  {
-    value: 'repokey-aes-ocb',
-    label: 'Repository Key (AES-OCB)',
-    desc: 'Default for Borg 2 · recommended',
-  },
-  {
-    value: 'repokey-chacha20-poly1305',
-    label: 'Repository Key (ChaCha20)',
-    desc: 'Alternative AEAD cipher',
-  },
-  { value: 'keyfile-aes-ocb', label: 'Key File (AES-OCB)', desc: 'Key stored in a separate file' },
-  {
-    value: 'keyfile-chacha20-poly1305',
-    label: 'Key File (ChaCha20)',
-    desc: 'Key file with ChaCha20',
-  },
-  { value: 'none', label: 'None', desc: 'No encryption (not recommended)' },
+  'repokey-aes-ocb',
+  'repokey-chacha20-poly1305',
+  'keyfile-aes-ocb',
+  'keyfile-chacha20-poly1305',
+  'none',
 ]
 
 export default function RepositoryEncryptionFields({
@@ -81,13 +62,13 @@ export default function RepositoryEncryptionFields({
               onChange={(e) => onChange({ encryption: e.target.value })}
             >
               {encryptionOptions.map((opt) => (
-                <MenuItem key={opt.value} value={opt.value}>
+                <MenuItem key={opt} value={opt}>
                   <Box>
                     <Typography variant="body2" fontWeight={600}>
-                      {opt.label}
+                      {t(`wizard.security.options.${opt}.label`)}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      {opt.desc}
+                      {t(`wizard.security.options.${opt}.description`)}
                     </Typography>
                   </Box>
                 </MenuItem>
@@ -146,7 +127,11 @@ export default function RepositoryEncryptionFields({
             endAdornment: (
               <InputAdornment position="end">
                 <IconButton
-                  aria-label={showPassphrase ? 'Hide passphrase' : 'Show passphrase'}
+                  aria-label={
+                    showPassphrase
+                      ? t('wizard.review.hidePassphrase')
+                      : t('wizard.review.showPassphrase')
+                  }
                   onClick={() => setShowPassphrase((v) => !v)}
                   edge="end"
                   size="small"

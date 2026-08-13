@@ -52,12 +52,15 @@ const UnassignedReposSection: React.FC<UnassignedReposSectionProps> = ({
         }}
         onClick={() => setExpanded((v) => !v)}
       >
-        <IconButton size="small" sx={{ ml: -0.5 }} aria-label={expanded ? 'Collapse' : 'Expand'}>
+        <IconButton
+          size="small"
+          sx={{ ml: -0.5 }}
+          aria-label={expanded ? t('common.buttons.collapse') : t('common.buttons.expand')}
+        >
           {expanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
         </IconButton>
         <Typography variant="subtitle2" fontWeight={700} sx={{ flex: 1 }}>
           {t('schedule.byPlan.unassignedTitle', {
-            defaultValue: 'Repositories not in any plan ({{count}})',
             count: repositories.length,
           })}
         </Typography>

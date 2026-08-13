@@ -342,9 +342,9 @@ export default function SSHConnectionsSingleKey() {
   // Handlers
   const handleGenerateKey = () => {
     generateKeyMutation.mutate({
-      name: 'System SSH Key',
+      name: t('sshConnections.systemKey.title'),
       key_type: keyType,
-      description: 'System SSH key for all remote connections',
+      description: t('sshConnections.systemKey.defaultDescription'),
     })
   }
 

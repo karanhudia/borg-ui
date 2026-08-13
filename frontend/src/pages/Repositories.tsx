@@ -566,7 +566,7 @@ export default function Repositories() {
 
   // Event handlers
   const handleDeleteRepository = (repository: Repository) => {
-    if (window.confirm(`Are you sure you want to delete repository "${repository.name}"?`)) {
+    if (window.confirm(t('repositories.deleteConfirmation', { name: repository.name }))) {
       deleteRepositoryMutation.mutate(repository.id)
     }
   }

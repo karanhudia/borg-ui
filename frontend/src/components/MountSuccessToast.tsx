@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Box, Typography, IconButton, alpha, useTheme } from '@mui/material'
 import { HardDrive, Copy, Check, X } from 'lucide-react'
 import { toast } from 'react-hot-toast'
+import { useTranslation } from 'react-i18next'
 
 interface MountSuccessToastProps {
   toastId: string
@@ -9,6 +10,7 @@ interface MountSuccessToastProps {
 }
 
 export default function MountSuccessToast({ toastId, command }: MountSuccessToastProps) {
+  const { t } = useTranslation()
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
   const [copied, setCopied] = useState(false)
@@ -62,10 +64,10 @@ export default function MountSuccessToast({ toastId, command }: MountSuccessToas
             fontWeight={600}
             sx={{ fontSize: '0.82rem', lineHeight: 1.3 }}
           >
-            Archive Mounted
+            {t('mountSuccess.title')}
           </Typography>
           <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.72rem' }}>
-            Access via Docker:
+            {t('mountSuccess.accessViaDocker')}
           </Typography>
         </Box>
         <IconButton
@@ -107,7 +109,7 @@ export default function MountSuccessToast({ toastId, command }: MountSuccessToas
         <IconButton
           size="small"
           onClick={handleCopy}
-          title={copied ? 'Copied!' : 'Copy command'}
+          title={copied ? t('mountSuccess.copied') : t('mountSuccess.copyCommand')}
           sx={{
             flexShrink: 0,
             color: copied ? 'success.main' : 'text.disabled',

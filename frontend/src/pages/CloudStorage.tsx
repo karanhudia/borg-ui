@@ -147,10 +147,6 @@ const getApiMessage = (error: unknown, fallback: string) => {
   return translateBackendKey(detail) || fallback
 }
 
-const formatStatus = (remote: RcloneRemote) => {
-  return remote.last_test_status || 'Not tested'
-}
-
 const statusColor = (
   status?: string | null
 ): 'default' | 'success' | 'error' | 'warning' | 'info' => {
@@ -225,7 +221,21 @@ function CloudStorageRemoteCard({
   const { t } = useTranslation()
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
-  const status = formatStatus(remote)
+  const status = (() => {
+    switch (remote.last_test_status) {
+      case 'connected':
+      case 'success':
+        return t('cloudStorage.groups.connected')
+      case 'failed':
+      case 'error':
+        return t('cloudStorage.groups.failed')
+      case 'pending':
+      case 'running':
+        return t('cloudStorage.groups.pending')
+      default:
+        return t('cloudStorage.groups.notTested')
+    }
+  })()
   const statusThemeColor = statusColor(remote.last_test_status)
   const usageCount = remote.usage_count ?? 0
   const deleteDisabled = usageCount > 0
@@ -611,7 +621,9 @@ function CloudStorageRemoteCard({
             <Typography
               sx={{ fontSize: '0.68rem', fontWeight: 600, color: 'text.secondary', lineHeight: 1 }}
             >
-              {remote.config_source || 'managed'}
+              {remote.config_source === 'managed' || !remote.config_source
+                ? t('cloudStorage.configSource.managed')
+                : remote.config_source}
             </Typography>
           </Box>
         </Box>
@@ -805,15 +817,15 @@ export function CloudStorageContent({
     switch (status) {
       case 'connected':
       case 'success':
-        return t('cloudStorage.groups.connected', { defaultValue: 'Connected' })
+        return t('cloudStorage.groups.connected')
       case 'failed':
       case 'error':
-        return t('cloudStorage.groups.failed', { defaultValue: 'Failed' })
+        return t('cloudStorage.groups.failed')
       case 'pending':
       case 'running':
-        return t('cloudStorage.groups.pending', { defaultValue: 'Pending' })
+        return t('cloudStorage.groups.pending')
       default:
-        return t('cloudStorage.groups.notTested', { defaultValue: 'Not tested' })
+        return t('cloudStorage.groups.notTested')
     }
   }
 
@@ -954,48 +966,46 @@ export function CloudStorageContent({
         <ListToolbar
           searchValue={searchQuery}
           onSearchChange={handleSearchChange}
-          searchPlaceholder={t('cloudStorage.search', {
-            defaultValue: 'Search cloud storage...',
-          })}
+          searchPlaceholder={t('cloudStorage.search')}
           sortValue={sortBy}
           onSortChange={handleSortChange}
           sortOptions={[
             {
               value: 'name-asc',
-              label: t('cloudStorage.sort.nameAZ', { defaultValue: 'Name A → Z' }),
+              label: t('cloudStorage.sort.nameAZ'),
             },
             {
               value: 'name-desc',
-              label: t('cloudStorage.sort.nameZA', { defaultValue: 'Name Z → A' }),
+              label: t('cloudStorage.sort.nameZA'),
             },
             {
               value: 'provider-asc',
-              label: t('cloudStorage.sort.provider', { defaultValue: 'Provider' }),
+              label: t('cloudStorage.sort.provider'),
             },
             {
               value: 'status',
-              label: t('cloudStorage.sort.status', { defaultValue: 'Status (connected first)' }),
+              label: t('cloudStorage.sort.status'),
             },
             {
               value: 'usage-desc',
-              label: t('cloudStorage.sort.usageMost', { defaultValue: 'Usage (most first)' }),
+              label: t('cloudStorage.sort.usageMost'),
             },
             {
               value: 'usage-asc',
-              label: t('cloudStorage.sort.usageLeast', { defaultValue: 'Usage (least first)' }),
+              label: t('cloudStorage.sort.usageLeast'),
             },
           ]}
           groupValue={groupBy}
           onGroupChange={handleGroupChange}
           groupOptions={[
-            { value: 'none', label: t('cloudStorage.group.none', { defaultValue: 'No grouping' }) },
+            { value: 'none', label: t('cloudStorage.group.none') },
             {
               value: 'status',
-              label: t('cloudStorage.group.status', { defaultValue: 'By status' }),
+              label: t('cloudStorage.group.status'),
             },
             {
               value: 'provider',
-              label: t('cloudStorage.group.provider', { defaultValue: 'By provider' }),
+              label: t('cloudStorage.group.provider'),
             },
           ]}
         />
@@ -1022,21 +1032,16 @@ export function CloudStorageContent({
         <EmptyStateCard
           centered={false}
           icon={<Cloud size={48} />}
-          title={t('cloudStorage.noMatch.title', { defaultValue: 'No matching remotes' })}
+          title={t('cloudStorage.noMatch.title')}
           description={
             searchQuery
-              ? t('cloudStorage.noMatch.message', {
-                  search: searchQuery,
-                  defaultValue: `No remotes match "${searchQuery}".`,
-                })
-              : t('cloudStorage.noMatch.fallback', {
-                  defaultValue: 'No remotes match the current filters.',
-                })
+              ? t('cloudStorage.noMatch.message', { search: searchQuery })
+              : t('cloudStorage.noMatch.fallback')
           }
           actions={
             searchQuery ? (
               <Button variant="outlined" onClick={() => setSearchQuery('')}>
-                {t('cloudStorage.noMatch.clearSearch', { defaultValue: 'Clear search' })}
+                {t('cloudStorage.noMatch.clearSearch')}
               </Button>
             ) : null
           }
