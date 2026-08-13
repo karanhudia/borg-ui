@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type JSX } from 'react'
 import type { TFunction } from 'i18next'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { Box } from '@mui/material'

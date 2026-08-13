@@ -50,7 +50,7 @@ describe('AnnouncementModal', () => {
           dismissible: true,
           highlights: ['First improvement', 'Second improvement'],
           cta_label: 'View release notes',
-          cta_url: 'javascript:void(0)',
+          cta_url: 'https://example.com/release-notes',
         }}
         open
         onAcknowledge={onAcknowledge}
@@ -64,7 +64,7 @@ describe('AnnouncementModal', () => {
     expect(screen.getByText('Latest release')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /view release notes/i })).toHaveAttribute(
       'href',
-      'javascript:void(0)'
+      'https://example.com/release-notes'
     )
 
     await user.click(screen.getByRole('button', { name: 'Remind me later' }))
