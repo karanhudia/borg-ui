@@ -25,7 +25,8 @@ omit =
 # Enable branch coverage (if statements, loops, etc.)
 branch = True
 
-# Measure coverage for code called by subprocess
+# Write a separate coverage data file per process, for later `coverage combine`
+# (off: a single data file, single process)
 parallel = False
 
 # Store coverage data in this file
