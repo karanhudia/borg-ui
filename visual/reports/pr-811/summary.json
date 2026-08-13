@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-08-13T13:21:01.572Z",
+  "generatedAt": "2026-08-13T14:00:33.999Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #811 visual report",
-    "commitSha": "beee4c7cb51d",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/31704006506"
+    "commitSha": "8b9ae2f3a9ef",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/31707380810"
   },
   "totals": {
     "baseline": 458,
     "actual": 458,
     "compared": 458,
-    "changed": 14,
+    "changed": 17,
     "added": 0,
     "removed": 0,
-    "unchanged": 444
+    "unchanged": 441
   },
   "changed": [
     {
@@ -32,6 +32,24 @@
       "actual": {
         "width": 1280,
         "height": 800
+      }
+    },
+    {
+      "fileName": "components-richselect--default--mobile.png",
+      "baselinePath": "images/baseline/components-richselect--default--mobile.png",
+      "actualPath": "images/actual/components-richselect--default--mobile.png",
+      "diffPath": "images/diff/components-richselect--default--mobile.png",
+      "diffPixels": 38,
+      "totalPixels": 329160,
+      "diffRatio": 0.00011544537610888322,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
       }
     },
     {
@@ -266,6 +284,42 @@
       "actual": {
         "width": 1280,
         "height": 800
+      }
+    },
+    {
+      "fileName": "pages-managedagents--agent-reinstall-dialog-open--mobile.png",
+      "baselinePath": "images/baseline/pages-managedagents--agent-reinstall-dialog-open--mobile.png",
+      "actualPath": "images/actual/pages-managedagents--agent-reinstall-dialog-open--mobile.png",
+      "diffPath": "images/diff/pages-managedagents--agent-reinstall-dialog-open--mobile.png",
+      "diffPixels": 242829,
+      "totalPixels": 329160,
+      "diffRatio": 0.7377232956616843,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "pages-managedagents--delete-confirmation--mobile.png",
+      "baselinePath": "images/baseline/pages-managedagents--delete-confirmation--mobile.png",
+      "actualPath": "images/actual/pages-managedagents--delete-confirmation--mobile.png",
+      "diffPath": "images/diff/pages-managedagents--delete-confirmation--mobile.png",
+      "diffPixels": 223524,
+      "totalPixels": 329160,
+      "diffRatio": 0.6790740065621582,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
       }
     }
   ],
@@ -1098,9 +1152,6 @@
       "fileName": "components-retryjobdialog--backup-plan-run-retry.png"
     },
     {
-      "fileName": "components-richselect--default--mobile.png"
-    },
-    {
       "fileName": "components-richselect--default.png"
     },
     {
@@ -1491,13 +1542,7 @@
       "fileName": "pages-managedagents--agent-logs.png"
     },
     {
-      "fileName": "pages-managedagents--agent-reinstall-dialog-open--mobile.png"
-    },
-    {
       "fileName": "pages-managedagents--agent-reinstall-dialog-open.png"
-    },
-    {
-      "fileName": "pages-managedagents--delete-confirmation--mobile.png"
     },
     {
       "fileName": "pages-managedagents--delete-confirmation.png"
