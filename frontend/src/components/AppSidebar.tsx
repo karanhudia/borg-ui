@@ -520,7 +520,7 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
                             textTransform: 'uppercase',
                           }}
                         >
-                          {t('navigation.badges.new', { defaultValue: 'New' })}
+                          {t('navigation.badges.new')}
                         </Box>
                       ) : undefined
                     }

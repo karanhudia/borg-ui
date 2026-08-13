@@ -57,7 +57,7 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
   const roleBadgeStyles = getRoleBadgeStyles(roleLabel, isDark)
   const companyLabel =
     user?.deployment_type === 'enterprise'
-      ? user.enterprise_name?.trim() || 'Enterprise deployment'
+      ? user.enterprise_name?.trim() || t('navigation.menu.enterpriseDeployment')
       : ''
 
   const isFullAccess = entitlement?.is_full_access && entitlement.status === 'active'
@@ -100,7 +100,7 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
       >
         <IconButton
           color="inherit"
-          aria-label="open drawer"
+          aria-label={t('navigation.menu.openDrawer')}
           edge="start"
           onClick={onToggleMobileMenu}
           sx={{ mr: 2, display: { sm: 'none' } }}
@@ -120,7 +120,7 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
             setAnchorEl(e.currentTarget)
             trackNavigation(EventAction.VIEW, { surface: 'user_menu' })
           }}
-          aria-label="User menu"
+          aria-label={t('navigation.menu.userMenu')}
           aria-haspopup="true"
           aria-expanded={open}
           sx={{

@@ -446,9 +446,7 @@ const Backup: React.FC = () => {
                     onChange={setSelectedBackupPlanId}
                     plans={runnableBackupPlans}
                     emptyMessage={t('backup.planRun.empty')}
-                    placeholder={t('backup.planRun.selectPlaceholder', {
-                      defaultValue: 'Select a backup plan',
-                    })}
+                    placeholder={t('backup.planRun.selectPlaceholder')}
                     disabled={loadingBackupPlans || runnableBackupPlans.length === 0}
                     formatSecondary={(plan) => {
                       const sourceLabel =

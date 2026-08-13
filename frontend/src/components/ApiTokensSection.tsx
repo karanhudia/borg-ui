@@ -17,6 +17,7 @@ import {
 } from '@mui/material'
 import { Plus, Trash2, Key, Copy, Check } from 'lucide-react'
 import { toast } from 'react-hot-toast'
+import { useTranslation } from 'react-i18next'
 import { tokensAPI } from '../services/api'
 import { formatDateShort } from '../utils/dateUtils'
 import EmptyStateCard from './EmptyStateCard'
@@ -30,6 +31,7 @@ interface Token {
 }
 
 export default function ApiTokensSection() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [generateOpen, setGenerateOpen] = useState(false)
   const [tokenName, setTokenName] = useState('')
@@ -51,7 +53,7 @@ export default function ApiTokensSection() {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to generate token')
+      toast.error(error.response?.data?.detail || t('apiTokens.errors.generate'))
     },
   })
 
@@ -59,11 +61,11 @@ export default function ApiTokensSection() {
     mutationFn: (id: number) => tokensAPI.revoke(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['api-tokens'] })
-      toast.success('Token revoked')
+      toast.success(t('apiTokens.revoked'))
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to revoke token')
+      toast.error(error.response?.data?.detail || t('apiTokens.errors.revoke'))
     },
   })
 
@@ -112,10 +114,10 @@ export default function ApiTokensSection() {
         >
           <Box>
             <Typography variant="body2" fontWeight={600}>
-              API Tokens
+              {t('apiTokens.title')}
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              Programmatic access — shown only once when generated
+              {t('apiTokens.description')}
             </Typography>
           </Box>
           <Button
@@ -125,7 +127,7 @@ export default function ApiTokensSection() {
             onClick={() => setGenerateOpen(true)}
             sx={{ width: { xs: '100%', sm: 'auto' } }}
           >
-            Generate
+            {t('common.buttons.generate')}
           </Button>
         </Box>
 
@@ -135,12 +137,18 @@ export default function ApiTokensSection() {
               <CircularProgress size={24} />
             </Box>
           ) : tokens.length === 0 ? (
-            <EmptyStateCard inline icon={<Key size={32} />} title="No tokens yet" />
+            <EmptyStateCard inline icon={<Key size={32} />} title={t('apiTokens.empty')} />
           ) : (
             <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse' }}>
               <Box component="thead">
                 <Box component="tr" sx={{ borderBottom: '1px solid', borderColor: 'divider' }}>
-                  {['Name', 'Prefix', 'Created', 'Last used', ''].map((h) => (
+                  {[
+                    t('common.name'),
+                    t('apiTokens.prefix'),
+                    t('apiTokens.created'),
+                    t('apiTokens.lastUsed'),
+                    '',
+                  ].map((h) => (
                     <Box
                       key={h}
                       component="th"
@@ -188,11 +196,13 @@ export default function ApiTokensSection() {
                     </Box>
                     <Box component="td" sx={{ p: 1.5 }}>
                       <Typography variant="body2" color="text.secondary">
-                        {token.last_used_at ? formatDateShort(token.last_used_at) : 'Never'}
+                        {token.last_used_at
+                          ? formatDateShort(token.last_used_at)
+                          : t('common.never')}
                       </Typography>
                     </Box>
                     <Box component="td" sx={{ p: 1.5, textAlign: 'right' }}>
-                      <Tooltip title="Revoke token">
+                      <Tooltip title={t('apiTokens.revoke')}>
                         <IconButton
                           size="small"
                           color="error"
@@ -218,7 +228,7 @@ export default function ApiTokensSection() {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Generate API Token</DialogTitle>
+        <DialogTitle>{t('apiTokens.generateTitle')}</DialogTitle>
         <form
           onSubmit={(e) => {
             e.preventDefault()
@@ -227,23 +237,27 @@ export default function ApiTokensSection() {
         >
           <DialogContent>
             <TextField
-              label="Token name"
+              label={t('apiTokens.name')}
               value={tokenName}
               onChange={(e) => setTokenName(e.target.value)}
-              placeholder="e.g. CI deploy, Home automation"
+              placeholder={t('apiTokens.namePlaceholder')}
               required
               fullWidth
               autoFocus
             />
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setGenerateOpen(false)}>Cancel</Button>
+            <Button onClick={() => setGenerateOpen(false)}>{t('common.buttons.cancel')}</Button>
             <Button
               type="submit"
               variant="contained"
               disabled={generateMutation.isPending || !tokenName.trim()}
             >
-              {generateMutation.isPending ? <CircularProgress size={16} /> : 'Generate'}
+              {generateMutation.isPending ? (
+                <CircularProgress size={16} />
+              ) : (
+                t('common.buttons.generate')
+              )}
             </Button>
           </DialogActions>
         </form>
@@ -251,10 +265,10 @@ export default function ApiTokensSection() {
 
       {/* One-time token copy dialog */}
       <Dialog open={!!newToken} onClose={handleCloseCopyModal} maxWidth="sm" fullWidth>
-        <DialogTitle>Your new API token</DialogTitle>
+        <DialogTitle>{t('apiTokens.newTokenTitle')}</DialogTitle>
         <DialogContent>
           <Alert severity="warning" sx={{ mb: 2 }}>
-            Copy this token now. You won't be able to see it again.
+            {t('apiTokens.copyWarning')}
           </Alert>
           <Stack direction="row" spacing={1} alignItems="center">
             <TextField
@@ -263,7 +277,7 @@ export default function ApiTokensSection() {
               InputProps={{ readOnly: true, sx: { fontFamily: 'monospace', fontSize: '0.8rem' } }}
               onClick={(e) => (e.target as HTMLInputElement).select()}
             />
-            <Tooltip title={copied ? 'Copied!' : 'Copy to clipboard'}>
+            <Tooltip title={copied ? t('apiTokens.copied') : t('apiTokens.copyToClipboard')}>
               <IconButton onClick={handleCopy} color={copied ? 'success' : 'default'}>
                 {copied ? <Check size={18} /> : <Copy size={18} />}
               </IconButton>
@@ -272,7 +286,7 @@ export default function ApiTokensSection() {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseCopyModal} variant="contained">
-            Done
+            {t('common.buttons.finish')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -284,14 +298,12 @@ export default function ApiTokensSection() {
         maxWidth="xs"
         fullWidth
       >
-        <DialogTitle>Close without copying?</DialogTitle>
+        <DialogTitle>{t('apiTokens.closeWithoutCopyingTitle')}</DialogTitle>
         <DialogContent>
-          <Typography variant="body2">
-            You haven't copied the token. Once you close this dialog, the token cannot be retrieved.
-          </Typography>
+          <Typography variant="body2">{t('apiTokens.closeWithoutCopyingDescription')}</Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCloseConfirmOpen(false)}>Go back</Button>
+          <Button onClick={() => setCloseConfirmOpen(false)}>{t('common.buttons.back')}</Button>
           <Button
             color="error"
             onClick={() => {
@@ -300,7 +312,7 @@ export default function ApiTokensSection() {
               setGenerateOpen(false)
             }}
           >
-            Close anyway
+            {t('apiTokens.closeAnyway')}
           </Button>
         </DialogActions>
       </Dialog>

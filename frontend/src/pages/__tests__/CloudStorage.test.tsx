@@ -292,7 +292,7 @@ describe('CloudStorage', () => {
     expect(await screen.findByText('prod-s3')).toBeInTheDocument()
     const card = screen.getByTestId('cloud-storage-remote-prod-s3')
     expect(within(card).getByText('s3')).toBeInTheDocument()
-    expect(within(card).getAllByText('connected').length).toBeGreaterThan(0)
+    expect(within(card).getAllByText('Connected').length).toBeGreaterThan(0)
     expect(within(card).getByText('2 repositories')).toBeInTheDocument()
     expect(
       screen.getByText('Manage reusable rclone remotes for repository mirrors.')

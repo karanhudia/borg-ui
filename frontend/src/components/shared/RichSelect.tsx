@@ -15,6 +15,7 @@ import type { SystemStyleObject } from '@mui/system'
 import { Search } from 'lucide-react'
 import type { KeyboardEvent, MouseEvent, ReactNode } from 'react'
 import { useId, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import RichSelectRow from './RichSelectRow'
 
 export interface RichSelectOption {
@@ -58,18 +59,21 @@ export default function RichSelect({
   required,
   placeholder,
   searchEnabled = false,
-  searchPlaceholder = 'Search',
-  noResultsText = 'No results found',
+  searchPlaceholder,
+  noResultsText,
   sx,
   selectSx,
   menuPaperSx,
 }: RichSelectProps) {
+  const { t } = useTranslation()
   const generatedId = useId()
   const resolvedLabelId = labelId ?? `${generatedId}-label`
   const rootRef = useRef<HTMLDivElement | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuWidth, setMenuWidth] = useState<number | null>(null)
   const [search, setSearch] = useState('')
+  const resolvedSearchPlaceholder = searchPlaceholder ?? t('common.search')
+  const resolvedNoResultsText = noResultsText ?? t('common.noResults')
   const selectSxList = toSxArray(selectSx)
   const menuPaperSxList = toSxArray(menuPaperSx)
 
@@ -204,7 +208,7 @@ export default function RichSelect({
               fullWidth
               size="small"
               value={search}
-              placeholder={searchPlaceholder}
+              placeholder={resolvedSearchPlaceholder}
               onChange={(event) => setSearch(event.target.value)}
               onClick={handleSearchClick}
               onMouseDown={handleSearchClick}
@@ -259,7 +263,7 @@ export default function RichSelect({
         ) : (
           <MenuItem disabled sx={menuItemSx}>
             <Typography variant="body2" color="text.secondary" noWrap>
-              {noResultsText}
+              {resolvedNoResultsText}
             </Typography>
           </MenuItem>
         )}

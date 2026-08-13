@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { Box, Typography, alpha, useTheme, useMediaQuery } from '@mui/material'
 import { getWizardStepColor } from './wizardStepColors'
 
@@ -19,6 +20,7 @@ export default function WizardStepIndicator({
   currentStep,
   onStepClick,
 }: WizardStepIndicatorProps) {
+  const { t } = useTranslation()
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
@@ -55,7 +57,10 @@ export default function WizardStepIndicator({
           }}
         >
           <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500 }}>
-            {`Step ${currentStep + 1} / ${steps.length}`}
+            {t('wizard.scheduleWizard.stepIndicator.progress', {
+              current: currentStep + 1,
+              total: steps.length,
+            })}
           </Typography>
           <Typography variant="caption" sx={{ color: activeColor, fontWeight: 600 }}>
             {activeStep?.label}
@@ -74,7 +79,10 @@ export default function WizardStepIndicator({
                 onClick={() => onStepClick?.(index)}
                 data-testid={`step-circle-${step.key}`}
                 role="button"
-                aria-label={`Go to step ${index + 1}: ${step.label}`}
+                aria-label={t('wizard.scheduleWizard.stepIndicator.goToStep', {
+                  step: index + 1,
+                  label: step.label,
+                })}
                 sx={{
                   display: 'flex',
                   alignItems: 'center',

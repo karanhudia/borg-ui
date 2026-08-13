@@ -25,9 +25,18 @@
       "clear": "Limpiar",
       "reset": "Restablecer",
       "deploy": "Desplegar",
-      "view": "Ver"
+      "view": "Ver",
+      "collapse": "Contraer",
+      "expand": "Expandir"
     },
     "status": "Estado",
+    "loading": "Cargando...",
+    "search": "Buscar",
+    "noResults": "No se encontraron resultados",
+    "password": {
+      "show": "Mostrar contraseña",
+      "hide": "Ocultar contraseña"
+    },
     "never": "Nunca",
     "na": "N/D",
     "unknown": "Desconocido",
@@ -124,6 +133,7 @@
     "badges": {
       "new": "Nuevo"
     },
+    "comingSoon": "Próximamente",
     "settings": {
       "personal": "Personal",
       "system": "Sistema",
@@ -148,6 +158,9 @@
       "beta": "Beta"
     },
     "menu": {
+      "openDrawer": "Abrir navegación",
+      "userMenu": "Menú de usuario",
+      "enterpriseDeployment": "Implementación Enterprise",
       "accountAndSecurityDesc": "Perfil, contraseña, 2FA, passkeys",
       "appearanceDesc": "Tema",
       "notificationsDesc": "Alertas y preferencias",
@@ -257,7 +270,242 @@
   "managedAgents": {
     "planGate": {
       "message": "Los agentes gestionados requieren Pro o Enterprise. Actualiza para registrar máquinas remotas y ejecutar jobs con agentes."
+    },
+    "agent": "Agente",
+    "page": {
+      "title": "Agentes gestionados",
+      "subtitle": "Máquinas ligeras conectadas a este servidor de Borg UI",
+      "refresh": "Actualizar",
+      "refreshing": "Actualizando agentes",
+      "addAgent": "Añadir agente",
+      "unknownAgent": "Agente desconocido",
+      "never": "Nunca",
+      "none": "Ninguno",
+      "noneReported": "No informado",
+      "notReported": "No informado",
+      "os": "SO",
+      "lastSeen": "Visto por última vez",
+      "agentVersion": "Versión del agente",
+      "borg": "Borg",
+      "capabilities": "Capacidades",
+      "emptyAgents": "No hay agentes registrados.",
+      "emptyJobs": "Aún no hay trabajos de agente.",
+      "emptyTokens": "No se han creado tokens de registro.",
+      "tabs": { "agents": "Agentes", "jobs": "Trabajos", "tokens": "Tokens de registro" },
+      "toasts": {
+        "tokenCreated": "Token de registro creado",
+        "tokenRevoked": "Token de registro revocado",
+        "agentRevoked": "Agente revocado",
+        "agentDeleted": "Agente eliminado",
+        "cancellationRequested": "Cancelación solicitada",
+        "copied": "Copiado"
+      },
+      "errors": {
+        "revokeToken": "No se pudo revocar el token de registro",
+        "revokeAgent": "No se pudo revocar el agente",
+        "deleteAgent": "No se pudo eliminar el agente",
+        "cancelJob": "No se pudo cancelar el trabajo",
+        "runDiagnostics": "No se pudieron ejecutar los diagnósticos"
+      },
+      "table": {
+        "job": "Trabajo",
+        "status": "Estado",
+        "progress": "Progreso",
+        "updated": "Actualizado",
+        "actions": "Acciones",
+        "name": "Nombre",
+        "prefix": "Prefijo",
+        "expires": "Caduca"
+      },
+      "actions": {
+        "runDiagnostics": "Ejecutar diagnósticos",
+        "viewAgentLogs": "Ver registros del agente",
+        "reinstallAgent": "Reinstalar agente",
+        "revokeAccess": "Revocar acceso",
+        "revokeAgent": "Revocar agente",
+        "deleteAgent": "Eliminar agente",
+        "viewLogs": "Ver registros",
+        "cancelJob": "Cancelar trabajo",
+        "revokeToken": "Revocar token"
+      },
+      "noBorg": {
+        "title": "No se informó de un binario Borg utilizable",
+        "description": "Instale Borg en este agente o genere de nuevo el comando de configuración con la instalación de Borg activada."
+      },
+      "deleteDialog": {
+        "title": "Eliminar agente",
+        "confirm": "Eliminar agente",
+        "description": "Al eliminarlo, se quita de la lista de flota. El servicio local puede seguir ejecutándose hasta eliminarse en el cliente."
+      },
+      "reinstallDialog": {
+        "title": "Reinstalar agente",
+        "copyCommand": "Copiar comando de reinstalación",
+        "description": "Ejecute esto en la máquina registrada para actualizar el paquete del agente Borg UI y reiniciar el servicio systemd. No se requiere token ni paso de registro.",
+        "configPreserved": "El script conserva la configuración existente del agente en"
+      },
+      "logs": {
+        "agent": "Registros del agente",
+        "agentTitle": "Registros del agente - {{name}}",
+        "job": "Trabajo de agente",
+        "jobTitle": "Registros del trabajo de agente - Trabajo #{{id}}"
+      },
+      "diagnostics": {
+        "title": "Diagnósticos del agente",
+        "running": "Ejecutando diagnósticos",
+        "runCheck": "Ejecutar comprobación",
+        "description": "Verifique la sesión saliente del agente y, opcionalmente, pruebe un destino TCP desde el host del agente.",
+        "invalidPort": "Introduzca un puerto TCP entre 1 y 65535.",
+        "invalidTimeout": "Introduzca un tiempo de espera entre 0,5 y 10 segundos.",
+        "advancedSummary": "Avanzado: probar otro servicio",
+        "advancedDescription": "Comprueba si este agente puede alcanzar un servicio independiente. Déjelo vacío para los diagnósticos normales.",
+        "serviceHost": "Host del servicio",
+        "serviceHostHelper": "Servicio opcional para probar desde este agente",
+        "servicePort": "Puerto del servicio",
+        "timeout": "Tiempo de espera",
+        "seconds": "Segundos",
+        "timeoutRange": "0,5-10 segundos",
+        "sessionHealthy": "Sesión correcta",
+        "agentOffline": "Agente sin conexión",
+        "timedOut": "Tiempo agotado",
+        "sessionFailed": "Sesión fallida",
+        "tcpReachable": "TCP accesible",
+        "tcpFailed": "TCP falló",
+        "emptyResult": "Ejecute una comprobación para verificar la sesión activa del agente. Añada un host y un puerto para probar la conectividad TCP desde el host del agente.",
+        "unavailable": "Los diagnósticos no están disponibles en esta vista de historia o prueba."
+      }
+    },
+    "installCommand": {
+      "title": "Comando de instalación",
+      "copy": "Copiar comando de instalación",
+      "description": "Ejecuta el comando en el equipo Linux. El instalador registra el agente y habilita el servicio systemd de forma predeterminada.",
+      "connected": "{{name}} conectado",
+      "waiting": "Esperando a que el agente se conecte…",
+      "connectedDescription": "Puedes cerrar este diálogo; el agente seguirá funcionando.",
+      "waitingDescription": "Esta página se actualizará automáticamente cuando termine la instalación."
+    },
+    "setupGuide": {
+      "summary": "Ejecuta esto en un equipo remoto para registrarlo con este servidor Borg UI.",
+      "help": "Ayuda de configuración",
+      "title": "Ayuda de configuración del agente",
+      "copySetupCommand": "Copiar comando de configuración",
+      "copyInstallCommands": "Copiar comandos de instalación",
+      "copyStatusCommand": "Copiar comando de estado",
+      "copySystemdCommands": "Copiar comandos systemd",
+      "steps": {
+        "install": {
+          "title": "1. Ejecutar el instalador de Linux",
+          "description": "Ejecuta esto en el equipo Linux que posee los archivos que Borg debe respaldar. El instalador instala dependencias, registra el agente y habilita el servicio systemd. De forma predeterminada, el servicio se ejecuta como el usuario que invocó sudo, por lo que las rutas del repositorio y del origen deben ser accesibles para ese usuario."
+        },
+        "server": {
+          "title": "2. URL del servidor y token",
+          "description": "La URL del servidor debe ser accesible desde el equipo cliente. localhost solo funciona cuando el agente y Borg UI están en el mismo equipo. Los clientes remotos deben usar un nombre de host, una dirección IP o una URL HTTPS de Borg UI accesible. Los tokens de inscripción son credenciales temporales de configuración; el agente inscrito conserva su propia credencial hasta que se revoca o elimina."
+        },
+        "troubleshooting": {
+          "title": "3. Solución manual de problemas",
+          "descriptionPrefix": "La instalación manual sigue siendo útil para solucionar problemas. El código fuente del agente está en el",
+          "link": "directorio del agente de Borg UI"
+        },
+        "service": {
+          "title": "4. Comprobaciones del servicio",
+          "description": "El instalador habilita systemd de forma predeterminada para que el agente sobreviva a los reinicios. Usa estos comandos solo al inspeccionar o reparar una instalación manual."
+        }
+      }
+    },
+    "add": {
+      "title": "Añadir agente",
+      "steps": { "target": "Destino", "details": "Detalles", "install": "Instalar" },
+      "errors": { "createToken": "No se pudo crear el token de inscripción" },
+      "platform": "Plataforma",
+      "platforms": { "linux": "Linux", "macos": "macOS", "windows": "Windows" },
+      "selected": "Seleccionado",
+      "comingLater": "Próximamente",
+      "serverUrl": "URL del servidor",
+      "localhostWarning": "localhost solo funciona cuando el agente y Borg UI se ejecutan en el mismo equipo. Los equipos remotos necesitan un nombre de host, una dirección IP o una URL HTTPS accesible.",
+      "serverUrlHelper": "Esta URL debe ser accesible desde el equipo del agente.",
+      "agentName": "Nombre del agente",
+      "defaultPath": "Ruta predeterminada",
+      "defaultPathHelper": "Directorio inicial para explorar los archivos de este agente.",
+      "tokenExpiry": "Caducidad del token",
+      "expiry": {
+        "1h": "1 hora",
+        "24h": "24 horas",
+        "7d": "7 días",
+        "30d": "30 días",
+        "never": "Nunca"
+      },
+      "serviceUser": "Usuario del servicio",
+      "serviceUsers": {
+        "current": {
+          "label": "Usuario de instalación",
+          "description": "El agente puede acceder a los mismos archivos que el usuario que ejecuta el instalador."
+        },
+        "dedicated": {
+          "label": "Usuario dedicado borg-ui-agent",
+          "description": "Usa una cuenta independiente con pocos privilegios para un aislamiento más estricto."
+        },
+        "root": {
+          "label": "Root",
+          "description": "Úsalo solo cuando el agente deba respaldar rutas propiedad de root."
+        }
+      },
+      "rootWarning": "El modo root permite que este agente ejecute operaciones de Borg con privilegios de root. Úsalo solo para rutas propiedad de root.",
+      "borgInstallation": "Instalación de Borg",
+      "borgOptions": {
+        "borg1": {
+          "label": "Borg 1.x",
+          "description": "Predeterminado. Instala o verifica Borg 1 como 'borg'."
+        },
+        "borg2": {
+          "label": "Solo Borg 2.x beta",
+          "description": "Opción experimental avanzada. Instala o verifica Borg 2 como 'borg2'."
+        },
+        "both": {
+          "label": "Borg 1.x y Borg 2.x beta",
+          "description": "Opción experimental avanzada. Mantiene Borg 1 como 'borg' y Borg 2 como 'borg2'."
+        },
+        "skip": {
+          "label": "Omitir instalación de Borg",
+          "description": "Usa esta opción cuando Borg se gestione por separado en el equipo del agente."
+        }
+      },
+      "generateInstallCommand": "Generar comando de instalación"
     }
+  },
+  "apiTokens": {
+    "title": "Tokens de API",
+    "description": "Acceso programático, se muestra solo una vez al generarlo",
+    "empty": "Aún no hay tokens",
+    "prefix": "Prefijo",
+    "created": "Creado",
+    "lastUsed": "Último uso",
+    "revoke": "Revocar token",
+    "revoked": "Token revocado",
+    "name": "Nombre del token",
+    "namePlaceholder": "p. ej. despliegue CI, automatización del hogar",
+    "generateTitle": "Generar token de API",
+    "newTokenTitle": "Tu nuevo token de API",
+    "copyWarning": "Copia este token ahora. No podrás volver a verlo.",
+    "copied": "¡Copiado!",
+    "copyToClipboard": "Copiar al portapapeles",
+    "closeWithoutCopyingTitle": "¿Cerrar sin copiar?",
+    "closeWithoutCopyingDescription": "No has copiado el token. Una vez que cierres este diálogo, no podrá recuperarse.",
+    "closeAnyway": "Cerrar de todos modos",
+    "errors": { "generate": "No se pudo generar el token", "revoke": "No se pudo revocar el token" }
+  },
+  "accountPassword": {
+    "title": "Cambiar contraseña",
+    "current": "Contraseña actual",
+    "new": "Nueva contraseña",
+    "confirm": "Confirmar contraseña",
+    "mismatch": "Las contraseñas no coinciden",
+    "saving": "Guardando",
+    "update": "Actualizar contraseña"
+  },
+  "mountSuccess": {
+    "title": "Archivo montado",
+    "accessViaDocker": "Acceso mediante Docker:",
+    "copied": "¡Copiado!",
+    "copyCommand": "Copiar comando"
   },
   "cloudStorage": {
     "title": "Almacenamiento cloud",
@@ -286,6 +534,9 @@
     "storagePercentUsed": "{{value}}% usado",
     "noStorageInfo": "Sin información de almacenamiento",
     "configSourceLabel": "Configuración",
+    "configSource": {
+      "managed": "Gestionada"
+    },
     "managedConfig": "rclone.conf gestionado por el servidor",
     "editRemote": "Editar remoto",
     "deleteRemote": "Eliminar remoto",
@@ -724,7 +975,10 @@
       "runCompact": "Compactar",
       "runCompactTip": "El repositorio se compacta después de cada copia",
       "runCheck": "Comprobar",
-      "runCheckTip": "La comprobación de integridad se ejecuta después de cada copia (además de cualquier comprobación programada abajo)"
+      "runCheckTip": "La comprobación de integridad se ejecuta después de cada copia (además de cualquier comprobación programada abajo)",
+      "collapse": "Contraer",
+      "expand": "Expandir",
+      "togglePlan": "{{action}} {{name}}"
     },
     "noRepositories": "Necesitas crear al menos un repositorio antes de programar copias de seguridad.",
     "legacyBackupSchedulesTitle": "Automatizaciones de copia de seguridad",
@@ -751,6 +1005,18 @@
       "completed": "Mantenimiento completado"
     },
     "card": {
+      "serviceTypes": {
+        "webhook": "Webhook",
+        "slack": "Slack",
+        "discord": "Discord",
+        "telegram": "Telegram",
+        "email": "Correo electrónico",
+        "teams": "Teams",
+        "pushover": "Pushover",
+        "ntfy": "Ntfy",
+        "gotify": "Gotify",
+        "matrix": "Matrix"
+      },
       "stats": {
         "schedule": "Schedule",
         "repository": "Repository",
@@ -833,6 +1099,18 @@
     "title": "Planes de copia",
     "subtitle": "Define orígenes, ajustes, programaciones y los repositorios donde escribe cada copia.",
     "loading": "Cargando planes de copia...",
+    "select": {
+      "source": {
+        "local": "Fuente local",
+        "remote": "Fuente remota",
+        "agent": "Agente gestionado",
+        "mixed": "Varias fuentes"
+      },
+      "repositories_one": "{{count}} repositorio",
+      "repositories_other": "{{count}} repositorios",
+      "scheduled": "Programado",
+      "manual": "Manual"
+    },
     "runTooltipPro": "Este plan usa varios repositorios o ejecución en paralelo. Edítalo o actualiza a Pro para ejecutarlo.",
     "runTooltipProFeature": "Este plan usa {{feature}}, que requiere Pro. Edítalo o actualiza a Pro para ejecutarlo.",
     "runTooltipProFeatures": "Este plan usa funciones solo Pro: {{features}}. Edítalo o actualiza a Pro para ejecutarlo.",
@@ -1460,6 +1738,7 @@
       "encryption": "Cifrado"
     },
     "observeOnly": "Solo observación",
+    "deleteConfirmation": "¿Seguro que quieres eliminar el repositorio \"{{name}}\"?",
     "buttons": {
       "info": "Info",
       "check": "Comprobar",
@@ -1943,6 +2222,7 @@
     },
     "systemKey": {
       "title": "Clave SSH del sistema",
+      "defaultDescription": "Clave SSH del sistema para todas las conexiones remotas",
       "noKey": "No se encontró clave SSH del sistema. Genera una nueva o importa una existente.",
       "generate": "Generar clave SSH del sistema",
       "import": "Importar clave existente",
@@ -3497,6 +3777,8 @@
     "noScheduledChecks": "Sin comprobaciones programadas",
     "noScheduledChecksDesc": "Configura comprobaciones automáticas del repositorio para garantizar la integridad de los datos",
     "needRepository": "Necesitas crear al menos un repositorio antes de programar comprobaciones.",
+    "repositoryNotFound": "Repositorio no encontrado",
+    "status": { "cancelled": "Cancelado", "running": "En ejecución" },
     "historyTitle": "Historial de comprobaciones programadas",
     "historyShowing": "Mostrando {{filtered}} de {{total}} trabajos de comprobación programada",
     "historyShowingFiltered": "Mostrando {{filtered}} de {{total}} trabajos de comprobación programada (filtrados)",
@@ -3594,6 +3876,10 @@
     "canaryModeHint": "El modo canario añade un pequeño archivo canario de Borg UI a las copias de seguridad futuras mientras esté activado, y luego lo verifica desde el archivo más reciente. Funciona después de la próxima copia de seguridad.",
     "canaryUnavailableObserveOnly": "El modo canario no está disponible para repositorios solo de observación porque Borg UI no crea sus copias. Usa rutas de prueba seleccionadas o una prueba de archivo completo.",
     "noBackupYet": "Aún no hay copia",
+    "timeLabels": {
+      "storedUtc": "Guardado en UTC",
+      "localTimezone": "Tu zona horaria local"
+    },
     "probeModeHint": "El modo de rutas de prueba restaura archivos reales que tú eliges. Úsalo para comprobaciones más profundas de rutas críticas sin extraer el archivo completo.",
     "fullArchiveWarning": "Las pruebas de archivo completo pueden ser costosas en repositorios grandes. Úsalas con moderación y solo cuando tengas almacenamiento temporal y ventana de mantenimiento suficientes."
   },
@@ -3687,6 +3973,7 @@
       "remoteSshfsNote": "Los directorios remotos se montan mediante SSHFS preservando sus rutas originales. Los patrones de exclusión funcionan igual que con fuentes locales (ej., */var/cache/*)."
     },
     "dataSource": {
+      "note": "Nota:",
       "title": "¿Dónde están los datos que deseas respaldar?",
       "localDescription": "Respaldar datos de este servidor (sistemas de archivos locales o montados)",
       "agentLocalDescription": "Respaldar rutas del sistema de archivos del agente gestionado seleccionado",
@@ -3705,6 +3992,9 @@
       "remoteSshNote": "El servidor Borg UI se conectará por SSH a la máquina remota para explorar y respaldar los directorios seleccionados. Asegúrate de que la conexión SSH esté correctamente configurada con los permisos necesarios."
     },
     "location": {
+      "borgVersion": "Versión de Borg",
+      "beta": "Beta",
+      "borg2": "Borg 2",
       "repositoryNameLabel": "Nombre del repositorio",
       "repositoryNameHelper": "Un nombre descriptivo para identificar este repositorio",
       "repositoryModeLabel": "Modo del repositorio",
@@ -3750,6 +4040,14 @@
       "rcloneOAuthBorgUiHelper": "Borg UI recibe el callback del proveedor en el servidor. Cuando el proveedor indique que la autorización terminó, vuelve aquí; este diálogo comprobará automáticamente.",
       "rcloneOAuthLoopbackHelper": "rclone usará su callback loopback local. Úsalo solo cuando el navegador pueda llegar al mismo host que el proceso rclone.",
       "rcloneOAuthSetupMissing": "El OAuth gestionado por Borg UI no está configurado para este proveedor.",
+      "rcloneProviderSearchPlaceholder": "Buscar proveedores",
+      "rcloneProviderSearchNoResults": "No se encontraron proveedores",
+      "rcloneDefaultProviders": {
+        "localLabel": "Sistema de archivos local",
+        "localDescription": "Remoto de ruta local.",
+        "customLabel": "Backend rclone personalizado",
+        "customDescription": "Configuración manual para cualquier backend de rclone."
+      },
       "rcloneOAuthCallbackUrl": "Callback de Borg UI: {{url}}",
       "rcloneOAuthModeBorgUi": "Callback de Borg UI",
       "rcloneOAuthModeLoopback": "loopback de rclone",
@@ -3867,6 +4165,8 @@
       "useFolder": "Usar carpeta"
     },
     "restoreDestination": {
+      "port": "Puerto {{port}}",
+      "connected": "Conectado",
       "title": "¿Dónde deben restaurarse los archivos?",
       "subtitle": "Selecciona el destino y la ubicación para los archivos restaurados",
       "borgUiServerDesc": "Restaurar en el almacenamiento local de este servidor",
@@ -4002,6 +4302,9 @@
       "compression": "Compresión",
       "customFlags": "Indicadores personalizados",
       "repositoryInitialized": "El repositorio será inicializado",
+      "readyToInitialize": "Listo para inicializar",
+      "hidePassphrase": "Ocultar frase de contraseña",
+      "showPassphrase": "Mostrar frase de contraseña",
       "repositoryImportNote": "El repositorio será verificado antes de importar. Asegúrate de que la frase de contraseña sea correcta.",
       "repositoryEditNote": "Los cambios se guardarán en la configuración del repositorio."
     },
@@ -4022,6 +4325,41 @@
       "passphrasePlaceholderCreate": "Introduce la frase de contraseña",
       "passphraseHelperEdit": "Opcional - dejar en blanco para mantener la última frase guardada",
       "passphraseHelperCreate": "¡Guárdala de forma segura - no podrás acceder a las copias de seguridad sin ella!",
+      "options": {
+        "repokey": {
+          "label": "Clave del repositorio",
+          "description": "Clave almacenada en el repositorio (recomendado)"
+        },
+        "repokey-blake2": {
+          "label": "Clave del repositorio (BLAKE2)",
+          "description": "Variante de hash más rápida"
+        },
+        "keyfile": {
+          "label": "Archivo de clave",
+          "description": "Clave almacenada en un archivo separado"
+        },
+        "keyfile-blake2": {
+          "label": "Archivo de clave (BLAKE2)",
+          "description": "Archivo de clave con hash más rápido"
+        },
+        "repokey-aes-ocb": {
+          "label": "Clave del repositorio (AES-OCB)",
+          "description": "Predeterminado para Borg 2 · recomendado"
+        },
+        "repokey-chacha20-poly1305": {
+          "label": "Clave del repositorio (ChaCha20)",
+          "description": "Cifrado AEAD alternativo"
+        },
+        "keyfile-aes-ocb": {
+          "label": "Archivo de clave (AES-OCB)",
+          "description": "Clave almacenada en un archivo separado"
+        },
+        "keyfile-chacha20-poly1305": {
+          "label": "Archivo de clave (ChaCha20)",
+          "description": "Archivo de clave con ChaCha20"
+        },
+        "none": { "label": "Ninguna", "description": "Sin cifrado (no recomendado)" }
+      },
       "borgKeyfileTitle": "Archivo de clave Borg (Opcional)",
       "borgKeyfileDesc": "Los archivos de clave Borg se almacenan típicamente sin extensión de archivo en ~/.config/borg/keys/",
       "uploadFile": "Subir archivo",
@@ -4045,6 +4383,7 @@
         "selectAtLeastOne": "Selecciona al menos un repositorio para continuar."
       },
       "maintenance": {
+        "caution": "Precaución:",
         "title": "Opciones de mantenimiento",
         "subtitle": "Ejecutar poda y compactación tras las copias de seguridad para gestionar el espacio en disco.",
         "info": "La poda elimina archivos antiguos. La compactación recupera espacio en disco.",
@@ -4055,6 +4394,10 @@
         "compactAfterPruneDesc": "Recuperar espacio en disco liberando segmentos",
         "compactInfo": "La compactación recupera espacio en disco tras la poda. Puede llevar tiempo en repositorios grandes."
       },
+      "stepIndicator": {
+        "progress": "Paso {{current}} / {{total}}",
+        "goToStep": "Ir al paso {{step}}: {{label}}"
+      },
       "config": {
         "scheduleLabel": "Programación (Expresión Cron)",
         "scheduleHelper": "Haz clic en el icono del reloj para usar el constructor visual.",
@@ -4063,6 +4406,8 @@
       },
       "review": {
         "readyToCreate": "¡Listo para crear la programación!",
+        "ready": "Listo",
+        "keep": "Conservar:",
         "reviewAndConfirm": "Revisa y confirma a continuación.",
         "jobSummary": "Resumen del trabajo",
         "name": "Nombre",
@@ -4436,11 +4781,18 @@
     "creating": "Creando...",
     "create": "Crear",
     "failedToLoad": "Error al cargar el directorio",
+    "selectAgentFirst": "Selecciona un agente antes de explorar.",
+    "selectRemoteFirst": "Selecciona primero un remoto de rclone.",
+    "createFailed": "No se pudo crear la carpeta",
     "chips": {
       "remote": "Remoto",
       "host": "Host",
       "borg": "Borg"
     }
+  },
+  "repoSelect": {
+    "label": "Repositorio",
+    "placeholder": "Selecciona un repositorio"
   },
   "cronExpressionInput": {
     "label": "Programación"
@@ -4452,6 +4804,17 @@
     "selectPath": "Seleccionar ruta"
   },
   "cache": {
+    "redis": "Redis",
+    "inMemory": "En memoria",
+    "connection": "Conexión",
+    "externalRedis": "Redis externo",
+    "localDocker": "Docker local",
+    "durationDays_one": "{{count}} día",
+    "durationDays_other": "{{count}} días",
+    "durationHours_one": "{{count}} hora",
+    "durationHours_other": "{{count}} horas",
+    "durationMinutes_one": "{{count}} minuto",
+    "durationMinutes_other": "{{count}} minutos",
     "subtitle": "Monitoriza y configura el sistema de caché de archivos basado en Redis para una navegación más rápida",
     "cacheStatus": "Estado de la caché",
     "cachedArchives": "Entidades en caché",
@@ -4570,6 +4933,8 @@
     },
     "confirmRemove": "¿Eliminar este script del repositorio?",
     "parametersConfigured": "{{count}} parámetro(s) configurado(s)",
+    "parameterCount_one": "{{count}} parámetro",
+    "parameterCount_other": "{{count}} parámetros",
     "tooltips": {
       "testScript": "Probar este script",
       "parametersOutOfSync": "Los parámetros necesitan atención - la definición del script ha cambiado",
@@ -4588,7 +4953,13 @@
       "continueOnErrorHelperText": "Anular predeterminado: Si está marcado, la copia de seguridad continuará aunque falle este script.",
       "cancel": "Cancelar",
       "assignScript": "Asignar script",
-      "onFailureLabel": "Si este script falla:"
+      "onFailureLabel": "Si este script falla:",
+      "inlineScriptReplacementWarning": "Añadir un script de la biblioteca sustituirá el script integrado actual de este hook."
+    },
+    "testDialog": {
+      "title": "Prueba: {{scriptName}}",
+      "exitCode": "Salida: {{code}}",
+      "duration": "{{seconds}}s"
     },
     "parametersDialog": {
       "title": "Configurar parámetros del script: {{scriptName}}",
@@ -5289,6 +5660,8 @@
     "learnMore": "See what's included →"
   },
   "announcements": {
+    "latestRelease": "Última versión",
+    "close": "Cerrar anuncio",
     "highlights": "What's new",
     "viewDetails": "View details",
     "remindLater": "Remind me later",

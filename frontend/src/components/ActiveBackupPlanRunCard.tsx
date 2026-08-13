@@ -48,8 +48,8 @@ function isActive(status?: string): boolean {
   return status === 'pending' || status === 'running'
 }
 
-function getRepositoryLabel(runRepository: BackupPlanRunRepository): string {
-  return runRepository.repository?.name || runRepository.backup_job?.repository || 'Repository'
+function getRepositoryLabel(runRepository: BackupPlanRunRepository, fallback: string): string {
+  return runRepository.repository?.name || runRepository.backup_job?.repository || fallback
 }
 
 function aggregateStats(run: BackupPlanRun) {
@@ -195,13 +195,13 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
   visibleStats.push({
     key: 'speed',
     label: t('backup.runningJobs.progress.speed'),
-    value: stats.hasSpeed ? `${stats.speed.toFixed(2)} MB/s` : 'N/A',
+    value: stats.hasSpeed ? `${stats.speed.toFixed(2)} MB/s` : t('common.na'),
     valueColor: undefined,
   })
   visibleStats.push({
     key: 'eta',
     label: t('backup.runningJobs.progress.eta'),
-    value: stats.hasEta ? formatDurationSeconds(stats.eta) : 'N/A',
+    value: stats.hasEta ? formatDurationSeconds(stats.eta) : t('common.na'),
     valueColor: undefined,
   })
 
@@ -553,7 +553,7 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
                     noWrap
                     sx={{ flex: 1, minWidth: 0 }}
                   >
-                    {getRepositoryLabel(repoRun)}
+                    {getRepositoryLabel(repoRun, t('backupPlans.status.repositoryFallback'))}
                   </Typography>
                   <Typography
                     variant="caption"

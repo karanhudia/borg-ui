@@ -48,7 +48,7 @@ const UpcomingJobsTable: React.FC<UpcomingJobsTableProps> = ({
       return t('upcomingJobs.repositories', { count: job.repository_ids.length })
     }
     if (job.repository_id) {
-      return repositories.find((r) => r.id === job.repository_id)?.name || 'Unknown'
+      return repositories.find((r) => r.id === job.repository_id)?.name || t('common.unknown')
     }
     return getRepositoryName(job.repository || '')
   }
@@ -87,9 +87,7 @@ const UpcomingJobsTable: React.FC<UpcomingJobsTableProps> = ({
           const isPlan = job.type === 'backup_plan'
           const accent = isPlan ? ACCENT_PLAN : ACCENT_SCHEDULE
           const isClickable = isPlan && Boolean(onPlanClick)
-          const typeLabel = isPlan
-            ? t('upcomingJobs.types.plan', { defaultValue: 'Plan' })
-            : t('upcomingJobs.types.schedule', { defaultValue: 'Schedule' })
+          const typeLabel = isPlan ? t('upcomingJobs.types.plan') : t('upcomingJobs.types.schedule')
           const TypeIcon = isPlan ? ListChecks : CalendarClock
 
           const rowContent = (

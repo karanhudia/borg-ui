@@ -21,6 +21,7 @@ vi.mock('react-i18next', () => ({
         'backup.runningJobs.progress.initializing': 'Initializing',
         'backup.runningJobs.progress.processing': 'Processing',
         'backup.runningJobs.progress.finalizing': 'Finalizing',
+        'common.na': 'N/A',
       }
       if (key === 'backup.runningJobs.jobTitle') return `Backup Job ${opts?.id}`
       return map[key] ?? key
