@@ -1,17 +1,17 @@
 {
-  "generatedAt": "2026-08-13T05:35:09.610Z",
+  "generatedAt": "2026-08-13T06:01:17.469Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #804 visual report",
-    "commitSha": "c037573868d3",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/31670494999"
+    "commitSha": "5d2bfee58b5d",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/31671986671"
   },
   "totals": {
     "baseline": 452,
-    "actual": 456,
+    "actual": 458,
     "compared": 452,
     "changed": 12,
-    "added": 4,
+    "added": 6,
     "removed": 0,
     "unchanged": 440
   },
@@ -249,6 +249,14 @@
     {
       "fileName": "components-backupplanrunspanel--skipped-availability-check.png",
       "actualPath": "images/actual/components-backupplanrunspanel--skipped-availability-check.png"
+    },
+    {
+      "fileName": "shared-schedulepicker--availability-trigger--mobile.png",
+      "actualPath": "images/actual/shared-schedulepicker--availability-trigger--mobile.png"
+    },
+    {
+      "fileName": "shared-schedulepicker--availability-trigger.png",
+      "actualPath": "images/actual/shared-schedulepicker--availability-trigger.png"
     }
   ],
   "removed": [],
