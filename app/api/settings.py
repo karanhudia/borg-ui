@@ -11,6 +11,7 @@ from app.database.models import User, Repository, SystemSettings
 from app.services import backup_monitoring_service
 from app.core.authorization import authorize_request
 from app.core.security import (
+    BcryptPassword,
     encrypt_secret,
     get_current_user,
     get_password_hash,
@@ -167,7 +168,7 @@ from pydantic import BaseModel
 
 class UserCreate(BaseModel):
     username: str
-    password: str
+    password: BcryptPassword
     email: Optional[str] = None
     role: str = "viewer"
     full_name: Optional[str] = None
@@ -185,11 +186,11 @@ class UserUpdate(BaseModel):
 
 class PasswordChange(BaseModel):
     current_password: str
-    new_password: str
+    new_password: BcryptPassword
 
 
 class PasswordReset(BaseModel):
-    new_password: str
+    new_password: BcryptPassword
 
 
 class UserPreferencesUpdate(BaseModel):

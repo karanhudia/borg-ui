@@ -53,6 +53,7 @@ from app.core.oidc import (
 )
 from app.core.security import (
     authenticate_user,
+    BcryptPassword,
     create_access_token,
     create_login_challenge_token,
     create_totp_setup_token,
@@ -151,7 +152,7 @@ class OidcLinkStartResponse(BaseModel):
 
 class UserCreate(BaseModel):
     username: str
-    password: str
+    password: BcryptPassword
     email: Optional[str] = None
     is_admin: bool = False
     role: Optional[str] = None
@@ -166,7 +167,7 @@ class UserUpdate(BaseModel):
 
 class PasswordChange(BaseModel):
     current_password: str
-    new_password: str
+    new_password: BcryptPassword
 
 
 class PasswordSetupCompleteResponse(BaseModel):
