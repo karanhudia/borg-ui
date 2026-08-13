@@ -19,7 +19,7 @@ from app.core.security import (
 AT_LIMIT = "a" * BCRYPT_MAX_PASSWORD_BYTES  # 72 ASCII bytes
 OVER_LIMIT = "a" * (BCRYPT_MAX_PASSWORD_BYTES + 1)  # 73 bytes
 MULTIBYTE_AT_LIMIT = "é" * (BCRYPT_MAX_PASSWORD_BYTES // 2)  # 36 chars = 72 bytes
-MULTIBYTE_OVER_LIMIT = "é" * (BCRYPT_MAX_PASSWORD_BYTES // 2) + "a"  # 73 bytes
+MULTIBYTE_OVER_LIMIT = "é" * (BCRYPT_MAX_PASSWORD_BYTES // 2 + 1)  # 37 chars = 74 bytes
 
 
 def test_validator_accepts_at_limit():
