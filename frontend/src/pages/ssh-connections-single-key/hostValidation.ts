@@ -1,6 +1,5 @@
 export type HostValidationResult =
-  | { ok: true; host: string }
-  | { ok: false; errorKey: 'sshConnections.validation.hostBareOnly' }
+  { ok: true; host: string } | { ok: false; errorKey: 'sshConnections.validation.hostBareOnly' }
 
 const HOST_ERROR_KEY = 'sshConnections.validation.hostBareOnly' as const
 const DNS_LABEL_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/
