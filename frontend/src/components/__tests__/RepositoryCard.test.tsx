@@ -476,10 +476,12 @@ describe('RepositoryCard', () => {
         />
       )
 
-      expect(screen.queryByRole('button', { name: /Legacy Backup/i })).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: /Run backup automation/i })
+      ).not.toBeInTheDocument()
     })
 
-    it('shows legacy backup button for full mode repositories with source paths', () => {
+    it('shows backup automations button for full mode repositories with source paths', () => {
       renderWithProviders(
         <RepositoryCard
           repository={mockRepository}
@@ -490,7 +492,7 @@ describe('RepositoryCard', () => {
         />
       )
 
-      expect(screen.getByRole('button', { name: /Legacy Backup/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Run backup automation/i })).toBeInTheDocument()
     })
 
     it('shows Create Backup Plan as the primary repository backup action', () => {
@@ -505,7 +507,9 @@ describe('RepositoryCard', () => {
       )
 
       expect(screen.getByRole('button', { name: /Create Backup Plan/i })).toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: /Legacy Backup/i })).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: /Run backup automation/i })
+      ).not.toBeInTheDocument()
     })
 
     it('hides Compact and Prune buttons for observe mode but still allows Delete', () => {
@@ -720,7 +724,7 @@ describe('RepositoryCard', () => {
       expect(mockCallbacks.onBreakLock).toHaveBeenCalledTimes(1)
     })
 
-    it('calls onBackupNow and tracks event when Legacy Backup button is clicked', () => {
+    it('calls onBackupNow and tracks event when Run backup automation is clicked', () => {
       renderWithProviders(
         <RepositoryCard
           repository={mockRepository}
@@ -731,7 +735,7 @@ describe('RepositoryCard', () => {
         />
       )
 
-      fireEvent.click(screen.getByRole('button', { name: /Legacy Backup/i }))
+      fireEvent.click(screen.getByRole('button', { name: /Run backup automation/i }))
       expect(mockCallbacks.onBackupNow).toHaveBeenCalledTimes(1)
       expect(mockAnalyticsTracking.trackBackup).toHaveBeenCalledWith(
         'Start',
@@ -882,7 +886,7 @@ describe('RepositoryCard', () => {
       expect(screen.getByRole('button', { name: /Check/i })).toBeDisabled()
       expect(screen.getByRole('button', { name: /Compact/i })).toBeDisabled()
       expect(screen.getByRole('button', { name: /Prune/i })).toBeDisabled()
-      expect(screen.getByRole('button', { name: /Legacy Backup/i })).toBeDisabled()
+      expect(screen.getByRole('button', { name: /Run backup automation/i })).toBeDisabled()
       expect(screen.getByRole('button', { name: /Create Backup Plan/i })).toBeDisabled()
       expect(screen.getByRole('button', { name: /View Archives/i })).toBeDisabled()
     })
@@ -1366,7 +1370,7 @@ describe('RepositoryCard', () => {
       expect(screen.getByRole('button', { name: /Check/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Compact/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Prune/i })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /Legacy Backup/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Run backup automation/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Create Backup Plan/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /View Archives/i })).toBeInTheDocument()
 
