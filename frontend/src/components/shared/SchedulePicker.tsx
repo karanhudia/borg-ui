@@ -211,7 +211,7 @@ const SchedulePicker: React.FC<SchedulePickerProps> = ({
         </Stack>
       )}
 
-      {nextRunTimes && nextRunTimes.length > 0 && (
+      {scheduleMode === 'cron' && nextRunTimes && nextRunTimes.length > 0 && (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, pl: 0.25 }}>
           <Tooltip
             title={

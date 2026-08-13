@@ -794,7 +794,7 @@ export const BackupJobsTable = <T extends Job = Job>({
       onClick: onRunNow,
       color: 'success',
       tooltip: t('backupJobsTable.actions.runNow'),
-      show: (job) => job.status !== 'running',
+      show: (job) => job.status !== 'running' && job.type !== 'availability_check',
     })
   }
 

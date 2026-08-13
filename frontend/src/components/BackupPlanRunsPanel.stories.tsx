@@ -123,6 +123,13 @@ const skippedAvailabilityRun: BackupPlanRun = {
   repositories: [],
 }
 
+const skippedUnavailableSourceRun: BackupPlanRun = {
+  ...skippedAvailabilityRun,
+  id: 344,
+  skip_reason: 'source_unavailable',
+  error_message: 'SSH source unavailable for Accounting source',
+}
+
 const allowRetry = (_run: BackupPlanRun): boolean => true
 const denyRetry = (_run: BackupPlanRun): boolean => false
 
@@ -181,5 +188,11 @@ export const DisabledNoPermission: Story = {
 export const SkippedAvailabilityCheck: Story = {
   args: {
     runs: [skippedAvailabilityRun],
+  },
+}
+
+export const SkippedUnavailableSource: Story = {
+  args: {
+    runs: [skippedUnavailableSourceRun],
   },
 }

@@ -102,6 +102,47 @@ async def test_check_scheduler_creates_job_and_updates_next_run(db_session):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_availability_automation_success_advances_next_check(db_session):
+    repo = Repository(
+        name="Availability source",
+        path="/tmp/availability-source",
+        encryption="none",
+        repository_type="local",
+    )
+    db_session.add(repo)
+    db_session.commit()
+
+    now = datetime(2026, 1, 2, 12, 0)
+    job = ScheduledJob(
+        name="Availability automation",
+        schedule_mode="availability",
+        availability_check_interval_minutes=30,
+        enabled=True,
+        repository_id=repo.id,
+        next_run=now - timedelta(minutes=1),
+    )
+    db_session.add(job)
+    db_session.commit()
+
+    def close_background_task(coro):
+        coro.close()
+        return None
+
+    with (
+        patch(
+            "app.api.schedule.asyncio.create_task",
+            side_effect=close_background_task,
+        ),
+        patch("app.api.schedule._track_scheduled_backup_task"),
+    ):
+        await dispatch_due_scheduled_backups(db_session, now)
+
+    db_session.refresh(job)
+    assert job.next_run == now + timedelta(minutes=30)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_check_scheduler_ignores_invalid_cron_expression(db_session):
     repo = Repository(
         name="Broken Cron Repo",

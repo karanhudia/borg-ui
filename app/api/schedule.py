@@ -185,6 +185,19 @@ def _calculate_next_schedule_run(
     return calculate_next_cron_run(cron_expression, base_time, schedule_timezone)
 
 
+def _next_scheduled_job_run(job: ScheduledJob, now: datetime) -> Optional[datetime]:
+    """Return the next due time for cron and availability automations."""
+    if job.schedule_mode == "availability":
+        return now + timedelta(minutes=job.availability_check_interval_minutes)
+    if not job.cron_expression:
+        return None
+    return _calculate_next_schedule_run(
+        job.cron_expression,
+        now,
+        job.timezone or DEFAULT_SCHEDULE_TIMEZONE,
+    )
+
+
 def _raise_invalid_schedule_timezone(exc: InvalidScheduleTimezone) -> NoReturn:
     raise HTTPException(
         status_code=400,
@@ -2878,11 +2891,7 @@ def _dispatch_due_scheduled_job(
         return None
 
     job.last_run = now
-    job.next_run = _calculate_next_schedule_run(
-        job.cron_expression,
-        now,
-        job.timezone or DEFAULT_SCHEDULE_TIMEZONE,
-    )
+    job.next_run = _next_scheduled_job_run(job, now)
     db.commit()
     logger.info("Scheduled job started", job_id=job.id, name=job.name, run_key=run_key)
     return run_key
@@ -2984,14 +2993,15 @@ async def dispatch_due_scheduled_backups(
                         .first()
                     )
                     linked_repositories = [repository] if repository else []
-                if not linked_repositories:
-                    decision_reason = (
-                        "No repositories are configured for this automation."
-                    )
-                else:
+                sources_available = False
+                decision_reason = "No repositories are configured for this automation."
+                if linked_repositories:
                     decision = await repositories_available(db, linked_repositories)
-                    decision_reason = decision.reason
-                if not linked_repositories or not decision.available:
+                    sources_available = decision.available
+                    decision_reason = (
+                        decision.reason or "The backup source is unavailable."
+                    )
+                if not sources_available:
                     job.next_run = now + timedelta(
                         minutes=job.availability_check_interval_minutes
                     )
@@ -3000,20 +3010,14 @@ async def dispatch_due_scheduled_backups(
                         job,
                         now,
                         reason="source_unavailable",
-                        detail=(
-                            decision_reason
-                            if linked_repositories
-                            else "No repositories are configured for this automation."
-                        ),
+                        detail=decision_reason,
                     )
                     db.commit()
                     skipped += 1
                     logger.info(
                         "Availability schedule skipped: source unavailable",
                         job_id=job.id,
-                        reason=decision_reason
-                        if linked_repositories
-                        else "no repositories configured",
+                        reason=decision_reason,
                     )
                     continue
             run_key = _dispatch_due_scheduled_job(db, job, now)

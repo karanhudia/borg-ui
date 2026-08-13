@@ -80,6 +80,23 @@ const nonRetryableDestructiveJobs: Job[] = [
   },
 ]
 
+const availabilityCheckJobs: Job[] = [
+  {
+    id: 203,
+    repository: '/backups/accounting',
+    repository_path: '/backups/accounting',
+    repository_id: 31,
+    type: 'availability_check',
+    status: 'skipped',
+    skip_reason: 'source_unavailable',
+    started_at: '2026-05-22T09:30:00Z',
+    completed_at: '2026-05-22T09:30:00Z',
+    triggered_by: 'schedule',
+    execution_mode: 'local',
+    error_message: 'SSH source unavailable for accounting source',
+  },
+]
+
 const meta = {
   title: 'Components/BackupJobsTable',
   component: BackupJobsTable,
@@ -137,6 +154,22 @@ export const NonRetryableDestructiveJob: Story = {
     },
     canRetryJob: () => true,
     onRetryJob: () => {},
+  },
+  render: (args) => (
+    <Box sx={{ p: 3 }}>
+      <BackupJobsTable {...args} />
+    </Box>
+  ),
+}
+
+export const AvailabilityCheckSkipped: Story = {
+  args: {
+    jobs: availabilityCheckJobs,
+    showTypeColumn: true,
+    showTriggerColumn: true,
+    actions: { runNow: true, delete: true },
+    onRunNow: () => {},
+    canDeleteJobs: true,
   },
   render: (args) => (
     <Box sx={{ p: 3 }}>
