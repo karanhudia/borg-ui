@@ -80,7 +80,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.11'  # Use Python 3.11 for better security coverage
+          python-version: '3.12'  # keep in sync with docker/runtime-base.env
 
       - name: Install pip-audit
         run: pip install pip-audit
