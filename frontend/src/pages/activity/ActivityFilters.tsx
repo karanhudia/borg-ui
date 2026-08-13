@@ -36,6 +36,9 @@ export function ActivityFilters({
         <MenuItem value="rclone_sync">{t('activity.filters.types.rcloneSync')}</MenuItem>
         <MenuItem value="rclone_hydrate">{t('activity.filters.types.rcloneHydrate')}</MenuItem>
         <MenuItem value="script_execution">{t('activity.filters.types.scriptExecution')}</MenuItem>
+        <MenuItem value="availability_check">
+          {t('activity.filters.types.availabilityCheck')}
+        </MenuItem>
       </Select>
 
       <Select
@@ -54,6 +57,7 @@ export function ActivityFilters({
         <MenuItem value="failed">{t('activity.filters.statuses.failed')}</MenuItem>
         <MenuItem value="running">{t('activity.filters.statuses.running')}</MenuItem>
         <MenuItem value="pending">{t('activity.filters.statuses.pending')}</MenuItem>
+        <MenuItem value="skipped">{t('activity.filters.statuses.skipped')}</MenuItem>
       </Select>
     </Box>
   )

@@ -30,8 +30,11 @@ export const createInitialState = (): WizardState => ({
   maxParallelRepositories: 1,
   failureBehavior: 'continue',
   scheduleEnabled: false,
+  scheduleMode: 'cron',
   cronExpression: '0 21 * * *',
   timezone: getBrowserTimeZone(),
+  availabilityCheckIntervalMinutes: 30,
+  minimumSuccessIntervalHours: 20,
   preBackupScriptId: null,
   postBackupScriptId: null,
   preBackupScriptParameters: {},
@@ -350,8 +353,14 @@ export function planToState(plan: BackupPlan): WizardState {
     maxParallelRepositories: plan.max_parallel_repositories || 1,
     failureBehavior: plan.failure_behavior || 'continue',
     scheduleEnabled: Boolean(plan.schedule_enabled),
+    scheduleMode: plan.schedule_mode || 'cron',
     cronExpression: plan.cron_expression || '0 21 * * *',
     timezone: plan.timezone || getBrowserTimeZone(),
+    availabilityCheckIntervalMinutes: plan.availability_check_interval_minutes ?? 30,
+    minimumSuccessIntervalHours: Math.max(
+      1,
+      Math.round((plan.min_success_interval_minutes ?? 20 * 60) / 60)
+    ),
     preBackupScriptId: firstPreHook?.script_id ?? plan.pre_backup_script_id ?? null,
     postBackupScriptId: firstPostHook?.script_id ?? plan.post_backup_script_id ?? null,
     preBackupScriptParameters:

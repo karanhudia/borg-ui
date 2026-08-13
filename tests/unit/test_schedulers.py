@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.database.models import (
     BackupJob,
+    AvailabilityScheduleSkip,
     CheckJob,
     Repository,
     RestoreCheckJob,
@@ -24,6 +25,33 @@ from app.services.mqtt_sync_scheduler import (
 from app.services.stats_refresh_scheduler import StatsRefreshScheduler
 from app.api import schedule as schedule_api
 from app.api.schedule import check_scheduled_jobs, dispatch_due_scheduled_backups
+
+
+@pytest.mark.unit
+def test_availability_automation_skip_is_durable_and_neutral(db_session):
+    job = ScheduledJob(
+        name="Availability automation",
+        schedule_mode="availability",
+        enabled=True,
+    )
+    db_session.add(job)
+    db_session.commit()
+
+    now = datetime.now(timezone.utc)
+    job.next_run = now + timedelta(minutes=30)
+    schedule_api._record_availability_skip(
+        db_session,
+        job,
+        now,
+        reason="minimum_interval_not_elapsed",
+        detail="Minimum interval after the last successful backup has not elapsed.",
+    )
+    db_session.commit()
+
+    skip = db_session.query(AvailabilityScheduleSkip).one()
+    assert skip.scheduled_job_id == job.id
+    assert skip.reason == "minimum_interval_not_elapsed"
+    assert skip.next_check_at == job.next_run
 
 
 @pytest.mark.unit

@@ -20,6 +20,8 @@ from app.database.models import (
     AgentJobLog,
     BackupJob,
     BackupPlan,
+    BackupPlanRun,
+    AvailabilityScheduleSkip,
     RestoreJob,
     CheckJob,
     CompactJob,
@@ -77,6 +79,7 @@ class ActivityItem(BaseModel):
     backup_plan_id: Optional[int] = None  # BackupPlan ID if triggered by a plan
     backup_plan_run_id: Optional[int] = None  # BackupPlanRun ID if triggered by a plan
     backup_plan_name: Optional[str] = None  # BackupPlan name if triggered by a plan
+    skip_reason: Optional[str] = None
 
     # Type-specific metadata
     archive_name: Optional[str] = None  # For backup/restore
@@ -391,6 +394,79 @@ async def list_recent_activity(
                         output_text=[job.logs, job.error_message],
                         file_path=job.log_file_path,
                     ),
+                }
+            )
+
+    # Availability Plan skips are plan-run records, not BackupJobs: Borg was never
+    # invoked, so they must be added independently to Activity.
+    if not job_type or job_type == "availability_check":
+        plan_skips = (
+            db.query(BackupPlanRun)
+            .filter(
+                BackupPlanRun.status == "skipped",
+                BackupPlanRun.trigger == "availability",
+            )
+            .order_by(BackupPlanRun.completed_at.desc(), BackupPlanRun.id.desc())
+            .limit(limit)
+            .all()
+        )
+        for run in plan_skips:
+            if status and status != "skipped":
+                continue
+            plan = (
+                db.get(BackupPlan, run.backup_plan_id) if run.backup_plan_id else None
+            )
+            activities.append(
+                {
+                    "id": run.id,
+                    "type": "availability_check",
+                    "status": "skipped",
+                    "started_at": run.started_at,
+                    "completed_at": run.completed_at,
+                    "error_message": run.error_message,
+                    "repository": plan.name if plan else "Backup plan",
+                    "repository_path": None,
+                    "log_file_path": None,
+                    "triggered_by": "backup_plan",
+                    "backup_plan_id": run.backup_plan_id,
+                    "backup_plan_run_id": run.id,
+                    "backup_plan_name": plan.name if plan else None,
+                    "skip_reason": run.skip_reason,
+                    "has_logs": False,
+                    "_sort_at": run.completed_at or run.created_at,
+                }
+            )
+
+        automation_skips = (
+            db.query(AvailabilityScheduleSkip)
+            .order_by(
+                AvailabilityScheduleSkip.occurred_at.desc(),
+                AvailabilityScheduleSkip.id.desc(),
+            )
+            .limit(limit)
+            .all()
+        )
+        for skip in automation_skips:
+            if status and status != "skipped":
+                continue
+            schedule = db.get(ScheduledJob, skip.scheduled_job_id)
+            activities.append(
+                {
+                    "id": skip.id,
+                    "type": "availability_check",
+                    "status": "skipped",
+                    "started_at": skip.occurred_at,
+                    "completed_at": skip.occurred_at,
+                    "error_message": skip.detail,
+                    "repository": schedule.name if schedule else "Backup automation",
+                    "repository_path": None,
+                    "log_file_path": None,
+                    "triggered_by": "schedule",
+                    "schedule_id": skip.scheduled_job_id,
+                    "schedule_name": schedule.name if schedule else None,
+                    "skip_reason": skip.reason,
+                    "has_logs": False,
+                    "_sort_at": skip.occurred_at,
                 }
             )
 

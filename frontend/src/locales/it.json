@@ -361,7 +361,8 @@
     "failed": "Fallito",
     "running": "In esecuzione",
     "pending": "In attesa",
-    "cancelled": "Annullato"
+    "cancelled": "Annullato",
+    "skipped": "Ignorato"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -555,7 +556,7 @@
     "tabs": {
       "ariaLabel": "Tipo di operazione di backup",
       "backupPlans": "Piani di backup",
-      "legacyBackup": "Backup legacy"
+      "legacyBackup": "Automazioni di backup"
     },
     "planRun": {
       "title": "Esegui un piano di backup",
@@ -691,7 +692,7 @@
     "createBackup": "Crea Pianificazione Backup",
     "createBackupPlan": "Crea piano di backup",
     "createSchedule": "Crea pianificazione",
-    "createLegacySchedule": "Crea pianificazione legacy",
+    "createLegacySchedule": "Crea automazione di backup",
     "addCheck": "Aggiungi Pianificazione Controllo",
     "addRestoreCheck": "Aggiungi controllo di ripristino",
     "tabs": {
@@ -726,8 +727,19 @@
       "runCheckTip": "Il controllo di integrità viene eseguito dopo ogni backup (oltre a qualsiasi controllo pianificato qui sotto)"
     },
     "noRepositories": "Devi creare almeno un repository prima di pianificare i backup.",
-    "legacyBackupSchedulesTitle": "Pianificazioni backup legacy",
-    "legacyBackupSchedulesDescription": "Le pianificazioni esistenti basate su repository continuano a essere eseguite qui. I nuovi backup pianificati dovrebbero essere creati come piani di backup.",
+    "legacyBackupSchedulesTitle": "Automazioni di backup",
+    "legacyBackupSchedulesDescription": "Automazioni di backup personalizzate basate su repository, incluse esecuzioni a orario fisso e in base alla disponibilità.",
+    "trigger": {
+      "catchUp": "Esegui i backup mancati quando la sorgente diventa disponibile",
+      "label": "Attivatore di esecuzione",
+      "fixedTime": "A un orario fisso",
+      "whenAvailable": "Quando la sorgente è disponibile",
+      "availabilityDescription": "Borg UI controlla una sorgente raggiungibile ed esegue il backup quando è trascorso l'intervallo minimo.",
+      "checkInterval": "Controlla ogni (minuti)",
+      "checkIntervalHelper": "Con quale frequenza Borg UI controlla se la sorgente è disponibile.",
+      "minimumInterval": "Intervallo minimo dopo un'esecuzione riuscita (ore)",
+      "minimumIntervalHelper": "Borg UI non avvierà un altro backup prima che questo intervallo sia trascorso."
+    },
     "confirmRunNow": "Eseguire \"{{name}}\" ora?",
     "maintenance": {
       "pruning": "Pulizia archivi in corso...",
@@ -1536,7 +1548,8 @@
         "package": "Pacchetto",
         "rcloneSync": "Sync cloud",
         "rcloneHydrate": "Idratazione cloud",
-        "scriptExecution": "Script"
+        "scriptExecution": "Script",
+        "availabilityCheck": "Verifica disponibilità"
       },
       "statuses": {
         "completed": "Completato",
@@ -1544,12 +1557,19 @@
         "needsBackup": "Backup richiesto",
         "failed": "Fallito",
         "running": "In Esecuzione",
-        "pending": "In Attesa"
+        "pending": "In Attesa",
+        "skipped": "Ignorato"
       }
     },
     "empty": {
       "title": "Nessuna attività trovata",
       "message": "Non ci sono operazioni corrispondenti ai tuoi filtri"
+    }
+  },
+  "availabilitySchedule": {
+    "skipReasons": {
+      "minimumIntervalNotElapsed": "Intervallo minimo non ancora trascorso",
+      "sourceUnavailable": "Origine non disponibile"
     }
   },
   "cloudStorageJobs": {
@@ -2234,8 +2254,8 @@
       "rcloneHydrate": "Idrata cache locale",
       "enableCloudMirror": "Abilita mirror cloud",
       "backupNow": "Backup Ora",
-      "legacyBackup": "Backup legacy",
-      "legacyBackupTooltip": "Esegui il vecchio backup basato sul repository usando i percorsi sorgente legacy di questo repository",
+      "legacyBackup": "Esegui automazione di backup",
+      "legacyBackupTooltip": "Esegui l'automazione di backup basata sul repository usando i percorsi sorgente configurati del repository",
       "backupPlanRequired": "Crea un piano di backup per definire le sorgenti",
       "viewArchives": "Visualizza Archivi",
       "viewBackupPlans": "Visualizza piani di backup collegati",
@@ -2589,7 +2609,8 @@
       "package": "Installazione Pacchetto",
       "rcloneSync": "Sync cloud",
       "rcloneHydrate": "Idratazione cloud",
-      "scriptExecution": "Script"
+      "scriptExecution": "Script",
+      "availabilityCheck": "Verifica disponibilità"
     },
     "scheduledById": "Pianificato (ID: {{id}})",
     "backupPlanByName": "Piano di backup: {{name}}",

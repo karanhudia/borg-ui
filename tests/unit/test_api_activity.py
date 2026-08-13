@@ -135,6 +135,72 @@ class TestActivityLogDownloads:
 class TestRecentActivityEndpoint:
     """Test the aggregated recent activity feed."""
 
+    def test_recent_activity_includes_durable_availability_skips(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.database.models import (
+            AvailabilityScheduleSkip,
+            BackupPlan,
+            BackupPlanRun,
+            ScheduledJob,
+        )
+
+        occurred_at = datetime(2026, 8, 13, 12, 0, 0)
+        plan = BackupPlan(
+            name="Availability plan",
+            source_directories='["/srv/availability"]',
+            schedule_enabled=True,
+            schedule_mode="availability",
+        )
+        automation = ScheduledJob(
+            name="Availability automation",
+            schedule_mode="availability",
+            enabled=True,
+        )
+        test_db.add_all([plan, automation])
+        test_db.flush()
+        test_db.add_all(
+            [
+                BackupPlanRun(
+                    backup_plan_id=plan.id,
+                    trigger="availability",
+                    status="skipped",
+                    skip_reason="minimum_interval_not_elapsed",
+                    error_message="Minimum interval after the last successful backup has not elapsed.",
+                    started_at=occurred_at,
+                    completed_at=occurred_at,
+                    created_at=occurred_at,
+                ),
+                AvailabilityScheduleSkip(
+                    scheduled_job_id=automation.id,
+                    reason="source_unavailable",
+                    detail="The backup source is unavailable.",
+                    occurred_at=occurred_at + timedelta(minutes=1),
+                ),
+            ]
+        )
+        test_db.commit()
+
+        response = test_client.get(
+            "/api/activity/recent?job_type=availability_check&status=skipped",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        activity = response.json()
+        assert len(activity) == 2
+        assert all(item["type"] == "availability_check" for item in activity)
+        assert all(item["status"] == "skipped" for item in activity)
+        assert all(item["has_logs"] is False for item in activity)
+        assert {item["skip_reason"] for item in activity} == {
+            "minimum_interval_not_elapsed",
+            "source_unavailable",
+        }
+        assert {item["repository"] for item in activity} == {
+            plan.name,
+            automation.name,
+        }
+
     def test_recent_activity_aggregates_job_types_and_schedule_metadata(
         self, test_client, admin_headers, test_db
     ):

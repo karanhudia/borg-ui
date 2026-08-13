@@ -319,8 +319,11 @@ export interface BackupPlan {
   max_parallel_repositories: number
   failure_behavior: 'continue' | 'stop'
   schedule_enabled: boolean
+  schedule_mode?: 'cron' | 'availability'
   cron_expression?: string | null
   timezone: string
+  availability_check_interval_minutes?: number | null
+  min_success_interval_minutes?: number | null
   last_run?: string | null
   next_run?: string | null
   repository_count: number
@@ -383,6 +386,7 @@ export interface BackupPlanRun {
   started_at?: string | null
   completed_at?: string | null
   error_message?: string | null
+  skip_reason?: 'minimum_interval_not_elapsed' | 'source_unavailable' | null
   created_at?: string | null
   retry_attempt?: number | null
   retry_original_run_id?: number | null
@@ -412,8 +416,11 @@ export interface BackupPlanData {
   max_parallel_repositories: number
   failure_behavior: 'continue' | 'stop'
   schedule_enabled: boolean
+  schedule_mode?: 'cron' | 'availability'
   cron_expression?: string | null
   timezone: string
+  availability_check_interval_minutes?: number | null
+  min_success_interval_minutes?: number | null
   pre_backup_script_id?: number | null
   post_backup_script_id?: number | null
   pre_backup_script_parameters?: Record<string, string> | null

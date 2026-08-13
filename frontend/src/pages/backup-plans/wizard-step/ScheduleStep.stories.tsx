@@ -59,3 +59,22 @@ export const CheckFlagConflict: Story = {
     </Box>
   ),
 }
+
+export const WhenAvailable: Story = {
+  render: () => (
+    <Box sx={{ width: 720, maxWidth: 'calc(100vw - 32px)' }}>
+      <ScheduleStep
+        wizardState={{
+          ...createInitialState(),
+          scheduleEnabled: true,
+          scheduleMode: 'availability',
+          availabilityCheckIntervalMinutes: 30,
+          minimumSuccessIntervalHours: 20,
+        }}
+        updateState={() => {}}
+        handlePruneSettingsChange={() => {}}
+        t={t}
+      />
+    </Box>
+  ),
+}

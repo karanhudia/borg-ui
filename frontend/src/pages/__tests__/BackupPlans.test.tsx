@@ -41,6 +41,26 @@ describe('BackupPlans API', () => {
   })
 })
 
+describe('Backup plan availability scheduling', () => {
+  it('serializes availability policy values in backend minutes', () => {
+    const payload = buildBackupPlanPayload(
+      createPayloadState({
+        scheduleEnabled: true,
+        scheduleMode: 'availability',
+        availabilityCheckIntervalMinutes: 30,
+        minimumSuccessIntervalHours: 20,
+      })
+    )
+
+    expect(payload).toMatchObject({
+      schedule_mode: 'availability',
+      cron_expression: null,
+      availability_check_interval_minutes: 30,
+      min_success_interval_minutes: 1200,
+    })
+  })
+})
+
 describe('BackupPlans repository selection gating', () => {
   it('limits Community plans to the first selected repository', () => {
     expect(applyRepositorySelectionLimit([10, 20], false)).toEqual({

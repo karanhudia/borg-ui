@@ -41,4 +41,24 @@ describe('SchedulePicker', () => {
     render(<SchedulePicker {...defaultProps} cronLabel="Custom cron label" />)
     expect(screen.getByRole('textbox', { name: /Custom cron label/i })).toBeInTheDocument()
   })
+
+  it('shows availability controls and emits availability policy updates', () => {
+    const onChange = vi.fn()
+    render(
+      <SchedulePicker
+        {...defaultProps}
+        onChange={onChange}
+        showTriggerMode
+        scheduleMode="availability"
+        availabilityCheckIntervalMinutes={30}
+        minimumSuccessIntervalHours={20}
+      />
+    )
+
+    expect(screen.getByDisplayValue('0 2 * * *')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText(/check every/i), { target: { value: '45' } })
+    expect(onChange).toHaveBeenCalledWith({ availabilityCheckIntervalMinutes: 45 })
+    fireEvent.change(screen.getByLabelText(/minimum interval/i), { target: { value: '24' } })
+    expect(onChange).toHaveBeenCalledWith({ minimumSuccessIntervalHours: 24 })
+  })
 })

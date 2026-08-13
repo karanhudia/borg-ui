@@ -19,7 +19,10 @@ export interface ScheduledJob {
   id: number
   name: string
   cron_expression: string
+  schedule_mode?: 'cron' | 'availability'
   timezone?: string | null
+  availability_check_interval_minutes?: number | null
+  min_success_interval_minutes?: number | null
   repository: string | null
   repository_id: number | null
   repository_ids: number[] | null
@@ -64,7 +67,10 @@ export interface ScheduleData {
   repository_ids: number[]
   enabled: boolean
   cron_expression: string
+  schedule_mode: 'cron' | 'availability'
   timezone: string
+  availability_check_interval_minutes: number
+  min_success_interval_minutes: number
   archive_name_template: string
   pre_backup_script_id: number | null
   post_backup_script_id: number | null
@@ -92,6 +98,9 @@ interface WizardState {
   // Step 2: Schedule
   cronExpression: string
   timezone: string
+  scheduleMode: 'cron' | 'availability'
+  availabilityCheckIntervalMinutes: number
+  minimumSuccessIntervalHours: number
   archiveNameTemplate: string
 
   // Step 3: Scripts
@@ -119,6 +128,9 @@ const createInitialState = (): WizardState => ({
   repositoryIds: [],
   cronExpression: '0 2 * * *',
   timezone: getBrowserTimeZone(),
+  scheduleMode: 'cron',
+  availabilityCheckIntervalMinutes: 30,
+  minimumSuccessIntervalHours: 20,
   archiveNameTemplate: '{job_name}-{now}',
   preBackupScriptId: null,
   postBackupScriptId: null,
@@ -190,6 +202,12 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
       repositoryIds: Array.from(new Set(repository_ids)),
       cronExpression: scheduledJob.cron_expression,
       timezone: scheduledJob.timezone || 'UTC',
+      scheduleMode: scheduledJob.schedule_mode || 'cron',
+      availabilityCheckIntervalMinutes: scheduledJob.availability_check_interval_minutes ?? 30,
+      minimumSuccessIntervalHours: Math.max(
+        1,
+        Math.round((scheduledJob.min_success_interval_minutes ?? 20 * 60) / 60)
+      ),
       archiveNameTemplate: scheduledJob.archive_name_template || '{job_name}-{now}',
       preBackupScriptId: scheduledJob.pre_backup_script_id || null,
       postBackupScriptId: scheduledJob.post_backup_script_id || null,
@@ -247,6 +265,16 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
       case 'schedule':
         if (!wizardState.cronExpression.trim()) return false
         if (!wizardState.timezone.trim()) return false
+        if (
+          wizardState.scheduleMode === 'availability' &&
+          wizardState.availabilityCheckIntervalMinutes < 1
+        )
+          return false
+        if (
+          wizardState.scheduleMode === 'availability' &&
+          wizardState.minimumSuccessIntervalHours < 1
+        )
+          return false
         if (!wizardState.archiveNameTemplate.trim()) return false
         return true
 
@@ -275,7 +303,10 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
       repository_ids: Array.from(new Set(wizardState.repositoryIds)),
       enabled: mode === 'edit' && scheduledJob ? scheduledJob.enabled : true,
       cron_expression: wizardState.cronExpression,
+      schedule_mode: wizardState.scheduleMode,
       timezone: wizardState.timezone,
+      availability_check_interval_minutes: wizardState.availabilityCheckIntervalMinutes,
+      min_success_interval_minutes: wizardState.minimumSuccessIntervalHours * 60,
       archive_name_template: wizardState.archiveNameTemplate,
       pre_backup_script_id: wizardState.preBackupScriptId,
       post_backup_script_id: wizardState.postBackupScriptId,
@@ -328,6 +359,9 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
             data={{
               cronExpression: wizardState.cronExpression,
               timezone: wizardState.timezone,
+              scheduleMode: wizardState.scheduleMode,
+              availabilityCheckIntervalMinutes: wizardState.availabilityCheckIntervalMinutes,
+              minimumSuccessIntervalHours: wizardState.minimumSuccessIntervalHours,
               archiveNameTemplate: wizardState.archiveNameTemplate,
             }}
             jobName={wizardState.name}

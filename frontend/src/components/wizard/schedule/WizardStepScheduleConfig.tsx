@@ -7,6 +7,9 @@ import ArchiveNameTemplateInput from '../../ArchiveNameTemplateInput'
 interface WizardStepScheduleConfigData {
   cronExpression: string
   timezone?: string
+  scheduleMode?: 'cron' | 'availability'
+  availabilityCheckIntervalMinutes?: number
+  minimumSuccessIntervalHours?: number
   archiveNameTemplate: string
 }
 
@@ -29,6 +32,10 @@ const WizardStepScheduleConfig: React.FC<WizardStepScheduleConfigProps> = ({
         cronExpression={data.cronExpression}
         timezone={data.timezone || 'UTC'}
         onChange={(updates) => onChange(updates)}
+        scheduleMode={data.scheduleMode}
+        availabilityCheckIntervalMinutes={data.availabilityCheckIntervalMinutes}
+        minimumSuccessIntervalHours={data.minimumSuccessIntervalHours}
+        showTriggerMode
         required
         size="medium"
         cronLabel={t('wizard.scheduleWizard.config.scheduleLabel')}

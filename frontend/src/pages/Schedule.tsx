@@ -540,7 +540,7 @@ const Schedule: React.FC = () => {
               sx={{ width: { xs: '100%', sm: 'auto' } }}
             >
               {t('schedule.createLegacySchedule', {
-                defaultValue: 'Create legacy schedule',
+                defaultValue: 'Create backup automation',
               })}
             </Button>
             <Button

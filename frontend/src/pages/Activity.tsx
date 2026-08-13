@@ -31,6 +31,7 @@ export interface ActivityItem {
   backup_plan_id?: number | null
   backup_plan_run_id?: number | null
   backup_plan_name?: string | null
+  skip_reason?: 'minimum_interval_not_elapsed' | 'source_unavailable' | null
   has_logs?: boolean
 }
 

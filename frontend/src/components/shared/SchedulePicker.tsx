@@ -1,21 +1,43 @@
 import React, { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Autocomplete, Box, Stack, TextField, Tooltip, Typography } from '@mui/material'
+import {
+  Autocomplete,
+  Box,
+  FormControlLabel,
+  Stack,
+  Switch,
+  TextField,
+  Tooltip,
+  Typography,
+} from '@mui/material'
 import { Info } from 'lucide-react'
 import CronExpressionParser from 'cron-parser'
 import CronExpressionInput from './CronExpressionInput'
 import { getBrowserTimeZone, getSupportedTimeZones } from '../../utils/dateUtils'
 
+export type ScheduleMode = 'cron' | 'availability'
+
 interface SchedulePickerProps {
   cronExpression: string
   timezone: string
-  onChange: (updates: { cronExpression?: string; timezone?: string }) => void
+  onChange: (updates: {
+    cronExpression?: string
+    timezone?: string
+    scheduleMode?: ScheduleMode
+    availabilityCheckIntervalMinutes?: number
+    minimumSuccessIntervalHours?: number
+  }) => void
+  scheduleMode?: ScheduleMode
+  availabilityCheckIntervalMinutes?: number
+  minimumSuccessIntervalHours?: number
   disabled?: boolean
   required?: boolean
   size?: 'small' | 'medium'
   cronLabel?: string
   cronHelperText?: string
   timezoneLabel?: string
+  /** Shows the missed-run catch-up policy controls. */
+  showTriggerMode?: boolean
   /** How many upcoming runs to show in the preview tooltip. Defaults to 3. */
   previewRunCount?: number
 }
@@ -38,6 +60,10 @@ const SchedulePicker: React.FC<SchedulePickerProps> = ({
   cronLabel,
   cronHelperText,
   timezoneLabel,
+  scheduleMode = 'cron',
+  availabilityCheckIntervalMinutes = 30,
+  minimumSuccessIntervalHours = 20,
+  showTriggerMode = false,
   previewRunCount = 3,
 }) => {
   const { t } = useTranslation()
@@ -80,39 +106,108 @@ const SchedulePicker: React.FC<SchedulePickerProps> = ({
 
   return (
     <Stack spacing={2}>
-      <CronExpressionInput
-        value={cronExpression}
-        onChange={(cron) => onChange({ cronExpression: cron })}
-        label={cronLabel ?? t('wizard.scheduleWizard.config.scheduleLabel')}
-        helperText={cronHelperText ?? t('wizard.scheduleWizard.config.scheduleHelper')}
-        required={required}
-        disabled={disabled}
-        size={size}
-      />
+      {showTriggerMode && (
+        <FormControlLabel
+          disabled={disabled}
+          control={
+            <Switch
+              checked={scheduleMode === 'availability'}
+              onChange={(event) =>
+                onChange({ scheduleMode: event.target.checked ? 'availability' : 'cron' })
+              }
+            />
+          }
+          label={t('schedule.trigger.catchUp', {
+            defaultValue: 'Run missed backups when the source becomes available',
+          })}
+        />
+      )}
 
-      <Autocomplete
-        options={timezoneOptions}
-        value={effectiveTimezone}
-        onChange={(_, value) => {
-          if (value) onChange({ timezone: value })
-        }}
-        disableClearable
-        disabled={disabled}
-        fullWidth
-        size={size}
-        autoHighlight
-        renderInput={(params) => (
+      <>
+        <CronExpressionInput
+          value={cronExpression}
+          onChange={(cron) => onChange({ cronExpression: cron })}
+          label={cronLabel ?? t('wizard.scheduleWizard.config.scheduleLabel')}
+          helperText={cronHelperText ?? t('wizard.scheduleWizard.config.scheduleHelper')}
+          required={required}
+          disabled={disabled}
+          size={size}
+        />
+
+        <Autocomplete
+          options={timezoneOptions}
+          value={effectiveTimezone}
+          onChange={(_, value) => {
+            if (value) onChange({ timezone: value })
+          }}
+          disableClearable
+          disabled={disabled}
+          fullWidth
+          size={size}
+          autoHighlight
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              label={
+                timezoneLabel ??
+                t('wizard.scheduleWizard.config.timezoneLabel', { defaultValue: 'Timezone' })
+              }
+              required={required}
+              placeholder="Asia/Kolkata"
+            />
+          )}
+        />
+      </>
+
+      {scheduleMode === 'availability' && (
+        <Stack spacing={2}>
+          <Typography variant="body2" color="text.secondary">
+            {t('schedule.trigger.availabilityDescription', {
+              defaultValue:
+                'Borg UI checks for a reachable source and runs after the minimum interval has elapsed.',
+            })}
+          </Typography>
           <TextField
-            {...params}
-            label={
-              timezoneLabel ??
-              t('wizard.scheduleWizard.config.timezoneLabel', { defaultValue: 'Timezone' })
+            label={t('schedule.trigger.checkInterval', { defaultValue: 'Check every (minutes)' })}
+            helperText={t('schedule.trigger.checkIntervalHelper', {
+              defaultValue: 'How often Borg UI checks whether the source is available.',
+            })}
+            type="number"
+            value={availabilityCheckIntervalMinutes}
+            onChange={(event) =>
+              onChange({
+                availabilityCheckIntervalMinutes: Math.max(1, Number(event.target.value) || 1),
+              })
             }
+            inputProps={{ min: 1 }}
             required={required}
-            placeholder="Asia/Kolkata"
+            disabled={disabled}
+            size={size}
+            fullWidth
           />
-        )}
-      />
+          <TextField
+            label={t('schedule.trigger.minimumInterval', {
+              defaultValue: 'Minimum interval after a successful run (hours)',
+            })}
+            helperText={t('schedule.trigger.minimumIntervalHelper', {
+              defaultValue:
+                'Borg UI will not start another backup before this interval has elapsed.',
+            })}
+            type="number"
+            value={minimumSuccessIntervalHours}
+            onChange={(event) =>
+              onChange({
+                minimumSuccessIntervalHours: Math.max(1, Number(event.target.value) || 1),
+              })
+            }
+            inputProps={{ min: 1 }}
+            required={required}
+            disabled={disabled}
+            size={size}
+            fullWidth
+          />
+        </Stack>
+      )}
 
       {nextRunTimes && nextRunTimes.length > 0 && (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, pl: 0.25 }}>
