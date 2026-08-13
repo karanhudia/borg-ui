@@ -4043,6 +4043,8 @@
       "rcloneOAuthBorgUiHelper": "Borg UI riceve il callback del provider lato server. Quando il provider indica che l'autorizzazione è completa, torna qui; questa finestra controllerà automaticamente.",
       "rcloneOAuthLoopbackHelper": "rclone userà il proprio callback loopback locale. Usalo solo quando il browser può raggiungere lo stesso host del processo rclone.",
       "rcloneOAuthSetupMissing": "L'OAuth gestito da Borg UI non è configurato per questo provider.",
+      "rcloneProviderSearchPlaceholder": "Cerca provider",
+      "rcloneProviderSearchNoResults": "Nessun provider trovato",
       "rcloneDefaultProviders": {
         "localLabel": "File system locale",
         "localDescription": "Remoto per percorso locale.",

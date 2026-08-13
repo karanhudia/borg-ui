@@ -61,7 +61,7 @@ function runStatusColor(status?: string): 'default' | 'primary' | 'success' | 'w
   return 'default'
 }
 
-function formatRunStatus(status?: string, unknownLabel = 'Unknown'): string {
+function formatRunStatus(status: string | undefined, unknownLabel: string): string {
   if (!status) return unknownLabel
   return status.replace(/_/g, ' ')
 }
@@ -92,10 +92,7 @@ function getTransportLabel(
   return null
 }
 
-function getRepositoryLabel(
-  runRepository: BackupPlanRunRepository,
-  fallback = 'Repository'
-): string {
+function getRepositoryLabel(runRepository: BackupPlanRunRepository, fallback: string): string {
   return runRepository.repository?.name || runRepository.backup_job?.repository || fallback
 }
 
@@ -135,10 +132,10 @@ function getStartedAt(run: BackupPlanRun): string | null {
   return run.started_at || run.created_at || null
 }
 
-function getPrimaryRepositoryName(run: BackupPlanRun): string {
+function getPrimaryRepositoryName(run: BackupPlanRun, fallback: string): string {
   const firstRepository = run.repositories[0]
   if (!firstRepository) return '-'
-  return getRepositoryLabel(firstRepository)
+  return getRepositoryLabel(firstRepository, fallback)
 }
 
 function getPrimaryRepositoryPath(run: BackupPlanRun): string {
@@ -561,7 +558,10 @@ export default function BackupPlanRunsPanel({
             {getPlanName(run)}
           </Typography>
           <RepositoryCell
-            repositoryName={getPrimaryRepositoryName(run)}
+            repositoryName={getPrimaryRepositoryName(
+              run,
+              t('backupPlans.status.repositoryFallback')
+            )}
             repositoryPath={getPrimaryRepositoryPath(run)}
             withIcon={false}
           />

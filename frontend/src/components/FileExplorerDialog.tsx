@@ -456,8 +456,7 @@ export default function FileExplorerDialog({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error('Failed to create folder:', err)
-      const errorMessage =
-        err.response?.data?.detail || err.message || t('fileExplorer.createFailed')
+      const errorMessage = err.response?.data?.detail || t('fileExplorer.createFailed')
       // Handle validation errors from FastAPI
       if (typeof errorMessage === 'object') {
         setError(JSON.stringify(errorMessage))

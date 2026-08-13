@@ -10,7 +10,6 @@ import {
   Button,
   Chip,
   CircularProgress,
-  Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
@@ -754,15 +753,22 @@ export function AgentSetupGuide({
         onCopy={() => onCopy(command)}
       />
 
-      <Dialog open={helpOpen} onClose={() => setHelpOpen(false)} fullWidth maxWidth="md">
+      <ResponsiveDialog
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        fullWidth
+        maxWidth="md"
+        footer={
+          <DialogActions>
+            <Button onClick={() => setHelpOpen(false)}>{t('common.buttons.close')}</Button>
+          </DialogActions>
+        }
+      >
         <DialogTitle>{t('managedAgents.setupGuide.title')}</DialogTitle>
         <DialogContent>
           <AgentSetupHelpContent command={command} onCopy={onCopy} />
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setHelpOpen(false)}>{t('common.buttons.close')}</Button>
-        </DialogActions>
-      </Dialog>
+      </ResponsiveDialog>
     </Box>
   )
 }
@@ -1292,7 +1298,28 @@ export function AgentDeleteConfirmationDialog({
 }) {
   const { t } = useTranslation()
   return (
-    <Dialog open={open} onClose={onCancel} fullWidth maxWidth="xs">
+    <ResponsiveDialog
+      open={open}
+      onClose={onCancel}
+      fullWidth
+      maxWidth="xs"
+      footer={
+        <DialogActions>
+          <Button onClick={onCancel}>{t('common.buttons.cancel')}</Button>
+          <Button
+            color="error"
+            variant="contained"
+            disabled={isDeleting || !agent}
+            onClick={() => {
+              if (!agent) return
+              onConfirm(agent)
+            }}
+          >
+            {t('managedAgents.page.deleteDialog.confirm')}
+          </Button>
+        </DialogActions>
+      }
+    >
       <DialogTitle>{t('managedAgents.page.deleteDialog.title')}</DialogTitle>
       <DialogContent>
         <Stack spacing={1.5} sx={{ mt: 0.5 }}>
@@ -1304,21 +1331,7 @@ export function AgentDeleteConfirmationDialog({
           </Typography>
         </Stack>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onCancel}>{t('common.buttons.cancel')}</Button>
-        <Button
-          color="error"
-          variant="contained"
-          disabled={isDeleting || !agent}
-          onClick={() => {
-            if (!agent) return
-            onConfirm(agent)
-          }}
-        >
-          {t('managedAgents.page.deleteDialog.confirm')}
-        </Button>
-      </DialogActions>
-    </Dialog>
+    </ResponsiveDialog>
   )
 }
 
@@ -1339,7 +1352,17 @@ export function AgentReinstallDialog({
   const command = buildAgentReinstallCommand(serverUrl)
 
   return (
-    <Dialog open={open} onClose={onCancel} fullWidth maxWidth="md">
+    <ResponsiveDialog
+      open={open}
+      onClose={onCancel}
+      fullWidth
+      maxWidth="md"
+      footer={
+        <DialogActions>
+          <Button onClick={onCancel}>{t('common.buttons.close')}</Button>
+        </DialogActions>
+      }
+    >
       <DialogTitle>{t('managedAgents.page.reinstallDialog.title')}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 0.5 }}>
@@ -1362,10 +1385,7 @@ export function AgentReinstallDialog({
           </Alert>
         </Stack>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onCancel}>{t('common.buttons.close')}</Button>
-      </DialogActions>
-    </Dialog>
+    </ResponsiveDialog>
   )
 }
 

@@ -4043,6 +4043,8 @@
       "rcloneOAuthBorgUiHelper": "Borg UI empfängt den Provider-Callback serverseitig. Nachdem der Provider die Autorisierung als abgeschlossen meldet, kehre hierher zurück; dieser Dialog prüft automatisch.",
       "rcloneOAuthLoopbackHelper": "rclone verwendet seinen lokalen Loopback-Callback. Verwende dies nur, wenn dein Browser denselben Host wie der rclone-Prozess erreichen kann.",
       "rcloneOAuthSetupMissing": "Borg UI-eigenes OAuth ist für diesen Provider nicht konfiguriert.",
+      "rcloneProviderSearchPlaceholder": "Provider suchen",
+      "rcloneProviderSearchNoResults": "Keine Provider gefunden",
       "rcloneDefaultProviders": {
         "localLabel": "Lokales Dateisystem",
         "localDescription": "Remote für lokale Pfade.",
