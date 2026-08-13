@@ -1,41 +1,47 @@
 {
-  "generatedAt": "2026-08-13T09:14:06.244Z",
+  "generatedAt": "2026-08-13T14:55:27.173Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #806 visual report",
-    "commitSha": "02ace9cd4953",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/31685286245"
+    "commitSha": "765b08881433",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/31712041092"
   },
   "totals": {
     "baseline": 458,
-    "actual": 458,
+    "actual": 464,
     "compared": 458,
-    "changed": 1,
-    "added": 0,
+    "changed": 0,
+    "added": 6,
     "removed": 0,
-    "unchanged": 457
+    "unchanged": 458
   },
-  "changed": [
+  "changed": [],
+  "added": [
     {
-      "fileName": "backup-plans-sourceselectiondialog--database-scan-remote-target.png",
-      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--database-scan-remote-target.png",
-      "actualPath": "images/actual/backup-plans-sourceselectiondialog--database-scan-remote-target.png",
-      "diffPath": "images/diff/backup-plans-sourceselectiondialog--database-scan-remote-target.png",
-      "diffPixels": 69454,
-      "totalPixels": 1024000,
-      "diffRatio": 0.067826171875,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
+      "fileName": "components-backupjobstable--availability-check-skipped--mobile.png",
+      "actualPath": "images/actual/components-backupjobstable--availability-check-skipped--mobile.png"
+    },
+    {
+      "fileName": "components-backupjobstable--availability-check-skipped.png",
+      "actualPath": "images/actual/components-backupjobstable--availability-check-skipped.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--skipped-unavailable-source--mobile.png",
+      "actualPath": "images/actual/components-backupplanrunspanel--skipped-unavailable-source--mobile.png"
+    },
+    {
+      "fileName": "components-backupplanrunspanel--skipped-unavailable-source.png",
+      "actualPath": "images/actual/components-backupplanrunspanel--skipped-unavailable-source.png"
+    },
+    {
+      "fileName": "components-statusbadge--skipped--mobile.png",
+      "actualPath": "images/actual/components-statusbadge--skipped--mobile.png"
+    },
+    {
+      "fileName": "components-statusbadge--skipped.png",
+      "actualPath": "images/actual/components-statusbadge--skipped.png"
     }
   ],
-  "added": [],
   "removed": [],
   "unchanged": [
     {
@@ -208,6 +214,9 @@
     },
     {
       "fileName": "backup-plans-sourceselectiondialog--database-scan-remote-target--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-scan-remote-target.png"
     },
     {
       "fileName": "backup-plans-sourceselectiondialog--database-scan-returned-after-add--mobile.png"
