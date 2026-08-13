@@ -31,6 +31,8 @@
     },
     "status": "Estado",
     "loading": "Cargando...",
+    "search": "Buscar",
+    "noResults": "No se encontraron resultados",
     "password": {
       "show": "Mostrar contraseña",
       "hide": "Ocultar contraseña"
@@ -131,6 +133,7 @@
     "badges": {
       "new": "Nuevo"
     },
+    "comingSoon": "Próximamente",
     "settings": {
       "personal": "Personal",
       "system": "Sistema",
@@ -1002,6 +1005,18 @@
       "completed": "Mantenimiento completado"
     },
     "card": {
+      "serviceTypes": {
+        "webhook": "Webhook",
+        "slack": "Slack",
+        "discord": "Discord",
+        "telegram": "Telegram",
+        "email": "Correo electrónico",
+        "teams": "Teams",
+        "pushover": "Pushover",
+        "ntfy": "Ntfy",
+        "gotify": "Gotify",
+        "matrix": "Matrix"
+      },
       "stats": {
         "schedule": "Schedule",
         "repository": "Repository",
@@ -3861,6 +3876,10 @@
     "canaryModeHint": "El modo canario añade un pequeño archivo canario de Borg UI a las copias de seguridad futuras mientras esté activado, y luego lo verifica desde el archivo más reciente. Funciona después de la próxima copia de seguridad.",
     "canaryUnavailableObserveOnly": "El modo canario no está disponible para repositorios solo de observación porque Borg UI no crea sus copias. Usa rutas de prueba seleccionadas o una prueba de archivo completo.",
     "noBackupYet": "Aún no hay copia",
+    "timeLabels": {
+      "storedUtc": "Guardado en UTC",
+      "localTimezone": "Tu zona horaria local"
+    },
     "probeModeHint": "El modo de rutas de prueba restaura archivos reales que tú eliges. Úsalo para comprobaciones más profundas de rutas críticas sin extraer el archivo completo.",
     "fullArchiveWarning": "Las pruebas de archivo completo pueden ser costosas en repositorios grandes. Úsalas con moderación y solo cuando tengas almacenamiento temporal y ventana de mantenimiento suficientes."
   },
@@ -3954,6 +3973,7 @@
       "remoteSshfsNote": "Los directorios remotos se montan mediante SSHFS preservando sus rutas originales. Los patrones de exclusión funcionan igual que con fuentes locales (ej., */var/cache/*)."
     },
     "dataSource": {
+      "note": "Nota:",
       "title": "¿Dónde están los datos que deseas respaldar?",
       "localDescription": "Respaldar datos de este servidor (sistemas de archivos locales o montados)",
       "agentLocalDescription": "Respaldar rutas del sistema de archivos del agente gestionado seleccionado",
@@ -4020,6 +4040,12 @@
       "rcloneOAuthBorgUiHelper": "Borg UI recibe el callback del proveedor en el servidor. Cuando el proveedor indique que la autorización terminó, vuelve aquí; este diálogo comprobará automáticamente.",
       "rcloneOAuthLoopbackHelper": "rclone usará su callback loopback local. Úsalo solo cuando el navegador pueda llegar al mismo host que el proceso rclone.",
       "rcloneOAuthSetupMissing": "El OAuth gestionado por Borg UI no está configurado para este proveedor.",
+      "rcloneDefaultProviders": {
+        "localLabel": "Sistema de archivos local",
+        "localDescription": "Remoto de ruta local.",
+        "customLabel": "Backend rclone personalizado",
+        "customDescription": "Configuración manual para cualquier backend de rclone."
+      },
       "rcloneOAuthCallbackUrl": "Callback de Borg UI: {{url}}",
       "rcloneOAuthModeBorgUi": "Callback de Borg UI",
       "rcloneOAuthModeLoopback": "loopback de rclone",
@@ -4137,6 +4163,8 @@
       "useFolder": "Usar carpeta"
     },
     "restoreDestination": {
+      "port": "Puerto {{port}}",
+      "connected": "Conectado",
       "title": "¿Dónde deben restaurarse los archivos?",
       "subtitle": "Selecciona el destino y la ubicación para los archivos restaurados",
       "borgUiServerDesc": "Restaurar en el almacenamiento local de este servidor",
@@ -4353,6 +4381,7 @@
         "selectAtLeastOne": "Selecciona al menos un repositorio para continuar."
       },
       "maintenance": {
+        "caution": "Precaución:",
         "title": "Opciones de mantenimiento",
         "subtitle": "Ejecutar poda y compactación tras las copias de seguridad para gestionar el espacio en disco.",
         "info": "La poda elimina archivos antiguos. La compactación recupera espacio en disco.",
@@ -4362,6 +4391,10 @@
         "compactAfterPrune": "Ejecutar compactación tras la poda",
         "compactAfterPruneDesc": "Recuperar espacio en disco liberando segmentos",
         "compactInfo": "La compactación recupera espacio en disco tras la poda. Puede llevar tiempo en repositorios grandes."
+      },
+      "stepIndicator": {
+        "progress": "Paso {{current}} / {{total}}",
+        "goToStep": "Ir al paso {{step}}: {{label}}"
       },
       "config": {
         "scheduleLabel": "Programación (Expresión Cron)",
@@ -4746,11 +4779,18 @@
     "creating": "Creando...",
     "create": "Crear",
     "failedToLoad": "Error al cargar el directorio",
+    "selectAgentFirst": "Selecciona un agente antes de explorar.",
+    "selectRemoteFirst": "Selecciona primero un remoto de rclone.",
+    "createFailed": "No se pudo crear la carpeta",
     "chips": {
       "remote": "Remoto",
       "host": "Host",
       "borg": "Borg"
     }
+  },
+  "repoSelect": {
+    "label": "Repositorio",
+    "placeholder": "Selecciona un repositorio"
   },
   "cronExpressionInput": {
     "label": "Programación"

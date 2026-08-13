@@ -1,5 +1,6 @@
 import { Box, Chip, Stack, Typography } from '@mui/material'
 import { Database } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import BorgVersionChip from './BorgVersionChip'
 
 interface RepoMenuItemProps {
@@ -32,6 +33,7 @@ export default function RepoMenuItem({
   maintenanceLabel = 'maintenance running',
   hidePath = false,
 }: RepoMenuItemProps) {
+  const { t } = useTranslation()
   return (
     <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0, overflow: 'hidden' }}>
       <Database size={16} style={{ flexShrink: 0 }} />
@@ -41,7 +43,9 @@ export default function RepoMenuItem({
             {name}
           </Typography>
           <BorgVersionChip borgVersion={borgVersion} compact />
-          {mode === 'observe' && <Chip label="Observe Only" size="small" sx={observeChipSx} />}
+          {mode === 'observe' && (
+            <Chip label={t('repositories.observeOnly')} size="small" sx={observeChipSx} />
+          )}
           {hasRunningMaintenance && (
             <Typography component="span" variant="caption" color="warning.main">
               {maintenanceLabel}

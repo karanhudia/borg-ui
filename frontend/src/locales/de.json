@@ -31,6 +31,8 @@
     },
     "status": "Status",
     "loading": "Lädt...",
+    "search": "Suchen",
+    "noResults": "Keine Ergebnisse gefunden",
     "password": {
       "show": "Passwort anzeigen",
       "hide": "Passwort ausblenden"
@@ -131,6 +133,7 @@
     "badges": {
       "new": "Neu"
     },
+    "comingSoon": "Demnächst verfügbar",
     "settings": {
       "personal": "Persönlich",
       "system": "System",
@@ -1005,6 +1008,18 @@
       "completed": "Wartung abgeschlossen"
     },
     "card": {
+      "serviceTypes": {
+        "webhook": "Webhook",
+        "slack": "Slack",
+        "discord": "Discord",
+        "telegram": "Telegram",
+        "email": "E-Mail",
+        "teams": "Teams",
+        "pushover": "Pushover",
+        "ntfy": "Ntfy",
+        "gotify": "Gotify",
+        "matrix": "Matrix"
+      },
       "stats": {
         "schedule": "Schedule",
         "repository": "Repository",
@@ -3864,6 +3879,10 @@
     "canaryModeHint": "Der Canary-Modus fügt künftigen Sicherungen eine winzige Borg UI-Canary-Datei hinzu, solange er aktiviert ist, und prüft sie aus dem neuesten Archiv. Er funktioniert nach der nächsten Sicherung.",
     "canaryUnavailableObserveOnly": "Der Canary-Modus ist für Observe-only-Repositories nicht verfügbar, weil Borg UI deren Backups nicht erstellt. Nutze ausgewählte Probe-Pfade oder einen vollständigen Archiv-Drill.",
     "noBackupYet": "Noch keine Sicherung",
+    "timeLabels": {
+      "storedUtc": "Gespeichert in UTC",
+      "localTimezone": "Deine lokale Zeitzone"
+    },
     "probeModeHint": "Der Probe-Pfad-Modus stellt echte von dir gewählte Dateien wieder her. Nutze ihn für aussagekräftigere Prüfungen kritischer Pfade ohne das gesamte Archiv zu extrahieren.",
     "fullArchiveWarning": "Vollständige Archiv-Drills können bei großen Repositories teuer sein. Nutze sie sparsam und nur mit ausreichend temporärem Speicher und Wartungsfenster."
   },
@@ -3957,6 +3976,7 @@
       "remoteSshfsNote": "Remote-Verzeichnisse werden über SSHFS eingehängt und behalten ihre ursprünglichen Pfade bei. Ausschlussmuster funktionieren genauso wie bei lokalen Quellen (z.B. */var/cache/*)."
     },
     "dataSource": {
+      "note": "Hinweis:",
       "title": "Wo befinden sich die Daten, die du sichern möchtest?",
       "localDescription": "Daten von diesem Server sichern (lokale oder eingehängte Dateisysteme)",
       "agentLocalDescription": "Pfade aus dem Dateisystem des ausgewählten verwalteten Agenten sichern",
@@ -4023,6 +4043,12 @@
       "rcloneOAuthBorgUiHelper": "Borg UI empfängt den Provider-Callback serverseitig. Nachdem der Provider die Autorisierung als abgeschlossen meldet, kehre hierher zurück; dieser Dialog prüft automatisch.",
       "rcloneOAuthLoopbackHelper": "rclone verwendet seinen lokalen Loopback-Callback. Verwende dies nur, wenn dein Browser denselben Host wie der rclone-Prozess erreichen kann.",
       "rcloneOAuthSetupMissing": "Borg UI-eigenes OAuth ist für diesen Provider nicht konfiguriert.",
+      "rcloneDefaultProviders": {
+        "localLabel": "Lokales Dateisystem",
+        "localDescription": "Remote für lokale Pfade.",
+        "customLabel": "Benutzerdefiniertes rclone-Backend",
+        "customDescription": "Manuelle Einrichtung für jedes rclone-Backend."
+      },
       "rcloneOAuthCallbackUrl": "Borg UI-Callback: {{url}}",
       "rcloneOAuthModeBorgUi": "Borg UI-Callback",
       "rcloneOAuthModeLoopback": "rclone-Loopback",
@@ -4140,6 +4166,8 @@
       "useFolder": "Ordner verwenden"
     },
     "restoreDestination": {
+      "port": "Port {{port}}",
+      "connected": "Verbunden",
       "title": "Wohin sollen Dateien wiederhergestellt werden?",
       "subtitle": "Wähle Ziel und Speicherort für die wiederhergestellten Dateien",
       "borgUiServerDesc": "Im lokalen Speicher dieses Servers wiederherstellen",
@@ -4356,6 +4384,7 @@
         "selectAtLeastOne": "Wähle mindestens ein Repository aus, um fortzufahren."
       },
       "maintenance": {
+        "caution": "Achtung:",
         "title": "Wartungsoptionen",
         "subtitle": "Bereinigung und Komprimierung nach Sicherungen ausführen, um Speicherplatz zu verwalten.",
         "info": "Bereinigung entfernt alte Archive. Komprimierung gibt Speicherplatz frei.",
@@ -4365,6 +4394,10 @@
         "compactAfterPrune": "Komprimierung nach Bereinigung ausführen",
         "compactAfterPruneDesc": "Speicherplatz durch Freigabe von Segmenten zurückgewinnen",
         "compactInfo": "Komprimierung gibt nach der Bereinigung Speicherplatz frei. Kann bei großen Repositories Zeit in Anspruch nehmen."
+      },
+      "stepIndicator": {
+        "progress": "Schritt {{current}} / {{total}}",
+        "goToStep": "Zu Schritt {{step}}: {{label}}"
       },
       "config": {
         "scheduleLabel": "Zeitplan (Cron-Ausdruck)",
@@ -4749,11 +4782,18 @@
     "creating": "Erstellt...",
     "create": "Erstellen",
     "failedToLoad": "Verzeichnis konnte nicht geladen werden",
+    "selectAgentFirst": "Wähle vor dem Durchsuchen einen Agenten aus.",
+    "selectRemoteFirst": "Wähle zuerst ein Rclone-Remote aus.",
+    "createFailed": "Ordner konnte nicht erstellt werden",
     "chips": {
       "remote": "Remote",
       "host": "Host",
       "borg": "Borg"
     }
+  },
+  "repoSelect": {
+    "label": "Repository",
+    "placeholder": "Repository auswählen"
   },
   "cronExpressionInput": {
     "label": "Zeitplan"

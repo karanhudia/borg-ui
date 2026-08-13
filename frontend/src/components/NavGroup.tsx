@@ -1,5 +1,6 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   Box,
   Collapse,
@@ -40,6 +41,7 @@ export default function NavGroup({
   currentPath,
   navLabel,
 }: NavGroupProps) {
+  const { t } = useTranslation()
   const isAnySubItemActive = subItems.some((sub) => sub.href && currentPath.startsWith(sub.href))
 
   return (
@@ -144,7 +146,7 @@ export default function NavGroup({
             return (
               <ListItem key={subItem.name} disablePadding>
                 {isDisabled ? (
-                  <Tooltip title="Coming soon" arrow placement="right">
+                  <Tooltip title={t('navigation.comingSoon')} arrow placement="right">
                     <Box sx={{ width: '100%' }}>{button}</Box>
                   </Tooltip>
                 ) : (

@@ -31,6 +31,8 @@
     },
     "status": "Status",
     "loading": "Loading...",
+    "search": "Search",
+    "noResults": "No results found",
     "password": {
       "show": "Show password",
       "hide": "Hide password"
@@ -131,6 +133,7 @@
     "badges": {
       "new": "New"
     },
+    "comingSoon": "Coming soon",
     "settings": {
       "personal": "Personal",
       "system": "System",
@@ -1016,6 +1019,18 @@
       "never": "Never"
     },
     "card": {
+      "serviceTypes": {
+        "webhook": "Webhook",
+        "slack": "Slack",
+        "discord": "Discord",
+        "telegram": "Telegram",
+        "email": "Email",
+        "teams": "Teams",
+        "pushover": "Pushover",
+        "ntfy": "Ntfy",
+        "gotify": "Gotify",
+        "matrix": "Matrix"
+      },
       "stats": {
         "schedule": "Schedule",
         "repository": "Repository",
@@ -3861,6 +3876,10 @@
     "canaryModeHint": "Canary mode adds a tiny Borg UI canary file to future backups while enabled, then verifies it from the latest archive. It works after the next backup.",
     "canaryUnavailableObserveOnly": "Canary mode is unavailable for observe-only repositories because Borg UI does not create their backups. Use selected probe paths or a full archive drill.",
     "noBackupYet": "No backup yet",
+    "timeLabels": {
+      "storedUtc": "Stored UTC",
+      "localTimezone": "Your local timezone"
+    },
     "probeModeHint": "Probe-path mode restores real files you choose. Use it for higher-confidence checks on critical paths without extracting the full archive.",
     "fullArchiveWarning": "Full archive drills can be expensive on large repositories. Use this sparingly, and only when you have enough temporary storage and maintenance window budget."
   },
@@ -3954,6 +3973,7 @@
       "remoteSshfsNote": "Remote directories are mounted via SSHFS preserving their original paths. Exclude patterns work the same as local sources (e.g., */var/cache/*)."
     },
     "dataSource": {
+      "note": "Note:",
       "title": "Where is the data you want to back up?",
       "localDescription": "Back up data from this server (local or mounted filesystems)",
       "agentLocalDescription": "Back up paths from the selected managed agent filesystem",
@@ -4020,6 +4040,12 @@
       "rcloneOAuthBorgUiHelper": "Borg UI receives the provider callback server-side. After the provider says authorization is complete, return here; this dialog checks automatically.",
       "rcloneOAuthLoopbackHelper": "rclone will use its local loopback callback. Use this only when your browser can reach the same host as the rclone process.",
       "rcloneOAuthSetupMissing": "Borg UI-owned OAuth is not configured for this provider.",
+      "rcloneDefaultProviders": {
+        "localLabel": "Local filesystem",
+        "localDescription": "Local path remote.",
+        "customLabel": "Custom rclone backend",
+        "customDescription": "Manual setup for any rclone backend."
+      },
       "rcloneOAuthCallbackUrl": "Borg UI callback: {{url}}",
       "rcloneOAuthModeBorgUi": "Borg UI callback",
       "rcloneOAuthModeLoopback": "rclone loopback",
@@ -4137,6 +4163,8 @@
       "useFolder": "Use folder"
     },
     "restoreDestination": {
+      "port": "Port {{port}}",
+      "connected": "Connected",
       "title": "Where should files be restored?",
       "subtitle": "Select the destination and location for your restored files",
       "borgUiServerDesc": "Restore to this server's local storage",
@@ -4350,6 +4378,7 @@
         "selectAtLeastOne": "Select at least one repository to continue."
       },
       "maintenance": {
+        "caution": "Caution:",
         "title": "Maintenance Options",
         "subtitle": "Run prune and compact after backups to manage disk space.",
         "info": "Prune removes old archives. Compact reclaims disk space.",
@@ -4359,6 +4388,10 @@
         "compactAfterPrune": "Run compact after prune",
         "compactAfterPruneDesc": "Reclaim disk space by freeing segments",
         "compactInfo": "Compact reclaims disk space after prune. May take time on large repositories."
+      },
+      "stepIndicator": {
+        "progress": "Step {{current}} / {{total}}",
+        "goToStep": "Go to step {{step}}: {{label}}"
       },
       "config": {
         "scheduleLabel": "Schedule (Cron Expression)",
@@ -4743,11 +4776,18 @@
     "creating": "Creating...",
     "create": "Create",
     "failedToLoad": "Failed to load directory",
+    "selectAgentFirst": "Select an agent before browsing.",
+    "selectRemoteFirst": "Select a rclone remote first.",
+    "createFailed": "Failed to create folder",
     "chips": {
       "remote": "Remote",
       "host": "Host",
       "borg": "Borg"
     }
+  },
+  "repoSelect": {
+    "label": "Repository",
+    "placeholder": "Select a repository"
   },
   "cronExpressionInput": {
     "label": "Schedule"

@@ -317,8 +317,8 @@ const ScheduledRestoreChecksSection = forwardRef<ScheduledRestoreChecksSectionRe
             title={
               <ScheduledInstantTooltip
                 display={startedDisplay}
-                scheduledLabel="Stored UTC"
-                localLabel="Your local timezone"
+                scheduledLabel={t('scheduledRestoreChecks.timeLabels.storedUtc')}
+                localLabel={t('scheduledRestoreChecks.timeLabels.localTimezone')}
               />
             }
             arrow

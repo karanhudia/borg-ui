@@ -31,6 +31,8 @@
     },
     "status": "Stato",
     "loading": "Caricamento...",
+    "search": "Cerca",
+    "noResults": "Nessun risultato trovato",
     "password": {
       "show": "Mostra password",
       "hide": "Nascondi password"
@@ -131,6 +133,7 @@
     "badges": {
       "new": "Nuovo"
     },
+    "comingSoon": "Prossimamente",
     "settings": {
       "personal": "Personali",
       "system": "Sistema",
@@ -1005,6 +1008,18 @@
       "completed": "Manutenzione completata"
     },
     "card": {
+      "serviceTypes": {
+        "webhook": "Webhook",
+        "slack": "Slack",
+        "discord": "Discord",
+        "telegram": "Telegram",
+        "email": "Email",
+        "teams": "Teams",
+        "pushover": "Pushover",
+        "ntfy": "Ntfy",
+        "gotify": "Gotify",
+        "matrix": "Matrix"
+      },
       "stats": {
         "schedule": "Pianificazione",
         "repository": "Repository",
@@ -3864,6 +3879,10 @@
     "canaryModeHint": "La modalità canary aggiunge un piccolo file canary di Borg UI ai backup futuri finché è attiva, poi lo verifica dall'archivio più recente. Funziona dopo il prossimo backup.",
     "canaryUnavailableObserveOnly": "La modalità canary non è disponibile per i repository solo osservazione perché Borg UI non crea i loro backup. Usa percorsi di prova selezionati o una verifica dell'intero archivio.",
     "noBackupYet": "Nessun backup",
+    "timeLabels": {
+      "storedUtc": "Memorizzato in UTC",
+      "localTimezone": "Il tuo fuso orario locale"
+    },
     "probeModeHint": "La modalità percorsi di prova ripristina file reali che scegli tu. Usala per verifiche più approfondite su percorsi critici senza estrarre l'intero archivio.",
     "fullArchiveWarning": "Le verifiche dell'intero archivio possono essere costose su repository grandi. Usale raramente e solo se hai spazio temporaneo e una finestra di manutenzione adeguata."
   },
@@ -3957,6 +3976,7 @@
       "remoteSshfsNote": "Le directory remote vengono montate tramite SSHFS preservando i loro percorsi originali. I pattern di esclusione funzionano come per le sorgenti locali (es., */var/cache/*)."
     },
     "dataSource": {
+      "note": "Nota:",
       "title": "Dove si trovano i dati di cui vuoi fare il backup?",
       "localDescription": "Backup dei dati da questo server (filesystem locali o montati)",
       "agentLocalDescription": "Esegui il backup dei percorsi dal filesystem dell'agente gestito selezionato",
@@ -4023,6 +4043,12 @@
       "rcloneOAuthBorgUiHelper": "Borg UI riceve il callback del provider lato server. Quando il provider indica che l'autorizzazione è completa, torna qui; questa finestra controllerà automaticamente.",
       "rcloneOAuthLoopbackHelper": "rclone userà il proprio callback loopback locale. Usalo solo quando il browser può raggiungere lo stesso host del processo rclone.",
       "rcloneOAuthSetupMissing": "L'OAuth gestito da Borg UI non è configurato per questo provider.",
+      "rcloneDefaultProviders": {
+        "localLabel": "File system locale",
+        "localDescription": "Remoto per percorso locale.",
+        "customLabel": "Backend rclone personalizzato",
+        "customDescription": "Configurazione manuale per qualsiasi backend rclone."
+      },
       "rcloneOAuthCallbackUrl": "Callback Borg UI: {{url}}",
       "rcloneOAuthModeBorgUi": "Callback Borg UI",
       "rcloneOAuthModeLoopback": "loopback rclone",
@@ -4140,6 +4166,8 @@
       "useFolder": "Usa cartella"
     },
     "restoreDestination": {
+      "port": "Porta {{port}}",
+      "connected": "Connesso",
       "title": "Dove devono essere ripristinati i file?",
       "subtitle": "Seleziona la destinazione e la posizione per i tuoi file ripristinati",
       "borgUiServerDesc": "Ripristina sull'archiviazione locale di questo server",
@@ -4356,6 +4384,7 @@
         "selectAtLeastOne": "Seleziona almeno un repository per continuare."
       },
       "maintenance": {
+        "caution": "Attenzione:",
         "title": "Opzioni Manutenzione",
         "subtitle": "Esegui pulizia e compattazione dopo i backup per gestire lo spazio su disco.",
         "info": "La pulizia rimuove gli archivi vecchi. La compattazione recupera spazio su disco.",
@@ -4365,6 +4394,10 @@
         "compactAfterPrune": "Esegui compattazione dopo la pulizia",
         "compactAfterPruneDesc": "Recupera spazio su disco liberando segmenti",
         "compactInfo": "La compattazione recupera spazio su disco dopo la pulizia. Potrebbe richiedere tempo su repository di grandi dimensioni."
+      },
+      "stepIndicator": {
+        "progress": "Passaggio {{current}} / {{total}}",
+        "goToStep": "Vai al passaggio {{step}}: {{label}}"
       },
       "config": {
         "scheduleLabel": "Pianificazione (Espressione Cron)",
@@ -4749,11 +4782,18 @@
     "creating": "Creazione in corso...",
     "create": "Crea",
     "failedToLoad": "Impossibile caricare la directory",
+    "selectAgentFirst": "Seleziona un agente prima di esplorare.",
+    "selectRemoteFirst": "Seleziona prima un remoto rclone.",
+    "createFailed": "Impossibile creare la cartella",
     "chips": {
       "remote": "Remoto",
       "host": "Host",
       "borg": "Borg"
     }
+  },
+  "repoSelect": {
+    "label": "Repository",
+    "placeholder": "Seleziona un repository"
   },
   "cronExpressionInput": {
     "label": "Pianificazione"

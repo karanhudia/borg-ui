@@ -201,7 +201,7 @@ export default function FileExplorerDialog({
       try {
         if (useConnectionType === 'agent') {
           if (!agentId) {
-            setError(t('fileExplorer.selectAgentFirst', 'Select an agent before browsing.'))
+            setError(t('fileExplorer.selectAgentFirst'))
             setItems([])
             return
           }
@@ -255,7 +255,7 @@ export default function FileExplorerDialog({
 
         if (useConnectionType === 'rclone') {
           if (!rcloneRemoteId) {
-            setError(t('wizard.cloudMirror.selectRemoteFirst', 'Select a rclone remote first.'))
+            setError(t('fileExplorer.selectRemoteFirst'))
             setItems([])
             return
           }
@@ -456,7 +456,8 @@ export default function FileExplorerDialog({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error('Failed to create folder:', err)
-      const errorMessage = err.response?.data?.detail || err.message || 'Failed to create folder'
+      const errorMessage =
+        err.response?.data?.detail || err.message || t('fileExplorer.createFailed')
       // Handle validation errors from FastAPI
       if (typeof errorMessage === 'object') {
         setError(JSON.stringify(errorMessage))
