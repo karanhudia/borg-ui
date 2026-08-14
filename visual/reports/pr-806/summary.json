@@ -1,21 +1,58 @@
 {
-  "generatedAt": "2026-08-14T02:42:47.502Z",
+  "generatedAt": "2026-08-14T03:20:39.340Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #806 visual report",
-    "commitSha": "e80681065915",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/31764325935"
+    "commitSha": "3da5cf1170f7",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/31765995763"
   },
   "totals": {
     "baseline": 458,
-    "actual": 464,
+    "actual": 474,
     "compared": 458,
-    "changed": 0,
-    "added": 6,
+    "changed": 2,
+    "added": 16,
     "removed": 0,
-    "unchanged": 458
+    "unchanged": 456
   },
-  "changed": [],
+  "changed": [
+    {
+      "fileName": "components-backupplanrunspanel--skipped-availability-check--mobile.png",
+      "baselinePath": "images/baseline/components-backupplanrunspanel--skipped-availability-check--mobile.png",
+      "actualPath": "images/actual/components-backupplanrunspanel--skipped-availability-check--mobile.png",
+      "diffPath": "images/diff/components-backupplanrunspanel--skipped-availability-check--mobile.png",
+      "diffPixels": 11312,
+      "totalPixels": 329160,
+      "diffRatio": 0.0343662656458865,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "components-backupplanrunspanel--skipped-availability-check.png",
+      "baselinePath": "images/baseline/components-backupplanrunspanel--skipped-availability-check.png",
+      "actualPath": "images/actual/components-backupplanrunspanel--skipped-availability-check.png",
+      "diffPath": "images/diff/components-backupplanrunspanel--skipped-availability-check.png",
+      "diffPixels": 2325,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0022705078125,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    }
+  ],
   "added": [
     {
       "fileName": "components-backupjobstable--availability-check-skipped--mobile.png",
@@ -26,6 +63,14 @@
       "actualPath": "images/actual/components-backupjobstable--availability-check-skipped.png"
     },
     {
+      "fileName": "components-backupjobstable--status-comparison--mobile.png",
+      "actualPath": "images/actual/components-backupjobstable--status-comparison--mobile.png"
+    },
+    {
+      "fileName": "components-backupjobstable--status-comparison.png",
+      "actualPath": "images/actual/components-backupjobstable--status-comparison.png"
+    },
+    {
       "fileName": "components-backupplanrunspanel--skipped-unavailable-source--mobile.png",
       "actualPath": "images/actual/components-backupplanrunspanel--skipped-unavailable-source--mobile.png"
     },
@@ -34,12 +79,44 @@
       "actualPath": "images/actual/components-backupplanrunspanel--skipped-unavailable-source.png"
     },
     {
+      "fileName": "components-statusbadge--completed--mobile.png",
+      "actualPath": "images/actual/components-statusbadge--completed--mobile.png"
+    },
+    {
+      "fileName": "components-statusbadge--completed-with-warnings--mobile.png",
+      "actualPath": "images/actual/components-statusbadge--completed-with-warnings--mobile.png"
+    },
+    {
+      "fileName": "components-statusbadge--completed-with-warnings.png",
+      "actualPath": "images/actual/components-statusbadge--completed-with-warnings.png"
+    },
+    {
+      "fileName": "components-statusbadge--completed.png",
+      "actualPath": "images/actual/components-statusbadge--completed.png"
+    },
+    {
+      "fileName": "components-statusbadge--failed--mobile.png",
+      "actualPath": "images/actual/components-statusbadge--failed--mobile.png"
+    },
+    {
+      "fileName": "components-statusbadge--failed.png",
+      "actualPath": "images/actual/components-statusbadge--failed.png"
+    },
+    {
       "fileName": "components-statusbadge--skipped--mobile.png",
       "actualPath": "images/actual/components-statusbadge--skipped--mobile.png"
     },
     {
       "fileName": "components-statusbadge--skipped.png",
       "actualPath": "images/actual/components-statusbadge--skipped.png"
+    },
+    {
+      "fileName": "components-statusbadge--status-comparison--mobile.png",
+      "actualPath": "images/actual/components-statusbadge--status-comparison--mobile.png"
+    },
+    {
+      "fileName": "components-statusbadge--status-comparison.png",
+      "actualPath": "images/actual/components-statusbadge--status-comparison.png"
     }
   ],
   "removed": [],
@@ -463,12 +540,6 @@
     },
     {
       "fileName": "components-backupplanrunspanel--retryable-backup-plan-run.png"
-    },
-    {
-      "fileName": "components-backupplanrunspanel--skipped-availability-check--mobile.png"
-    },
-    {
-      "fileName": "components-backupplanrunspanel--skipped-availability-check.png"
     },
     {
       "fileName": "components-backupplanselect--configured-plan--mobile.png"
