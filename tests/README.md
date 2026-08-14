@@ -350,11 +350,8 @@ test_configs = [
         "path": "/path/to/repo",
         "passphrase": None,  # or "password"
         "archives": [
-            {
-                "name": "my-archive",
-                "test_paths": ["", "some/path", "another/path"]
-            }
-        ]
+            {"name": "my-archive", "test_paths": ["", "some/path", "another/path"]}
+        ],
     }
 ]
 ```
@@ -368,9 +365,7 @@ def test_my_feature(self) -> bool:
     """Test my new feature"""
     try:
         response = self.session.get(
-            f"{self.base_url}/api/my-endpoint",
-            headers=self.headers,
-            timeout=5
+            f"{self.base_url}/api/my-endpoint", headers=self.headers, timeout=5
         )
 
         if response.status_code == 200:
