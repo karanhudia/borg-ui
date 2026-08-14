@@ -83,7 +83,7 @@ function App() {
       return (
         <div className="min-h-screen flex items-center justify-center">
           {authError ? (
-            <div className="max-w-lg rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+            <div className="max-w-lg rounded-2xl border border-slate-200 bg-white p-8 shadow-xs">
               <div className="flex items-center gap-2.5">
                 <ShieldAlert size={22} className="shrink-0 text-slate-500" />
                 <h1 className="text-2xl font-semibold text-slate-900">
@@ -123,7 +123,7 @@ function App() {
       return (
         <div className="min-h-screen flex items-center justify-center">
           {authError ? (
-            <div className="max-w-lg rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+            <div className="max-w-lg rounded-2xl border border-slate-200 bg-white p-8 shadow-xs">
               <div className="flex items-center gap-2.5">
                 <ShieldAlert size={22} className="shrink-0 text-slate-500" />
                 <h1 className="text-2xl font-semibold text-slate-900">
