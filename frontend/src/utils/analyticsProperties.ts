@@ -1,11 +1,5 @@
 export type JobStatus =
-  | 'pending'
-  | 'running'
-  | 'completed'
-  | 'completed_with_warnings'
-  | 'failed'
-  | 'cancelled'
-  | string
+  'pending' | 'running' | 'completed' | 'completed_with_warnings' | 'failed' | 'cancelled' | string
 
 export const TERMINAL_JOB_STATUSES = new Set<JobStatus>([
   'completed',

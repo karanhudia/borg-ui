@@ -21,7 +21,7 @@ import {
   clearAccessToken,
   type BackendTargetRequestConfig,
 } from '../authHeaders'
-import type { AxiosProgressEvent, InternalAxiosRequestConfig } from 'axios'
+import type { AxiosProgressEvent, AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 
 export const httpClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL || `${BASE_PATH}/api`,
@@ -201,7 +201,7 @@ export class BorgApiClient {
 
   // ── Backup operations ────────────────────────────────────────────────────
 
-  runBackup(options: BackupOptions = {}) {
+  runBackup(options: BackupOptions = {}): Promise<AxiosResponse> {
     if (this.v === '/v2') {
       return httpClient.post('/v2/backup/run', {
         repository_id: this.repoId,
