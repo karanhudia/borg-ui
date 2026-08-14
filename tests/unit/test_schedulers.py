@@ -23,6 +23,7 @@ from app.services.mqtt_sync_scheduler import (
     start_mqtt_sync_scheduler,
 )
 from app.services.stats_refresh_scheduler import StatsRefreshScheduler
+from app.services.schedule_availability import AvailabilityDecision
 from app.api import schedule as schedule_api
 from app.api.schedule import check_scheduled_jobs, dispatch_due_scheduled_backups
 
@@ -105,7 +106,7 @@ async def test_check_scheduler_creates_job_and_updates_next_run(db_session):
 async def test_availability_automation_success_advances_next_check(db_session):
     repo = Repository(
         name="Availability source",
-        path="/tmp/availability-source",
+        path="/availability-source",
         encryption="none",
         repository_type="local",
     )
@@ -132,12 +133,17 @@ async def test_availability_automation_success_advances_next_check(db_session):
         patch(
             "app.api.schedule.asyncio.create_task",
             side_effect=close_background_task,
-        ),
+        ) as mock_create_task,
         patch("app.api.schedule._track_scheduled_backup_task"),
+        patch(
+            "app.api.schedule.repositories_available",
+            new=AsyncMock(return_value=AvailabilityDecision(True)),
+        ),
     ):
         await dispatch_due_scheduled_backups(db_session, now)
 
     db_session.refresh(job)
+    mock_create_task.assert_called_once()
     assert job.next_run == now + timedelta(minutes=30)
 
 

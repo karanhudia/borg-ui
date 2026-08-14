@@ -622,12 +622,14 @@ describe('BackupJobsTable', () => {
     renderWithProviders(
       <BackupJobsTable
         jobs={[availabilityCheck]}
-        actions={{ runNow: true }}
+        actions={{ runNow: true, delete: true }}
         onRunNow={mockCallbacks.onRunNow}
+        canDeleteJobs
       />
     )
 
     expect(screen.queryByRole('button', { name: 'Run Now' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Delete')).not.toBeInTheDocument()
   })
 
   it('calls onRunNow when Run Now is clicked', async () => {
