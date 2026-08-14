@@ -613,18 +613,6 @@ export default function BackupPlanRunsPanel({
                   : undefined
             }
           />
-          {run.skip_reason && (
-            <Chip
-              size="small"
-              variant="outlined"
-              label={
-                run.skip_reason === 'minimum_interval_not_elapsed'
-                  ? t('availabilitySchedule.skipReasons.minimumIntervalNotElapsed')
-                  : t('availabilitySchedule.skipReasons.sourceUnavailable')
-              }
-              sx={{ alignSelf: 'flex-start' }}
-            />
-          )}
           {isActiveRun(run.status) && (
             <LinearProgress
               variant={getRunProgress(run) === 0 ? 'indeterminate' : 'determinate'}

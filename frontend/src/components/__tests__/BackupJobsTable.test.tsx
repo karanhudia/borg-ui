@@ -630,6 +630,7 @@ describe('BackupJobsTable', () => {
 
     expect(screen.queryByRole('button', { name: 'Run Now' })).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Delete')).not.toBeInTheDocument()
+    expect(screen.queryByText('Source unavailable')).not.toBeInTheDocument()
   })
 
   it('calls onRunNow when Run Now is clicked', async () => {
