@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { Box } from '@mui/material'
-import type { ComponentProps } from 'react'
+import type { ComponentProps, JSX } from 'react'
 import type { SSHConnectionDiagnosticsResponse } from '../../../services/api'
 import type { SSHConnection } from '../types'
 import { ConnectionDiagnosticsDialog } from './ConnectionDiagnosticsDialog'
