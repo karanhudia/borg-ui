@@ -23,6 +23,7 @@ from app.services.mqtt_sync_scheduler import (
     start_mqtt_sync_scheduler,
 )
 from app.services.stats_refresh_scheduler import StatsRefreshScheduler
+from app.services.schedule_availability import AvailabilityDecision
 from app.api import schedule as schedule_api
 from app.api.schedule import check_scheduled_jobs, dispatch_due_scheduled_backups
 
@@ -98,6 +99,52 @@ async def test_check_scheduler_creates_job_and_updates_next_run(db_session):
     mock_start.assert_called_once()
     assert mock_start.call_args.kwargs["extra_fields"]["max_duration"] == 0
     assert mock_start.call_args.kwargs["extra_fields"]["extra_flags"] == "--verify-data"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_availability_automation_success_advances_next_check(db_session):
+    repo = Repository(
+        name="Availability source",
+        path="/availability-source",
+        encryption="none",
+        repository_type="local",
+    )
+    db_session.add(repo)
+    db_session.commit()
+
+    now = datetime(2026, 1, 2, 12, 0)
+    job = ScheduledJob(
+        name="Availability automation",
+        schedule_mode="availability",
+        availability_check_interval_minutes=30,
+        enabled=True,
+        repository_id=repo.id,
+        next_run=now - timedelta(minutes=1),
+    )
+    db_session.add(job)
+    db_session.commit()
+
+    def close_background_task(coro):
+        coro.close()
+        return None
+
+    with (
+        patch(
+            "app.api.schedule.asyncio.create_task",
+            side_effect=close_background_task,
+        ) as mock_create_task,
+        patch("app.api.schedule._track_scheduled_backup_task"),
+        patch(
+            "app.api.schedule.repositories_available",
+            new=AsyncMock(return_value=AvailabilityDecision(True)),
+        ),
+    ):
+        await dispatch_due_scheduled_backups(db_session, now)
+
+    db_session.refresh(job)
+    mock_create_task.assert_called_once()
+    assert job.next_run == now + timedelta(minutes=30)
 
 
 @pytest.mark.unit

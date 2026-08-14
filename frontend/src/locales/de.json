@@ -992,7 +992,7 @@
       "fixedTime": "Zu einer festen Zeit",
       "whenAvailable": "Wenn die Quelle verfügbar ist",
       "availabilityDescription": "Borg UI prüft eine erreichbare Quelle und führt die Sicherung nach Ablauf des Mindestintervalls aus.",
-      "checkInterval": "Prüfen alle (Minuten)",
+      "checkInterval": "Prüfintervall (Minuten)",
       "checkIntervalHelper": "Wie oft Borg UI prüft, ob die Quelle verfügbar ist.",
       "minimumInterval": "Mindestintervall nach erfolgreicher Ausführung (Stunden)",
       "minimumIntervalHelper": "Borg UI startet keine weitere Sicherung, bevor dieses Intervall abgelaufen ist."

@@ -610,6 +610,29 @@ describe('BackupJobsTable', () => {
     expect(runNowButtons.length).toBe(2)
   })
 
+  it('does not offer Run Now for immutable availability decisions', () => {
+    const availabilityCheck = {
+      ...mockJobs[0],
+      id: 4,
+      type: 'availability_check',
+      status: 'skipped',
+      skip_reason: 'source_unavailable' as const,
+    }
+
+    renderWithProviders(
+      <BackupJobsTable
+        jobs={[availabilityCheck]}
+        actions={{ runNow: true, delete: true }}
+        onRunNow={mockCallbacks.onRunNow}
+        canDeleteJobs
+      />
+    )
+
+    expect(screen.queryByRole('button', { name: 'Run Now' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Delete')).not.toBeInTheDocument()
+    expect(screen.queryByText('Source unavailable')).not.toBeInTheDocument()
+  })
+
   it('calls onRunNow when Run Now is clicked', async () => {
     const user = userEvent.setup()
 

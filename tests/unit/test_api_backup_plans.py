@@ -33,6 +33,7 @@ from app.database.models import (
 )
 from app.core.security import get_password_hash
 from app.services.backup_plan_execution_service import backup_plan_execution_service
+from app.services.schedule_availability import AvailabilityDecision
 
 
 def _json_snapshot(value):
@@ -2545,6 +2546,43 @@ class TestBackupPlanRoutes:
         run = test_db.query(BackupPlanRun).filter_by(backup_plan_id=plan.id).one()
         assert run.trigger == "schedule"
         assert run.status == "pending"
+
+    @pytest.mark.asyncio
+    async def test_availability_plan_success_advances_next_check(self, test_db):
+        _set_plan(test_db, "community")
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        now = datetime(2026, 1, 1, 2, 0)
+        plan = _create_scheduled_plan(
+            test_db,
+            [repo],
+            next_run=now - timedelta(minutes=1),
+        )
+        plan.schedule_mode = "availability"
+        plan.cron_expression = None
+        plan.availability_check_interval_minutes = 30
+        test_db.commit()
+
+        def close_background_task(coro):
+            coro.close()
+            return None
+
+        with (
+            patch(
+                "app.services.backup_plan_execution_service.source_locations_available",
+                new=AsyncMock(return_value=AvailabilityDecision(True)),
+            ),
+            patch(
+                "app.services.backup_plan_execution_service.asyncio.create_task",
+                side_effect=close_background_task,
+            ),
+        ):
+            dispatched = await backup_plan_execution_service.dispatch_due_runs(
+                test_db, now
+            )
+
+        assert dispatched == 1
+        test_db.refresh(plan)
+        assert plan.next_run == now + timedelta(minutes=30)
 
     @pytest.mark.asyncio
     async def test_availability_plan_records_minimum_interval_skip(self, test_db):

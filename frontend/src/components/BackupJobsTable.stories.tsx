@@ -80,6 +80,61 @@ const nonRetryableDestructiveJobs: Job[] = [
   },
 ]
 
+const availabilityCheckJobs: Job[] = [
+  {
+    id: 203,
+    repository: '/backups/accounting',
+    repository_path: '/backups/accounting',
+    repository_id: 31,
+    type: 'availability_check',
+    status: 'skipped',
+    skip_reason: 'source_unavailable',
+    started_at: '2026-05-22T09:30:00Z',
+    completed_at: '2026-05-22T09:30:00Z',
+    triggered_by: 'schedule',
+    execution_mode: 'local',
+    error_message: 'SSH source unavailable for accounting source',
+  },
+]
+
+const statusComparisonJobs: Job[] = [
+  {
+    id: 301,
+    repository: '/backups/accounting',
+    repository_path: '/backups/accounting',
+    type: 'backup',
+    status: 'completed',
+    started_at: '2026-05-22T08:00:00Z',
+    completed_at: '2026-05-22T08:07:00Z',
+    triggered_by: 'manual',
+    execution_mode: 'local',
+  },
+  {
+    id: 302,
+    repository: '/backups/accounting',
+    repository_path: '/backups/accounting',
+    type: 'backup',
+    status: 'completed_with_warnings',
+    started_at: '2026-05-22T08:15:00Z',
+    completed_at: '2026-05-22T08:22:00Z',
+    triggered_by: 'manual',
+    execution_mode: 'local',
+  },
+  {
+    id: 303,
+    repository: '/backups/accounting',
+    repository_path: '/backups/accounting',
+    type: 'backup',
+    status: 'failed',
+    started_at: '2026-05-22T08:30:00Z',
+    completed_at: '2026-05-22T08:31:00Z',
+    triggered_by: 'manual',
+    execution_mode: 'local',
+    error_message: 'Archive finalization failed',
+  },
+  availabilityCheckJobs[0],
+]
+
 const meta = {
   title: 'Components/BackupJobsTable',
   component: BackupJobsTable,
@@ -137,6 +192,35 @@ export const NonRetryableDestructiveJob: Story = {
     },
     canRetryJob: () => true,
     onRetryJob: () => {},
+  },
+  render: (args) => (
+    <Box sx={{ p: 3 }}>
+      <BackupJobsTable {...args} />
+    </Box>
+  ),
+}
+
+export const AvailabilityCheckSkipped: Story = {
+  args: {
+    jobs: availabilityCheckJobs,
+    showTypeColumn: true,
+    showTriggerColumn: true,
+    actions: { runNow: true, delete: true },
+    onRunNow: () => {},
+    canDeleteJobs: true,
+  },
+  render: (args) => (
+    <Box sx={{ p: 3 }}>
+      <BackupJobsTable {...args} />
+    </Box>
+  ),
+}
+
+export const StatusComparison: Story = {
+  args: {
+    jobs: statusComparisonJobs,
+    showTypeColumn: true,
+    showTriggerColumn: true,
   },
   render: (args) => (
     <Box sx={{ p: 3 }}>

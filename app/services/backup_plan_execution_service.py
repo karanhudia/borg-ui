@@ -575,6 +575,19 @@ def _remote_script_body(script: str, env: dict[str, str]) -> str:
 
 
 class BackupPlanExecutionService:
+    @staticmethod
+    def _next_plan_run(plan: BackupPlan, now: datetime) -> Optional[datetime]:
+        """Return the next due time for either scheduling mode."""
+        if plan.schedule_mode == "availability":
+            return now + timedelta(minutes=plan.availability_check_interval_minutes)
+        if not plan.cron_expression:
+            return None
+        return calculate_next_cron_run(
+            plan.cron_expression,
+            base_time=now,
+            schedule_timezone=plan.timezone,
+        )
+
     async def dispatch_due_runs(self, db: Session, now: datetime) -> int:
         now = to_utc_naive(now)
         due_plans = (
@@ -667,29 +680,13 @@ class BackupPlanExecutionService:
                     current=access_decision.current.value,
                     reason=access_decision.reason,
                 )
-                plan.next_run = (
-                    calculate_next_cron_run(
-                        plan.cron_expression,
-                        base_time=now,
-                        schedule_timezone=plan.timezone,
-                    )
-                    if plan.cron_expression
-                    else None
-                )
+                plan.next_run = self._next_plan_run(plan, now)
                 db.commit()
                 continue
             try:
                 self.start_run(db, plan, trigger="schedule")
                 plan.last_run = now
-                plan.next_run = (
-                    calculate_next_cron_run(
-                        plan.cron_expression,
-                        base_time=now,
-                        schedule_timezone=plan.timezone,
-                    )
-                    if plan.cron_expression
-                    else None
-                )
+                plan.next_run = self._next_plan_run(plan, now)
                 db.commit()
                 dispatched += 1
             except Exception as exc:

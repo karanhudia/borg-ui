@@ -615,9 +615,6 @@ export const BackupJobsTable = <T extends Job = Job>({
         return (
           <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
             <StatusBadge status={job.status} tooltip={skipReasonLabel || undefined} />
-            {skipReasonLabel && (
-              <Chip size="small" variant="outlined" color="default" label={skipReasonLabel} />
-            )}
             {transportLabel && <Chip size="small" variant="outlined" label={transportLabel} />}
           </Stack>
         )
@@ -794,7 +791,7 @@ export const BackupJobsTable = <T extends Job = Job>({
       onClick: onRunNow,
       color: 'success',
       tooltip: t('backupJobsTable.actions.runNow'),
-      show: (job) => job.status !== 'running',
+      show: (job) => job.status !== 'running' && job.type !== 'availability_check',
     })
   }
 
