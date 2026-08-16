@@ -176,7 +176,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setAuthError(
                 translateBackendKey(
                   detail as
-                    string | { key: string; params?: Record<string, unknown> } | null | undefined
+                    | string
+                    | { key: string; params?: Record<string, unknown> }
+                    | null
+                    | undefined
                 ) || 'Insecure no-auth mode is enabled but Borg UI could not resolve a local user.'
               )
             }

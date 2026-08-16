@@ -6,7 +6,10 @@ import { useT } from './tokens'
 import type { DashboardOverview } from './types'
 
 type LaunchpadRoute =
-  '/backup-plans' | '/cloud-storage' | '/remote-clients' | '/schedule/restore-checks'
+  | '/backup-plans'
+  | '/cloud-storage'
+  | '/remote-clients'
+  | '/schedule/restore-checks'
 type LaunchpadSource = 'backup_plans' | 'cloud_storage' | 'remote_clients' | 'restore_verification'
 
 type LaunchpadCard = {

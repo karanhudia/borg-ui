@@ -293,7 +293,9 @@ const menuItemSx = {
 }
 
 type RichSelectSxItem =
-  boolean | SystemStyleObject<Theme> | ((theme: Theme) => SystemStyleObject<Theme>)
+  | boolean
+  | SystemStyleObject<Theme>
+  | ((theme: Theme) => SystemStyleObject<Theme>)
 
 function toSxArray(sx?: SxProps<Theme>): RichSelectSxItem[] {
   if (!sx) return []

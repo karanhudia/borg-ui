@@ -403,7 +403,11 @@ export default function RepositoryScriptsTab({
                   size="small"
                   color={
                     getRunOnColor(effectiveRunOn) as
-                      'success' | 'error' | 'warning' | 'info' | 'default'
+                      | 'success'
+                      | 'error'
+                      | 'warning'
+                      | 'info'
+                      | 'default'
                   }
                   sx={{ height: 20, fontSize: '0.7rem' }}
                 />

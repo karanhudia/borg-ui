@@ -1,7 +1,10 @@
 import i18n from '../i18n'
 
 export type BackendDetail =
-  string | { key: string; params?: Record<string, unknown> } | null | undefined
+  | string
+  | { key: string; params?: Record<string, unknown> }
+  | null
+  | undefined
 
 /**
  * Translates a backend-originating detail/message value into a user-facing string.
