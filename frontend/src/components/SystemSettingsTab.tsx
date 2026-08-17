@@ -132,8 +132,7 @@ const SystemSettingsTab: React.FC = () => {
   const cacheStats = cacheData
   const systemSettings = systemData?.settings
   const timeoutSources = systemSettings?.timeout_sources as
-    | Record<string, string | null>
-    | undefined
+    Record<string, string | null> | undefined
   const proxyAuthConfig = authConfigData
 
   useEffect(() => {
