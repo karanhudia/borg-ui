@@ -28,5 +28,5 @@ structlog==26.1.0
 tzdata==2026.3
 uvicorn[standard]==0.52.1
 paho-mqtt==2.1.0
-webauthn==2.7.1
+webauthn==3.0.0
 websocket-client==1.9.0
