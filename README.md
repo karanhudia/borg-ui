@@ -140,11 +140,11 @@ For teams that need commercial support, larger rollouts, or an enterprise conver
 
 <div align="center">
 
-<a href="https://star-history.com/#karanhudia/borg-ui&Date">
+<a href="https://star-history.dera.page/#karanhudia/borg-ui&type=Date">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=karanhudia/borg-ui&type=Date&theme=dark" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=karanhudia/borg-ui&type=Date" />
-    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=karanhudia/borg-ui&type=Date" />
+    <source media="(prefers-color-scheme: dark)" srcset="https://star-history.dera.page/svg?repos=karanhudia/borg-ui&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://star-history.dera.page/svg?repos=karanhudia/borg-ui&type=Date" />
+    <img alt="Star History Chart" src="https://star-history.dera.page/svg?repos=karanhudia/borg-ui&type=Date" />
   </picture>
 </a>
 
