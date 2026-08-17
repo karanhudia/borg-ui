@@ -1,4 +1,4 @@
-alembic==1.19.0
+alembic==1.19.1
 apprise==1.12.0
 bcrypt==5.0.0
 coverage[toml]==7.15.4
@@ -12,7 +12,7 @@ psutil==7.2.2
 psycopg[binary]==3.3.4
 pydantic-settings==2.15.0
 pydantic==2.13.4
-pre-commit==4.6.1
+pre-commit==4.6.2
 pytest-asyncio==1.4.0
 pytest-cov==7.1.0
 pytest==9.1.1
@@ -22,11 +22,11 @@ python-multipart==0.0.32
 pyyaml==6.0.3
 redis==8.1.0
 requests==2.34.2
-ruff==0.16.1
-sqlalchemy==2.0.51
+ruff==0.16.3
+sqlalchemy==2.0.52
 structlog==26.1.0
 tzdata==2026.3
-uvicorn[standard]==0.52.1
+uvicorn[standard]==0.52.3
 paho-mqtt==2.1.0
 webauthn==2.7.1
 websocket-client==1.9.0
