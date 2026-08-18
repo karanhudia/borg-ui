@@ -257,13 +257,22 @@ function BackupPlansContentImpl({
           <Stack
             direction="row"
             spacing={1.5}
-            alignItems="center"
-            sx={{ mb: 1, color: 'text.secondary' }}
+            sx={{
+              alignItems: 'center',
+              mb: 1,
+              color: 'text.secondary',
+            }}
           >
             <Box sx={{ display: 'flex', color: 'success.main' }}>
               <RefreshCw size={20} className="animate-spin" />
             </Box>
-            <Typography id="backup-plans-running-heading" variant="h6" fontWeight={600}>
+            <Typography
+              id="backup-plans-running-heading"
+              variant="h6"
+              sx={{
+                fontWeight: 600,
+              }}
+            >
               {t('backupPlans.runsPanel.activeTitle')}
             </Typography>
             <Chip
@@ -272,7 +281,13 @@ function BackupPlansContentImpl({
               label={t('backupPlans.runsPanel.activeCount', { count: runningEntries.length })}
             />
           </Stack>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+              mb: 2,
+            }}
+          >
             {t('backupPlans.runsPanel.activeSubtitle')}
           </Typography>
           <Stack spacing={2}>

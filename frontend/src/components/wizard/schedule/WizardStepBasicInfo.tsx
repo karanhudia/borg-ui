@@ -33,11 +33,14 @@ const WizardStepBasicInfo: React.FC<WizardStepBasicInfoProps> = ({
         fullWidth
         placeholder={t('wizard.scheduleWizard.basicInfo.jobNamePlaceholder')}
         size="medium"
-        InputProps={{
-          sx: { fontSize: '1.1rem' },
-        }}
-        InputLabelProps={{
-          sx: { fontSize: '1.1rem' },
+        slotProps={{
+          input: {
+            sx: { fontSize: '1.1rem' },
+          },
+
+          inputLabel: {
+            sx: { fontSize: '1.1rem' },
+          },
         }}
       />
 
@@ -50,11 +53,14 @@ const WizardStepBasicInfo: React.FC<WizardStepBasicInfoProps> = ({
         placeholder={t('wizard.scheduleWizard.basicInfo.descriptionPlaceholder')}
         fullWidth
         size="medium"
-        InputProps={{
-          sx: { fontSize: '1.1rem' },
-        }}
-        InputLabelProps={{
-          sx: { fontSize: '1.1rem' },
+        slotProps={{
+          input: {
+            sx: { fontSize: '1.1rem' },
+          },
+
+          inputLabel: {
+            sx: { fontSize: '1.1rem' },
+          },
         }}
       />
 

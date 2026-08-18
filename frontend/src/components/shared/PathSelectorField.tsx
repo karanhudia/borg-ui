@@ -80,27 +80,29 @@ export default function PathSelectorField({
         required={required}
         error={error}
         onKeyDown={onKeyDown}
-        InputProps={{
-          endAdornment: (
-            <InputAdornment position="end">
-              <IconButton
-                onClick={() => {
-                  if (onBrowse) {
-                    onBrowse()
-                  } else {
-                    setShowFileExplorer(true)
-                  }
-                }}
-                edge="end"
-                size="small"
-                title={resolvedBrowseButtonLabel}
-                aria-label={resolvedBrowseButtonLabel}
-                disabled={disabled || browseButtonDisabled}
-              >
-                <FolderOpen fontSize="small" />
-              </IconButton>
-            </InputAdornment>
-          ),
+        slotProps={{
+          input: {
+            endAdornment: (
+              <InputAdornment position="end">
+                <IconButton
+                  onClick={() => {
+                    if (onBrowse) {
+                      onBrowse()
+                    } else {
+                      setShowFileExplorer(true)
+                    }
+                  }}
+                  edge="end"
+                  size="small"
+                  title={resolvedBrowseButtonLabel}
+                  aria-label={resolvedBrowseButtonLabel}
+                  disabled={disabled || browseButtonDisabled}
+                >
+                  <FolderOpen fontSize="small" />
+                </IconButton>
+              </InputAdornment>
+            ),
+          },
         }}
       />
 

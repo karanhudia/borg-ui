@@ -56,10 +56,23 @@ export default function AdvancedRepositoryOptions({
   return (
     <>
       <Divider sx={{ mt: 2 }} />
-      <Typography variant="subtitle2" fontWeight={600} sx={{ mt: 2 }}>
+      <Typography
+        variant="subtitle2"
+        sx={{
+          fontWeight: 600,
+          mt: 2,
+        }}
+      >
         {t('advancedRepositoryOptions.title')}
       </Typography>
-      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
+      <Typography
+        variant="caption"
+        sx={{
+          color: 'text.secondary',
+          display: 'block',
+          mb: 1.5,
+        }}
+      >
         {t('advancedRepositoryOptions.subtitle')}
       </Typography>
 
@@ -91,8 +104,10 @@ export default function AdvancedRepositoryOptions({
             onChange={(e) => onUploadRatelimitMbChange(e.target.value)}
             type="number"
             fullWidth
-            inputProps={{ min: 0, step: 0.1 }}
             helperText={t('advancedRepositoryOptions.uploadSpeedLimitHint')}
+            slotProps={{
+              htmlInput: { min: 0, step: 0.1 },
+            }}
           />
         </>
       )}
@@ -101,10 +116,23 @@ export default function AdvancedRepositoryOptions({
       {mode === 'full' && (
         <>
           <Divider sx={{ mt: 3, mb: 1.5 }} />
-          <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 0.5 }}>
+          <Typography
+            variant="subtitle2"
+            sx={{
+              fontWeight: 600,
+              mb: 0.5,
+            }}
+          >
             {t('advancedRepositoryOptions.scripts')}
           </Typography>
-          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'text.secondary',
+              display: 'block',
+              mb: 1,
+            }}
+          >
             {t('advancedRepositoryOptions.scriptsHint')}
           </Typography>
 

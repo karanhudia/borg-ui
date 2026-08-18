@@ -146,13 +146,31 @@ function DiagnosticRow({
         minWidth: 0,
       }}
     >
-      <Stack direction="row" spacing={1} alignItems="flex-start">
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{
+          alignItems: 'flex-start',
+        }}
+      >
         <Box sx={{ color: status === 'success' ? 'success.main' : 'text.secondary', mt: 0.25 }}>
           {icon}
         </Box>
         <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
-            <Typography fontWeight={700} variant="body2">
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{
+              alignItems: 'center',
+              mb: 0.5,
+            }}
+          >
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: 700,
+              }}
+            >
               {title}
             </Typography>
             <Chip size="small" color={probeStatusColor(status)} label={status} />
@@ -163,7 +181,13 @@ function DiagnosticRow({
             </Typography>
           )}
           {detail && (
-            <Typography variant="caption" color="text.secondary" sx={{ wordBreak: 'break-word' }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+                wordBreak: 'break-word',
+              }}
+            >
               {detail}
             </Typography>
           )}
@@ -295,12 +319,22 @@ export function ConnectionDiagnosticsDialog({
       <DialogContent>
         <Stack spacing={2.25} sx={{ pt: 0.5, pb: 1 }}>
           <Box>
-            <Typography fontWeight={700}>
+            <Typography
+              sx={{
+                fontWeight: 700,
+              }}
+            >
               {connection
                 ? `${connection.username}@${connection.host}:${connection.port}`
                 : t('sshConnections.diagnostics.noConnection')}
             </Typography>
-            <Typography color="text.secondary" variant="body2" sx={{ mt: 0.25 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+                mt: 0.25,
+              }}
+            >
               {t('sshConnections.diagnostics.description')}
             </Typography>
           </Box>
@@ -365,9 +399,11 @@ export function ConnectionDiagnosticsDialog({
               onChange={(event) => setTimeoutSeconds(event.target.value)}
               size="small"
               type="number"
-              inputProps={{ min: 1, max: 30, step: 1 }}
               error={Boolean(timeoutError)}
               helperText={t('sshConnections.diagnostics.seconds')}
+              slotProps={{
+                htmlInput: { min: 1, max: 30, step: 1 },
+              }}
             />
             <TextField
               label={t('sshConnections.diagnostics.speedProbeSize')}
@@ -375,9 +411,11 @@ export function ConnectionDiagnosticsDialog({
               onChange={(event) => setSpeedProbeBytes(event.target.value)}
               size="small"
               type="number"
-              inputProps={{ min: 65536, max: 5 * 1024 * 1024, step: 65536 }}
               error={Boolean(speedError)}
               helperText={t('sshConnections.diagnostics.speedProbeHelper')}
+              slotProps={{
+                htmlInput: { min: 65536, max: 5 * 1024 * 1024, step: 65536 },
+              }}
             />
           </Box>
 

@@ -99,15 +99,32 @@ export default function DiagnosticsTcpTargetFields({
           '& .MuiAccordionSummary-content.Mui-expanded': { my: 1 },
         }}
       >
-        <Stack direction="row" spacing={1.25} alignItems="flex-start" sx={{ minWidth: 0 }}>
+        <Stack
+          direction="row"
+          spacing={1.25}
+          sx={{
+            alignItems: 'flex-start',
+            minWidth: 0,
+          }}
+        >
           <Box sx={{ color: 'text.secondary', display: 'flex', pt: 0.25 }}>
             <Network size={17} />
           </Box>
           <Box sx={{ minWidth: 0 }}>
-            <Typography fontWeight={700} variant="body2">
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: 700,
+              }}
+            >
               {labels.summary}
             </Typography>
-            <Typography color="text.secondary" variant="caption">
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {labels.description}
             </Typography>
           </Box>
@@ -138,10 +155,12 @@ export default function DiagnosticsTcpTargetFields({
               placeholder={labels.portPlaceholder}
               size="small"
               type="number"
-              inputProps={{ min: 1, max: 65535 }}
               required={hasTarget}
               error={portInvalid}
               helperText={portInvalid ? labels.portError : labels.portHelper}
+              slotProps={{
+                htmlInput: { min: 1, max: 65535 },
+              }}
             />
             <TextField
               label={labels.timeout}
@@ -149,10 +168,12 @@ export default function DiagnosticsTcpTargetFields({
               onChange={(event) => onTargetTimeoutChange(event.target.value)}
               size="small"
               type="number"
-              inputProps={timeoutInputProps}
               required={hasTarget}
               error={timeoutInvalid}
               helperText={timeoutInvalid ? labels.timeoutError : labels.timeoutHelper}
+              slotProps={{
+                htmlInput: timeoutInputProps,
+              }}
             />
           </Box>
         </AccordionDetails>

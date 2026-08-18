@@ -99,7 +99,13 @@ export default function ScriptEditorDialog({
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
       <DialogTitle>
-        <Box display="flex" alignItems="center" justifyContent="space-between">
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
           <Typography variant="h6">{title}</Typography>
           <Button
             variant="outlined"
@@ -128,9 +134,11 @@ export default function ScriptEditorDialog({
               type="number"
               value={timeout}
               onChange={(e) => onTimeoutChange?.(parseInt(e.target.value) || 300)}
-              inputProps={{ min: 30, max: 3600 }}
               helperText={t('scriptEditor.timeoutHint')}
               sx={{ flex: 1 }}
+              slotProps={{
+                htmlInput: { min: 30, max: 3600 },
+              }}
             />
             {showContinueOnFailure && (
               <FormControl sx={{ mt: 1 }}>
@@ -168,21 +176,36 @@ export default function ScriptEditorDialog({
                 {testResult.success ? (
                   <>
                     <CheckCircle size={20} color="#4caf50" />
-                    <Typography variant="subtitle2" color="success.main">
+                    <Typography
+                      variant="subtitle2"
+                      sx={{
+                        color: 'success.main',
+                      }}
+                    >
                       {t('scriptEditor.testPassed')}
                     </Typography>
                   </>
                 ) : testResult.exit_code === 0 ? (
                   <>
                     <AlertTriangle size={20} color="#ff9800" />
-                    <Typography variant="subtitle2" color="warning.main">
+                    <Typography
+                      variant="subtitle2"
+                      sx={{
+                        color: 'warning.main',
+                      }}
+                    >
                       {t('scriptEditor.testWarnings')}
                     </Typography>
                   </>
                 ) : (
                   <>
                     <XCircle size={20} color="#f44336" />
-                    <Typography variant="subtitle2" color="error.main">
+                    <Typography
+                      variant="subtitle2"
+                      sx={{
+                        color: 'error.main',
+                      }}
+                    >
                       {t('scriptEditor.testFailed')}
                     </Typography>
                   </>
@@ -204,8 +227,11 @@ export default function ScriptEditorDialog({
                 <Box sx={{ mb: 2 }}>
                   <Typography
                     variant="caption"
-                    color="text.secondary"
-                    sx={{ mb: 0.5, display: 'block' }}
+                    sx={{
+                      color: 'text.secondary',
+                      mb: 0.5,
+                      display: 'block',
+                    }}
                   >
                     {t('scriptEditor.stdout')}
                   </Typography>
@@ -235,8 +261,11 @@ export default function ScriptEditorDialog({
                 <Box>
                   <Typography
                     variant="caption"
-                    color="text.secondary"
-                    sx={{ mb: 0.5, display: 'block' }}
+                    sx={{
+                      color: 'text.secondary',
+                      mb: 0.5,
+                      display: 'block',
+                    }}
                   >
                     {t('scriptEditor.stderr')}
                   </Typography>

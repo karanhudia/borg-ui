@@ -35,24 +35,27 @@ const CronExpressionInput: React.FC<CronExpressionInputProps> = ({
       size={size}
       placeholder="0 2 * * *"
       helperText={helperText}
-      InputProps={{
-        sx: {
-          fontFamily: 'monospace',
-          fontSize: size === 'medium' ? '1.1rem' : '0.875rem',
-          letterSpacing: '0.1em',
+      slotProps={{
+        input: {
+          sx: {
+            fontFamily: 'monospace',
+            fontSize: size === 'medium' ? '1.1rem' : '0.875rem',
+            letterSpacing: '0.1em',
+          },
+          endAdornment: (
+            <InputAdornment position="end">
+              <CronBuilderDialog
+                value={value}
+                onChange={onChange}
+                dialogTitle={t('cronBuilderDialog.configureSchedule')}
+              />
+            </InputAdornment>
+          ),
         },
-        endAdornment: (
-          <InputAdornment position="end">
-            <CronBuilderDialog
-              value={value}
-              onChange={onChange}
-              dialogTitle={t('cronBuilderDialog.configureSchedule')}
-            />
-          </InputAdornment>
-        ),
-      }}
-      InputLabelProps={{
-        sx: { fontSize: size === 'medium' ? '1.1rem' : '0.875rem' },
+
+        inputLabel: {
+          sx: { fontSize: size === 'medium' ? '1.1rem' : '0.875rem' },
+        },
       }}
     />
   )

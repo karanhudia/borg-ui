@@ -113,7 +113,15 @@ export default function LocalServerCard({ active, onUse }: LocalServerCardProps)
           )}
         </Box>
 
-        <Typography variant="subtitle1" fontWeight={700} noWrap sx={{ lineHeight: 1.3, mb: 0.25 }}>
+        <Typography
+          variant="subtitle1"
+          noWrap
+          sx={{
+            fontWeight: 700,
+            lineHeight: 1.3,
+            mb: 0.25,
+          }}
+        >
           {t('remoteClients.localBackend.title')}
         </Typography>
 

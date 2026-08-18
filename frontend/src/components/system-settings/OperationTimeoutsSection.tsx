@@ -51,7 +51,6 @@ const OperationTimeoutsSection: React.FC<OperationTimeoutsSectionProps> = ({
         fullWidth
         value={mountTimeout}
         onChange={(e) => setMountTimeout(Number(e.target.value))}
-        inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 10 }}
         error={mountTimeout < MIN_TIMEOUT || mountTimeout > MAX_TIMEOUT}
         helperText={
           <>
@@ -59,6 +58,9 @@ const OperationTimeoutsSection: React.FC<OperationTimeoutsSectionProps> = ({
             <SourceLabel source={timeoutSources?.mount_timeout} />
           </>
         }
+        slotProps={{
+          htmlInput: { min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 10 },
+        }}
       />
 
       <TextField
@@ -67,7 +69,6 @@ const OperationTimeoutsSection: React.FC<OperationTimeoutsSectionProps> = ({
         fullWidth
         value={infoTimeout}
         onChange={(e) => setInfoTimeout(Number(e.target.value))}
-        inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 60 }}
         error={infoTimeout < MIN_TIMEOUT || infoTimeout > MAX_TIMEOUT}
         helperText={
           <>
@@ -75,6 +76,9 @@ const OperationTimeoutsSection: React.FC<OperationTimeoutsSectionProps> = ({
             <SourceLabel source={timeoutSources?.info_timeout} />
           </>
         }
+        slotProps={{
+          htmlInput: { min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 60 },
+        }}
       />
 
       <TextField
@@ -83,7 +87,6 @@ const OperationTimeoutsSection: React.FC<OperationTimeoutsSectionProps> = ({
         fullWidth
         value={listTimeout}
         onChange={(e) => setListTimeout(Number(e.target.value))}
-        inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 60 }}
         error={listTimeout < MIN_TIMEOUT || listTimeout > MAX_TIMEOUT}
         helperText={
           <>
@@ -91,6 +94,9 @@ const OperationTimeoutsSection: React.FC<OperationTimeoutsSectionProps> = ({
             <SourceLabel source={timeoutSources?.list_timeout} />
           </>
         }
+        slotProps={{
+          htmlInput: { min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 60 },
+        }}
       />
 
       <TextField
@@ -99,7 +105,6 @@ const OperationTimeoutsSection: React.FC<OperationTimeoutsSectionProps> = ({
         fullWidth
         value={initTimeout}
         onChange={(e) => setInitTimeout(Number(e.target.value))}
-        inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 60 }}
         error={initTimeout < MIN_TIMEOUT || initTimeout > MAX_TIMEOUT}
         helperText={
           <>
@@ -107,6 +112,9 @@ const OperationTimeoutsSection: React.FC<OperationTimeoutsSectionProps> = ({
             <SourceLabel source={timeoutSources?.init_timeout} />
           </>
         }
+        slotProps={{
+          htmlInput: { min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 60 },
+        }}
       />
 
       <TextField
@@ -115,7 +123,6 @@ const OperationTimeoutsSection: React.FC<OperationTimeoutsSectionProps> = ({
         fullWidth
         value={backupTimeout}
         onChange={(e) => setBackupTimeout(Number(e.target.value))}
-        inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 300 }}
         error={backupTimeout < MIN_TIMEOUT || backupTimeout > MAX_TIMEOUT}
         helperText={
           <>
@@ -123,6 +130,9 @@ const OperationTimeoutsSection: React.FC<OperationTimeoutsSectionProps> = ({
             <SourceLabel source={timeoutSources?.backup_timeout} />
           </>
         }
+        slotProps={{
+          htmlInput: { min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 300 },
+        }}
       />
 
       <TextField
@@ -131,7 +141,6 @@ const OperationTimeoutsSection: React.FC<OperationTimeoutsSectionProps> = ({
         fullWidth
         value={sourceSizeTimeout}
         onChange={(e) => setSourceSizeTimeout(Number(e.target.value))}
-        inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 300 }}
         error={sourceSizeTimeout < MIN_TIMEOUT || sourceSizeTimeout > MAX_TIMEOUT}
         helperText={
           <>
@@ -139,6 +148,9 @@ const OperationTimeoutsSection: React.FC<OperationTimeoutsSectionProps> = ({
             <SourceLabel source={timeoutSources?.source_size_timeout} />
           </>
         }
+        slotProps={{
+          htmlInput: { min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 300 },
+        }}
       />
     </Box>
   )

@@ -52,7 +52,13 @@ function StatCard({ label, value, icon, colorKey, tooltip }: StatCardProps) {
         },
       }}
     >
-      <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+      <Stack
+        direction="row"
+        sx={{
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+        }}
+      >
         <Box>
           <Typography
             variant="caption"
@@ -70,8 +76,12 @@ function StatCard({ label, value, icon, colorKey, tooltip }: StatCardProps) {
           </Typography>
           <Typography
             variant="h5"
-            fontWeight={700}
-            sx={{ lineHeight: 1.2, fontSize: { xs: '1.4rem', lg: '1.5rem' }, color }}
+            sx={{
+              fontWeight: 700,
+              lineHeight: 1.2,
+              fontSize: { xs: '1.4rem', lg: '1.5rem' },
+              color,
+            }}
           >
             {value}
           </Typography>

@@ -32,7 +32,13 @@ export default function DeleteArchiveDialog({
   return (
     <ResponsiveDialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
       <DialogTitle>
-        <Stack direction="row" spacing={2} alignItems="center">
+        <Stack
+          direction="row"
+          spacing={2}
+          sx={{
+            alignItems: 'center',
+          }}
+        >
           <Box
             sx={{
               width: 48,
@@ -46,7 +52,12 @@ export default function DeleteArchiveDialog({
           >
             <AlertCircle size={24} color="#d32f2f" />
           </Box>
-          <Typography variant="h6" fontWeight={600}>
+          <Typography
+            variant="h6"
+            sx={{
+              fontWeight: 600,
+            }}
+          >
             {t('dialogs.deleteArchive.title')}
           </Typography>
         </Stack>
@@ -58,7 +69,13 @@ export default function DeleteArchiveDialog({
         <Typography variant="body2" gutterBottom>
           {t('dialogs.deleteArchive.subtitle')} <strong>"{archiveName}"</strong>
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+            mt: 1,
+          }}
+        >
           {t('dialogs.deleteArchive.archiveName', { name: archiveName })}
         </Typography>
       </DialogContent>

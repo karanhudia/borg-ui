@@ -348,7 +348,14 @@ function CloudStorageRemoteCard({
             <RcloneProviderIcon provider={remote.provider} size={30} iconSize={16} />
             <Box sx={{ minWidth: 0, flex: 1 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
-                <Typography variant="subtitle1" fontWeight={700} noWrap sx={{ lineHeight: 1.3 }}>
+                <Typography
+                  variant="subtitle1"
+                  noWrap
+                  sx={{
+                    fontWeight: 700,
+                    lineHeight: 1.3,
+                  }}
+                >
                   {remote.name}
                 </Typography>
                 <Chip
@@ -589,8 +596,8 @@ function CloudStorageRemoteCard({
                 </Box>
                 <Typography
                   variant="body2"
-                  fontWeight={600}
                   sx={{
+                    fontWeight: 600,
                     fontVariantNumeric: 'tabular-nums',
                     fontSize: '0.85rem',
                     minWidth: 0,

@@ -23,12 +23,25 @@ export function BackupPlanCardSkeleton({ index = 0 }: { index?: number }) {
       }}
     >
       <Box sx={{ px: { xs: 1.75, sm: 2 }, pt: { xs: 1.75, sm: 2 }, pb: { xs: 1.5, sm: 1.75 } }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1.5}>
+        <Stack
+          direction="row"
+          spacing={1.5}
+          sx={{
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
           <Box sx={{ minWidth: 0, flex: 1 }}>
             <Skeleton variant="text" width="38%" height={26} sx={{ transform: 'none' }} />
             <Skeleton variant="text" width="52%" height={16} sx={{ mt: 0.5, transform: 'none' }} />
           </Box>
-          <Stack direction="row" spacing={0.75} alignItems="center">
+          <Stack
+            direction="row"
+            spacing={0.75}
+            sx={{
+              alignItems: 'center',
+            }}
+          >
             <Skeleton variant="rounded" width={92} height={24} sx={{ borderRadius: 1 }} />
             <Skeleton variant="rounded" width={28} height={28} sx={{ borderRadius: 1 }} />
           </Stack>
@@ -68,8 +81,21 @@ export function BackupPlanCardSkeleton({ index = 0 }: { index?: number }) {
           ))}
         </Box>
 
-        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mt: 1.5 }}>
-          <Stack direction="row" spacing={0.75} alignItems="center">
+        <Stack
+          direction="row"
+          sx={{
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            mt: 1.5,
+          }}
+        >
+          <Stack
+            direction="row"
+            spacing={0.75}
+            sx={{
+              alignItems: 'center',
+            }}
+          >
             <Skeleton variant="rounded" width={82} height={28} sx={{ borderRadius: 1 }} />
             <Skeleton variant="rounded" width={32} height={32} sx={{ borderRadius: 1.5 }} />
             <Skeleton variant="rounded" width={32} height={32} sx={{ borderRadius: 1.5 }} />

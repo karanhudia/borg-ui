@@ -240,7 +240,8 @@ describe('WizardStepMaintenance', () => {
     render(<WizardStepMaintenance {...defaultProps} data={dataWithPrune} />)
 
     const alert = screen.getByText(/Caution:/).closest('.MuiAlert-root')
-    expect(alert).toHaveClass('MuiAlert-standardWarning')
+    // MUI 9 splits the combined variant+severity class into two.
+    expect(alert).toHaveClass('MuiAlert-standard', 'MuiAlert-colorWarning')
   })
 
   it('renders info tooltip for maintenance hint', () => {

@@ -72,7 +72,13 @@ export default function PermanentDeleteRepositoryDialog({
         <Alert severity="error" sx={{ mb: 2 }}>
           {t('repositories.permanentDeleteDialog.warning')}
         </Alert>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+            mb: 1.5,
+          }}
+        >
           {t('repositories.permanentDeleteDialog.message', { name: repository.name })}
         </Typography>
         <Box

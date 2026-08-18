@@ -49,7 +49,12 @@ export default function RepositoryScriptsSection({
             mb: 0.75,
           }}
         >
-          <Typography variant="body2" fontWeight={600}>
+          <Typography
+            variant="body2"
+            sx={{
+              fontWeight: 600,
+            }}
+          >
             {t('repositoryScriptsSection.preBackup')}
           </Typography>
           <Tooltip
@@ -136,7 +141,12 @@ export default function RepositoryScriptsSection({
             mb: 0.75,
           }}
         >
-          <Typography variant="body2" fontWeight={600}>
+          <Typography
+            variant="body2"
+            sx={{
+              fontWeight: 600,
+            }}
+          >
             {t('repositoryScriptsSection.postBackup')}
           </Typography>
           <Tooltip

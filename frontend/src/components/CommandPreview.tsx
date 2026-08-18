@@ -253,9 +253,12 @@ export default function CommandPreview({
           <Box sx={{ mb: 2 }}>
             <Typography
               variant="caption"
-              color="primary.main"
-              fontWeight={600}
-              sx={{ mb: 0.5, display: 'block' }}
+              sx={{
+                color: 'primary.main',
+                fontWeight: 600,
+                mb: 0.5,
+                display: 'block',
+              }}
             >
               {t('commandPreview.step1InitRepo')}
             </Typography>
@@ -266,9 +269,12 @@ export default function CommandPreview({
         <Box sx={{ mb: 2 }}>
           <Typography
             variant="caption"
-            color="primary.main"
-            fontWeight={600}
-            sx={{ mb: 0.5, display: 'block' }}
+            sx={{
+              color: 'primary.main',
+              fontWeight: 600,
+              mb: 0.5,
+              display: 'block',
+            }}
           >
             {mode === 'create'
               ? t('commandPreview.step2MountRemote', {
@@ -285,7 +291,14 @@ export default function CommandPreview({
                 })}
           </Typography>
           <CopyableCommandBox command={sshfsMountCommands.join('\n')} />
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'text.secondary',
+              mt: 0.5,
+              display: 'block',
+            }}
+          >
             {mountDisplayText}
           </Typography>
         </Box>
@@ -293,16 +306,26 @@ export default function CommandPreview({
         <Box sx={{ mb: 2 }}>
           <Typography
             variant="caption"
-            color="primary.main"
-            fontWeight={600}
-            sx={{ mb: 0.5, display: 'block' }}
+            sx={{
+              color: 'primary.main',
+              fontWeight: 600,
+              mb: 0.5,
+              display: 'block',
+            }}
           >
             {mode === 'create'
               ? t('commandPreview.step3RunBackup')
               : t('commandPreview.step2RunBackup')}
           </Typography>
           <CopyableCommandBox command={createCommand} />
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'text.secondary',
+              mt: 0.5,
+              display: 'block',
+            }}
+          >
             {t('commandPreview.archivesPreserve')}
           </Typography>
         </Box>
@@ -310,16 +333,26 @@ export default function CommandPreview({
         <Box>
           <Typography
             variant="caption"
-            color="primary.main"
-            fontWeight={600}
-            sx={{ mb: 0.5, display: 'block' }}
+            sx={{
+              color: 'primary.main',
+              fontWeight: 600,
+              mb: 0.5,
+              display: 'block',
+            }}
           >
             {mode === 'create'
               ? t('commandPreview.step4Cleanup')
               : t('commandPreview.step3Cleanup')}
           </Typography>
           <CopyableCommandBox command="fusermount -u /tmp/sshfs_mount/" />
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'text.secondary',
+              mt: 0.5,
+              display: 'block',
+            }}
+          >
             {t('commandPreview.cleanupDesc')}
           </Typography>
         </Box>
@@ -340,14 +373,24 @@ export default function CommandPreview({
         <Box sx={{ mb: 2 }}>
           <Typography
             variant="caption"
-            color="primary.main"
-            fontWeight={600}
-            sx={{ mb: 0.5, display: 'block' }}
+            sx={{
+              color: 'primary.main',
+              fontWeight: 600,
+              mb: 0.5,
+              display: 'block',
+            }}
           >
             {t('commandPreview.step1InitRepo')}
           </Typography>
           <CopyableCommandBox command={initCommand} />
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'text.secondary',
+              mt: 0.5,
+              display: 'block',
+            }}
+          >
             {t('commandPreview.initRepositoryDesc')}
           </Typography>
         </Box>
@@ -357,16 +400,26 @@ export default function CommandPreview({
         <Box>
           <Typography
             variant="caption"
-            color="primary.main"
-            fontWeight={600}
-            sx={{ mb: 0.5, display: 'block' }}
+            sx={{
+              color: 'primary.main',
+              fontWeight: 600,
+              mb: 0.5,
+              display: 'block',
+            }}
           >
             {mode === 'create'
               ? t('commandPreview.step2RunBackup')
               : t('commandPreview.stepRunBackup')}
           </Typography>
           <CopyableCommandBox command={createCommand} />
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'text.secondary',
+              mt: 0.5,
+              display: 'block',
+            }}
+          >
             {mode === 'create'
               ? t('commandPreview.backupSourceDirs')
               : t('commandPreview.futureBackups')}

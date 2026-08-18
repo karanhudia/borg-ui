@@ -179,13 +179,26 @@ export default function WizardStepDataSource({
                   </Typography>
                 </Box>
               </Box>
-              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem' }}>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                  fontSize: '0.8125rem',
+                }}
+              >
                 {isAgentExecution
                   ? t('wizard.dataSource.agentLocalDescription')
                   : t('wizard.dataSource.localDescription')}
               </Typography>
               {hasRemoteDirs && (
-                <Typography variant="caption" color="warning.main" sx={{ mt: 1, display: 'block' }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'warning.main',
+                    mt: 1,
+                    display: 'block',
+                  }}
+                >
                   {t('wizard.dataSource.removeRemoteDirsFirst')}
                 </Typography>
               )}
@@ -278,7 +291,13 @@ export default function WizardStepDataSource({
                     </Typography>
                   </Box>
                 </Box>
-                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem' }}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: 'text.secondary',
+                    fontSize: '0.8125rem',
+                  }}
+                >
                   {isRemoteToRemoteDisabled
                     ? isAgentExecution
                       ? t('wizard.dataSource.notAvailableAgentExecution')
@@ -288,8 +307,11 @@ export default function WizardStepDataSource({
                 {hasLocalDirs && !isRemoteToRemoteDisabled && (
                   <Typography
                     variant="caption"
-                    color="warning.main"
-                    sx={{ mt: 1, display: 'block' }}
+                    sx={{
+                      color: 'warning.main',
+                      mt: 1,
+                      display: 'block',
+                    }}
                   >
                     {t('wizard.dataSource.removeLocalDirsFirst')}
                   </Typography>
@@ -351,8 +373,11 @@ export default function WizardStepDataSource({
               />
               <Typography
                 variant="caption"
-                color="text.secondary"
-                sx={{ mt: 0.5, display: 'block' }}
+                sx={{
+                  color: 'text.secondary',
+                  mt: 0.5,
+                  display: 'block',
+                }}
               >
                 {t('wizard.dataSource.browseRemoteNote')}
               </Typography>

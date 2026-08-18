@@ -92,7 +92,13 @@ export function RepositoryGroups({
         secondaryDescription={t('repositories.empty.hint')}
         actions={
           canManageRepositoriesGlobally && (
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent="center">
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={1.5}
+              sx={{
+                justifyContent: 'center',
+              }}
+            >
               <Button
                 variant="contained"
                 startIcon={<Add />}

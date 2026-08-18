@@ -114,23 +114,52 @@ export default function PreferencesTab() {
   return (
     <Box>
       <Box sx={{ mb: 3 }}>
-        <Typography variant="h5" fontWeight={700} gutterBottom>
+        <Typography
+          variant="h5"
+          gutterBottom
+          sx={{
+            fontWeight: 700,
+          }}
+        >
           {t('preferences.title')}
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           {t('preferences.subtitle')}
         </Typography>
       </Box>
 
       {/* Language Section */}
       <SettingsCard sx={{ mb: 3 }}>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="flex-start">
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={2}
+          sx={{
+            alignItems: 'flex-start',
+          }}
+        >
           <Globe size={24} />
           <Box sx={{ flex: 1 }}>
-            <Typography variant="h6" fontWeight={600} gutterBottom>
+            <Typography
+              variant="h6"
+              gutterBottom
+              sx={{
+                fontWeight: 600,
+              }}
+            >
               {t('preferences.languageTitle')}
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+                mb: 2,
+              }}
+            >
               {t('preferences.languageDescription')}
             </Typography>
             <FormControl size="small" sx={{ width: { xs: '100%', sm: 200 } }}>
@@ -153,13 +182,31 @@ export default function PreferencesTab() {
 
       {/* Analytics Section */}
       <SettingsCard sx={{ mb: 3 }}>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="flex-start">
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={2}
+          sx={{
+            alignItems: 'flex-start',
+          }}
+        >
           <BarChart3 size={24} />
           <Box sx={{ flex: 1 }}>
-            <Typography variant="h6" fontWeight={600} gutterBottom>
+            <Typography
+              variant="h6"
+              gutterBottom
+              sx={{
+                fontWeight: 600,
+              }}
+            >
               {t('preferences.analyticsTitle')}
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+                mb: 2,
+              }}
+            >
               {t('preferences.analyticsDescription')}
             </Typography>
 

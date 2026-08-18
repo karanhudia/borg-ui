@@ -37,7 +37,13 @@ export function DeleteKeyDialog({
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
           <Alert severity="warning" sx={{ mb: 1 }}>
-            <Typography variant="body2" fontWeight={600} gutterBottom>
+            <Typography
+              variant="body2"
+              gutterBottom
+              sx={{
+                fontWeight: 600,
+              }}
+            >
               {t('sshConnections.deleteKeyDialog.confirm')}
             </Typography>
           </Alert>
@@ -77,7 +83,13 @@ export function DeleteKeyDialog({
             </Box>
           )}
 
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+              mb: 1,
+            }}
+          >
             {t('sshConnections.deleteKeyDialog.actionIntro')}
           </Typography>
           <Box component="ul" sx={{ m: 0, pl: 3 }}>

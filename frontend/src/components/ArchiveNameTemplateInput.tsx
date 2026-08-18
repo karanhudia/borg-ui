@@ -44,14 +44,17 @@ const ArchiveNameTemplateInput: React.FC<ArchiveNameTemplateInputProps> = ({
         size={size}
         disabled={disabled}
         helperText={t('archiveNameTemplate.hint')}
-        InputProps={{
-          sx: {
-            fontSize: size === 'medium' ? '1.1rem' : '0.875rem',
-            fontFamily: 'monospace',
+        slotProps={{
+          input: {
+            sx: {
+              fontSize: size === 'medium' ? '1.1rem' : '0.875rem',
+              fontFamily: 'monospace',
+            },
           },
-        }}
-        InputLabelProps={{
-          sx: { fontSize: size === 'medium' ? '1.1rem' : '0.875rem' },
+
+          inputLabel: {
+            sx: { fontSize: size === 'medium' ? '1.1rem' : '0.875rem' },
+          },
         }}
       />
       {value && (

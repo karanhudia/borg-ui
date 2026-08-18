@@ -91,16 +91,18 @@ export default function AnnouncementModal({
       open={open}
       maxWidth="sm"
       fullWidth
-      PaperProps={{
-        sx: {
-          overflow: 'hidden',
-          borderRadius: 3,
-          color: foreground,
-          background: panelBackground,
-          border: `1px solid ${borderAlpha}`,
-          boxShadow: isDark
-            ? `0 28px 80px ${alpha('#000000', 0.52)}`
-            : `0 28px 80px ${alpha('#000000', 0.16)}`,
+      slotProps={{
+        paper: {
+          sx: {
+            overflow: 'hidden',
+            borderRadius: 3,
+            color: foreground,
+            background: panelBackground,
+            border: `1px solid ${borderAlpha}`,
+            boxShadow: isDark
+              ? `0 28px 80px ${alpha('#000000', 0.52)}`
+              : `0 28px 80px ${alpha('#000000', 0.16)}`,
+          },
         },
       }}
     >
@@ -125,7 +127,15 @@ export default function AnnouncementModal({
           </Box>
 
           <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 1.25 }}>
+            <Stack
+              direction="row"
+              spacing={1}
+              useFlexGap
+              sx={{
+                flexWrap: 'wrap',
+                mb: 1.25,
+              }}
+            >
               <Chip
                 size="small"
                 icon={<Sparkles size={12} />}

@@ -122,11 +122,20 @@ export function SourceStep({
           <Stack
             direction="row"
             spacing={1.5}
-            alignItems="center"
-            justifyContent="space-between"
-            sx={{ minWidth: 0 }}
+            sx={{
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              minWidth: 0,
+            }}
           >
-            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ minWidth: 0 }}>
+            <Stack
+              direction="row"
+              spacing={1.5}
+              sx={{
+                alignItems: 'center',
+                minWidth: 0,
+              }}
+            >
               <Box
                 sx={{
                   alignItems: 'center',
@@ -158,9 +167,11 @@ export function SourceStep({
                   <Stack
                     direction="row"
                     spacing={0.75}
-                    flexWrap="wrap"
                     useFlexGap
-                    sx={{ minWidth: 0 }}
+                    sx={{
+                      flexWrap: 'wrap',
+                      minWidth: 0,
+                    }}
                   >
                     <Chip size="small" label={sourceKindLabel} />
                     <Chip
@@ -172,7 +183,12 @@ export function SourceStep({
                     />
                   </Stack>
                 ) : (
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: 'text.secondary',
+                    }}
+                  >
                     {t('backupPlans.sourceChooser.summaryEmpty')}
                   </Typography>
                 )}
@@ -558,7 +574,13 @@ function ContainerSourcePathDetails({
 function DatabasePathLine({ label, value }: { label: string; value: string }) {
   return (
     <Stack spacing={0.15} sx={{ minWidth: 0 }}>
-      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+      <Typography
+        variant="caption"
+        sx={{
+          color: 'text.secondary',
+          fontWeight: 600,
+        }}
+      >
         {label}
       </Typography>
       <Typography

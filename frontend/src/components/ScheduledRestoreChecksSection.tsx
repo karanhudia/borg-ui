@@ -552,10 +552,20 @@ const ScheduledRestoreChecksSection = forwardRef<ScheduledRestoreChecksSectionRe
         }}
       >
         <Box>
-          <Typography variant="h6" fontWeight={600}>
+          <Typography
+            variant="h6"
+            sx={{
+              fontWeight: 600,
+            }}
+          >
             {t('scheduledRestoreChecks.sectionTitle')}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {t('scheduledRestoreChecks.sectionDescription')}
           </Typography>
         </Box>
@@ -589,7 +599,12 @@ const ScheduledRestoreChecksSection = forwardRef<ScheduledRestoreChecksSectionRe
               <Typography variant="body1" gutterBottom>
                 {t('scheduledRestoreChecks.noScheduledChecks')}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {t('scheduledRestoreChecks.noScheduledChecksDesc')}
               </Typography>
             </Box>
@@ -610,10 +625,22 @@ const ScheduledRestoreChecksSection = forwardRef<ScheduledRestoreChecksSectionRe
           )}
 
           <Box>
-            <Typography variant="h6" fontWeight={600} gutterBottom>
+            <Typography
+              variant="h6"
+              gutterBottom
+              sx={{
+                fontWeight: 600,
+              }}
+            >
               {t('integrity.history.title')}
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+                mb: 1.5,
+              }}
+            >
               {t('integrity.history.description')}
             </Typography>
             <DataTable
@@ -690,20 +717,22 @@ const ScheduledRestoreChecksSection = forwardRef<ScheduledRestoreChecksSectionRe
                 setFormData({ ...formData, cron_expression: event.target.value })
               }
               fullWidth
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <CronBuilderDialog
-                      value={formData.cron_expression}
-                      onChange={(localCron) =>
-                        setFormData({ ...formData, cron_expression: localCron })
-                      }
-                      label={t('scheduledRestoreChecks.scheduleLabel')}
-                      helperText={t('scheduledRestoreChecks.scheduleHelperText')}
-                      dialogTitle={t('scheduledRestoreChecks.scheduleBuilderTitle')}
-                    />
-                  </InputAdornment>
-                ),
+              slotProps={{
+                input: {
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <CronBuilderDialog
+                        value={formData.cron_expression}
+                        onChange={(localCron) =>
+                          setFormData({ ...formData, cron_expression: localCron })
+                        }
+                        label={t('scheduledRestoreChecks.scheduleLabel')}
+                        helperText={t('scheduledRestoreChecks.scheduleHelperText')}
+                        dialogTitle={t('scheduledRestoreChecks.scheduleBuilderTitle')}
+                      />
+                    </InputAdornment>
+                  ),
+                },
               }}
             />
 
@@ -769,30 +798,32 @@ const ScheduledRestoreChecksSection = forwardRef<ScheduledRestoreChecksSectionRe
                 minRows={4}
                 fullWidth
                 placeholder={'etc/hostname\nvar/lib/app/config.yml'}
-                InputProps={{
-                  endAdornment: (
-                    <InputAdornment position="end" sx={{ alignSelf: 'flex-start', mt: 0.5 }}>
-                      <Tooltip
-                        title={
-                          selectedRepository
-                            ? t('scheduledRestoreChecks.archivePicker.open')
-                            : t('scheduledRestoreChecks.validation.selectRepository')
-                        }
-                      >
-                        <span>
-                          <IconButton
-                            edge="end"
-                            size="small"
-                            onClick={openArchivePathPicker}
-                            disabled={!selectedRepository}
-                            aria-label={t('scheduledRestoreChecks.archivePicker.open')}
-                          >
-                            <FolderOpen size={18} />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                    </InputAdornment>
-                  ),
+                slotProps={{
+                  input: {
+                    endAdornment: (
+                      <InputAdornment position="end" sx={{ alignSelf: 'flex-start', mt: 0.5 }}>
+                        <Tooltip
+                          title={
+                            selectedRepository
+                              ? t('scheduledRestoreChecks.archivePicker.open')
+                              : t('scheduledRestoreChecks.validation.selectRepository')
+                          }
+                        >
+                          <span>
+                            <IconButton
+                              edge="end"
+                              size="small"
+                              onClick={openArchivePathPicker}
+                              disabled={!selectedRepository}
+                              aria-label={t('scheduledRestoreChecks.archivePicker.open')}
+                            >
+                              <FolderOpen size={18} />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      </InputAdornment>
+                    ),
+                  },
                 }}
               />
             )}
@@ -822,7 +853,12 @@ const ScheduledRestoreChecksSection = forwardRef<ScheduledRestoreChecksSectionRe
         fullWidth
         footer={
           <DialogActions sx={{ px: 3, pb: 2 }}>
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {t('scheduledRestoreChecks.archivePicker.selectedCount', {
                 count: archiveSelection.selectedPaths.length,
               })}
@@ -842,10 +878,20 @@ const ScheduledRestoreChecksSection = forwardRef<ScheduledRestoreChecksSectionRe
         }
       >
         <DialogTitle component="div">
-          <Typography variant="h6" fontWeight={600}>
+          <Typography
+            variant="h6"
+            sx={{
+              fontWeight: 600,
+            }}
+          >
             {t('scheduledRestoreChecks.archivePicker.title')}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {latestArchive
               ? t('scheduledRestoreChecks.archivePicker.subtitleWithArchive', {
                   archive: getArchiveName(latestArchive),

@@ -165,7 +165,13 @@ function RecoveryCommandBox({ command }: { command: RecoveryCommand }) {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
-      <Typography variant="caption" color="text.secondary" fontWeight={700}>
+      <Typography
+        variant="caption"
+        sx={{
+          color: 'text.secondary',
+          fontWeight: 700,
+        }}
+      >
         {command.label}
       </Typography>
       <Box
@@ -241,14 +247,31 @@ function RecoveryGuidedCheckAction({
       }}
     >
       <Box sx={{ minWidth: 0 }}>
-        <Typography variant="body2" fontWeight={700}>
+        <Typography
+          variant="body2"
+          sx={{
+            fontWeight: 700,
+          }}
+        >
           {t('repositoryInfoDialog.recovery.guidedCheckTitle')}
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           {t('repositoryInfoDialog.recovery.guidedCheckDescription')}
         </Typography>
         {!canRunRecoveryCheck && (
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'text.secondary',
+              display: 'block',
+              mt: 0.5,
+            }}
+          >
             {t('repositoryInfoDialog.recovery.guidedCheckUnavailable')}
           </Typography>
         )}
@@ -351,7 +374,12 @@ export default function RepositoryInfoDialog({
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <Storage color="primary" />
-          <Typography variant="h5" fontWeight={600}>
+          <Typography
+            variant="h5"
+            sx={{
+              fontWeight: 600,
+            }}
+          >
             {displayRepository?.name}
           </Typography>
         </Box>
@@ -361,7 +389,12 @@ export default function RepositoryInfoDialog({
           <>
             {isLoading ? (
               <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
-                <Typography variant="body2" color="text.secondary">
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: 'text.secondary',
+                  }}
+                >
                   {t('dialogs.repositoryInfo.loadingInfo')}
                 </Typography>
               </Box>
@@ -398,7 +431,13 @@ export default function RepositoryInfoDialog({
                         >
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                             <Lock sx={{ color: '#7b1fa2', fontSize: 28 }} />
-                            <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                color: 'text.secondary',
+                                fontWeight: 500,
+                              }}
+                            >
                               {t('dialogs.repositoryInfo.encryption')}
                             </Typography>
                           </Box>
@@ -428,7 +467,14 @@ export default function RepositoryInfoDialog({
                             </Tooltip>
                           )}
                         </Box>
-                        <Typography variant="h6" fontWeight={700} sx={{ color: '#7b1fa2', ml: 5 }}>
+                        <Typography
+                          variant="h6"
+                          sx={{
+                            fontWeight: 700,
+                            color: '#7b1fa2',
+                            ml: 5,
+                          }}
+                        >
                           {displayRepositoryInfo.encryption?.mode || 'N/A'}
                         </Typography>
                       </CardContent>
@@ -439,14 +485,23 @@ export default function RepositoryInfoDialog({
                       <CardContent sx={{ py: 2 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
                           <CalendarMonth sx={{ color: '#0277bd', fontSize: 28 }} />
-                          <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              color: 'text.secondary',
+                              fontWeight: 500,
+                            }}
+                          >
                             {t('dialogs.repositoryInfo.lastModified')}
                           </Typography>
                         </Box>
                         <Typography
                           variant="body2"
-                          fontWeight={600}
-                          sx={{ color: '#0277bd', ml: 5 }}
+                          sx={{
+                            fontWeight: 600,
+                            color: '#0277bd',
+                            ml: 5,
+                          }}
                         >
                           {displayRepositoryInfo.repository?.last_modified
                             ? formatDateShort(displayRepositoryInfo.repository.last_modified)
@@ -461,9 +516,11 @@ export default function RepositoryInfoDialog({
                     <CardContent sx={{ py: 2 }}>
                       <Typography
                         variant="caption"
-                        color="text.secondary"
-                        display="block"
-                        sx={{ mb: 0.5 }}
+                        sx={{
+                          color: 'text.secondary',
+                          display: 'block',
+                          mb: 0.5,
+                        }}
                       >
                         {t('dialogs.repositoryInfo.repositoryLocation')}
                       </Typography>
@@ -484,10 +541,21 @@ export default function RepositoryInfoDialog({
                     <RepositoryStatsV1 stats={displayRepositoryInfo.cache.stats} />
                   ) : (
                     <Alert severity="info" icon={<Info />}>
-                      <Typography variant="body2" fontWeight={600} gutterBottom>
+                      <Typography
+                        variant="body2"
+                        gutterBottom
+                        sx={{
+                          fontWeight: 600,
+                        }}
+                      >
                         {t('dialogs.repositoryInfo.noBackupsYet')}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          color: 'text.secondary',
+                        }}
+                      >
                         {t('repositoryInfoDialog.noArchivesDescription')}
                       </Typography>
                     </Alert>
@@ -506,10 +574,22 @@ export default function RepositoryInfoDialog({
                       bgcolor: 'action.hover',
                     }}
                   >
-                    <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+                    <Typography
+                      variant="subtitle2"
+                      gutterBottom
+                      sx={{
+                        fontWeight: 700,
+                      }}
+                    >
                       {t('repositoryInfoDialog.recovery.title')}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: 'text.secondary',
+                        mb: 1.5,
+                      }}
+                    >
                       {t('repositoryInfoDialog.recovery.description')}
                     </Typography>
                     {onRunRecoveryCheck && (

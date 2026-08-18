@@ -58,7 +58,13 @@ export function BackupPlanHistoryDialog({
       }
     >
       <DialogTitle sx={{ pb: 1 }}>
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{
+            alignItems: 'center',
+          }}
+        >
           <Box sx={{ color: theme.palette.info.main, display: 'flex', alignItems: 'center' }}>
             <History size={18} />
           </Box>

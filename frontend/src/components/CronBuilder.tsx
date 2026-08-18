@@ -233,7 +233,13 @@ const generatePreview = (
 
 function TimeInput({ hour12, minute, ampm, amLabel, pmLabel, onTimeChange }: TimeInputProps) {
   return (
-    <Stack direction="row" spacing={0.5} alignItems="center">
+    <Stack
+      direction="row"
+      spacing={0.5}
+      sx={{
+        alignItems: 'center',
+      }}
+    >
       <TextField
         type="number"
         value={hour12}
@@ -241,15 +247,23 @@ function TimeInput({ hour12, minute, ampm, amLabel, pmLabel, onTimeChange }: Tim
           const newHour12 = Math.max(1, Math.min(12, parseInt(e.target.value) || 1))
           onTimeChange(newHour12, minute, ampm)
         }}
-        inputProps={{ min: 1, max: 12 }}
         variant="outlined"
         size="small"
         sx={{
           width: 50,
           '& .MuiInputBase-input': { p: '6px', textAlign: 'center', fontSize: '0.875rem' },
         }}
+        slotProps={{
+          htmlInput: { min: 1, max: 12 },
+        }}
       />
-      <Typography variant="body2" color="text.secondary" fontWeight={500}>
+      <Typography
+        variant="body2"
+        sx={{
+          color: 'text.secondary',
+          fontWeight: 500,
+        }}
+      >
         :
       </Typography>
       <TextField
@@ -259,12 +273,14 @@ function TimeInput({ hour12, minute, ampm, amLabel, pmLabel, onTimeChange }: Tim
           const newMinute = Math.max(0, Math.min(59, parseInt(e.target.value) || 0))
           onTimeChange(hour12, newMinute, ampm)
         }}
-        inputProps={{ min: 0, max: 59 }}
         variant="outlined"
         size="small"
         sx={{
           width: 50,
           '& .MuiInputBase-input': { p: '6px', textAlign: 'center', fontSize: '0.875rem' },
+        }}
+        slotProps={{
+          htmlInput: { min: 0, max: 59 },
         }}
       />
       <Select
@@ -336,7 +352,13 @@ export default function CronBuilder({ value, onChange, label, helperText }: Cron
   return (
     <Stack spacing={1.5}>
       {label && (
-        <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+        <Typography
+          variant="caption"
+          sx={{
+            color: 'text.secondary',
+            ml: 1,
+          }}
+        >
           {label}
         </Typography>
       )}
@@ -383,27 +405,57 @@ export default function CronBuilder({ value, onChange, label, helperText }: Cron
             }}
           >
             <ToggleButton value="minute">
-              <Stack direction="row" spacing={0.5} alignItems="center">
+              <Stack
+                direction="row"
+                spacing={0.5}
+                sx={{
+                  alignItems: 'center',
+                }}
+              >
                 <Timer size={14} /> <span>{t('cronBuilder.tabs.minutes')}</span>
               </Stack>
             </ToggleButton>
             <ToggleButton value="hourly">
-              <Stack direction="row" spacing={0.5} alignItems="center">
+              <Stack
+                direction="row"
+                spacing={0.5}
+                sx={{
+                  alignItems: 'center',
+                }}
+              >
                 <Clock size={14} /> <span>{t('cronBuilder.tabs.hourly')}</span>
               </Stack>
             </ToggleButton>
             <ToggleButton value="daily">
-              <Stack direction="row" spacing={0.5} alignItems="center">
+              <Stack
+                direction="row"
+                spacing={0.5}
+                sx={{
+                  alignItems: 'center',
+                }}
+              >
                 <Calendar size={14} /> <span>{t('cronBuilder.tabs.daily')}</span>
               </Stack>
             </ToggleButton>
             <ToggleButton value="weekly">
-              <Stack direction="row" spacing={0.5} alignItems="center">
+              <Stack
+                direction="row"
+                spacing={0.5}
+                sx={{
+                  alignItems: 'center',
+                }}
+              >
                 <CalendarDays size={14} /> <span>{t('cronBuilder.tabs.weekly')}</span>
               </Stack>
             </ToggleButton>
             <ToggleButton value="monthly">
-              <Stack direction="row" spacing={0.5} alignItems="center">
+              <Stack
+                direction="row"
+                spacing={0.5}
+                sx={{
+                  alignItems: 'center',
+                }}
+              >
                 <CalendarRange size={14} /> <span>{t('cronBuilder.tabs.monthly')}</span>
               </Stack>
             </ToggleButton>
@@ -424,7 +476,13 @@ export default function CronBuilder({ value, onChange, label, helperText }: Cron
           }}
         >
           {state.frequency === 'minute' && (
-            <Stack direction="row" spacing={1} alignItems="center">
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{
+                alignItems: 'center',
+              }}
+            >
               <Typography variant="body2">{t('cronBuilderComponent.runEvery')}</Typography>
               <TextField
                 type="number"
@@ -432,17 +490,26 @@ export default function CronBuilder({ value, onChange, label, helperText }: Cron
                 onChange={(e) =>
                   handleStateChange({ minuteInterval: Math.max(1, parseInt(e.target.value) || 1) })
                 }
-                inputProps={{ min: 1, max: 59 }}
                 variant="outlined"
                 size="small"
                 sx={{ width: 60, '& input': { textAlign: 'center', p: '6px' } }}
+                slotProps={{
+                  htmlInput: { min: 1, max: 59 },
+                }}
               />
               <Typography variant="body2">{t('cronBuilderComponent.minutesSuffix')}</Typography>
             </Stack>
           )}
 
           {state.frequency === 'hourly' && (
-            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{
+                alignItems: 'center',
+                flexWrap: 'wrap',
+              }}
+            >
               <Typography variant="body2">{t('cronBuilderComponent.runEvery')}</Typography>
               <TextField
                 type="number"
@@ -450,10 +517,12 @@ export default function CronBuilder({ value, onChange, label, helperText }: Cron
                 onChange={(e) =>
                   handleStateChange({ hourInterval: Math.max(1, parseInt(e.target.value) || 1) })
                 }
-                inputProps={{ min: 1, max: 23 }}
                 variant="outlined"
                 size="small"
                 sx={{ width: 60, '& input': { textAlign: 'center', p: '6px' } }}
+                slotProps={{
+                  htmlInput: { min: 1, max: 23 },
+                }}
               />
               <Typography variant="body2">{t('cronBuilderComponent.hoursAtMinute')}</Typography>
               <TextField
@@ -464,25 +533,45 @@ export default function CronBuilder({ value, onChange, label, helperText }: Cron
                     startingMinute: Math.max(0, Math.min(59, parseInt(e.target.value) || 0)),
                   })
                 }
-                inputProps={{ min: 0, max: 59 }}
                 variant="outlined"
                 size="small"
                 sx={{ width: 60, '& input': { textAlign: 'center', p: '6px' } }}
+                slotProps={{
+                  htmlInput: { min: 0, max: 59 },
+                }}
               />
               <Typography variant="body2">{t('cronBuilderComponent.pastTheHour')}</Typography>
             </Stack>
           )}
 
           {state.frequency === 'daily' && (
-            <Stack direction="row" spacing={1} alignItems="center">
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{
+                alignItems: 'center',
+              }}
+            >
               <Typography variant="body2">{t('cronBuilderComponent.runDailyAt')}</Typography>
               {timeInput}
             </Stack>
           )}
 
           {state.frequency === 'weekly' && (
-            <Stack spacing={1} width="100%" alignItems="center">
-              <Stack direction="row" spacing={1} alignItems="center">
+            <Stack
+              spacing={1}
+              sx={{
+                width: '100%',
+                alignItems: 'center',
+              }}
+            >
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{
+                  alignItems: 'center',
+                }}
+              >
                 <Typography variant="body2">{t('cronBuilderComponent.runOn')}</Typography>
 
                 {/* ... inside component ... */}
@@ -523,7 +612,13 @@ export default function CronBuilder({ value, onChange, label, helperText }: Cron
                   ))}
                 </ToggleButtonGroup>
               </Stack>
-              <Stack direction="row" spacing={1} alignItems="center">
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{
+                  alignItems: 'center',
+                }}
+              >
                 <Typography variant="body2">{t('cronBuilderComponent.at')}</Typography>
                 {timeInput}
               </Stack>
@@ -531,7 +626,13 @@ export default function CronBuilder({ value, onChange, label, helperText }: Cron
           )}
 
           {state.frequency === 'monthly' && (
-            <Stack direction="row" spacing={1} alignItems="center">
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{
+                alignItems: 'center',
+              }}
+            >
               <Typography variant="body2">{t('cronBuilderComponent.runOnDay')}</Typography>
               <Select
                 value={state.dayOfMonth}
@@ -547,7 +648,7 @@ export default function CronBuilder({ value, onChange, label, helperText }: Cron
                     fontSize: '0.875rem',
                   },
                 }}
-                MenuProps={{ PaperProps: { sx: { maxHeight: 300 } } }}
+                MenuProps={{ slotProps: { paper: { sx: { maxHeight: 300 } } } }}
               >
                 {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
                   <MenuItem key={d} value={d} sx={{ fontSize: '0.875rem' }}>
@@ -568,13 +669,15 @@ export default function CronBuilder({ value, onChange, label, helperText }: Cron
               placeholder="* * * * *"
               variant="outlined"
               size="small"
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Code size={16} />
-                  </InputAdornment>
-                ),
-                sx: { fontFamily: 'monospace', fontSize: '0.875rem' },
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Code size={16} />
+                    </InputAdornment>
+                  ),
+                  sx: { fontFamily: 'monospace', fontSize: '0.875rem' },
+                },
               }}
             />
           )}
@@ -592,7 +695,13 @@ export default function CronBuilder({ value, onChange, label, helperText }: Cron
             justifyContent: 'space-between',
           }}
         >
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{
+              alignItems: 'center',
+            }}
+          >
             <Typography
               variant="body2"
               color="primary"
@@ -619,7 +728,13 @@ export default function CronBuilder({ value, onChange, label, helperText }: Cron
         </Box>
       </Paper>
       {helperText && (
-        <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+        <Typography
+          variant="caption"
+          sx={{
+            color: 'text.secondary',
+            ml: 1,
+          }}
+        >
           {helperText}
         </Typography>
       )}

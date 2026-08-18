@@ -729,11 +729,20 @@ export function AgentSetupGuide({
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         spacing={1}
-        alignItems={{ xs: 'stretch', sm: 'center' }}
-        justifyContent="space-between"
-        sx={{ mb: 1 }}
+        sx={{
+          alignItems: { xs: 'stretch', sm: 'center' },
+          justifyContent: 'space-between',
+          mb: 1,
+        }}
       >
-        <Stack direction="row" spacing={1} alignItems="center" color="text.secondary">
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{
+            alignItems: 'center',
+            color: 'text.secondary',
+          }}
+        >
           <Terminal size={16} />
           <Typography variant="body2">{t('managedAgents.setupGuide.summary')}</Typography>
         </Stack>
@@ -798,10 +807,21 @@ export function AgentSetupHelpContent({
   return (
     <Stack spacing={2.5} sx={{ mt: 1 }}>
       <Box>
-        <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+        <Typography
+          variant="subtitle2"
+          gutterBottom
+          sx={{
+            fontWeight: 700,
+          }}
+        >
           {t('managedAgents.setupGuide.steps.install.title')}
         </Typography>
-        <Typography color="text.secondary" sx={{ mb: 1 }}>
+        <Typography
+          sx={{
+            color: 'text.secondary',
+            mb: 1,
+          }}
+        >
           {t('managedAgents.setupGuide.steps.install.description')}
         </Typography>
         <CopyableCodeBlock
@@ -812,19 +832,41 @@ export function AgentSetupHelpContent({
       </Box>
 
       <Box>
-        <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+        <Typography
+          variant="subtitle2"
+          gutterBottom
+          sx={{
+            fontWeight: 700,
+          }}
+        >
           {t('managedAgents.setupGuide.steps.server.title')}
         </Typography>
-        <Typography color="text.secondary" sx={{ mb: 1 }}>
+        <Typography
+          sx={{
+            color: 'text.secondary',
+            mb: 1,
+          }}
+        >
           {t('managedAgents.setupGuide.steps.server.description')}
         </Typography>
       </Box>
 
       <Box>
-        <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+        <Typography
+          variant="subtitle2"
+          gutterBottom
+          sx={{
+            fontWeight: 700,
+          }}
+        >
           {t('managedAgents.setupGuide.steps.troubleshooting.title')}
         </Typography>
-        <Typography color="text.secondary" sx={{ mb: 1 }}>
+        <Typography
+          sx={{
+            color: 'text.secondary',
+            mb: 1,
+          }}
+        >
           {t('managedAgents.setupGuide.steps.troubleshooting.descriptionPrefix')}{' '}
           <MuiLink
             href="https://github.com/karanhudia/borg-ui/tree/main/agent"
@@ -843,10 +885,21 @@ export function AgentSetupHelpContent({
       </Box>
 
       <Box>
-        <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+        <Typography
+          variant="subtitle2"
+          gutterBottom
+          sx={{
+            fontWeight: 700,
+          }}
+        >
           {t('managedAgents.setupGuide.steps.service.title')}
         </Typography>
-        <Typography color="text.secondary" sx={{ mb: 1 }}>
+        <Typography
+          sx={{
+            color: 'text.secondary',
+            mb: 1,
+          }}
+        >
           {t('managedAgents.setupGuide.steps.service.description')}
         </Typography>
         <CopyableCodeBlock
@@ -1049,10 +1102,20 @@ export function AgentDiagnosticsDialog({
       <DialogContent>
         <Stack spacing={2.25} sx={{ pt: 0.5, pb: 1 }}>
           <Box>
-            <Typography fontWeight={700}>
+            <Typography
+              sx={{
+                fontWeight: 700,
+              }}
+            >
               {getAgentLabel(agent || undefined, t('managedAgents.page.unknownAgent'))}
             </Typography>
-            <Typography color="text.secondary" variant="body2" sx={{ mt: 0.25 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+                mt: 0.25,
+              }}
+            >
               {t('managedAgents.page.diagnostics.description')}
             </Typography>
           </Box>
@@ -1143,10 +1206,22 @@ export function AgentDiagnosticsDialog({
                     minWidth: 0,
                   }}
                 >
-                  <Typography variant="caption" color="text.secondary" fontWeight={700}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: 'text.secondary',
+                      fontWeight: 700,
+                    }}
+                  >
                     {label}
                   </Typography>
-                  <Typography noWrap title={String(value)} fontWeight={600}>
+                  <Typography
+                    noWrap
+                    title={String(value)}
+                    sx={{
+                      fontWeight: 600,
+                    }}
+                  >
                     {value}
                   </Typography>
                 </Box>
@@ -1155,10 +1230,23 @@ export function AgentDiagnosticsDialog({
           </Box>
 
           <Stack spacing={1}>
-            <Typography variant="caption" color="text.secondary" fontWeight={700}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+                fontWeight: 700,
+              }}
+            >
               {t('managedAgents.page.capabilities')}
             </Typography>
-            <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
+            <Stack
+              direction="row"
+              spacing={0.75}
+              useFlexGap
+              sx={{
+                flexWrap: 'wrap',
+              }}
+            >
               {capabilities.length ? (
                 capabilities.map((capability) => (
                   <Chip key={capability} label={capability} size="small" variant="outlined" />
@@ -1244,8 +1332,22 @@ function DiagnosticResultRow({
         py: 1.25,
       }}
     >
-      <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
-        <Stack direction="row" spacing={0.75} alignItems="center" minWidth={0}>
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <Stack
+          direction="row"
+          spacing={0.75}
+          sx={{
+            alignItems: 'center',
+            minWidth: 0,
+          }}
+        >
           {severity === 'success' ? (
             <CheckCircle size={16} />
           ) : severity === 'error' ? (
@@ -1253,7 +1355,13 @@ function DiagnosticResultRow({
           ) : (
             <AlertTriangle size={16} />
           )}
-          <Typography fontWeight={700}>{title}</Typography>
+          <Typography
+            sx={{
+              fontWeight: 700,
+            }}
+          >
+            {title}
+          </Typography>
         </Stack>
         <Chip
           label={formatElapsedMs(elapsed, t('managedAgents.page.notReported'))}
@@ -1262,7 +1370,13 @@ function DiagnosticResultRow({
         />
       </Stack>
       {target && (
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+            mt: 0.75,
+          }}
+        >
           {target}
         </Typography>
       )}
@@ -1275,7 +1389,13 @@ function DiagnosticResultRow({
         </Typography>
       )}
       {message && (
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+            mt: 0.5,
+          }}
+        >
           {message}
         </Typography>
       )}
@@ -1323,10 +1443,18 @@ export function AgentDeleteConfirmationDialog({
       <DialogTitle>{t('managedAgents.page.deleteDialog.title')}</DialogTitle>
       <DialogContent>
         <Stack spacing={1.5} sx={{ mt: 0.5 }}>
-          <Typography fontWeight={700}>
+          <Typography
+            sx={{
+              fontWeight: 700,
+            }}
+          >
             {getAgentLabel(agent || undefined, t('managedAgents.page.unknownAgent'))}
           </Typography>
-          <Typography color="text.secondary">
+          <Typography
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {t('managedAgents.page.deleteDialog.description')}
           </Typography>
         </Stack>
@@ -1367,10 +1495,19 @@ export function AgentReinstallDialog({
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 0.5 }}>
           <Box>
-            <Typography fontWeight={700}>
+            <Typography
+              sx={{
+                fontWeight: 700,
+              }}
+            >
               {getAgentLabel(agent || undefined, t('managedAgents.page.unknownAgent'))}
             </Typography>
-            <Typography color="text.secondary" sx={{ mt: 0.5 }}>
+            <Typography
+              sx={{
+                color: 'text.secondary',
+                mt: 0.5,
+              }}
+            >
               {t('managedAgents.page.reinstallDialog.description')}
             </Typography>
           </Box>
@@ -1551,10 +1688,13 @@ export function AgentList({
 
                   <Typography
                     variant="subtitle1"
-                    fontWeight={700}
                     noWrap
                     title={getAgentLabel(agent, t('managedAgents.page.unknownAgent'))}
-                    sx={{ lineHeight: 1.3, mb: 0.25 }}
+                    sx={{
+                      fontWeight: 700,
+                      lineHeight: 1.3,
+                      mb: 0.25,
+                    }}
                   >
                     {getAgentLabel(agent, t('managedAgents.page.unknownAgent'))}
                   </Typography>
@@ -1663,10 +1803,20 @@ export function AgentList({
                       '& .MuiAlert-icon': { alignItems: 'center' },
                     }}
                   >
-                    <Typography variant="body2" fontWeight={700}>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: 700,
+                      }}
+                    >
                       {t('managedAgents.page.noBorg.title')}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: 'text.secondary',
+                      }}
+                    >
                       {t('managedAgents.page.noBorg.description')}
                     </Typography>
                   </Alert>
@@ -1953,8 +2103,19 @@ export function JobsTable({
             return (
               <TableRow key={job.id} hover>
                 <TableCell>
-                  <Typography fontWeight={700}>#{job.id}</Typography>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography
+                    sx={{
+                      fontWeight: 700,
+                    }}
+                  >
+                    #{job.id}
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: 'text.secondary',
+                    }}
+                  >
                     {getJobKind(job)}
                   </Typography>
                 </TableCell>
@@ -1968,7 +2129,12 @@ export function JobsTable({
                     value={Math.max(0, Math.min(100, job.progress_percent ?? 0))}
                     sx={{ borderRadius: 1, height: 7 }}
                   />
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: 'text.secondary',
+                    }}
+                  >
                     {Math.round(job.progress_percent ?? 0)}%
                   </Typography>
                 </TableCell>

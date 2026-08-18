@@ -56,10 +56,19 @@ export function ScriptExecutionRow({
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         spacing={1}
-        alignItems={{ xs: 'flex-start', sm: 'center' }}
-        justifyContent="space-between"
+        sx={{
+          alignItems: { xs: 'flex-start', sm: 'center' },
+          justifyContent: 'space-between',
+        }}
       >
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{
+            alignItems: 'center',
+            minWidth: 0,
+          }}
+        >
           <Box sx={{ color: 'text.secondary', display: 'flex', flexShrink: 0 }}>
             <FileText size={16} />
           </Box>
@@ -67,14 +76,31 @@ export function ScriptExecutionRow({
             <Typography variant="subtitle2" noWrap>
               {hookLabel}: {execution.script_name}
             </Typography>
-            <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap>
+            <Stack
+              direction="row"
+              spacing={1.5}
+              useFlexGap
+              sx={{
+                flexWrap: 'wrap',
+              }}
+            >
               {execution.exit_code !== null && execution.exit_code !== undefined && (
-                <Typography variant="caption" color="text.secondary">
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                  }}
+                >
                   {t('backupPlans.runsDialog.exitCode', { code: execution.exit_code })}
                 </Typography>
               )}
               {execution.execution_time !== null && execution.execution_time !== undefined && (
-                <Typography variant="caption" color="text.secondary">
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                  }}
+                >
                   {t('backupPlans.runsDialog.scriptDuration', {
                     seconds: execution.execution_time.toFixed(2),
                   })}
@@ -83,7 +109,13 @@ export function ScriptExecutionRow({
             </Stack>
           </Box>
         </Stack>
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{
+            alignItems: 'center',
+          }}
+        >
           <Chip size="small" label={statusLabel} color={scriptStatusColor(execution.status)} />
           {canViewScriptLogs(execution) && (
             <Button
@@ -129,7 +161,12 @@ export function PlanRunScriptsSection({
   if (!executions || executions.length === 0) return null
   return (
     <Stack spacing={1.25}>
-      <Typography variant="subtitle2" fontWeight={700}>
+      <Typography
+        variant="subtitle2"
+        sx={{
+          fontWeight: 700,
+        }}
+      >
         {title ?? t('backupPlans.runsDialog.planScripts')}
       </Typography>
       {executions.map((execution) => (

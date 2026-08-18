@@ -324,10 +324,20 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
         }}
       >
         <Box>
-          <Typography variant="h6" fontWeight={600}>
+          <Typography
+            variant="h6"
+            sx={{
+              fontWeight: 600,
+            }}
+          >
             {t('scheduledChecks.sectionTitle')}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {t('scheduledChecks.sectionDescription')}
           </Typography>
         </Box>
@@ -365,7 +375,12 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
           <Typography variant="body1" gutterBottom>
             {t('scheduledChecks.noScheduledChecks')}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {t('scheduledChecks.noScheduledChecksDesc')}
           </Typography>
         </Box>
@@ -397,10 +412,20 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
             }}
           >
             <Box>
-              <Typography variant="h6" fontWeight={600}>
+              <Typography
+                variant="h6"
+                sx={{
+                  fontWeight: 600,
+                }}
+              >
                 {t('scheduledChecks.historyTitle')}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {historyHasFilters
                   ? t('scheduledChecks.historyShowingFiltered', {
                       filtered: filteredCheckHistory.length,
@@ -552,28 +577,31 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
               fullWidth
               size="medium"
               placeholder="0 2 * * 0"
-              InputProps={{
-                sx: {
-                  fontFamily: 'monospace',
-                  fontSize: '1.1rem',
-                  letterSpacing: '0.1em',
+              slotProps={{
+                input: {
+                  sx: {
+                    fontFamily: 'monospace',
+                    fontSize: '1.1rem',
+                    letterSpacing: '0.1em',
+                  },
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <CronBuilderDialog
+                        value={formData.cron_expression}
+                        onChange={(localCron) =>
+                          setFormData({ ...formData, cron_expression: localCron })
+                        }
+                        label={t('scheduledChecks.checkScheduleLabel')}
+                        helperText={t('scheduledChecks.checkScheduleHelperText')}
+                        dialogTitle={t('scheduledChecks.checkScheduleBuilderTitle')}
+                      />
+                    </InputAdornment>
+                  ),
                 },
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <CronBuilderDialog
-                      value={formData.cron_expression}
-                      onChange={(localCron) =>
-                        setFormData({ ...formData, cron_expression: localCron })
-                      }
-                      label={t('scheduledChecks.checkScheduleLabel')}
-                      helperText={t('scheduledChecks.checkScheduleHelperText')}
-                      dialogTitle={t('scheduledChecks.checkScheduleBuilderTitle')}
-                    />
-                  </InputAdornment>
-                ),
-              }}
-              InputLabelProps={{
-                sx: { fontSize: '1.1rem' },
+
+                inputLabel: {
+                  sx: { fontSize: '1.1rem' },
+                },
               }}
             />
 
@@ -608,7 +636,9 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
                   : t('scheduledChecks.maxDurationHint')
               }
               fullWidth
-              inputProps={{ min: 0 }}
+              slotProps={{
+                htmlInput: { min: 0 },
+              }}
             />
 
             <TextField
@@ -618,7 +648,9 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
               helperText={t('scheduledChecks.extraFlagsHint')}
               fullWidth
               placeholder="--repair --verify-data"
-              inputProps={{ spellCheck: false }}
+              slotProps={{
+                htmlInput: { spellCheck: false },
+              }}
             />
 
             {hasCheckFlagConflict && (

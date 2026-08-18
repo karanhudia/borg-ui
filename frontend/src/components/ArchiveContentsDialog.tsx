@@ -130,7 +130,12 @@ export default function ArchiveContentsDialog({
       }}
     >
       <Hourglass size={17} style={{ marginTop: 2, flexShrink: 0 }} />
-      <Typography variant="body2" color="text.secondary">
+      <Typography
+        variant="body2"
+        sx={{
+          color: 'text.secondary',
+        }}
+      >
         {t('archiveContents.slowLoadingHint')}
       </Typography>
     </Box>
@@ -169,7 +174,12 @@ export default function ArchiveContentsDialog({
             }}
           >
             <ShieldCheck size={17} style={{ marginTop: 2, flexShrink: 0 }} />
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {t('archiveContents.managedCanaryBanner')}
             </Typography>
           </Box>

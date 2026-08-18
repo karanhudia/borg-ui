@@ -71,7 +71,9 @@ export function RedeployKeyDialog({
             onChange={(e) => setRedeployPassword(e.target.value)}
             placeholder={t('sshConnections.redeployDialog.passwordPlaceholder')}
             helperText={t('sshConnections.redeployDialog.passwordHelper')}
-            InputLabelProps={{ shrink: true }}
+            slotProps={{
+              inputLabel: { shrink: true },
+            }}
           />
         </Stack>
       </DialogContent>

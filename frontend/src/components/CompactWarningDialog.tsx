@@ -44,7 +44,13 @@ export default function CompactWarningDialog({
           {t('dialogs.compact.description', { repositoryName })}
         </Typography>
 
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+            mt: 1,
+          }}
+        >
           {t('dialogs.compact.explanation')}
         </Typography>
 
@@ -74,7 +80,13 @@ export default function CompactWarningDialog({
           </List>
         </Box>
 
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+            mt: 1,
+          }}
+        >
           {t('dialogs.compact.tip')}
         </Typography>
       </DialogContent>

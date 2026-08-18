@@ -38,7 +38,12 @@ export default function RepositoryInfo({
     return (
       <Card>
         <CardContent>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {t('dialogs.repositoryInfo.loadingInfo')}
           </Typography>
         </CardContent>
@@ -57,11 +62,22 @@ export default function RepositoryInfo({
           <Box sx={{ flex: '1 1 200px' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
               <Archive size={16} color="#666" />
-              <Typography variant="caption" color="text.secondary" fontWeight={600}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                  fontWeight: 600,
+                }}
+              >
                 {t('repositoryInfo.archives')}
               </Typography>
             </Box>
-            <Typography variant="h6" fontWeight={600}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 600,
+              }}
+            >
               {archivesCount}
             </Typography>
           </Box>
@@ -69,11 +85,22 @@ export default function RepositoryInfo({
           <Box sx={{ flex: '1 1 200px' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
               <HardDrive size={16} color="#666" />
-              <Typography variant="caption" color="text.secondary" fontWeight={600}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                  fontWeight: 600,
+                }}
+              >
                 {t('repositoryInfo.totalSize')}
               </Typography>
             </Box>
-            <Typography variant="h6" fontWeight={600}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 600,
+              }}
+            >
               {stats?.total_size ? formatBytes(stats.total_size) : t('repositoryInfo.na')}
             </Typography>
           </Box>
@@ -81,11 +108,22 @@ export default function RepositoryInfo({
           <Box sx={{ flex: '1 1 200px' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
               <Database size={16} color="#666" />
-              <Typography variant="caption" color="text.secondary" fontWeight={600}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                  fontWeight: 600,
+                }}
+              >
                 {t('dialogs.repositoryInfo.uniqueData')}
               </Typography>
             </Box>
-            <Typography variant="h6" fontWeight={600}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 600,
+              }}
+            >
               {stats?.unique_csize ? formatBytes(stats.unique_csize) : t('repositoryInfo.na')}
             </Typography>
           </Box>
@@ -93,11 +131,22 @@ export default function RepositoryInfo({
           <Box sx={{ flex: '1 1 200px' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
               <Calendar size={16} color="#666" />
-              <Typography variant="caption" color="text.secondary" fontWeight={600}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                  fontWeight: 600,
+                }}
+              >
                 {t('repositoryInfo.lastModified')}
               </Typography>
             </Box>
-            <Typography variant="body2" fontWeight={600}>
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: 600,
+              }}
+            >
               {repoInfo.repository?.last_modified
                 ? formatDate(repoInfo.repository.last_modified)
                 : t('repositoryInfo.na')}

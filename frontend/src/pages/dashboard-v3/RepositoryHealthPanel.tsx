@@ -92,8 +92,21 @@ export function RepositoryHealthPanel({
 
   return (
     <Box sx={{ ...surface, p: 2.5 }}>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
-        <Stack direction="row" spacing={1} alignItems="center">
+      <Stack
+        direction="row"
+        sx={{
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          mb: 2,
+        }}
+      >
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{
+            alignItems: 'center',
+          }}
+        >
           <Server size={14} color={T.textMuted} />
           <Typography
             sx={{
@@ -164,7 +177,14 @@ export function RepositoryHealthPanel({
             p: 1.25,
           }}
         >
-          <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.75 }}>
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{
+              alignItems: 'center',
+              mb: 0.75,
+            }}
+          >
             <XCircle size={14} color={T.red} />
             <Typography
               sx={{
@@ -182,8 +202,10 @@ export function RepositoryHealthPanel({
                 key={`${a.type}-${a.id}`}
                 direction="row"
                 spacing={1}
-                alignItems="baseline"
-                sx={{ minWidth: 0 }}
+                sx={{
+                  alignItems: 'baseline',
+                  minWidth: 0,
+                }}
               >
                 <Typography
                   sx={{
@@ -321,7 +343,13 @@ export function RepositoryHealthPanel({
                   },
                 }}
               >
-                <Stack direction="row" spacing={1} alignItems="center">
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  sx={{
+                    alignItems: 'center',
+                  }}
+                >
                   <PulseDot color={cs.color} />
                   <Box sx={{ flexGrow: 1, minWidth: 0 }}>
                     <Typography
@@ -339,8 +367,11 @@ export function RepositoryHealthPanel({
                     <Stack
                       direction="row"
                       spacing={0.75}
-                      alignItems="center"
-                      sx={{ mt: 0.25, minWidth: 0 }}
+                      sx={{
+                        alignItems: 'center',
+                        mt: 0.25,
+                        minWidth: 0,
+                      }}
                     >
                       <RepoTypeChips repo={repo} T={T} />
                       <Typography
@@ -362,7 +393,13 @@ export function RepositoryHealthPanel({
                       </Typography>
                     </Stack>
                   </Box>
-                  <Stack alignItems="flex-end" spacing={0.4} sx={{ flexShrink: 0 }}>
+                  <Stack
+                    spacing={0.4}
+                    sx={{
+                      alignItems: 'flex-end',
+                      flexShrink: 0,
+                    }}
+                  >
                     <Typography
                       sx={{
                         fontFamily: T.mono,
@@ -423,11 +460,19 @@ export function RepositoryHealthPanel({
               {/* Top row: status dot + type chip | next-run pill */}
               <Stack
                 direction="row"
-                alignItems="center"
-                justifyContent="space-between"
-                sx={{ mb: 0.55 }}
+                sx={{
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  mb: 0.55,
+                }}
               >
-                <Stack direction="row" spacing={0.75} alignItems="center">
+                <Stack
+                  direction="row"
+                  spacing={0.75}
+                  sx={{
+                    alignItems: 'center',
+                  }}
+                >
                   <PulseDot color={cs.color} />
                   <RepoTypeChips repo={repo} T={T} />
                 </Stack>
@@ -474,8 +519,11 @@ export function RepositoryHealthPanel({
                 <Stack
                   direction="row"
                   spacing={0.75}
-                  alignItems="center"
-                  sx={{ mb: 0.75, minWidth: 0 }}
+                  sx={{
+                    alignItems: 'center',
+                    mb: 0.75,
+                    minWidth: 0,
+                  }}
                 >
                   <Chip
                     label={t('dashboard.repositoryHealth.planCount', {

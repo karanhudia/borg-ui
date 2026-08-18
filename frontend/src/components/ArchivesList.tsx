@@ -276,7 +276,12 @@ export default function ArchivesList({
         }}
       >
         <FolderOpen size={48} style={{ marginBottom: 16 }} />
-        <Typography variant="body1" color="text.secondary">
+        <Typography
+          variant="body1"
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           {t('archivesList.empty')}
         </Typography>
       </Box>
@@ -308,7 +313,13 @@ export default function ArchivesList({
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.25, flexShrink: 0 }}>
-          <Typography variant="h6" fontWeight={700} sx={{ fontSize: '0.95rem' }}>
+          <Typography
+            variant="h6"
+            sx={{
+              fontWeight: 700,
+              fontSize: '0.95rem',
+            }}
+          >
             {t('archivesList.archives')}
           </Typography>
           <Typography
@@ -563,12 +574,23 @@ export default function ArchivesList({
           }}
         >
           <FolderOpen size={48} style={{ marginBottom: 16 }} />
-          <Typography variant="body1" color="text.secondary">
+          <Typography
+            variant="body1"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {filter === 'scheduled'
               ? t('archivesList.noScheduledArchives')
               : t('archivesList.noManualArchives')}
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+              mt: 1,
+            }}
+          >
             {t('archivesList.tryDifferentFilter')}
           </Typography>
         </Box>
@@ -600,7 +622,13 @@ export default function ArchivesList({
                   ) : (
                     <ArchiveIcon size={20} />
                   )}
-                  <Typography variant="h6" fontSize="1rem" fontWeight={600}>
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      fontSize: '1rem',
+                      fontWeight: 600,
+                    }}
+                  >
                     {group.label}
                   </Typography>
                   <Chip label={group.archives.length} size="small" sx={{ ml: 'auto', mr: 2 }} />

@@ -111,7 +111,12 @@ export function SettingsStep({
               <Typography variant="subtitle2">
                 {t('backupPlans.wizard.settings.uploadPoliciesTitle')}
               </Typography>
-              <Typography variant="caption" color="text.secondary">
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {t('backupPlans.wizard.settings.uploadPoliciesHelper')}
               </Typography>
             </Box>
@@ -150,16 +155,20 @@ export function SettingsStep({
                 type="time"
                 value={policy.startTime}
                 onChange={(event) => updateUploadPolicy(index, { startTime: event.target.value })}
-                InputLabelProps={{ shrink: true }}
                 fullWidth
+                slotProps={{
+                  inputLabel: { shrink: true },
+                }}
               />
               <TextField
                 label={t('backupPlans.wizard.settings.policyEndTime')}
                 type="time"
                 value={policy.endTime}
                 onChange={(event) => updateUploadPolicy(index, { endTime: event.target.value })}
-                InputLabelProps={{ shrink: true }}
                 fullWidth
+                slotProps={{
+                  inputLabel: { shrink: true },
+                }}
               />
               <TextField
                 label={t('backupPlans.wizard.settings.policyLimit')}

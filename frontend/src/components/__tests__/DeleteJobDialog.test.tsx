@@ -132,7 +132,8 @@ describe('DeleteJobDialog', () => {
       renderWithProviders(<DeleteJobDialog {...mockProps} />)
 
       const deleteButton = screen.getByRole('button', { name: /delete permanently/i })
-      expect(deleteButton).toHaveClass('MuiButton-containedError')
+      // MUI 9 splits the combined variant+color class into two.
+      expect(deleteButton).toHaveClass('MuiButton-contained', 'MuiButton-colorError')
     })
 
     it('renders Delete button with warning icon', () => {

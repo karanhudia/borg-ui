@@ -64,11 +64,23 @@ const RunningCloudStorageJobsSection: React.FC<RunningCloudStorageJobsSectionPro
       }}
     >
       <CardContent>
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.75 }}>
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{
+            alignItems: 'center',
+            mb: 0.75,
+          }}
+        >
           <Box sx={{ color: accent, display: 'flex' }}>
             <RefreshCw size={16} className="animate-spin" />
           </Box>
-          <Typography variant="h6" fontWeight={600}>
+          <Typography
+            variant="h6"
+            sx={{
+              fontWeight: 600,
+            }}
+          >
             {t('cloudStorageJobs.title')}
           </Typography>
           <Chip
@@ -83,7 +95,13 @@ const RunningCloudStorageJobsSection: React.FC<RunningCloudStorageJobsSectionPro
             }}
           />
         </Stack>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+            mb: 2.5,
+          }}
+        >
           {t('cloudStorageJobs.subtitle')}
         </Typography>
 
@@ -106,16 +124,38 @@ const RunningCloudStorageJobsSection: React.FC<RunningCloudStorageJobsSectionPro
                 <Stack
                   direction={{ xs: 'column', sm: 'row' }}
                   spacing={1.5}
-                  justifyContent="space-between"
-                  alignItems={{ xs: 'flex-start', sm: 'center' }}
+                  sx={{
+                    justifyContent: 'space-between',
+                    alignItems: { xs: 'flex-start', sm: 'center' },
+                  }}
                 >
-                  <Stack direction="row" spacing={1.25} alignItems="center" sx={{ minWidth: 0 }}>
+                  <Stack
+                    direction="row"
+                    spacing={1.25}
+                    sx={{
+                      alignItems: 'center',
+                      minWidth: 0,
+                    }}
+                  >
                     <Box sx={{ color: accent, display: 'flex', flexShrink: 0 }}>
                       <Icon size={18} />
                     </Box>
                     <Box sx={{ minWidth: 0 }}>
-                      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                        <Typography variant="subtitle2" fontWeight={700} noWrap>
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        sx={{
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        <Typography
+                          variant="subtitle2"
+                          noWrap
+                          sx={{
+                            fontWeight: 700,
+                          }}
+                        >
                           {job.repository || t('cloudStorageJobs.unknownRepository')}
                         </Typography>
                         <StatusBadge status={job.status} />
@@ -127,14 +167,26 @@ const RunningCloudStorageJobsSection: React.FC<RunningCloudStorageJobsSectionPro
                         />
                       </Stack>
                       {job.repository_path && (
-                        <Typography variant="caption" color="text.secondary" noWrap>
+                        <Typography
+                          variant="caption"
+                          noWrap
+                          sx={{
+                            color: 'text.secondary',
+                          }}
+                        >
                           {job.repository_path}
                         </Typography>
                       )}
                     </Box>
                   </Stack>
 
-                  <Stack direction="row" spacing={1} alignItems="center">
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{
+                      alignItems: 'center',
+                    }}
+                  >
                     <Chip
                       size="small"
                       label={t(getTriggerLabelKey(job.triggered_by))}

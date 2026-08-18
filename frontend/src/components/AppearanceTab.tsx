@@ -18,16 +18,34 @@ export default function AppearanceTab() {
   return (
     <Box>
       <Box>
-        <Typography variant="h6" fontWeight={600} gutterBottom>
+        <Typography
+          variant="h6"
+          gutterBottom
+          sx={{
+            fontWeight: 600,
+          }}
+        >
           {t('settings.appearance.title')}
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+            mb: 3,
+          }}
+        >
           {t('settings.appearance.subtitle')}
         </Typography>
       </Box>
       <SettingsCard sx={{ maxWidth: 600 }}>
         <Stack spacing={2.5}>
-          <Stack direction="row" spacing={2} alignItems="center">
+          <Stack
+            direction="row"
+            spacing={2}
+            sx={{
+              alignItems: 'center',
+            }}
+          >
             <Box
               sx={{
                 width: 42,
@@ -50,10 +68,20 @@ export default function AppearanceTab() {
               )}
             </Box>
             <Box>
-              <Typography variant="subtitle1" fontWeight={700}>
+              <Typography
+                variant="subtitle1"
+                sx={{
+                  fontWeight: 700,
+                }}
+              >
                 {t('settings.appearance.theme')}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {t('settings.appearance.chooseTheme')}
               </Typography>
             </Box>
@@ -140,7 +168,14 @@ export default function AppearanceTab() {
                   }}
                 >
                   <Box sx={{ mb: 1.25 }}>
-                    <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mb: 0.75 }}>
+                    <Stack
+                      direction="row"
+                      spacing={1.25}
+                      sx={{
+                        alignItems: 'center',
+                        mb: 0.75,
+                      }}
+                    >
                       <Box
                         sx={{
                           width: 28,
@@ -157,14 +192,23 @@ export default function AppearanceTab() {
                       >
                         <Icon size={14} />
                       </Box>
-                      <Typography variant="subtitle2" fontWeight={700} sx={{ minWidth: 0 }}>
+                      <Typography
+                        variant="subtitle2"
+                        sx={{
+                          fontWeight: 700,
+                          minWidth: 0,
+                        }}
+                      >
                         {t(themeOption.labelKey)}
                       </Typography>
                     </Stack>
                     <Typography
                       variant="caption"
-                      color="text.secondary"
-                      sx={{ display: 'block', lineHeight: 1.45 }}
+                      sx={{
+                        color: 'text.secondary',
+                        display: 'block',
+                        lineHeight: 1.45,
+                      }}
                     >
                       {t(`settings.appearance.themeDescriptions.${themeOption.id}`)}
                     </Typography>

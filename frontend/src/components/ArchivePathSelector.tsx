@@ -211,7 +211,12 @@ export default function ArchivePathSelector({
         <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
           {title || t('wizard.restoreFiles.title')}
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           {subtitle || t('wizard.restoreFiles.subtitle')}
         </Typography>
       </Box>
@@ -303,7 +308,12 @@ export default function ArchivePathSelector({
             }}
           >
             <ShieldCheck size={16} style={{ marginTop: 2, flexShrink: 0 }} />
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {t('archiveContents.managedCanaryProbeDisabled')}
             </Typography>
           </Box>
@@ -355,8 +365,11 @@ export default function ArchivePathSelector({
               {awaitingAgent && (
                 <Typography
                   variant="body2"
-                  color="text.secondary"
-                  sx={{ maxWidth: 420, textAlign: 'center' }}
+                  sx={{
+                    color: 'text.secondary',
+                    maxWidth: 420,
+                    textAlign: 'center',
+                  }}
                 >
                   {t('archiveContents.slowLoadingHint')}
                 </Typography>
@@ -372,7 +385,12 @@ export default function ArchivePathSelector({
 
           {!loading && !error && items.length === 0 && (
             <Box sx={{ p: 4, textAlign: 'center' }}>
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {t('wizard.restoreFiles.noItemsFound')}
               </Typography>
             </Box>
@@ -487,7 +505,9 @@ export default function ArchivePathSelector({
                             </Box>
                           }
                           secondary={item.size ? formatSize(item.size) : undefined}
-                          secondaryTypographyProps={{ sx: { fontSize: '0.75rem' } }}
+                          slotProps={{
+                            secondary: { sx: { fontSize: '0.75rem' } },
+                          }}
                         />
                       </ListItemButton>
                     </ListItem>
@@ -499,7 +519,13 @@ export default function ArchivePathSelector({
         </Box>
       </Box>
 
-      <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+      <Typography
+        variant="caption"
+        sx={{
+          color: 'text.secondary',
+          mt: 1,
+        }}
+      >
         {helpText || t('wizard.restoreFiles.helpText')}
       </Typography>
     </Box>

@@ -223,17 +223,19 @@ export default function PlanInfoDrawer({
       open={open}
       onClose={onClose}
       container={container}
-      SlideProps={{
-        onExited: () => {
-          setSelectedPlan(getDefaultSelectedPlan(normalizedPlan, initialSelectedPlan))
-          setActiveTab(getDefaultActiveTab(normalizedPlan))
-        },
-      }}
       sx={{
         '& .MuiDrawer-paper': {
           width: 340,
           boxSizing: 'border-box',
           bgcolor: drawerColors.paper,
+        },
+      }}
+      slotProps={{
+        transition: {
+          onExited: () => {
+            setSelectedPlan(getDefaultSelectedPlan(normalizedPlan, initialSelectedPlan))
+            setActiveTab(getDefaultActiveTab(normalizedPlan))
+          },
         },
       }}
     >

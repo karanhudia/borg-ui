@@ -75,10 +75,12 @@ function FlowNode({
         <Tooltip title={label} placement="top" disableHoverListener={label.length < 16}>
           <Typography
             variant="body2"
-            fontWeight={600}
-            fontSize="0.78rem"
             noWrap
-            sx={{ color: 'text.primary' }}
+            sx={{
+              fontWeight: 600,
+              fontSize: '0.78rem',
+              color: 'text.primary',
+            }}
           >
             {label}
           </Typography>
@@ -86,10 +88,12 @@ function FlowNode({
         {subtitle && (
           <Typography
             variant="caption"
-            color="text.secondary"
-            fontSize="0.68rem"
-            display="block"
             noWrap
+            sx={{
+              color: 'text.secondary',
+              fontSize: '0.68rem',
+              display: 'block',
+            }}
           >
             {subtitle}
           </Typography>
@@ -98,11 +102,11 @@ function FlowNode({
           <Tooltip title={path} placement="bottom">
             <Typography
               variant="caption"
-              fontFamily="monospace"
-              fontSize="0.65rem"
               noWrap
-              display="block"
               sx={{
+                fontFamily: 'monospace',
+                fontSize: '0.65rem',
+                display: 'block',
                 color: accentColor,
                 opacity: 0.85,
                 cursor: 'default',
@@ -233,7 +237,14 @@ export default function BackupFlowPreview({
         >
           Backup Flow
         </Typography>
-        <Typography variant="caption" fontWeight={500} fontSize="0.72rem" sx={{ color: BLUE }}>
+        <Typography
+          variant="caption"
+          sx={{
+            fontWeight: 500,
+            fontSize: '0.72rem',
+            color: BLUE,
+          }}
+        >
           {getSummaryText()}
         </Typography>
       </Box>

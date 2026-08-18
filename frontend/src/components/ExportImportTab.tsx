@@ -223,12 +223,22 @@ const ExportImportTab: React.FC = () => {
       <Box sx={{ mb: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
           <Download size={24} style={{ marginRight: 8 }} />
-          <Typography variant="h6" fontWeight={600}>
+          <Typography
+            variant="h6"
+            sx={{
+              fontWeight: 600,
+            }}
+          >
             {t('exportImport.export.title')}
           </Typography>
         </Box>
 
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           {t('exportImport.export.description')}
         </Typography>
       </Box>
@@ -340,12 +350,22 @@ const ExportImportTab: React.FC = () => {
       <Box sx={{ mb: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
           <Upload size={24} style={{ marginRight: 8 }} />
-          <Typography variant="h6" fontWeight={600}>
+          <Typography
+            variant="h6"
+            sx={{
+              fontWeight: 600,
+            }}
+          >
             {t('exportImport.import.title')}
           </Typography>
         </Box>
 
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           {t('exportImport.import.description')}
         </Typography>
       </Box>

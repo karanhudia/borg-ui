@@ -1704,7 +1704,12 @@ export function SourceSelectionDialog({
             }}
           >
             <Lock size={14} />
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {t('backupPlans.sourceChooser.agentRepoLockedAgentPicker', {
                 agent: agentRepoConstraint.agentName,
               })}
@@ -1736,7 +1741,12 @@ export function SourceSelectionDialog({
             }}
           >
             {sourceKind === 'agent' ? <Laptop size={14} /> : <HardDrive size={14} />}
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {agentDisabled
                 ? t(
                     canUseManagedAgents
@@ -1750,7 +1760,13 @@ export function SourceSelectionDialog({
           </Box>
         )}
 
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems="flex-start">
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1}
+          sx={{
+            alignItems: 'flex-start',
+          }}
+        >
           <PathSelectorField
             label={t('backupPlans.sourceChooser.sourcePath')}
             value={sourcePath}
@@ -1824,13 +1840,23 @@ export function SourceSelectionDialog({
                 },
               }}
             >
-              <Typography variant="body2" fontWeight={500} color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  fontWeight: 500,
+                  color: 'text.secondary',
+                }}
+              >
                 {t('backupPlans.sourceChooser.advancedCaptureMode')}
               </Typography>
               <Typography
                 variant="body2"
-                color="text.primary"
-                sx={{ ml: 'auto', mr: 0.5, fontWeight: 500 }}
+                sx={{
+                  color: 'text.primary',
+                  ml: 'auto',
+                  mr: 0.5,
+                  fontWeight: 500,
+                }}
               >
                 {snapshotDraft.provider === 'none'
                   ? t('backupPlans.sourceChooser.captureModeDirect')
@@ -1873,9 +1899,11 @@ export function SourceSelectionDialog({
                       <Stack
                         direction="row"
                         spacing={0.75}
-                        alignItems="center"
                         useFlexGap
-                        flexWrap="wrap"
+                        sx={{
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                        }}
                       >
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>
                           {t('backupPlans.sourceChooser.snapshotRequirementsTitle')}
@@ -1977,7 +2005,12 @@ export function SourceSelectionDialog({
             {t('backupPlans.sourceChooser.selectedSourceGroups')}
           </Typography>
           {fileDraftSourceLocations.length === 0 ? (
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {t('backupPlans.sourceChooser.summaryEmpty')}
             </Typography>
           ) : (
@@ -2010,8 +2043,10 @@ export function SourceSelectionDialog({
                       <Stack
                         direction="row"
                         spacing={1.25}
-                        alignItems="center"
-                        sx={{ minWidth: 0 }}
+                        sx={{
+                          alignItems: 'center',
+                          minWidth: 0,
+                        }}
                       >
                         <Box
                           sx={{
@@ -2078,14 +2113,18 @@ export function SourceSelectionDialog({
                         <Stack
                           direction="row"
                           spacing={1.25}
-                          alignItems="center"
-                          justifyContent="space-between"
+                          sx={{
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                          }}
                         >
                           <Stack
                             direction="row"
                             spacing={1.25}
-                            alignItems="center"
-                            sx={{ minWidth: 0 }}
+                            sx={{
+                              alignItems: 'center',
+                              minWidth: 0,
+                            }}
                           >
                             <Box
                               sx={{
@@ -2144,8 +2183,10 @@ export function SourceSelectionDialog({
                               key={path}
                               direction="row"
                               spacing={0.5}
-                              alignItems="center"
-                              sx={{ minWidth: 0 }}
+                              sx={{
+                                alignItems: 'center',
+                                minWidth: 0,
+                              }}
                             >
                               <Typography variant="body2" title={path} sx={monospacePathSx}>
                                 {path}
@@ -2257,7 +2298,12 @@ export function SourceSelectionDialog({
               }}
             >
               <HardDrive size={14} />
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {databaseRemoteDisabled
                   ? t('backupPlans.sourceChooser.noRemoteMachines')
                   : t('backupPlans.sourceChooser.readingFromLocal')}
@@ -2294,14 +2340,19 @@ export function SourceSelectionDialog({
                     <Stack
                       direction={{ xs: 'column', sm: 'row' }}
                       spacing={1.25}
-                      alignItems={{ xs: 'stretch', sm: 'center' }}
-                      sx={{ minWidth: 0 }}
+                      sx={{
+                        alignItems: { xs: 'stretch', sm: 'center' },
+                        minWidth: 0,
+                      }}
                     >
                       <Stack
                         direction="row"
                         spacing={1.25}
-                        alignItems="center"
-                        sx={{ minWidth: 0, flex: 1 }}
+                        sx={{
+                          alignItems: 'center',
+                          minWidth: 0,
+                          flex: 1,
+                        }}
                       >
                         <DatabaseIcon size={16} />
                         <Stack spacing={0.2} sx={{ minWidth: 0, flex: 1 }}>
@@ -2310,10 +2361,12 @@ export function SourceSelectionDialog({
                           </Typography>
                           <Typography
                             variant="caption"
-                            color="text.secondary"
                             sx={{
+                              color: 'text.secondary',
+
                               fontFamily:
                                 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
                               whiteSpace: 'nowrap',
@@ -2324,11 +2377,13 @@ export function SourceSelectionDialog({
                           {livePath && (
                             <Typography
                               variant="caption"
-                              color="text.secondary"
                               title={livePath}
                               sx={{
+                                color: 'text.secondary',
+
                                 fontFamily:
                                   'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
                                 whiteSpace: 'nowrap',
@@ -2339,11 +2394,13 @@ export function SourceSelectionDialog({
                           )}
                           <Typography
                             variant="caption"
-                            color="text.secondary"
                             title={backupPathLabel}
                             sx={{
+                              color: 'text.secondary',
+
                               fontFamily:
                                 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
                               whiteSpace: 'nowrap',
@@ -2357,9 +2414,11 @@ export function SourceSelectionDialog({
                         direction="row"
                         spacing={0.75}
                         useFlexGap
-                        flexWrap="wrap"
-                        justifyContent={{ xs: 'flex-start', sm: 'flex-end' }}
-                        alignItems="center"
+                        sx={{
+                          flexWrap: 'wrap',
+                          justifyContent: { xs: 'flex-start', sm: 'flex-end' },
+                          alignItems: 'center',
+                        }}
                       >
                         <Chip
                           size="small"
@@ -2555,9 +2614,21 @@ export function SourceSelectionDialog({
             }}
           >
             <Stack spacing={0.75}>
-              <Stack direction="row" spacing={0.75} alignItems="center">
+              <Stack
+                direction="row"
+                spacing={0.75}
+                sx={{
+                  alignItems: 'center',
+                }}
+              >
                 <Info size={14} />
-                <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                    fontWeight: 600,
+                  }}
+                >
                   {t('backupPlans.sourceChooser.notesLabel')}
                 </Typography>
               </Stack>
@@ -2586,9 +2657,21 @@ export function SourceSelectionDialog({
         >
           <Stack spacing={1.5}>
             <Stack spacing={0.25}>
-              <Stack direction="row" spacing={0.75} alignItems="center">
+              <Stack
+                direction="row"
+                spacing={0.75}
+                sx={{
+                  alignItems: 'center',
+                }}
+              >
                 <Server size={14} />
-                <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                    fontWeight: 600,
+                  }}
+                >
                   {t('backupPlans.sourceChooser.databaseSourceMachine')}
                 </Typography>
               </Stack>
@@ -2598,9 +2681,21 @@ export function SourceSelectionDialog({
             </Stack>
             {detectedPath && (
               <Stack spacing={0.25}>
-                <Stack direction="row" spacing={0.75} alignItems="center">
+                <Stack
+                  direction="row"
+                  spacing={0.75}
+                  sx={{
+                    alignItems: 'center',
+                  }}
+                >
                   <DatabaseIcon size={14} />
-                  <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: 'text.secondary',
+                      fontWeight: 600,
+                    }}
+                  >
                     {t('backupPlans.sourceChooser.databaseLivePath')}
                   </Typography>
                 </Stack>
@@ -2616,17 +2711,32 @@ export function SourceSelectionDialog({
                 </Typography>
                 <Typography
                   variant="caption"
-                  color="text.secondary"
-                  sx={{ pl: 2.5, fontStyle: 'italic' }}
+                  sx={{
+                    color: 'text.secondary',
+                    pl: 2.5,
+                    fontStyle: 'italic',
+                  }}
                 >
                   {strategyHint}
                 </Typography>
               </Stack>
             )}
             <Stack spacing={0.25}>
-              <Stack direction="row" spacing={0.75} alignItems="center">
+              <Stack
+                direction="row"
+                spacing={0.75}
+                sx={{
+                  alignItems: 'center',
+                }}
+              >
                 <HardDrive size={14} />
-                <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                    fontWeight: 600,
+                  }}
+                >
                   {t('backupPlans.sourceChooser.databaseBackupPaths')}
                 </Typography>
               </Stack>
@@ -2642,8 +2752,11 @@ export function SourceSelectionDialog({
               </Typography>
               <Typography
                 variant="caption"
-                color="text.secondary"
-                sx={{ pl: 2.5, fontStyle: 'italic' }}
+                sx={{
+                  color: 'text.secondary',
+                  pl: 2.5,
+                  fontStyle: 'italic',
+                }}
               >
                 {t('backupPlans.sourceChooser.borgWillBackUpHint', {
                   defaultValue:
@@ -2678,13 +2791,23 @@ export function SourceSelectionDialog({
               },
             }}
           >
-            <Typography variant="body2" fontWeight={500} color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: 500,
+                color: 'text.secondary',
+              }}
+            >
               {t('backupPlans.sourceChooser.captureModeDatabase')}
             </Typography>
             <Typography
               variant="body2"
-              color="text.primary"
-              sx={{ ml: 'auto', mr: 0.5, fontWeight: 500 }}
+              sx={{
+                color: 'text.primary',
+                ml: 'auto',
+                mr: 0.5,
+                fontWeight: 500,
+              }}
             >
               {effectiveCaptureMode === 'original'
                 ? t('backupPlans.sourceChooser.captureModeOriginal')
@@ -2775,7 +2898,12 @@ export function SourceSelectionDialog({
                 defaultValue: 'No script will populate the dump.',
               })}
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {t('backupPlans.sourceChooser.skipScriptsWarningBody', {
                 defaultValue:
                   'Borg will only capture what is already in {{path}}. If you do not have an external job populating this directory, the backup will be empty. Pick "Create new scripts" to have Borg UI generate the dump for you.',
@@ -3041,14 +3169,19 @@ export function SourceSelectionDialog({
                   <Stack
                     direction={{ xs: 'column', sm: 'row' }}
                     spacing={1.25}
-                    alignItems={{ xs: 'stretch', sm: 'center' }}
-                    sx={{ minWidth: 0 }}
+                    sx={{
+                      alignItems: { xs: 'stretch', sm: 'center' },
+                      minWidth: 0,
+                    }}
                   >
                     <Stack
                       direction="row"
                       spacing={1.25}
-                      alignItems="center"
-                      sx={{ minWidth: 0, flex: 1 }}
+                      sx={{
+                        alignItems: 'center',
+                        minWidth: 0,
+                        flex: 1,
+                      }}
                     >
                       <Box
                         sx={{
@@ -3073,10 +3206,12 @@ export function SourceSelectionDialog({
                         </Typography>
                         <Typography
                           variant="caption"
-                          color="text.secondary"
                           sx={{
+                            color: 'text.secondary',
+
                             fontFamily:
                               'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
                             whiteSpace: 'nowrap',
@@ -3086,11 +3221,13 @@ export function SourceSelectionDialog({
                         </Typography>
                         <Typography
                           variant="caption"
-                          color="text.secondary"
                           title={container.export_path}
                           sx={{
+                            color: 'text.secondary',
+
                             fontFamily:
                               'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
                             whiteSpace: 'nowrap',
@@ -3104,9 +3241,11 @@ export function SourceSelectionDialog({
                       direction="row"
                       spacing={0.75}
                       useFlexGap
-                      flexWrap="wrap"
-                      justifyContent={{ xs: 'flex-start', sm: 'flex-end' }}
-                      alignItems="center"
+                      sx={{
+                        flexWrap: 'wrap',
+                        justifyContent: { xs: 'flex-start', sm: 'flex-end' },
+                        alignItems: 'center',
+                      }}
                     >
                       {container.image && (
                         <Chip size="small" variant="outlined" label={container.image} />
@@ -3189,7 +3328,12 @@ export function SourceSelectionDialog({
               }}
             >
               <Lock size={14} />
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {t('backupPlans.sourceChooser.agentRepoLockedAgentPicker', {
                   agent: agentRepoConstraint.agentName,
                 })}
@@ -3221,7 +3365,12 @@ export function SourceSelectionDialog({
               }}
             >
               {sourceKind === 'agent' ? <Laptop size={14} /> : <HardDrive size={14} />}
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {agentDisabled
                   ? t(
                       canUseManagedAgents
@@ -3239,8 +3388,22 @@ export function SourceSelectionDialog({
         {!showContainerScanFrame && selectedContainerSummary}
 
         <Stack spacing={1.5}>
-          <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
-            <Stack direction="row" spacing={0.5} alignItems="center" sx={{ minWidth: 0 }}>
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <Stack
+              direction="row"
+              spacing={0.5}
+              sx={{
+                alignItems: 'center',
+                minWidth: 0,
+              }}
+            >
               <Typography variant="subtitle2">
                 {t('backupPlans.sourceChooser.detectedContainers')}
               </Typography>
@@ -3293,7 +3456,12 @@ export function SourceSelectionDialog({
               }}
             >
               <Search size={16} />
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {t('backupPlans.sourceChooser.scanContainersHint')}
               </Typography>
             </Box>
@@ -3321,12 +3489,20 @@ export function SourceSelectionDialog({
               {containerScanLoading && (
                 <Stack
                   spacing={1}
-                  alignItems="center"
-                  justifyContent="center"
-                  sx={{ flex: 1, color: 'text.secondary' }}
+                  sx={{
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flex: 1,
+                    color: 'text.secondary',
+                  }}
                 >
                   <CircularProgress size={20} thickness={4} />
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: 'text.secondary',
+                    }}
+                  >
                     {t('backupPlans.sourceChooser.scanning')}
                   </Typography>
                 </Stack>
@@ -3338,15 +3514,28 @@ export function SourceSelectionDialog({
                 containerScanWarnings.length === 0 && (
                   <Stack
                     spacing={0.5}
-                    alignItems="center"
-                    justifyContent="center"
-                    textAlign="center"
-                    sx={{ flex: 1, px: 2 }}
+                    sx={{
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      textAlign: 'center',
+                      flex: 1,
+                      px: 2,
+                    }}
                   >
-                    <Typography variant="body2" fontWeight={600}>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: 600,
+                      }}
+                    >
                       {t('backupPlans.sourceChooser.noContainersFoundTitle')}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: 'text.secondary',
+                      }}
+                    >
                       {t('backupPlans.sourceChooser.noContainersFoundBody')}
                     </Typography>
                   </Stack>
@@ -3358,15 +3547,23 @@ export function SourceSelectionDialog({
                 containerScanWarnings.length === 0 && (
                   <Stack
                     spacing={0.75}
-                    alignItems="center"
-                    justifyContent="center"
-                    textAlign="center"
-                    sx={{ flex: 1, px: 2 }}
+                    sx={{
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      textAlign: 'center',
+                      flex: 1,
+                      px: 2,
+                    }}
                   >
                     <Box sx={{ color: 'text.disabled', display: 'inline-flex' }}>
                       <Search size={18} />
                     </Box>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: 'text.secondary',
+                      }}
+                    >
                       {t('backupPlans.sourceChooser.scanContainersHint')}
                     </Typography>
                   </Stack>
@@ -3447,14 +3644,18 @@ export function SourceSelectionDialog({
                             <Stack
                               direction={{ xs: 'column', sm: 'row' }}
                               spacing={0.75}
-                              alignItems={{ xs: 'stretch', sm: 'center' }}
-                              justifyContent="space-between"
+                              sx={{
+                                alignItems: { xs: 'stretch', sm: 'center' },
+                                justifyContent: 'space-between',
+                              }}
                             >
                               <Stack
                                 direction="row"
                                 spacing={1}
-                                alignItems="center"
-                                sx={{ minWidth: 0 }}
+                                sx={{
+                                  alignItems: 'center',
+                                  minWidth: 0,
+                                }}
                               >
                                 <Box
                                   sx={{
@@ -3479,8 +3680,10 @@ export function SourceSelectionDialog({
                                   </Typography>
                                   <Typography
                                     variant="caption"
-                                    color="text.secondary"
-                                    sx={{ overflowWrap: 'anywhere' }}
+                                    sx={{
+                                      color: 'text.secondary',
+                                      overflowWrap: 'anywhere',
+                                    }}
                                   >
                                     {`${t('backupPlans.sourceChooser.containerExportsTo')} `}
                                     <Box
@@ -3538,15 +3741,19 @@ export function SourceSelectionDialog({
                                 <Stack spacing={0.25}>
                                   <Typography
                                     variant="caption"
-                                    fontWeight={600}
-                                    color="text.primary"
+                                    sx={{
+                                      fontWeight: 600,
+                                      color: 'text.primary',
+                                    }}
                                   >
                                     {t('backupPlans.sourceChooser.containerMountsOptional')}
                                   </Typography>
                                   <Typography
                                     variant="caption"
-                                    color="text.secondary"
-                                    sx={{ pb: 0.25 }}
+                                    sx={{
+                                      color: 'text.secondary',
+                                      pb: 0.25,
+                                    }}
                                   >
                                     {t('backupPlans.sourceChooser.containerMountsNotIncludedHelp')}
                                   </Typography>
@@ -3590,13 +3797,15 @@ export function SourceSelectionDialog({
                                                   event.target.checked
                                                 )
                                               }
-                                              inputProps={{
-                                                'aria-label': t(
-                                                  'backupPlans.sourceChooser.includeContainerMountAria',
-                                                  { path: mountSourcePath || displayPath }
-                                                ),
-                                              }}
                                               sx={{ mt: -0.25 }}
+                                              slotProps={{
+                                                input: {
+                                                  'aria-label': t(
+                                                    'backupPlans.sourceChooser.includeContainerMountAria',
+                                                    { path: mountSourcePath || displayPath }
+                                                  ),
+                                                },
+                                              }}
                                             />
                                           }
                                           label={
@@ -3604,9 +3813,11 @@ export function SourceSelectionDialog({
                                               <Stack
                                                 direction="row"
                                                 spacing={0.75}
-                                                alignItems="center"
-                                                flexWrap="wrap"
                                                 useFlexGap
+                                                sx={{
+                                                  alignItems: 'center',
+                                                  flexWrap: 'wrap',
+                                                }}
                                               >
                                                 <Typography
                                                   variant="caption"
@@ -3637,14 +3848,16 @@ export function SourceSelectionDialog({
                                               {mount.destination && (
                                                 <Typography
                                                   variant="caption"
-                                                  color="text.secondary"
                                                   title={t(
                                                     'backupPlans.sourceChooser.containerMountDestination',
                                                     { path: mount.destination }
                                                   )}
                                                   sx={{
+                                                    color: 'text.secondary',
+
                                                     fontFamily:
                                                       'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+
                                                     overflowWrap: 'anywhere',
                                                   }}
                                                 >
@@ -3752,7 +3965,14 @@ export function SourceSelectionDialog({
       }
     >
       <DialogTitle sx={{ pb: 1.5 }}>
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{
+            alignItems: 'center',
+            minWidth: 0,
+          }}
+        >
           <Typography component="span" variant="h6" sx={{ fontWeight: 600 }} noWrap>
             {view === 'database' && t('backupPlans.sourceChooser.databaseBackupTitle')}
             {view === 'database-detail' && databaseDisplayTitle(selectedDatabase, t)}

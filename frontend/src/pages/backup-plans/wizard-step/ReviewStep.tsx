@@ -164,13 +164,13 @@ export function ReviewStep({
           </Box>
 
           <ReviewAttrRow label={t('backupPlans.wizard.review.sourceLocation')}>
-            <Stack direction="row" spacing={0.5} alignItems="center" sx={{ minWidth: 0 }}>
+            <Stack direction="row" spacing={0.5} sx={{ minWidth: 0, alignItems: 'center' }}>
               {wizardState.sourceType === 'remote' || wizardState.sourceType === 'mixed' ? (
                 <Laptop size={12} style={{ opacity: 0.6, flexShrink: 0 }} />
               ) : (
                 <HardDrive size={12} style={{ opacity: 0.6, flexShrink: 0 }} />
               )}
-              <Typography variant="body2" fontSize="0.75rem" noWrap>
+              <Typography variant="body2" noWrap sx={{ fontSize: '0.75rem' }}>
                 {sourceLocationLabel}
               </Typography>
             </Stack>
@@ -178,7 +178,7 @@ export function ReviewStep({
 
           {wizardState.sourceType === 'remote' && (
             <ReviewAttrRow label={t('backupPlans.wizard.review.sourceConnection')}>
-              <Typography variant="body2" fontSize="0.75rem" fontWeight={500} noWrap>
+              <Typography variant="body2" noWrap sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
                 {sourceConnectionLabel}
               </Typography>
             </ReviewAttrRow>
@@ -490,9 +490,8 @@ export function ReviewStep({
           <ReviewAttrRow label={t('backupPlans.wizard.review.planPreScript')}>
             <Typography
               variant="body2"
-              fontSize="0.75rem"
-              fontWeight={prePlanScripts.length > 0 ? 600 : 400}
               color={prePlanScripts.length > 0 ? 'text.primary' : 'text.disabled'}
+              sx={{ fontSize: '0.75rem', fontWeight: prePlanScripts.length > 0 ? 600 : 400 }}
             >
               {prePlanScripts.length > 0
                 ? prePlanScripts.map((hook) => hookLabel(hook)).join(', ')
@@ -502,9 +501,8 @@ export function ReviewStep({
           <ReviewAttrRow label={t('backupPlans.wizard.review.planPostScript')}>
             <Typography
               variant="body2"
-              fontSize="0.75rem"
-              fontWeight={postPlanScripts.length > 0 ? 600 : 400}
               color={postPlanScripts.length > 0 ? 'text.primary' : 'text.disabled'}
+              sx={{ fontSize: '0.75rem', fontWeight: postPlanScripts.length > 0 ? 600 : 400 }}
             >
               {postPlanScripts.length > 0
                 ? postPlanScripts.map((hook) => hookLabel(hook)).join(', ')
@@ -538,7 +536,7 @@ export function ReviewStep({
             wizardState.scheduleMode === 'availability' ? (
               <>
                 <ReviewAttrRow label={t('schedule.trigger.label', { defaultValue: 'Run trigger' })}>
-                  <Typography variant="body2" fontSize="0.75rem" fontWeight={600}>
+                  <Typography variant="body2" sx={{ fontSize: '0.75rem', fontWeight: 600 }}>
                     {t('schedule.trigger.whenAvailable', {
                       defaultValue: 'When source is available',
                     })}
@@ -711,7 +709,7 @@ function ContainerSourceReviewItem({
         py: 0.85,
       }}
     >
-      <Stack direction="row" spacing={0.75} alignItems="center" sx={{ minWidth: 0 }}>
+      <Stack direction="row" spacing={0.75} sx={{ minWidth: 0, alignItems: 'center' }}>
         <ContainerIcon size={12} style={{ opacity: 0.7, flexShrink: 0 }} />
         <Typography
           variant="caption"

@@ -20,11 +20,22 @@ export default function PageHeader({ title, subtitle, actions }: PageHeaderProps
       }}
     >
       <Box sx={{ flex: 1, mr: { md: 2 }, minWidth: 0 }}>
-        <Typography variant="h4" fontWeight={600} gutterBottom>
+        <Typography
+          variant="h4"
+          gutterBottom
+          sx={{
+            fontWeight: 600,
+          }}
+        >
           {title}
         </Typography>
         {subtitle ? (
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {subtitle}
           </Typography>
         ) : null}

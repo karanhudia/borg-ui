@@ -66,7 +66,13 @@ export default function AccountSecuritySettingsSection({
         }}
       >
         <Stack spacing={2.5}>
-          <Stack direction="row" spacing={1.25} alignItems="center">
+          <Stack
+            direction="row"
+            spacing={1.25}
+            sx={{
+              alignItems: 'center',
+            }}
+          >
             <Box
               sx={{
                 width: 34,
@@ -95,7 +101,13 @@ export default function AccountSecuritySettingsSection({
               >
                 {t('settings.account.security.overline')}
               </Typography>
-              <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.1 }}>
+              <Typography
+                variant="h6"
+                sx={{
+                  fontWeight: 700,
+                  lineHeight: 1.1,
+                }}
+              >
                 {t('settings.account.security.title')}
               </Typography>
             </Box>
@@ -103,8 +115,11 @@ export default function AccountSecuritySettingsSection({
 
           <Typography
             variant="body2"
-            color="text.secondary"
-            sx={{ maxWidth: 720, fontSize: { md: '0.95rem' } }}
+            sx={{
+              color: 'text.secondary',
+              maxWidth: 720,
+              fontSize: { md: '0.95rem' },
+            }}
           >
             {t('settings.account.security.description')}
           </Typography>
@@ -140,7 +155,12 @@ export default function AccountSecuritySettingsSection({
                 >
                   {highlight.label}
                 </Typography>
-                <Typography variant="subtitle2" fontWeight={700}>
+                <Typography
+                  variant="subtitle2"
+                  sx={{
+                    fontWeight: 700,
+                  }}
+                >
                   {highlight.value}
                 </Typography>
               </Box>

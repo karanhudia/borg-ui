@@ -113,10 +113,20 @@ export default function ApiTokensSection() {
           }}
         >
           <Box>
-            <Typography variant="body2" fontWeight={600}>
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: 600,
+              }}
+            >
               {t('apiTokens.title')}
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {t('apiTokens.description')}
             </Typography>
           </Box>
@@ -175,7 +185,12 @@ export default function ApiTokensSection() {
                     }}
                   >
                     <Box component="td" sx={{ p: 1.5 }}>
-                      <Typography variant="body2" fontWeight={500}>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontWeight: 500,
+                        }}
+                      >
                         {token.name}
                       </Typography>
                     </Box>
@@ -195,7 +210,12 @@ export default function ApiTokensSection() {
                       <Typography variant="body2">{formatDateShort(token.created_at)}</Typography>
                     </Box>
                     <Box component="td" sx={{ p: 1.5 }}>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          color: 'text.secondary',
+                        }}
+                      >
                         {token.last_used_at
                           ? formatDateShort(token.last_used_at)
                           : t('common.never')}
@@ -270,12 +290,20 @@ export default function ApiTokensSection() {
           <Alert severity="warning" sx={{ mb: 2 }}>
             {t('apiTokens.copyWarning')}
           </Alert>
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{
+              alignItems: 'center',
+            }}
+          >
             <TextField
               value={newToken ?? ''}
               fullWidth
-              InputProps={{ readOnly: true, sx: { fontFamily: 'monospace', fontSize: '0.8rem' } }}
               onClick={(e) => (e.target as HTMLInputElement).select()}
+              slotProps={{
+                input: { readOnly: true, sx: { fontFamily: 'monospace', fontSize: '0.8rem' } },
+              }}
             />
             <Tooltip title={copied ? t('apiTokens.copied') : t('apiTokens.copyToClipboard')}>
               <IconButton onClick={handleCopy} color={copied ? 'success' : 'default'}>

@@ -46,14 +46,22 @@ export default function EmptyStateCard({
       {description && (
         <Typography
           variant="body2"
-          color="text.secondary"
-          sx={{ mb: secondaryDescription ? 1.5 : actions ? 3 : 0 }}
+          sx={{
+            color: 'text.secondary',
+            mb: secondaryDescription ? 1.5 : actions ? 3 : 0,
+          }}
         >
           {description}
         </Typography>
       )}
       {secondaryDescription && (
-        <Typography variant="body2" color="text.secondary" sx={{ mb: actions ? 3 : 0 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+            mb: actions ? 3 : 0,
+          }}
+        >
           {secondaryDescription}
         </Typography>
       )}

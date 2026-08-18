@@ -430,7 +430,12 @@ export default function RepositoryScriptsTab({
               {/* Timeout */}
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 <Clock size={12} style={{ opacity: 0.6 }} />
-                <Typography variant="caption" color="text.secondary">
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                  }}
+                >
                   {effectiveTimeout}s
                 </Typography>
               </Box>
@@ -613,9 +618,11 @@ function RepositoryScriptDialog({
                 return s ? s.name : ''
               }}
               MenuProps={{
-                PaperProps: {
-                  style: {
-                    maxHeight: 400,
+                slotProps: {
+                  paper: {
+                    style: {
+                      maxHeight: 400,
+                    },
                   },
                 },
               }}
@@ -625,7 +632,13 @@ function RepositoryScriptDialog({
                   <Box>
                     <Typography variant="body2">{script.name}</Typography>
                     {script.description && (
-                      <Typography variant="caption" color="text.secondary" display="block">
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          color: 'text.secondary',
+                          display: 'block',
+                        }}
+                      >
                         {script.description}
                       </Typography>
                     )}
@@ -793,13 +806,25 @@ function ScriptTestDialog({ open, onClose, scriptName, running, result }: Script
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle>
-        <Box display="flex" alignItems="center" justifyContent="space-between">
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
           <Typography variant="h6">
             {t('repositoryScripts.testDialog.title', { scriptName })}
           </Typography>
           {running && <CircularProgress size={20} />}
           {result && (
-            <Box display="flex" alignItems="center" gap={1}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+              }}
+            >
               {result.success ? (
                 <CheckCircle size={20} color="#4caf50" />
               ) : (
@@ -823,7 +848,13 @@ function ScriptTestDialog({ open, onClose, scriptName, running, result }: Script
       </DialogTitle>
       <DialogContent dividers>
         {running && (
-          <Box display="flex" justifyContent="center" py={4}>
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'center',
+              py: 4,
+            }}
+          >
             <CircularProgress />
           </Box>
         )}
@@ -833,9 +864,11 @@ function ScriptTestDialog({ open, onClose, scriptName, running, result }: Script
               <Box>
                 <Typography
                   variant="caption"
-                  color="text.secondary"
-                  display="block"
-                  sx={{ mb: 0.5 }}
+                  sx={{
+                    color: 'text.secondary',
+                    display: 'block',
+                    mb: 0.5,
+                  }}
                 >
                   {t('scriptEditor.stdout')}
                 </Typography>
@@ -860,9 +893,11 @@ function ScriptTestDialog({ open, onClose, scriptName, running, result }: Script
               <Box>
                 <Typography
                   variant="caption"
-                  color="text.secondary"
-                  display="block"
-                  sx={{ mb: 0.5 }}
+                  sx={{
+                    color: 'text.secondary',
+                    display: 'block',
+                    mb: 0.5,
+                  }}
                 >
                   {t('scriptEditor.stderr')}
                 </Typography>

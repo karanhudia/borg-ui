@@ -327,7 +327,12 @@ const NotificationsTab: React.FC = () => {
       >
         <Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <Typography variant="h6" fontWeight={600}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 600,
+              }}
+            >
               {t('notifications.title')}
             </Typography>
             <Tooltip title={t('notifications.serviceUrlExamples')} arrow>
@@ -340,7 +345,12 @@ const NotificationsTab: React.FC = () => {
               </IconButton>
             </Tooltip>
           </Box>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {t('notifications.subtitle')}
           </Typography>
         </Box>
@@ -492,7 +502,13 @@ const NotificationsTab: React.FC = () => {
           <Typography variant="h6" gutterBottom>
             {t('notifications.noServicesTitle')}
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+              mb: 2,
+            }}
+          >
             {t('notifications.noServicesSubtitle')}
           </Typography>
           <Button
@@ -532,7 +548,13 @@ const NotificationsTab: React.FC = () => {
       >
         <DialogTitle>{t('notifications.appriseUrlExamplesTitle')}</DialogTitle>
         <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+              mb: 2,
+            }}
+          >
             {t('notifications.alertDescription')}
           </Typography>
           <Box
