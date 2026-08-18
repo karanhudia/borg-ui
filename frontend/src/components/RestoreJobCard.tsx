@@ -97,7 +97,13 @@ export default function RestoreJobCard({ job, showJobId = true }: RestoreJobCard
   return (
     <Box>
       {showJobId && (
-        <Typography variant="body2" fontWeight={500} sx={{ mb: 1 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            fontWeight: 500,
+            mb: 1,
+          }}
+        >
           {t('restoreJobCard.title')} #{job.id}
         </Typography>
       )}
@@ -124,9 +130,9 @@ export default function RestoreJobCard({ job, showJobId = true }: RestoreJobCard
         >
           <Typography
             variant="body2"
-            fontWeight={600}
             noWrap
             sx={{
+              fontWeight: 600,
               fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace',
               fontSize: '0.78rem',
             }}
@@ -138,9 +144,9 @@ export default function RestoreJobCard({ job, showJobId = true }: RestoreJobCard
           </Box>
           <Typography
             variant="body2"
-            color="text.secondary"
             noWrap
             sx={{
+              color: 'text.secondary',
               fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace',
               fontSize: '0.72rem',
               minWidth: 0,
@@ -188,7 +194,13 @@ export default function RestoreJobCard({ job, showJobId = true }: RestoreJobCard
               flexShrink: 0,
             }}
           >
-            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.72rem' }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+                fontSize: '0.72rem',
+              }}
+            >
               {formatRelativeTime(job.completed_at)}
             </Typography>
             {getDurationText() && (
@@ -203,7 +215,13 @@ export default function RestoreJobCard({ job, showJobId = true }: RestoreJobCard
                     flexShrink: 0,
                   }}
                 />
-                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.72rem' }}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: 'text.secondary',
+                    fontSize: '0.72rem',
+                  }}
+                >
                   {getDurationText()}
                 </Typography>
               </>
@@ -214,7 +232,14 @@ export default function RestoreJobCard({ job, showJobId = true }: RestoreJobCard
 
       {/* Running: elapsed time */}
       {job.status === 'running' && job.started_at && !job.completed_at && (
-        <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.72rem', mt: 0.5 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+            fontSize: '0.72rem',
+            mt: 0.5,
+          }}
+        >
           {formatTimeRange(job.started_at, job.completed_at, job.status)}
         </Typography>
       )}
@@ -234,7 +259,12 @@ export default function RestoreJobCard({ job, showJobId = true }: RestoreJobCard
       {/* Running: current file */}
       {job.status === 'running' && job.progress_details?.current_file && (
         <Alert severity="info" sx={{ mt: 1.5, py: 0.5 }}>
-          <Typography variant="caption" fontWeight={500}>
+          <Typography
+            variant="caption"
+            sx={{
+              fontWeight: 500,
+            }}
+          >
             {t('restoreJobCard.currentFile')}
           </Typography>
           <Typography
@@ -262,26 +292,58 @@ export default function RestoreJobCard({ job, showJobId = true }: RestoreJobCard
           }}
         >
           <Box>
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {t('restoreJobCard.filesRestored')}
             </Typography>
-            <Typography variant="body2" fontWeight={500}>
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: 500,
+              }}
+            >
               {job.progress_details.nfiles?.toLocaleString() || '0'}
             </Typography>
           </Box>
           <Box>
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {t('restoreJobCard.progress')}
             </Typography>
-            <Typography variant="body2" fontWeight={500} color="primary.main">
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: 500,
+                color: 'primary.main',
+              }}
+            >
               {job.progress_details.progress_percent?.toFixed(1) || '0'}%
             </Typography>
           </Box>
           <Box>
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {t('restoreJobCard.speed')}
             </Typography>
-            <Typography variant="body2" fontWeight={500} color="primary.main">
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: 500,
+                color: 'primary.main',
+              }}
+            >
               {job.progress_details.restore_speed
                 ? `${job.progress_details.restore_speed.toFixed(2)} MB/s`
                 : 'N/A'}
@@ -289,10 +351,21 @@ export default function RestoreJobCard({ job, showJobId = true }: RestoreJobCard
           </Box>
           {(job.progress_details.estimated_time_remaining || 0) > 0 && (
             <Box>
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {t('restoreJobCard.eta')}
               </Typography>
-              <Typography variant="body2" fontWeight={500} color="success.main">
+              <Typography
+                variant="body2"
+                sx={{
+                  fontWeight: 500,
+                  color: 'success.main',
+                }}
+              >
                 {formatDurationSeconds(job.progress_details.estimated_time_remaining || 0)}
               </Typography>
             </Box>

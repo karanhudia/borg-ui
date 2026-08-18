@@ -70,7 +70,9 @@ export function EditConnectionDialog({
               setEditConnectionForm({ ...editConnectionForm, username: e.target.value })
             }
             placeholder="root"
-            InputLabelProps={{ shrink: true }}
+            slotProps={{
+              inputLabel: { shrink: true },
+            }}
           />
           <TextField
             label={t('sshConnections.deployDialog.port')}
@@ -80,7 +82,9 @@ export function EditConnectionDialog({
             onChange={(e) =>
               setEditConnectionForm({ ...editConnectionForm, port: parseInt(e.target.value) })
             }
-            InputLabelProps={{ shrink: true }}
+            slotProps={{
+              inputLabel: { shrink: true },
+            }}
           />
           <FormControlLabel
             control={
@@ -94,7 +98,12 @@ export function EditConnectionDialog({
             label={
               <Box>
                 <Typography variant="body2">{t('sshConnections.deployDialog.sftpMode')}</Typography>
-                <Typography variant="caption" color="text.secondary">
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                  }}
+                >
                   {t('sshConnections.deployDialog.sftpModeHint')}
                 </Typography>
               </Box>
@@ -112,7 +121,12 @@ export function EditConnectionDialog({
             label={
               <Box>
                 <Typography variant="body2">{t('sshConnections.deployDialog.useSudo')}</Typography>
-                <Typography variant="caption" color="text.secondary">
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                  }}
+                >
                   {t('sshConnections.deployDialog.useSudoHint')}
                 </Typography>
               </Box>
@@ -127,7 +141,9 @@ export function EditConnectionDialog({
             }
             placeholder="/home"
             helperText={t('sshConnections.deployDialog.defaultPathHelper')}
-            InputLabelProps={{ shrink: true }}
+            slotProps={{
+              inputLabel: { shrink: true },
+            }}
           />
           <TextField
             label={t('sshConnections.deployDialog.mountPoint')}
@@ -138,7 +154,9 @@ export function EditConnectionDialog({
             }
             placeholder={t('sshConnections.deployDialog.mountPointPlaceholder')}
             helperText={t('sshConnections.deployDialog.mountPointHelper')}
-            InputLabelProps={{ shrink: true }}
+            slotProps={{
+              inputLabel: { shrink: true },
+            }}
           />
           <Alert severity="info" sx={{ fontSize: '0.85rem' }}>
             {t('sshConnections.editConnectionDialog.updateInfo')}

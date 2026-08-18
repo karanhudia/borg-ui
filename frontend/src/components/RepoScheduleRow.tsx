@@ -121,7 +121,14 @@ function ScheduleLine({
             </Typography>
           )}
           {!isPaused && timezone && (
-            <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.75 }}>
+            <Typography
+              component="span"
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+                ml: 0.75,
+              }}
+            >
               {timezone}
             </Typography>
           )}
@@ -129,9 +136,13 @@ function ScheduleLine({
       ) : (
         <Typography
           variant="body2"
-          sx={{ flex: 1, minWidth: 0, fontStyle: 'italic' }}
-          color="text.disabled"
           noWrap
+          sx={{
+            color: 'text.disabled',
+            flex: 1,
+            minWidth: 0,
+            fontStyle: 'italic',
+          }}
         >
           {setLabel}
         </Typography>
@@ -193,15 +204,23 @@ const RepoScheduleRow: React.FC<RepoScheduleRowProps> = ({
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.25 }}>
         <HardDrive size={14} style={{ flexShrink: 0, color: theme.palette.text.secondary }} />
-        <Typography variant="body2" fontWeight={600} noWrap sx={{ minWidth: 0, flex: 1 }}>
+        <Typography
+          variant="body2"
+          noWrap
+          sx={{
+            fontWeight: 600,
+            minWidth: 0,
+            flex: 1,
+          }}
+        >
           {repositoryName}
         </Typography>
         {repositoryPath && repositoryPath !== repositoryName && (
           <Typography
             variant="caption"
-            color="text.disabled"
             noWrap
             sx={{
+              color: 'text.disabled',
               fontFamily: 'monospace',
               fontSize: '0.65rem',
               minWidth: 0,

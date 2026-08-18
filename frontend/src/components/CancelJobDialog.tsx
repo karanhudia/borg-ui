@@ -17,7 +17,12 @@ export default function CancelJobDialog({ open, onClose, onConfirm }: CancelJobD
         <Typography variant="h6" gutterBottom>
           {t('dialogs.cancelJob.title')}
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           {t('dialogs.cancelJob.message')}
         </Typography>
       </DialogContent>

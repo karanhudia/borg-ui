@@ -195,8 +195,10 @@ export function DimStatusGrid({
             key={item.label}
             direction="row"
             spacing={0.5}
-            alignItems="center"
-            sx={{ minWidth: 0 }}
+            sx={{
+              alignItems: 'center',
+              minWidth: 0,
+            }}
           >
             {/* Inline cell: icon and label on the left, value pushed to the
                 right edge by flexGrow on the label. Translation values are
@@ -295,13 +297,13 @@ export function ScheduleBadge({
       <Stack
         direction="row"
         spacing={0.4}
-        alignItems="center"
         title={
           scheduleName
             ? `${t('dashboard.scheduleBadge.pausedTitle', { name: scheduleName })} (${timezoneLabel})`
             : `${t('dashboard.scheduleBadge.pausedTitleGeneric')} (${timezoneLabel})`
         }
         sx={{
+          alignItems: 'center',
           px: 1,
           py: 0.4,
           bgcolor: T.amberDim,
@@ -332,9 +334,9 @@ export function ScheduleBadge({
       <Stack
         direction="row"
         spacing={0.4}
-        alignItems="center"
         title={`${scheduleName ?? t('dashboard.scheduleBadge.scheduled')} (${timezoneLabel})`}
         sx={{
+          alignItems: 'center',
           px: 1,
           py: 0.4,
           bgcolor: T.blueDim,
@@ -379,13 +381,13 @@ export function ScheduleBadge({
     <Stack
       direction="row"
       spacing={0.5}
-      alignItems="center"
       title={
         scheduleName
           ? `${t('dashboard.scheduleBadge.nextRunTitle', { name: scheduleName, label })} (${timezoneLabel})`
           : `${t('dashboard.scheduleBadge.nextRunTitleGeneric', { label })} (${timezoneLabel})`
       }
       sx={{
+        alignItems: 'center',
         px: 1,
         py: 0.4,
         bgcolor: T.indigoDim,

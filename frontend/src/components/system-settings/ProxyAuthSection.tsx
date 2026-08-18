@@ -42,7 +42,12 @@ const ProxyAuthSection: React.FC<ProxyAuthSectionProps> = ({
                 borderColor: 'divider',
               }}
             >
-              <Typography variant="caption" color="text.secondary">
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {t(labelKey)}
               </Typography>
               <Typography
@@ -58,7 +63,13 @@ const ProxyAuthSection: React.FC<ProxyAuthSectionProps> = ({
 
       {proxyAuthConfig?.proxy_auth_health?.warnings?.length ? (
         <Alert severity="warning">
-          <Typography variant="body2" fontWeight={600} sx={{ mb: 1 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              fontWeight: 600,
+              mb: 1,
+            }}
+          >
             {t('systemSettings.proxyAuthWarningsTitle')}
           </Typography>
           <Stack spacing={0.75}>

@@ -217,7 +217,12 @@ const ScheduleByPlanTab: React.FC<ScheduleByPlanTabProps> = ({
           <Typography variant="body1" gutterBottom>
             {t('schedule.byPlan.noPlansTitle', { defaultValue: 'No backup plans yet' })}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {t('schedule.byPlan.noPlansDesc', {
               defaultValue:
                 'Repository check and restore-check schedules below run independently of any plan.',

@@ -105,14 +105,21 @@ export function RepositoriesStep({
           <Stack
             direction={{ xs: 'column', sm: 'row' }}
             spacing={1.5}
-            alignItems={{ xs: 'stretch', sm: 'center' }}
-            justifyContent="space-between"
+            sx={{
+              alignItems: { xs: 'stretch', sm: 'center' },
+              justifyContent: 'space-between',
+            }}
           >
             <Box>
               <Typography variant="subtitle2">
                 {t('backupPlans.wizard.repositories.addStorageTarget')}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {t('backupPlans.wizard.repositories.basicDescription')}
               </Typography>
             </Box>
@@ -170,19 +177,21 @@ export function RepositoriesStep({
                 helperText={t('backupPlans.wizard.repositories.pathHelper')}
                 required
                 fullWidth
-                InputProps={{
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        onClick={() => setShowBasicRepositoryPathExplorer(true)}
-                        edge="end"
-                        size="small"
-                        title={t('backupPlans.wizard.repositories.browsePath')}
-                      >
-                        <FolderOpenIcon fontSize="small" />
-                      </IconButton>
-                    </InputAdornment>
-                  ),
+                slotProps={{
+                  input: {
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton
+                          onClick={() => setShowBasicRepositoryPathExplorer(true)}
+                          edge="end"
+                          size="small"
+                          title={t('backupPlans.wizard.repositories.browsePath')}
+                        >
+                          <FolderOpenIcon fontSize="small" />
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  },
                 }}
               />
               <RepositoryEncryptionFields

@@ -161,7 +161,13 @@ export default function RepositoryWipeDialog({
   return (
     <ResponsiveDialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle sx={{ pb: 1.5 }}>
-        <Stack direction="row" spacing={1.5} alignItems="flex-start">
+        <Stack
+          direction="row"
+          spacing={1.5}
+          sx={{
+            alignItems: 'flex-start',
+          }}
+        >
           <Box
             sx={{
               display: 'flex',
@@ -178,14 +184,24 @@ export default function RepositoryWipeDialog({
             <ShieldAlert size={19} />
           </Box>
           <Box sx={{ minWidth: 0, flex: 1 }}>
-            <Typography variant="h6" fontWeight={650} lineHeight={1.3}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 650,
+                lineHeight: 1.3,
+              }}
+            >
               {t('dialogs.repositoryWipe.title')}
             </Typography>
             <Typography
               variant="body2"
-              color="text.secondary"
               noWrap
-              sx={{ fontFamily: 'ui-monospace, monospace', fontSize: '0.72rem', mt: 0.25 }}
+              sx={{
+                color: 'text.secondary',
+                fontFamily: 'ui-monospace, monospace',
+                fontSize: '0.72rem',
+                mt: 0.25,
+              }}
             >
               {repository.name} · {repository.path}
             </Typography>
@@ -203,7 +219,12 @@ export default function RepositoryWipeDialog({
 
       <DialogContent sx={{ pt: 0 }}>
         <Stack spacing={2}>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {t('dialogs.repositoryWipe.scopeSummary')}
           </Typography>
 
@@ -279,10 +300,21 @@ export default function RepositoryWipeDialog({
             }
             label={
               <Box>
-                <Typography variant="body2" fontWeight={600}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontWeight: 600,
+                  }}
+                >
                   {t('dialogs.repositoryWipe.compactOption')}
                 </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.45 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                    lineHeight: 1.45,
+                  }}
+                >
                   {t('dialogs.repositoryWipe.compactHelper')}
                 </Typography>
               </Box>
@@ -328,17 +360,31 @@ export default function RepositoryWipeDialog({
                   borderColor,
                 }}
               >
-                <Stack direction="row" spacing={0.75} alignItems="center" minWidth={0}>
+                <Stack
+                  direction="row"
+                  spacing={0.75}
+                  sx={{
+                    alignItems: 'center',
+                    minWidth: 0,
+                  }}
+                >
                   <Archive size={15} />
-                  <Typography variant="body2" fontWeight={700}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontWeight: 700,
+                    }}
+                  >
                     {t('dialogs.repositoryWipe.previewScope', { count: archiveCount })}
                   </Typography>
                 </Stack>
                 <Typography
                   variant="caption"
-                  color="text.disabled"
                   noWrap
-                  sx={{ fontFamily: 'ui-monospace, monospace' }}
+                  sx={{
+                    color: 'text.disabled',
+                    fontFamily: 'ui-monospace, monospace',
+                  }}
                 >
                   {preview.archive_fingerprint}
                 </Typography>
@@ -359,7 +405,12 @@ export default function RepositoryWipeDialog({
 
                 {isBlocked && (
                   <Alert severity="error" icon={<XCircle size={18} />}>
-                    <Typography variant="body2" fontWeight={650}>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: 650,
+                      }}
+                    >
                       {preview.blocking_reason === 'protected_archives'
                         ? t('dialogs.repositoryWipe.protectedTitle')
                         : t('dialogs.repositoryWipe.blockedTitle')}
@@ -396,14 +447,22 @@ export default function RepositoryWipeDialog({
                             bgcolor: isDark ? alpha('#fff', 0.018) : alpha('#000', 0.012),
                           }}
                         >
-                          <Typography noWrap variant="body2" fontWeight={650}>
+                          <Typography
+                            noWrap
+                            variant="body2"
+                            sx={{
+                              fontWeight: 650,
+                            }}
+                          >
                             {archive.name || archive.identity}
                           </Typography>
                           <Typography
                             noWrap
                             variant="caption"
-                            color="text.disabled"
-                            sx={{ fontFamily: 'ui-monospace, monospace' }}
+                            sx={{
+                              color: 'text.disabled',
+                              fontFamily: 'ui-monospace, monospace',
+                            }}
                           >
                             {archive.id || archive.identity}
                           </Typography>
@@ -424,8 +483,8 @@ export default function RepositoryWipeDialog({
                         <Stack
                           direction="row"
                           spacing={0.75}
-                          alignItems="center"
                           sx={{
+                            alignItems: 'center',
                             px: 1.25,
                             py: 0.75,
                             borderBottom: '1px solid',
@@ -497,8 +556,10 @@ export default function RepositoryWipeDialog({
                 }
                 fullWidth
                 autoComplete="off"
-                inputProps={{ 'aria-describedby': 'repository-wipe-confirmation-helper' }}
-                FormHelperTextProps={{ id: 'repository-wipe-confirmation-helper' }}
+                slotProps={{
+                  htmlInput: { 'aria-describedby': 'repository-wipe-confirmation-helper' },
+                  formHelperText: { id: 'repository-wipe-confirmation-helper' },
+                }}
               />
             </Stack>
           )}
@@ -513,9 +574,21 @@ export default function RepositoryWipeDialog({
                 p: 1.5,
               }}
             >
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{
+                  alignItems: 'center',
+                  mb: 1,
+                }}
+              >
                 <RefreshCw size={16} className="animate-spin" />
-                <Typography variant="body2" fontWeight={700}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontWeight: 700,
+                  }}
+                >
                   {job.progress_message || t('dialogs.repositoryWipe.running')}
                 </Typography>
               </Stack>
@@ -525,7 +598,12 @@ export default function RepositoryWipeDialog({
 
           {job && hasTerminalJob && (
             <Alert role="status" severity={statusSeverity(job.status)}>
-              <Typography variant="body2" fontWeight={650}>
+              <Typography
+                variant="body2"
+                sx={{
+                  fontWeight: 650,
+                }}
+              >
                 {terminalMessage(job, t)}
               </Typography>
               {job.error_message && (

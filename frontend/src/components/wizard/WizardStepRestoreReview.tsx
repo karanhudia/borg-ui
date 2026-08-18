@@ -58,7 +58,12 @@ function SummaryRow({ label, children }: { label: string; children: React.ReactN
         py: 0.75,
       }}
     >
-      <Typography variant="body2" color="text.secondary">
+      <Typography
+        variant="body2"
+        sx={{
+          color: 'text.secondary',
+        }}
+      >
         {label}
       </Typography>
       <Box sx={{ textAlign: { xs: 'left', sm: 'right' }, width: { xs: '100%', sm: 'auto' } }}>
@@ -117,7 +122,12 @@ export default function WizardStepRestoreReview({
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {/* Success Alert */}
       <Alert severity="success" icon={<CheckCircle size={20} />} sx={{ py: 0.5 }}>
-        <Typography variant="body2" fontWeight={600}>
+        <Typography
+          variant="body2"
+          sx={{
+            fontWeight: 600,
+          }}
+        >
           {selectedFiles.length === 0
             ? t('wizard.restoreReview.readyEntireArchive', { archiveName })
             : t('wizard.restoreReview.readyFiles', { count: selectedFiles.length, archiveName })}
@@ -138,7 +148,12 @@ export default function WizardStepRestoreReview({
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             {data.destinationType === 'local' ? <HardDrive size={18} /> : <Cloud size={18} />}
-            <Typography variant="subtitle2" fontWeight={600}>
+            <Typography
+              variant="subtitle2"
+              sx={{
+                fontWeight: 600,
+              }}
+            >
               {t('wizard.restoreReview.restoreDestination')}
             </Typography>
           </Box>
@@ -162,7 +177,12 @@ export default function WizardStepRestoreReview({
             <>
               <Divider sx={{ my: 1 }} />
               <SummaryRow label={t('wizard.restoreReview.sshConnection')}>
-                <Typography variant="body2" fontFamily="monospace">
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontFamily: 'monospace',
+                  }}
+                >
                   {destinationConnection.username}@{destinationConnection.host}:
                   {destinationConnection.port}
                 </Typography>
@@ -187,7 +207,12 @@ export default function WizardStepRestoreReview({
             <>
               <Divider sx={{ my: 1 }} />
               <SummaryRow label={t('wizard.restoreReview.customPath')}>
-                <Typography variant="body2" fontFamily="monospace">
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontFamily: 'monospace',
+                  }}
+                >
                   {data.customPath || t('wizard.restoreReview.notSet')}
                 </Typography>
               </SummaryRow>
@@ -223,7 +248,12 @@ export default function WizardStepRestoreReview({
           >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <FileCheck size={18} />
-              <Typography variant="subtitle2" fontWeight={600}>
+              <Typography
+                variant="subtitle2"
+                sx={{
+                  fontWeight: 600,
+                }}
+              >
                 {t('wizard.restoreReview.restorePreview')}
               </Typography>
             </Box>
@@ -233,9 +263,12 @@ export default function WizardStepRestoreReview({
           <Box sx={{ p: 2 }}>
             <Typography
               variant="caption"
-              color="text.secondary"
               gutterBottom
-              sx={{ display: 'block', mb: 1 }}
+              sx={{
+                color: 'text.secondary',
+                display: 'block',
+                mb: 1,
+              }}
             >
               {t('wizard.restoreReview.previewNote')}
             </Typography>
@@ -253,8 +286,11 @@ export default function WizardStepRestoreReview({
                   <Box key={index} sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                     <Typography
                       variant="body2"
-                      color="text.secondary"
-                      sx={{ fontSize: '0.75rem', fontFamily: 'monospace' }}
+                      sx={{
+                        color: 'text.secondary',
+                        fontSize: '0.75rem',
+                        fontFamily: 'monospace',
+                      }}
                     >
                       Original: {path}
                     </Typography>
@@ -277,7 +313,13 @@ export default function WizardStepRestoreReview({
                   </Box>
                 ))}
                 {hasMoreFiles && (
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: 'text.secondary',
+                      mt: 1,
+                    }}
+                  >
                     {t('wizard.restoreReview.andMoreFiles', { count: selectedFiles.length - 3 })}
                   </Typography>
                 )}
@@ -301,7 +343,12 @@ export default function WizardStepRestoreReview({
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <FolderOpen size={18} />
-            <Typography variant="subtitle2" fontWeight={600}>
+            <Typography
+              variant="subtitle2"
+              sx={{
+                fontWeight: 600,
+              }}
+            >
               {t('wizard.restoreReview.filesToRestore')}
             </Typography>
           </Box>
@@ -336,7 +383,12 @@ export default function WizardStepRestoreReview({
 
       {/* Ready Alert */}
       <Alert severity="success" icon={<FileCheck size={20} />}>
-        <Typography variant="body2" fontWeight={600}>
+        <Typography
+          variant="body2"
+          sx={{
+            fontWeight: 600,
+          }}
+        >
           {t('wizard.restoreReview.everythingLooksGood')}
         </Typography>
       </Alert>

@@ -64,10 +64,20 @@ export default function RepositoryEncryptionFields({
               {encryptionOptions.map((opt) => (
                 <MenuItem key={opt} value={opt}>
                   <Box>
-                    <Typography variant="body2" fontWeight={600}>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: 600,
+                      }}
+                    >
                       {t(`wizard.security.options.${opt}.label`)}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: 'text.secondary',
+                      }}
+                    >
                       {t(`wizard.security.options.${opt}.description`)}
                     </Typography>
                   </Box>
@@ -78,7 +88,13 @@ export default function RepositoryEncryptionFields({
 
           {data.encryption === 'none' && (
             <Alert severity="warning">
-              <Typography variant="body2" fontWeight={600} gutterBottom>
+              <Typography
+                variant="body2"
+                gutterBottom
+                sx={{
+                  fontWeight: 600,
+                }}
+              >
                 {t('wizard.security.securityWarningTitle')}
               </Typography>
               <Typography variant="body2">{t('wizard.security.securityWarningBody')}</Typography>
@@ -90,7 +106,12 @@ export default function RepositoryEncryptionFields({
       {mode === 'edit' && (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
           <Shield size={14} style={{ color: 'inherit', opacity: 0.45, flexShrink: 0 }} />
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {t('wizard.security.encryptionReadonly')}
           </Typography>
         </Box>
@@ -118,28 +139,30 @@ export default function RepositoryEncryptionFields({
               ? t('wizard.security.passphraseHelperEdit')
               : t('wizard.security.passphraseHelperCreate')
           }
-          InputProps={{
-            startAdornment: (
-              <Box sx={{ mr: 1, display: 'flex', color: 'text.secondary' }}>
-                <Key size={18} />
-              </Box>
-            ),
-            endAdornment: (
-              <InputAdornment position="end">
-                <IconButton
-                  aria-label={
-                    showPassphrase
-                      ? t('wizard.review.hidePassphrase')
-                      : t('wizard.review.showPassphrase')
-                  }
-                  onClick={() => setShowPassphrase((v) => !v)}
-                  edge="end"
-                  size="small"
-                >
-                  {showPassphrase ? <EyeOff size={18} /> : <Eye size={18} />}
-                </IconButton>
-              </InputAdornment>
-            ),
+          slotProps={{
+            input: {
+              startAdornment: (
+                <Box sx={{ mr: 1, display: 'flex', color: 'text.secondary' }}>
+                  <Key size={18} />
+                </Box>
+              ),
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton
+                    aria-label={
+                      showPassphrase
+                        ? t('wizard.review.hidePassphrase')
+                        : t('wizard.review.showPassphrase')
+                    }
+                    onClick={() => setShowPassphrase((v) => !v)}
+                    edge="end"
+                    size="small"
+                  >
+                    {showPassphrase ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </IconButton>
+                </InputAdornment>
+              ),
+            },
           }}
         />
       )}

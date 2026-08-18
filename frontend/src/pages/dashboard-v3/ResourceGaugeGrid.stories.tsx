@@ -32,7 +32,14 @@ export const NarrowRail: Story = {
   render: () => (
     <TokenContext.Provider value={T}>
       <Box sx={{ width: 200, maxWidth: 'calc(100vw - 32px)', ...surface, p: 2 }}>
-        <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 2 }}>
+        <Stack
+          direction="row"
+          spacing={0.75}
+          sx={{
+            alignItems: 'center',
+            mb: 2,
+          }}
+        >
           <Cpu size={14} color={T.textMuted} />
           <Typography sx={{ fontSize: '0.8125rem', fontWeight: 600, color: T.textPrimary }}>
             Resources

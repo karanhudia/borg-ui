@@ -119,7 +119,14 @@ export default function EntityCard({
           }}
         >
           <Box sx={{ minWidth: 0, flex: 1 }}>
-            <Typography variant="subtitle1" fontWeight={700} noWrap sx={{ lineHeight: 1.3 }}>
+            <Typography
+              variant="subtitle1"
+              noWrap
+              sx={{
+                fontWeight: 700,
+                lineHeight: 1.3,
+              }}
+            >
               {title}
             </Typography>
             {subtitle && (
@@ -200,9 +207,12 @@ export default function EntityCard({
                   </Box>
                   <Typography
                     variant="body2"
-                    fontWeight={600}
                     noWrap
-                    sx={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.85rem' }}
+                    sx={{
+                      fontWeight: 600,
+                      fontVariantNumeric: 'tabular-nums',
+                      fontSize: '0.85rem',
+                    }}
                   >
                     {stat.value}
                   </Typography>

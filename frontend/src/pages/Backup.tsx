@@ -368,8 +368,20 @@ const Backup: React.FC = () => {
         }}
       >
         <Box>
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-            <Typography variant="h4" fontWeight={600}>
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{
+              alignItems: 'center',
+              mb: 1,
+            }}
+          >
+            <Typography
+              variant="h4"
+              sx={{
+                fontWeight: 600,
+              }}
+            >
               {t('backup.title')}
             </Typography>
             {repositoriesData?.data?.repositories?.some(
@@ -398,11 +410,22 @@ const Backup: React.FC = () => {
                 </Tooltip>
               )}
           </Stack>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {t('backup.subtitle')}
           </Typography>
         </Box>
-        <Stack direction="row" spacing={2} alignItems="center"></Stack>
+        <Stack
+          direction="row"
+          spacing={2}
+          sx={{
+            alignItems: 'center',
+          }}
+        ></Stack>
       </Box>
 
       <PageTabs
@@ -419,10 +442,20 @@ const Backup: React.FC = () => {
           <Box>
             <Stack spacing={2.5}>
               <Box>
-                <Typography variant="h6" fontWeight={600}>
+                <Typography
+                  variant="h6"
+                  sx={{
+                    fontWeight: 600,
+                  }}
+                >
                   {t('backup.planRun.title')}
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: 'text.secondary',
+                  }}
+                >
                   {t('backup.planRun.description')}
                 </Typography>
               </Box>
@@ -439,7 +472,13 @@ const Backup: React.FC = () => {
                   {t('backup.planRun.empty')}
                 </Alert>
               ) : (
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="stretch">
+                <Stack
+                  direction={{ xs: 'column', sm: 'row' }}
+                  spacing={2}
+                  sx={{
+                    alignItems: 'stretch',
+                  }}
+                >
                   <BackupPlanSelect
                     label={t('backup.planRun.selectLabel')}
                     value={selectedBackupPlanId}
@@ -530,7 +569,13 @@ const Backup: React.FC = () => {
 
           {/* Legacy Manual Backup Control */}
           <Box sx={{ mb: 4 }}>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="stretch">
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={2}
+              sx={{
+                alignItems: 'stretch',
+              }}
+            >
               <RepoSelect
                 repositories={legacyBackupRepositories}
                 value={selectedRepository}
@@ -570,7 +615,13 @@ const Backup: React.FC = () => {
 
             {repositoriesData?.data?.repositories?.length === 0 && !loadingRepositories && (
               <Alert severity="warning" sx={{ mt: 2 }}>
-                <Typography variant="body2" fontWeight={500} gutterBottom>
+                <Typography
+                  variant="body2"
+                  gutterBottom
+                  sx={{
+                    fontWeight: 500,
+                  }}
+                >
                   {t('backup.manualBackup.noRepositories.title')}
                 </Typography>
                 <Typography variant="body2">
@@ -620,15 +671,29 @@ const Backup: React.FC = () => {
               <Stack
                 direction="row"
                 spacing={1.5}
-                alignItems="center"
-                sx={{ mb: 1, color: 'text.secondary' }}
+                sx={{
+                  alignItems: 'center',
+                  mb: 1,
+                  color: 'text.secondary',
+                }}
               >
                 <Clock size={20} />
-                <Typography variant="h6" fontWeight={600}>
+                <Typography
+                  variant="h6"
+                  sx={{
+                    fontWeight: 600,
+                  }}
+                >
                   {t('backup.recentJobs.title')}
                 </Typography>
               </Stack>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                  mb: 3,
+                }}
+              >
                 {t('backup.recentJobs.subtitle')}
               </Typography>
 

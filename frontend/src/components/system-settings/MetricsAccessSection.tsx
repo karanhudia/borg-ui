@@ -92,7 +92,12 @@ const MetricsAccessSection: React.FC<MetricsAccessSectionProps> = ({
             ? t('systemSettings.metricsRotateToken')
             : t('systemSettings.metricsGenerateToken')}
         </Button>
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           {!metricsEnabled || !metricsRequireAuth
             ? t('systemSettings.metricsTokenDisabledHelper')
             : rotateMetricsToken
@@ -116,7 +121,13 @@ const MetricsAccessSection: React.FC<MetricsAccessSectionProps> = ({
           <Stack spacing={1.5}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
               <AlertTriangle size={13} color="orange" />
-              <Typography variant="caption" fontWeight={600} color="warning.main">
+              <Typography
+                variant="caption"
+                sx={{
+                  fontWeight: 600,
+                  color: 'warning.main',
+                }}
+              >
                 {t('systemSettings.metricsTokenDialogWarning')}
               </Typography>
             </Box>

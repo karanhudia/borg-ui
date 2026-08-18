@@ -226,7 +226,12 @@ export default function WizardStepReview({
       {mode === 'create' && data.repositoryMode === 'full' && (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
           <Info size={14} style={{ opacity: 0.45, flexShrink: 0 }} />
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {t('wizard.review.repositoryInitialized')}
           </Typography>
         </Box>
@@ -241,7 +246,13 @@ export default function WizardStepReview({
           accentColor={BLUE}
         >
           <ReviewAttrRow label={t('wizard.review.name')}>
-            <Typography variant="body2" fontWeight={700} fontSize="0.8rem">
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: 700,
+                fontSize: '0.8rem',
+              }}
+            >
               {data.name}
             </Typography>
           </ReviewAttrRow>
@@ -266,7 +277,12 @@ export default function WizardStepReview({
               ) : (
                 <Cloud size={12} style={{ opacity: 0.6 }} />
               )}
-              <Typography variant="body2" fontSize="0.75rem">
+              <Typography
+                variant="body2"
+                sx={{
+                  fontSize: '0.75rem',
+                }}
+              >
                 {executionTarget === 'agent'
                   ? t('wizard.review.repositoryPathOnSelectedAgent')
                   : data.repositoryLocation === 'local'
@@ -287,7 +303,12 @@ export default function WizardStepReview({
               ) : (
                 <Server size={12} style={{ opacity: 0.6 }} />
               )}
-              <Typography variant="body2" fontSize="0.75rem">
+              <Typography
+                variant="body2"
+                sx={{
+                  fontSize: '0.75rem',
+                }}
+              >
                 {executionTarget === 'agent'
                   ? t('wizard.review.managedAgent')
                   : t('wizard.review.borgUiServer')}
@@ -297,7 +318,13 @@ export default function WizardStepReview({
 
           {executionTarget === 'agent' && (
             <ReviewAttrRow label={t('wizard.review.agent')}>
-              <Typography variant="body2" fontSize="0.75rem" fontWeight={500}>
+              <Typography
+                variant="body2"
+                sx={{
+                  fontSize: '0.75rem',
+                  fontWeight: 500,
+                }}
+              >
                 {selectedAgent?.hostname || selectedAgent?.name || t('wizard.review.notSet')}
               </Typography>
             </ReviewAttrRow>
@@ -310,12 +337,22 @@ export default function WizardStepReview({
           {isDirectRclone && (
             <>
               <ReviewAttrRow label={t('wizard.review.rcloneRoute')}>
-                <Typography variant="body2" fontSize="0.75rem">
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontSize: '0.75rem',
+                  }}
+                >
                   {t('wizard.location.directRcloneRoutePreview')}
                 </Typography>
               </ReviewAttrRow>
               <ReviewAttrRow label={t('wizard.review.directRcloneTradeoffsLabel')}>
-                <Typography variant="body2" fontSize="0.75rem">
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontSize: '0.75rem',
+                  }}
+                >
                   {t('wizard.review.directRcloneTradeoffs')}
                 </Typography>
               </ReviewAttrRow>
@@ -339,7 +376,12 @@ export default function WizardStepReview({
             accentColor={VIOLET}
           >
             <ReviewAttrRow label={t('wizard.review.rcloneRoute')}>
-              <Typography variant="body2" fontSize="0.75rem">
+              <Typography
+                variant="body2"
+                sx={{
+                  fontSize: '0.75rem',
+                }}
+              >
                 {t('wizard.cloudMirror.routePreview')}
               </Typography>
             </ReviewAttrRow>
@@ -347,7 +389,12 @@ export default function WizardStepReview({
               <ReviewCodePill>{cloudMirrorTarget}</ReviewCodePill>
             </ReviewAttrRow>
             <ReviewAttrRow label={t('wizard.review.rcloneSyncPolicy')}>
-              <Typography variant="body2" fontSize="0.75rem">
+              <Typography
+                variant="body2"
+                sx={{
+                  fontSize: '0.75rem',
+                }}
+              >
                 {getRcloneSyncPolicyLabel()}
               </Typography>
             </ReviewAttrRow>
@@ -392,9 +439,11 @@ export default function WizardStepReview({
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.4 }}>
                 <Typography
                   variant="body2"
-                  fontFamily={showPassphrase ? 'inherit' : 'monospace'}
-                  fontSize="0.75rem"
-                  letterSpacing={showPassphrase ? 'normal' : '0.1em'}
+                  sx={{
+                    fontFamily: showPassphrase ? 'inherit' : 'monospace',
+                    fontSize: '0.75rem',
+                    letterSpacing: showPassphrase ? 'normal' : '0.1em',
+                  }}
                 >
                   {showPassphrase ? data.passphrase : '••••••••'}
                 </Typography>
@@ -420,7 +469,13 @@ export default function WizardStepReview({
                 </Tooltip>
               </Box>
             ) : (
-              <Typography variant="body2" fontSize="0.75rem" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  fontSize: '0.75rem',
+                  color: 'text.secondary',
+                }}
+              >
                 {t('wizard.review.passphraseNotSet')}
               </Typography>
             )}
@@ -435,11 +490,23 @@ export default function WizardStepReview({
             accentColor={AMBER}
           >
             <ReviewAttrRow label={t('wizard.review.source')}>
-              <Typography variant="body2" fontSize="0.75rem" fontWeight={500}>
+              <Typography
+                variant="body2"
+                sx={{
+                  fontSize: '0.75rem',
+                  fontWeight: 500,
+                }}
+              >
                 {t('wizard.review.backupPlans')}
               </Typography>
             </ReviewAttrRow>
-            <Typography variant="body2" color="text.secondary" fontSize="0.75rem">
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+                fontSize: '0.75rem',
+              }}
+            >
               {t('wizard.review.planOwnedSourcesDetail')}
             </Typography>
           </ReviewSectionCard>
@@ -452,7 +519,13 @@ export default function WizardStepReview({
             accentColor={AMBER}
           >
             <ReviewAttrRow label={t('wizard.review.source')}>
-              <Typography variant="body2" fontSize="0.75rem" fontWeight={500}>
+              <Typography
+                variant="body2"
+                sx={{
+                  fontSize: '0.75rem',
+                  fontWeight: 500,
+                }}
+              >
                 {executionTarget === 'agent'
                   ? t('wizard.review.managedAgent')
                   : data.dataSource === 'local'
@@ -464,13 +537,23 @@ export default function WizardStepReview({
             {data.dataSource === 'local' && (
               <>
                 <ReviewAttrRow label={t('wizard.review.directories')}>
-                  <Typography variant="body2" fontSize="0.75rem">
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontSize: '0.75rem',
+                    }}
+                  >
                     {t('wizard.review.directoriesCount', { count: data.sourceDirs.length })}
                   </Typography>
                 </ReviewAttrRow>
 
                 <ReviewAttrRow label={t('wizard.review.excludePatterns')}>
-                  <Typography variant="body2" fontSize="0.75rem">
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontSize: '0.75rem',
+                    }}
+                  >
                     {t('wizard.review.directoriesCount', { count: data.excludePatterns.length })}
                   </Typography>
                 </ReviewAttrRow>
@@ -503,7 +586,12 @@ export default function WizardStepReview({
       {mode === 'import' && (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
           <Info size={14} style={{ opacity: 0.45, flexShrink: 0 }} />
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {t('wizard.review.repositoryImportNote')}
           </Typography>
         </Box>
@@ -512,7 +600,12 @@ export default function WizardStepReview({
       {mode === 'edit' && (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
           <Info size={14} style={{ opacity: 0.45, flexShrink: 0 }} />
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {t('wizard.review.repositoryEditNote')}
           </Typography>
         </Box>

@@ -122,7 +122,12 @@ export default function WizardStepRestoreDestination({
         <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
           {t('wizard.restoreDestination.title')}
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           {t('wizard.restoreDestination.subtitle')}
         </Typography>
       </Box>
@@ -176,7 +181,13 @@ export default function WizardStepRestoreDestination({
                   <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600 }}>
                     {t('wizard.borgUiServer')}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem' }}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: 'text.secondary',
+                      fontSize: '0.8125rem',
+                    }}
+                  >
                     {t('wizard.restoreDestination.borgUiServerDesc')}
                   </Typography>
                 </Box>
@@ -235,8 +246,10 @@ export default function WizardStepRestoreDestination({
                     </Typography>
                     <Typography
                       variant="body2"
-                      color="text.secondary"
-                      sx={{ fontSize: '0.8125rem' }}
+                      sx={{
+                        color: 'text.secondary',
+                        fontSize: '0.8125rem',
+                      }}
                     >
                       {t('wizard.restoreDestination.remoteMachineDesc')}
                     </Typography>
@@ -288,7 +301,12 @@ export default function WizardStepRestoreDestination({
                         <Typography variant="body2">
                           {conn.username}@{conn.host}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: 'text.secondary',
+                          }}
+                        >
                           {t('wizard.restoreDestination.port', { port: conn.port })}
                           {conn.mount_point && ` • ${conn.mount_point}`}
                         </Typography>
@@ -347,10 +365,20 @@ export default function WizardStepRestoreDestination({
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <FileCheck size={18} />
                     <Box>
-                      <Typography variant="body1" fontWeight={600}>
+                      <Typography
+                        variant="body1"
+                        sx={{
+                          fontWeight: 600,
+                        }}
+                      >
                         {t('wizard.restoreDestination.restoreToOriginal')}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          color: 'text.secondary',
+                        }}
+                      >
                         {data.destinationType === 'ssh'
                           ? t('wizard.restoreDestination.restoreToOriginalDescRemote')
                           : t('wizard.restoreDestination.restoreToOriginalDescLocal')}
@@ -387,10 +415,20 @@ export default function WizardStepRestoreDestination({
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <FolderOpen size={18} />
                     <Box>
-                      <Typography variant="body1" fontWeight={600}>
+                      <Typography
+                        variant="body1"
+                        sx={{
+                          fontWeight: 600,
+                        }}
+                      >
                         {t('wizard.restoreDestination.restoreToCustom')}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          color: 'text.secondary',
+                        }}
+                      >
                         {t('wizard.restoreDestination.restoreToCustomDesc')}
                       </Typography>
                     </Box>
@@ -422,23 +460,25 @@ export default function WizardStepRestoreDestination({
                 ? t('wizard.restoreDestination.customPathHelperRemote')
                 : t('wizard.restoreDestination.customPathHelperLocal')
             }
-            InputProps={{
-              endAdornment: (
-                <InputAdornment position="end">
-                  <IconButton
-                    onClick={onBrowsePath}
-                    edge="end"
-                    size="small"
-                    title={
-                      data.destinationType === 'ssh'
-                        ? t('wizard.restoreDestination.browseRemoteFilesystem')
-                        : t('wizard.restoreDestination.browseFilesystem')
-                    }
-                  >
-                    <FolderOpenIcon fontSize="small" />
-                  </IconButton>
-                </InputAdornment>
-              ),
+            slotProps={{
+              input: {
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      onClick={onBrowsePath}
+                      edge="end"
+                      size="small"
+                      title={
+                        data.destinationType === 'ssh'
+                          ? t('wizard.restoreDestination.browseRemoteFilesystem')
+                          : t('wizard.restoreDestination.browseFilesystem')
+                      }
+                    >
+                      <FolderOpenIcon fontSize="small" />
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              },
             }}
           />
 
@@ -471,10 +511,20 @@ export default function WizardStepRestoreDestination({
                   control={<Radio size="small" />}
                   label={
                     <Box>
-                      <Typography variant="body2" fontWeight={600}>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontWeight: 600,
+                        }}
+                      >
                         {t('wizard.restoreDestination.preserveArchivePath')}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          color: 'text.secondary',
+                        }}
+                      >
                         {t('wizard.restoreDestination.preserveArchivePathDesc')}
                       </Typography>
                     </Box>
@@ -503,10 +553,20 @@ export default function WizardStepRestoreDestination({
                   control={<Radio size="small" />}
                   label={
                     <Box>
-                      <Typography variant="body2" fontWeight={600}>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontWeight: 600,
+                        }}
+                      >
                         {t('wizard.restoreDestination.restoreContentsHere')}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          color: 'text.secondary',
+                        }}
+                      >
                         {t('wizard.restoreDestination.restoreContentsHereDesc')}
                       </Typography>
                     </Box>
@@ -533,7 +593,12 @@ export default function WizardStepRestoreDestination({
                       rowGap: 0.25,
                     }}
                   >
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: 'text.secondary',
+                      }}
+                    >
                       {t('wizard.restoreDestination.archivePath')}
                     </Typography>
                     <Typography
@@ -542,7 +607,12 @@ export default function WizardStepRestoreDestination({
                     >
                       {item.path}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: 'text.secondary',
+                      }}
+                    >
                       {t('wizard.restoreDestination.restorePath')}
                     </Typography>
                     <Typography
@@ -564,7 +634,12 @@ export default function WizardStepRestoreDestination({
                   </Box>
                 ))}
                 {hiddenPreviewCount > 0 && (
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: 'text.secondary',
+                    }}
+                  >
                     {t('wizard.restoreDestination.andMoreItems', { count: hiddenPreviewCount })}
                   </Typography>
                 )}

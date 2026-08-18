@@ -86,6 +86,37 @@ from inside the container can modify user data on the host and can fail for
 read-only mounts. Fix access with host permissions, runtime UID/GID mapping, or
 the rootless Podman `PUID=0` / `PGID=0` mode above.
 
+### Group-readable source paths in Docker
+
+`PUID` and `PGID` set the Borg UI container process's primary user and group;
+they do not grant it access to every supplementary group on the host. This can
+matter when a mounted source directory is readable by a group other than the
+configured `PGID` (for example, a directory owned by `otheruser:photos` with
+mode `2770`).
+
+Add the host group's **numeric GID** to the Borg UI service with `group_add`:
+
+```yaml
+services:
+  app:
+    environment:
+      - PUID=1008
+      - PGID=1008
+    group_add:
+      - "3001" # Host group with read access to the mounted source
+```
+
+Recreate the container after changing Compose. To confirm the running Borg UI
+process has the expected supplementary group, run:
+
+```bash
+docker exec borg-web-ui sh -c "cat /proc/1/status | grep -E 'Uid|Gid|Groups'"
+```
+
+Use the GID of the group that owns or can read the source directory, not a Borg
+UI web-login user. Prefer granting access only to the mounted data Borg UI
+needs rather than running the container as root.
+
 ### Path not found
 
 Check the Docker volume mapping and use the container path, not the host path.

@@ -83,9 +83,9 @@ const ScriptSelectorSection: React.FC<ScriptSelectorSectionProps> = ({
       {script.description && (
         <Typography
           variant="caption"
-          color="text.secondary"
           title={script.description}
           sx={{
+            color: 'text.secondary',
             display: 'block',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -121,10 +121,23 @@ const ScriptSelectorSection: React.FC<ScriptSelectorSectionProps> = ({
 
   return (
     <Box sx={{ p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
-      <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+      <Typography
+        variant="subtitle2"
+        gutterBottom
+        sx={{
+          fontWeight: 600,
+        }}
+      >
         {title || t('scriptSelector.title')}
       </Typography>
-      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+      <Typography
+        variant="caption"
+        sx={{
+          color: 'text.secondary',
+          display: 'block',
+          mb: 2,
+        }}
+      >
         {description || t('scriptSelector.subtitle')}
       </Typography>
 
@@ -232,7 +245,12 @@ const ScriptSelectorSection: React.FC<ScriptSelectorSectionProps> = ({
               <Typography variant="body2">
                 {runRepositoryScriptsLabel || t('scriptSelector.runRepoScripts')}
               </Typography>
-              <Typography variant="caption" color="text.secondary">
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {runRepositoryScriptsDescription || t('scriptSelector.runRepoScriptsDesc')}
               </Typography>
             </Box>

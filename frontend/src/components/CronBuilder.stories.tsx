@@ -32,10 +32,20 @@ function CronBuilderStory({ initialValue }: { initialValue: string }) {
           bgcolor: 'background.default',
         }}
       >
-        <Typography variant="caption" color="text.secondary">
+        <Typography
+          variant="caption"
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           Generated cron
         </Typography>
-        <Typography variant="body2" fontFamily="monospace">
+        <Typography
+          variant="body2"
+          sx={{
+            fontFamily: 'monospace',
+          }}
+        >
           {value}
         </Typography>
       </Box>

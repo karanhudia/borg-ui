@@ -45,10 +45,19 @@ export const WithPreview: Story = {
     operation: 'view_preview_story',
     preview: (
       <Box sx={{ display: 'grid', gap: 1.5 }}>
-        <Typography variant="h5" fontWeight={700}>
+        <Typography
+          variant="h5"
+          sx={{
+            fontWeight: 700,
+          }}
+        >
           Remote Clients
         </Typography>
-        <Typography color="text.secondary">
+        <Typography
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           Register Borg UI client servers on other machines, check their health, and switch targets.
         </Typography>
         <Box
@@ -61,8 +70,19 @@ export const WithPreview: Story = {
             bgcolor: 'background.paper',
           }}
         >
-          <Typography fontWeight={700}>This server</Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            sx={{
+              fontWeight: 700,
+            }}
+          >
+            This server
+          </Typography>
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             Current Borg UI server
           </Typography>
         </Box>

@@ -544,11 +544,24 @@ export default function FileExplorerDialog({
         fullWidth
         fullScreen={fullScreen}
         container={dialogContainer}
-        PaperProps={{ sx: { height: fullScreen ? '100%' : '75vh' } }}
+        slotProps={{
+          paper: { sx: { height: fullScreen ? '100%' : '75vh' } },
+        }}
       >
         <DialogTitle sx={{ pb: 1, pt: 2 }}>
-          <Box display="flex" alignItems="center" justifyContent="space-between">
-            <Typography variant="h6" fontWeight={600}>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 600,
+              }}
+            >
               {title ?? t('dialogs.fileExplorer.selectDirectory')}
             </Typography>
             {activeConnectionType === 'agent' && agentId ? (
@@ -644,19 +657,21 @@ export default function FileExplorerDialog({
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               inputRef={searchInputRef}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Search size={16} />
-                  </InputAdornment>
-                ),
-              }}
               sx={{
                 '& .MuiOutlinedInput-root': {
                   bgcolor: 'background.paper',
                 },
                 '& .MuiOutlinedInput-input': {
                   py: 0.75,
+                },
+              }}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Search size={16} />
+                    </InputAdornment>
+                  ),
                 },
               }}
             />
@@ -699,15 +714,24 @@ export default function FileExplorerDialog({
           {/* Loading State */}
           {loading ? (
             <Box
-              display="flex"
-              flexDirection="column"
-              alignItems="center"
-              justifyContent="center"
-              sx={{ flex: 1, minHeight: 0 }}
-              py={4}
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                py: 4,
+                flex: 1,
+                minHeight: 0,
+              }}
             >
               <CircularProgress size={32} />
-              <Typography variant="caption" color="text.secondary" mt={1.5}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                  mt: 1.5,
+                }}
+              >
                 {t('fileExplorer.loading')}
               </Typography>
             </Box>
@@ -735,18 +759,31 @@ export default function FileExplorerDialog({
               >
                 {filteredItems.length === 0 ? (
                   <Box
-                    display="flex"
-                    flexDirection="column"
-                    alignItems="center"
-                    justifyContent="center"
-                    py={4}
-                    sx={{ color: 'text.secondary' }}
+                    sx={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      py: 4,
+                      color: 'text.secondary',
+                    }}
                   >
                     <FolderOpenIcon sx={{ fontSize: 36 }} />
-                    <Typography variant="body2" color="text.secondary" mt={1.5}>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: 'text.secondary',
+                        mt: 1.5,
+                      }}
+                    >
                       {t('fileExplorer.noItemsFound')}
                     </Typography>
-                    <Typography variant="caption" color="text.disabled">
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: 'text.disabled',
+                      }}
+                    >
                       {searchTerm
                         ? t('fileExplorer.tryDifferentSearch')
                         : t('fileExplorer.emptyDirectory')}
@@ -831,7 +868,13 @@ export default function FileExplorerDialog({
                           </ListItemIcon>
                           <ListItemText
                             primary={
-                              <Box display="flex" alignItems="center" gap={0.75}>
+                              <Box
+                                sx={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 0.75,
+                                }}
+                              >
                                 <Typography variant="body2">{item.name}</Typography>
                                 {item.is_mount_point && (
                                   <Chip
@@ -860,8 +903,10 @@ export default function FileExplorerDialog({
                                 {!item.is_directory && item.size && (
                                   <Typography
                                     variant="caption"
-                                    color="text.disabled"
-                                    sx={{ ml: 'auto' }}
+                                    sx={{
+                                      color: 'text.disabled',
+                                      ml: 'auto',
+                                    }}
                                   >
                                     {formatFileSize(item.size)}
                                   </Typography>
@@ -879,10 +924,22 @@ export default function FileExplorerDialog({
               {/* Info Box */}
               {multiSelect && selectedPaths.length > 0 && (
                 <Box
-                  flexShrink={0}
-                  sx={{ px: 2, py: 1, bgcolor: 'primary.50', borderTop: 1, borderColor: 'divider' }}
+                  sx={{
+                    flexShrink: 0,
+                    px: 2,
+                    py: 1,
+                    bgcolor: 'primary.50',
+                    borderTop: 1,
+                    borderColor: 'divider',
+                  }}
                 >
-                  <Typography variant="caption" color="primary.main" fontWeight={600}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: 'primary.main',
+                      fontWeight: 600,
+                    }}
+                  >
                     {t('fileExplorer.selectedCount', { count: selectedPaths.length })}
                   </Typography>
                 </Box>

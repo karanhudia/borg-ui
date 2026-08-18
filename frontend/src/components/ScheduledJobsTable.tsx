@@ -205,7 +205,12 @@ const ScheduledJobsTable = ({
           <Typography variant="body1" gutterBottom>
             {t('scheduledJobsTableSection.noJobsFound')}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {t('scheduledJobsTableSection.noJobsDesc')}
           </Typography>
         </Box>
@@ -235,11 +240,24 @@ const ScheduledJobsTable = ({
 
   return (
     <Box>
-      <Typography variant="h6" fontWeight={600} sx={{ mb: 2 }}>
+      <Typography
+        variant="h6"
+        sx={{
+          fontWeight: 600,
+          mb: 2,
+        }}
+      >
         {title || t('scheduledJobsTableSection.title')}
       </Typography>
       {description && (
-        <Typography variant="body2" color="text.secondary" sx={{ mt: -1, mb: 2 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+            mt: -1,
+            mb: 2,
+          }}
+        >
           {description}
         </Typography>
       )}

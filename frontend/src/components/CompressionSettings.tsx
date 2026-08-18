@@ -128,8 +128,12 @@ export default function CompressionSettings({
                 />
                 <Typography
                   variant="caption"
-                  color="text.secondary"
-                  sx={{ mt: -1, mb: 1, display: 'block' }}
+                  sx={{
+                    color: 'text.secondary',
+                    mt: -1,
+                    mb: 1,
+                    display: 'block',
+                  }}
                 >
                   {t('compressionSettings.autoDetectDesc')}
                 </Typography>

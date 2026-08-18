@@ -24,7 +24,9 @@ export function SshHostField({
       placeholder={placeholder}
       error={Boolean(hostError)}
       helperText={hostError}
-      InputLabelProps={{ shrink: true }}
+      slotProps={{
+        inputLabel: { shrink: true },
+      }}
     />
   )
 }

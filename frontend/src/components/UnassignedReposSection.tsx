@@ -59,7 +59,13 @@ const UnassignedReposSection: React.FC<UnassignedReposSectionProps> = ({
         >
           {expanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
         </IconButton>
-        <Typography variant="subtitle2" fontWeight={700} sx={{ flex: 1 }}>
+        <Typography
+          variant="subtitle2"
+          sx={{
+            fontWeight: 700,
+            flex: 1,
+          }}
+        >
           {t('schedule.byPlan.unassignedTitle', {
             count: repositories.length,
           })}

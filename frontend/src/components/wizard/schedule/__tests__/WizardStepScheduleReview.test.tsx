@@ -331,7 +331,8 @@ describe('WizardStepScheduleReview', () => {
     render(<WizardStepScheduleReview {...defaultProps} />)
 
     const alert = screen.getByText(/Ready to create/).closest('.MuiAlert-root')
-    expect(alert).toHaveClass('MuiAlert-standardSuccess')
+    // MUI 9 splits the combined variant+severity class into two.
+    expect(alert).toHaveClass('MuiAlert-standard', 'MuiAlert-colorSuccess')
   })
 
   it('uses monospace font for paths and technical values', () => {

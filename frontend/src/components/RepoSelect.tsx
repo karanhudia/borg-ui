@@ -102,7 +102,12 @@ export default function RepoSelect({
         renderValue={(val) => {
           if (loading) {
             return (
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {resolvedLoadingLabel}
               </Typography>
             )
@@ -110,13 +115,24 @@ export default function RepoSelect({
           if (!val || val === '' || !selectedRepo) {
             if (val && val !== '' && fallbackDisplayValue) {
               return (
-                <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: 'text.secondary',
+                    fontWeight: 600,
+                  }}
+                >
                   {fallbackDisplayValue}
                 </Typography>
               )
             }
             return (
-              <Typography variant="body2" color="text.disabled">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.disabled',
+                }}
+              >
                 {resolvedPlaceholderLabel}
               </Typography>
             )
@@ -125,9 +141,21 @@ export default function RepoSelect({
           if (size === 'small') {
             // Compact: icon + name only
             return (
-              <Stack direction="row" spacing={0.75} alignItems="center">
+              <Stack
+                direction="row"
+                spacing={0.75}
+                sx={{
+                  alignItems: 'center',
+                }}
+              >
                 <Database size={13} />
-                <Typography variant="body2" fontWeight={500} noWrap>
+                <Typography
+                  variant="body2"
+                  noWrap
+                  sx={{
+                    fontWeight: 500,
+                  }}
+                >
                   {selectedRepo.name}
                 </Typography>
                 <BorgVersionChip borgVersion={selectedRepo.borg_version} compact />
@@ -140,13 +168,30 @@ export default function RepoSelect({
             <Stack
               direction="row"
               spacing={1}
-              alignItems="center"
-              sx={{ minWidth: 0, flex: 1, overflow: 'hidden' }}
+              sx={{
+                alignItems: 'center',
+                minWidth: 0,
+                flex: 1,
+                overflow: 'hidden',
+              }}
             >
               <Database size={16} style={{ flexShrink: 0 }} />
               <Box sx={{ minWidth: 0, flex: 1 }}>
-                <Stack direction="row" spacing={0.5} alignItems="center">
-                  <Typography variant="body2" fontWeight={600} noWrap sx={{ lineHeight: 1.3 }}>
+                <Stack
+                  direction="row"
+                  spacing={0.5}
+                  sx={{
+                    alignItems: 'center',
+                  }}
+                >
+                  <Typography
+                    variant="body2"
+                    noWrap
+                    sx={{
+                      fontWeight: 600,
+                      lineHeight: 1.3,
+                    }}
+                  >
                     {selectedRepo.name}
                   </Typography>
                   <BorgVersionChip borgVersion={selectedRepo.borg_version} compact />

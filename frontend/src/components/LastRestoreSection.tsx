@@ -43,7 +43,13 @@ export default function LastRestoreSection({ restoreJob }: LastRestoreSectionPro
         }}
       >
         <RotateCcw size={14} color={isDark ? alpha('#fff', 0.25) : alpha('#000', 0.25)} />
-        <Typography variant="body2" color="text.disabled" sx={{ fontSize: '0.78rem' }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.disabled',
+            fontSize: '0.78rem',
+          }}
+        >
           {t('lastRestoreSection.noRestores')}
         </Typography>
       </Box>
@@ -63,7 +69,13 @@ export default function LastRestoreSection({ restoreJob }: LastRestoreSectionPro
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <RotateCcw size={15} color={theme.palette.secondary.main} />
-          <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.82rem' }}>
+          <Typography
+            variant="body2"
+            sx={{
+              fontWeight: 600,
+              fontSize: '0.82rem',
+            }}
+          >
             {t('lastRestoreSection.title')}
           </Typography>
         </Box>

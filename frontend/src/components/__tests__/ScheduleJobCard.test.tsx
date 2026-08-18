@@ -140,8 +140,7 @@ describe('ScheduleJobCard', () => {
     )
 
     const props = entityCardMock.mock.lastCall?.[0] as
-      | { primaryAction?: { disabled?: boolean } }
-      | undefined
+      { primaryAction?: { disabled?: boolean } } | undefined
 
     expect(props?.primaryAction?.disabled).toBe(false)
   })
@@ -162,8 +161,7 @@ describe('ScheduleJobCard', () => {
     )
 
     const props = entityCardMock.mock.lastCall?.[0] as
-      | { primaryAction?: { disabled?: boolean } }
-      | undefined
+      { primaryAction?: { disabled?: boolean } } | undefined
 
     expect(props?.primaryAction?.disabled).toBe(true)
   })

@@ -80,7 +80,14 @@ export default function WizardStepSecurity({
             <FileKey size={18} />
             {t('wizard.security.borgKeyfileTitle')}
           </Typography>
-          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'text.secondary',
+              display: 'block',
+              mb: 1.5,
+            }}
+          >
             {t('wizard.security.borgKeyfileDesc')}
           </Typography>
 
@@ -137,8 +144,10 @@ export default function WizardStepSecurity({
               placeholder="BORG_KEY ..."
               value={keyfileText}
               onChange={(e) => handleKeyfileTextChange(e.target.value)}
-              inputProps={{
-                style: { fontFamily: 'monospace', fontSize: '0.85rem' },
+              slotProps={{
+                htmlInput: {
+                  style: { fontFamily: 'monospace', fontSize: '0.85rem' },
+                },
               }}
             />
           )}

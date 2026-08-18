@@ -353,7 +353,13 @@ export function DatabaseScanDialog({
     >
       <DialogTitle sx={{ pr: 6 }}>
         {t('backupPlans.sourceChooser.scanForDatabasesTitle')}
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+            mt: 0.5,
+          }}
+        >
           {t('backupPlans.sourceChooser.scanForDatabasesSubtitle')}
         </Typography>
         <Tooltip title={t('backupPlans.sourceChooser.closeScanDialog')}>
@@ -400,7 +406,12 @@ export function DatabaseScanDialog({
               }}
             >
               <HardDrive size={14} />
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {remoteDisabled
                   ? t('backupPlans.sourceChooser.noRemoteMachines')
                   : t('backupPlans.sourceChooser.readingFromLocal')}
@@ -409,7 +420,13 @@ export function DatabaseScanDialog({
           )}
 
           <Stack spacing={1}>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems="flex-start">
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={1}
+              sx={{
+                alignItems: 'flex-start',
+              }}
+            >
               <PathSelectorField
                 label={t('backupPlans.sourceChooser.sourcePath')}
                 value={scanPathDraft}
@@ -449,9 +466,11 @@ export function DatabaseScanDialog({
               <Stack
                 direction="row"
                 spacing={1}
-                alignItems="center"
-                justifyContent="space-between"
-                sx={{ mb: 1 }}
+                sx={{
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  mb: 1,
+                }}
               >
                 <Typography variant="subtitle2">
                   {t('backupPlans.sourceChooser.pathsToScan')}
@@ -475,7 +494,14 @@ export function DatabaseScanDialog({
                     : t('backupPlans.sourceChooser.rescan')}
                 </Button>
               </Stack>
-              <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
+              <Stack
+                direction="row"
+                spacing={0.75}
+                useFlexGap
+                sx={{
+                  flexWrap: 'wrap',
+                }}
+              >
                 {scanPaths.map((path) => (
                   <Chip
                     key={path}
@@ -490,7 +516,12 @@ export function DatabaseScanDialog({
                   />
                 ))}
                 {scanPaths.length === 0 && (
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: 'text.secondary',
+                    }}
+                  >
                     {t('backupPlans.sourceChooser.noScanPaths')}
                   </Typography>
                 )}
@@ -515,7 +546,13 @@ export function DatabaseScanDialog({
                 expandIcon={<ChevronDown size={16} />}
                 sx={{ minHeight: 40, '& .MuiAccordionSummary-content': { my: 0.75 } }}
               >
-                <Stack direction="row" spacing={1} alignItems="center">
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  sx={{
+                    alignItems: 'center',
+                  }}
+                >
                   <Sliders size={14} />
                   <Typography variant="subtitle2">
                     {t('backupPlans.sourceChooser.advancedScanOptions')}
@@ -662,8 +699,10 @@ export function DatabaseScanDialog({
                     direction="row"
                     spacing={0.5}
                     useFlexGap
-                    flexWrap="wrap"
-                    alignItems="baseline"
+                    sx={{
+                      flexWrap: 'wrap',
+                      alignItems: 'baseline',
+                    }}
                   >
                     <Typography variant="caption" sx={{ flexShrink: 0 }}>
                       {t('backupPlans.sourceChooser.checkedPaths')}

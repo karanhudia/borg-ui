@@ -234,10 +234,13 @@ export default function RemoteClientCard({
           {/* Client name */}
           <Typography
             variant="subtitle1"
-            fontWeight={700}
             noWrap
             title={client.name}
-            sx={{ lineHeight: 1.3, mb: 0.25 }}
+            sx={{
+              fontWeight: 700,
+              lineHeight: 1.3,
+              mb: 0.25,
+            }}
           >
             {client.name}
           </Typography>

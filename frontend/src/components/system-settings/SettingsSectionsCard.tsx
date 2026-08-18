@@ -107,7 +107,12 @@ const SettingsSectionsCard: React.FC<SettingsSectionsCardProps> = ({
             )}
           </Box>
 
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {sectionTabs[activeSection].description}
           </Typography>
 

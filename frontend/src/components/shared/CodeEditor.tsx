@@ -80,7 +80,14 @@ export default function CodeEditor({
         />
       </Box>
       {helperText && (
-        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+        <Typography
+          variant="caption"
+          sx={{
+            color: 'text.secondary',
+            mt: 0.5,
+            display: 'block',
+          }}
+        >
           {helperText}
         </Typography>
       )}

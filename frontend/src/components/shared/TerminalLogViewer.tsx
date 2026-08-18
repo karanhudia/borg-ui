@@ -285,16 +285,31 @@ export const TerminalLogViewer = React.forwardRef<TerminalLogViewerHandle, Termi
             }}
           >
             <Box>
-              <Typography variant="h6" fontWeight={600}>
+              <Typography
+                variant="h6"
+                sx={{
+                  fontWeight: 600,
+                }}
+              >
                 {t('terminalLogViewer.title')}
               </Typography>
               {status === 'running' && totalLines > 500 && (
-                <Typography variant="caption" color="text.secondary">
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                  }}
+                >
                   {t('terminalLogViewer.tailLabel', { total: totalLines.toLocaleString() })}
                 </Typography>
               )}
               {status !== 'running' && totalLines > 0 && (
-                <Typography variant="caption" color="text.secondary">
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                  }}
+                >
                   {t('terminalLogViewer.linesLabel', { count: logs.length, total: totalLines })}
                 </Typography>
               )}
@@ -340,7 +355,12 @@ export const TerminalLogViewer = React.forwardRef<TerminalLogViewerHandle, Termi
               sx={{ fontWeight: 500 }}
             />
             {totalLines > 0 && (
-              <Typography variant="caption" color="text.secondary">
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {t('terminalLogViewer.linesDisplayed', { count: logs.length })}
               </Typography>
             )}
@@ -399,7 +419,12 @@ export const TerminalLogViewer = React.forwardRef<TerminalLogViewerHandle, Termi
           }}
         >
           {logs.length === 0 ? (
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {status === 'running'
                 ? t('terminalLogViewer.waitingForLogs')
                 : t('terminalLogViewer.noLogsAvailable')}

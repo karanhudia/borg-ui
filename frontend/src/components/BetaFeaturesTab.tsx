@@ -119,7 +119,14 @@ const BetaFeaturesTab: React.FC = () => {
 
   if (systemLoading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          minHeight: '200px',
+        }}
+      >
         <CircularProgress />
       </Box>
     )
@@ -128,10 +135,21 @@ const BetaFeaturesTab: React.FC = () => {
   return (
     <Box>
       <Box sx={{ mb: 3 }}>
-        <Typography variant="h6" fontWeight={600} gutterBottom>
+        <Typography
+          variant="h6"
+          gutterBottom
+          sx={{
+            fontWeight: 600,
+          }}
+        >
           {t('betaFeatures.title')}
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           {t('betaFeatures.description')}
         </Typography>
       </Box>
@@ -140,7 +158,13 @@ const BetaFeaturesTab: React.FC = () => {
         <Stack spacing={3}>
           {/* Bypass Lock on Info Commands */}
           <Box>
-            <Typography variant="h6" fontSize="1rem" sx={{ mb: 2 }}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontSize: '1rem',
+                mb: 2,
+              }}
+            >
               {t('betaFeatures.bypassLocksInfoTitle')}
             </Typography>
 
@@ -156,7 +180,12 @@ const BetaFeaturesTab: React.FC = () => {
               label={
                 <Box>
                   <Typography variant="body1">{t('betaFeatures.enableBypassLocksInfo')}</Typography>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: 'text.secondary',
+                    }}
+                  >
                     {t('betaFeatures.bypassLocksInfoDescription')}
                   </Typography>
                 </Box>
@@ -166,7 +195,13 @@ const BetaFeaturesTab: React.FC = () => {
 
           {/* Bypass Lock on List Commands */}
           <Box>
-            <Typography variant="h6" fontSize="1rem" sx={{ mb: 2 }}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontSize: '1rem',
+                mb: 2,
+              }}
+            >
               {t('betaFeatures.bypassLocksListTitle')}
             </Typography>
 
@@ -182,7 +217,12 @@ const BetaFeaturesTab: React.FC = () => {
               label={
                 <Box>
                   <Typography variant="body1">{t('betaFeatures.enableBypassLocksList')}</Typography>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: 'text.secondary',
+                    }}
+                  >
                     {t('betaFeatures.bypassLocksListDescription')}
                   </Typography>
                 </Box>
@@ -191,7 +231,13 @@ const BetaFeaturesTab: React.FC = () => {
           </Box>
 
           <Box>
-            <Typography variant="h6" fontSize="1rem" sx={{ mb: 2 }}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontSize: '1rem',
+                mb: 2,
+              }}
+            >
               {t('betaFeatures.lockBreakingTitle')}
             </Typography>
 
@@ -207,7 +253,12 @@ const BetaFeaturesTab: React.FC = () => {
               label={
                 <Box>
                   <Typography variant="body1">{t('betaFeatures.enableLockBreaking')}</Typography>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: 'text.secondary',
+                    }}
+                  >
                     {t('betaFeatures.lockBreakingDescription')}
                   </Typography>
                 </Box>
@@ -216,7 +267,13 @@ const BetaFeaturesTab: React.FC = () => {
           </Box>
 
           <Box>
-            <Typography variant="h6" fontSize="1rem" sx={{ mb: 2 }}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontSize: '1rem',
+                mb: 2,
+              }}
+            >
               {t('betaFeatures.borg2FastBrowseTitle')}
             </Typography>
 
@@ -232,7 +289,12 @@ const BetaFeaturesTab: React.FC = () => {
               label={
                 <Box>
                   <Typography variant="body1">{t('betaFeatures.enableBorg2FastBrowse')}</Typography>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: 'text.secondary',
+                    }}
+                  >
                     {t('betaFeatures.borg2FastBrowseDescription')}
                   </Typography>
                 </Box>
@@ -241,7 +303,13 @@ const BetaFeaturesTab: React.FC = () => {
           </Box>
 
           <Box>
-            <Typography variant="h6" fontSize="1rem" sx={{ mb: 2 }}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontSize: '1rem',
+                mb: 2,
+              }}
+            >
               {t('betaFeatures.mqttIntegrationTitle')}
             </Typography>
 
@@ -257,7 +325,12 @@ const BetaFeaturesTab: React.FC = () => {
               label={
                 <Box>
                   <Typography variant="body1">{t('betaFeatures.enableMqtt')}</Typography>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: 'text.secondary',
+                    }}
+                  >
                     {t('betaFeatures.mqttIntegrationDescription')}
                   </Typography>
                 </Box>
