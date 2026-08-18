@@ -61,7 +61,7 @@
     "prettier": "^3.9.6",
     "storybook": "^10.5.7",
     "tailwindcss": "^4.3.3",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vite": "^8.2.1",
     "vitest": "^4.0.18"
   },
