@@ -302,7 +302,13 @@ export function RemoteClientsContent() {
                 ? t('remoteClients.dialog.editTitle')
                 : t('remoteClients.dialog.addTitle')}
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+                mt: 0.5,
+              }}
+            >
               {t('remoteClients.dialog.description')}
             </Typography>
             <Stack spacing={2} sx={{ mt: 2.5 }}>
@@ -328,7 +334,13 @@ export function RemoteClientsContent() {
                 placeholder="https://client.example.com/api"
                 fullWidth
               />
-              <Stack direction="row" spacing={1} justifyContent="flex-end">
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{
+                  justifyContent: 'flex-end',
+                }}
+              >
                 <Button onClick={closeDialog} disabled={isSaving}>
                   {t('common.buttons.cancel')}
                 </Button>
@@ -352,10 +364,23 @@ export function RemoteClientsContent() {
             <Typography variant="h6" sx={{ fontWeight: 800 }}>
               {t('remoteClients.deleteDialog.title')}
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+                mt: 0.75,
+              }}
+            >
               {t('remoteClients.deleteDialog.description', { name: deletingClient.name })}
             </Typography>
-            <Stack direction="row" spacing={1} justifyContent="flex-end" sx={{ mt: 2.5 }}>
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{
+                justifyContent: 'flex-end',
+                mt: 2.5,
+              }}
+            >
               <Button onClick={closeDeleteDialog} disabled={isDeleting}>
                 {t('common.buttons.cancel')}
               </Button>

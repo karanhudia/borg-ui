@@ -41,11 +41,23 @@ export function RemoteConnectionsSection({
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Box>
-            <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.3 }}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 700,
+                lineHeight: 1.3,
+              }}
+            >
               {t('sshConnections.remoteConnections.title')}
             </Typography>
             {connections.length > 0 && (
-              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                  fontSize: '0.8rem',
+                }}
+              >
                 {t('sshConnections.remoteConnections.configured', { count: connections.length })}
               </Typography>
             )}
@@ -117,10 +129,22 @@ export function RemoteConnectionsSection({
           >
             <Wifi size={22} />
           </Box>
-          <Typography variant="body1" fontWeight={600} sx={{ mb: 0.5 }}>
+          <Typography
+            variant="body1"
+            sx={{
+              fontWeight: 600,
+              mb: 0.5,
+            }}
+          >
             {t('sshConnections.remoteConnections.emptyTitle')}
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.82rem' }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+              fontSize: '0.82rem',
+            }}
+          >
             {keyExists
               ? t('sshConnections.remoteConnections.emptyWithKey')
               : t('sshConnections.remoteConnections.emptyWithoutKey')}

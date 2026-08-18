@@ -56,7 +56,12 @@ export default function ScriptParameterInputs({
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Typography variant="subtitle2" fontWeight={600}>
+        <Typography
+          variant="subtitle2"
+          sx={{
+            fontWeight: 600,
+          }}
+        >
           {t('scriptParameters.title')}
         </Typography>
         <Chip
@@ -99,35 +104,37 @@ export default function ScriptParameterInputs({
               required={param.required}
               placeholder={param.default || ''}
               helperText={helperText}
-              InputProps={{
-                startAdornment: isPassword ? (
-                  <InputAdornment position="start">
-                    <Lock size={18} color="#666" />
-                  </InputAdornment>
-                ) : undefined,
-                endAdornment: isPassword ? (
-                  <InputAdornment position="end">
-                    <Tooltip
-                      title={
-                        shouldShow
-                          ? t('scriptParameters.hidePassword')
-                          : t('scriptParameters.showPassword')
-                      }
-                    >
-                      <IconButton
-                        size="small"
-                        onClick={() => toggleShowPassword(param.name)}
-                        edge="end"
-                      >
-                        {shouldShow ? <EyeOff size={18} /> : <Eye size={18} />}
-                      </IconButton>
-                    </Tooltip>
-                  </InputAdornment>
-                ) : null,
-              }}
               sx={{
                 '& .MuiInputBase-root': {
                   backgroundColor: isPassword ? 'rgba(255, 152, 0, 0.04)' : undefined,
+                },
+              }}
+              slotProps={{
+                input: {
+                  startAdornment: isPassword ? (
+                    <InputAdornment position="start">
+                      <Lock size={18} color="#666" />
+                    </InputAdornment>
+                  ) : undefined,
+                  endAdornment: isPassword ? (
+                    <InputAdornment position="end">
+                      <Tooltip
+                        title={
+                          shouldShow
+                            ? t('scriptParameters.hidePassword')
+                            : t('scriptParameters.showPassword')
+                        }
+                      >
+                        <IconButton
+                          size="small"
+                          onClick={() => toggleShowPassword(param.name)}
+                          edge="end"
+                        >
+                          {shouldShow ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </IconButton>
+                      </Tooltip>
+                    </InputAdornment>
+                  ) : null,
                 },
               }}
             />

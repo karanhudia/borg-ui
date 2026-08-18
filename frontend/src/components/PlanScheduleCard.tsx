@@ -152,7 +152,15 @@ const PlanScheduleCard: React.FC<PlanScheduleCardProps> = ({
         >
           <Database size={14} />
         </Box>
-        <Typography variant="subtitle1" fontWeight={700} sx={{ flex: 1, minWidth: 0 }} noWrap>
+        <Typography
+          variant="subtitle1"
+          noWrap
+          sx={{
+            fontWeight: 700,
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
           {plan.name}
         </Typography>
         {!plan.enabled && (
@@ -240,8 +248,10 @@ const PlanScheduleCard: React.FC<PlanScheduleCardProps> = ({
               <Typography
                 component="span"
                 variant="caption"
-                color="text.secondary"
-                sx={{ ml: 0.75 }}
+                sx={{
+                  color: 'text.secondary',
+                  ml: 0.75,
+                }}
               >
                 {plan.timezone}
               </Typography>
@@ -249,7 +259,14 @@ const PlanScheduleCard: React.FC<PlanScheduleCardProps> = ({
           </Typography>
         ) : (
           <Box sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 0.75 }}>
-            <Typography variant="body2" sx={{ fontStyle: 'italic' }} color="text.disabled" noWrap>
+            <Typography
+              variant="body2"
+              noWrap
+              sx={{
+                color: 'text.disabled',
+                fontStyle: 'italic',
+              }}
+            >
               {plan.schedule_enabled
                 ? t('schedule.byPlan.notScheduled')
                 : t('schedule.byPlan.scheduleDisabled')}
@@ -371,7 +388,12 @@ const PlanScheduleCard: React.FC<PlanScheduleCardProps> = ({
               borderColor: 'divider',
             }}
           >
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {t('schedule.byPlan.noRepos')}
             </Typography>
           </Box>

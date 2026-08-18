@@ -49,7 +49,12 @@ const WizardStepMaintenance: React.FC<WizardStepMaintenanceProps> = ({ data, onC
     <Stack spacing={2}>
       <Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-          <Typography variant="h6" fontWeight={600}>
+          <Typography
+            variant="h6"
+            sx={{
+              fontWeight: 600,
+            }}
+          >
             {t('wizard.scheduleWizard.maintenance.title')}
           </Typography>
           <Tooltip title={t('wizard.scheduleWizard.maintenance.info')} arrow placement="right">
@@ -73,7 +78,12 @@ const WizardStepMaintenance: React.FC<WizardStepMaintenanceProps> = ({ data, onC
             </Box>
           </Tooltip>
         </Box>
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           {t('wizard.scheduleWizard.maintenance.subtitle')}
         </Typography>
       </Box>
@@ -88,10 +98,20 @@ const WizardStepMaintenance: React.FC<WizardStepMaintenanceProps> = ({ data, onC
           }
           label={
             <Box>
-              <Typography variant="body2" fontWeight={600}>
+              <Typography
+                variant="body2"
+                sx={{
+                  fontWeight: 600,
+                }}
+              >
                 {t('wizard.scheduleWizard.maintenance.pruneAfterBackup')}
               </Typography>
-              <Typography variant="caption" color="text.secondary">
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {t('wizard.scheduleWizard.maintenance.pruneAfterBackupDesc')}
               </Typography>
             </Box>
@@ -134,7 +154,12 @@ const WizardStepMaintenance: React.FC<WizardStepMaintenanceProps> = ({ data, onC
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
               <Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                  <Typography variant="body2" fontWeight={600}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontWeight: 600,
+                    }}
+                  >
                     {t('wizard.scheduleWizard.maintenance.compactAfterPrune')}
                   </Typography>
                   <Tooltip
@@ -162,7 +187,12 @@ const WizardStepMaintenance: React.FC<WizardStepMaintenanceProps> = ({ data, onC
                     </Box>
                   </Tooltip>
                 </Box>
-                <Typography variant="caption" color="text.secondary">
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                  }}
+                >
                   {t('wizard.scheduleWizard.maintenance.compactAfterPruneDesc')}
                 </Typography>
               </Box>

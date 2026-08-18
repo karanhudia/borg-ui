@@ -240,7 +240,9 @@ export function DeployKeyDialog({
             value={connectionForm.username}
             onChange={(e) => setConnectionForm({ ...connectionForm, username: e.target.value })}
             placeholder={selectedPresetDetails.usernamePlaceholder}
-            InputLabelProps={{ shrink: true }}
+            slotProps={{
+              inputLabel: { shrink: true },
+            }}
           />
           <TextField
             label={t('sshConnections.deployDialog.port')}
@@ -250,7 +252,9 @@ export function DeployKeyDialog({
             onChange={(e) =>
               setConnectionForm({ ...connectionForm, port: parseInt(e.target.value) })
             }
-            InputLabelProps={{ shrink: true }}
+            slotProps={{
+              inputLabel: { shrink: true },
+            }}
           />
           <TextField
             label={t('sshConnections.deployDialog.password')}
@@ -259,25 +263,28 @@ export function DeployKeyDialog({
             value={connectionForm.password}
             onChange={(e) => setConnectionForm({ ...connectionForm, password: e.target.value })}
             placeholder={t('sshConnections.deployDialog.passwordPlaceholder')}
-            InputLabelProps={{ shrink: true }}
-            InputProps={{
-              endAdornment: (
-                <InputAdornment position="end">
-                  <Tooltip title={t('sshConnections.deployDialog.passwordHelp')} arrow>
-                    <Box
-                      component="span"
-                      sx={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        color: 'text.secondary',
-                        cursor: 'help',
-                      }}
-                    >
-                      <Info size={18} />
-                    </Box>
-                  </Tooltip>
-                </InputAdornment>
-              ),
+            slotProps={{
+              input: {
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <Tooltip title={t('sshConnections.deployDialog.passwordHelp')} arrow>
+                      <Box
+                        component="span"
+                        sx={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          color: 'text.secondary',
+                          cursor: 'help',
+                        }}
+                      >
+                        <Info size={18} />
+                      </Box>
+                    </Tooltip>
+                  </InputAdornment>
+                ),
+              },
+
+              inputLabel: { shrink: true },
             }}
           />
           <FormControlLabel
@@ -292,7 +299,12 @@ export function DeployKeyDialog({
             label={
               <Box>
                 <Typography variant="body2">{t('sshConnections.deployDialog.sftpMode')}</Typography>
-                <Typography variant="caption" color="text.secondary">
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                  }}
+                >
                   {t('sshConnections.deployDialog.sftpModeHint')}
                 </Typography>
               </Box>
@@ -305,7 +317,9 @@ export function DeployKeyDialog({
             onChange={(e) => setConnectionForm({ ...connectionForm, default_path: e.target.value })}
             placeholder="/home"
             helperText={t('sshConnections.deployDialog.defaultPathHelper')}
-            InputLabelProps={{ shrink: true }}
+            slotProps={{
+              inputLabel: { shrink: true },
+            }}
           />
           <TextField
             label={t('sshConnections.deployDialog.sshPathPrefix')}
@@ -316,7 +330,9 @@ export function DeployKeyDialog({
             }
             placeholder="/volume1"
             helperText={t('sshConnections.deployDialog.sshPathPrefixHelper')}
-            InputLabelProps={{ shrink: true }}
+            slotProps={{
+              inputLabel: { shrink: true },
+            }}
           />
           <TextField
             label={t('sshConnections.deployDialog.mountPoint')}
@@ -325,7 +341,9 @@ export function DeployKeyDialog({
             onChange={(e) => setConnectionForm({ ...connectionForm, mount_point: e.target.value })}
             placeholder={t('sshConnections.deployDialog.mountPointPlaceholder')}
             helperText={t('sshConnections.deployDialog.mountPointHelper')}
-            InputLabelProps={{ shrink: true }}
+            slotProps={{
+              inputLabel: { shrink: true },
+            }}
           />
         </Stack>
       </DialogContent>

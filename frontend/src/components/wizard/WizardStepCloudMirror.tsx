@@ -104,10 +104,20 @@ export default function WizardStepCloudMirror({
         }
         label={
           <Box>
-            <Typography variant="body2" fontWeight={600}>
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: 600,
+              }}
+            >
               {enableLabel}
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {enableHelper}
             </Typography>
           </Box>

@@ -192,7 +192,14 @@ const LogManagementTab: React.FC = () => {
 
   if (loadingSettings) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          minHeight: '400px',
+        }}
+      >
         <CircularProgress />
       </Box>
     )
@@ -215,10 +222,20 @@ const LogManagementTab: React.FC = () => {
         }}
       >
         <Box>
-          <Typography variant="h6" fontWeight={600}>
+          <Typography
+            variant="h6"
+            sx={{
+              fontWeight: 600,
+            }}
+          >
             {t('logManagement.title')}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {t('logManagement.subtitle')}
           </Typography>
         </Box>
@@ -240,13 +257,30 @@ const LogManagementTab: React.FC = () => {
         <SettingsCard>
           <Stack spacing={3}>
             <Box>
-              <Box display="flex" alignItems="center" gap={1} mb={1}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  mb: 1,
+                }}
+              >
                 <HardDrive size={20} />
-                <Typography variant="subtitle1" fontWeight={600}>
+                <Typography
+                  variant="subtitle1"
+                  sx={{
+                    fontWeight: 600,
+                  }}
+                >
                   {t('logManagement.storageUsage')}
                 </Typography>
               </Box>
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {t('logManagement.storageUsageDesc')}
               </Typography>
             </Box>
@@ -254,7 +288,11 @@ const LogManagementTab: React.FC = () => {
             <Divider />
 
             {loadingStorage ? (
-              <Box py={2}>
+              <Box
+                sx={{
+                  py: 2,
+                }}
+              >
                 <LinearProgress />
               </Box>
             ) : (
@@ -269,32 +307,53 @@ const LogManagementTab: React.FC = () => {
                   <Box>
                     <Typography
                       variant="caption"
-                      color="text.secondary"
-                      sx={{ textTransform: 'uppercase', fontWeight: 600 }}
+                      sx={{
+                        color: 'text.secondary',
+                        textTransform: 'uppercase',
+                        fontWeight: 600,
+                      }}
                     >
                       {t('logManagement.totalSize')}
                     </Typography>
-                    <Typography variant="h5" fontWeight={600} sx={{ mt: 0.5 }}>
+                    <Typography
+                      variant="h5"
+                      sx={{
+                        fontWeight: 600,
+                        mt: 0.5,
+                      }}
+                    >
                       {logStorage?.total_size_mb || 0} MB
                     </Typography>
                   </Box>
                   <Box>
                     <Typography
                       variant="caption"
-                      color="text.secondary"
-                      sx={{ textTransform: 'uppercase', fontWeight: 600 }}
+                      sx={{
+                        color: 'text.secondary',
+                        textTransform: 'uppercase',
+                        fontWeight: 600,
+                      }}
                     >
                       {t('logManagement.fileCount')}
                     </Typography>
-                    <Typography variant="h5" fontWeight={600} sx={{ mt: 0.5 }}>
+                    <Typography
+                      variant="h5"
+                      sx={{
+                        fontWeight: 600,
+                        mt: 0.5,
+                      }}
+                    >
                       {logStorage?.file_count || 0}
                     </Typography>
                   </Box>
                   <Box>
                     <Typography
                       variant="caption"
-                      color="text.secondary"
-                      sx={{ textTransform: 'uppercase', fontWeight: 600 }}
+                      sx={{
+                        color: 'text.secondary',
+                        textTransform: 'uppercase',
+                        fontWeight: 600,
+                      }}
                     >
                       {t('logManagement.oldestLog')}
                     </Typography>
@@ -305,8 +364,11 @@ const LogManagementTab: React.FC = () => {
                   <Box>
                     <Typography
                       variant="caption"
-                      color="text.secondary"
-                      sx={{ textTransform: 'uppercase', fontWeight: 600 }}
+                      sx={{
+                        color: 'text.secondary',
+                        textTransform: 'uppercase',
+                        fontWeight: 600,
+                      }}
                     >
                       {t('logManagement.newestLog')}
                     </Typography>
@@ -317,14 +379,30 @@ const LogManagementTab: React.FC = () => {
                 </Box>
 
                 <Box>
-                  <Box display="flex" justifyContent="space-between" mb={1}>
-                    <Typography variant="body2" fontWeight={600}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      mb: 1,
+                    }}
+                  >
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: 600,
+                      }}
+                    >
                       {t('logManagement.usageOfLimit', {
                         percent: usagePercent,
                         limit: logStorage?.limit_mb || 0,
                       })}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: 'text.secondary',
+                      }}
+                    >
                       {t('logManagement.mbAvailable', {
                         count: Math.max(
                           0,
@@ -375,10 +453,21 @@ const LogManagementTab: React.FC = () => {
         <SettingsCard>
           <Stack spacing={3}>
             <Box>
-              <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+              <Typography
+                variant="subtitle1"
+                gutterBottom
+                sx={{
+                  fontWeight: 600,
+                }}
+              >
                 {t('logManagement.storagePolicy')}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {t('logManagement.storagePolicyDesc')}
               </Typography>
             </Box>
@@ -392,10 +481,20 @@ const LogManagementTab: React.FC = () => {
                   control={<Radio />}
                   label={
                     <Box sx={{ py: 1 }}>
-                      <Typography variant="body1" fontWeight={500}>
+                      <Typography
+                        variant="body1"
+                        sx={{
+                          fontWeight: 500,
+                        }}
+                      >
                         {t('logManagement.policyFailedOnly')}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          color: 'text.secondary',
+                        }}
+                      >
                         {t('logManagement.policyFailedOnlyDesc')}
                       </Typography>
                     </Box>
@@ -407,10 +506,20 @@ const LogManagementTab: React.FC = () => {
                   control={<Radio />}
                   label={
                     <Box sx={{ py: 1 }}>
-                      <Typography variant="body1" fontWeight={500}>
+                      <Typography
+                        variant="body1"
+                        sx={{
+                          fontWeight: 500,
+                        }}
+                      >
                         {t('logManagement.policyFailedAndWarnings')}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          color: 'text.secondary',
+                        }}
+                      >
                         {t('logManagement.policyFailedAndWarningsDesc')}
                       </Typography>
                     </Box>
@@ -422,10 +531,20 @@ const LogManagementTab: React.FC = () => {
                   control={<Radio />}
                   label={
                     <Box sx={{ py: 1 }}>
-                      <Typography variant="body1" fontWeight={500}>
+                      <Typography
+                        variant="body1"
+                        sx={{
+                          fontWeight: 500,
+                        }}
+                      >
                         {t('logManagement.policyAllJobs')}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          color: 'text.secondary',
+                        }}
+                      >
                         {t('logManagement.policyAllJobsDesc')}
                       </Typography>
                     </Box>
@@ -441,10 +560,21 @@ const LogManagementTab: React.FC = () => {
         <SettingsCard>
           <Stack spacing={3}>
             <Box>
-              <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+              <Typography
+                variant="subtitle1"
+                gutterBottom
+                sx={{
+                  fontWeight: 600,
+                }}
+              >
                 {t('logManagement.retentionSettings')}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {t('logManagement.retentionSettingsDesc')}
               </Typography>
             </Box>
@@ -452,7 +582,13 @@ const LogManagementTab: React.FC = () => {
             <Divider />
 
             <Box>
-              <Typography variant="body2" fontWeight={600} gutterBottom>
+              <Typography
+                variant="body2"
+                gutterBottom
+                sx={{
+                  fontWeight: 600,
+                }}
+              >
                 {t('logManagement.logRetentionPeriod', { days: retentionDays })}
               </Typography>
               <Box sx={{ px: 1, pt: 1 }}>
@@ -471,7 +607,12 @@ const LogManagementTab: React.FC = () => {
                   valueLabelDisplay="auto"
                 />
               </Box>
-              <Typography variant="caption" color="text.secondary">
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {t('logManagement.logRetentionCaption')}
               </Typography>
             </Box>
@@ -484,14 +625,22 @@ const LogManagementTab: React.FC = () => {
                 onChange={(e) =>
                   setMaxTotalSizeMb(Math.min(10000, Math.max(10, parseInt(e.target.value) || 10)))
                 }
-                inputProps={{ min: 10, max: 10000, step: 50 }}
                 fullWidth
                 helperText={t('logManagement.maxTotalSizeHelper')}
+                slotProps={{
+                  htmlInput: { min: 10, max: 10000, step: 50 },
+                }}
               />
             </Box>
 
             <Box>
-              <Typography variant="body2" fontWeight={600} gutterBottom>
+              <Typography
+                variant="body2"
+                gutterBottom
+                sx={{
+                  fontWeight: 600,
+                }}
+              >
                 {t('logManagement.historyRetentionPeriod', { days: historyRetentionDays })}
               </Typography>
               <Box sx={{ px: 1, pt: 1 }}>
@@ -510,7 +659,12 @@ const LogManagementTab: React.FC = () => {
                   valueLabelDisplay="auto"
                 />
               </Box>
-              <Typography variant="caption" color="text.secondary">
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {t('logManagement.historyRetentionCaption')}
               </Typography>
             </Box>
@@ -521,10 +675,21 @@ const LogManagementTab: React.FC = () => {
         <SettingsCard>
           <Stack spacing={3}>
             <Box>
-              <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+              <Typography
+                variant="subtitle1"
+                gutterBottom
+                sx={{
+                  fontWeight: 600,
+                }}
+              >
                 {t('logManagement.automaticCleanup')}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {t('logManagement.automaticCleanupDesc')}
               </Typography>
             </Box>
@@ -540,10 +705,20 @@ const LogManagementTab: React.FC = () => {
               }
               label={
                 <Box>
-                  <Typography variant="body1" fontWeight={500}>
+                  <Typography
+                    variant="body1"
+                    sx={{
+                      fontWeight: 500,
+                    }}
+                  >
                     {t('logManagement.cleanupOnStartup')}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: 'text.secondary',
+                    }}
+                  >
                     {t('logManagement.cleanupOnStartupDesc')}
                   </Typography>
                 </Box>

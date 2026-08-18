@@ -41,7 +41,7 @@ export const Skipped: Story = {
 export const StatusComparison: Story = {
   args: { status: 'completed' },
   render: () => (
-    <Stack spacing={1.5} sx={{ p: 3, minWidth: 260 }} alignItems="flex-start">
+    <Stack spacing={1.5} sx={{ p: 3, minWidth: 260, alignItems: 'flex-start' }}>
       <StatusBadge status="completed" />
       <StatusBadge status="completed_with_warnings" />
       <StatusBadge status="failed" tooltip="Backup failed while writing archive metadata." />

@@ -54,10 +54,20 @@ export function ScheduleStep({
     <Stack spacing={3}>
       <Stack spacing={2}>
         <Box>
-          <Typography variant="subtitle2" fontWeight={600}>
+          <Typography
+            variant="subtitle2"
+            sx={{
+              fontWeight: 600,
+            }}
+          >
             {t('backupPlans.wizard.schedule.title')}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {t('backupPlans.wizard.schedule.description')}
           </Typography>
         </Box>
@@ -91,10 +101,20 @@ export function ScheduleStep({
       <Divider />
       <Stack spacing={2.5}>
         <Box>
-          <Typography variant="subtitle2" fontWeight={600}>
+          <Typography
+            variant="subtitle2"
+            sx={{
+              fontWeight: 600,
+            }}
+          >
             {t('backupPlans.wizard.maintenance.title')}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {t('backupPlans.wizard.maintenance.description')}
           </Typography>
         </Box>
@@ -163,8 +183,10 @@ export function ScheduleStep({
                     })
                   }
                   helperText={t('backupPlans.wizard.maintenance.checkMaxDurationHelper')}
-                  inputProps={{ min: 0 }}
                   fullWidth
+                  slotProps={{
+                    htmlInput: { min: 0 },
+                  }}
                 />
                 <TextField
                   label={t('backupPlans.wizard.fields.checkExtraFlags')}
@@ -172,8 +194,10 @@ export function ScheduleStep({
                   onChange={(event) => updateState({ checkExtraFlags: event.target.value })}
                   helperText={t('backupPlans.wizard.maintenance.checkExtraFlagsHelper')}
                   placeholder="--repair --verify-data"
-                  inputProps={{ spellCheck: false }}
                   fullWidth
+                  slotProps={{
+                    htmlInput: { spellCheck: false },
+                  }}
                 />
                 {hasCheckFlagConflict && (
                   <Alert severity="warning">

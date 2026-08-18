@@ -328,11 +328,22 @@ export default function DataTable<T>({
           }}
         >
           <Box sx={{ mb: 2, color: 'text.secondary', opacity: 0.6 }}>{emptyState.icon}</Box>
-          <Typography variant="h6" fontWeight={600} gutterBottom>
+          <Typography
+            variant="h6"
+            gutterBottom
+            sx={{
+              fontWeight: 600,
+            }}
+          >
             {emptyState.title}
           </Typography>
           {emptyState.description && (
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {emptyState.description}
             </Typography>
           )}

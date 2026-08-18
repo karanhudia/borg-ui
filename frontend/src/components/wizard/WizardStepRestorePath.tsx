@@ -99,7 +99,12 @@ export default function WizardStepRestorePath({
         <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
           {t('wizard.restorePath.title')}
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           {t('wizard.restorePath.subtitle')}
         </Typography>
       </Box>
@@ -136,10 +141,20 @@ export default function WizardStepRestorePath({
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <FileCheck size={18} />
                   <Box>
-                    <Typography variant="body1" fontWeight={600}>
+                    <Typography
+                      variant="body1"
+                      sx={{
+                        fontWeight: 600,
+                      }}
+                    >
                       {t('wizard.restorePath.restoreToOriginal')}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: 'text.secondary',
+                      }}
+                    >
                       {t('wizard.restorePath.restoreToOriginalDesc')}
                     </Typography>
                   </Box>
@@ -174,10 +189,20 @@ export default function WizardStepRestorePath({
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <FolderOpen size={18} />
                   <Box>
-                    <Typography variant="body1" fontWeight={600}>
+                    <Typography
+                      variant="body1"
+                      sx={{
+                        fontWeight: 600,
+                      }}
+                    >
                       {t('wizard.restorePath.restoreToCustom')}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: 'text.secondary',
+                      }}
+                    >
                       {t('wizard.restorePath.restoreToCustomDesc')}
                     </Typography>
                   </Box>
@@ -200,20 +225,22 @@ export default function WizardStepRestorePath({
             required
             fullWidth
             helperText={t('wizard.restorePath.customPathHelper')}
-            InputProps={{
-              endAdornment: (
-                <InputAdornment position="end">
-                  <IconButton
-                    onClick={onBrowsePath}
-                    edge="end"
-                    size="small"
-                    title={t('wizard.restorePath.browseFilesystem')}
-                    disabled={destinationType === 'ssh' && !destinationConnectionId}
-                  >
-                    <FolderOpenIcon fontSize="small" />
-                  </IconButton>
-                </InputAdornment>
-              ),
+            slotProps={{
+              input: {
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      onClick={onBrowsePath}
+                      edge="end"
+                      size="small"
+                      title={t('wizard.restorePath.browseFilesystem')}
+                      disabled={destinationType === 'ssh' && !destinationConnectionId}
+                    >
+                      <FolderOpenIcon fontSize="small" />
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              },
             }}
           />
         </>
@@ -239,8 +266,11 @@ export default function WizardStepRestorePath({
                 <Box key={index} sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                   <Typography
                     variant="body2"
-                    color="text.secondary"
-                    sx={{ fontSize: '0.75rem', fontFamily: 'monospace' }}
+                    sx={{
+                      color: 'text.secondary',
+                      fontSize: '0.75rem',
+                      fontFamily: 'monospace',
+                    }}
                   >
                     {t('wizard.restorePath.original')} {path}
                   </Typography>
@@ -258,7 +288,13 @@ export default function WizardStepRestorePath({
                 </Box>
               ))}
               {hasMoreFiles && (
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                    mt: 1,
+                  }}
+                >
                   {t('wizard.restorePath.andMoreFiles', { count: selectedFiles.length - 3 })}
                 </Typography>
               )}

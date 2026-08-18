@@ -567,7 +567,14 @@ export default function RepositoryCard({
           >
             <Box sx={{ minWidth: 0, flex: 1 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
-                <Typography variant="subtitle1" fontWeight={700} noWrap sx={{ lineHeight: 1.3 }}>
+                <Typography
+                  variant="subtitle1"
+                  noWrap
+                  sx={{
+                    fontWeight: 700,
+                    lineHeight: 1.3,
+                  }}
+                >
                   {repository.name}
                 </Typography>
                 {repository.mode === 'observe' && (
@@ -835,9 +842,12 @@ export default function RepositoryCard({
                   </Box>
                   <Typography
                     variant="body2"
-                    fontWeight={600}
                     noWrap
-                    sx={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.85rem' }}
+                    sx={{
+                      fontWeight: 600,
+                      fontVariantNumeric: 'tabular-nums',
+                      fontSize: '0.85rem',
+                    }}
                   >
                     {stat.value}
                   </Typography>
@@ -903,10 +913,22 @@ export default function RepositoryCard({
             }}
           >
             <Box sx={{ minWidth: 0 }}>
-              <Typography variant="caption" fontWeight={700} color="primary.main">
+              <Typography
+                variant="caption"
+                sx={{
+                  fontWeight: 700,
+                  color: 'primary.main',
+                }}
+              >
                 {t('repositoryCard.legacySources.title')}
               </Typography>
-              <Typography variant="caption" color="text.secondary" display="block">
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                  display: 'block',
+                }}
+              >
                 {t('repositoryCard.legacySources.description')}
               </Typography>
             </Box>
@@ -1317,8 +1339,11 @@ export default function RepositoryCard({
             {elapsedTime && (
               <Typography
                 variant="caption"
-                color="text.secondary"
-                sx={{ display: 'block', mt: 0.25 }}
+                sx={{
+                  color: 'text.secondary',
+                  display: 'block',
+                  mt: 0.25,
+                }}
               >
                 {elapsedTime}
               </Typography>

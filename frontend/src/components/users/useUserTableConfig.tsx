@@ -55,20 +55,36 @@ export const useUserTableColumns = ({
                 </Typography>
               </Box>
               <Box sx={{ minWidth: 0 }}>
-                <Typography variant="body2" fontWeight={600} noWrap>
+                <Typography
+                  variant="body2"
+                  noWrap
+                  sx={{
+                    fontWeight: 600,
+                  }}
+                >
                   {user.full_name || user.username}
                 </Typography>
                 <Stack spacing={0.4} sx={{ minWidth: 0 }}>
                   <Typography
                     variant="caption"
-                    color="text.secondary"
                     noWrap
-                    sx={{ display: 'block', lineHeight: 1.4 }}
+                    sx={{
+                      color: 'text.secondary',
+                      display: 'block',
+                      lineHeight: 1.4,
+                    }}
                   >
                     {user.email || `@${user.username}`}
                   </Typography>
                   {(user.auth_source === 'oidc' || user.oidc_subject) && (
-                    <Stack direction="row" spacing={0.75} alignItems="center" sx={{ minWidth: 0 }}>
+                    <Stack
+                      direction="row"
+                      spacing={0.75}
+                      sx={{
+                        alignItems: 'center',
+                        minWidth: 0,
+                      }}
+                    >
                       {user.auth_source === 'oidc' && (
                         <Chip
                           size="small"
@@ -82,9 +98,12 @@ export const useUserTableColumns = ({
                         <Tooltip title={user.oidc_subject}>
                           <Typography
                             variant="caption"
-                            color="text.secondary"
                             noWrap
-                            sx={{ display: 'block', minWidth: 0 }}
+                            sx={{
+                              color: 'text.secondary',
+                              display: 'block',
+                              minWidth: 0,
+                            }}
                           >
                             {t('settings.users.labels.subject', { subject: user.oidc_subject })}
                           </Typography>
@@ -152,7 +171,12 @@ export const useUserTableColumns = ({
         label: t('settings.users.table.created'),
         width: '110px',
         render: (user) => (
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {formatDateShort(user.created_at)}
           </Typography>
         ),
@@ -162,7 +186,12 @@ export const useUserTableColumns = ({
         label: t('settings.users.table.lastLogin'),
         width: '120px',
         render: (user) => (
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {user.last_login ? formatDateShort(user.last_login) : t('common.never')}
           </Typography>
         ),

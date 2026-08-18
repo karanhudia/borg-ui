@@ -37,7 +37,15 @@ export default function RichSelectRow({
       )}
       <Box sx={{ flex: 1, minWidth: 0 }}>
         <Tooltip title={primary} placement="top" enterDelay={500}>
-          <Typography variant="body2" fontWeight={600} lineHeight={1.3} noWrap sx={{ minWidth: 0 }}>
+          <Typography
+            variant="body2"
+            noWrap
+            sx={{
+              fontWeight: 600,
+              lineHeight: 1.3,
+              minWidth: 0,
+            }}
+          >
             {primary}
           </Typography>
         </Tooltip>
@@ -45,10 +53,13 @@ export default function RichSelectRow({
           <Tooltip title={secondary} placement="top" enterDelay={500}>
             <Typography
               variant="caption"
-              color="text.secondary"
-              lineHeight={1.3}
               noWrap
-              sx={{ display: 'block', minWidth: 0 }}
+              sx={{
+                color: 'text.secondary',
+                lineHeight: 1.3,
+                display: 'block',
+                minWidth: 0,
+              }}
             >
               {secondary}
             </Typography>

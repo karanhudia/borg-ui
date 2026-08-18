@@ -59,7 +59,12 @@ export function CreateBackupPlanDialog({
       <DialogTitle>{t('repositories.createPlanDialog.title')}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {t('repositories.createPlanDialog.description', {
               name: repository?.name || '',
             })}

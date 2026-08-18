@@ -120,11 +120,19 @@ export default function AccountProfileSection({
         <Stack spacing={2.5}>
           <Stack
             direction={{ xs: 'column', sm: 'row' }}
-            justifyContent="space-between"
-            alignItems={{ xs: 'flex-start', sm: 'center' }}
-            gap={1.5}
+            sx={{
+              justifyContent: 'space-between',
+              alignItems: { xs: 'flex-start', sm: 'center' },
+              gap: 1.5,
+            }}
           >
-            <Stack direction="row" spacing={1.25} alignItems="center">
+            <Stack
+              direction="row"
+              spacing={1.25}
+              sx={{
+                alignItems: 'center',
+              }}
+            >
               <Box
                 sx={{
                   width: 34,
@@ -153,14 +161,27 @@ export default function AccountProfileSection({
                 >
                   {t('settings.account.profile.title')}
                 </Typography>
-                <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.1 }}>
+                <Typography
+                  variant="h6"
+                  sx={{
+                    fontWeight: 700,
+                    lineHeight: 1.1,
+                  }}
+                >
                   {profileForm.full_name || profileForm.username}
                 </Typography>
               </Box>
             </Stack>
 
             {/* ── Role & status badges ── */}
-            <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+            <Stack
+              direction="row"
+              spacing={0.75}
+              useFlexGap
+              sx={{
+                flexWrap: 'wrap',
+              }}
+            >
               {/* Role badge */}
               <Box
                 sx={{
@@ -283,8 +304,11 @@ export default function AccountProfileSection({
 
           <Typography
             variant="body2"
-            color="text.secondary"
-            sx={{ maxWidth: 720, fontSize: { md: '0.95rem' } }}
+            sx={{
+              color: 'text.secondary',
+              maxWidth: 720,
+              fontSize: { md: '0.95rem' },
+            }}
           >
             {t('settings.account.profile.description')}
           </Typography>
@@ -334,7 +358,13 @@ export default function AccountProfileSection({
                 >
                   {item.label}
                 </Typography>
-                <Typography variant="subtitle2" fontWeight={700} noWrap>
+                <Typography
+                  variant="subtitle2"
+                  noWrap
+                  sx={{
+                    fontWeight: 700,
+                  }}
+                >
                   {item.value}
                 </Typography>
               </Box>
@@ -384,7 +414,14 @@ export default function AccountProfileSection({
               },
             }}
           >
-            <Stack direction="row" spacing={2} alignItems="center" sx={{ minWidth: 0 }}>
+            <Stack
+              direction="row"
+              spacing={2}
+              sx={{
+                alignItems: 'center',
+                minWidth: 0,
+              }}
+            >
               <Box
                 sx={{
                   width: 38,
@@ -402,10 +439,22 @@ export default function AccountProfileSection({
                 <Pencil size={16} style={{ opacity: 0.45 }} />
               </Box>
               <Box sx={{ minWidth: 0 }}>
-                <Typography variant="body2" fontWeight={600} noWrap>
+                <Typography
+                  variant="body2"
+                  noWrap
+                  sx={{
+                    fontWeight: 600,
+                  }}
+                >
                   {t('settings.account.editProfile')}
                 </Typography>
-                <Typography variant="caption" color="text.secondary" noWrap>
+                <Typography
+                  variant="caption"
+                  noWrap
+                  sx={{
+                    color: 'text.secondary',
+                  }}
+                >
                   {profileForm.username} · {profileForm.email}
                 </Typography>
               </Box>
@@ -432,10 +481,22 @@ export default function AccountProfileSection({
       {/* ── Deployment profile (admin only) ── */}
       {canManageSystem && (
         <Box>
-          <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+          <Typography
+            variant="subtitle2"
+            gutterBottom
+            sx={{
+              fontWeight: 700,
+            }}
+          >
             {t('settings.account.profile.deployment.title')}
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+              mb: 2,
+            }}
+          >
             {t('settings.account.profile.deployment.description')}
           </Typography>
 
@@ -492,7 +553,14 @@ export default function AccountProfileSection({
                         },
                       }}
                     >
-                      <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}>
+                      <Stack
+                        direction="row"
+                        spacing={1.5}
+                        sx={{
+                          alignItems: 'center',
+                          mb: 1,
+                        }}
+                      >
                         <Box
                           sx={{
                             width: 30,
@@ -508,11 +576,22 @@ export default function AccountProfileSection({
                         >
                           {option.icon}
                         </Box>
-                        <Typography variant="subtitle2" fontWeight={700}>
+                        <Typography
+                          variant="subtitle2"
+                          sx={{
+                            fontWeight: 700,
+                          }}
+                        >
                           {option.title}
                         </Typography>
                       </Stack>
-                      <Typography variant="body2" color="text.secondary" sx={{ pl: '42px' }}>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          color: 'text.secondary',
+                          pl: '42px',
+                        }}
+                      >
                         {option.body}
                       </Typography>
                     </Box>

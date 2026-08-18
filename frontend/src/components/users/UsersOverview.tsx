@@ -34,10 +34,20 @@ export const UsersHeader: React.FC<UsersHeaderProps> = ({ canCreateUser, onCreat
       }}
     >
       <Box>
-        <Typography variant="h6" fontWeight={600}>
+        <Typography
+          variant="h6"
+          sx={{
+            fontWeight: 600,
+          }}
+        >
           {t('settings.users.title')}
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           {t('settings.users.subtitle')}
         </Typography>
       </Box>
@@ -103,12 +113,21 @@ export const UsersStats: React.FC<UsersStatsProps> = ({
         <Box key={stat.label}>
           <Typography
             variant="h6"
-            fontWeight={700}
-            sx={{ color: stat.color, lineHeight: 1, mb: 0.25 }}
+            sx={{
+              fontWeight: 700,
+              color: stat.color,
+              lineHeight: 1,
+              mb: 0.25,
+            }}
           >
             {stat.value}
           </Typography>
-          <Typography variant="caption" color="text.secondary">
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {stat.label}
           </Typography>
         </Box>
@@ -146,7 +165,12 @@ export const PendingSsoAlert: React.FC<PendingSsoAlertProps> = ({
         </Button>
       }
     >
-      <Typography variant="body2" fontWeight={600}>
+      <Typography
+        variant="body2"
+        sx={{
+          fontWeight: 600,
+        }}
+      >
         {t('settings.users.pendingReview.title', { count: pendingSsoUsers })}
       </Typography>
       <Typography variant="body2">{t('settings.users.pendingReview.description')}</Typography>
@@ -216,17 +240,19 @@ export const UsersFilterToolbar: React.FC<UsersFilterToolbarProps> = ({
           placeholder={t('settings.users.search.placeholder')}
           value={searchQuery}
           onChange={(e) => onSearchQueryChange(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <Search size={15} color={theme.palette.text.secondary} />
-              </InputAdornment>
-            ),
-          }}
           sx={{
             width: 240,
             flexShrink: 0,
             '& .MuiOutlinedInput-root': { borderRadius: 1.5 },
+          }}
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Search size={15} color={theme.palette.text.secondary} />
+                </InputAdornment>
+              ),
+            },
           }}
         />
 
@@ -335,7 +361,13 @@ export const UsersFilterToolbar: React.FC<UsersFilterToolbarProps> = ({
       </Box>
 
       {hasActiveFilters && (
-        <Typography variant="caption" color="text.secondary" sx={{ pl: 0.5 }}>
+        <Typography
+          variant="caption"
+          sx={{
+            color: 'text.secondary',
+            pl: 0.5,
+          }}
+        >
           {t('settings.users.filter.showing', {
             count: filteredUserCount,
             total: totalUsers,

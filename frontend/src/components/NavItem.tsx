@@ -57,10 +57,14 @@ export default function NavItem({
       </ListItemIcon>
       <ListItemText
         primary={navLabel(name)}
-        primaryTypographyProps={{
-          fontSize: '0.8125rem',
-          fontWeight: isActive ? 500 : 400,
-          color: isActive ? 'text.primary' : isEnabled ? 'text.secondary' : 'text.disabled',
+        slotProps={{
+          primary: {
+            sx: {
+              fontSize: '0.8125rem',
+              fontWeight: isActive ? 500 : 400,
+              color: isActive ? 'text.primary' : isEnabled ? 'text.secondary' : 'text.disabled',
+            },
+          },
         }}
       />
       {badge && <Box sx={{ ml: 1, display: 'flex', alignItems: 'center' }}>{badge}</Box>}

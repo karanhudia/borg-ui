@@ -96,7 +96,12 @@ export function ActivityContent({
           <History size={32} />
           <Box>
             <Typography variant="h4">{t('activity.title')}</Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {t('activity.subtitle')}
             </Typography>
           </Box>

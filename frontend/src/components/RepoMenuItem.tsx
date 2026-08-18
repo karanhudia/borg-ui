@@ -35,11 +35,30 @@ export default function RepoMenuItem({
 }: RepoMenuItemProps) {
   const { t } = useTranslation()
   return (
-    <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0, overflow: 'hidden' }}>
+    <Stack
+      direction="row"
+      spacing={1}
+      sx={{
+        alignItems: 'center',
+        minWidth: 0,
+        overflow: 'hidden',
+      }}
+    >
       <Database size={16} style={{ flexShrink: 0 }} />
       <Box sx={{ minWidth: 0, overflow: 'hidden' }}>
-        <Stack direction="row" spacing={0.75} alignItems="center">
-          <Typography variant="body2" fontWeight={500}>
+        <Stack
+          direction="row"
+          spacing={0.75}
+          sx={{
+            alignItems: 'center',
+          }}
+        >
+          <Typography
+            variant="body2"
+            sx={{
+              fontWeight: 500,
+            }}
+          >
             {name}
           </Typography>
           <BorgVersionChip borgVersion={borgVersion} compact />
@@ -47,7 +66,13 @@ export default function RepoMenuItem({
             <Chip label={t('repositories.observeOnly')} size="small" sx={observeChipSx} />
           )}
           {hasRunningMaintenance && (
-            <Typography component="span" variant="caption" color="warning.main">
+            <Typography
+              component="span"
+              variant="caption"
+              sx={{
+                color: 'warning.main',
+              }}
+            >
               {maintenanceLabel}
             </Typography>
           )}
@@ -55,8 +80,8 @@ export default function RepoMenuItem({
         {!hidePath && (
           <Typography
             variant="caption"
-            color="text.secondary"
             sx={{
+              color: 'text.secondary',
               fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,SFMono-Regular,monospace',
               display: 'block',
               overflow: 'hidden',

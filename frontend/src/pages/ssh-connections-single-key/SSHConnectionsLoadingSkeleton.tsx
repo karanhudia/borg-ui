@@ -36,7 +36,14 @@ export function SSHConnectionsLoadingSkeleton({ isDark }: SSHConnectionsLoadingS
         }}
       >
         <Box sx={{ px: { xs: 2, sm: 2.5 }, pt: { xs: 2, sm: 2.5 }, pb: { xs: 2, sm: 2.5 } }}>
-          <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 2 }}>
+          <Stack
+            direction="row"
+            spacing={1.5}
+            sx={{
+              alignItems: 'center',
+              mb: 2,
+            }}
+          >
             <Skeleton
               variant="rounded"
               width={34}

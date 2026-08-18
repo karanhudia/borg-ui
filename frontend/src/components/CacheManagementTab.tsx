@@ -243,10 +243,20 @@ const CacheManagementTab: React.FC = () => {
           }}
         >
           <Box>
-            <Typography variant="h6" fontWeight={600}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 600,
+              }}
+            >
               {t('cacheManagement.title')}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {t('cache.subtitle')}
             </Typography>
           </Box>
@@ -308,7 +318,12 @@ const CacheManagementTab: React.FC = () => {
                 <Typography variant="h4" color="primary">
                   {stats?.entry_count || 0}
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: 'text.secondary',
+                  }}
+                >
                   {t('cache.cachedArchives')}
                 </Typography>
               </Box>
@@ -317,7 +332,12 @@ const CacheManagementTab: React.FC = () => {
                 <Typography variant="h4" color="primary">
                   {sizeMb.toFixed(1)} MB
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: 'text.secondary',
+                  }}
+                >
                   {t('cache.memoryUsed')}
                 </Typography>
               </Box>
@@ -326,10 +346,20 @@ const CacheManagementTab: React.FC = () => {
                 <Typography variant="h4" color="primary">
                   {hitRate.toFixed(1)}%
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: 'text.secondary',
+                  }}
+                >
                   {t('cache.hitRate')}
                 </Typography>
-                <Typography variant="caption" color="text.secondary">
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                  }}
+                >
                   {t('cache.totalRequests', { count: totalRequests })}
                 </Typography>
               </Box>
@@ -340,7 +370,12 @@ const CacheManagementTab: React.FC = () => {
                     ? formatTtl(stats.cache_ttl_minutes)
                     : t('cache.durationHours', { count: 2 })}
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: 'text.secondary',
+                  }}
+                >
                   {t('cache.cacheTtl')}
                 </Typography>
               </Box>
@@ -357,10 +392,20 @@ const CacheManagementTab: React.FC = () => {
                   mb: 1,
                 }}
               >
-                <Typography variant="body2" color="text.secondary">
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: 'text.secondary',
+                  }}
+                >
                   {t('cache.cacheUsage')}
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: 'text.secondary',
+                  }}
+                >
                   {t('cache.cacheUsageDetail', {
                     used: sizeMb.toFixed(1),
                     max: maxSizeFromStats,
@@ -424,8 +469,10 @@ const CacheManagementTab: React.FC = () => {
                 fullWidth
                 value={ttlMinutes}
                 onChange={(e) => setTtlMinutes(Number(e.target.value))}
-                inputProps={{ min: 1, max: 10080 }}
                 helperText={t('cache.ttlHelperText', { current: formatTtl(ttlMinutes) })}
+                slotProps={{
+                  htmlInput: { min: 1, max: 10080 },
+                }}
               />
 
               <TextField
@@ -434,14 +481,22 @@ const CacheManagementTab: React.FC = () => {
                 fullWidth
                 value={maxSizeMb}
                 onChange={(e) => setMaxSizeMb(Number(e.target.value))}
-                inputProps={{ min: 100, max: 10240 }}
                 helperText={t('cache.maxSizeHelperText', {
                   current: (maxSizeMb / 1024).toFixed(2),
                 })}
+                slotProps={{
+                  htmlInput: { min: 100, max: 10240 },
+                }}
               />
             </Box>
 
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="flex-start">
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={2}
+              sx={{
+                alignItems: 'flex-start',
+              }}
+            >
               <TextField
                 label={t('cache.redisUrlLabel')}
                 fullWidth

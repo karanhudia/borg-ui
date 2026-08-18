@@ -55,7 +55,13 @@ export function DashboardSkeleton({ T }: { T: Tokens }) {
           gap: { xs: 1.75, md: 2 },
         }}
       >
-        <Stack direction="row" spacing={2} alignItems="center">
+        <Stack
+          direction="row"
+          spacing={2}
+          sx={{
+            alignItems: 'center',
+          }}
+        >
           <Skeleton variant="circular" width={10} height={10} />
           <Box>
             <Skeleton
@@ -141,9 +147,11 @@ export function DashboardSkeleton({ T }: { T: Tokens }) {
           >
             <Stack
               direction="row"
-              alignItems="baseline"
-              justifyContent="space-between"
-              sx={{ mb: 1.5 }}
+              sx={{
+                alignItems: 'baseline',
+                justifyContent: 'space-between',
+                mb: 1.5,
+              }}
             >
               <Skeleton
                 variant="text"
@@ -159,7 +167,14 @@ export function DashboardSkeleton({ T }: { T: Tokens }) {
               />
             </Stack>
             <Skeleton variant="circular" width={96} height={96} sx={{ mx: 'auto', mb: 1.5 }} />
-            <Stack direction="row" justifyContent="center" spacing={1} sx={{ mt: 1 }}>
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{
+                justifyContent: 'center',
+                mt: 1,
+              }}
+            >
               <Skeleton
                 variant="text"
                 width={68}
@@ -185,7 +200,14 @@ export function DashboardSkeleton({ T }: { T: Tokens }) {
               p: 2,
             }}
           >
-            <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 2 }}>
+            <Stack
+              direction="row"
+              spacing={0.75}
+              sx={{
+                alignItems: 'center',
+                mb: 2,
+              }}
+            >
               <Skeleton variant="circular" width={14} height={14} />
               <Skeleton
                 variant="text"
@@ -322,9 +344,11 @@ export function DashboardSkeleton({ T }: { T: Tokens }) {
           >
             <Stack
               direction="row"
-              alignItems="baseline"
-              justifyContent="space-between"
-              sx={{ mb: 1.5 }}
+              sx={{
+                alignItems: 'baseline',
+                justifyContent: 'space-between',
+                mb: 1.5,
+              }}
             >
               <Skeleton
                 variant="text"
@@ -342,7 +366,14 @@ export function DashboardSkeleton({ T }: { T: Tokens }) {
             <Skeleton variant="circular" width={96} height={96} sx={{ mx: 'auto', mb: 1.5 }} />
             <Stack spacing={0.65}>
               {[88, 76, 80, 64, 56].map((w, i) => (
-                <Stack key={i} direction="row" alignItems="center" spacing={0.75}>
+                <Stack
+                  key={i}
+                  direction="row"
+                  spacing={0.75}
+                  sx={{
+                    alignItems: 'center',
+                  }}
+                >
                   <Skeleton variant="circular" width={8} height={8} />
                   <Skeleton
                     variant="text"
@@ -376,11 +407,19 @@ export function DashboardSkeleton({ T }: { T: Tokens }) {
             {/* Header: title + 3 status count chips (critical / warn / ok) */}
             <Stack
               direction="row"
-              alignItems="center"
-              justifyContent="space-between"
-              sx={{ mb: 2 }}
+              sx={{
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                mb: 2,
+              }}
             >
-              <Stack direction="row" spacing={1} alignItems="center">
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{
+                  alignItems: 'center',
+                }}
+              >
                 <Skeleton variant="circular" width={14} height={14} />
                 <Skeleton
                   variant="text"
@@ -407,7 +446,14 @@ export function DashboardSkeleton({ T }: { T: Tokens }) {
                 p: 1.25,
               }}
             >
-              <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.75 }}>
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{
+                  alignItems: 'center',
+                  mb: 0.75,
+                }}
+              >
                 <Skeleton variant="circular" width={14} height={14} />
                 <Skeleton
                   variant="text"
@@ -422,8 +468,10 @@ export function DashboardSkeleton({ T }: { T: Tokens }) {
                     key={i}
                     direction="row"
                     spacing={1}
-                    alignItems="baseline"
-                    sx={{ minWidth: 0 }}
+                    sx={{
+                      alignItems: 'baseline',
+                      minWidth: 0,
+                    }}
                   >
                     <Skeleton
                       variant="text"
@@ -483,11 +531,19 @@ export function DashboardSkeleton({ T }: { T: Tokens }) {
                   {/* Top row: pulse dot + type chip | schedule pill */}
                   <Stack
                     direction="row"
-                    alignItems="center"
-                    justifyContent="space-between"
-                    sx={{ mb: 0.55 }}
+                    sx={{
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      mb: 0.55,
+                    }}
                   >
-                    <Stack direction="row" spacing={0.75} alignItems="center">
+                    <Stack
+                      direction="row"
+                      spacing={0.75}
+                      sx={{
+                        alignItems: 'center',
+                      }}
+                    >
                       <Skeleton variant="circular" width={10} height={10} />
                       <Skeleton variant="rounded" width={48} height={20} sx={{ borderRadius: 1 }} />
                     </Stack>
@@ -534,8 +590,10 @@ export function DashboardSkeleton({ T }: { T: Tokens }) {
                         key={j}
                         direction="row"
                         spacing={0.5}
-                        alignItems="center"
-                        sx={{ minWidth: 0 }}
+                        sx={{
+                          alignItems: 'center',
+                          minWidth: 0,
+                        }}
                       >
                         <Skeleton
                           variant="circular"
@@ -585,7 +643,14 @@ export function DashboardSkeleton({ T }: { T: Tokens }) {
                     ...fadeIn,
                   }}
                 >
-                  <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{
+                      alignItems: 'center',
+                      minWidth: 0,
+                    }}
+                  >
                     <Skeleton variant="circular" width={10} height={10} sx={{ flexShrink: 0 }} />
                     <Box sx={{ flexGrow: 1, minWidth: 0 }}>
                       <Skeleton
@@ -597,8 +662,11 @@ export function DashboardSkeleton({ T }: { T: Tokens }) {
                       <Stack
                         direction="row"
                         spacing={0.75}
-                        alignItems="center"
-                        sx={{ mt: 0.4, minWidth: 0 }}
+                        sx={{
+                          alignItems: 'center',
+                          mt: 0.4,
+                          minWidth: 0,
+                        }}
                       >
                         <Skeleton
                           variant="rounded"
@@ -619,7 +687,13 @@ export function DashboardSkeleton({ T }: { T: Tokens }) {
                         />
                       </Stack>
                     </Box>
-                    <Stack alignItems="flex-end" spacing={0.4} sx={{ flexShrink: 0 }}>
+                    <Stack
+                      spacing={0.4}
+                      sx={{
+                        alignItems: 'flex-end',
+                        flexShrink: 0,
+                      }}
+                    >
                       <Skeleton
                         variant="text"
                         width={60}
@@ -645,11 +719,19 @@ export function DashboardSkeleton({ T }: { T: Tokens }) {
           >
             <Stack
               direction="row"
-              alignItems="center"
-              justifyContent="space-between"
-              sx={{ mb: 1.75 }}
+              sx={{
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                mb: 1.75,
+              }}
             >
-              <Stack direction="row" spacing={1} alignItems="center">
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{
+                  alignItems: 'center',
+                }}
+              >
                 <Skeleton variant="circular" width={14} height={14} />
                 <Skeleton
                   variant="text"
@@ -707,7 +789,14 @@ export function DashboardSkeleton({ T }: { T: Tokens }) {
               ))}
             </Stack>
             {/* Failed-marker legend */}
-            <Stack direction="row" spacing={0.65} alignItems="center" sx={{ mt: 1.5 }}>
+            <Stack
+              direction="row"
+              spacing={0.65}
+              sx={{
+                alignItems: 'center',
+                mt: 1.5,
+              }}
+            >
               <Skeleton variant="circular" width={8} height={8} />
               <Skeleton
                 variant="text"

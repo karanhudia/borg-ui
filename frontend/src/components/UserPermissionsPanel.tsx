@@ -231,11 +231,21 @@ export default function UserPermissionsPanel({
             bgcolor: 'action.hover',
           }}
         >
-          <Typography variant="body2" fontWeight={600}>
+          <Typography
+            variant="body2"
+            sx={{
+              fontWeight: 600,
+            }}
+          >
             {title}
           </Typography>
           {subtitle && (
-            <Typography variant="caption" color="text.secondary">
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {subtitle}
             </Typography>
           )}
@@ -245,9 +255,9 @@ export default function UserPermissionsPanel({
       <Box sx={{ px: 2.5, py: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
         <Typography
           variant="caption"
-          fontWeight={700}
-          color="text.secondary"
           sx={{
+            fontWeight: 700,
+            color: 'text.secondary',
             letterSpacing: '0.05em',
             textTransform: 'uppercase',
             fontSize: '0.68rem',
@@ -284,7 +294,9 @@ export default function UserPermissionsPanel({
               <Stack
                 direction={{ xs: 'column', sm: 'row' }}
                 spacing={1}
-                alignItems={{ xs: 'flex-start', sm: 'center' }}
+                sx={{
+                  alignItems: { xs: 'flex-start', sm: 'center' },
+                }}
               >
                 <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 170 } }}>
                   <Select
@@ -298,18 +310,36 @@ export default function UserPermissionsPanel({
                     ))}
                   </Select>
                 </FormControl>
-                <Typography variant="caption" color="text.secondary">
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.secondary',
+                  }}
+                >
                   {t('settings.permissions.scope.autoInheritHint')}
                 </Typography>
               </Stack>
             ) : (
-              <Typography variant="caption" color="text.secondary">
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                }}
+              >
                 {t('settings.permissions.scope.restrictedHint')}
               </Typography>
             )}
           </Stack>
         ) : hasAutomaticAccess ? (
-          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+          <Stack
+            direction="row"
+            spacing={1}
+            useFlexGap
+            sx={{
+              alignItems: 'center',
+              flexWrap: 'wrap',
+            }}
+          >
             <Chip
               label={t('settings.permissions.scope.automaticAccess', {
                 role: formatRoleLabel(wildcardValue),
@@ -317,12 +347,22 @@ export default function UserPermissionsPanel({
               color={ROLE_COLOR[wildcardValue ?? 'viewer'] ?? 'default'}
               size="small"
             />
-            <Typography variant="caption" color="text.secondary">
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {t('settings.permissions.scope.futureInheritHint')}
             </Typography>
           </Stack>
         ) : (
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {t('settings.permissions.scope.restrictedAccess')}
           </Typography>
         )}
@@ -348,7 +388,12 @@ export default function UserPermissionsPanel({
         ) : permissions.length === 0 ? (
           <Box sx={{ px: 2.5, py: 2.5, display: 'flex', alignItems: 'center', gap: 1.5 }}>
             <ShieldOff size={15} style={{ opacity: 0.35, flexShrink: 0 }} />
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {hasAutomaticAccess
                 ? t('settings.permissions.empty.automaticCoverage')
                 : t('settings.permissions.empty.noPermissions')}
@@ -371,8 +416,11 @@ export default function UserPermissionsPanel({
                 <Stack
                   direction="row"
                   spacing={1}
-                  alignItems="center"
-                  sx={{ flex: 1, minWidth: 0 }}
+                  sx={{
+                    alignItems: 'center',
+                    flex: 1,
+                    minWidth: 0,
+                  }}
                 >
                   <Database size={13} style={{ opacity: 0.4, flexShrink: 0 }} />
                   <Typography variant="body2" noWrap>
@@ -434,9 +482,9 @@ export default function UserPermissionsPanel({
           <Box sx={{ px: 2.5, py: 2, borderTop: '1px solid', borderColor: 'divider' }}>
             <Typography
               variant="caption"
-              fontWeight={700}
-              color="text.secondary"
               sx={{
+                fontWeight: 700,
+                color: 'text.secondary',
                 letterSpacing: '0.05em',
                 textTransform: 'uppercase',
                 fontSize: '0.68rem',
@@ -461,7 +509,12 @@ export default function UserPermissionsPanel({
                 }}
               >
                 <Database size={15} style={{ opacity: 0.35, flexShrink: 0 }} />
-                <Typography variant="body2" color="text.secondary">
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: 'text.secondary',
+                  }}
+                >
                   {t('settings.permissions.grantAccess.noRepositories')}
                 </Typography>
               </Box>
@@ -479,7 +532,12 @@ export default function UserPermissionsPanel({
                 }}
               >
                 <ShieldOff size={15} style={{ opacity: 0.35, flexShrink: 0 }} />
-                <Typography variant="body2" color="text.secondary">
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: 'text.secondary',
+                  }}
+                >
                   {t('settings.permissions.grantAccess.allAssigned')}
                 </Typography>
               </Box>
@@ -487,7 +545,9 @@ export default function UserPermissionsPanel({
               <Stack
                 direction={{ xs: 'column', sm: 'row' }}
                 spacing={1}
-                alignItems={{ xs: 'stretch', sm: 'center' }}
+                sx={{
+                  alignItems: { xs: 'stretch', sm: 'center' },
+                }}
               >
                 <FormControl size="small" sx={{ flex: 1, minWidth: { sm: 160 } }}>
                   <Select
@@ -505,7 +565,13 @@ export default function UserPermissionsPanel({
                     ))}
                   </Select>
                 </FormControl>
-                <Stack direction="row" spacing={1} alignItems="center">
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  sx={{
+                    alignItems: 'center',
+                  }}
+                >
                   <FormControl size="small" sx={{ minWidth: 110, flex: { xs: 1, sm: 'none' } }}>
                     <Select value={addRole} onChange={(e) => setAddRole(e.target.value)}>
                       {availableRoles.map((r) => (

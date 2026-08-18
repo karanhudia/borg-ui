@@ -242,8 +242,12 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
             <Stack
               direction="row"
               spacing={0.75}
-              alignItems="center"
-              sx={{ mb: 0.5, flexWrap: 'wrap', gap: 0.5 }}
+              sx={{
+                alignItems: 'center',
+                mb: 0.5,
+                flexWrap: 'wrap',
+                gap: 0.5,
+              }}
             >
               <Box
                 sx={{
@@ -262,7 +266,14 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
                   },
                 }}
               />
-              <Typography variant="body1" fontWeight={700} noWrap sx={{ lineHeight: 1.3 }}>
+              <Typography
+                variant="body1"
+                noWrap
+                sx={{
+                  fontWeight: 700,
+                  lineHeight: 1.3,
+                }}
+              >
                 {planName}
               </Typography>
               <Typography
@@ -283,7 +294,13 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
                 #{run.id}
               </Typography>
             </Stack>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+                display: 'block',
+              }}
+            >
               {t('backupPlans.runsPanel.repositoryProgress', {
                 completed: run.repositories.filter((r) => !isActive(r.status)).length,
                 total: run.repositories.length,
@@ -294,11 +311,21 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
           </Box>
 
           {/* Right: actions */}
-          <Stack direction="row" spacing={0.75} alignItems="center" flexShrink={0}>
+          <Stack
+            direction="row"
+            spacing={0.75}
+            sx={{
+              alignItems: 'center',
+              flexShrink: 0,
+            }}
+          >
             <Typography
               variant="caption"
-              color="text.secondary"
-              sx={{ display: { xs: 'none', sm: 'block' }, mr: 0.5 }}
+              sx={{
+                color: 'text.secondary',
+                display: { xs: 'none', sm: 'block' },
+                mr: 0.5,
+              }}
             >
               {formatTimeRange(run.started_at, run.completed_at, run.status)}
             </Typography>
@@ -336,9 +363,11 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
           <Box sx={{ mb: 1.5 }}>
             <Stack
               direction="row"
-              justifyContent="space-between"
-              alignItems="center"
-              sx={{ mb: 0.5 }}
+              sx={{
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                mb: 0.5,
+              }}
             >
               <Typography
                 sx={{
@@ -418,9 +447,9 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
                 </Box>
                 <Typography
                   variant="body2"
-                  fontWeight={600}
                   noWrap
                   sx={{
+                    fontWeight: 600,
                     fontVariantNumeric: 'tabular-nums',
                     fontSize: '0.875rem',
                     color: stat.valueColor || 'text.primary',
@@ -549,9 +578,12 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
                   {icon}
                   <Typography
                     variant="caption"
-                    fontWeight={600}
                     noWrap
-                    sx={{ flex: 1, minWidth: 0 }}
+                    sx={{
+                      fontWeight: 600,
+                      flex: 1,
+                      minWidth: 0,
+                    }}
                   >
                     {getRepositoryLabel(repoRun, t('backupPlans.status.repositoryFallback'))}
                   </Typography>

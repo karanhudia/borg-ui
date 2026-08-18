@@ -109,7 +109,7 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
             />
           </Box>
         )}
-        renderTags={() => null} // We render tags manually below
+        renderValue={() => null} // We render tags manually below
         renderInput={(params) => (
           <TextField
             {...params}
@@ -121,11 +121,15 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
             required={required}
             size={size}
             error={error || (touched && required && selectedIds.length === 0)}
-            inputProps={{
-              ...params.inputProps,
-              required: required && selectedIds.length === 0,
-            }}
             onBlur={() => setTouched(true)}
+            slotProps={{
+              ...params.slotProps,
+
+              htmlInput: {
+                ...params.slotProps.htmlInput,
+                required: required && selectedIds.length === 0,
+              },
+            }}
           />
         )}
         sx={{
@@ -133,15 +137,24 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
             minHeight: size === 'medium' ? 56 : 40,
           },
         }}
-        ListboxProps={{
-          style: { maxHeight: 400 },
+        slotProps={{
+          listbox: {
+            style: { maxHeight: 400 },
+          },
         }}
       />
 
       {/* Display selected repositories */}
       {selectedRepos.length > 0 && (
         <Box sx={{ mt: 2 }}>
-          <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'text.secondary',
+              mb: 1,
+              display: 'block',
+            }}
+          >
             {allowReorder && selectedRepos.length > 1
               ? t('multiRepositorySelector.selectedCountWithOrder', { count: selectedRepos.length })
               : t('multiRepositorySelector.selectedCount', { count: selectedRepos.length })}

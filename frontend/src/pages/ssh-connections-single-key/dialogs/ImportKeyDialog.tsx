@@ -44,7 +44,9 @@ export function ImportKeyDialog({
             value={importForm.name}
             onChange={(e) => setImportForm({ ...importForm, name: e.target.value })}
             placeholder={t('sshConnections.importDialog.keyNamePlaceholder')}
-            InputLabelProps={{ shrink: true }}
+            slotProps={{
+              inputLabel: { shrink: true },
+            }}
           />
           <TextField
             label={t('sshConnections.importDialog.privateKeyPath')}
@@ -54,7 +56,9 @@ export function ImportKeyDialog({
             onChange={(e) => setImportForm({ ...importForm, private_key_path: e.target.value })}
             placeholder={t('sshConnections.importDialog.privateKeyPathPlaceholder')}
             helperText={t('sshConnections.importDialog.privateKeyPathHelper')}
-            InputLabelProps={{ shrink: true }}
+            slotProps={{
+              inputLabel: { shrink: true },
+            }}
           />
           <TextField
             label={t('sshConnections.importDialog.publicKeyPath')}
@@ -63,7 +67,9 @@ export function ImportKeyDialog({
             onChange={(e) => setImportForm({ ...importForm, public_key_path: e.target.value })}
             placeholder={t('sshConnections.importDialog.publicKeyPathPlaceholder')}
             helperText={t('sshConnections.importDialog.publicKeyPathHelper')}
-            InputLabelProps={{ shrink: true }}
+            slotProps={{
+              inputLabel: { shrink: true },
+            }}
           />
           <TextField
             label={t('sshConnections.importDialog.description')}
@@ -71,9 +77,11 @@ export function ImportKeyDialog({
             value={importForm.description}
             onChange={(e) => setImportForm({ ...importForm, description: e.target.value })}
             placeholder={t('sshConnections.importDialog.descriptionPlaceholder')}
-            InputLabelProps={{ shrink: true }}
             multiline
             rows={2}
+            slotProps={{
+              inputLabel: { shrink: true },
+            }}
           />
         </Stack>
       </DialogContent>

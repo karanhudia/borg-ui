@@ -55,7 +55,14 @@ export default function AccountSecuritySection({
         },
       }}
     >
-      <Stack direction="row" spacing={2} alignItems="center" sx={{ minWidth: 0 }}>
+      <Stack
+        direction="row"
+        spacing={2}
+        sx={{
+          alignItems: 'center',
+          minWidth: 0,
+        }}
+      >
         <Box
           sx={{
             width: 38,
@@ -75,10 +82,22 @@ export default function AccountSecuritySection({
           <Lock size={16} style={{ opacity: 0.45 }} />
         </Box>
         <Box sx={{ minWidth: 0 }}>
-          <Typography variant="body2" fontWeight={600} noWrap>
+          <Typography
+            variant="body2"
+            noWrap
+            sx={{
+              fontWeight: 600,
+            }}
+          >
             {title}
           </Typography>
-          <Typography variant="caption" color="text.secondary" noWrap>
+          <Typography
+            variant="caption"
+            noWrap
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {description}
           </Typography>
         </Box>

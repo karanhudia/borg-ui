@@ -92,7 +92,13 @@ export default function CheckWarningDialog({
           </List>
         </Box>
 
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+            mt: 1,
+          }}
+        >
           {t('dialogs.checkWarning.otherReposAccessible')}
         </Typography>
 
@@ -107,8 +113,10 @@ export default function CheckWarningDialog({
             }}
             fullWidth
             helperText={t('dialogs.checkWarning.maxDurationHelper')}
-            InputProps={{
-              inputProps: { min: 0 },
+            slotProps={{
+              input: {
+                inputProps: { min: 0 },
+              },
             }}
           />
         </Box>
@@ -121,7 +129,9 @@ export default function CheckWarningDialog({
             fullWidth
             placeholder="--repair --verify-data"
             helperText={t('dialogs.checkWarning.extraFlagsHelper')}
-            inputProps={{ spellCheck: false }}
+            slotProps={{
+              htmlInput: { spellCheck: false },
+            }}
           />
         </Box>
 

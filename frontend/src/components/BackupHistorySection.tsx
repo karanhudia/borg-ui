@@ -151,10 +151,20 @@ const BackupHistorySection: React.FC<BackupHistorySectionProps> = ({
         }}
       >
         <Box>
-          <Typography variant="h6" fontWeight={600}>
+          <Typography
+            variant="h6"
+            sx={{
+              fontWeight: 600,
+            }}
+          >
             {t('backupHistory.title')}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {hasFilters
               ? t('backupHistory.showingFiltered', {
                   filtered: filteredBackupJobs.length,

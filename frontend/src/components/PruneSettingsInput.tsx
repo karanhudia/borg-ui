@@ -62,60 +62,72 @@ const PruneSettingsInput: React.FC<PruneSettingsInputProps> = ({
         type="number"
         value={values.keepHourly}
         onChange={(e) => handleCountChange('keepHourly', e.target.value)}
-        inputProps={{ min: 0 }}
         size="small"
         helperText={t('pruneSettings.keepHourlyHint')}
         disabled={disabled}
+        slotProps={{
+          htmlInput: { min: 0 },
+        }}
       />
       <TextField
         label={t('pruneSettings.keepDaily')}
         type="number"
         value={values.keepDaily}
         onChange={(e) => handleCountChange('keepDaily', e.target.value)}
-        inputProps={{ min: 0 }}
         size="small"
         helperText={t('pruneSettings.keepDailyHint')}
         disabled={disabled}
+        slotProps={{
+          htmlInput: { min: 0 },
+        }}
       />
       <TextField
         label={t('pruneSettings.keepWeekly')}
         type="number"
         value={values.keepWeekly}
         onChange={(e) => handleCountChange('keepWeekly', e.target.value)}
-        inputProps={{ min: 0 }}
         size="small"
         helperText={t('pruneSettings.keepWeeklyHint')}
         disabled={disabled}
+        slotProps={{
+          htmlInput: { min: 0 },
+        }}
       />
       <TextField
         label={t('pruneSettings.keepMonthly')}
         type="number"
         value={values.keepMonthly}
         onChange={(e) => handleCountChange('keepMonthly', e.target.value)}
-        inputProps={{ min: 0 }}
         size="small"
         helperText={t('pruneSettings.keepMonthlyHint')}
         disabled={disabled}
+        slotProps={{
+          htmlInput: { min: 0 },
+        }}
       />
       <TextField
         label={t('pruneSettings.keepQuarterly')}
         type="number"
         value={values.keepQuarterly}
         onChange={(e) => handleCountChange('keepQuarterly', e.target.value)}
-        inputProps={{ min: 0 }}
         size="small"
         helperText={t('pruneSettings.keepQuarterlyHint')}
         disabled={disabled}
+        slotProps={{
+          htmlInput: { min: 0 },
+        }}
       />
       <TextField
         label={t('pruneSettings.keepYearly')}
         type="number"
         value={values.keepYearly}
         onChange={(e) => handleCountChange('keepYearly', e.target.value)}
-        inputProps={{ min: 0 }}
         size="small"
         helperText={t('pruneSettings.keepYearlyHint')}
         disabled={disabled}
+        slotProps={{
+          htmlInput: { min: 0 },
+        }}
       />
     </Box>
   )

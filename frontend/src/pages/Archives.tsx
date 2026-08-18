@@ -509,10 +509,21 @@ const Archives: React.FC = () => {
         }}
       >
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography variant="h5" fontWeight={700} sx={{ lineHeight: 1.3 }}>
+          <Typography
+            variant="h5"
+            sx={{
+              fontWeight: 700,
+              lineHeight: 1.3,
+            }}
+          >
             {t('archives.title')}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {t('archives.subtitle')}
           </Typography>
         </Box>
@@ -539,7 +550,12 @@ const Archives: React.FC = () => {
           }}
         >
           <Folder size={48} style={{ marginBottom: 16 }} />
-          <Typography variant="body1" color="text.secondary">
+          <Typography
+            variant="body1"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {repositories.length === 0
               ? t('archives.noRepositories')
               : t('archives.selectRepository')}

@@ -26,10 +26,21 @@ export default function RepositoryStatsV2({ archives }: RepositoryStatsV2Props) 
   if (archives.length === 0) {
     return (
       <Alert severity="info" icon={<Info />}>
-        <Typography variant="body2" fontWeight={600} gutterBottom>
+        <Typography
+          variant="body2"
+          gutterBottom
+          sx={{
+            fontWeight: 600,
+          }}
+        >
           {t('dialogs.repositoryInfo.noBackupsYet')}
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           {t('repositoryInfoDialog.noArchivesDescription')}
         </Typography>
       </Alert>
@@ -41,7 +52,13 @@ export default function RepositoryStatsV2({ archives }: RepositoryStatsV2Props) 
 
   return (
     <>
-      <Typography variant="h6" fontWeight={600} sx={{ mt: 1 }}>
+      <Typography
+        variant="h6"
+        sx={{
+          fontWeight: 600,
+          mt: 1,
+        }}
+      >
         {t('dialogs.repositoryInfo.storageStatistics')}
       </Typography>
       <Box
@@ -55,11 +72,23 @@ export default function RepositoryStatsV2({ archives }: RepositoryStatsV2Props) 
           <CardContent sx={{ py: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
               <DataUsage sx={{ color: '#2e7d32', fontSize: 24 }} />
-              <Typography variant="caption" color="text.secondary" fontWeight={500}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                  fontWeight: 500,
+                }}
+              >
                 {t('dialogs.repositoryInfo.latestBackupSize')}
               </Typography>
             </Box>
-            <Typography variant="h6" fontWeight={700} sx={{ color: '#2e7d32' }}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 700,
+                color: '#2e7d32',
+              }}
+            >
               {formatBytes(latest.stats?.original_size || 0)}
             </Typography>
           </CardContent>
@@ -68,11 +97,23 @@ export default function RepositoryStatsV2({ archives }: RepositoryStatsV2Props) 
           <CardContent sx={{ py: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
               <Inventory sx={{ color: '#e65100', fontSize: 24 }} />
-              <Typography variant="caption" color="text.secondary" fontWeight={500}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                  fontWeight: 500,
+                }}
+              >
                 {t('dialogs.repositoryInfo.files')}
               </Typography>
             </Box>
-            <Typography variant="h6" fontWeight={700} sx={{ color: '#e65100' }}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 700,
+                color: '#e65100',
+              }}
+            >
               {(latest.stats?.nfiles ?? 0).toLocaleString()}
             </Typography>
           </CardContent>
@@ -81,11 +122,23 @@ export default function RepositoryStatsV2({ archives }: RepositoryStatsV2Props) 
           <CardContent sx={{ py: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
               <Folder sx={{ color: '#1565c0', fontSize: 24 }} />
-              <Typography variant="caption" color="text.secondary" fontWeight={500}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                  fontWeight: 500,
+                }}
+              >
                 {t('dialogs.repositoryInfo.archiveCount')}
               </Typography>
             </Box>
-            <Typography variant="h6" fontWeight={700} sx={{ color: '#1565c0' }}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 700,
+                color: '#1565c0',
+              }}
+            >
               {archives.length.toLocaleString()}
             </Typography>
           </CardContent>
@@ -102,11 +155,22 @@ export default function RepositoryStatsV2({ archives }: RepositoryStatsV2Props) 
           <CardContent sx={{ py: 1.5 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
               <Schedule sx={{ color: 'text.secondary', fontSize: 18 }} />
-              <Typography variant="caption" color="text.secondary" display="block">
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                  display: 'block',
+                }}
+              >
                 {t('dialogs.repositoryInfo.firstBackup')}
               </Typography>
             </Box>
-            <Typography variant="body2" fontWeight={600}>
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: 600,
+              }}
+            >
               {first.time ? formatDateShort(first.time) : t('common.na')}
             </Typography>
           </CardContent>
@@ -115,11 +179,22 @@ export default function RepositoryStatsV2({ archives }: RepositoryStatsV2Props) 
           <CardContent sx={{ py: 1.5 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
               <Schedule sx={{ color: 'text.secondary', fontSize: 18 }} />
-              <Typography variant="caption" color="text.secondary" display="block">
+              <Typography
+                variant="caption"
+                sx={{
+                  color: 'text.secondary',
+                  display: 'block',
+                }}
+              >
                 {t('dialogs.repositoryInfo.latestBackup')}
               </Typography>
             </Box>
-            <Typography variant="body2" fontWeight={600}>
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: 600,
+              }}
+            >
               {latest.time ? formatDateShort(latest.time) : t('common.na')}
             </Typography>
           </CardContent>

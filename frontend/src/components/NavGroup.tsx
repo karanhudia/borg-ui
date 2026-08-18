@@ -72,10 +72,14 @@ export default function NavGroup({
           </ListItemIcon>
           <ListItemText
             primary={navLabel(name)}
-            primaryTypographyProps={{
-              fontSize: '0.8125rem',
-              fontWeight: isAnySubItemActive ? 500 : 400,
-              color: isAnySubItemActive ? 'text.primary' : 'text.secondary',
+            slotProps={{
+              primary: {
+                sx: {
+                  fontSize: '0.8125rem',
+                  fontWeight: isAnySubItemActive ? 500 : 400,
+                  color: isAnySubItemActive ? 'text.primary' : 'text.secondary',
+                },
+              },
             }}
           />
           {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -134,10 +138,14 @@ export default function NavGroup({
                 </ListItemIcon>
                 <ListItemText
                   primary={navLabel(subItem.name)}
-                  primaryTypographyProps={{
-                    fontSize: '0.8rem',
-                    fontWeight: isActive ? 500 : 400,
-                    color: isActive ? 'text.primary' : 'text.secondary',
+                  slotProps={{
+                    primary: {
+                      sx: {
+                        fontSize: '0.8rem',
+                        fontWeight: isActive ? 500 : 400,
+                        color: isActive ? 'text.primary' : 'text.secondary',
+                      },
+                    },
                   }}
                 />
               </ListItemButton>

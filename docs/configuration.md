@@ -25,6 +25,10 @@ Most configuration is available in the UI under Settings. Use environment variab
 | `LOCAL_MOUNT_POINTS` | `/local` | Comma-separated container paths shown as local mounts in the file browser |
 | `BASE_PATH` | empty | Sub-path deployment, for example `/borg-ui` |
 
+`PUID` and `PGID` set the Borg UI process's primary identity. If a source is
+readable through an additional host group, add that group's numeric GID with
+Docker Compose `group_add`; see [Permission denied](troubleshooting#permission-denied).
+
 ## Volumes
 
 Required:

@@ -42,7 +42,12 @@ export default function AgentInstallCommand({
 
   return (
     <Stack spacing={1.5}>
-      <Typography variant="subtitle2" fontWeight={700}>
+      <Typography
+        variant="subtitle2"
+        sx={{
+          fontWeight: 700,
+        }}
+      >
         {t('managedAgents.installCommand.title')}
       </Typography>
       <Box sx={{ position: 'relative', minWidth: 0 }}>
@@ -98,7 +103,12 @@ export default function AgentInstallCommand({
           </Button>
         </Tooltip>
       </Box>
-      <Typography variant="body2" color="text.secondary">
+      <Typography
+        variant="body2"
+        sx={{
+          color: 'text.secondary',
+        }}
+      >
         {t('managedAgents.installCommand.description')}
       </Typography>
       <Box
@@ -137,14 +147,24 @@ export default function AgentInstallCommand({
           </Box>
         )}
         <Stack spacing={0.25} sx={{ minWidth: 0 }}>
-          <Typography variant="body2" fontWeight={600}>
+          <Typography
+            variant="body2"
+            sx={{
+              fontWeight: 600,
+            }}
+          >
             {connectedAgent
               ? t('managedAgents.installCommand.connected', {
                   name: connectedAgent.name || connectedAgent.hostname || t('managedAgents.agent'),
                 })
               : t('managedAgents.installCommand.waiting')}
           </Typography>
-          <Typography variant="caption" color="text.secondary">
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
             {connectedAgent
               ? t('managedAgents.installCommand.connectedDescription')
               : t('managedAgents.installCommand.waitingDescription')}

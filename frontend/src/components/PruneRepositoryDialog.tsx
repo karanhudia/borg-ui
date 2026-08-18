@@ -367,7 +367,13 @@ function PruneResultsDialog({
     <ResponsiveDialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       {/* ── Title ── */}
       <DialogTitle sx={{ pb: 1.5 }}>
-        <Stack direction="row" spacing={1.5} alignItems="flex-start">
+        <Stack
+          direction="row"
+          spacing={1.5}
+          sx={{
+            alignItems: 'flex-start',
+          }}
+        >
           <Box
             sx={{
               display: 'flex',
@@ -384,8 +390,21 @@ function PruneResultsDialog({
             {headerIcon}
           </Box>
           <Box sx={{ minWidth: 0, flex: 1 }}>
-            <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
-              <Typography variant="h6" fontWeight={600} lineHeight={1.3}>
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{
+                alignItems: 'center',
+                flexWrap: 'wrap',
+              }}
+            >
+              <Typography
+                variant="h6"
+                sx={{
+                  fontWeight: 600,
+                  lineHeight: 1.3,
+                }}
+              >
                 {title}
               </Typography>
               <Chip
@@ -404,9 +423,13 @@ function PruneResultsDialog({
             {repository?.name && (
               <Typography
                 variant="body2"
-                color="text.secondary"
                 noWrap
-                sx={{ fontFamily: 'ui-monospace, monospace', fontSize: '0.72rem', mt: 0.25 }}
+                sx={{
+                  color: 'text.secondary',
+                  fontFamily: 'ui-monospace, monospace',
+                  fontSize: '0.72rem',
+                  mt: 0.25,
+                }}
               >
                 {repository.name}
               </Typography>
@@ -519,8 +542,13 @@ function PruneResultsDialog({
         {!isFailed && (
           <Typography
             variant="caption"
-            color="text.secondary"
-            sx={{ display: 'block', mt: 1.5, px: 0.25, lineHeight: 1.5 }}
+            sx={{
+              color: 'text.secondary',
+              display: 'block',
+              mt: 1.5,
+              px: 0.25,
+              lineHeight: 1.5,
+            }}
           >
             {isDryRun ? t('dialogs.prune.dryRunNote') : t('dialogs.prune.pruneNote')}
           </Typography>
@@ -671,7 +699,13 @@ export default function PruneRepositoryDialog({
       <ResponsiveDialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
         {/* ── Title ── */}
         <DialogTitle sx={{ pb: 1.5 }}>
-          <Stack direction="row" spacing={1.5} alignItems="flex-start">
+          <Stack
+            direction="row"
+            spacing={1.5}
+            sx={{
+              alignItems: 'flex-start',
+            }}
+          >
             <Box
               sx={{
                 display: 'flex',
@@ -688,15 +722,24 @@ export default function PruneRepositoryDialog({
               <Scissors size={18} />
             </Box>
             <Box sx={{ minWidth: 0 }}>
-              <Typography variant="h6" fontWeight={600} lineHeight={1.3}>
+              <Typography
+                variant="h6"
+                sx={{
+                  fontWeight: 600,
+                  lineHeight: 1.3,
+                }}
+              >
                 {t('dialogs.pruneRepository.title')}
               </Typography>
               {repository?.name && (
                 <Typography
                   variant="body2"
-                  color="text.secondary"
                   noWrap
-                  sx={{ fontFamily: 'ui-monospace, monospace', fontSize: '0.72rem' }}
+                  sx={{
+                    color: 'text.secondary',
+                    fontFamily: 'ui-monospace, monospace',
+                    fontSize: '0.72rem',
+                  }}
                 >
                   {repository.name}
                 </Typography>
@@ -705,13 +748,24 @@ export default function PruneRepositoryDialog({
             <Tooltip
               title={
                 <Box>
-                  <Typography variant="body2" fontWeight={600} gutterBottom>
+                  <Typography
+                    variant="body2"
+                    gutterBottom
+                    sx={{
+                      fontWeight: 600,
+                    }}
+                  >
                     {t('dialogs.prune.whatDoesPruningDo')}
                   </Typography>
                   <Typography variant="body2" gutterBottom>
                     {t('dialogs.prune.explanation')}
                   </Typography>
-                  <Typography variant="body2" fontWeight={600}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontWeight: 600,
+                    }}
+                  >
                     {t('dialogs.prune.dryRunTip')}
                   </Typography>
                 </Box>
@@ -784,7 +838,12 @@ export default function PruneRepositoryDialog({
                 <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>
                   {t('dialogs.prune.keepWithin')}
                 </Typography>
-                <Typography variant="caption" color="text.disabled">
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'text.disabled',
+                  }}
+                >
                   {t('dialogs.prune.keepWithinHelper')}
                 </Typography>
               </Box>
@@ -880,8 +939,12 @@ export default function PruneRepositoryDialog({
 
           <Typography
             variant="caption"
-            color="text.disabled"
-            sx={{ display: 'block', mb: 2, px: 0.25 }}
+            sx={{
+              color: 'text.disabled',
+              display: 'block',
+              mb: 2,
+              px: 0.25,
+            }}
           >
             {retentionSummary
               ? t('dialogs.prune.exampleExplanation', { retention: retentionSummary })
@@ -909,8 +972,11 @@ export default function PruneRepositoryDialog({
             <Box sx={{ minWidth: 0 }}>
               <Typography
                 variant="body2"
-                fontWeight={600}
-                sx={{ fontSize: '0.8rem', color: isDark ? 'warning.light' : 'warning.dark' }}
+                sx={{
+                  fontWeight: 600,
+                  fontSize: '0.8rem',
+                  color: isDark ? 'warning.light' : 'warning.dark',
+                }}
               >
                 {t('dialogs.prune.warningTitle')}
               </Typography>

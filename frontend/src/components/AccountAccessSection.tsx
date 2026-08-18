@@ -16,13 +16,30 @@ export default function AccountAccessSection({
   return (
     <Stack spacing={3}>
       <Box>
-        <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mb: 1 }}>
+        <Stack
+          direction="row"
+          spacing={1.25}
+          sx={{
+            alignItems: 'center',
+            mb: 1,
+          }}
+        >
           <ShieldCheck size={16} style={{ opacity: 0.6 }} />
-          <Typography variant="subtitle1" fontWeight={700}>
+          <Typography
+            variant="subtitle1"
+            sx={{
+              fontWeight: 700,
+            }}
+          >
             {t('settings.account.access.title')}
           </Typography>
         </Stack>
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           {t('settings.account.access.description')}
         </Typography>
       </Box>
@@ -48,10 +65,20 @@ export default function AccountAccessSection({
         >
           <ShieldCheck size={16} style={{ color: '#f87171', flexShrink: 0 }} />
           <Box>
-            <Typography variant="body2" fontWeight={700}>
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: 700,
+              }}
+            >
               {t('settings.account.access.globalAccess.title')}
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {t('settings.account.access.globalAccess.description')}
             </Typography>
           </Box>

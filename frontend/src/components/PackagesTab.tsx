@@ -310,11 +310,21 @@ export default function PackagesTab() {
       label: t('packages.columns.package'),
       render: (pkg) => (
         <Box>
-          <Typography variant="body2" fontWeight={500}>
+          <Typography
+            variant="body2"
+            sx={{
+              fontWeight: 500,
+            }}
+          >
             {pkg.name}
           </Typography>
           {pkg.description && (
-            <Typography variant="caption" color="text.secondary">
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+              }}
+            >
               {pkg.description}
             </Typography>
           )}
@@ -355,7 +365,12 @@ export default function PackagesTab() {
       id: 'installed_at',
       label: t('packages.columns.installed'),
       render: (pkg) => (
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           {pkg.installed_at ? formatDateShort(pkg.installed_at) : '-'}
         </Typography>
       ),
@@ -407,10 +422,21 @@ export default function PackagesTab() {
   return (
     <Box>
       <Box sx={{ mb: 3 }}>
-        <Typography variant="h6" fontWeight={600} gutterBottom>
+        <Typography
+          variant="h6"
+          gutterBottom
+          sx={{
+            fontWeight: 600,
+          }}
+        >
           {t('packages.title')}
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+          }}
+        >
           {t('packages.subtitle')}
         </Typography>
       </Box>
@@ -429,7 +455,12 @@ export default function PackagesTab() {
           mb: 3,
         }}
       >
-        <Typography variant="h6" fontWeight={600}>
+        <Typography
+          variant="h6"
+          sx={{
+            fontWeight: 600,
+          }}
+        >
           {t('packages.installedPackages')}
         </Typography>
         <Button
@@ -557,7 +588,13 @@ export default function PackagesTab() {
           <Typography variant="body2">
             {t('packages.deleteDialog.message', { name: deleteConfirmPackage?.name })}
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+              mt: 1,
+            }}
+          >
             {t('packages.deleteDialog.note')}
           </Typography>
         </DialogContent>
@@ -615,7 +652,12 @@ export default function PackagesTab() {
             {jobStatus?.status === 'installing' && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 <CircularProgress size={20} />
-                <Typography variant="body2" color="text.secondary">
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: 'text.secondary',
+                  }}
+                >
                   {t('packages.resultDialog.installingDesc')}
                 </Typography>
               </Box>
@@ -625,8 +667,11 @@ export default function PackagesTab() {
               <Box>
                 <Typography
                   variant="caption"
-                  color="text.secondary"
-                  sx={{ mb: 0.5, display: 'block' }}
+                  sx={{
+                    color: 'text.secondary',
+                    mb: 0.5,
+                    display: 'block',
+                  }}
                 >
                   {t('packages.resultDialog.stdout')}
                 </Typography>
@@ -656,8 +701,11 @@ export default function PackagesTab() {
               <Box>
                 <Typography
                   variant="caption"
-                  color="text.secondary"
-                  sx={{ mb: 0.5, display: 'block' }}
+                  sx={{
+                    color: 'text.secondary',
+                    mb: 0.5,
+                    display: 'block',
+                  }}
                 >
                   {t('packages.resultDialog.stderr')}
                 </Typography>

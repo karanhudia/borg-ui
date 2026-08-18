@@ -152,14 +152,24 @@ const UpcomingJobsTable: React.FC<UpcomingJobsTableProps> = ({
                   overflow: 'hidden',
                 }}
               >
-                <Typography variant="body2" fontWeight={600} noWrap sx={{ flexShrink: 0 }}>
+                <Typography
+                  variant="body2"
+                  noWrap
+                  sx={{
+                    fontWeight: 600,
+                    flexShrink: 0,
+                  }}
+                >
                   {job.name}
                 </Typography>
                 <Typography
                   variant="body2"
-                  color="text.secondary"
                   noWrap
-                  sx={{ fontSize: '0.8rem', minWidth: 0 }}
+                  sx={{
+                    color: 'text.secondary',
+                    fontSize: '0.8rem',
+                    minWidth: 0,
+                  }}
                 >
                   {getRepoLabel(job)}
                 </Typography>

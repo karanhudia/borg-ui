@@ -26,20 +26,37 @@ export default function DeleteJobDialog({
           <Box sx={{ color: 'error.main' }}>
             <AlertTriangle size={24} />
           </Box>
-          <Typography variant="h6" fontWeight={600}>
+          <Typography
+            variant="h6"
+            sx={{
+              fontWeight: 600,
+            }}
+          >
             {jobType === 'backup'
               ? t('dialogs.deleteJob.titleBackup')
               : t('dialogs.deleteJob.titleJob')}
           </Typography>
         </Box>
 
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: 'text.secondary',
+            mb: 2,
+          }}
+        >
           Are you sure you want to permanently delete this {jobType} job entry
           {jobId && ` ${t('dialogs.deleteJob.jobId', { id: jobId })}`}?
         </Typography>
 
         <Alert severity="warning" sx={{ mb: 0 }}>
-          <Typography variant="body2" fontWeight={500} gutterBottom>
+          <Typography
+            variant="body2"
+            gutterBottom
+            sx={{
+              fontWeight: 500,
+            }}
+          >
             {t('dialogs.deleteJob.warnings.undone')}
           </Typography>
           <Typography variant="body2">

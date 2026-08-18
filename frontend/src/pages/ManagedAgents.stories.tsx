@@ -232,14 +232,26 @@ export const FleetOverview: Story = {
         <Stack
           direction={{ xs: 'column', md: 'row' }}
           spacing={2}
-          justifyContent="space-between"
-          alignItems={{ xs: 'stretch', md: 'center' }}
+          sx={{
+            justifyContent: 'space-between',
+            alignItems: { xs: 'stretch', md: 'center' },
+          }}
         >
           <Box>
-            <Typography variant="h4" fontWeight={700}>
+            <Typography
+              variant="h4"
+              sx={{
+                fontWeight: 700,
+              }}
+            >
               Managed Agents
             </Typography>
-            <Typography color="text.secondary" sx={{ mt: 0.5 }}>
+            <Typography
+              sx={{
+                color: 'text.secondary',
+                mt: 0.5,
+              }}
+            >
               Lightweight machines connected to this Borg UI server
             </Typography>
           </Box>
@@ -272,13 +284,32 @@ export const FleetOverview: Story = {
                     borderColor: 'divider',
                   }}
                 >
-                  <Stack direction="row" spacing={0.75} alignItems="center" color="text.secondary">
+                  <Stack
+                    direction="row"
+                    spacing={0.75}
+                    sx={{
+                      alignItems: 'center',
+                      color: 'text.secondary',
+                    }}
+                  >
                     <Icon size={15} />
-                    <Typography variant="caption" fontWeight={700} textTransform="uppercase">
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                      }}
+                    >
                       {stat.label}
                     </Typography>
                   </Stack>
-                  <Typography variant="h5" fontWeight={700} sx={{ mt: 0.5 }}>
+                  <Typography
+                    variant="h5"
+                    sx={{
+                      fontWeight: 700,
+                      mt: 0.5,
+                    }}
+                  >
                     {stat.value}
                   </Typography>
                 </Box>
@@ -288,7 +319,13 @@ export const FleetOverview: Story = {
         </Paper>
 
         <Box>
-          <Typography variant="h6" fontWeight={700} sx={{ mb: 1.5 }}>
+          <Typography
+            variant="h6"
+            sx={{
+              fontWeight: 700,
+              mb: 1.5,
+            }}
+          >
             Fleet
           </Typography>
           <AgentList
@@ -306,7 +343,13 @@ export const FleetOverview: Story = {
         <Divider />
 
         <Box>
-          <Typography variant="h6" fontWeight={700} sx={{ mb: 1.5 }}>
+          <Typography
+            variant="h6"
+            sx={{
+              fontWeight: 700,
+              mb: 1.5,
+            }}
+          >
             Jobs
           </Typography>
           <JobsTable
@@ -319,7 +362,13 @@ export const FleetOverview: Story = {
         </Box>
 
         <Box>
-          <Typography variant="h6" fontWeight={700} sx={{ mb: 1.5 }}>
+          <Typography
+            variant="h6"
+            sx={{
+              fontWeight: 700,
+              mb: 1.5,
+            }}
+          >
             Enrollment Tokens
           </Typography>
           <TokensTable tokens={tokens} onRevoke={() => {}} isRevoking={false} />
@@ -351,10 +400,20 @@ export const SetupHelpDetails: Story = {
       <Paper variant="outlined" sx={{ maxWidth: 820, mx: 'auto', p: 3, borderRadius: 2 }}>
         <Stack spacing={2}>
           <Box>
-            <Typography variant="h5" fontWeight={700}>
+            <Typography
+              variant="h5"
+              sx={{
+                fontWeight: 700,
+              }}
+            >
               Agent Setup Help
             </Typography>
-            <Typography color="text.secondary" sx={{ mt: 0.5 }}>
+            <Typography
+              sx={{
+                color: 'text.secondary',
+                mt: 0.5,
+              }}
+            >
               Fresh-machine install, registration URL, and startup guidance
             </Typography>
           </Box>
