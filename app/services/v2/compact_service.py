@@ -2,9 +2,12 @@
 
 Mirrors compact_service.py but uses the borg2 binary.
 
-Borg 2 compact has two phases (verified against live borg2 2.0.0b21):
+Borg 2 compact has two phases (verified against live borg2 2.0.0b22):
   operation=1  compact.analyze_archives  "Computing used chunks X%"   → 0-50%
-  operation=2  compact.report_and_delete "Deleting unused objects X%"  → 50-100%
+  operation=2  compact.compact_packs     "Compacting packs X%"        → 50-100%
+
+The second phase was compact.report_and_delete until 2.0.0b22 renamed it; the
+progress split keys on `operation`, not on the msgid, so it did not move.
 
 Both phases emit progress_percent on stderr with --progress --log-json.
 """

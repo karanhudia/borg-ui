@@ -135,6 +135,19 @@ compact, mount, or external Borg process is using the repository.
 
 Break the lock only when you are certain the previous Borg process is gone.
 
+### Borg 2 repository unreadable after an upgrade
+
+Borg operations on an existing Borg 2 repository fail with
+`repository version 3 is not supported by this borg version`, or a repository
+that worked before an image pull is suddenly not accessible.
+
+Borg 2.0.0b22 changed the repository format (packs) and cannot read a repository
+written by an earlier Borg 2 beta. Nothing is wrong with the storage, the
+passphrase or the key — the format is simply one this Borg cannot open, and
+there is no in-place conversion. Delete the affected Borg 2 repositories and
+create them again, or go back to the image you upgraded from. Borg 1
+repositories are not affected.
+
 ### Slow archive browsing
 
 The first browse of a large archive can be slow because Borg has to list archive
