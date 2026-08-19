@@ -410,6 +410,15 @@ docker compose up -d
 
 Do not delete `borg_data` or `borg_cache` unless you intentionally want to remove application state or Borg cache data.
 
+> **Borg 2 repositories do not survive the upgrade to Borg 2.0.0b22.** That
+> release changed the repository format (packs) and cannot read a repository
+> written by any earlier Borg 2 beta — opening one fails with
+> `repository version 3 is not supported by this borg version`. There is no
+> in-place conversion: delete the old Borg 2 repositories before upgrading and
+> let Borg UI create them again. Borg 1 repositories are unaffected. Borg 2 is
+> a beta line with no stable release yet, and upstream reserves exactly this
+> kind of break between betas.
+
 If the first backup after an image pull or container recreate is slower than later backups, see [Slow first backup after a pull or restart](troubleshooting#slow-first-backup-after-a-pull-or-restart).
 
 ## Next
