@@ -972,6 +972,56 @@ class TestV2RepositoryRoutes:
         assert repo.archive_count == 2
         assert repo.last_backup == datetime(2026, 8, 19, 19, 3, 18)
 
+    def test_get_repository_info_normalizes_borg2_b22_encryption(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Borg 2.0.0b22 reports the cipher and the id hash instead of a single
+        `mode`, and `info --json` carries the block too — so the rinfo merge
+        below never fires and the dialog showed "N/A" for an encrypted
+        repository. Both payloads are verbatim from 2.0.0b22.
+        """
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db, path="/tmp/v2-b22-repo")
+        b22_encryption = {"encryption": "aes256-ocb", "id_hash": "sha256"}
+
+        with patch(
+            "app.api.v2.repositories.borg2.info_repo",
+            new=AsyncMock(
+                return_value={
+                    "success": True,
+                    "stdout": json.dumps(
+                        {"archives": [], "encryption": dict(b22_encryption)}
+                    ),
+                    "stderr": "",
+                }
+            ),
+        ):
+            with patch(
+                "app.api.v2.repositories.borg2.rinfo",
+                new=AsyncMock(
+                    return_value={
+                        "success": True,
+                        "stdout": json.dumps(
+                            {
+                                "repository": {"id": 9},
+                                "encryption": dict(b22_encryption),
+                            }
+                        ),
+                        "stderr": "",
+                    }
+                ),
+            ):
+                response = test_client.get(
+                    f"/api/v2/repositories/{repo.id}/info", headers=admin_headers
+                )
+
+        assert response.status_code == 200
+        assert response.json()["info"]["encryption"] == {
+            "encryption": "aes256-ocb",
+            "id_hash": "sha256",
+            "mode": "aes256-ocb",
+        }
+
     def test_get_repository_info_returns_500_on_info_failure(
         self, test_client: TestClient, admin_headers, test_db
     ):

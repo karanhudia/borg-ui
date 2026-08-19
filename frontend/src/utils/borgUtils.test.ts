@@ -281,6 +281,8 @@ describe('generateBorgInitCommand', () => {
       encryption: 'repokey-aes-ocb',
     })
 
-    expect(cmd).toBe('borg2 -r /backups/repo repo-create --encryption repokey-aes-ocb')
+    expect(cmd).toBe(
+      'borg2 -r /backups/repo repo-create --encryption aes256-ocb --key-location repokey'
+    )
   })
 })

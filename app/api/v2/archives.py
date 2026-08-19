@@ -23,7 +23,7 @@ from app.core.security import (
     get_current_download_user,
 )
 from app.core.features import require_feature
-from app.core.borg2 import borg2
+from app.core.borg2 import borg2, normalize_repo_info_encryption
 from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
 from app.services.archive_browse_service import (
     build_browse_items,
@@ -340,7 +340,9 @@ async def get_archive_info(
             "limits": archive_info.get("limits", {}),
             "comment": archive_info.get("comment", ""),
             "repository": archive_data.get("repository", {}),
-            "encryption": archive_data.get("encryption", {}),
+            "encryption": normalize_repo_info_encryption(archive_data).get(
+                "encryption", {}
+            ),
             "cache": archive_data.get("cache", {}),
         }
 

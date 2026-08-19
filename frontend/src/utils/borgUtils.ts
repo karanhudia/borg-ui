@@ -22,6 +22,26 @@ export interface BorgInitCommandOptions {
 
 const getBorgBinary = (borgVersion: 1 | 2 = 1): string => (borgVersion === 2 ? 'borg2' : 'borg')
 
+/**
+ * Borg 2.0.0b22 split repo-create's single --encryption value into the cipher
+ * and where the key is stored (--key-location). The combined names stay the
+ * vocabulary of the UI and of the stored repository, so a command shown to the
+ * user is translated here — the same table the server and the agent keep
+ * (app/core/borg2.py, agent/borg_ui_agent/repository_ops.py). Three runtimes,
+ * no shared module, so it is stated three times.
+ *
+ * A mode this table does not know is passed through: borg names the valid ones
+ * in its own error, which beats this file inventing a flag.
+ */
+const BORG2_ENCRYPTION_FLAGS: Record<string, string> = {
+  'repokey-aes-ocb': '--encryption aes256-ocb --key-location repokey',
+  'repokey-chacha20-poly1305': '--encryption chacha20-poly1305 --key-location repokey',
+  'keyfile-aes-ocb': '--encryption aes256-ocb --key-location keyfile',
+  'keyfile-chacha20-poly1305': '--encryption chacha20-poly1305 --key-location keyfile',
+  authenticated: '--encryption authenticated',
+  none: '--encryption none',
+}
+
 export const generateBorgInitCommand = (options: BorgInitCommandOptions): string => {
   const {
     repositoryPath,
@@ -31,7 +51,8 @@ export const generateBorgInitCommand = (options: BorgInitCommandOptions): string
   } = options
 
   if (borgVersion === 2) {
-    return `${getBorgBinary(2)} -r ${repositoryPath} repo-create ${remotePathFlag}--encryption ${encryption}`
+    const encryptionFlags = BORG2_ENCRYPTION_FLAGS[encryption] ?? `--encryption ${encryption}`
+    return `${getBorgBinary(2)} -r ${repositoryPath} repo-create ${remotePathFlag}${encryptionFlags}`
   }
 
   return `${getBorgBinary(1)} init --encryption ${encryption} ${remotePathFlag}${repositoryPath}`

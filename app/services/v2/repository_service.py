@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, Optional
 
-from app.core.borg2 import borg2
+from app.core.borg2 import borg2, borg2_encryption_flags
 from app.database.database import SessionLocal  # noqa: F401
 from app.utils.fs import calculate_path_size_bytes
 from app.utils.borg_env import ssh_key_borg_env
@@ -36,8 +36,7 @@ class RepositoryV2Service:
                         "-r",
                         path,
                         "repo-create",
-                        "--encryption",
-                        encryption,
+                        *borg2_encryption_flags(encryption),
                     ]
                     + (["--remote-path", remote_path] if remote_path else []),
                     timeout=init_timeout,

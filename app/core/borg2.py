@@ -27,7 +27,8 @@ Key command differences from Borg 1:
   Borg 2 command that carried it failed at argument parsing, which read as an
   unreachable repository rather than as a flag this Borg does not know.
 
-  Encryption modes (borg 2 only):
+  Encryption modes (borg 2 only), translated to repo-create's
+  --encryption/--key-location split by BORG2_ENCRYPTION_FLAGS:
     repokey-aes-ocb            (default — recommended)
     repokey-chacha20-poly1305
     keyfile-aes-ocb
@@ -49,14 +50,75 @@ from app.utils.ssh_utils import public_key_only_ssh_args
 
 logger = structlog.get_logger()
 
-BORG2_ENCRYPTION_MODES = [
-    "repokey-aes-ocb",
-    "repokey-chacha20-poly1305",
-    "keyfile-aes-ocb",
-    "keyfile-chacha20-poly1305",
-    "authenticated",
-    "none",
-]
+# The encryption modes Borg 2 repositories are offered in, keyed by the combined
+# name the API, the UI and the repository row all speak, mapped to the flags
+# repo-create wants.
+#
+# Borg 2.0.0b22 split repo-create's single --encryption value into three
+# orthogonal options: the cipher (--encryption), where the key is stored
+# (--key-location) and the id hash (--id-hash, sha256 by default). Translating
+# here keeps that split where it belongs — one command builder — instead of
+# pushing a schema and vocabulary change through every caller and stored row.
+#
+# --key-location is omitted where borg's default is what the combined name has
+# always meant: `none` has no key at all, and `authenticated` keeps its key in
+# the repository. blake2 modes are not offered — b22 replaced BLAKE2b with
+# BLAKE3 for new repositories.
+BORG2_ENCRYPTION_FLAGS: Dict[str, List[str]] = {
+    "repokey-aes-ocb": ["--encryption", "aes256-ocb", "--key-location", "repokey"],
+    "repokey-chacha20-poly1305": [
+        "--encryption",
+        "chacha20-poly1305",
+        "--key-location",
+        "repokey",
+    ],
+    "keyfile-aes-ocb": ["--encryption", "aes256-ocb", "--key-location", "keyfile"],
+    "keyfile-chacha20-poly1305": [
+        "--encryption",
+        "chacha20-poly1305",
+        "--key-location",
+        "keyfile",
+    ],
+    "authenticated": ["--encryption", "authenticated"],
+    "none": ["--encryption", "none"],
+}
+
+BORG2_ENCRYPTION_MODES = list(BORG2_ENCRYPTION_FLAGS)
+
+
+def borg2_encryption_flags(mode: str) -> List[str]:
+    """The repo-create flags for a combined encryption mode name."""
+    try:
+        return list(BORG2_ENCRYPTION_FLAGS[mode])
+    except KeyError:
+        raise ValueError(
+            f"unsupported Borg 2 encryption mode {mode!r}; expected one of "
+            + ", ".join(BORG2_ENCRYPTION_MODES)
+        ) from None
+
+
+def normalize_repo_info_encryption(info: Dict) -> Dict:
+    """Give repo-info's encryption block a `mode` again, in place.
+
+    Borg 2.0.0b22 replaced repo-info's single ``{"mode": "repokey-aes-ocb"}``
+    with ``{"encryption": "aes256-ocb", "id_hash": "sha256"}`` (#9168), the same
+    split it made on the repo-create side. Everything downstream — the stored
+    repository row, the API response, the info dialog — reads ``mode``, and got
+    nothing, so the UI showed "N/A" for a repository that is in fact encrypted.
+
+    The cipher is what `mode` is filled from. The key location is deliberately
+    NOT reconstructed: b22 does not report it here, so `repokey-` or `keyfile-`
+    would be a guess, and a guess about where the key lives is worse than a
+    field that names only what borg actually said. `id_hash` is left in place
+    for callers that want it.
+    """
+    encryption = info.get("encryption")
+    if isinstance(encryption, dict) and not encryption.get("mode"):
+        cipher = encryption.get("encryption")
+        if cipher:
+            encryption["mode"] = cipher
+    return info
+
 
 DEFAULT_BORG2_BINARY = "borg2"
 
@@ -287,8 +349,7 @@ class Borg2Interface:
             "-r",
             repository,
             "repo-create",
-            "--encryption",
-            encryption,
+            *borg2_encryption_flags(encryption),
         ]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
@@ -551,7 +612,9 @@ class Borg2Interface:
         if keep_yearly > 0:
             cmd.extend(["--keep-yearly", str(keep_yearly)])
         if keep_within and keep_within.strip():
-            cmd.append(f"--keep-within={keep_within.strip()}")
+            # Borg 2.0.0b22 removed --keep-within (and --keep-last) in favour of
+            # --keep, which takes either form: a count or an interval like "1d".
+            cmd.extend(["--keep", keep_within.strip()])
         cmd.append("--list")
         if dry_run:
             cmd.append("--dry-run")
