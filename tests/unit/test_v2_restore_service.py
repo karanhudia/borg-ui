@@ -8,6 +8,9 @@ from app.services.v2.restore_service import RestoreV2Service
 
 @pytest.mark.unit
 def test_build_extract_command_uses_borg2_archive_identifier():
+    """bypass_lock is accepted and ignored: --bypass-lock is a Borg 1 flag that
+    Borg 2 has never had, and emitting it failed the command at argument
+    parsing."""
     with patch("app.services.v2.restore_service.borg2.borg_cmd", "borg2"):
         cmd = RestoreV2Service().build_extract_command(
             repository_path="/repos/v2",
@@ -28,7 +31,6 @@ def test_build_extract_command_uses_borg2_archive_identifier():
         "0022",
         "--remote-path",
         "/usr/local/bin/borg2",
-        "--bypass-lock",
         "--strip-components",
         "1",
         "manual-1",

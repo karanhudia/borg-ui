@@ -5997,7 +5997,10 @@ async def list_repository_archives(
         cmd = router.build_repo_list_command(repository.path)
         if repository.remote_path:
             cmd.extend(["--remote-path", repository.remote_path])
-        if use_bypass_lock:
+        # BorgRouter returns a Borg 2 command for a Borg 2 repository, and Borg 2
+        # has no --bypass-lock (see app/core/borg2.py), so the flag goes on only
+        # where it exists.
+        if use_bypass_lock and not router.is_v2:
             cmd.append("--bypass-lock")
 
         stdout = await _run_repository_command_with_retries(
@@ -6097,7 +6100,10 @@ async def get_repository_info(
         cmd = router.build_repo_info_command(repository.path)
         if repository.remote_path:
             cmd.extend(["--remote-path", repository.remote_path])
-        if use_bypass_lock:
+        # BorgRouter returns a Borg 2 command for a Borg 2 repository, and Borg 2
+        # has no --bypass-lock (see app/core/borg2.py), so the flag goes on only
+        # where it exists.
+        if use_bypass_lock and not router.is_v2:
             cmd.append("--bypass-lock")
 
         stdout = await _run_repository_command_with_retries(

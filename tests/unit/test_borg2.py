@@ -131,3 +131,50 @@ async def test_rcreate_injects_managed_rclone_config_into_process_env(
         "none",
     )
     assert captured["env"]["RCLONE_CONFIG"] == str(rclone_root / "rclone.conf")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("call", "kwargs"),
+    [
+        ("rinfo", {}),
+        ("info_repo", {}),
+        ("list_repo", {}),
+        ("info_archive", {"archive": "series"}),
+        ("list_archive_contents", {"archive": "series"}),
+        (
+            "extract_archive",
+            {"archive": "series", "paths": ["etc/hosts"], "destination": "/restore"},
+        ),
+    ],
+)
+async def test_no_borg2_command_carries_bypass_lock(monkeypatch, call, kwargs):
+    """--bypass-lock is a Borg 1 flag. Borg 2 has never had it — it is absent
+    from the 2.0.0b21 and 2.0.0b22 sources alike — so a Borg 2 command carrying
+    it dies at argument parsing, which reads as an unreachable repository rather
+    than as a flag this Borg does not know. The argument stays (callers and the
+    repository settings speak for both majors) and is ignored.
+    """
+    captured: dict[str, object] = {}
+
+    class Process:
+        returncode = 0
+
+        async def communicate(self):
+            return b"{}", b""
+
+    async def create_subprocess_exec(*cmd, **_):
+        captured["cmd"] = cmd
+        return Process()
+
+    monkeypatch.setattr(
+        "app.core.borg2.asyncio.create_subprocess_exec", create_subprocess_exec
+    )
+    method = getattr(borg2, call, None)
+    if method is None:
+        pytest.skip(f"borg2 has no {call}()")
+
+    await method(repository="/repo", bypass_lock=True, **kwargs)
+
+    assert "--bypass-lock" not in list(captured["cmd"])

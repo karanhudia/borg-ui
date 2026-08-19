@@ -962,9 +962,12 @@ class TestV2RepositoryRoutes:
         assert detail["key"] == "backend.errors.repo.remoteBorg2Incompatible"
         assert "params" not in detail
 
-    def test_get_repository_info_retries_with_bypass_lock_on_lock_like_failure(
+    def test_get_repository_info_reports_a_lock_error_without_retrying(
         self, test_client: TestClient, admin_headers, test_db
     ):
+        """The retry used to re-run the command with bypass_lock=True, which only
+        ever meant --bypass-lock — a flag Borg 2 does not have. Repeating the
+        identical command would just double the wait on every lock error."""
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(test_db, path="/tmp/v2-lock-retry")
 
@@ -972,22 +975,12 @@ class TestV2RepositoryRoutes:
             patch(
                 "app.api.v2.repositories.borg2.info_repo",
                 new=AsyncMock(
-                    side_effect=[
-                        {
-                            "success": False,
-                            "stdout": "",
-                            "stderr": "ObjectNotFound: locks/ddba06e6e875813a",
-                            "return_code": 2,
-                        },
-                        {
-                            "success": True,
-                            "stdout": json.dumps(
-                                {"archives": [], "repository": {"id": 9}}
-                            ),
-                            "stderr": "",
-                            "return_code": 0,
-                        },
-                    ]
+                    return_value={
+                        "success": False,
+                        "stdout": "",
+                        "stderr": "ObjectNotFound: locks/ddba06e6e875813a",
+                        "return_code": 2,
+                    }
                 ),
             ) as mock_info,
             patch(
@@ -1005,10 +998,8 @@ class TestV2RepositoryRoutes:
                 f"/api/v2/repositories/{repo.id}/info", headers=admin_headers
             )
 
-        assert response.status_code == 200
-        assert mock_info.await_count == 2
-        assert mock_info.await_args_list[0].kwargs["bypass_lock"] is False
-        assert mock_info.await_args_list[1].kwargs["bypass_lock"] is True
+        assert response.status_code == 500
+        assert mock_info.await_count == 1
 
     def test_get_repository_info_returns_404_for_missing_repo(
         self, test_client: TestClient, admin_headers, test_db

@@ -17,7 +17,7 @@ class RestoreV2Service:
         archive_name: str,
         paths: Optional[List[str]] = None,
         remote_path: Optional[str] = None,
-        bypass_lock: bool = False,
+        bypass_lock: bool = False,  # noqa: ARG002 - Borg 1 only, see app/core/borg2.py
         strip_components: Optional[int] = None,
     ) -> List[str]:
         cmd = [
@@ -31,8 +31,6 @@ class RestoreV2Service:
         ]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
-        if bypass_lock:
-            cmd.append("--bypass-lock")
         if strip_components:
             cmd.extend(["--strip-components", str(strip_components)])
         cmd.append(archive_name)
