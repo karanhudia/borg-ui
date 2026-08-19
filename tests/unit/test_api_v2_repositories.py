@@ -2,6 +2,7 @@ import asyncio
 import base64
 import contextlib
 import json
+from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -917,6 +918,59 @@ class TestV2RepositoryRoutes:
         mock_info.assert_awaited_once()
         mock_rinfo.assert_awaited_once()
         mock_size.assert_awaited_once_with([repo.path], timeout=30)
+
+    def test_get_repository_info_syncs_archive_stats_to_the_row(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """The dialog's list must reach the stored columns the card renders."""
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db, path="/tmp/v2-sync-repo")
+        repo.archive_count = 1
+        test_db.commit()
+
+        with (
+            patch(
+                "app.api.v2.repositories.borg2.info_repo",
+                new=AsyncMock(
+                    return_value={
+                        "success": True,
+                        "stdout": json.dumps(
+                            {
+                                "archives": [
+                                    {
+                                        "name": "s",
+                                        "start": "2026-08-19T20:03:15+02:00",
+                                    },
+                                    {
+                                        "name": "s",
+                                        "start": "2026-08-19T21:03:18+02:00",
+                                    },
+                                ]
+                            }
+                        ),
+                        "stderr": "",
+                    }
+                ),
+            ),
+            patch(
+                "app.api.v2.repositories.borg2.rinfo",
+                new=AsyncMock(
+                    return_value={
+                        "success": True,
+                        "stdout": json.dumps({}),
+                        "stderr": "",
+                    }
+                ),
+            ),
+        ):
+            response = test_client.get(
+                f"/api/v2/repositories/{repo.id}/info", headers=admin_headers
+            )
+
+        assert response.status_code == 200
+        test_db.refresh(repo)
+        assert repo.archive_count == 2
+        assert repo.last_backup == datetime(2026, 8, 19, 19, 3, 18)
 
     def test_get_repository_info_returns_500_on_info_failure(
         self, test_client: TestClient, admin_headers, test_db
