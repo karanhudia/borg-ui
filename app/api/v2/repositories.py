@@ -18,7 +18,11 @@ from app.database.database import get_db
 from app.database.models import User, Repository, SSHConnection, SystemSettings
 from app.core.security import get_current_user
 from app.core.features import require_feature
-from app.core.borg2 import borg2, BORG2_ENCRYPTION_MODES
+from app.core.borg2 import (
+    borg2,
+    BORG2_ENCRYPTION_MODES,
+    normalize_repo_info_encryption,
+)
 from app.core.borg_errors import is_lock_error
 from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
 from app.services.repository_command_lock import run_serialized_repository_command
@@ -565,7 +569,10 @@ async def get_repository_info(
                 info_data["repository"] = rinfo_data["repository"]
             if rinfo_data.get("encryption") and not info_data.get("encryption"):
                 info_data["encryption"] = rinfo_data["encryption"]
-            return {"info": info_data, "borg_version": 2}
+            return {
+                "info": normalize_repo_info_encryption(info_data),
+                "borg_version": 2,
+            }
 
         bypass_lock = _resolve_bypass_lock(repo, db, "bypass_lock_on_info")
         with repository_borg_env(repo, db) as env:
@@ -641,7 +648,11 @@ async def get_repository_info(
             except Exception:
                 pass
 
-        return {"info": info_data, "borg_version": 2}
+        # Normalised on the way out, not at either parse site: both `info --json`
+        # and `repo-info --json` carry the block, and the merge above only fires
+        # when info_data has none of its own — so normalising a source would miss
+        # the case where borg2 info already supplied one.
+        return {"info": normalize_repo_info_encryption(info_data), "borg_version": 2}
 
     return await run_serialized_repository_command(repo_id, _operation)
 

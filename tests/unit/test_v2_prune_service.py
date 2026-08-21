@@ -157,7 +157,9 @@ async def test_borg2_prune_command_omits_stats_flag():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_borg2_prune_command_includes_keep_within():
+async def test_borg2_prune_command_sends_keep_within_as_keep():
+    """Borg 2.0.0b22 removed --keep-within; --keep takes the same interval. The
+    field is still called keep_within everywhere above the command builder."""
     with patch(
         "app.core.borg2.borg2._run",
         new=AsyncMock(return_value={"success": True, "stdout": "", "stderr": ""}),
@@ -169,5 +171,6 @@ async def test_borg2_prune_command_includes_keep_within():
             dry_run=True,
         )
 
-    cmd = mock_run.await_args.args[0]
-    assert "--keep-within=1d" in cmd
+    cmd = list(mock_run.await_args.args[0])
+    assert cmd[cmd.index("--keep") + 1] == "1d"
+    assert not [arg for arg in cmd if str(arg).startswith("--keep-within")]

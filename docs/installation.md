@@ -392,6 +392,25 @@ This does not include Redis. Use Compose for normal deployments.
 
 ## Upgrade
 
+> **Borg 2 repositories do not survive the upgrade to Borg 2.0.0b22.** That
+> release changed the repository format (packs) and cannot read a repository
+> written by any earlier Borg 2 beta — opening one fails with
+> `repository version 3 is not supported by this borg version`. There is no
+> in-place conversion. Before upgrading:
+>
+> 1. Keep the image you are upgrading from available — it is the only thing
+>    that can still read the old repositories.
+> 2. Move the old Borg 2 repositories aside (rename the directory, or point
+>    the repository at a fresh path) rather than deleting them, and let
+>    Borg UI create new ones.
+> 3. Delete the old repositories only once the new ones hold backups you have
+>    verified.
+>
+> Borg 1 repositories are unaffected. Borg 2 is a beta line with no stable
+> release yet, and upstream reserves exactly this kind of break between betas.
+
+Then pull and start the new image:
+
 ```bash
 docker compose pull
 docker compose up -d
