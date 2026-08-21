@@ -85,3 +85,14 @@ jobs:
 
             Re-running the job updates this same PR rather than opening another.
           labels: dependencies
+
+      # A release this job cannot read is otherwise indistinguishable from no
+      # release at all: the run says "up to date" and stays green while the pin
+      # falls behind. borgbackup renaming its Linux assets (glibc235 -> glibc239
+      # in 2.0.0b22) hid a Borg 2 release that way. Red here is the only signal
+      # there is; a release caught mid-upload clears itself on the next run.
+      - name: Flag releases that could not be adopted
+        if: steps.refresh.outputs.unadoptable != ''
+        run: |
+          echo "::error title=Borg release not adopted::${{ steps.refresh.outputs.unadoptable }}"
+          exit 1
