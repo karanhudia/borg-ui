@@ -138,15 +138,21 @@ Break the lock only when you are certain the previous Borg process is gone.
 ### Borg 2 repository unreadable after an upgrade
 
 Borg operations on an existing Borg 2 repository fail with
-`repository version 3 is not supported by this borg version`, or a repository
-that worked before an image pull is suddenly not accessible.
+`repository version 3 is not supported by this borg version`.
 
-Borg 2.0.0b22 changed the repository format (packs) and cannot read a repository
-written by an earlier Borg 2 beta. Nothing is wrong with the storage, the
-passphrase or the key — the format is simply one this Borg cannot open, and
-there is no in-place conversion. Delete the affected Borg 2 repositories and
-create them again, or go back to the image you upgraded from. Borg 1
+This exact error means a Borg 2.0.0b22 (or later) client is reading a
+repository written by an earlier Borg 2 beta: that release changed the
+repository format (packs) and cannot open the old one. With this error — and
+only with this error — the storage, the passphrase and the key are fine; the
+format alone is the problem, and there is no in-place conversion. To keep
+using the repository, go back to the image you upgraded from. To move on,
+move the repository aside and let a fresh one be created — and delete the old
+one only once the new one holds backups you have verified. Borg 1
 repositories are not affected.
+
+A repository that became inaccessible after an image pull but reports a
+different error is an ordinary access problem — check the job log for the
+actual message and start from storage, network and credentials.
 
 ### Slow archive browsing
 

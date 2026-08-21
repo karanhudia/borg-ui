@@ -245,7 +245,7 @@ class CompactV2Service:
                                         pct = (current / total) * 100
                                         # Two phases:
                                         # operation=1 (compact.analyze_archives) → 0-50%
-                                        # operation=2 (compact.report_and_delete) → 50-100%
+                                        # operation=2 (compact.compact_packs) → 50-100%
                                         if operation == 1:
                                             job.progress = int(pct / 2)
                                         else:
