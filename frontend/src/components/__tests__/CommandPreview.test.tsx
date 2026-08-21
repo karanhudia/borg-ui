@@ -71,8 +71,12 @@ describe('CommandPreview', () => {
         />
       )
 
+      // The combined mode name stays the component's input; Borg 2.0.0b22 split
+      // the emitted flags into cipher + key location (see borgUtils).
       expect(
-        screen.getByText(/borg2 -r \/backups\/repo repo-create --encryption repokey-aes-ocb/)
+        screen.getByText(
+          /borg2 -r \/backups\/repo repo-create --encryption aes256-ocb --key-location repokey/
+        )
       ).toBeInTheDocument()
       expect(screen.getByText(/borg2 create/)).toBeInTheDocument()
     })
