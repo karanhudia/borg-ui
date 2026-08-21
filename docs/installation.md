@@ -392,13 +392,6 @@ This does not include Redis. Use Compose for normal deployments.
 
 ## Upgrade
 
-```bash
-docker compose pull
-docker compose up -d
-```
-
-Do not delete `borg_data` or `borg_cache` unless you intentionally want to remove application state or Borg cache data.
-
 > **Borg 2 repositories do not survive the upgrade to Borg 2.0.0b22.** That
 > release changed the repository format (packs) and cannot read a repository
 > written by any earlier Borg 2 beta — opening one fails with
@@ -415,6 +408,15 @@ Do not delete `borg_data` or `borg_cache` unless you intentionally want to remov
 >
 > Borg 1 repositories are unaffected. Borg 2 is a beta line with no stable
 > release yet, and upstream reserves exactly this kind of break between betas.
+
+Then pull and start the new image:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+Do not delete `borg_data` or `borg_cache` unless you intentionally want to remove application state or Borg cache data.
 
 If the first backup after an image pull or container recreate is slower than later backups, see [Slow first backup after a pull or restart](troubleshooting#slow-first-backup-after-a-pull-or-restart).
 
