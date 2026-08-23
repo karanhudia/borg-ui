@@ -15,6 +15,7 @@ import structlog
 from app.database.models import CheckJob, Repository
 from app.database.database import SessionLocal
 from app.core.borg2 import _get_borg2_binary
+from app.core.borg_errors import is_borg_warning_exit_code
 from app.config import settings
 from app.utils.db_retries import commit_with_retry
 from app.utils.borg_env import build_repository_borg_env, cleanup_temp_key_file
@@ -300,7 +301,7 @@ class CheckV2Service:
                 job.completed_at = datetime.utcnow()
                 repo.last_check = datetime.utcnow()
                 logger.info("Borg2 check completed", job_id=job_id)
-            elif process.returncode == 1 or (100 <= process.returncode <= 127):
+            elif is_borg_warning_exit_code(process.returncode):
                 job.status = "completed_with_warnings"
                 job.progress = 100
                 job.progress_message = (

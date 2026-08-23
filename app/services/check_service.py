@@ -9,6 +9,7 @@ from app.database.models import CheckJob, Repository
 from app.database.database import SessionLocal
 from app.config import settings
 from app.core.borg import borg
+from app.core.borg_errors import is_borg_warning_exit_code
 from app.services.notification_service import NotificationService
 from app.utils.db_retries import commit_with_retry
 from app.utils.borg_env import build_repository_borg_env, cleanup_temp_key_file
@@ -379,7 +380,7 @@ class CheckService:
                 # Update repository's last_check timestamp
                 repository.last_check = datetime.utcnow()
                 logger.info("Check completed successfully", job_id=job_id)
-            elif process.returncode == 1 or (100 <= process.returncode <= 127):
+            elif is_borg_warning_exit_code(process.returncode):
                 # Warning (legacy exit code 1 or modern exit codes 100-127)
                 job.status = "completed_with_warnings"
                 job.progress = 100

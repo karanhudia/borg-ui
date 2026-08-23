@@ -245,6 +245,20 @@ def get_exit_code_message(exit_code: int) -> str:
         return f"Unknown error (exit code {exit_code})"
 
 
+def is_borg_warning_exit_code(exit_code) -> bool:
+    """Borg's warning exit codes: legacy rc 1, modern range 100-127.
+
+    Warnings mean the operation ran to completion but something was worth
+    telling the operator (a file changed mid-read, a path was missing).
+    They are not failures; jobs record them as completed_with_warnings.
+    """
+    return (
+        isinstance(exit_code, int)
+        and not isinstance(exit_code, bool)
+        and (exit_code == 1 or 100 <= exit_code <= 127)
+    )
+
+
 def is_lock_error(exit_code: int = None, msgid: str = None) -> bool:
     """
     Check if an error is a lock-related error

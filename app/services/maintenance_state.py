@@ -1,5 +1,7 @@
 from datetime import datetime
 
+from app.core.borg_errors import is_borg_warning_exit_code
+
 
 def apply_compact_completion(job, repository, returncode: int, *, now=None) -> None:
     """Apply the shared terminal compact state to a job and repository."""
@@ -13,7 +15,7 @@ def apply_compact_completion(job, repository, returncode: int, *, now=None) -> N
         repository.last_compact = completed_at
         return
 
-    if returncode == 1 or (100 <= returncode <= 127):
+    if is_borg_warning_exit_code(returncode):
         job.status = "completed_with_warnings"
         job.progress = 100
         job.progress_message = (
