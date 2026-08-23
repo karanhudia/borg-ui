@@ -21,10 +21,37 @@ from app.database.models import BackupJob, Repository, SSHConnection, SSHKey
 from app.database.database import SessionLocal
 from app.config import settings
 from app.core.borg_errors import is_borg_warning_exit_code
+from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.services.notification_service import notification_service
 from app.utils.ssh_utils import ssh_key_auth_args, write_ssh_key_to_tempfile
 
 logger = structlog.get_logger()
+
+# BORG_PASSPHRASE=<value> as _build_remote_command emits it: shlex.quote yields
+# either a bare word or a single-quoted string with '"'"' for embedded quotes.
+_PASSPHRASE_ASSIGNMENT = re.compile(
+    r"""BORG_PASSPHRASE=(?:'(?:[^']|'"'"')*'|[^\s']+)"""
+)
+
+
+def _redact_command(text: str) -> str:
+    """Mask passphrase assignments wherever they appear in text bound for logs.
+
+    Applied to the built command, and defensively to borg's output and the
+    error message too - a shell that chokes on the command line echoes it.
+    """
+    return _PASSPHRASE_ASSIGNMENT.sub("BORG_PASSPHRASE=***", text)
+
+
+def _collapse_carriage_returns(line: str) -> str:
+    """Keep what a terminal would show of a \\r-overwritten line.
+
+    borg's --progress writes its updates to stderr terminated by \\r, so a
+    single readline() yields the whole progress history up to the next real
+    line. Only the final state is worth keeping.
+    """
+    segments = [segment for segment in line.split("\r") if segment.strip()]
+    return segments[-1].strip() if segments else ""
 
 
 def _parse_created_archive_name(stdout) -> str | None:
@@ -148,7 +175,7 @@ class RemoteBackupService:
             logger.info(
                 "Built borg command for remote execution",
                 job_id=job_id,
-                command_preview=borg_command[:200],
+                command=_redact_command(borg_command),
             )
 
             # Execute command on remote host
@@ -201,12 +228,15 @@ class RemoteBackupService:
                     logger.info("Remote backup completed successfully", job_id=job_id)
             else:
                 job.status = "failed"
-                job.error_message = result.get("error", "Remote backup failed")
+                job.error_message = _redact_command(
+                    result.get("error") or "Remote backup failed"
+                )
                 logger.error(
-                    "Remote backup failed", job_id=job_id, error=result.get("error")
+                    "Remote backup failed", job_id=job_id, error=job.error_message
                 )
 
             job.completed_at = datetime.utcnow()
+            self._store_job_logs(db, job, borg_command, result)
             db.commit()
 
             await self._send_completion_notification(
@@ -237,6 +267,49 @@ class RemoteBackupService:
             raise
         finally:
             db.close()
+
+    def _store_job_logs(
+        self, db: Session, job: BackupJob, command: str, result: dict
+    ) -> None:
+        """Keep the remote borg output the way the local path keeps its own.
+
+        The transcript is the redacted command, borg's stderr and its --json
+        result. Per the log save policy it goes to a per-job file (so the
+        Activity view can stream it) or, when the policy says not to keep a
+        file, into the job row like local backups do.
+        """
+        parts = [f"$ {command}"]
+        for stream in ("stderr", "stdout"):
+            text = (result.get(stream) or "").strip()
+            if text:
+                parts.append(text)
+        transcript = _redact_command("\n".join(parts))
+
+        try:
+            should_save = job_has_logs_by_policy(
+                job,
+                get_log_save_policy(db),
+                output_text=transcript,
+                status=job.status,
+                exit_code=result.get("returncode"),
+            )
+            if should_save:
+                log_file = (
+                    self.log_dir
+                    / f"backup_job_{job.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+                )
+                log_file.write_text(transcript + "\n")
+                job.log_file_path = str(log_file)
+                job.logs = f"Logs saved to: {log_file.name}"
+            else:
+                job.logs = transcript
+        except Exception as e:
+            job.logs = transcript
+            logger.warning(
+                "Failed to save remote backup log file, kept transcript in DB",
+                job_id=job.id,
+                error=str(e),
+            )
 
     async def _send_completion_notification(
         self,
@@ -464,10 +537,7 @@ class RemoteBackupService:
                 ]
 
                 logger.info(
-                    "Executing SSH command",
-                    job_id=job_id,
-                    host=ssh_connection.host,
-                    command_preview=command[:200],
+                    "Executing SSH command", job_id=job_id, host=ssh_connection.host
                 )
 
                 # Execute command
@@ -512,7 +582,17 @@ class RemoteBackupService:
                         line = await process.stderr.readline()
                         if not line:
                             break
-                        line_str = line.decode("utf-8", errors="replace").strip()
+                        # Redact at capture: a remote shell can echo the
+                        # BORG_PASSPHRASE assignment back on stderr, and every
+                        # downstream path (debug log, transcript, result) reads
+                        # from stderr_lines.
+                        line_str = _redact_command(
+                            _collapse_carriage_returns(
+                                line.decode("utf-8", errors="replace")
+                            )
+                        )
+                        if not line_str:
+                            continue
                         stderr_lines.append(line_str)
                         logger.debug(
                             "Remote backup stderr", job_id=job_id, line=line_str
@@ -529,16 +609,25 @@ class RemoteBackupService:
 
                 # Return transport facts only; whether a non-zero exit is a
                 # borg warning or a failure is decided by the caller, which
-                # knows what command ran and what output to expect.
+                # knows what command ran and what output to expect. On failure,
+                # borg's last line on stderr names the cause; surface it next
+                # to the exit code. stderr_lines is already redacted at
+                # capture, and redaction must precede this truncation (a
+                # cut-off quoted assignment would no longer match the
+                # redaction pattern).
                 success = returncode == 0
+                error = None
+                if not success:
+                    error = f"Remote backup failed with exit code {returncode}"
+                    if stderr_lines:
+                        cause = stderr_lines[-1][:300]
+                        error = f"{error}: {cause}"
                 return {
                     "success": success,
                     "returncode": returncode,
                     "stdout": "\n".join(stdout_lines),
                     "stderr": "\n".join(stderr_lines),
-                    "error": None
-                    if success
-                    else f"Remote backup failed with exit code {returncode}",
+                    "error": error,
                 }
 
             finally:
