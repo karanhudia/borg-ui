@@ -66,7 +66,7 @@ Common options:
 | SFTP deployment mode | Key deployment needs SFTP mode, for example Hetzner Storage Box |
 | SSH path prefix | SSH commands need a prefix that SFTP browsing does not, for example some NAS paths |
 | Logical mount point | You want a friendly name for the remote machine in path pickers |
-| Use sudo | SSHFS access needs the remote SFTP server to run through sudo |
+| Use sudo | The SSH user's own permissions are not enough: SSHFS runs the remote SFTP server through sudo, and Remote Direct Backups run `borg create` through sudo (see below) |
 
 SFTP deployment mode can break some older SSH servers or NAS devices. Disable it when key deployment fails on those systems.
 
@@ -172,6 +172,24 @@ Use the connection's Borg binary path when the source host needs a wrapper
 script, for example to pause Docker containers before Borg starts and resume
 them after Borg exits. The repository `remote_path` setting is different: it is
 passed to Borg as the repository-side remote Borg path.
+
+With *Use sudo* enabled, Borg UI runs
+`sudo -n --preserve-env=BORG_PASSPHRASE,... borg create ...` on the source
+host, so the passphrase and the other `BORG_*` variables survive sudo's
+`env_reset` (the default on Debian, Ubuntu and Raspberry Pi OS). The SSH user
+needs passwordless sudo that also allows preserving those variables. Prefer a
+rule scoped to the Borg binary with the `SETENV:` tag, for example
+`backup ALL=(root) NOPASSWD: SETENV: /usr/bin/borg` - the path in the rule must
+be the connection's configured Borg binary path, exactly as entered, wrapper
+scripts included, because that is what runs after `sudo`. The configured
+binary or wrapper and its parent directories must be owned by root and not
+writable by the SSH user - otherwise the rule executes user-controlled code
+as root. The unrestricted
+`NOPASSWD: ALL` that many images grant their default user works as well, but
+it lets the SSH user run any command as root - use it only where that is
+intentional, and prefer the scoped `SETENV` rule otherwise.
+Without either, sudo refuses the command or the environment and the backup
+fails before it touches the repository.
 
 ## Synology and NAS Path Prefixes
 
