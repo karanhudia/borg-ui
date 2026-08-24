@@ -12,6 +12,7 @@ import structlog
 from fastapi import HTTPException
 
 from app.config import settings
+from app.core.borg_errors import is_borg_warning_exit_code
 from app.core.borg_router import BorgRouter
 from app.database.database import SessionLocal
 from app.database.models import Repository, RestoreCheckJob
@@ -93,10 +94,6 @@ def _http_detail_text(exc: HTTPException) -> str:
     if isinstance(detail, dict):
         return detail.get("message") or detail.get("key") or str(detail)
     return str(detail)
-
-
-def _is_borg_warning_exit_code(returncode: int | None) -> bool:
-    return returncode == 1 or (returncode is not None and 100 <= returncode <= 127)
 
 
 class RestoreCheckService:
@@ -354,7 +351,7 @@ class RestoreCheckService:
                     )
 
                 returncode = await run_extract(attempt_paths)
-                warning_exit = _is_borg_warning_exit_code(returncode)
+                warning_exit = is_borg_warning_exit_code(returncode)
 
                 if not use_canary:
                     break
@@ -384,7 +381,7 @@ class RestoreCheckService:
                     continue
                 break
 
-            warning_exit = _is_borg_warning_exit_code(returncode)
+            warning_exit = is_borg_warning_exit_code(returncode)
             if canary_prerequisite_error:
                 job.status = "needs_backup"
                 job.progress = 100

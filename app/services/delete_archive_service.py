@@ -7,6 +7,7 @@ from app.database.models import DeleteArchiveJob, Repository
 from app.database.database import SessionLocal
 from app.config import settings
 from app.core.borg import borg
+from app.core.borg_errors import is_borg_warning_exit_code
 from app.utils.db_retries import commit_with_retry
 from app.utils.borg_env import build_repository_borg_env, cleanup_temp_key_file
 
@@ -220,7 +221,7 @@ class DeleteArchiveService:
                 job.progress = 100
                 job.progress_message = f"Archive {archive_name} deleted successfully"
                 logger.info("Delete job completed", job_id=job_id)
-            elif process.returncode == 1 or (100 <= process.returncode <= 127):
+            elif is_borg_warning_exit_code(process.returncode):
                 # Warning (legacy exit code 1 or modern exit codes 100-127)
                 job.status = "completed_with_warnings"
                 job.progress = 100

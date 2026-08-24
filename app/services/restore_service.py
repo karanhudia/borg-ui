@@ -10,6 +10,7 @@ from types import SimpleNamespace
 
 from app.database.models import RestoreJob, Repository, SSHConnection
 from app.database.database import SessionLocal
+from app.core.borg_errors import is_borg_warning_exit_code
 from app.core.borg_router import BorgRouter
 from app.services.notification_service import notification_service
 from app.utils.borg_env import (
@@ -883,7 +884,7 @@ class RestoreService:
                         logger.warning(
                             "Failed to send restore success notification", error=str(e)
                         )
-                elif process.returncode == 1 or (100 <= process.returncode <= 127):
+                elif is_borg_warning_exit_code(process.returncode):
                     # Exit code 1 or 100-127 can be warnings OR errors
                     # If no files were restored, treat as failure (likely permission/path error)
                     stderr_output = "\n".join(stderr_lines)
@@ -1490,11 +1491,7 @@ class RestoreService:
             await process.wait()
 
             # Check exit code (same logic as local restore)
-            if (
-                process.returncode == 0
-                or process.returncode == 1
-                or (100 <= process.returncode <= 127)
-            ):
+            if process.returncode == 0 or is_borg_warning_exit_code(process.returncode):
                 if process.returncode == 1:
                     warning_msgs = [
                         line

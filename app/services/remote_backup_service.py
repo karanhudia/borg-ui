@@ -20,10 +20,35 @@ from sqlalchemy.orm import Session
 from app.database.models import BackupJob, Repository, SSHConnection, SSHKey
 from app.database.database import SessionLocal
 from app.config import settings
+from app.core.borg_errors import is_borg_warning_exit_code
 from app.services.notification_service import notification_service
 from app.utils.ssh_utils import ssh_key_auth_args, write_ssh_key_to_tempfile
 
 logger = structlog.get_logger()
+
+
+def _parse_created_archive_name(stdout) -> str | None:
+    """Extract the resolved archive name from ``borg create --json`` stdout.
+
+    borg expands placeholders such as ``{hostname}-{now}`` when it creates the
+    archive and reports the resolved name as ``archive.name`` in the JSON
+    result document. Returns None when the output is absent or unparseable so
+    the caller can fall back to the requested (template) name.
+    """
+    if not stdout or not stdout.strip():
+        return None
+    try:
+        data = json.loads(stdout)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    archive = data.get("archive")
+    if isinstance(archive, dict):
+        name = archive.get("name")
+        if isinstance(name, str) and name.strip():
+            return name.strip()
+    return None
 
 
 class RemoteBackupService:
@@ -134,13 +159,46 @@ class RemoteBackupService:
                 db=db,
             )
 
+            # borg expanded the {hostname}-{now} placeholders on the remote
+            # host and reports the resolved name in its --json result document.
+            resolved_name = _parse_created_archive_name(result.get("stdout"))
+
+            # A warning exit code only counts as a warning when borg proves it
+            # wrote an archive (the result document above). An exit in the
+            # warning range without it is the remote shell speaking - 127 for
+            # a missing borg binary, 126 for a non-executable one - and means
+            # the backup never ran.
+            warning = (
+                is_borg_warning_exit_code(result.get("returncode"))
+                and resolved_name is not None
+            )
+            if warning:
+                result = {**result, "success": True, "warning": True, "error": None}
+
             # Update final job status
             job = db.query(BackupJob).filter(BackupJob.id == job_id).first()
             if result["success"]:
-                job.status = "completed"
+                if resolved_name:
+                    archive_name = resolved_name
+                job.archive_name = archive_name
                 job.progress = 100
                 job.progress_percent = 100.0
-                logger.info("Remote backup completed successfully", job_id=job_id)
+                if warning:
+                    job.status = "completed_with_warnings"
+                    job.error_message = json.dumps(
+                        {
+                            "key": "backend.errors.service.backupCompletedWithWarning",
+                            "params": {"exitCode": result["returncode"]},
+                        }
+                    )
+                    logger.warning(
+                        "Remote backup completed with warnings",
+                        job_id=job_id,
+                        exit_code=result["returncode"],
+                    )
+                else:
+                    job.status = "completed"
+                    logger.info("Remote backup completed successfully", job_id=job_id)
             else:
                 job.status = "failed"
                 job.error_message = result.get("error", "Remote backup failed")
@@ -188,16 +246,28 @@ class RemoteBackupService:
         archive_name: str,
     ) -> None:
         try:
+            stats = {
+                "original_size": job.original_size,
+                "compressed_size": job.compressed_size,
+                "deduplicated_size": job.deduplicated_size,
+            }
             if job.status == "completed":
                 await notification_service.send_backup_success(
                     db,
                     repository.name,
                     archive_name,
-                    stats={
-                        "original_size": job.original_size,
-                        "compressed_size": job.compressed_size,
-                        "deduplicated_size": job.deduplicated_size,
-                    },
+                    stats=stats,
+                    completion_time=job.completed_at,
+                    started_at=job.started_at,
+                    nfiles=job.nfiles,
+                )
+            elif job.status == "completed_with_warnings":
+                await notification_service.send_backup_warning(
+                    db,
+                    repository.name,
+                    archive_name,
+                    job.error_message,
+                    stats=stats,
                     completion_time=job.completed_at,
                     started_at=job.started_at,
                     nfiles=job.nfiles,
@@ -457,7 +527,9 @@ class RemoteBackupService:
                 # Clean up
                 del self.running_processes[job_id]
 
-                # Return result
+                # Return transport facts only; whether a non-zero exit is a
+                # borg warning or a failure is decided by the caller, which
+                # knows what command ran and what output to expect.
                 success = returncode == 0
                 return {
                     "success": success,

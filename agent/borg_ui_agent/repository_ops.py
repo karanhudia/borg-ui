@@ -1043,12 +1043,6 @@ def _execute_streaming_repository_operation(
     )
 
 
-def _is_borg_warning_rc(return_code: Optional[int]) -> bool:
-    # Borg uses exit code 1 (and 100-127 in newer builds) for warnings that
-    # still produced output. Mirrors restore_check_service._is_borg_warning_exit_code.
-    return return_code == 1 or (return_code is not None and 100 <= return_code <= 127)
-
-
 def _resolve_restore_target(operation: dict[str, Any]) -> tuple[str, bool]:
     """Return (target_dir, is_temp) for a repository.restore job.
 
@@ -1151,7 +1145,7 @@ def _execute_restore_operation(
                     )
 
         return_code = process.wait()
-        warning = _is_borg_warning_rc(return_code)
+        warning = is_warning_return_code(return_code)
 
         # A hard borg failure has no meaningful verification verdict.
         if return_code != 0 and not warning:

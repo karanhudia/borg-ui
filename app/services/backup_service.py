@@ -13,7 +13,11 @@ from app.database.models import BackupJob, Repository, RepositoryScript, SystemS
 from app.database.database import SessionLocal
 from app.config import settings
 from app.core.borg_router import BorgRouter
-from app.core.borg_errors import format_error_message, is_lock_error
+from app.core.borg_errors import (
+    format_error_message,
+    is_borg_warning_exit_code,
+    is_lock_error,
+)
 from app.services.notification_service import notification_service
 from app.services.script_executor import execute_script
 from app.services.script_library_executor import ScriptLibraryExecutor
@@ -2729,7 +2733,7 @@ class BackupService:
                             "Failed to send backup notification", error=str(e)
                         )
 
-            elif actual_returncode == 1 or (100 <= actual_returncode <= 127):
+            elif is_borg_warning_exit_code(actual_returncode):
                 # Warning (legacy exit code 1 or modern exit codes 100-127)
                 job.status = "completed_with_warnings"
                 job.progress = 100

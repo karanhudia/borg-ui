@@ -2,8 +2,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+import json
+
 from app.database.models import BackupJob, Repository, SSHConnection, SSHKey
-from app.services.remote_backup_service import RemoteBackupService
+from app.services.remote_backup_service import (
+    RemoteBackupService,
+    _parse_created_archive_name,
+)
 
 
 def _remote_entities(test_db):
@@ -102,15 +107,23 @@ async def test_execute_remote_backup_updates_same_job_row_and_uses_source_borg_w
             },
             db,
         )
-        return {"success": True, "returncode": 0, "stdout": "{}", "stderr": ""}
+        return {
+            "success": True,
+            "returncode": 0,
+            "stdout": json.dumps(
+                {"archive": {"name": "docker-host.example-2026-08-20T11:18:00"}}
+            ),
+            "stderr": "",
+        }
 
     monkeypatch.setattr(
         "app.services.remote_backup_service.SessionLocal", lambda: test_db
     )
     monkeypatch.setattr(service, "_execute_ssh_command", fake_execute_ssh_command)
+    send_success = AsyncMock()
     monkeypatch.setattr(
         "app.services.remote_backup_service.notification_service.send_backup_success",
-        AsyncMock(),
+        send_success,
     )
 
     result = await service.execute_remote_backup(
@@ -125,6 +138,8 @@ async def test_execute_remote_backup_updates_same_job_row_and_uses_source_borg_w
     job = test_db.query(BackupJob).filter(BackupJob.id == job_id).one()
     assert result["success"] is True
     assert job.status == "completed"
+    assert job.archive_name == "docker-host.example-2026-08-20T11:18:00"
+    assert send_success.await_args.args[2] == "docker-host.example-2026-08-20T11:18:00"
     assert job.started_at is not None
     assert job.completed_at is not None
     assert job.remote_hostname == connection_host
@@ -217,7 +232,12 @@ async def test_execute_remote_backup_keeps_completed_status_when_success_notific
     job_id = job.id
 
     async def fake_execute_ssh_command(*args, **kwargs):
-        return {"success": True, "returncode": 0, "stdout": "{}", "stderr": ""}
+        return {
+            "success": True,
+            "returncode": 0,
+            "stdout": "{}",
+            "stderr": "",
+        }
 
     monkeypatch.setattr(
         "app.services.remote_backup_service.SessionLocal", lambda: test_db
@@ -367,3 +387,175 @@ async def test_update_progress_from_json_only_sets_percent_with_known_total(test
     assert job_without_total.progress_percent == 0.0
     assert job_with_total.progress == 50
     assert job_with_total.progress_percent == 50.0
+
+
+@pytest.mark.asyncio
+async def test_execute_remote_backup_records_warning_exit_as_completed_with_warnings(
+    test_db, monkeypatch
+):
+    connection, repository, job = _remote_entities(test_db)
+    service = RemoteBackupService()
+    connection_id = connection.id
+    repository_id = repository.id
+    job_id = job.id
+
+    async def fake_execute_ssh_command(*args, **kwargs):
+        return {
+            "success": False,
+            "returncode": 1,
+            "stdout": json.dumps({"archive": {"name": "host-2026-08-20T11:18:00"}}),
+            "stderr": "BackupFileNotFoundError: /etc/dangling-symlink",
+            "error": "Remote backup failed with exit code 1",
+        }
+
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.SessionLocal", lambda: test_db
+    )
+    monkeypatch.setattr(service, "_execute_ssh_command", fake_execute_ssh_command)
+    send_warning = AsyncMock()
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.notification_service.send_backup_warning",
+        send_warning,
+    )
+
+    result = await service.execute_remote_backup(
+        job_id=job_id,
+        source_ssh_connection_id=connection_id,
+        repository_id=repository_id,
+        source_paths=["/var/lib/docker/volumes/app"],
+    )
+
+    job = test_db.query(BackupJob).filter(BackupJob.id == job_id).one()
+    assert result["success"] is True
+    assert job.status == "completed_with_warnings"
+    assert job.progress == 100
+    assert job.progress_percent == 100.0
+    assert job.completed_at is not None
+    assert job.archive_name == "host-2026-08-20T11:18:00"
+    assert json.loads(job.error_message) == {
+        "key": "backend.errors.service.backupCompletedWithWarning",
+        "params": {"exitCode": 1},
+    }
+    send_warning.assert_awaited_once()
+    assert send_warning.await_args.args[2] == "host-2026-08-20T11:18:00"
+
+
+@pytest.mark.asyncio
+async def test_execute_ssh_command_reports_transport_facts_only(monkeypatch):
+    """_execute_ssh_command must not classify warnings - the exit code may be
+    the remote shell's (127 = borg missing), so the caller decides."""
+    service = RemoteBackupService()
+    connection = SSHConnection(
+        id=7,
+        host="truenas.example",
+        username="backup",
+        port=2222,
+        ssh_key_id=42,
+    )
+    ssh_key = MagicMock(spec=SSHKey)
+    job = MagicMock(spec=BackupJob)
+    db = MagicMock()
+
+    def query_side_effect(model):
+        query = MagicMock()
+        if model == SSHKey:
+            query.filter.return_value.first.return_value = ssh_key
+        elif model == BackupJob:
+            query.filter.return_value.first.return_value = job
+        return query
+
+    db.query.side_effect = query_side_effect
+
+    process = AsyncMock()
+    process.pid = 1234
+    process.stdout.readline = AsyncMock(return_value=b"")
+    process.stderr.readline = AsyncMock(return_value=b"")
+
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.write_ssh_key_to_tempfile",
+        lambda key: "/tmp/source.key",
+    )
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.asyncio.create_subprocess_exec",
+        AsyncMock(return_value=process),
+    )
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.os.unlink", lambda path: None
+    )
+
+    for returncode in (0, 1, 104, 127, 2):
+        process.wait = AsyncMock(return_value=returncode)
+        result = await service._execute_ssh_command(
+            ssh_connection=connection,
+            command="borg create /repo::archive /data",
+            job_id=99,
+            db=db,
+        )
+        assert result["success"] is (returncode == 0), returncode
+        assert "warning" not in result
+        if returncode == 0:
+            assert result["error"] is None
+        else:
+            assert (
+                result["error"] == f"Remote backup failed with exit code {returncode}"
+            )
+
+
+@pytest.mark.asyncio
+async def test_execute_remote_backup_treats_shell_127_as_failure(test_db, monkeypatch):
+    """Exit 127 is the remote shell's 'command not found' - inside borg's
+    modern warning range, but no archive was written. Must stay a failure."""
+    connection, repository, job = _remote_entities(test_db)
+    service = RemoteBackupService()
+    connection_id = connection.id
+    repository_id = repository.id
+    job_id = job.id
+
+    async def fake_execute_ssh_command(*args, **kwargs):
+        return {
+            "success": False,
+            "returncode": 127,
+            "stdout": "",
+            "stderr": "bash: line 1: /usr/local/bin/borg-wrapper: command not found",
+            "error": "Remote backup failed with exit code 127",
+        }
+
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.SessionLocal", lambda: test_db
+    )
+    monkeypatch.setattr(service, "_execute_ssh_command", fake_execute_ssh_command)
+    send_failure = AsyncMock()
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.notification_service.send_backup_failure",
+        send_failure,
+    )
+
+    result = await service.execute_remote_backup(
+        job_id=job_id,
+        source_ssh_connection_id=connection_id,
+        repository_id=repository_id,
+        source_paths=["/var/lib/docker/volumes/app"],
+    )
+
+    job = test_db.query(BackupJob).filter(BackupJob.id == job_id).one()
+    assert result["success"] is False
+    assert job.status == "failed"
+    assert job.archive_name is None
+    assert job.error_message == "Remote backup failed with exit code 127"
+    send_failure.assert_awaited_once()
+
+
+def test_parse_created_archive_name():
+    stdout = json.dumps(
+        {
+            "archive": {"name": "host-2026-08-20T11:18:00", "id": "ceb0dfe2"},
+            "repository": {"location": "ssh://backup@host/repo"},
+        },
+        indent=4,
+    )
+    assert _parse_created_archive_name(stdout) == "host-2026-08-20T11:18:00"
+    assert _parse_created_archive_name("") is None
+    assert _parse_created_archive_name(None) is None
+    assert _parse_created_archive_name("not json") is None
+    assert _parse_created_archive_name(json.dumps({"archive": {}})) is None
+    assert _parse_created_archive_name(json.dumps(["archive"])) is None

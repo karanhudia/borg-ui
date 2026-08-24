@@ -11,6 +11,7 @@ from app.core.borg_errors import (
     format_error_message,
     get_error_details,
     get_exit_code_message,
+    is_borg_warning_exit_code,
     is_lock_error,
 )
 
@@ -164,3 +165,20 @@ def test_format_error_message_uses_unknown_error_when_no_inputs():
     payload = json.loads(format_error_message())
 
     assert payload == {"key": "backend.errors.borg.unknownError"}
+
+
+@pytest.mark.unit
+def test_is_borg_warning_exit_code():
+    """Warnings are legacy rc 1 and the modern 100-127 range, nothing else"""
+    assert is_borg_warning_exit_code(1) is True
+    assert is_borg_warning_exit_code(100) is True
+    assert is_borg_warning_exit_code(127) is True
+    assert is_borg_warning_exit_code(0) is False
+    assert is_borg_warning_exit_code(2) is False
+    assert is_borg_warning_exit_code(99) is False
+    assert is_borg_warning_exit_code(128) is False
+    assert is_borg_warning_exit_code(-1) is False
+    assert is_borg_warning_exit_code(None) is False
+    assert is_borg_warning_exit_code("1") is False
+    assert is_borg_warning_exit_code(True) is False
+    assert is_borg_warning_exit_code(False) is False

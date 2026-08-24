@@ -852,6 +852,40 @@ class TestAgentJobTransport:
         assert job.status == "failed"
         assert "exited with code 2" in (job.error_message or "")
 
+    @pytest.mark.parametrize("malformed", ["2", 2.0, True, [1]])
+    def test_malformed_return_code_in_completion_report_fails_closed(
+        self, test_client: TestClient, test_db, admin_headers, malformed
+    ):
+        """A completion report is only trusted with an int return code;
+        anything else fails the job (and its linked backup job) instead of
+        slipping past the classification as a success."""
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        job = _create_agent_job(test_db, agent, status="running")
+        backup_job = BackupJob(repository="/repo", status="running")
+        test_db.add(backup_job)
+        test_db.commit()
+        job.backup_job_id = backup_job.id
+        test_db.commit()
+        headers = _agent_headers(registered["agent_token"])
+
+        complete = test_client.post(
+            f"/api/agents/jobs/{job.id}/complete",
+            json={"result": {"return_code": malformed}},
+            headers=headers,
+        )
+        assert complete.status_code == 200
+        assert complete.json()["status"] == "failed"
+
+        test_db.refresh(job)
+        test_db.refresh(backup_job)
+        assert job.status == "failed"
+        assert "malformed return code" in (job.error_message or "")
+        assert backup_job.status == "failed"
+
     def test_repeated_complete_report_is_idempotent(
         self, test_client: TestClient, test_db, admin_headers
     ):
