@@ -19,6 +19,12 @@ the SSH repository connection are the same. Different SSH source/repository
 pairs still run on the Borg UI server and may see warnings when active files
 change during backup.
 
+Pull mode mounts the remote filesystem inside the container and therefore
+needs FUSE access (`/dev/fuse`, `SYS_ADMIN`, AppArmor exception). A job that
+fails at once with `failedPrepareSourcePaths` and `fuse: device not found` is
+missing that - see
+[Remote Machines](ssh-keys#sshfs-mount-fails-with-fuse-device-not-found).
+
 ### Slow first backup after a pull or restart
 
 `docker compose pull` and container recreates do not remove Docker volumes or
