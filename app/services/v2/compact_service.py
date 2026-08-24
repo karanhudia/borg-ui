@@ -110,8 +110,8 @@ class CompactV2Service:
                 )
                 return
 
-            # Job is pre-set to running by the endpoint; refresh to ensure we have latest state.
-            # If the job was somehow already completed/cancelled (race), bail out.
+            # Refresh to ensure we have the latest state. If the job was
+            # somehow already completed/cancelled (race), bail out.
             db.refresh(job)
             if job.status not in ("running", "pending"):
                 logger.warning(
@@ -120,6 +120,44 @@ class CompactV2Service:
                     status=job.status,
                 )
                 return
+
+            # The manual endpoint pre-sets the job to running, but scheduler
+            # jobs arrive as pending. Record the actual execution start either
+            # way so started_at is never left NULL (job history and the
+            # dashboard activity feed both filter on it). The status predicate
+            # keeps a concurrent cancellation from being overwritten.
+            started_at = datetime.utcnow()
+            claimed = 0
+
+            def persist_start_state():
+                nonlocal claimed
+                claimed = (
+                    db.query(CompactJob)
+                    .filter(
+                        CompactJob.id == job_id,
+                        CompactJob.status.in_(("pending", "running")),
+                    )
+                    .update(
+                        {"status": "running", "started_at": started_at},
+                        synchronize_session=False,
+                    )
+                )
+
+            await commit_with_retry(
+                db,
+                prepare=persist_start_state,
+                logger=logger,
+                action="borg2_compact_start",
+                job_id=job_id,
+                repository_id=repository_id,
+            )
+            if not claimed:
+                logger.warning(
+                    "Compact job reached a terminal state before start, skipping",
+                    job_id=job_id,
+                )
+                return
+            db.refresh(job)
 
             env, temp_key_file = build_repository_borg_env(
                 repository,

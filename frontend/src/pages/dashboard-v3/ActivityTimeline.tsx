@@ -31,7 +31,10 @@ export function ActivityTimeline({
     'restore',
     'prune',
   ]
-  const laneIndex = (type: string) => LANES.indexOf(type)
+  // The API reports restore verification runs as "restore_check"; they
+  // belong on the restore lane.
+  const laneKey = (type: string) => (type === 'restore_check' ? 'restore' : type)
+  const laneIndex = (type: string) => LANES.indexOf(laneKey(type))
 
   const VB_W = 680
   const ML = 44
@@ -93,7 +96,7 @@ export function ActivityTimeline({
       const date = new Date(activity.timestamp)
       const offset = n === 1 ? 0 : (i / (n - 1) - 0.5) * spreadW
       const jobColor =
-        activity.status === 'failed' ? T.red : (JOB_COLOR[activity.type] ?? T.textMuted)
+        activity.status === 'failed' ? T.red : (JOB_COLOR[laneKey(activity.type)] ?? T.textMuted)
       dots.push({
         x: cx + offset,
         y: cy,
