@@ -13,8 +13,8 @@
 #   pip download --only-binary=:all: --implementation py --abi none \
 #       --platform any --dest dist dist/borg_ui_agent-*.whl
 certifi==2026.7.22
-charset-normalizer==3.5.0
-idna==3.18
+charset-normalizer==3.5.1
+idna==3.19
 requests==2.34.2
 urllib3==2.7.0
 websocket-client==1.9.0
