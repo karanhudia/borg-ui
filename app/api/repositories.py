@@ -136,7 +136,15 @@ V2_ONLY_ENCRYPTION_MODES = {
 
 
 def _router_repo_snapshot(repository: Repository) -> SimpleNamespace:
-    return SimpleNamespace(id=repository.id, borg_version=repository.borg_version)
+    # BorgRouter routes on executor_type (with the legacy execution_target
+    # fallback). Keep those in the snapshot so the router's agent gate stays
+    # functional even though these endpoints branch on the executor earlier.
+    return SimpleNamespace(
+        id=repository.id,
+        borg_version=repository.borg_version,
+        executor_type=repository.executor_type,
+        execution_target=repository.execution_target,
+    )
 
 
 def _dispatch_router_check(router_repo: SimpleNamespace, job: CheckJob):
