@@ -23,7 +23,15 @@ STALE_PENDING_SCHEDULED_CHECK_AFTER = timedelta(minutes=15)
 
 
 def _router_repo_snapshot(repository: Repository) -> SimpleNamespace:
-    return SimpleNamespace(id=repository.id, borg_version=repository.borg_version)
+    # BorgRouter routes on executor_type (with the legacy execution_target
+    # fallback). Dropping those here would silently disable its agent gate
+    # and run checks for agent-executed repositories on the server.
+    return SimpleNamespace(
+        id=repository.id,
+        borg_version=repository.borg_version,
+        executor_type=repository.executor_type,
+        execution_target=repository.execution_target,
+    )
 
 
 def _dispatch_router_check(router_repo: SimpleNamespace, job: CheckJob):

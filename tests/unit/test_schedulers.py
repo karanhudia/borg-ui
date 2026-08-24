@@ -103,6 +103,46 @@ async def test_check_scheduler_creates_job_and_updates_next_run(db_session):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_check_scheduler_snapshot_preserves_agent_routing(db_session):
+    # BorgRouter decides agent-vs-server on executor_type. The scheduler hands
+    # the router a detached snapshot instead of the ORM instance; if that
+    # snapshot drops executor_type, checks for agent-executed repositories
+    # silently run on the server.
+    from app.services.repository_executor import is_agent_executor
+
+    repo = Repository(
+        name="Agent Repo",
+        path="rest://borg@host/repo",
+        encryption="none",
+        compression="lz4",
+        repository_type="local",
+        executor_type="agent",
+        borg_version=2,
+        check_cron_expression="0 2 * * *",
+    )
+    db_session.add(repo)
+    db_session.commit()
+    db_session.refresh(repo)
+
+    with patch(
+        "app.services.check_scheduler.start_background_maintenance_job"
+    ) as mock_start:
+        mock_start.side_effect = lambda db, repo, job_model, **kwargs: CheckJob(
+            id=43,
+            repository_id=repo.id,
+            status="pending",
+            scheduled_check=True,
+        )
+        await run_due_scheduled_checks(db_session)
+
+    mock_start.assert_called_once()
+    snapshot = mock_start.call_args.kwargs["dispatcher"].args[0]
+    assert snapshot.executor_type == "agent"
+    assert is_agent_executor(snapshot) is True
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_availability_automation_success_advances_next_check(db_session):
     repo = Repository(
         name="Availability source",
