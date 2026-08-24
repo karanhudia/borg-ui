@@ -47,7 +47,9 @@ REPOSITORY_JOB_KINDS = {
 # name it stores, so the agent translates it the same way the server does for
 # its own repositories (app/core/borg2.py: BORG2_ENCRYPTION_FLAGS). The two are
 # separate packages and share no imports, so the table is stated twice; a mode
-# missing here falls through to borg, which rejects it by name.
+# missing here is rejected up front with the mode name, mirroring the server —
+# passing it to repo-create would fail with an argument-parsing error that
+# does not name the actual problem.
 BORG2_ENCRYPTION_FLAGS = {
     "repokey-aes-ocb": ["--encryption", "aes256-ocb", "--key-location", "repokey"],
     "repokey-chacha20-poly1305": [
@@ -168,11 +170,15 @@ class RepositoryOperationPayload:
                 raise ValueError("repository.init requires operation.encryption")
             encryption = encryption.strip()
             if self.borg_version == 2:
+                encryption_flags = BORG2_ENCRYPTION_FLAGS.get(encryption)
+                if encryption_flags is None:
+                    raise ValueError(
+                        f"unsupported Borg 2 encryption mode {encryption!r}; "
+                        "expected one of " + ", ".join(BORG2_ENCRYPTION_FLAGS)
+                    )
                 return [
                     *self._base_borg2("repo-create"),
-                    *BORG2_ENCRYPTION_FLAGS.get(
-                        encryption, ["--encryption", encryption]
-                    ),
+                    *encryption_flags,
                 ]
             return [
                 *self._base_borg1("init"),

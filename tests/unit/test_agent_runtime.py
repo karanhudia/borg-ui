@@ -690,6 +690,26 @@ def test_repository_init_payload_builds_borg2_command():
 
 
 @pytest.mark.unit
+def test_repository_init_payload_rejects_unknown_borg2_encryption_mode():
+    """A mode the table does not know (a legacy blake2 name, a typo) must fail
+    with the mode's name, mirroring the server — handed to repo-create it dies
+    at argument parsing, which does not name the actual problem."""
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "schema_version": 1,
+            "job_kind": "repository.init",
+            "repository": {"path": "/agent/repo2", "borg_version": 2},
+            "operation": {"encryption": "repokey-blake2"},
+        }
+    )
+
+    with pytest.raises(
+        ValueError, match="unsupported Borg 2 encryption mode 'repokey-blake2'"
+    ):
+        payload.build_command()
+
+
+@pytest.mark.unit
 def test_borg1_prune_keeps_the_old_keep_within_spelling():
     """--keep-within was removed in Borg 2.0.0b22 only; Borg 1 never gained
     --keep, so the two majors part ways on this flag."""

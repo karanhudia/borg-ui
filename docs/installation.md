@@ -412,10 +412,10 @@ This does not include Redis. Use Compose for normal deployments.
 > 1. Keep the image you are upgrading from available — it is the only thing
 >    that can still read the old repositories.
 > 2. Move the old Borg 2 repositories aside (rename the directory, or point
->    the repository at a fresh path) rather than deleting them, and let
->    Borg UI create new ones.
-> 3. Delete the old repositories only once the new ones hold backups you have
->    verified.
+>    the repository at a fresh path) rather than deleting them.
+> 3. After the new image is running, let Borg UI create new repositories —
+>    the old image cannot create 2.0.0b22 repositories — and delete the old
+>    ones only once the new ones hold backups you have verified.
 >
 > Borg 1 repositories are unaffected. Borg 2 is a beta line with no stable
 > release yet, and upstream reserves exactly this kind of break between betas.
