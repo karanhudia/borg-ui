@@ -19,6 +19,7 @@ from app.database.models import (
     ScheduledJobRepository,
     CheckJob,
     CompactJob,
+    PruneJob,
     RestoreCheckJob,
     SSHConnection,
     SystemSettings,
@@ -1044,6 +1045,9 @@ async def get_dashboard_overview(
             .filter(CompactJob.started_at >= fourteen_days_ago)
             .all()
         )
+        recent_prunes = (
+            db.query(PruneJob).filter(PruneJob.started_at >= fourteen_days_ago).all()
+        )
         recent_restore_checks = (
             db.query(RestoreCheckJob)
             .filter(RestoreCheckJob.started_at >= fourteen_days_ago)
@@ -1161,6 +1165,40 @@ async def get_dashboard_overview(
                     "repository": repo_name,
                     "timestamp": serialize_datetime(job.started_at),
                     "message": f"Compact {job.status}",
+                    "error": job.error_message if job.status == "failed" else None,
+                }
+            )
+
+        for job in recent_prunes:
+            # Try multiple ways to get repo name
+            repo_name = None
+            if job.repository_path in repo_name_map:
+                repo_name = repo_name_map[job.repository_path]
+            elif (
+                job.repository_path and job.repository_path.rstrip("/") in repo_name_map
+            ):
+                repo_name = repo_name_map[job.repository_path.rstrip("/")]
+            elif (
+                hasattr(job, "repository_id")
+                and job.repository_id
+                and job.repository_id in repo_id_map
+            ):
+                repo_name = repo_id_map[job.repository_id]
+            else:
+                repo_name = (
+                    job.repository_path.rstrip("/").split("/")[-1]
+                    if job.repository_path
+                    else "Unknown"
+                )
+
+            activity_feed.append(
+                {
+                    "id": job.id,
+                    "type": "prune",
+                    "status": job.status,
+                    "repository": repo_name,
+                    "timestamp": serialize_datetime(job.started_at),
+                    "message": f"Prune {job.status}",
                     "error": job.error_message if job.status == "failed" else None,
                 }
             )

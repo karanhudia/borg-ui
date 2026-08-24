@@ -23,6 +23,7 @@ from app.database.models import (
     BackupPlanRepository,
     CheckJob,
     CompactJob,
+    PruneJob,
     Repository,
     RestoreCheckJob,
     ScheduledJob,
@@ -817,6 +818,13 @@ class TestDashboardScheduleAndOverview:
                     started_at=now - timedelta(days=4),
                     completed_at=now - timedelta(days=4, minutes=20),
                 ),
+                PruneJob(
+                    repository_id=full_repo.id,
+                    repository_path=full_repo.path,
+                    status="completed",
+                    started_at=now - timedelta(days=5),
+                    completed_at=now - timedelta(days=5, minutes=5),
+                ),
                 RestoreCheckJob(
                     repository_id=full_repo.id,
                     repository_path=full_repo.path,
@@ -895,10 +903,13 @@ class TestDashboardScheduleAndOverview:
             "restore": "unknown",
         }
         assert len(data["repository_health"]) == 2
-        assert [item["type"] for item in data["activity_feed"]][:3] == [
+        assert [item["type"] for item in data["activity_feed"]] == [
             "restore_check",
             "backup",
             "backup",
+            "check",
+            "compact",
+            "prune",
         ]
         assert data["activity_feed"][0]["repository"] == "Full Repo"
         assert [item["name"] for item in data["upcoming_tasks"]] == [

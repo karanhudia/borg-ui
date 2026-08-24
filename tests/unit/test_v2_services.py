@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from sqlalchemy.orm import sessionmaker
@@ -174,7 +174,107 @@ class TestCheckV2Service:
         assert refreshed_job.has_logs is True
         assert refreshed_job.log_file_path is not None
         assert Path(refreshed_job.log_file_path).exists()
+        assert refreshed_job.started_at is not None
         assert refreshed_repo.last_check is not None
+        verification.close()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_execute_check_sets_started_at_on_pending_scheduler_job(
+        self, db_session, testing_session_local, borg_v2_repo_for_services, tmp_path
+    ):
+        # The check scheduler creates jobs as pending without started_at; the
+        # service must record the execution start itself or the job stays
+        # invisible to every started_at-based view (dashboard activity feed).
+        job = CheckJob(repository_id=borg_v2_repo_for_services.id, status="pending")
+        db_session.add(job)
+        db_session.commit()
+        db_session.refresh(job)
+
+        process = FakeProcess(returncode=0, stderr_lines=[])
+
+        service = CheckV2Service()
+        service.log_dir = tmp_path
+
+        with (
+            patch("app.services.v2.check_service.SessionLocal", testing_session_local),
+            patch(
+                "app.services.v2.check_service.resolve_repo_ssh_key_file",
+                return_value=None,
+            ),
+            patch(
+                "app.services.v2.check_service._get_borg2_binary", return_value="borg2"
+            ),
+            patch(
+                "app.services.v2.check_service._get_process_start_time",
+                return_value=123,
+            ),
+            patch(
+                "app.services.v2.check_service.asyncio.create_subprocess_exec",
+                return_value=process,
+            ),
+        ):
+            await service.execute_check(job.id, borg_v2_repo_for_services.id)
+
+        verification = testing_session_local()
+        refreshed_job = (
+            verification.query(CheckJob).filter(CheckJob.id == job.id).first()
+        )
+        assert refreshed_job.status == "completed"
+        assert refreshed_job.started_at is not None
+        verification.close()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_execute_check_does_not_resurrect_a_concurrently_cancelled_job(
+        self, db_session, testing_session_local, borg_v2_repo_for_services, tmp_path
+    ):
+        # A cancellation can land between the service's status guard and its
+        # start claim; the claim's status predicate must lose that race and
+        # never start borg on the cancelled job.
+        job = CheckJob(repository_id=borg_v2_repo_for_services.id, status="pending")
+        db_session.add(job)
+        db_session.commit()
+        db_session.refresh(job)
+
+        from app.services.v2 import check_service as check_service_module
+
+        real_commit_with_retry = check_service_module.commit_with_retry
+
+        async def cancel_then_commit(db, **kwargs):
+            if kwargs.get("action") == "borg2_check_start":
+                other = testing_session_local()
+                other.query(CheckJob).filter(CheckJob.id == job.id).update(
+                    {"status": "cancelled"}
+                )
+                other.commit()
+                other.close()
+            return await real_commit_with_retry(db, **kwargs)
+
+        spawn = MagicMock()
+        service = CheckV2Service()
+        service.log_dir = tmp_path
+
+        with (
+            patch("app.services.v2.check_service.SessionLocal", testing_session_local),
+            patch(
+                "app.services.v2.check_service.commit_with_retry",
+                new=cancel_then_commit,
+            ),
+            patch(
+                "app.services.v2.check_service.asyncio.create_subprocess_exec",
+                new=spawn,
+            ),
+        ):
+            await service.execute_check(job.id, borg_v2_repo_for_services.id)
+
+        spawn.assert_not_called()
+        verification = testing_session_local()
+        refreshed_job = (
+            verification.query(CheckJob).filter(CheckJob.id == job.id).first()
+        )
+        assert refreshed_job.status == "cancelled"
+        assert refreshed_job.started_at is None
         verification.close()
 
     @pytest.mark.unit
@@ -421,7 +521,108 @@ class TestCompactV2Service:
         assert refreshed.status == "completed"
         assert refreshed.progress == 100
         assert refreshed.has_logs is True
+        assert refreshed.started_at is not None
         assert refreshed_repo.last_compact is not None
+        verification.close()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_execute_compact_sets_started_at_on_pending_scheduler_job(
+        self, db_session, testing_session_local, borg_v2_repo_for_services, tmp_path
+    ):
+        # Same contract as the check service: jobs dispatched as pending must
+        # get started_at from the service itself.
+        job = CompactJob(repository_id=borg_v2_repo_for_services.id, status="pending")
+        db_session.add(job)
+        db_session.commit()
+        db_session.refresh(job)
+
+        service = CompactV2Service()
+        service.log_dir = tmp_path
+
+        with (
+            patch(
+                "app.services.v2.compact_service.SessionLocal", testing_session_local
+            ),
+            patch(
+                "app.services.v2.compact_service.resolve_repo_ssh_key_file",
+                return_value=None,
+            ),
+            patch(
+                "app.services.v2.compact_service._get_borg2_binary",
+                return_value="borg2",
+            ),
+            patch(
+                "app.services.v2.compact_service._get_process_start_time",
+                return_value=123,
+            ),
+            patch(
+                "app.services.v2.compact_service.asyncio.create_subprocess_exec",
+                return_value=FakeProcess(returncode=0, stderr_lines=[]),
+            ),
+        ):
+            await service.execute_compact(job.id, borg_v2_repo_for_services.id)
+
+        verification = testing_session_local()
+        refreshed = (
+            verification.query(CompactJob).filter(CompactJob.id == job.id).first()
+        )
+        assert refreshed.status == "completed"
+        assert refreshed.started_at is not None
+        verification.close()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_execute_compact_does_not_resurrect_a_concurrently_cancelled_job(
+        self, db_session, testing_session_local, borg_v2_repo_for_services, tmp_path
+    ):
+        # Same race as the check service: a cancellation landing between the
+        # status guard and the start claim must win.
+        job = CompactJob(repository_id=borg_v2_repo_for_services.id, status="pending")
+        db_session.add(job)
+        db_session.commit()
+        db_session.refresh(job)
+
+        from app.services.v2 import compact_service as compact_service_module
+
+        real_commit_with_retry = compact_service_module.commit_with_retry
+
+        async def cancel_then_commit(db, **kwargs):
+            if kwargs.get("action") == "borg2_compact_start":
+                other = testing_session_local()
+                other.query(CompactJob).filter(CompactJob.id == job.id).update(
+                    {"status": "cancelled"}
+                )
+                other.commit()
+                other.close()
+            return await real_commit_with_retry(db, **kwargs)
+
+        spawn = MagicMock()
+        service = CompactV2Service()
+        service.log_dir = tmp_path
+
+        with (
+            patch(
+                "app.services.v2.compact_service.SessionLocal", testing_session_local
+            ),
+            patch(
+                "app.services.v2.compact_service.commit_with_retry",
+                new=cancel_then_commit,
+            ),
+            patch(
+                "app.services.v2.compact_service.asyncio.create_subprocess_exec",
+                new=spawn,
+            ),
+        ):
+            await service.execute_compact(job.id, borg_v2_repo_for_services.id)
+
+        spawn.assert_not_called()
+        verification = testing_session_local()
+        refreshed = (
+            verification.query(CompactJob).filter(CompactJob.id == job.id).first()
+        )
+        assert refreshed.status == "cancelled"
+        assert refreshed.started_at is None
         verification.close()
 
     @pytest.mark.unit
