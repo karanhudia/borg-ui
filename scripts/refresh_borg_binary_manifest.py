@@ -43,14 +43,22 @@ API = "https://api.github.com/repos/borgbackup/borg/releases/tags/{version}"
 RELEASES_API = "https://api.github.com/repos/borgbackup/borg/releases?per_page=100"
 RELEASE_URL = "https://github.com/borgbackup/borg/releases/download/{version}/{asset}"
 
-# Published asset name -> (uname -m arch, oldest glibc it was built against).
-# Assets outside this list are ignored: macOS and FreeBSD builds, and the source
-# tarballs, are not something the Debian-family installer can use.
-KNOWN_VARIANTS = {
-    "borg-linux-glibc231-x86_64": ("x86_64", "2.31"),
-    "borg-linux-glibc235-x86_64-gh": ("x86_64", "2.35"),
-    "borg-linux-glibc235-arm64-gh": ("aarch64", "2.35"),
-}
+# The published Linux binaries a Debian-family installer can use, recognised by
+# the shape of the asset name rather than by a list of the names seen so far.
+# borgbackup renames these whenever it moves its build runner — 2.0.0b21 shipped
+# borg-linux-glibc235-*, 2.0.0b22 borg-linux-glibc239-* — and to a fixed
+# allow-list such a release reads as "publishes nothing installable", which is
+# indistinguishable from "no new release" and stalls the pin in silence.
+#
+# The anchors are what exclude everything else: the macOS and FreeBSD builds,
+# the .tgz and .asc companions, and the source tarballs never match. The glibc
+# version is carried in the name as its digits without the dot (glibc239 =
+# glibc 2.39), so it is read back the same way.
+LINUX_ASSET = re.compile(r"^borg-linux-glibc(\d)(\d+)-(x86_64|arm64)(?:-gh)?$")
+
+# borgbackup names the ARM asset after the Debian architecture; the installer
+# matches on `uname -m`.
+ARCH_NAMES = {"x86_64": "x86_64", "arm64": "aarch64"}
 
 
 def _get_json(url: str):
@@ -88,17 +96,17 @@ def _linux_binaries(release: dict) -> list[dict]:
     """The manifest entries an installer can use from a release's assets."""
     entries = []
     for asset in release.get("assets", []):
-        variant = KNOWN_VARIANTS.get(asset["name"])
-        if variant is None:
+        match = LINUX_ASSET.match(asset["name"])
+        if match is None:
             continue
+        glibc_major, glibc_minor, arch = match.groups()
         digest = asset.get("digest", "")
         if not digest.startswith("sha256:"):
             raise SystemExit(f"No sha256 digest published for {asset['name']}")
-        arch, min_glibc = variant
         entries.append(
             {
-                "arch": arch,
-                "min_glibc": min_glibc,
+                "arch": ARCH_NAMES[arch],
+                "min_glibc": f"{glibc_major}.{glibc_minor}",
                 "asset": asset["name"],
                 "sha256": digest.removeprefix("sha256:"),
             }
@@ -136,10 +144,19 @@ def _covers_both_arches(release: dict) -> bool:
     }
 
 
-def latest_adoptable() -> dict[str, str]:
+def latest_adoptable() -> tuple[dict[str, str], list[str]]:
     """The newest release GitHub publishes for each line: a stable 1.x, and a
-    2.x that may still be a beta, since that is what this repo pins today."""
+    2.x that may still be a beta, since that is what this repo pins today.
+
+    Alongside it, the releases that were passed over for carrying no usable pair
+    of Linux binaries though they are newer than the pick. A release whose assets
+    are still uploading looks the same as one this script cannot read, so passing
+    it over cannot be an error here — but it must not be silent either, or an
+    upstream rename freezes a line for months behind a green weekly job. The
+    caller decides how loud to be.
+    """
     latest: dict[str, Version] = {}
+    passed_over: dict[str, Version] = {}
     for release in _get_json(RELEASES_API):
         if release.get("draft"):
             continue
@@ -156,10 +173,18 @@ def latest_adoptable() -> dict[str, str]:
             continue
         if _covers_both_arches(release):
             latest[major] = version
+        elif version > passed_over.get(major, Version("0")):
+            passed_over[major] = version
     if set(latest) != {"1", "2"}:
         missing = {"1", "2"} - set(latest)
         raise SystemExit(f"No adoptable Borg release found for line(s) {missing}")
-    return {major: str(version) for major, version in latest.items()}
+    unadoptable = [
+        f"Borg {version} is newer than the {latest[major]} this run picked, but "
+        f"publishes no borg-linux-glibc*-{{x86_64,arm64}} pair to install"
+        for major, version in sorted(passed_over.items())
+        if version > latest[major]
+    ]
+    return {major: str(version) for major, version in latest.items()}, unadoptable
 
 
 def _rewrite(path: Path, pattern: str, new_version: str) -> None:
@@ -230,7 +255,12 @@ def adopt_latest() -> int:
     """Bump the versions file, its Dockerfile mirror, and the manifest to the
     newest published releases."""
     current = versions_from_env()
-    latest = latest_adoptable()
+    latest, unadoptable = latest_adoptable()
+    for note in unadoptable:
+        print(f"NOT ADOPTABLE: {note}")
+    # Reported through the workflow rather than raised: the file writes below
+    # still have to happen, and the PR they feed still has to be opened.
+    passed_over = "; ".join(unadoptable)
     bumps = {
         major: latest[major]
         for major in ("1", "2")
@@ -238,7 +268,7 @@ def adopt_latest() -> int:
     }
     if not bumps:
         print(f"Up to date: Borg {current['1']}, {current['2']}")
-        _emit_output(changed="false")
+        _emit_output(changed="false", unadoptable=passed_over)
         return 0
 
     # Read the coverage the outgoing versions offer before the manifest is
@@ -279,7 +309,13 @@ def adopt_latest() -> int:
             "Affected machines fall back to `--borg-source distro`:\n"
             + "\n".join(f"> - {note}" for note in warnings)
         )
-    _emit_output(changed="true", title=title, summary=summary, warnings_md=warnings_md)
+    _emit_output(
+        changed="true",
+        title=title,
+        summary=summary,
+        warnings_md=warnings_md,
+        unadoptable=passed_over,
+    )
     return 0
 
 
