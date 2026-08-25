@@ -403,19 +403,20 @@ This does not include Redis. Use Compose for normal deployments.
 
 ## Upgrade
 
-> **Borg 2 repositories do not survive the upgrade to Borg 2.0.0b22.** That
-> release changed the repository format (packs) and cannot read a repository
+> **Borg 2 repositories written before 2.0.0b22 do not survive this upgrade.**
+> 2.0.0b22 changed the repository format (packs) and cannot read a repository
 > written by any earlier Borg 2 beta — opening one fails with
 > `repository version 3 is not supported by this borg version`. There is no
-> in-place conversion. Before upgrading:
+> in-place conversion. 2.0.0b23 kept that format, so repositories created
+> with 2.0.0b22 or later stay readable. Coming from a pre-b22 image:
 >
 > 1. Keep the image you are upgrading from available — it is the only thing
 >    that can still read the old repositories.
 > 2. Move the old Borg 2 repositories aside (rename the directory, or point
 >    the repository at a fresh path) rather than deleting them.
 > 3. After the new image is running, let Borg UI create new repositories —
->    the old image cannot create 2.0.0b22 repositories — and delete the old
->    ones only once the new ones hold backups you have verified.
+>    the old image cannot create packs-format repositories — and delete the
+>    old ones only once the new ones hold backups you have verified.
 >
 > Borg 1 repositories are unaffected. Borg 2 is a beta line with no stable
 > release yet, and upstream reserves exactly this kind of break between betas.

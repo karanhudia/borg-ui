@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-ARG BASE_IMAGE=docker.io/ainullcode/borg-ui-runtime-base:runtime-borg1-1.4.5-borg2-2.0.0b22-r1
+ARG BASE_IMAGE=docker.io/ainullcode/borg-ui-runtime-base:runtime-borg1-1.4.5-borg2-2.0.0b23-r1
 # The Python the builder stages use — kept in step with runtime-base.env by a
 # guard test; the site-packages COPY paths derive from it.
 ARG PYTHON_VERSION=3.12
