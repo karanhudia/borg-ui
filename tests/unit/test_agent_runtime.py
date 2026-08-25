@@ -2308,6 +2308,24 @@ def test_build_borg_env_overrides_win_but_container_setting_is_kept(monkeypatch)
 
 
 @pytest.mark.unit
+def test_build_borg_env_enables_the_pack_cache_with_a_bounded_size(monkeypatch):
+    """Borg 2.0.0b23's pack cache downloads each pack once instead of
+    re-transferring it on every listing; borg puts it under its own cache
+    directory. An empty container-level BORG_STORE_CACHE disables it."""
+    monkeypatch.delenv("BORG_STORE_CACHE", raising=False)
+    monkeypatch.delenv("BORG_PACK_CACHE_SIZE", raising=False)
+
+    env = build_borg_env()
+
+    assert env["BORG_STORE_CACHE"] == "1"
+    assert env["BORG_PACK_CACHE_SIZE"] == str(2 * 1024**3)
+
+    monkeypatch.setenv("BORG_STORE_CACHE", "")
+    env = build_borg_env()
+    assert env["BORG_STORE_CACHE"] == ""
+
+
+@pytest.mark.unit
 def test_execute_backup_create_job_reports_resolved_archive_name(monkeypatch):
     # borg expands placeholders like {now:...} itself; the resolved name comes
     # back on stdout as the --json document's archive.name. The agent must report

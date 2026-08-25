@@ -190,6 +190,10 @@ class Borg2Interface:
         env = os.environ.copy()
         env["BORG_LOCK_WAIT"] = "20"
         env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
+        # Borg 2.0.0b23's pack cache — same defaults and override semantics as
+        # setup_borg_env (app/utils/borg_env.py), see the comment there.
+        env.setdefault("BORG_STORE_CACHE", "1")
+        env.setdefault("BORG_PACK_CACHE_SIZE", str(2 * 1024**3))
         env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
         env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
         ssh_opts = [

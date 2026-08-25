@@ -83,6 +83,14 @@ def setup_borg_env(
     env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
     env["BORG_LOCK_WAIT"] = lock_wait
     env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
+    # Borg 2.0.0b23's pack cache: borgstore serves archive metadata as
+    # whole-pack loads, so on remote repositories every listing re-transfers
+    # packs. The writethrough cache under borg's own cache directory
+    # downloads each pack once. setdefault: the
+    # container environment can resize it or disable it (BORG_STORE_CACHE="").
+    # Borg 1 ignores both variables.
+    env.setdefault("BORG_STORE_CACHE", "1")
+    env.setdefault("BORG_PACK_CACHE_SIZE", str(2 * 1024**3))
     # Borg 2 starts an rclone RC process for direct rclone repositories. The
     # same managed config must be available to that process as to repository
     # create/import commands, otherwise it falls back to an empty default config.

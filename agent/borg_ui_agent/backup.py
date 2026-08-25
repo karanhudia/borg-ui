@@ -190,6 +190,14 @@ def _extract_environment(
 _BORG_NONINTERACTIVE_ACCESS_DEFAULTS = {
     "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK": "yes",
     "BORG_RELOCATED_REPO_ACCESS_IS_OK": "yes",
+    # Borg 2.0.0b23's pack cache: borgstore serves archive metadata as
+    # whole-pack loads, so on remote repositories every listing re-transfers
+    # packs. The writethrough cache under borg's own cache directory downloads
+    # each pack once. Applied via setdefault like the flags above, so the
+    # container environment can resize it or disable it (BORG_STORE_CACHE="").
+    # Borg 1 ignores both variables.
+    "BORG_STORE_CACHE": "1",
+    "BORG_PACK_CACHE_SIZE": str(2 * 1024**3),
 }
 
 
