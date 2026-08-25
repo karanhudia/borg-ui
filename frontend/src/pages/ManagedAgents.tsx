@@ -64,10 +64,13 @@ import LogViewerDialog, { type LogViewerFetchLogs } from '../components/shared/L
 import ResponsiveDialog from '../components/shared/ResponsiveDialog'
 import DiagnosticsTcpTargetFields from '../components/shared/DiagnosticsTcpTargetFields'
 import AddAgentDialog from './managed-agents/AddAgentDialog'
+import BorgInstallModeRadioGroup from './managed-agents/BorgInstallModeRadioGroup'
 import { resolveAgentServerUrl } from './managed-agents/agentServerUrl'
 import {
   buildAgentInstallCommand,
   buildAgentReinstallCommand,
+  deriveBorgInstallMode,
+  type BorgInstallMode,
 } from './managed-agents/agentInstallCommandText'
 import {
   agentJobLogsToViewerResult,
@@ -1477,7 +1480,15 @@ export function AgentReinstallDialog({
   onCopy: (value: string) => void
 }) {
   const { t } = useTranslation()
-  const command = buildAgentReinstallCommand(serverUrl)
+  // Preselected from what the agent last reported: majors whose binaries the
+  // installer manages get verified/updated, everything else defaults to the
+  // reinstall behavior of leaving Borg untouched. The radio group lets the
+  // user override either way.
+  const [borgInstallMode, setBorgInstallMode] = useState<BorgInstallMode>('skip')
+  useEffect(() => {
+    setBorgInstallMode(deriveBorgInstallMode(agent?.borg_versions))
+  }, [agent])
+  const command = buildAgentReinstallCommand(serverUrl, borgInstallMode)
 
   return (
     <ResponsiveDialog
@@ -1511,6 +1522,22 @@ export function AgentReinstallDialog({
               {t('managedAgents.page.reinstallDialog.description')}
             </Typography>
           </Box>
+          <Box>
+            <BorgInstallModeRadioGroup
+              value={borgInstallMode}
+              onChange={setBorgInstallMode}
+              i18nPrefix="managedAgents.page.reinstallDialog"
+            />
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+                mt: 1,
+              }}
+            >
+              {t('managedAgents.page.reinstallDialog.borgSelectionHint')}
+            </Typography>
+          </Box>
           <CopyableCodeBlock
             value={command}
             copyLabel={t('managedAgents.page.reinstallDialog.copyCommand')}
@@ -1518,7 +1545,8 @@ export function AgentReinstallDialog({
           />
           <Alert severity="info" sx={{ borderRadius: 1.5 }}>
             {t('managedAgents.page.reinstallDialog.configPreserved')}{' '}
-            <Box component="code">/etc/borg-ui-agent/config.toml</Box>.
+            <Box component="code">/etc/borg-ui-agent/config.toml</Box>.{' '}
+            {t('managedAgents.page.reinstallDialog.serviceUserPreserved')}
           </Alert>
         </Stack>
       </DialogContent>

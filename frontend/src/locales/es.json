@@ -341,7 +341,28 @@
         "title": "Reinstalar agente",
         "copyCommand": "Copiar comando de reinstalación",
         "description": "Ejecute esto en la máquina registrada para actualizar el paquete del agente Borg UI y reiniciar el servicio systemd. No se requiere token ni paso de registro.",
-        "configPreserved": "El script conserva la configuración existente del agente en"
+        "configPreserved": "El script conserva la configuración existente del agente en",
+        "serviceUserPreserved": "El servicio también sigue ejecutándose con el usuario registrado en su unidad de systemd; ejecute el comando desde cualquier cuenta con sudo.",
+        "borgInstallation": "Instalación de Borg",
+        "borgSelectionHint": "Preseleccionado según lo último que informó el agente. Seleccionar versiones de Borg también actualiza esos binarios a las versiones que ofrece este servidor.",
+        "borgOptions": {
+          "borg1": {
+            "label": "Borg 1.x",
+            "description": "Verifica o actualiza Borg 1 como 'borg' a la versión de este servidor."
+          },
+          "borg2": {
+            "label": "Solo Borg 2.x beta",
+            "description": "Verifica o actualiza Borg 2 como 'borg2' a la versión de este servidor."
+          },
+          "both": {
+            "label": "Borg 1.x y Borg 2.x beta",
+            "description": "Verifica o actualiza Borg 1 como 'borg' y Borg 2 como 'borg2' a las versiones de este servidor."
+          },
+          "skip": {
+            "label": "Omitir instalación de Borg",
+            "description": "Predeterminado. Solo actualiza el paquete del agente; los binarios de Borg no se tocan."
+          }
+        }
       },
       "logs": {
         "agent": "Registros del agente",
