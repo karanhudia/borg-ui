@@ -562,6 +562,50 @@ def test_repository_rinfo_payload_builds_borg2_command():
 
 
 @pytest.mark.unit
+def test_repository_list_archives_payload_builds_light_borg2_command():
+    """The Borg 2 listing must restrict the JSON keys to name/id/time — the
+    default key set makes repo-list read every archive's metadata, which
+    borgstore serves as whole-pack loads on remote repositories."""
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "schema_version": 1,
+            "job_kind": "repository.list_archives",
+            "repository": {"path": "/agent/repo2", "borg_version": 2},
+        }
+    )
+
+    assert payload.build_command() == [
+        "borg2",
+        "-r",
+        "/agent/repo2",
+        "repo-list",
+        "--json",
+        "--format",
+        "{name}{id}{time}",
+    ]
+
+
+@pytest.mark.unit
+def test_repository_list_archives_payload_keeps_plain_borg1_command():
+    """Borg 1's list --json reads the manifest only — no per-archive cost, so
+    it stays untouched."""
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "schema_version": 1,
+            "job_kind": "repository.list_archives",
+            "repository": {"path": "/agent/repo", "borg_version": 1},
+        }
+    )
+
+    assert payload.build_command() == [
+        "borg",
+        "list",
+        "--json",
+        "/agent/repo",
+    ]
+
+
+@pytest.mark.unit
 def test_repository_archive_info_payload_builds_borg2_command():
     payload = RepositoryOperationPayload.from_job_payload(
         {
