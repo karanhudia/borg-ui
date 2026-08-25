@@ -38,8 +38,10 @@ const BORG2_ENCRYPTION_FLAGS: Record<string, string> = {
   'repokey-chacha20-poly1305': '--encryption chacha20-poly1305 --key-location repokey',
   'keyfile-aes-ocb': '--encryption aes256-ocb --key-location keyfile',
   'keyfile-chacha20-poly1305': '--encryption chacha20-poly1305 --key-location keyfile',
-  authenticated: '--encryption authenticated',
-  none: '--encryption none',
+  // b23 folded the id hash into the unencrypted mode names; the sha256
+  // variants keep exactly what `authenticated`/`none` produced before.
+  authenticated: '--encryption authenticated-sha256',
+  none: '--encryption none-sha256',
 }
 
 export const generateBorgInitCommand = (options: BorgInitCommandOptions): string => {

@@ -134,7 +134,7 @@ async def test_rcreate_injects_managed_rclone_config_into_process_env(
         "rclone:prod-s3:borg-ui/direct",
         "repo-create",
         "--encryption",
-        "none",
+        "none-sha256",
     )  # 'none' has no key, so repo-create gets no --key-location
     assert captured["env"]["RCLONE_CONFIG"] == str(rclone_root / "rclone.conf")
 
@@ -151,8 +151,8 @@ async def test_rcreate_injects_managed_rclone_config_into_process_env(
             "keyfile-chacha20-poly1305",
             ["--encryption", "chacha20-poly1305", "--key-location", "keyfile"],
         ),
-        ("authenticated", ["--encryption", "authenticated"]),
-        ("none", ["--encryption", "none"]),
+        ("authenticated", ["--encryption", "authenticated-sha256"]),
+        ("none", ["--encryption", "none-sha256"]),
     ],
 )
 def test_encryption_mode_is_translated_to_the_repo_create_split(mode, expected):

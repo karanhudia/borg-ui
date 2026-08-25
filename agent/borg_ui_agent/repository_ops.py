@@ -49,7 +49,9 @@ REPOSITORY_JOB_KINDS = {
 # separate packages and share no imports, so the table is stated twice; a mode
 # missing here is rejected up front with the mode name, mirroring the server —
 # passing it to repo-create would fail with an argument-parsing error that
-# does not name the actual problem.
+# does not name the actual problem. b23 folded the id hash into the mode name
+# for the unencrypted modes (no alias for the plain b22 names); the sha256
+# variants keep exactly what `authenticated`/`none` produced before.
 BORG2_ENCRYPTION_FLAGS = {
     "repokey-aes-ocb": ["--encryption", "aes256-ocb", "--key-location", "repokey"],
     "repokey-chacha20-poly1305": [
@@ -65,8 +67,8 @@ BORG2_ENCRYPTION_FLAGS = {
         "--key-location",
         "keyfile",
     ],
-    "authenticated": ["--encryption", "authenticated"],
-    "none": ["--encryption", "none"],
+    "authenticated": ["--encryption", "authenticated-sha256"],
+    "none": ["--encryption", "none-sha256"],
 }
 
 # Kill a streaming extract only when no bytes have flowed for this long — a

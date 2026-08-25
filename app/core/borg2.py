@@ -64,6 +64,11 @@ logger = structlog.get_logger()
 # always meant: `none` has no key at all, and `authenticated` keeps its key in
 # the repository. blake2 modes are not offered — b22 replaced BLAKE2b with
 # BLAKE3 for new repositories.
+#
+# b23 renamed the unencrypted modes: the id hash became part of the mode name
+# (`authenticated-sha256`/`-blake3`, `none-sha256`/`-blake3`), with no alias
+# for the plain b22 names. The combined names borg-ui stores stay stable; the
+# sha256 variants keep exactly what `authenticated`/`none` produced before.
 BORG2_ENCRYPTION_FLAGS: Dict[str, List[str]] = {
     "repokey-aes-ocb": ["--encryption", "aes256-ocb", "--key-location", "repokey"],
     "repokey-chacha20-poly1305": [
@@ -79,8 +84,8 @@ BORG2_ENCRYPTION_FLAGS: Dict[str, List[str]] = {
         "--key-location",
         "keyfile",
     ],
-    "authenticated": ["--encryption", "authenticated"],
-    "none": ["--encryption", "none"],
+    "authenticated": ["--encryption", "authenticated-sha256"],
+    "none": ["--encryption", "none-sha256"],
 }
 
 BORG2_ENCRYPTION_MODES = list(BORG2_ENCRYPTION_FLAGS)
