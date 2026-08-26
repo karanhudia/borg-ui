@@ -382,9 +382,42 @@ export function ReviewStep({
                   </Typography>
                   {routePreview &&
                     (routePreview.supported ? (
-                      <Typography variant="caption" color="text.secondary">
-                        {t(routeExecutorLabelKey(routePreview.executor))}
-                      </Typography>
+                      <>
+                        <Typography variant="caption" color="text.secondary">
+                          {t(routeExecutorLabelKey(routePreview.executor))}
+                        </Typography>
+                        {routePreview.strategy === 'remote_direct' && (
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              gap: 0.75,
+                              alignItems: 'flex-start',
+                              mt: 0.5,
+                              p: 0.75,
+                              borderRadius: 1,
+                              bgcolor: 'action.hover',
+                            }}
+                          >
+                            <Box sx={{ color: 'info.main', display: 'flex', mt: '1px' }}>
+                              <Laptop size={14} />
+                            </Box>
+                            <Box>
+                              <Typography
+                                variant="caption"
+                                sx={{ display: 'block', fontWeight: 700 }}
+                              >
+                                {t('backupPlans.routePreview.directOnSourceTitle')}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                sx={{ display: 'block', lineHeight: 1.4 }}
+                              >
+                                {t('backupPlans.routePreview.directOnSourceDescription')}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        )}
+                      </>
                     ) : (
                       <Alert severity="warning" sx={{ py: 0, px: 1 }}>
                         {t(routePreview.messageKey || '', routePreview.messageParams)}

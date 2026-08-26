@@ -1428,6 +1428,8 @@
       "runsOnServer": "Runs on Borg UI server",
       "runsOnSshHost": "Runs on SSH host",
       "runsOnManagedAgent": "Runs on managed agent",
+      "directOnSourceTitle": "Sichert direkt auf dem Quellrechner",
+      "directOnSourceDescription": "Borg UI führt Borg über SSH aus und zeigt den Fortschritt hier an.",
       "sourceMustMatchAgent": "This repository is controlled by {{agent}}, so sources must also be on {{agent}}.",
       "agentRepoSshUnsupported": "Agent-owned repositories cannot use SSH repository targets.",
       "serverToAgentRepo": "Borg UI cannot push server-local paths into an agent-owned repository.",

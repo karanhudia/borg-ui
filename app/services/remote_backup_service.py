@@ -107,11 +107,6 @@ class RemoteBackupService:
             if not ssh_connection:
                 raise Exception(f"SSH connection {source_ssh_connection_id} not found")
 
-            if not ssh_connection.is_backup_source:
-                raise Exception(
-                    f"SSH connection {source_ssh_connection_id} is not enabled as backup source"
-                )
-
             # Load repository
             repository = (
                 db.query(Repository).filter(Repository.id == repository_id).first()
@@ -141,7 +136,7 @@ class RemoteBackupService:
                 compression=compression,
                 custom_flags=custom_flags,
                 upload_ratelimit_kib=upload_ratelimit_kib,
-                borg_binary_path=ssh_connection.borg_binary_path,
+                borg_binary_path=ssh_connection.borg_binary_path or "borg",
                 use_sudo=ssh_connection.use_sudo,
             )
 

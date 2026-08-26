@@ -134,6 +134,9 @@ const translations: Record<string, string> = {
   'backupPlans.routePreview.runsOnServer': 'Runs on Borg UI server',
   'backupPlans.routePreview.runsOnSshHost': 'Runs on SSH host',
   'backupPlans.routePreview.runsOnManagedAgent': 'Runs on managed agent',
+  'backupPlans.routePreview.directOnSourceTitle': 'Backs up directly on the source machine',
+  'backupPlans.routePreview.directOnSourceDescription':
+    'Borg UI runs Borg over SSH and streams progress here.',
   'backupPlans.routePreview.sourceMustMatchAgent':
     'This repository is controlled by {{agent}}, so sources must also be on {{agent}}.',
   'backupPlans.routePreview.agentRepoSshUnsupported':
@@ -288,7 +291,7 @@ export const DockerContainerSourceToServerRepo: Story = {
     ),
 }
 
-export const SshSourceToSameSshRepo: Story = {
+export const RemoteDirectExecution: Story = {
   render: () =>
     renderReview(
       stateWith(

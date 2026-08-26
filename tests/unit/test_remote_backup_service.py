@@ -83,10 +83,12 @@ def test_repository_url_keeps_canonical_ssh_url_for_different_connection(test_db
 
 
 @pytest.mark.asyncio
-async def test_execute_remote_backup_updates_same_job_row_and_uses_source_borg_wrapper(
+async def test_execute_remote_backup_does_not_require_backup_source_flag_and_uses_source_borg_wrapper(
     test_db, monkeypatch
 ):
     connection, repository, job = _remote_entities(test_db)
+    connection.is_backup_source = False
+    test_db.commit()
     service = RemoteBackupService()
     commands = []
     connection_id = connection.id
