@@ -200,7 +200,19 @@ class RepositoryOperationPayload:
 
         if self.job_kind == "repository.list_archives":
             if self.borg_version == 2:
-                return [*self._base_borg2("repo-list"), "--json"]
+                # A bare `repo-list --json` fills its default keys by reading
+                # every archive's metadata, which borgstore serves as
+                # whole-pack loads on remote repositories — listing N archives
+                # can transfer N packs. Restricting the keys to what the
+                # server reads (name, id, time) keeps the listing to the
+                # archives directory entries; the --json output shape is
+                # unchanged, borg just emits the requested keys.
+                return [
+                    *self._base_borg2("repo-list"),
+                    "--json",
+                    "--format",
+                    "{name}{id}{time}",
+                ]
             return [*self._base_borg1("list"), "--json", self.repository_path]
 
         if self.job_kind == "repository.list_archive_contents":
