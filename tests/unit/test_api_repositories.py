@@ -1155,6 +1155,71 @@ class TestRepositoriesCreate:
         )
         run_local.assert_not_called()
 
+    def test_agent_repository_info_syncs_archive_stats_to_the_row(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """The live case: stats refresh wrote 1, a backup finished, the info
+        click showed 2 in the dialog while the card kept rendering the stale
+        stored count. The info route now writes the list it fetched back."""
+        agent = _agent_machine_with_capabilities("repository.info")
+        repo = Repository(
+            name="Agent Sync Repo",
+            path="/agent/sync/repo",
+            encryption="repokey-aes-ocb",
+            compression="lz4",
+            executor_type="agent",
+            execution_target="agent",
+            agent_machine_id=1,
+            repository_type="local",
+            borg_version=2,
+            archive_count=1,
+        )
+        test_db.add_all([agent, repo])
+        test_db.commit()
+        repo.agent_machine_id = agent.id
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with (
+            patch(
+                "app.api.repositories.wait_for_agent_repository_operation_job",
+                new=AsyncMock(
+                    return_value={
+                        "data": {
+                            "repository": {"id": "abc"},
+                            "cache": {},
+                            "encryption": {
+                                "encryption": "aes256-ocb",
+                                "id_hash": "sha256",
+                            },
+                            "archives": [
+                                {
+                                    "name": "k8s-borg",
+                                    "start": "2026-08-19T20:03:15.388152+02:00",
+                                },
+                                {
+                                    "name": "k8s-borg",
+                                    "start": "2026-08-19T21:03:18.624537+02:00",
+                                },
+                            ],
+                        }
+                    }
+                ),
+            ),
+            patch(
+                "app.api.repositories._run_repository_command",
+                new=AsyncMock(return_value=(0, b"{}", b"")),
+            ),
+        ):
+            response = test_client.get(
+                f"/api/repositories/{repo.id}/info", headers=admin_headers
+            )
+
+        assert response.status_code == 200
+        test_db.refresh(repo)
+        assert repo.archive_count == 2
+        assert repo.last_backup == datetime(2026, 8, 19, 19, 3, 18, 624537)
+
     async def test_agent_stats_refresh_keeps_count_when_list_job_fails(self, test_db):
         # A completed list job can still carry a non-zero borg exit with no
         # stdout (-> []). That must not wipe the stored archive_count to 0.
@@ -2726,6 +2791,51 @@ class TestRepositoriesStatistics:
         assert cmd[0] == "borg2"
         assert "-r" in cmd
         assert "info" in cmd
+
+    def test_get_repository_info_syncs_archive_stats_on_server_path(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """The server-managed branch must sync the stored columns exactly like
+        the agent branch above it."""
+        repo = Repository(
+            name="V2 Server Sync Repo",
+            path="/tmp/v2-server-sync-repo",
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+            borg_version=2,
+            archive_count=1,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        info_json = json.dumps(
+            {
+                "repository": {"id": "abc"},
+                "archives": [
+                    {"name": "s", "start": "2026-08-19T20:03:15+02:00"},
+                    {"name": "s", "start": "2026-08-19T21:03:18+02:00"},
+                ],
+            }
+        ).encode()
+
+        with (
+            patch("app.core.borg2.borg2.borg_cmd", "borg2"),
+            patch(
+                "app.api.repositories._run_repository_command",
+                new=AsyncMock(return_value=(0, info_json, b"")),
+            ),
+        ):
+            response = test_client.get(
+                f"/api/repositories/{repo.id}/info",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        test_db.refresh(repo)
+        assert repo.archive_count == 2
+        assert repo.last_backup == datetime(2026, 8, 19, 19, 3, 18)
 
     def test_get_repository_stats_not_found(
         self, test_client: TestClient, admin_headers

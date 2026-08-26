@@ -233,6 +233,15 @@ export default function Repositories() {
     retry: false,
   })
 
+  // Fresh info carries the authoritative archive list, and the backend syncs
+  // archive_count/last_backup from it — refetch the list so the card catches
+  // up with the dialog instead of rendering the stale stored count.
+  React.useEffect(() => {
+    if (repositoryInfo) {
+      queryClient.invalidateQueries({ queryKey: ['repositories'] })
+    }
+  }, [repositoryInfo, queryClient])
+
   // Handle repository info error
   React.useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
