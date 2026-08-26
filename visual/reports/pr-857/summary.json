@@ -1,58 +1,21 @@
 {
-  "generatedAt": "2026-08-26T07:41:11.139Z",
+  "generatedAt": "2026-08-26T15:08:08.166Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #857 visual report",
-    "commitSha": "fb78cde74d00",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/32943581640"
+    "commitSha": "f4a659ae7045",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/32983613067"
   },
   "totals": {
     "baseline": 474,
     "actual": 474,
     "compared": 472,
-    "changed": 2,
+    "changed": 0,
     "added": 2,
     "removed": 2,
-    "unchanged": 470
+    "unchanged": 472
   },
-  "changed": [
-    {
-      "fileName": "components-wizard-cloud-mirror--ssh-primary-enabled--mobile.png",
-      "baselinePath": "images/baseline/components-wizard-cloud-mirror--ssh-primary-enabled--mobile.png",
-      "actualPath": "images/actual/components-wizard-cloud-mirror--ssh-primary-enabled--mobile.png",
-      "diffPath": "images/diff/components-wizard-cloud-mirror--ssh-primary-enabled--mobile.png",
-      "diffPixels": 329160,
-      "totalPixels": 329160,
-      "diffRatio": 1,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "components-wizard-rclone-remote-dialog--borg-ui-o-auth-credentials-missing--mobile.png",
-      "baselinePath": "images/baseline/components-wizard-rclone-remote-dialog--borg-ui-o-auth-credentials-missing--mobile.png",
-      "actualPath": "images/actual/components-wizard-rclone-remote-dialog--borg-ui-o-auth-credentials-missing--mobile.png",
-      "diffPath": "images/diff/components-wizard-rclone-remote-dialog--borg-ui-o-auth-credentials-missing--mobile.png",
-      "diffPixels": 60516,
-      "totalPixels": 329160,
-      "diffRatio": 0.18384979948960992,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    }
-  ],
+  "changed": [],
   "added": [
     {
       "fileName": "backup-plans-reviewstep--remote-direct-execution--mobile.png",
@@ -1089,7 +1052,13 @@
       "fileName": "components-wizard-cloud-mirror--scheduled.png"
     },
     {
+      "fileName": "components-wizard-cloud-mirror--ssh-primary-enabled--mobile.png"
+    },
+    {
       "fileName": "components-wizard-cloud-mirror--ssh-primary-enabled.png"
+    },
+    {
+      "fileName": "components-wizard-rclone-remote-dialog--borg-ui-o-auth-credentials-missing--mobile.png"
     },
     {
       "fileName": "components-wizard-rclone-remote-dialog--borg-ui-o-auth-credentials-missing.png"
