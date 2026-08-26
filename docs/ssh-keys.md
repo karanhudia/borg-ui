@@ -181,10 +181,17 @@ needs passwordless sudo that also allows preserving those variables. Prefer a
 rule scoped to the Borg binary with the `SETENV:` tag, for example
 `backup ALL=(root) NOPASSWD: SETENV: /usr/bin/borg` - the path in the rule must
 be the connection's configured Borg binary path, exactly as entered, wrapper
-scripts included, because that is what runs after `sudo`. The configured
-binary or wrapper and its parent directories must be owned by root and not
-writable by the SSH user - otherwise the rule executes user-controlled code
-as root. The unrestricted
+scripts included, because that is what runs after `sudo`.
+
+::: warning The sudo target must not be writable by the SSH user
+The configured Borg binary or wrapper - and every parent directory on its
+path - must be owned by root and not writable by the SSH user. A file or
+directory the SSH user can modify turns the sudo rule into root code
+execution: the user replaces the target (or redirects a parent directory)
+and sudo runs it as root.
+:::
+
+The unrestricted
 `NOPASSWD: ALL` that many images grant their default user works as well, but
 it lets the SSH user run any command as root - use it only where that is
 intentional, and prefer the scoped `SETENV` rule otherwise.
