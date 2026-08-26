@@ -824,3 +824,73 @@ async def test_successful_remote_backup_keeps_transcript_in_job_row_per_policy(
     assert list(log_dir.iterdir()) == []
     assert job.logs.startswith("$ BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes ")
     assert stats in job.logs
+
+
+@pytest.mark.asyncio
+async def test_execute_ssh_command_never_returns_or_logs_the_passphrase(monkeypatch):
+    """A remote shell error can echo the whole command line — including the
+    BORG_PASSPHRASE assignment — on either stream. Both streams are redacted
+    at capture, so neither the returned output nor anything handed to the
+    logger ever carries the secret."""
+    secret = "hunter2-super-secret"
+    echoed = f"sh: 1: BORG_PASSPHRASE={shlex.quote(secret)} borg: not found"
+
+    service = RemoteBackupService()
+    connection = SSHConnection(
+        id=7, host="truenas.example", username="backup", port=2222, ssh_key_id=42
+    )
+    ssh_key = MagicMock(spec=SSHKey)
+    job = MagicMock(spec=BackupJob)
+    db = MagicMock()
+
+    def query_side_effect(model):
+        query = MagicMock()
+        if model == SSHKey:
+            query.filter.return_value.first.return_value = ssh_key
+        elif model == BackupJob:
+            query.filter.return_value.first.return_value = job
+        return query
+
+    db.query.side_effect = query_side_effect
+
+    process = AsyncMock()
+    process.pid = 1234
+    process.stdout.readline = AsyncMock(side_effect=[echoed.encode(), b""])
+    process.stderr.readline = AsyncMock(side_effect=[echoed.encode(), b""])
+    process.wait = AsyncMock(return_value=127)
+
+    log_records: list[tuple] = []
+
+    class RecordingLogger:
+        def __getattr__(self, level):
+            def record(*args, **kwargs):
+                log_records.append((level, args, kwargs))
+
+            return record
+
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.write_ssh_key_to_tempfile",
+        lambda key: "/tmp/source.key",
+    )
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.asyncio.create_subprocess_exec",
+        AsyncMock(return_value=process),
+    )
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.os.unlink", lambda path: None
+    )
+    monkeypatch.setattr("app.services.remote_backup_service.logger", RecordingLogger())
+
+    result = await service._execute_ssh_command(
+        ssh_connection=connection,
+        command=f"BORG_PASSPHRASE={shlex.quote(secret)} borg create /repo::a /data",
+        job_id=99,
+        db=db,
+    )
+
+    for field in ("stdout", "stderr", "error"):
+        assert secret not in (result[field] or ""), field
+    # The mask proves redaction ran (rather than the lines being dropped).
+    assert "BORG_PASSPHRASE=***" in result["stdout"]
+    assert "BORG_PASSPHRASE=***" in result["stderr"]
+    assert secret not in repr(log_records)

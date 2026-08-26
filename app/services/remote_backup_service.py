@@ -564,7 +564,15 @@ class RemoteBackupService:
                         line = await process.stdout.readline()
                         if not line:
                             break
-                        line_str = line.decode("utf-8", errors="replace").strip()
+                        # Redact at capture, like stderr below: a remote shell
+                        # error can echo the whole command line — with its
+                        # BORG_PASSPHRASE assignment — on either stream, and
+                        # stdout_lines is returned and stored. Redaction never
+                        # alters borg's own JSON, so progress parsing still
+                        # sees the line unchanged.
+                        line_str = _redact_command(
+                            line.decode("utf-8", errors="replace").strip()
+                        )
                         stdout_lines.append(line_str)
 
                         # Try to parse Borg JSON progress
@@ -763,16 +771,22 @@ class RemoteBackupService:
 
                     return {"installed": True, "version": version, "path": borg_path}
                 else:
+                    # No passphrase is involved in a --version probe, but the
+                    # stream is redacted anyway: every stderr that leaves this
+                    # service is, so no future caller has to re-check.
+                    stderr_text = _redact_command(
+                        stderr.decode("utf-8", errors="replace")
+                    )
                     logger.warning(
                         "Borg not found on remote host",
                         connection_id=ssh_connection_id,
-                        stderr=stderr.decode("utf-8", errors="replace"),
+                        stderr=stderr_text,
                     )
                     return {
                         "installed": False,
                         "version": None,
                         "path": None,
-                        "error": stderr.decode("utf-8", errors="replace"),
+                        "error": stderr_text,
                     }
 
             finally:
