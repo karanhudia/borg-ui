@@ -577,25 +577,11 @@ async def get_repository_info(
                 timeout=info_timeout,
                 env=env,
             )
-        if (
-            not result["success"]
-            and not bypass_lock
-            and _is_borg2_lock_like_failure(result)
-        ):
-            logger.warning(
-                "Retrying borg2 info_repo with bypass lock after lock-like failure",
-                repo_id=repo.id,
-                path=repo.path,
-            )
-            with repository_borg_env(repo, db) as env:
-                result = await borg2.info_repo(
-                    repository=repo.path,
-                    passphrase=repo.passphrase,
-                    remote_path=repo.remote_path,
-                    bypass_lock=True,
-                    timeout=info_timeout,
-                    env=env,
-                )
+        # No lock-error retry here. It used to re-run the command with
+        # bypass_lock=True, which only ever meant "--bypass-lock" — a flag Borg 2
+        # does not have. With that gone the retry would issue the identical
+        # command and double the wait on every lock error, so the lock error is
+        # reported as one.
         if not result["success"]:
             raise HTTPException(
                 status_code=500,
