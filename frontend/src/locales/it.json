@@ -344,7 +344,7 @@
         "configPreserved": "Lo script conserva la configurazione dell'agente esistente in",
         "serviceUserPreserved": "Il servizio continua inoltre a essere eseguito con l'utente registrato nella sua unità systemd: esegui il comando da qualsiasi account con sudo.",
         "borgInstallation": "Installazione di Borg",
-        "borgSelectionHint": "Preselezionato in base all'ultimo report dell'agente. Selezionando le versioni di Borg vengono aggiornati anche quei binari alle versioni offerte da questo server.",
+        "borgSelectionHint": "Selezionando le versioni di Borg quei binari sull'agente vengono aggiornati alle versioni offerte da questo server. Lascia la selezione su Salta se non intendi eseguire un upgrade di Borg.",
         "borgOptions": {
           "borg1": {
             "label": "Borg 1.x",

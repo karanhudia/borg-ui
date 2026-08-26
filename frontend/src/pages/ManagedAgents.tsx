@@ -69,7 +69,6 @@ import { resolveAgentServerUrl } from './managed-agents/agentServerUrl'
 import {
   buildAgentInstallCommand,
   buildAgentReinstallCommand,
-  deriveBorgInstallMode,
   type BorgInstallMode,
 } from './managed-agents/agentInstallCommandText'
 import {
@@ -1480,13 +1479,13 @@ export function AgentReinstallDialog({
   onCopy: (value: string) => void
 }) {
   const { t } = useTranslation()
-  // Preselected from what the agent last reported: majors whose binaries the
-  // installer manages get verified/updated, everything else defaults to the
-  // reinstall behavior of leaving Borg untouched. The radio group lets the
-  // user override either way.
+  // Always defaults to Skip — a routine reinstall must never preselect a Borg
+  // upgrade (a Borg change moves users between versions, and Borg 2 betas
+  // still change repository formats). Changing Borg is an explicit choice,
+  // reset whenever the dialog targets a different agent.
   const [borgInstallMode, setBorgInstallMode] = useState<BorgInstallMode>('skip')
   useEffect(() => {
-    setBorgInstallMode(deriveBorgInstallMode(agent?.borg_versions))
+    setBorgInstallMode('skip')
   }, [agent])
   const command = buildAgentReinstallCommand(serverUrl, borgInstallMode)
 

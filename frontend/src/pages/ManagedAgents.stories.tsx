@@ -578,39 +578,6 @@ export const AgentReinstallDialogOpen: Story = {
   ),
 }
 
-// An agent whose Borg binaries the installer manages: the Borg selection is
-// preselected from the reported install_source, and the command carries
-// --borg-version accordingly.
-export const AgentReinstallDialogInstallerManagedBorg: Story = {
-  render: () => (
-    <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>
-      <AgentReinstallDialog
-        open
-        agent={{
-          ...agents[0],
-          borg_versions: [
-            {
-              major: 1,
-              version: '1.4.5',
-              path: '/opt/borg-ui-agent/borg1/current/borg',
-              install_source: 'borg-ui-installer',
-            },
-            {
-              major: 2,
-              version: '2.0.0b23',
-              path: '/opt/borg-ui-agent/borg2/current/borg',
-              install_source: 'borg-ui-installer',
-            },
-          ],
-        }}
-        serverUrl="https://borg-ui.example.com"
-        onCancel={() => {}}
-        onCopy={() => {}}
-      />
-    </Box>
-  ),
-}
-
 export const AgentDiagnosticsSuccess: Story = {
   render: () => (
     <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>

@@ -21,10 +21,7 @@ import {
   managedAgentsAPI,
 } from '../../services/api'
 import type { AxiosResponse } from 'axios'
-import {
-  buildAgentReinstallCommand,
-  deriveBorgInstallMode,
-} from '../managed-agents/agentInstallCommandText'
+import { buildAgentReinstallCommand } from '../managed-agents/agentInstallCommandText'
 
 const { mockPlanCan, mockTrackSystem } = vi.hoisted(() => ({
   mockPlanCan: vi.fn((_feature: string) => true),
@@ -746,45 +743,7 @@ describe('ManagedAgents', () => {
     )
   })
 
-  it('derives the Borg selection from the reported install sources', () => {
-    const installer1 = {
-      major: 1,
-      version: '1.4.5',
-      path: '/opt/borg-ui-agent/borg1/current/borg',
-      install_source: 'borg-ui-installer',
-    }
-    const installer2 = {
-      major: 2,
-      version: '2.0.0b23',
-      path: '/opt/borg-ui-agent/borg2/current/borg',
-      install_source: 'borg-ui-installer',
-    }
-
-    expect(deriveBorgInstallMode([installer1, installer2])).toBe('both')
-    expect(deriveBorgInstallMode([installer1])).toBe('borg1')
-    expect(deriveBorgInstallMode([installer2])).toBe('borg2')
-    // Binaries the installer does not manage must not be touched by default:
-    // distro packages, custom paths, or agents that have not reported yet.
-    expect(
-      deriveBorgInstallMode([
-        { major: 1, version: '1.2.8', path: '/usr/bin/borg', install_source: 'system-package' },
-      ])
-    ).toBe('skip')
-    expect(
-      deriveBorgInstallMode([
-        {
-          major: 2,
-          version: '2.0.0b23',
-          path: '/usr/local/bin/borg2',
-          install_source: 'custom-path',
-        },
-      ])
-    ).toBe('skip')
-    expect(deriveBorgInstallMode([])).toBe('skip')
-    expect(deriveBorgInstallMode(undefined)).toBe('skip')
-  })
-
-  it('preselects the reported Borg majors in the reinstall dialog and follows overrides', async () => {
+  it('defaults the reinstall dialog to Skip and makes a Borg change an explicit choice', async () => {
     const user = userEvent.setup()
     const onCopy = vi.fn()
     const agent = {
@@ -826,19 +785,19 @@ describe('ManagedAgents', () => {
     )
 
     const dialog = screen.getByRole('dialog', { name: /reinstall agent/i })
-    expect(
-      within(dialog).getByRole('radio', { name: /Borg 1\.x and Borg 2\.x beta/i })
-    ).toBeChecked()
+    // Even for an agent whose Borg binaries the installer manages, a routine
+    // reinstall must not preselect a Borg upgrade.
+    expect(within(dialog).getByRole('radio', { name: /Skip Borg install/i })).toBeChecked()
 
-    await user.click(within(dialog).getByLabelText('Copy reinstall command'))
-    expect(onCopy).toHaveBeenLastCalledWith(
-      'curl -fsSL https://borg-ui.example.com/agent/install.sh | sudo bash -s -- --reinstall --borg-version both'
-    )
-
-    await user.click(within(dialog).getByRole('radio', { name: /Skip Borg install/i }))
     await user.click(within(dialog).getByLabelText('Copy reinstall command'))
     expect(onCopy).toHaveBeenLastCalledWith(
       'curl -fsSL https://borg-ui.example.com/agent/install.sh | sudo bash -s -- --reinstall'
+    )
+
+    await user.click(within(dialog).getByRole('radio', { name: /Borg 1\.x and Borg 2\.x beta/i }))
+    await user.click(within(dialog).getByLabelText('Copy reinstall command'))
+    expect(onCopy).toHaveBeenLastCalledWith(
+      'curl -fsSL https://borg-ui.example.com/agent/install.sh | sudo bash -s -- --reinstall --borg-version both'
     )
   }, 60000)
 

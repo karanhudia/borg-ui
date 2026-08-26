@@ -52,29 +52,6 @@ export function buildAgentInstallCommand(
     .join(' ')
 }
 
-// Reconstruct the installer's Borg choice from what the agent last reported.
-// The install flags themselves are not persisted anywhere, but the agent
-// classifies each detected binary's install_source, and "borg-ui-installer"
-// means the binary lives where install.sh puts the Borgs it manages — so those
-// majors are the ones a reinstall should verify/update. Anything else
-// (system-package, custom-path, or no report yet) maps to the reinstall
-// default of not touching Borg.
-export function deriveBorgInstallMode(
-  borgVersions?: Array<Record<string, unknown>> | null
-): BorgInstallMode {
-  const installerManaged = new Set<number>()
-  for (const entry of borgVersions ?? []) {
-    if (entry && entry['install_source'] === 'borg-ui-installer') {
-      const major = Number(entry['major'])
-      if (major === 1 || major === 2) installerManaged.add(major)
-    }
-  }
-  if (installerManaged.has(1) && installerManaged.has(2)) return 'both'
-  if (installerManaged.has(1)) return 'borg1'
-  if (installerManaged.has(2)) return 'borg2'
-  return 'skip'
-}
-
 export function buildAgentReinstallCommand(
   serverUrl: string,
   borgInstallMode: BorgInstallMode = 'skip'
