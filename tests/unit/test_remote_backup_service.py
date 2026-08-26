@@ -582,6 +582,16 @@ def test_redact_command_masks_every_shape_shlex_quote_produces():
     assert _redact_command(untouched) == untouched
 
 
+def test_redact_command_is_idempotent():
+    """Output is redacted at capture and again at transcript assembly; the
+    second pass must leave already-masked text untouched (it used to eat the
+    character after the mask, e.g. the colon of a shell error)."""
+    once = _redact_command("bash: BORG_PASSPHRASE='s3cret pass': command not found")
+
+    assert once == "bash: BORG_PASSPHRASE=***: command not found"
+    assert _redact_command(once) == once
+
+
 def test_collapse_carriage_returns_keeps_the_final_state():
     assert (
         _collapse_carriage_returns("Initializing\r 12% done\r 80%\rWARNING: changed\n")
@@ -737,17 +747,20 @@ async def test_failed_remote_backup_stores_redacted_transcript_in_log_file(
 
     async def fake_execute_ssh_command(ssh_connection, command, job_id, db):
         assert "BORG_PASSPHRASE='s3cret pass'" in command
+        # The executor redacts both streams at capture, so its result never
+        # carries the raw value - the stub models that contract, and the
+        # transcript's second redaction pass must leave the mask untouched.
         return {
             "success": False,
             "returncode": 2,
             "stdout": "",
             "stderr": (
-                "bash: BORG_PASSPHRASE='s3cret pass': command not found\n"
+                "bash: BORG_PASSPHRASE=***: command not found\n"
                 "Cannot acquire a passphrase: BORG_PASSPHRASE is not set."
             ),
             "error": (
                 "Remote backup failed with exit code 2: "
-                "bash: BORG_PASSPHRASE='s3cret pass': command not found"
+                "bash: BORG_PASSPHRASE=***: command not found"
             ),
         }
 

@@ -29,8 +29,14 @@ logger = structlog.get_logger()
 
 # BORG_PASSPHRASE=<value> as _build_remote_command emits it: shlex.quote yields
 # either a bare word or a single-quoted string with '"'"' for embedded quotes.
+# The unquoted branch refuses our own mask, which makes redaction IDEMPOTENT:
+# output is redacted at capture and again at transcript assembly, and without
+# the lookahead the second pass would re-match `***` and eat what follows it
+# (e.g. the colon in "BORG_PASSPHRASE=***: command not found"). A real value
+# can never look like the mask here - shlex.quote single-quotes anything
+# containing `*`, so it lands in the quoted branch.
 _PASSPHRASE_ASSIGNMENT = re.compile(
-    r"""BORG_PASSPHRASE=(?:'(?:[^']|'"'"')*'|[^\s']+)"""
+    r"""BORG_PASSPHRASE=(?:'(?:[^']|'"'"')*'|(?!\*\*\*)[^\s']+)"""
 )
 
 
@@ -39,6 +45,7 @@ def _redact_command(text: str) -> str:
 
     Applied to the built command, and defensively to borg's output and the
     error message too - a shell that chokes on the command line echoes it.
+    Idempotent, so capture-time and assembly-time redaction can overlap.
     """
     return _PASSPHRASE_ASSIGNMENT.sub("BORG_PASSPHRASE=***", text)
 
