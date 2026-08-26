@@ -306,6 +306,31 @@ async def test_execute_remote_backup_records_failure_on_same_job_row(
 
 
 @pytest.mark.asyncio
+async def test_execute_remote_backup_rejects_different_source_and_repository_connections(
+    test_db, monkeypatch
+):
+    connection, repository, job = _remote_entities(test_db)
+    other_connection = SSHConnection(host="other.example", username="backup", port=22)
+    test_db.add(other_connection)
+    test_db.flush()
+    repository.connection_id = other_connection.id
+    test_db.commit()
+
+    service = RemoteBackupService()
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.SessionLocal", lambda: test_db
+    )
+
+    with pytest.raises(Exception, match="same SSH connection"):
+        await service.execute_remote_backup(
+            job_id=job.id,
+            source_ssh_connection_id=connection.id,
+            repository_id=repository.id,
+            source_paths=["/var/lib/data"],
+        )
+
+
+@pytest.mark.asyncio
 async def test_execute_remote_backup_keeps_failed_status_when_failure_notification_fails(
     test_db, monkeypatch
 ):

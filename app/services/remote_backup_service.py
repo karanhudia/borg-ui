@@ -120,6 +120,11 @@ class RemoteBackupService:
                     "Remote backups currently only support SSH repositories. "
                     "Local repositories will be supported in a future update."
                 )
+            if repository.connection_id != ssh_connection.id:
+                raise Exception(
+                    "Remote direct backups require the source and repository "
+                    "to use the same SSH connection"
+                )
 
             # Store remote hostname for reference
             job.remote_hostname = ssh_connection.host
@@ -621,7 +626,7 @@ class RemoteBackupService:
 
             try:
                 # Try to find borg binary
-                borg_path = ssh_connection.borg_binary_path or "/usr/bin/borg"
+                borg_path = ssh_connection.borg_binary_path or "borg"
 
                 # Build SSH command to check borg
                 ssh_cmd = [
