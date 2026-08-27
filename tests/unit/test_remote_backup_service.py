@@ -103,9 +103,12 @@ async def test_remote_sudo_command_preserves_only_required_borg_environment(
         use_sudo=True,
     )
 
-    assert "sudo -n -H --preserve-env=" in command
-    assert "BORG_PASSPHRASE" in command
-    assert "BORG_REMOTE_PATH" in command
+    assert (
+        "sudo -n -H --preserve-env="
+        "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK,"
+        "BORG_RELOCATED_REPO_ACCESS_IS_OK,BORG_PASSPHRASE,BORG_REMOTE_PATH" in command
+    )
+    assert "BORG_RSH" not in command
 
 
 @pytest.mark.asyncio

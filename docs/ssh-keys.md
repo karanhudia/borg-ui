@@ -175,9 +175,15 @@ passed to Borg as the repository-side remote Borg path.
 
 When **Use sudo** is enabled on the repository connection, Borg UI runs the
 remote Borg server with `sudo -n -H` for every repository operation. Configure
-passwordless sudo for the Borg binary, and ensure that binary or wrapper and
-its parent directories cannot be modified by the SSH user. `-H` keeps root's
-Borg cache and configuration under `/root` instead of the SSH user's home.
+passwordless sudo with `SETENV` for the Borg binary. Borg UI preserves only
+`BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK`, `BORG_RELOCATED_REPO_ACCESS_IS_OK`,
+`BORG_PASSPHRASE`, and `BORG_REMOTE_PATH` for a remote-direct backup. An
+equivalent `env_keep` policy is also valid. Before creating a plan, verify the
+policy on the remote host with `sudo -n -H /path/to/borg --version`.
+
+Ensure that the Borg binary or wrapper and its parent directories cannot be
+modified by the SSH user. `-H` keeps root's Borg cache and configuration under
+`/root` instead of the SSH user's home.
 
 ## Synology and NAS Path Prefixes
 

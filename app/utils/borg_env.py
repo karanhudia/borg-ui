@@ -6,10 +6,13 @@ import shlex
 from pathlib import Path
 from typing import Iterator, Optional
 
+from sqlalchemy.orm import object_session
+
 from app.config import settings
 from app.utils.ssh_utils import (
     public_key_only_ssh_args,
     resolve_repo_ssh_key_file,
+    resolve_repository_ssh_connection,
     resolve_ssh_key_file_by_id,
 )
 
@@ -99,7 +102,7 @@ def cleanup_temp_key_file(temp_key_file: Optional[str]) -> None:
         os.unlink(temp_key_file)
 
 
-def effective_repository_remote_path(repository) -> Optional[str]:
+def effective_repository_remote_path(repository, db=None) -> Optional[str]:
     """Return the Borg command used by an SSH repository's remote server.
 
     Borg runs its remote side as the SSH user by default. A repository attached
@@ -110,6 +113,16 @@ def effective_repository_remote_path(repository) -> Optional[str]:
     """
     configured_path = getattr(repository, "remote_path", None)
     connection = getattr(repository, "repository_connection", None)
+    if getattr(connection, "use_sudo", None) is not True:
+        session = db
+        if session is None:
+            try:
+                session = object_session(repository)
+            except Exception:
+                session = None
+        if session is not None:
+            connection = resolve_repository_ssh_connection(repository, session)
+
     if not connection or getattr(connection, "use_sudo", False) is not True:
         return configured_path
 
@@ -140,7 +153,7 @@ def build_repository_borg_env(
         lock_wait=lock_wait,
         show_progress=show_progress,
     )
-    remote_path = effective_repository_remote_path(repository)
+    remote_path = effective_repository_remote_path(repository, db)
     if remote_path:
         env["BORG_REMOTE_PATH"] = remote_path
     return env, temp_key_file
