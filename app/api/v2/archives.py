@@ -34,7 +34,7 @@ from app.services.repository_executor import (
     wait_for_agent_repository_operation_job,
 )
 from app.services.v2.archive_browse import get_browse_depth, is_fast_browse_enabled
-from app.utils.borg_env import repository_borg_env
+from app.utils.borg_env import effective_repository_remote_path, repository_borg_env
 from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
@@ -183,7 +183,7 @@ async def _resolve_archive_name(repo: Repository, archive_ref: str, db: Session)
             result = await borg2.list_archives(
                 repo.path,
                 passphrase=repo.passphrase,
-                remote_path=repo.remote_path,
+                remote_path=effective_repository_remote_path(repo),
                 bypass_lock=repo.bypass_lock,
                 env=env,
             )
@@ -191,7 +191,7 @@ async def _resolve_archive_name(repo: Repository, archive_ref: str, db: Session)
         result = await borg2.list_archives(
             repo.path,
             passphrase=repo.passphrase,
-            remote_path=repo.remote_path,
+            remote_path=effective_repository_remote_path(repo),
             bypass_lock=repo.bypass_lock,
         )
     if not result["success"]:
@@ -254,7 +254,7 @@ async def list_archives(
             result = await borg2.list_archives(
                 repo.path,
                 passphrase=repo.passphrase,
-                remote_path=repo.remote_path,
+                remote_path=effective_repository_remote_path(repo),
                 bypass_lock=repo.bypass_lock,
                 env=env,
             )
@@ -262,7 +262,7 @@ async def list_archives(
         result = await borg2.list_archives(
             repo.path,
             passphrase=repo.passphrase,
-            remote_path=repo.remote_path,
+            remote_path=effective_repository_remote_path(repo),
             bypass_lock=repo.bypass_lock,
         )
     if not result.get("success", bool(result.get("stdout"))):
@@ -298,7 +298,7 @@ async def get_archive_info(
                 repo.path,
                 archive_selector,
                 passphrase=repo.passphrase,
-                remote_path=repo.remote_path,
+                remote_path=effective_repository_remote_path(repo),
                 bypass_lock=repo.bypass_lock,
                 env=env,
             )
@@ -307,7 +307,7 @@ async def get_archive_info(
             repo.path,
             archive_selector,
             passphrase=repo.passphrase,
-            remote_path=repo.remote_path,
+            remote_path=effective_repository_remote_path(repo),
             bypass_lock=repo.bypass_lock,
         )
     if not result.get("success", bool(result.get("stdout"))):
@@ -355,7 +355,7 @@ async def get_archive_info(
                         repo.path,
                         archive_selector,
                         passphrase=repo.passphrase,
-                        remote_path=repo.remote_path,
+                        remote_path=effective_repository_remote_path(repo),
                         bypass_lock=repo.bypass_lock,
                         env=env,
                     )
@@ -364,7 +364,7 @@ async def get_archive_info(
                     repo.path,
                     archive_selector,
                     passphrase=repo.passphrase,
-                    remote_path=repo.remote_path,
+                    remote_path=effective_repository_remote_path(repo),
                     bypass_lock=repo.bypass_lock,
                 )
             if list_result.get("success", bool(list_result.get("stdout"))):
@@ -456,7 +456,7 @@ async def get_archive_contents(
                     "archive": archive_selector,
                     "path": path if fast_browse else "",
                     "passphrase": repo.passphrase,
-                    "remote_path": repo.remote_path,
+                    "remote_path": effective_repository_remote_path(repo),
                     "bypass_lock": repo.bypass_lock,
                     "env": env,
                 }
@@ -469,7 +469,7 @@ async def get_archive_contents(
                 "archive": archive_selector,
                 "path": path if fast_browse else "",
                 "passphrase": repo.passphrase,
-                "remote_path": repo.remote_path,
+                "remote_path": effective_repository_remote_path(repo),
                 "bypass_lock": repo.bypass_lock,
             }
             if fast_browse:
@@ -619,7 +619,7 @@ async def download_file_from_archive(
                         [file_path],
                         temp_dir,
                         passphrase=repo.passphrase,
-                        remote_path=repo.remote_path,
+                        remote_path=effective_repository_remote_path(repo),
                         bypass_lock=repo.bypass_lock,
                         env=env,
                     )
@@ -629,7 +629,7 @@ async def download_file_from_archive(
                 [file_path],
                 temp_dir,
                 passphrase=repo.passphrase,
-                remote_path=repo.remote_path,
+                remote_path=effective_repository_remote_path(repo),
                 bypass_lock=repo.bypass_lock,
             )
 

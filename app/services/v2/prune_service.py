@@ -12,7 +12,11 @@ from app.core.borg_router import BorgRouter
 from app.database.database import SessionLocal
 from app.database.models import PruneJob, Repository
 from app.utils.db_retries import commit_with_retry
-from app.utils.borg_env import build_repository_borg_env, cleanup_temp_key_file
+from app.utils.borg_env import (
+    build_repository_borg_env,
+    cleanup_temp_key_file,
+    effective_repository_remote_path,
+)
 
 logger = structlog.get_logger()
 
@@ -73,7 +77,7 @@ class PruneV2Service:
             dry_run=dry_run,
             keep_within=keep_within,
             passphrase=repo.passphrase,
-            remote_path=repo.remote_path,
+            remote_path=effective_repository_remote_path(repo),
         )
 
     async def execute_prune(
@@ -138,8 +142,8 @@ class PruneV2Service:
             env, temp_key_file = build_repository_borg_env(repo, db, keepalive=True)
             borg_cmd = _get_borg2_binary()
             cmd = [borg_cmd, "-r", repo.path, "prune", "--list"]
-            if repo.remote_path:
-                cmd.extend(["--remote-path", repo.remote_path])
+            if remote_path := effective_repository_remote_path(repo):
+                cmd.extend(["--remote-path", remote_path])
             if keep_hourly > 0:
                 cmd.extend(["--keep-hourly", str(keep_hourly)])
             if keep_daily > 0:

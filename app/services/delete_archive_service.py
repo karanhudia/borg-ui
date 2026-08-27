@@ -9,7 +9,11 @@ from app.config import settings
 from app.core.borg import borg
 from app.core.borg_errors import is_borg_warning_exit_code
 from app.utils.db_retries import commit_with_retry
-from app.utils.borg_env import build_repository_borg_env, cleanup_temp_key_file
+from app.utils.borg_env import (
+    build_repository_borg_env,
+    cleanup_temp_key_file,
+    effective_repository_remote_path,
+)
 
 logger = structlog.get_logger()
 
@@ -106,8 +110,8 @@ class DeleteArchiveService:
 
             # Build command
             cmd = [borg.borg_cmd, "delete", "--stats", "--progress"]
-            if repository.remote_path:
-                cmd.extend(["--remote-path", repository.remote_path])
+            if remote_path := effective_repository_remote_path(repository):
+                cmd.extend(["--remote-path", remote_path])
             cmd.append(f"{repository.path}::{archive_name}")
 
             logger.info(

@@ -13,6 +13,7 @@ from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 from app.config import settings
 from app.core.borg_router import BorgRouter
+from app.utils.borg_env import effective_repository_remote_path
 from app.database.models import (
     AgentJob,
     BackupPlanRun,
@@ -464,7 +465,7 @@ def break_repository_lock(repository: Repository) -> bool:
     try:
         cmd = BorgRouter(repository).build_break_lock_command(
             repository_path=repository.path,
-            remote_path=repository.remote_path,
+            remote_path=effective_repository_remote_path(repository),
         )
 
         # Set environment variables

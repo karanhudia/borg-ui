@@ -8,6 +8,7 @@ from typing import List, Optional
 
 from app.core.borg2 import borg2
 from app.database.models import Repository
+from app.utils.borg_env import effective_repository_remote_path
 
 
 class RestoreV2Service:
@@ -53,7 +54,7 @@ class RestoreV2Service:
             "destination": destination,
             "dry_run": True,
             "passphrase": repo.passphrase,
-            "remote_path": repo.remote_path,
+            "remote_path": effective_repository_remote_path(repo),
             "bypass_lock": repo.bypass_lock,
         }
         if env is not None:
@@ -74,7 +75,7 @@ class RestoreV2Service:
             "archive": archive,
             "path": path,
             "passphrase": repo.passphrase,
-            "remote_path": repo.remote_path,
+            "remote_path": effective_repository_remote_path(repo),
             "max_lines": max_lines,
             "bypass_lock": repo.bypass_lock,
         }

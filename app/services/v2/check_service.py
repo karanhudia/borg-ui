@@ -18,7 +18,11 @@ from app.core.borg2 import _get_borg2_binary
 from app.core.borg_errors import is_borg_warning_exit_code
 from app.config import settings
 from app.utils.db_retries import commit_with_retry
-from app.utils.borg_env import build_repository_borg_env, cleanup_temp_key_file
+from app.utils.borg_env import (
+    build_repository_borg_env,
+    cleanup_temp_key_file,
+    effective_repository_remote_path,
+)
 from app.utils.ssh_utils import (
     resolve_repo_ssh_key_file,  # noqa: F401
 )  # Backward-compatible patch target for tests
@@ -165,8 +169,8 @@ class CheckV2Service:
                         extra_flags=extra_flags,
                         error=str(exc),
                     )
-            if repo.remote_path:
-                cmd.extend(["--remote-path", repo.remote_path])
+            if remote_path := effective_repository_remote_path(repo):
+                cmd.extend(["--remote-path", remote_path])
 
             logger.info(
                 "Starting borg2 check",

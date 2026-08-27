@@ -260,6 +260,7 @@ class Repository(Base):
     connection_id = Column(
         Integer, ForeignKey("ssh_connections.id"), nullable=True
     )  # Associated SSH connection (preferred over host/port/username)
+    repository_connection = relationship("SSHConnection", foreign_keys=[connection_id])
     remote_path = Column(
         String, nullable=True
     )  # Path to borg binary on remote server (e.g., /usr/local/bin/borg)

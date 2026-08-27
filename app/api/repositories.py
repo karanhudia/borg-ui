@@ -116,12 +116,14 @@ from app.utils.source_locations import (
     normalize_source_locations,
 )
 from app.utils.borg_env import (
+    build_repository_borg_env,
+    effective_repository_remote_path,
     get_standard_ssh_opts as shared_get_standard_ssh_opts,
     setup_borg_env as shared_setup_borg_env,
     cleanup_temp_key_file,
 )
 from app.utils.ssh_utils import (
-    resolve_repo_ssh_key_file,
+    resolve_repo_ssh_key_file,  # noqa: F401
     ssh_key_auth_args,
 )  # Backward-compatible patch target for tests
 
@@ -473,13 +475,7 @@ def _prepare_repository_borg_env(repository: Repository, db: Session):
     Returns the environment plus any temporary SSH key file that must be
     cleaned up by the caller.
     """
-    temp_key_file = resolve_repo_ssh_key_file(repository, db)
-    ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
-    env = setup_borg_env(
-        passphrase=repository.passphrase,
-        ssh_opts=ssh_opts,
-    )
-    return env, temp_key_file
+    return build_repository_borg_env(repository, db)
 
 
 def _repository_stats_borg_env(env: Dict[str, str]) -> Dict[str, str]:
@@ -5996,8 +5992,8 @@ async def list_repository_archives(
         )
         router = BorgRouter(repository)
         cmd = router.build_repo_list_command(repository.path)
-        if repository.remote_path:
-            cmd.extend(["--remote-path", repository.remote_path])
+        if remote_path := effective_repository_remote_path(repository):
+            cmd.extend(["--remote-path", remote_path])
         # BorgRouter returns a Borg 2 command for a Borg 2 repository, and Borg 2
         # has no --bypass-lock (see app/core/borg2.py), so the flag goes on only
         # where it exists.
@@ -6103,8 +6099,8 @@ async def get_repository_info(
         )
         router = BorgRouter(repository)
         cmd = router.build_repo_info_command(repository.path)
-        if repository.remote_path:
-            cmd.extend(["--remote-path", repository.remote_path])
+        if remote_path := effective_repository_remote_path(repository):
+            cmd.extend(["--remote-path", remote_path])
         # BorgRouter returns a Borg 2 command for a Borg 2 repository, and Borg 2
         # has no --bypass-lock (see app/core/borg2.py), so the flag goes on only
         # where it exists.
@@ -6238,8 +6234,8 @@ async def get_repository_stats(
         cmd = router.build_repo_info_command(repository.path)
         if bypass_lock:
             cmd.append("--bypass-lock")
-        if repository.remote_path:
-            cmd.extend(["--remote-path", repository.remote_path])
+        if remote_path := effective_repository_remote_path(repository):
+            cmd.extend(["--remote-path", remote_path])
         info_result = await borg._execute_command(cmd, env=env)
 
         if not info_result["success"]:

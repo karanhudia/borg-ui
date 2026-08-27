@@ -342,7 +342,11 @@ class RemoteBackupService:
 
         # Borg binary path (optionally prefixed with sudo)
         if use_sudo:
-            cmd_parts.append("sudo")
+            cmd_parts.append(
+                "sudo -n -H "
+                "--preserve-env=BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK,"
+                "BORG_RELOCATED_REPO_ACCESS_IS_OK,BORG_PASSPHRASE,BORG_REMOTE_PATH"
+            )
         cmd_parts.append(shlex.quote(borg_binary_path))
 
         # Create command

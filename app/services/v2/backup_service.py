@@ -10,6 +10,7 @@ from typing import List, Optional
 
 from app.core.borg2 import borg2
 from app.database.models import Repository
+from app.utils.borg_env import effective_repository_remote_path
 
 
 class BackupV2Service:
@@ -81,7 +82,7 @@ class BackupV2Service:
             compression=repo.compression or "lz4",
             archive_name=archive_name,
             passphrase=repo.passphrase,
-            remote_path=repo.remote_path,
+            remote_path=effective_repository_remote_path(repo),
         )
 
 

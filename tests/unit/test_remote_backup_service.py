@@ -83,6 +83,32 @@ def test_repository_url_keeps_canonical_ssh_url_for_different_connection(test_db
 
 
 @pytest.mark.asyncio
+async def test_remote_sudo_command_preserves_only_required_borg_environment(
+    test_db, monkeypatch
+):
+    connection, repository, _job = _remote_entities(test_db)
+    connection.use_sudo = True
+    test_db.commit()
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.SessionLocal", lambda: test_db
+    )
+
+    command = await RemoteBackupService()._build_remote_command(
+        repository=repository,
+        source_ssh_connection=connection,
+        archive_name="test",
+        source_paths=["/srv/data"],
+        exclude_patterns=[],
+        borg_binary_path=connection.borg_binary_path,
+        use_sudo=True,
+    )
+
+    assert "sudo -n -H --preserve-env=" in command
+    assert "BORG_PASSPHRASE" in command
+    assert "BORG_REMOTE_PATH" in command
+
+
+@pytest.mark.asyncio
 async def test_execute_remote_backup_updates_same_job_row_and_uses_source_borg_wrapper(
     test_db, monkeypatch
 ):

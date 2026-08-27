@@ -26,6 +26,7 @@ from cryptography.fernet import Fernet
 
 from app.config import settings
 from app.core.borg_router import BorgRouter
+from app.utils.borg_env import effective_repository_remote_path
 from app.core.security import decrypt_secret
 from app.database.database import SessionLocal
 from app.database.models import SSHConnection, SSHKey, Repository, SystemSettings
@@ -1082,7 +1083,7 @@ class MountService:
                     repository_path=repository.path,
                     archive_name=archive_name,
                     mount_point=mount_point,
-                    remote_path=repository.remote_path,
+                    remote_path=effective_repository_remote_path(repository),
                     bypass_lock=repository.bypass_lock,
                 )
 

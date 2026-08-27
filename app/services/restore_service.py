@@ -16,6 +16,7 @@ from app.services.notification_service import notification_service
 from app.utils.borg_env import (
     build_repository_borg_env,
     cleanup_temp_key_file,
+    effective_repository_remote_path,
     get_standard_ssh_opts,
 )
 from app.utils.restore_layout import (
@@ -607,7 +608,11 @@ class RestoreService:
                     repository_path=repository_path,
                     archive_name=archive_name,
                     paths=paths or [],
-                    remote_path=repository.remote_path if repository else None,
+                    remote_path=(
+                        effective_repository_remote_path(repository)
+                        if repository
+                        else None
+                    ),
                     bypass_lock=repository.bypass_lock if repository else False,
                     strip_components=strip_components,
                 )
@@ -1300,7 +1305,9 @@ class RestoreService:
                 repository_path=repository_path,
                 archive_name=archive_name,
                 paths=paths or [],
-                remote_path=repository.remote_path if repository else None,
+                remote_path=(
+                    effective_repository_remote_path(repository) if repository else None
+                ),
                 bypass_lock=repository.bypass_lock if repository else False,
                 strip_components=strip_components,
             )

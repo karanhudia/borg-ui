@@ -66,7 +66,7 @@ Common options:
 | SFTP deployment mode | Key deployment needs SFTP mode, for example Hetzner Storage Box |
 | SSH path prefix | SSH commands need a prefix that SFTP browsing does not, for example some NAS paths |
 | Logical mount point | You want a friendly name for the remote machine in path pickers |
-| Use sudo | SSHFS access needs the remote SFTP server to run through sudo |
+| Use sudo | Remote source files or a remote repository need root access |
 
 SFTP deployment mode can break some older SSH servers or NAS devices. Disable it when key deployment fails on those systems.
 
@@ -172,6 +172,12 @@ Use the connection's Borg binary path when the source host needs a wrapper
 script, for example to pause Docker containers before Borg starts and resume
 them after Borg exits. The repository `remote_path` setting is different: it is
 passed to Borg as the repository-side remote Borg path.
+
+When **Use sudo** is enabled on the repository connection, Borg UI runs the
+remote Borg server with `sudo -n -H` for every repository operation. Configure
+passwordless sudo for the Borg binary, and ensure that binary or wrapper and
+its parent directories cannot be modified by the SSH user. `-H` keeps root's
+Borg cache and configuration under `/root` instead of the SSH user's home.
 
 ## Synology and NAS Path Prefixes
 

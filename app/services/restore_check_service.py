@@ -23,7 +23,11 @@ from app.services.restore_check_canary import (
     get_restore_canary_archive_paths,
     verify_restored_canary,
 )
-from app.utils.borg_env import build_repository_borg_env, cleanup_temp_key_file
+from app.utils.borg_env import (
+    build_repository_borg_env,
+    cleanup_temp_key_file,
+    effective_repository_remote_path,
+)
 
 logger = structlog.get_logger()
 
@@ -306,7 +310,7 @@ class RestoreCheckService:
                     repository_path=repository.path,
                     archive_name=archive_name,
                     paths=paths,
-                    remote_path=repository.remote_path,
+                    remote_path=effective_repository_remote_path(repository),
                     bypass_lock=repository.bypass_lock,
                 )
 

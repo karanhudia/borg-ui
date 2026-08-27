@@ -13,7 +13,11 @@ from app.database.database import SessionLocal
 from app.core.borg2 import borg2
 from app.config import settings
 from app.utils.db_retries import commit_with_retry
-from app.utils.borg_env import build_repository_borg_env, cleanup_temp_key_file
+from app.utils.borg_env import (
+    build_repository_borg_env,
+    cleanup_temp_key_file,
+    effective_repository_remote_path,
+)
 
 logger = structlog.get_logger()
 
@@ -78,7 +82,7 @@ class DeleteArchiveV2Service:
                 repository=repo.path,
                 archive=archive_name,
                 passphrase=repo.passphrase,
-                remote_path=repo.remote_path,
+                remote_path=effective_repository_remote_path(repo),
                 env=env,
             )
 
@@ -122,7 +126,7 @@ class DeleteArchiveV2Service:
             compact_result = await borg2.compact(
                 repository=repo.path,
                 passphrase=repo.passphrase,
-                remote_path=repo.remote_path,
+                remote_path=effective_repository_remote_path(repo),
                 env=env,
             )
 
