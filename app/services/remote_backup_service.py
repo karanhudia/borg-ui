@@ -18,6 +18,7 @@ import structlog
 from sqlalchemy.orm import Session
 
 from app.database.models import BackupJob, Repository, SSHConnection, SSHKey
+from app.utils.borg_env import effective_repository_remote_path
 from app.database.database import SessionLocal
 from app.config import settings
 from app.core.borg_errors import is_borg_warning_exit_code
@@ -317,6 +318,7 @@ class RemoteBackupService:
             repo_url = self._get_repository_url(
                 repository, db, source_ssh_connection=source_ssh_connection
             )
+            remote_path = effective_repository_remote_path(repository, db)
         finally:
             db.close()
 
@@ -337,8 +339,8 @@ class RemoteBackupService:
             cmd_parts.append(f"BORG_PASSPHRASE={escaped_passphrase}")
 
         # Add remote path if configured
-        if repository.remote_path:
-            cmd_parts.append(f"BORG_REMOTE_PATH={shlex.quote(repository.remote_path)}")
+        if remote_path:
+            cmd_parts.append(f"BORG_REMOTE_PATH={shlex.quote(remote_path)}")
 
         # Borg binary path (optionally prefixed with sudo)
         if use_sudo:
