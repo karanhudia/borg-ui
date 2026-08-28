@@ -179,7 +179,19 @@ passwordless sudo with `SETENV` for the Borg binary. Borg UI preserves only
 `BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK`, `BORG_RELOCATED_REPO_ACCESS_IS_OK`,
 `BORG_PASSPHRASE`, and `BORG_REMOTE_PATH` for a remote-direct backup. An
 equivalent `env_keep` policy is also valid. Before creating a plan, verify the
-policy on the remote host with `sudo -n -H /path/to/borg --version`.
+policy on the remote host with the same environment-preservation request used
+by Borg UI:
+
+```bash
+BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes \\
+BORG_RELOCATED_REPO_ACCESS_IS_OK=yes \\
+BORG_PASSPHRASE=preflight \\
+BORG_REMOTE_PATH=borg \\
+sudo -n -H \\
+  --preserve-env=BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK,\\
+BORG_RELOCATED_REPO_ACCESS_IS_OK,BORG_PASSPHRASE,BORG_REMOTE_PATH \\
+  /path/to/borg --version
+```
 
 Ensure that the Borg binary or wrapper and its parent directories cannot be
 modified by the SSH user. `-H` keeps root's Borg cache and configuration under
