@@ -3,10 +3,10 @@ apprise==1.13.0
 bcrypt==5.0.0
 coverage[toml]==7.15.4
 croniter==6.2.4
-cryptography==50.0.0
+cryptography==50.0.1
 fastapi-cache2==0.2.2
 fastapi==0.141.1
-gunicorn==26.1.0
+gunicorn==26.2.0
 httpx==0.28.1
 psutil==7.2.2
 psycopg[binary]==3.3.4
@@ -22,7 +22,7 @@ python-multipart==0.0.32
 pyyaml==6.0.3
 redis==8.1.0
 requests==2.34.2
-ruff==0.16.4
+ruff==0.16.5
 sqlalchemy==2.0.52
 structlog==26.1.0
 tzdata==2026.3
