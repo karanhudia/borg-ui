@@ -41,8 +41,8 @@ jobs:
       - name: Run npm audit
         working-directory: frontend
         run: |
-          # Audit production dependencies only (omit dev) — devDependencies like eslint
-          # and their transitive deps (brace-expansion, minimatch) never ship to production
+          # Audit production dependencies only (omit dev) — devDependencies like oxlint
+          # and their transitive deps never ship to production
           # and are not part of the runtime attack surface. npm audit has no ignore
           # flag, so a wrapper gates the JSON against a tracked allowlist of reviewed,
           # non-applicable advisories (security/npm-audit-known-vulns.json).
