@@ -45,6 +45,14 @@ def _remote_entities(test_db):
     return connection, repository, job
 
 
+def test_ssh_connection_defaults_to_path_resolved_borg(test_db):
+    connection = SSHConnection(host="path.example", username="backup", port=22)
+    test_db.add(connection)
+    test_db.flush()
+
+    assert connection.borg_binary_path == "borg"
+
+
 def test_repository_url_uses_remote_path_for_same_source_connection(test_db):
     connection, repository, _job = _remote_entities(test_db)
     repository.path = "ssh://backup@docker-host.example:2222/repos/remote-direct"
