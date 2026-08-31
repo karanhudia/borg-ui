@@ -23,7 +23,11 @@ from app.database.database import SessionLocal
 from app.config import settings
 from app.core.borg_errors import is_borg_warning_exit_code
 from app.services.notification_service import notification_service
-from app.utils.ssh_utils import ssh_key_auth_args, write_ssh_key_to_tempfile
+from app.utils.ssh_utils import (
+    resolve_repository_ssh_connection,
+    ssh_key_auth_args,
+    write_ssh_key_to_tempfile,
+)
 
 logger = structlog.get_logger()
 
@@ -120,8 +124,8 @@ class RemoteBackupService:
             if not repository:
                 raise Exception(f"Repository {repository_id} not found")
 
-            # Verify repository is SSH type (Phase 1 limitation)
-            if not repository.connection_id:
+            repository_connection = resolve_repository_ssh_connection(repository, db)
+            if not repository_connection:
                 raise Exception(
                     "Remote backups currently only support SSH repositories. "
                     "Local repositories will be supported in a future update."
@@ -405,10 +409,11 @@ class RemoteBackupService:
         Examples:
         - SSH repo: ssh://backup@repo-host:22/path
         """
-        if repository.connection_id:
+        connection = resolve_repository_ssh_connection(repository, db)
+        if connection:
             if (
                 source_ssh_connection is not None
-                and repository.connection_id == source_ssh_connection.id
+                and connection.id == source_ssh_connection.id
             ):
                 return self._extract_remote_repository_path(repository.path)
 
@@ -418,13 +423,6 @@ class RemoteBackupService:
                 return repository.path
 
             # Get SSH connection details
-            connection = (
-                db.query(SSHConnection)
-                .filter(SSHConnection.id == repository.connection_id)
-                .first()
-            )
-            if not connection:
-                raise ValueError(f"SSH connection {repository.connection_id} not found")
             return f"ssh://{connection.username}@{connection.host}:{connection.port}{repository.path}"
         else:
             raise NotImplementedError(

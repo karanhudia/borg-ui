@@ -103,20 +103,24 @@ async def test_remote_sudo_command_preserves_only_required_borg_environment(
         use_sudo=True,
     )
 
-    assert (
-        "sudo -n -H --preserve-env="
+    preserved_environment = (
         "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK,"
-        "BORG_RELOCATED_REPO_ACCESS_IS_OK,BORG_PASSPHRASE,BORG_REMOTE_PATH" in command
+        "BORG_RELOCATED_REPO_ACCESS_IS_OK,BORG_PASSPHRASE,BORG_REMOTE_PATH"
     )
+    assert f"--preserve-env={preserved_environment} " in command
+    assert command.count("--preserve-env=") == 1
     assert "BORG_REMOTE_PATH='sudo -n -H /usr/local/bin/borg-wrapper'" in command
     assert "BORG_RSH" not in command
 
 
 @pytest.mark.asyncio
-async def test_execute_remote_backup_updates_same_job_row_and_uses_source_borg_wrapper(
+async def test_execute_remote_backup_supports_legacy_repository_urls_and_uses_source_borg_wrapper(
     test_db, monkeypatch
 ):
     connection, repository, job = _remote_entities(test_db)
+    repository.connection_id = None
+    repository.path = "ssh://backup@docker-host.example:2222/repos/remote-direct"
+    test_db.commit()
     service = RemoteBackupService()
     commands = []
     connection_id = connection.id
