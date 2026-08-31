@@ -78,15 +78,17 @@ def _find_matching_ssh_connection(path: str, db) -> Optional[SSHConnection]:
     if not parsed.hostname or not parsed.username:
         return None
 
-    return (
+    matches = (
         db.query(SSHConnection)
         .filter(
             SSHConnection.host == parsed.hostname,
             SSHConnection.username == parsed.username,
             SSHConnection.port == port,
         )
-        .first()
+        .limit(2)
+        .all()
     )
+    return matches[0] if len(matches) == 1 else None
 
 
 def resolve_repository_ssh_connection(repository, db) -> Optional[SSHConnection]:
