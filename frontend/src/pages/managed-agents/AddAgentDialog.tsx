@@ -6,14 +6,10 @@ import {
   Chip,
   DialogActions,
   FormControl,
-  FormControlLabel,
   FormHelperText,
-  FormLabel,
   InputLabel,
   MenuItem,
   Paper,
-  Radio,
-  RadioGroup,
   Select,
   Stack,
   TextField,
@@ -29,6 +25,7 @@ import type {
 } from '../../services/api'
 import AgentInstallCommand from './AgentInstallCommand'
 import type { AgentServiceUserMode, BorgInstallMode } from './agentInstallCommandText'
+import BorgInstallModeRadioGroup from './BorgInstallModeRadioGroup'
 import { isLocalAgentServerUrl, normalizeAgentServerUrl } from './agentServerUrl'
 
 type WizardStepIndex = 0 | 1 | 2
@@ -67,8 +64,6 @@ function InlineWarning({ children }: { children: ReactNode }) {
 type ExpiryOption = '1h' | '24h' | '7d' | '30d' | 'never'
 
 const expiryOptions: ExpiryOption[] = ['1h', '24h', '7d', '30d', 'never']
-
-const borgInstallOptions: BorgInstallMode[] = ['borg1', 'borg2', 'both', 'skip']
 
 const serviceUserOptions: AgentServiceUserMode[] = ['current', 'dedicated', 'root']
 
@@ -420,65 +415,11 @@ export default function AddAgentDialog({
           )}
         </FormHelperText>
       </FormControl>
-      <FormControl component="fieldset">
-        <FormLabel component="legend">{t('managedAgents.add.borgInstallation')}</FormLabel>
-        <RadioGroup
-          value={borgInstallMode}
-          onChange={(event) => setBorgInstallMode(event.target.value as BorgInstallMode)}
-          sx={{
-            mt: 1,
-            display: 'grid',
-            gap: 1,
-            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
-          }}
-        >
-          {borgInstallOptions.map((option) => {
-            const selected = borgInstallMode === option
-            return (
-              <FormControlLabel
-                key={option}
-                value={option}
-                control={<Radio />}
-                label={
-                  <Stack spacing={0.35} sx={{ minWidth: 0 }}>
-                    <Typography
-                      sx={{
-                        fontWeight: 700,
-                      }}
-                    >
-                      {t(`managedAgents.add.borgOptions.${option}.label`)}
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        color: 'text.secondary',
-                      }}
-                    >
-                      {t(`managedAgents.add.borgOptions.${option}.description`)}
-                    </Typography>
-                  </Stack>
-                }
-                sx={{
-                  m: 0,
-                  p: 1.25,
-                  alignItems: 'flex-start',
-                  border: '1px solid',
-                  borderColor: selected ? 'primary.main' : 'divider',
-                  borderRadius: 1,
-                  bgcolor: selected ? 'action.hover' : 'background.paper',
-                  cursor: 'pointer',
-                  transition: 'border-color 180ms ease, background-color 180ms ease',
-                  '&:hover': {
-                    borderColor: selected ? 'primary.main' : 'text.secondary',
-                    bgcolor: 'action.hover',
-                  },
-                  '& .MuiFormControlLabel-label': { width: '100%' },
-                }}
-              />
-            )
-          })}
-        </RadioGroup>
-      </FormControl>
+      <BorgInstallModeRadioGroup
+        value={borgInstallMode}
+        onChange={setBorgInstallMode}
+        i18nPrefix="managedAgents.add"
+      />
     </Stack>
   )
 

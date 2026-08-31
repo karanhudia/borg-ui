@@ -66,7 +66,7 @@ Common options:
 | SFTP deployment mode | Key deployment needs SFTP mode, for example Hetzner Storage Box |
 | SSH path prefix | SSH commands need a prefix that SFTP browsing does not, for example some NAS paths |
 | Logical mount point | You want a friendly name for the remote machine in path pickers |
-| Use sudo | Remote source files or a remote repository need root access |
+| Use sudo | Remote source files or a remote repository need root access; see the sudo requirements below |
 
 SFTP deployment mode can break some older SSH servers or NAS devices. Disable it when key deployment fails on those systems.
 

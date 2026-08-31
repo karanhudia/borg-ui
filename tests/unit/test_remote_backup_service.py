@@ -3,11 +3,14 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 import json
+import shlex
 
 from app.database.models import BackupJob, Repository, SSHConnection, SSHKey
 from app.services.remote_backup_service import (
     RemoteBackupService,
+    _collapse_carriage_returns,
     _parse_created_archive_name,
+    _redact_command,
 )
 
 
@@ -105,12 +108,99 @@ async def test_remote_sudo_command_preserves_only_required_borg_environment(
 
     preserved_environment = (
         "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK,"
-        "BORG_RELOCATED_REPO_ACCESS_IS_OK,BORG_PASSPHRASE,BORG_REMOTE_PATH"
+        "BORG_RELOCATED_REPO_ACCESS_IS_OK,BORG_REMOTE_PATH"
     )
     assert f"--preserve-env={preserved_environment} " in command
     assert command.count("--preserve-env=") == 1
     assert "BORG_REMOTE_PATH='sudo -n -H /usr/local/bin/borg-wrapper'" in command
+    assert "BORG_PASSPHRASE" not in command
     assert "BORG_RSH" not in command
+
+
+@pytest.mark.asyncio
+async def test_build_remote_command_passes_borg_env_through_sudo(test_db, monkeypatch):
+    """sudo's env_reset (the Debian-family default) drops the BORG_* shell
+    assignments in front of the command, so with use_sudo they must be named
+    explicitly as preserved - otherwise borg prompts for a passphrase that
+    can never arrive and exits 2 before touching the repository."""
+    connection, repository, _job = _remote_entities(test_db)
+    repository.encryption = "repokey"
+    repository.passphrase = "s3cret pass"
+    test_db.commit()
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.SessionLocal", lambda: test_db
+    )
+    service = RemoteBackupService()
+
+    with_sudo = await service._build_remote_command(
+        repository=repository,
+        archive_name="{hostname}-{now}",
+        source_paths=["/data"],
+        exclude_patterns=[],
+        borg_binary_path="/usr/bin/borg",
+        use_sudo=True,
+        source_ssh_connection=connection,
+    )
+    without_sudo = await service._build_remote_command(
+        repository=repository,
+        archive_name="{hostname}-{now}",
+        source_paths=["/data"],
+        exclude_patterns=[],
+        borg_binary_path="/usr/bin/borg",
+        use_sudo=False,
+        source_ssh_connection=connection,
+    )
+
+    env_prefix = (
+        "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes "
+        "BORG_RELOCATED_REPO_ACCESS_IS_OK=yes "
+        "BORG_PASSPHRASE='s3cret pass' "
+        "BORG_REMOTE_PATH=/usr/lib/borg/borg "
+    )
+    assert with_sudo.startswith(
+        env_prefix + "sudo -n -H --preserve-env="
+        "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK,"
+        "BORG_RELOCATED_REPO_ACCESS_IS_OK,"
+        "BORG_PASSPHRASE,"
+        "BORG_REMOTE_PATH "
+        "/usr/bin/borg create "
+    )
+    assert without_sudo.startswith(env_prefix + "/usr/bin/borg create ")
+    assert "sudo" not in without_sudo
+
+
+@pytest.mark.asyncio
+async def test_build_remote_command_preserve_env_lists_only_variables_set(
+    test_db, monkeypatch
+):
+    """An unencrypted repository without remote_path sets neither
+    BORG_PASSPHRASE nor BORG_REMOTE_PATH, and the preserve list follows."""
+    connection, repository, _job = _remote_entities(test_db)
+    repository.remote_path = None
+    test_db.commit()
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.SessionLocal", lambda: test_db
+    )
+    service = RemoteBackupService()
+
+    command = await service._build_remote_command(
+        repository=repository,
+        archive_name="{hostname}-{now}",
+        source_paths=["/data"],
+        exclude_patterns=[],
+        borg_binary_path="/usr/bin/borg",
+        use_sudo=True,
+        source_ssh_connection=connection,
+    )
+
+    assert (
+        "sudo -n -H --preserve-env="
+        "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK,"
+        "BORG_RELOCATED_REPO_ACCESS_IS_OK "
+        "/usr/bin/borg create "
+    ) in command
+    assert "BORG_PASSPHRASE" not in command
+    assert "BORG_REMOTE_PATH" not in command
 
 
 @pytest.mark.asyncio
@@ -118,6 +208,7 @@ async def test_execute_remote_backup_supports_legacy_repository_urls_and_uses_so
     test_db, monkeypatch
 ):
     connection, repository, job = _remote_entities(test_db)
+    connection.is_backup_source = False
     repository.connection_id = None
     repository.path = "ssh://backup@docker-host.example:2222/repos/remote-direct"
     test_db.commit()
@@ -593,3 +684,348 @@ def test_parse_created_archive_name():
     assert _parse_created_archive_name("not json") is None
     assert _parse_created_archive_name(json.dumps({"archive": {}})) is None
     assert _parse_created_archive_name(json.dumps(["archive"])) is None
+
+
+def test_redact_command_masks_every_shape_shlex_quote_produces():
+    for passphrase in ["simple", "s3cret pass", "it's", "a'b'c", 'x"y', "ends with '"]:
+        command = (
+            f"BORG_RELOCATED_REPO_ACCESS_IS_OK=yes "
+            f"BORG_PASSPHRASE={shlex.quote(passphrase)} "
+            f"BORG_REMOTE_PATH=/usr/bin/borg /usr/bin/borg create repo::a /data"
+        )
+        assert _redact_command(command) == (
+            "BORG_RELOCATED_REPO_ACCESS_IS_OK=yes BORG_PASSPHRASE=*** "
+            "BORG_REMOTE_PATH=/usr/bin/borg /usr/bin/borg create repo::a /data"
+        ), passphrase
+
+    untouched = (
+        "BORG_RELOCATED_REPO_ACCESS_IS_OK=yes /usr/bin/borg create repo::a /data"
+    )
+    assert _redact_command(untouched) == untouched
+
+
+def test_redact_command_is_idempotent():
+    """Output is redacted at capture and again at transcript assembly; the
+    second pass must leave already-masked text untouched (it used to eat the
+    character after the mask, e.g. the colon of a shell error)."""
+    once = _redact_command("bash: BORG_PASSPHRASE='s3cret pass': command not found")
+
+    assert once == "bash: BORG_PASSPHRASE=***: command not found"
+    assert _redact_command(once) == once
+
+
+def test_collapse_carriage_returns_keeps_the_final_state():
+    assert (
+        _collapse_carriage_returns("Initializing\r 12% done\r 80%\rWARNING: changed\n")
+        == "WARNING: changed"
+    )
+    assert _collapse_carriage_returns("plain line\n") == "plain line"
+    assert _collapse_carriage_returns("\r\r\n") == ""
+
+
+@pytest.mark.asyncio
+async def test_execute_ssh_command_collapses_progress_and_names_the_failure_cause(
+    monkeypatch,
+):
+    service = RemoteBackupService()
+    connection = SSHConnection(
+        id=7, host="truenas.example", username="backup", port=2222, ssh_key_id=42
+    )
+    ssh_key = MagicMock(spec=SSHKey)
+    job = MagicMock(spec=BackupJob)
+    db = MagicMock()
+
+    def query_side_effect(model):
+        query = MagicMock()
+        if model == SSHKey:
+            query.filter.return_value.first.return_value = ssh_key
+        elif model == BackupJob:
+            query.filter.return_value.first.return_value = job
+        return query
+
+    db.query.side_effect = query_side_effect
+
+    process = AsyncMock()
+    process.pid = 1234
+    process.stdout.readline = AsyncMock(return_value=b"")
+    process.stderr.readline = AsyncMock(
+        side_effect=[
+            b"Initializing cache\r 12% done\r 80% done\rWARNING: file changed\n",
+            b"Cannot acquire a passphrase: BORG_PASSPHRASE is not set.\n",
+            b"",
+        ]
+    )
+    process.wait = AsyncMock(return_value=2)
+
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.write_ssh_key_to_tempfile",
+        lambda key: "/tmp/source.key",
+    )
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.asyncio.create_subprocess_exec",
+        AsyncMock(return_value=process),
+    )
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.os.unlink", lambda path: None
+    )
+
+    result = await service._execute_ssh_command(
+        ssh_connection=connection,
+        command="borg create /repo::archive /data",
+        job_id=99,
+        db=db,
+    )
+
+    assert result["success"] is False
+    assert result["stderr"] == (
+        "WARNING: file changed\nCannot acquire a passphrase: BORG_PASSPHRASE is not set."
+    )
+    assert result["error"] == (
+        "Remote backup failed with exit code 2: "
+        "Cannot acquire a passphrase: BORG_PASSPHRASE is not set."
+    )
+
+
+@pytest.mark.asyncio
+async def test_execute_ssh_command_redacts_the_failure_cause_before_truncating(
+    monkeypatch,
+):
+    """A shell echoing a long quoted BORG_PASSPHRASE= assignment must not leak
+    part of it through the 300-character cut - redaction runs first."""
+    service = RemoteBackupService()
+    connection = SSHConnection(
+        id=7, host="truenas.example", username="backup", port=2222, ssh_key_id=42
+    )
+    ssh_key = MagicMock(spec=SSHKey)
+    job = MagicMock(spec=BackupJob)
+    db = MagicMock()
+
+    def query_side_effect(model):
+        query = MagicMock()
+        if model == SSHKey:
+            query.filter.return_value.first.return_value = ssh_key
+        elif model == BackupJob:
+            query.filter.return_value.first.return_value = job
+        return query
+
+    db.query.side_effect = query_side_effect
+    passphrase = "p" * 400
+    echoed = (
+        f"bash: BORG_PASSPHRASE={shlex.quote(passphrase + ' x')}: command not found\n"
+    )
+
+    process = AsyncMock()
+    process.pid = 1234
+    process.stdout.readline = AsyncMock(return_value=b"")
+    process.stderr.readline = AsyncMock(side_effect=[echoed.encode(), b""])
+    process.wait = AsyncMock(return_value=127)
+
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.write_ssh_key_to_tempfile",
+        lambda key: "/tmp/source.key",
+    )
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.asyncio.create_subprocess_exec",
+        AsyncMock(return_value=process),
+    )
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.os.unlink", lambda path: None
+    )
+
+    result = await service._execute_ssh_command(
+        ssh_connection=connection,
+        command="borg create /repo::archive /data",
+        job_id=99,
+        db=db,
+    )
+
+    assert result["error"] == (
+        "Remote backup failed with exit code 127: "
+        "bash: BORG_PASSPHRASE=***: command not found"
+    )
+    assert "ppp" not in result["error"]
+    # Redaction happens at capture, so the retained stderr (the transcript
+    # source) never holds the raw passphrase either.
+    assert result["stderr"] == "bash: BORG_PASSPHRASE=***: command not found"
+    assert "ppp" not in result["stderr"]
+
+
+@pytest.mark.asyncio
+async def test_failed_remote_backup_stores_redacted_transcript_in_log_file(
+    test_db, monkeypatch, tmp_path
+):
+    """Default policy (failed_and_warnings): a failed job gets a per-job log
+    file with the command (passphrase masked), borg's stderr and stdout -
+    what the local path has always produced."""
+    connection, repository, job = _remote_entities(test_db)
+    repository.encryption = "repokey"
+    repository.passphrase = "s3cret pass"
+    test_db.commit()
+    service = RemoteBackupService()
+    service.log_dir = tmp_path
+    connection_id = connection.id
+    repository_id = repository.id
+    job_id = job.id
+
+    async def fake_execute_ssh_command(ssh_connection, command, job_id, db):
+        assert "BORG_PASSPHRASE='s3cret pass'" in command
+        # The executor redacts both streams at capture, so its result never
+        # carries the raw value - the stub models that contract, and the
+        # transcript's second redaction pass must leave the mask untouched.
+        return {
+            "success": False,
+            "returncode": 2,
+            "stdout": "",
+            "stderr": (
+                "bash: BORG_PASSPHRASE=***: command not found\n"
+                "Cannot acquire a passphrase: BORG_PASSPHRASE is not set."
+            ),
+            "error": (
+                "Remote backup failed with exit code 2: "
+                "bash: BORG_PASSPHRASE=***: command not found"
+            ),
+        }
+
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.SessionLocal", lambda: test_db
+    )
+    monkeypatch.setattr(service, "_execute_ssh_command", fake_execute_ssh_command)
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.notification_service.send_backup_failure",
+        AsyncMock(),
+    )
+
+    await service.execute_remote_backup(
+        job_id=job_id,
+        source_ssh_connection_id=connection_id,
+        repository_id=repository_id,
+        source_paths=["/var/lib/docker/volumes/app"],
+    )
+
+    job = test_db.query(BackupJob).filter(BackupJob.id == job_id).one()
+    assert job.status == "failed"
+    assert job.log_file_path and job.log_file_path.startswith(str(tmp_path))
+    assert job.logs.startswith("Logs saved to: backup_job_")
+    content = open(job.log_file_path).read()
+    assert content.startswith("$ BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes ")
+    assert "BORG_PASSPHRASE=***" in content
+    # neither the command line nor a shell echoing it may leak the value
+    assert "s3cret pass" not in content
+    assert "s3cret pass" not in job.error_message
+    assert job.error_message.endswith("bash: BORG_PASSPHRASE=***: command not found")
+    assert "/usr/local/bin/borg-wrapper create" in content
+    assert "/var/lib/docker/volumes/app" in content
+    assert "Cannot acquire a passphrase: BORG_PASSPHRASE is not set." in content
+
+
+@pytest.mark.asyncio
+async def test_successful_remote_backup_keeps_transcript_in_job_row_per_policy(
+    test_db, monkeypatch, tmp_path
+):
+    """Default policy keeps no file for a clean success; the transcript still
+    lands in the job row so the Activity view has something to show."""
+    connection, repository, job = _remote_entities(test_db)
+    service = RemoteBackupService()
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    service.log_dir = log_dir
+    connection_id = connection.id
+    repository_id = repository.id
+    job_id = job.id
+    stats = json.dumps({"archive": {"name": "host-2026-08-20T11:18:00"}})
+
+    async def fake_execute_ssh_command(*args, **kwargs):
+        return {"success": True, "returncode": 0, "stdout": stats, "stderr": ""}
+
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.SessionLocal", lambda: test_db
+    )
+    monkeypatch.setattr(service, "_execute_ssh_command", fake_execute_ssh_command)
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.notification_service.send_backup_success",
+        AsyncMock(),
+    )
+
+    await service.execute_remote_backup(
+        job_id=job_id,
+        source_ssh_connection_id=connection_id,
+        repository_id=repository_id,
+        source_paths=["/var/lib/docker/volumes/app"],
+    )
+
+    job = test_db.query(BackupJob).filter(BackupJob.id == job_id).one()
+    assert job.status == "completed"
+    assert job.log_file_path is None
+    assert list(log_dir.iterdir()) == []
+    assert job.logs.startswith("$ BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes ")
+    assert stats in job.logs
+
+
+@pytest.mark.asyncio
+async def test_execute_ssh_command_never_returns_or_logs_the_passphrase(monkeypatch):
+    """A remote shell error can echo the whole command line — including the
+    BORG_PASSPHRASE assignment — on either stream. Both streams are redacted
+    at capture, so neither the returned output nor anything handed to the
+    logger ever carries the secret."""
+    secret = "hunter2-super-secret"
+    echoed = f"sh: 1: BORG_PASSPHRASE={shlex.quote(secret)} borg: not found"
+
+    service = RemoteBackupService()
+    connection = SSHConnection(
+        id=7, host="truenas.example", username="backup", port=2222, ssh_key_id=42
+    )
+    ssh_key = MagicMock(spec=SSHKey)
+    job = MagicMock(spec=BackupJob)
+    db = MagicMock()
+
+    def query_side_effect(model):
+        query = MagicMock()
+        if model == SSHKey:
+            query.filter.return_value.first.return_value = ssh_key
+        elif model == BackupJob:
+            query.filter.return_value.first.return_value = job
+        return query
+
+    db.query.side_effect = query_side_effect
+
+    process = AsyncMock()
+    process.pid = 1234
+    process.stdout.readline = AsyncMock(side_effect=[echoed.encode(), b""])
+    process.stderr.readline = AsyncMock(side_effect=[echoed.encode(), b""])
+    process.wait = AsyncMock(return_value=127)
+
+    log_records: list[tuple] = []
+
+    class RecordingLogger:
+        def __getattr__(self, level):
+            def record(*args, **kwargs):
+                log_records.append((level, args, kwargs))
+
+            return record
+
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.write_ssh_key_to_tempfile",
+        lambda key: "/tmp/source.key",
+    )
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.asyncio.create_subprocess_exec",
+        AsyncMock(return_value=process),
+    )
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.os.unlink", lambda path: None
+    )
+    monkeypatch.setattr("app.services.remote_backup_service.logger", RecordingLogger())
+
+    result = await service._execute_ssh_command(
+        ssh_connection=connection,
+        command=f"BORG_PASSPHRASE={shlex.quote(secret)} borg create /repo::a /data",
+        job_id=99,
+        db=db,
+    )
+
+    for field in ("stdout", "stderr", "error"):
+        assert secret not in (result[field] or ""), field
+    # The mask proves redaction ran (rather than the lines being dropped).
+    assert "BORG_PASSPHRASE=***" in result["stdout"]
+    assert "BORG_PASSPHRASE=***" in result["stderr"]
+    assert secret not in repr(log_records)

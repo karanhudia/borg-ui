@@ -341,7 +341,28 @@
         "title": "Agent neu installieren",
         "copyCommand": "Neuinstallationsbefehl kopieren",
         "description": "Führen Sie dies auf dem registrierten Rechner aus, um das Borg-UI-Agent-Paket zu aktualisieren und den systemd-Dienst neu zu starten. Kein Registrierungstoken oder Registrierungsschritt erforderlich.",
-        "configPreserved": "Das Skript behält die vorhandene Agent-Konfiguration bei unter"
+        "configPreserved": "Das Skript behält die vorhandene Agent-Konfiguration unter",
+        "serviceUserPreserved": "Der Dienst läuft außerdem weiter unter dem in seiner systemd-Unit hinterlegten Benutzer. Führen Sie den Befehl von einem beliebigen sudo-fähigen Konto aus.",
+        "borgInstallation": "Borg-Installation",
+        "borgSelectionHint": "Eine Borg-Auswahl aktualisiert diese Binaries auf dem Agenten auf die Versionen dieses Servers. Lassen Sie die Auswahl auf Überspringen, sofern kein Borg-Upgrade beabsichtigt ist.",
+        "borgOptions": {
+          "borg1": {
+            "label": "Borg 1.x",
+            "description": "Prüft oder aktualisiert Borg 1 als 'borg' auf die Version dieses Servers."
+          },
+          "borg2": {
+            "label": "Nur Borg 2.x Beta",
+            "description": "Prüft oder aktualisiert Borg 2 als 'borg2' auf die Version dieses Servers."
+          },
+          "both": {
+            "label": "Borg 1.x und Borg 2.x Beta",
+            "description": "Prüft oder aktualisiert Borg 1 als 'borg' und Borg 2 als 'borg2' auf die Versionen dieses Servers."
+          },
+          "skip": {
+            "label": "Borg-Installation überspringen",
+            "description": "Standard. Aktualisiert nur das Agent-Paket; Borg-Binaries bleiben unangetastet."
+          }
+        }
       },
       "logs": {
         "agent": "Agent-Protokolle",

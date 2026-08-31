@@ -473,6 +473,45 @@ class TestRepositoriesCreate:
             "key": "backend.errors.repo.invalidUploadLimit"
         }
 
+    def test_create_repository_rejects_multiline_passphrase(
+        self, test_client: TestClient, admin_headers
+    ):
+        """The remote path shlex-quotes the passphrase into a shell command and
+        redacts echoed output line-by-line; a passphrase spanning lines would
+        come back as fragments the masking pattern cannot match."""
+        response = test_client.post(
+            "/api/repositories/",
+            json={
+                "name": "Multiline Passphrase Repo",
+                "path": "/tmp/multiline-pass-repo",
+                "encryption": "repokey",
+                "compression": "lz4",
+                "repository_type": "local",
+                "passphrase": "first line\nsecond line",
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 422
+        assert "line breaks" in response.text
+
+    def test_import_repository_rejects_multiline_passphrase(
+        self, test_client: TestClient, admin_headers
+    ):
+        response = test_client.post(
+            "/api/repositories/import",
+            json={
+                "name": "Multiline Passphrase Import",
+                "path": "/tmp/multiline-pass-import",
+                "encryption": "repokey",
+                "passphrase": "first line\nsecond line",
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 422
+        assert "line breaks" in response.text
+
     def test_create_ssh_repository(
         self, test_client: TestClient, admin_headers, test_db
     ):

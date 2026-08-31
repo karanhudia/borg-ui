@@ -1120,7 +1120,19 @@ def _repository_init_failure_detail(result: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # Pydantic models
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+
+def _single_line_passphrase(value: Optional[str]) -> Optional[str]:
+    """A passphrase must be a single line.
+
+    The remote-backup path shlex-quotes it into a shell command, and every
+    redaction of echoed output there works line-by-line — a value spanning
+    lines would be read back as fragments that defeat the masking pattern.
+    """
+    if value and ("\n" in value or "\r" in value):
+        raise ValueError("passphrase must not contain line breaks")
+    return value
 
 
 class RepositoryCreate(BaseModel):
@@ -1177,6 +1189,11 @@ class RepositoryCreate(BaseModel):
     rclone_extra_flags: Optional[List[str]] = None
     rclone_cache_path: Optional[str] = None
 
+    @field_validator("passphrase")
+    @classmethod
+    def _passphrase_single_line(cls, value: Optional[str]) -> Optional[str]:
+        return _single_line_passphrase(value)
+
 
 class RepositoryImport(BaseModel):
     name: str
@@ -1230,6 +1247,11 @@ class RepositoryImport(BaseModel):
     rclone_sync_timezone: Optional[str] = None
     rclone_extra_flags: Optional[List[str]] = None
     rclone_cache_path: Optional[str] = None
+
+    @field_validator("passphrase")
+    @classmethod
+    def _passphrase_single_line(cls, value: Optional[str]) -> Optional[str]:
+        return _single_line_passphrase(value)
 
 
 class RepositoryUpdate(BaseModel):
