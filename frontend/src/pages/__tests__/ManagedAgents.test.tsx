@@ -4,6 +4,7 @@ import { QueryClient } from '@tanstack/react-query'
 import ManagedAgents, {
   AgentDiagnosticsDialog,
   AgentList,
+  AgentReinstallDialog,
   AgentSetupGuide,
   AgentSetupHelpContent,
   JobsTable,
@@ -726,6 +727,80 @@ describe('ManagedAgents', () => {
     expect(command).not.toContain(' register ')
   })
 
+  it('adds --borg-version to the reinstall command for a Borg selection', () => {
+    const base =
+      'curl -fsSL https://borg-ui.example.com/agent/install.sh | sudo bash -s -- --reinstall'
+
+    expect(buildAgentReinstallCommand('https://borg-ui.example.com', 'skip')).toBe(base)
+    expect(buildAgentReinstallCommand('https://borg-ui.example.com', 'borg1')).toBe(
+      `${base} --borg-version 1`
+    )
+    expect(buildAgentReinstallCommand('https://borg-ui.example.com', 'borg2')).toBe(
+      `${base} --borg-version 2`
+    )
+    expect(buildAgentReinstallCommand('https://borg-ui.example.com', 'both')).toBe(
+      `${base} --borg-version both`
+    )
+  })
+
+  it('defaults the reinstall dialog to Skip and makes a Borg change an explicit choice', async () => {
+    const user = userEvent.setup()
+    const onCopy = vi.fn()
+    const agent = {
+      id: 8,
+      agent_id: 'agent-client-8',
+      name: 'client',
+      hostname: 'client-02',
+      status: 'online',
+      os: 'linux',
+      arch: 'x86_64',
+      agent_version: '0.4.0',
+      borg_versions: [
+        {
+          major: 1,
+          version: '1.4.5',
+          path: '/opt/borg-ui-agent/borg1/current/borg',
+          install_source: 'borg-ui-installer',
+        },
+        {
+          major: 2,
+          version: '2.0.0b23',
+          path: '/opt/borg-ui-agent/borg2/current/borg',
+          install_source: 'borg-ui-installer',
+        },
+      ],
+      last_seen_at: '2026-05-18T10:00:00.000Z',
+      created_at: '2026-05-18T09:00:00.000Z',
+      updated_at: '2026-05-18T10:00:00.000Z',
+    } as AgentMachineResponse
+
+    renderWithProviders(
+      <AgentReinstallDialog
+        open
+        agent={agent}
+        serverUrl="https://borg-ui.example.com"
+        onCancel={vi.fn()}
+        onCopy={onCopy}
+      />
+    )
+
+    const dialog = screen.getByRole('dialog', { name: /reinstall agent/i })
+    // Even for an agent whose Borg binaries the installer manages, a routine
+    // reinstall must not preselect a Borg upgrade.
+    expect(within(dialog).getByRole('radio', { name: /Skip Borg install/i })).toBeChecked()
+
+    await user.click(within(dialog).getByLabelText('Copy reinstall command'))
+    expect(onCopy).toHaveBeenLastCalledWith(
+      'curl -fsSL https://borg-ui.example.com/agent/install.sh | sudo bash -s -- --reinstall'
+    )
+
+    await user.click(within(dialog).getByRole('radio', { name: /Borg 1\.x and Borg 2\.x beta/i }))
+    await user.click(within(dialog).getByLabelText('Copy reinstall command'))
+    expect(onCopy).toHaveBeenLastCalledWith(
+      'curl -fsSL https://borg-ui.example.com/agent/install.sh | sudo bash -s -- --reinstall --borg-version both'
+    )
+  }, 60000)
+
   it('opens a tokenless reinstall script from an agent card', async () => {
     const user = userEvent.setup()
     const onCopy = vi.fn()
@@ -763,6 +838,9 @@ describe('ManagedAgents', () => {
     expect(within(dialog).getByText(/client-01/i)).toBeInTheDocument()
     expect(
       within(dialog).getByText(/No enrollment token or registration step is required/i)
+    ).toBeInTheDocument()
+    expect(
+      within(dialog).getByText(/run the command from any account that can sudo/i)
     ).toBeInTheDocument()
     expect(
       within(dialog).getByText((content) =>
