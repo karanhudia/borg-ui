@@ -466,7 +466,10 @@ def break_repository_lock(repository: Repository) -> bool:
         True if lock was successfully broken, False otherwise
     """
     try:
-        db = object_session(repository)
+        try:
+            db = object_session(repository)
+        except Exception:
+            db = None
         connection = resolve_repository_ssh_connection(repository, db) if db else None
         cmd = BorgRouter(repository).build_break_lock_command(
             repository_path=repository.path,
