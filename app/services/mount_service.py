@@ -31,6 +31,7 @@ from app.core.security import decrypt_secret
 from app.database.database import SessionLocal
 from app.database.models import SSHConnection, SSHKey, Repository, SystemSettings
 from app.utils.borg_env import get_standard_ssh_opts
+from app.utils.ssh_utils import resolve_repository_ssh_connection
 from app.utils.ssh_utils import ssh_key_auth_args, sshfs_key_auth_options
 
 logger = structlog.get_logger()
@@ -1008,18 +1009,13 @@ class MountService:
                 )
 
                 # Handle SSH repositories
-                if repository.connection_id:
+                connection = resolve_repository_ssh_connection(repository, db)
+                if connection:
                     # Always disable strict host key checking for SSH repos
                     ssh_opts = get_standard_ssh_opts()
 
-                    if repository.connection_id:
+                    if connection:
                         # Repository linked to SSH connection
-                        connection = (
-                            db.query(SSHConnection)
-                            .filter(SSHConnection.id == repository.connection_id)
-                            .first()
-                        )
-
                         logger.info(
                             "SSH connection details",
                             mount_id=mount_id,
@@ -1083,7 +1079,7 @@ class MountService:
                     repository_path=repository.path,
                     archive_name=archive_name,
                     mount_point=mount_point,
-                    remote_path=effective_repository_remote_path(repository),
+                    remote_path=effective_repository_remote_path(repository, db),
                     bypass_lock=repository.bypass_lock,
                 )
 

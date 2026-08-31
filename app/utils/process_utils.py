@@ -10,7 +10,7 @@ from typing import Optional
 import structlog
 from datetime import datetime, timedelta
 from sqlalchemy import and_, func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 from app.config import settings
 from app.core.borg_router import BorgRouter
 from app.utils.borg_env import effective_repository_remote_path
@@ -31,7 +31,10 @@ from app.utils.backup_maintenance import (
     COMPLETED_BACKUP_STATUSES,
     RUNNING_BACKUP_MAINTENANCE_FAILURES,
 )
-from app.utils.ssh_utils import public_key_only_ssh_args
+from app.utils.ssh_utils import (
+    public_key_only_ssh_args,
+    resolve_repository_ssh_connection,
+)
 
 logger = structlog.get_logger()
 
@@ -463,9 +466,11 @@ def break_repository_lock(repository: Repository) -> bool:
         True if lock was successfully broken, False otherwise
     """
     try:
+        db = object_session(repository)
+        connection = resolve_repository_ssh_connection(repository, db) if db else None
         cmd = BorgRouter(repository).build_break_lock_command(
             repository_path=repository.path,
-            remote_path=effective_repository_remote_path(repository),
+            remote_path=effective_repository_remote_path(repository, db),
         )
 
         # Set environment variables
@@ -474,7 +479,7 @@ def break_repository_lock(repository: Repository) -> bool:
             env["BORG_PASSPHRASE"] = repository.passphrase
 
         # For remote repos, add SSH options
-        if repository.connection_id:
+        if connection or repository.connection_id:
             ssh_opts = [
                 *public_key_only_ssh_args(),
                 "-o",
