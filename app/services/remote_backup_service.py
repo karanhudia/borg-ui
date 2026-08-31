@@ -758,7 +758,11 @@ class RemoteBackupService:
                     "-p",
                     str(ssh_connection.port),
                     f"{ssh_connection.username}@{ssh_connection.host}",
-                    f"{borg_path} --version",
+                    *(
+                        ["sudo", "-n", "-H", borg_path, "--version"]
+                        if ssh_connection.use_sudo
+                        else [borg_path, "--version"]
+                    ),
                 ]
 
                 logger.info(
