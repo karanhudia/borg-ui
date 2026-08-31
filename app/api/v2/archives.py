@@ -17,7 +17,11 @@ import structlog
 from app.api.archive_download import extract_file_download
 from app.database.database import get_db
 from app.database.models import User, Repository, DeleteArchiveJob, SystemSettings
-from app.core.security import get_current_user, get_current_download_user
+from app.core.security import (
+    check_repo_access,
+    get_current_user,
+    get_current_download_user,
+)
 from app.core.features import require_feature
 from app.core.borg2 import borg2
 from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
@@ -133,7 +137,7 @@ def _repo_needs_custom_env(repo: Repository) -> bool:
     )
 
 
-def _get_v2_repo(repository: str, db: Session) -> Repository:
+def _get_v2_repo(repository: str, db: Session, current_user: User) -> Repository:
     """Resolve and validate a Borg 2 repository by ID or path.
 
     BorgApiClient sends the integer ID as a string; legacy callers may send
@@ -162,6 +166,7 @@ def _get_v2_repo(repository: str, db: Session) -> Repository:
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"key": "backend.errors.restore.repositoryNotFound"},
         )
+    check_repo_access(db, current_user, repo, "viewer")
     return repo
 
 
@@ -244,7 +249,7 @@ async def list_archives(
     db: Session = Depends(get_db),
 ):
     """List archives in a Borg 2 repository."""
-    repo = _get_v2_repo(repository, db)
+    repo = _get_v2_repo(repository, db, current_user)
     if is_agent_executor(repo):
         result = await _agent_list_archives_result(
             db, repo, timeout_seconds=_get_list_timeout(db)
@@ -286,7 +291,7 @@ async def get_archive_info(
     db: Session = Depends(get_db),
 ):
     """Get detailed information about a Borg 2 archive."""
-    repo = _get_v2_repo(repository, db)
+    repo = _get_v2_repo(repository, db, current_user)
     archive_selector = _get_archive_selector(archive_id)
     if is_agent_executor(repo):
         result = await _agent_archive_info_result(
@@ -414,7 +419,7 @@ async def get_archive_contents(
     Returns {"items": [...]} matching the v1 /browse/ response shape so
     ArchiveContentsDialog works without version branching.
     """
-    repo = _get_v2_repo(repository, db)
+    repo = _get_v2_repo(repository, db, current_user)
     archive_selector = _get_archive_selector(archive_id)
     fast_browse = is_fast_browse_enabled(db)
     cache_key = _get_browse_cache_key(archive_id, path)
@@ -541,7 +546,7 @@ async def delete_archive(
             detail={"key": "backend.errors.archives.adminAccessRequired"},
         )
 
-    repo = _get_v2_repo(repository, db)
+    repo = _get_v2_repo(repository, db, current_user)
     archive_name = await _resolve_archive_name(repo, archive_id, db)
 
     running_job = (
@@ -606,7 +611,7 @@ async def download_file_from_archive(
     db: Session = Depends(get_db),
 ):
     """Extract and download a specific file from a Borg 2 archive."""
-    repo = _get_v2_repo(repository, db)
+    repo = _get_v2_repo(repository, db, current_user)
     archive_selector = _get_archive_selector(archive)
     try:
 
