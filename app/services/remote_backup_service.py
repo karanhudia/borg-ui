@@ -390,6 +390,10 @@ class RemoteBackupService:
           --compression lz4 \
           ssh://user@repo-host:/path::{hostname}-{now} \
           /data /etc
+
+        With use_sudo the borg invocation becomes
+        ``sudo -n --preserve-env=BORG_PASSPHRASE,... borg create ...`` so the
+        variables survive sudo's env_reset.
         """
         # Get DB session for connection lookup
         db = SessionLocal()
@@ -400,8 +404,8 @@ class RemoteBackupService:
         finally:
             db.close()
 
-        # Build borg command parts
-        cmd_parts = [
+        # Environment for borg, as shell assignments in front of the command
+        env_assignments = [
             "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes",
             "BORG_RELOCATED_REPO_ACCESS_IS_OK=yes",
         ]
@@ -414,15 +418,26 @@ class RemoteBackupService:
         ):
             # Use shlex.quote to safely escape the passphrase
             escaped_passphrase = shlex.quote(repository.passphrase)
-            cmd_parts.append(f"BORG_PASSPHRASE={escaped_passphrase}")
+            env_assignments.append(f"BORG_PASSPHRASE={escaped_passphrase}")
 
         # Add remote path if configured
         if repository.remote_path:
-            cmd_parts.append(f"BORG_REMOTE_PATH={shlex.quote(repository.remote_path)}")
+            env_assignments.append(
+                f"BORG_REMOTE_PATH={shlex.quote(repository.remote_path)}"
+            )
+
+        cmd_parts = list(env_assignments)
 
         # Borg binary path (optionally prefixed with sudo)
         if use_sudo:
-            cmd_parts.append("sudo")
+            # sudo's env_reset (the Debian-family default) strips the
+            # assignments above before borg starts; name them explicitly as
+            # preserved. -n fails fast instead of waiting for a password that
+            # can never arrive over a non-interactive ssh command.
+            preserved = ",".join(
+                assignment.split("=", 1)[0] for assignment in env_assignments
+            )
+            cmd_parts.extend(["sudo", "-n", f"--preserve-env={preserved}"])
         cmd_parts.append(shlex.quote(borg_binary_path))
 
         # Create command
