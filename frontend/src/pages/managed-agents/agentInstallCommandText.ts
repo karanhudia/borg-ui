@@ -52,6 +52,18 @@ export function buildAgentInstallCommand(
     .join(' ')
 }
 
-export function buildAgentReinstallCommand(serverUrl: string) {
-  return [`curl -fsSL ${serverUrl}/agent/install.sh`, '| sudo bash -s --', '--reinstall'].join(' ')
+export function buildAgentReinstallCommand(
+  serverUrl: string,
+  borgInstallMode: BorgInstallMode = 'skip'
+) {
+  return [
+    `curl -fsSL ${serverUrl}/agent/install.sh`,
+    '| sudo bash -s --',
+    '--reinstall',
+    // Reinstall mode skips Borg by default, so "skip" needs no flag; a Borg
+    // selection passes --borg-version to also verify/update those binaries.
+    borgInstallMode === 'skip' ? null : borgInstallArgs(borgInstallMode),
+  ]
+    .filter(Boolean)
+    .join(' ')
 }

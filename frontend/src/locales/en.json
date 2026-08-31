@@ -341,7 +341,28 @@
         "title": "Reinstall agent",
         "copyCommand": "Copy reinstall command",
         "description": "Run this on the enrolled machine to update the Borg UI agent package and restart the systemd service. No enrollment token or registration step is required.",
-        "configPreserved": "The script preserves the existing agent config at"
+        "configPreserved": "The script preserves the existing agent config at",
+        "serviceUserPreserved": "The service also keeps running as the user recorded in its systemd unit — run the command from any account that can sudo.",
+        "borgInstallation": "Borg installation",
+        "borgSelectionHint": "Selecting Borg versions upgrades those binaries on the agent to the versions this server provides. Leave this on Skip unless a Borg upgrade is intended.",
+        "borgOptions": {
+          "borg1": {
+            "label": "Borg 1.x",
+            "description": "Verifies or updates Borg 1 as 'borg' to this server's version."
+          },
+          "borg2": {
+            "label": "Borg 2.x beta only",
+            "description": "Verifies or updates Borg 2 as 'borg2' to this server's version."
+          },
+          "both": {
+            "label": "Borg 1.x and Borg 2.x beta",
+            "description": "Verifies or updates Borg 1 as 'borg' and Borg 2 as 'borg2' to this server's versions."
+          },
+          "skip": {
+            "label": "Skip Borg install",
+            "description": "Default. Only updates the agent package; Borg binaries are left untouched."
+          }
+        }
       },
       "logs": {
         "agent": "Agent Logs",

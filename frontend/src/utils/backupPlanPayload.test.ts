@@ -113,3 +113,36 @@ describe('backupPlanPayload prune keep-within', () => {
     expect(state.pruneKeepWithin).toBe('1d')
   })
 })
+
+describe('backupPlanPayload availability scheduling', () => {
+  it('omits availability-only integers for cron schedules', () => {
+    const payload = buildBackupPlanPayload({
+      ...createInitialState(),
+      name: 'Nightly backup',
+      sourceDirectories: ['/data'],
+      repositoryIds: [10],
+      scheduleEnabled: false,
+      scheduleMode: 'cron',
+    })
+
+    expect(payload).not.toHaveProperty('availability_check_interval_minutes')
+    expect(payload).not.toHaveProperty('min_success_interval_minutes')
+  })
+
+  it('sends integer availability settings for availability schedules', () => {
+    const payload = buildBackupPlanPayload({
+      ...createInitialState(),
+      name: 'Availability backup',
+      sourceDirectories: ['/data'],
+      repositoryIds: [10],
+      scheduleMode: 'availability',
+      availabilityCheckIntervalMinutes: 15,
+      minimumSuccessIntervalHours: 4,
+    })
+
+    expect(payload).toMatchObject({
+      availability_check_interval_minutes: 15,
+      min_success_interval_minutes: 240,
+    })
+  })
+})

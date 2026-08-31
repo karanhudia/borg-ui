@@ -419,8 +419,8 @@ export interface BackupPlanData {
   schedule_mode?: 'cron' | 'availability'
   cron_expression?: string | null
   timezone: string
-  availability_check_interval_minutes?: number | null
-  min_success_interval_minutes?: number | null
+  availability_check_interval_minutes?: number
+  min_success_interval_minutes?: number
   pre_backup_script_id?: number | null
   post_backup_script_id?: number | null
   pre_backup_script_parameters?: Record<string, string> | null

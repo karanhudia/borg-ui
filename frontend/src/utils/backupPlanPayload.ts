@@ -365,6 +365,7 @@ export function buildBackupPlanPayload(
   state: BackupPlanPayloadState,
   clearLegacySourceRepositoryIds: number[] = []
 ): BackupPlanData {
+  const scheduleMode = state.scheduleMode || 'cron'
   const sourceLocations = normalizeSourceLocations(state)
   const sourceDirectories = sourceLocations.length
     ? sourceLocations.flatMap((location) => location.paths)
@@ -400,18 +401,15 @@ export function buildBackupPlanPayload(
       state.repositoryRunMode === 'parallel' ? state.maxParallelRepositories : 1,
     failure_behavior: state.failureBehavior,
     schedule_enabled: state.scheduleEnabled,
-    schedule_mode: state.scheduleMode || 'cron',
-    cron_expression:
-      state.scheduleEnabled && (state.scheduleMode || 'cron') === 'cron'
-        ? state.cronExpression
-        : null,
+    schedule_mode: scheduleMode,
+    cron_expression: state.scheduleEnabled && scheduleMode === 'cron' ? state.cronExpression : null,
     timezone: state.timezone,
-    availability_check_interval_minutes:
-      state.scheduleMode === 'availability' ? (state.availabilityCheckIntervalMinutes ?? 30) : null,
-    min_success_interval_minutes:
-      state.scheduleMode === 'availability'
-        ? Math.round((state.minimumSuccessIntervalHours ?? 20) * 60)
-        : null,
+    ...(scheduleMode === 'availability'
+      ? {
+          availability_check_interval_minutes: state.availabilityCheckIntervalMinutes ?? 30,
+          min_success_interval_minutes: Math.round((state.minimumSuccessIntervalHours ?? 20) * 60),
+        }
+      : {}),
     pre_backup_script_id: firstPreHook?.script_id ?? state.preBackupScriptId,
     post_backup_script_id: firstPostHook?.script_id ?? state.postBackupScriptId,
     pre_backup_script_parameters:
