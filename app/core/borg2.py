@@ -362,8 +362,14 @@ class Borg2Interface:
         ]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
-        env = {"BORG_PASSPHRASE": passphrase} if passphrase else {}
-        return await self._run(cmd, timeout=300, env=env or None)
+        # Repo creation must not touch the shared pack cache: with the cache
+        # enabled, Store.create() also creates the cache backend, which rejects
+        # an already-populated cache directory — and borg misreports that as
+        # "repository already exists".
+        env = {"BORG_STORE_CACHE": ""}
+        if passphrase:
+            env["BORG_PASSPHRASE"] = passphrase
+        return await self._run(cmd, timeout=300, env=env)
 
     async def rinfo(
         self,
@@ -423,8 +429,13 @@ class Borg2Interface:
         cmd = [self.borg_cmd, "-r", repository, "repo-delete", "--force"]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
-        env = {"BORG_PASSPHRASE": passphrase} if passphrase else {}
-        return await self._run(cmd, timeout=300, env=env or None)
+        # Repo deletion must not touch the shared pack cache: with the cache
+        # enabled, Store.destroy() removes the whole cache directory, evicting
+        # every other repository's cached packs.
+        env = {"BORG_STORE_CACHE": ""}
+        if passphrase:
+            env["BORG_PASSPHRASE"] = passphrase
+        return await self._run(cmd, timeout=300, env=env)
 
     # ── Archive listing & info ─────────────────────────────────────────────────
 

@@ -541,6 +541,11 @@ def execute_repository_operation_job(
         )
 
     env = build_borg_env(payload.environment)
+    if payload.job_kind == "repository.init":
+        # Repo creation must not touch the shared pack cache: borgstore
+        # rejects an already-populated cache directory on create, and borg
+        # misreports that as "repository already exists".
+        env["BORG_STORE_CACHE"] = ""
     sequence = 0
     client.send_log(
         job_id,
