@@ -1307,6 +1307,46 @@ class TestV2RepositoryRoutes:
         assert response.json()["borg_version"] == 2
         mock_rinfo.assert_awaited_once()
 
+    def test_get_repository_stats_normalizes_borg2_b22_encryption(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """/stats returns the same rinfo payload as /info, so b22's mode-less
+        encryption block needs the same normalization — a client reading
+        `stats.encryption.mode` would otherwise get nothing while /info has
+        it. The payload is verbatim from 2.0.0b22.
+        """
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db, path="/tmp/v2-b22-stats-repo")
+
+        with patch(
+            "app.api.v2.repositories.borg2.rinfo",
+            new=AsyncMock(
+                return_value={
+                    "success": True,
+                    "stdout": json.dumps(
+                        {
+                            "repository": {"id": 9},
+                            "encryption": {
+                                "encryption": "aes256-ocb",
+                                "id_hash": "sha256",
+                            },
+                        }
+                    ),
+                    "stderr": "",
+                }
+            ),
+        ):
+            response = test_client.get(
+                f"/api/v2/repositories/{repo.id}/stats", headers=admin_headers
+            )
+
+        assert response.status_code == 200
+        assert response.json()["stats"]["encryption"] == {
+            "encryption": "aes256-ocb",
+            "id_hash": "sha256",
+            "mode": "aes256-ocb",
+        }
+
     def test_get_repository_stats_returns_500_on_borg_failure(
         self, test_client: TestClient, admin_headers, test_db
     ):

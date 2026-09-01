@@ -764,4 +764,4 @@ async def get_repository_stats(
     except json.JSONDecodeError:
         stats_data = {}
 
-    return {"stats": stats_data, "borg_version": 2}
+    return {"stats": normalize_repo_info_encryption(stats_data), "borg_version": 2}
