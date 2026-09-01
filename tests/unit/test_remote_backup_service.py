@@ -353,6 +353,60 @@ async def test_execute_ssh_command_uses_public_key_only_authentication_options(
 
 
 @pytest.mark.asyncio
+async def test_verify_remote_borg_resolves_default_path_before_sudo(monkeypatch):
+    service = RemoteBackupService()
+    connection = SSHConnection(
+        id=7,
+        host="truenas.example",
+        username="backup",
+        port=2222,
+        ssh_key_id=42,
+        borg_binary_path="borg",
+        use_sudo=True,
+    )
+    ssh_key = MagicMock(spec=SSHKey)
+    db = MagicMock()
+
+    def query_side_effect(model):
+        query = MagicMock()
+        if model == SSHConnection:
+            query.filter.return_value.first.return_value = connection
+        elif model == SSHKey:
+            query.filter.return_value.first.return_value = ssh_key
+        return query
+
+    db.query.side_effect = query_side_effect
+    captured_cmd: list[str] = []
+    process = AsyncMock()
+    process.communicate = AsyncMock(return_value=(b"borg 1.4.5", b""))
+    process.returncode = 0
+
+    async def fake_create_subprocess_exec(*cmd, **kwargs):
+        captured_cmd.extend(cmd)
+        return process
+
+    monkeypatch.setattr("app.services.remote_backup_service.SessionLocal", lambda: db)
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.write_ssh_key_to_tempfile",
+        lambda key: "/tmp/source.key",
+    )
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.asyncio.create_subprocess_exec",
+        fake_create_subprocess_exec,
+    )
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.os.unlink", lambda path: None
+    )
+
+    result = await service.verify_remote_borg(connection.id)
+
+    assert result == {"installed": True, "version": "1.4.5", "path": "borg"}
+    assert captured_cmd[-1] == (
+        'borg_path=$(command -v borg) && exec sudo -n -H "$borg_path" --version'
+    )
+
+
+@pytest.mark.asyncio
 async def test_execute_remote_backup_keeps_completed_status_when_success_notification_fails(
     test_db, monkeypatch
 ):

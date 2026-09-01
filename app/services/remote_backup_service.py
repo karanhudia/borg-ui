@@ -760,6 +760,16 @@ class RemoteBackupService:
                 # Try to find borg binary
                 borg_path = ssh_connection.borg_binary_path or "borg"
 
+                if ssh_connection.use_sudo and borg_path == "borg":
+                    remote_command = (
+                        "borg_path=$(command -v borg) && "
+                        'exec sudo -n -H "$borg_path" --version'
+                    )
+                elif ssh_connection.use_sudo:
+                    remote_command = f"sudo -n -H {shlex.quote(borg_path)} --version"
+                else:
+                    remote_command = f"{shlex.quote(borg_path)} --version"
+
                 # Build SSH command to check borg
                 ssh_cmd = [
                     "ssh",
@@ -771,11 +781,7 @@ class RemoteBackupService:
                     "-p",
                     str(ssh_connection.port),
                     f"{ssh_connection.username}@{ssh_connection.host}",
-                    *(
-                        ["sudo", "-n", "-H", borg_path, "--version"]
-                        if ssh_connection.use_sudo
-                        else [borg_path, "--version"]
-                    ),
+                    remote_command,
                 ]
 
                 logger.info(
