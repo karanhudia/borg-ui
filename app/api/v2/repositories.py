@@ -16,7 +16,7 @@ import structlog
 
 from app.database.database import get_db
 from app.database.models import User, Repository, SSHConnection, SystemSettings
-from app.core.security import get_current_user
+from app.core.security import check_repo_access, get_current_user
 from app.core.features import require_feature
 from app.core.borg2 import borg2, BORG2_ENCRYPTION_MODES
 from app.core.borg_errors import is_lock_error
@@ -540,6 +540,7 @@ async def get_repository_info(
             raise HTTPException(
                 status_code=404, detail={"key": "backend.errors.repo.notFound"}
             )
+        check_repo_access(db, current_user, repo, "viewer")
 
         info_timeout = _get_info_timeout(db)
 
@@ -656,6 +657,7 @@ async def list_archives(
             raise HTTPException(
                 status_code=404, detail={"key": "backend.errors.repo.notFound"}
             )
+        check_repo_access(db, current_user, repo, "viewer")
 
         from app.database.models import SystemSettings
 
@@ -723,6 +725,7 @@ async def get_repository_stats(
         raise HTTPException(
             status_code=404, detail={"key": "backend.errors.repo.notFound"}
         )
+    check_repo_access(db, current_user, repo, "viewer")
 
     info_timeout = _get_info_timeout(db)
     if is_agent_executor(repo):
