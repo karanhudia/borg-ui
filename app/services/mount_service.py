@@ -26,12 +26,14 @@ from cryptography.fernet import Fernet
 
 from app.config import settings
 from app.core.borg_router import BorgRouter
-from app.utils.borg_env import effective_repository_remote_path
+from app.utils.borg_env import effective_repository_remote_path, get_standard_ssh_opts
 from app.core.security import decrypt_secret
 from app.database.database import SessionLocal
 from app.database.models import SSHConnection, SSHKey, Repository, SystemSettings
-from app.utils.borg_env import get_standard_ssh_opts
-from app.utils.ssh_utils import resolve_repository_ssh_connection
+from app.utils.ssh_utils import (
+    resolve_repo_ssh_key_file,
+    resolve_repository_ssh_connection,
+)
 from app.utils.ssh_utils import ssh_key_auth_args, sshfs_key_auth_options
 
 logger = structlog.get_logger()
@@ -1011,63 +1013,16 @@ class MountService:
                 # Handle SSH repositories
                 connection = resolve_repository_ssh_connection(repository, db)
                 if connection:
-                    # Always disable strict host key checking for SSH repos
-                    ssh_opts = get_standard_ssh_opts()
-
-                    if connection:
-                        # Repository linked to SSH connection
-                        logger.info(
-                            "SSH connection details",
-                            mount_id=mount_id,
-                            connection_found=bool(connection),
-                            connection_id=repository.connection_id,
-                            ssh_key_id=connection.ssh_key_id if connection else None,
-                        )
-
-                        if connection and connection.ssh_key_id:
-                            ssh_key = (
-                                db.query(SSHKey)
-                                .filter(SSHKey.id == connection.ssh_key_id)
-                                .first()
-                            )
-
-                            if ssh_key:
-                                # Decrypt SSH key
-                                temp_key_file = self._decrypt_and_write_key(ssh_key)
-                                # Set BORG_RSH with key and SSH options
-                                key_ssh_opts = get_standard_ssh_opts(
-                                    include_key_path=temp_key_file
-                                )
-                                env["BORG_RSH"] = f"ssh {' '.join(key_ssh_opts)}"
-                                logger.info(
-                                    "Set BORG_RSH with key",
-                                    mount_id=mount_id,
-                                    borg_rsh=env["BORG_RSH"],
-                                )
-                            else:
-                                # No key found, use SSH options only
-                                env["BORG_RSH"] = f"ssh {' '.join(ssh_opts)}"
-                                logger.info(
-                                    "Set BORG_RSH without key (key not found)",
-                                    mount_id=mount_id,
-                                    borg_rsh=env["BORG_RSH"],
-                                )
-                        else:
-                            # No key configured or connection not found
-                            env["BORG_RSH"] = f"ssh {' '.join(ssh_opts)}"
-                            logger.info(
-                                "Set BORG_RSH without key (no connection or key)",
-                                mount_id=mount_id,
-                                borg_rsh=env["BORG_RSH"],
-                            )
-                    else:
-                        # SSH repository without connection_id (embedded SSH URL)
-                        env["BORG_RSH"] = f"ssh {' '.join(ssh_opts)}"
-                        logger.info(
-                            "Set BORG_RSH for SSH repo without connection",
-                            mount_id=mount_id,
-                            borg_rsh=env["BORG_RSH"],
-                        )
+                    temp_key_file = resolve_repo_ssh_key_file(repository, db)
+                    ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
+                    env["BORG_RSH"] = f"ssh {' '.join(ssh_opts)}"
+                    logger.info(
+                        "Set BORG_RSH for repository connection",
+                        mount_id=mount_id,
+                        connection_id=connection.id,
+                        has_ssh_key=bool(temp_key_file),
+                        borg_rsh=env["BORG_RSH"],
+                    )
                 else:
                     logger.info("Not an SSH repository", mount_id=mount_id)
 

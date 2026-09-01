@@ -13,7 +13,11 @@ from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session, object_session
 from app.config import settings
 from app.core.borg_router import BorgRouter
-from app.utils.borg_env import effective_repository_remote_path
+from app.utils.borg_env import (
+    cleanup_temp_key_file,
+    effective_repository_remote_path,
+    get_standard_ssh_opts,
+)
 from app.database.models import (
     AgentJob,
     BackupPlanRun,
@@ -32,7 +36,7 @@ from app.utils.backup_maintenance import (
     RUNNING_BACKUP_MAINTENANCE_FAILURES,
 )
 from app.utils.ssh_utils import (
-    public_key_only_ssh_args,
+    resolve_repo_ssh_key_file,
     resolve_repository_ssh_connection,
 )
 
@@ -465,6 +469,7 @@ def break_repository_lock(repository: Repository) -> bool:
     Returns:
         True if lock was successfully broken, False otherwise
     """
+    temp_key_file = None
     try:
         try:
             db = object_session(repository)
@@ -481,17 +486,14 @@ def break_repository_lock(repository: Repository) -> bool:
         if repository.passphrase:
             env["BORG_PASSPHRASE"] = repository.passphrase
 
-        # For remote repos, add SSH options
-        if connection or repository.connection_id:
-            ssh_opts = [
-                *public_key_only_ssh_args(),
-                "-o",
-                "StrictHostKeyChecking=no",
-                "-o",
-                "UserKnownHostsFile=/dev/null",
-                "-o",
-                "LogLevel=ERROR",
-            ]
+        # For remote repos, use the same resolved connection for the Borg
+        # remote command and SSH identity, including legacy ssh:// URLs.
+        if connection:
+            temp_key_file = resolve_repo_ssh_key_file(repository, db)
+            ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
+            env["BORG_RSH"] = f"ssh {' '.join(ssh_opts)}"
+        elif repository.connection_id:
+            ssh_opts = get_standard_ssh_opts()
             env["BORG_RSH"] = f"ssh {' '.join(ssh_opts)}"
 
         # Execute break-lock command
@@ -520,6 +522,8 @@ def break_repository_lock(repository: Repository) -> bool:
             "Error breaking repository lock", repository_id=repository.id, error=str(e)
         )
         return False
+    finally:
+        cleanup_temp_key_file(temp_key_file)
 
 
 def cleanup_orphaned_jobs(db: Session):
