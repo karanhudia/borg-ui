@@ -52,7 +52,7 @@ jobs:
 
       - name: Open or update the adoption PR
         if: steps.refresh.outputs.changed == 'true'
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           # A PR opened with the default GITHUB_TOKEN does not trigger other
           # workflows, so the tests that make this PR usefully red never run. A PAT
