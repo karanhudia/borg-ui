@@ -180,6 +180,38 @@ async def test_build_remote_command_preserve_env_lists_only_variables_set(
 
 
 @pytest.mark.asyncio
+async def test_build_remote_command_resolves_default_borg_before_sudo(
+    test_db, monkeypatch
+):
+    """The default Borg command must not depend on sudo's secure_path."""
+    connection, repository, _job = _remote_entities(test_db)
+    repository.remote_path = None
+    test_db.commit()
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.SessionLocal", lambda: test_db
+    )
+
+    command = await RemoteBackupService()._build_remote_command(
+        repository=repository,
+        archive_name="{hostname}-{now}",
+        source_paths=["/data"],
+        exclude_patterns=[],
+        borg_binary_path="borg",
+        use_sudo=True,
+        source_ssh_connection=connection,
+    )
+
+    assert command.startswith(
+        "export BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes "
+        "BORG_RELOCATED_REPO_ACCESS_IS_OK=yes && "
+        "borg_path=$(command -v borg) && "
+        "sudo -n --preserve-env="
+        "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK,"
+        'BORG_RELOCATED_REPO_ACCESS_IS_OK "$borg_path" create '
+    )
+
+
+@pytest.mark.asyncio
 async def test_execute_remote_backup_does_not_require_backup_source_flag_and_uses_source_borg_wrapper(
     test_db, monkeypatch
 ):

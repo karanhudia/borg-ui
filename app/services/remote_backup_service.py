@@ -429,6 +429,7 @@ class RemoteBackupService:
         cmd_parts = list(env_assignments)
 
         # Borg binary path (optionally prefixed with sudo)
+        borg_command = shlex.quote(borg_binary_path)
         if use_sudo:
             # sudo's env_reset (the Debian-family default) strips the
             # assignments above before borg starts; name them explicitly as
@@ -437,8 +438,20 @@ class RemoteBackupService:
             preserved = ",".join(
                 assignment.split("=", 1)[0] for assignment in env_assignments
             )
+            if borg_binary_path == "borg":
+                # Resolve Borg with the SSH user's PATH before sudo applies its
+                # secure_path. The default is intentionally path-based so hosts
+                # with Borg outside /usr/bin keep working without extra setup.
+                cmd_parts = [
+                    "export",
+                    *env_assignments,
+                    "&&",
+                    "borg_path=$(command -v borg)",
+                    "&&",
+                ]
+                borg_command = '"$borg_path"'
             cmd_parts.extend(["sudo", "-n", f"--preserve-env={preserved}"])
-        cmd_parts.append(shlex.quote(borg_binary_path))
+        cmd_parts.append(borg_command)
 
         # Create command
         cmd_parts.append("create")
