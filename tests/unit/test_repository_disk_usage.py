@@ -1,5 +1,7 @@
 import pytest
 
+from app.core.security import get_password_hash
+from app.database.models import AgentJob, AgentMachine, Repository
 from agent.borg_ui_agent.repository_ops import (
     REPOSITORY_JOB_KINDS,
     RepositoryOperationPayload,
@@ -7,8 +9,10 @@ from agent.borg_ui_agent.repository_ops import (
 from agent.borg_ui_agent.runtime import DEFAULT_CAPABILITIES, JOB_HANDLERS
 from app.services.job_admission import (
     AGENT_JOB_KIND_OPERATIONS,
-    OPERATION_CLASS_REPOSITORY_READ,
+    OPERATION_BACKUP,
+    OPERATION_CLASS_REPOSITORY_OBSERVE,
     OPERATION_DISK_USAGE,
+    ensure_repository_admission,
     operation_class_for,
 )
 from app.services.repository_executor import REPOSITORY_OPERATION_CAPABILITIES
@@ -62,8 +66,52 @@ def test_disk_usage_is_admitted_and_dispatchable():
 
 
 @pytest.mark.unit
-def test_disk_usage_is_a_read_operation():
-    # du opens nothing in the repository and takes no lock. Classed as a
-    # write it would block a backup queued behind it with
-    # repositoryOperationActive.
-    assert operation_class_for(OPERATION_DISK_USAGE) == OPERATION_CLASS_REPOSITORY_READ
+def test_disk_usage_is_an_observation():
+    # du stats the repository directory and never opens the repository, so it
+    # holds no borg lock. It is not a plain read either: a read still has to
+    # yield to a write, and there is nothing for this to yield to.
+    assert (
+        operation_class_for(OPERATION_DISK_USAGE)
+        == OPERATION_CLASS_REPOSITORY_OBSERVE
+    )
+
+
+@pytest.mark.unit
+def test_backup_can_queue_while_disk_usage_is_active(db_session):
+    # A requested write conflicts with ANY active work, so before disk usage
+    # became an observation an in-flight size check refused the backup behind
+    # it with repositoryOperationActive. The stats refresh runs on a timer, so
+    # that collision would land on scheduled backups at random.
+    agent = AgentMachine(
+        name="Agent",
+        agent_id="agt_disk_usage",
+        token_hash=get_password_hash("agent-secret"),
+        token_prefix="agent-secret",
+        status="online",
+    )
+    repo = Repository(
+        name="RepoDiskUsage",
+        path="/repos/disk-usage",
+        encryption="none",
+        repository_type="local",
+        executor_type="agent",
+    )
+    db_session.add_all([agent, repo])
+    db_session.flush()
+    repo.agent_machine_id = agent.id
+    db_session.add(
+        AgentJob(
+            agent_machine_id=agent.id,
+            job_type="repository",
+            status="queued",
+            payload={
+                "schema_version": 1,
+                "job_kind": JOB_KIND,
+                "repository": {"id": repo.id, "path": repo.path},
+            },
+        )
+    )
+    db_session.commit()
+
+    # No exception: the backup is admitted.
+    ensure_repository_admission(db_session, repo, OPERATION_BACKUP)

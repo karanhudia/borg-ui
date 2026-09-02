@@ -44,6 +44,11 @@ OPERATION_UNKNOWN_REPOSITORY = "repository.unknown"
 
 OPERATION_CLASS_REPOSITORY_WRITE = "repository_write"
 OPERATION_CLASS_REPOSITORY_READ = "repository_read"
+# Observation: reads metadata ABOUT the repository without opening it, so it
+# holds no borg lock and conflicts with nothing. Distinct from
+# repository_read, which does open the repository and must therefore still
+# yield to a write.
+OPERATION_CLASS_REPOSITORY_OBSERVE = "repository_observe"
 
 DEFAULT_MANUAL_BACKUP_LIMIT = 1
 DEFAULT_SCHEDULED_BACKUP_LIMIT = 2
@@ -78,7 +83,11 @@ READ_OPERATIONS = {
     OPERATION_REPOSITORY_LIST_ARCHIVES,
     OPERATION_REPOSITORY_LIST_ARCHIVE_CONTENTS,
     OPERATION_REPOSITORY_EXTRACT_ARCHIVE_FILE,
-    # du reads directory metadata only and takes no repository lock.
+}
+
+# du stats the repository directory; it never opens the repository, so it
+# neither takes a borg lock nor needs to wait for one.
+OBSERVE_OPERATIONS = {
     OPERATION_DISK_USAGE,
 }
 
@@ -129,6 +138,8 @@ def operation_class_for(operation: str) -> str:
         return OPERATION_CLASS_REPOSITORY_WRITE
     if operation in READ_OPERATIONS:
         return OPERATION_CLASS_REPOSITORY_READ
+    if operation in OBSERVE_OPERATIONS:
+        return OPERATION_CLASS_REPOSITORY_OBSERVE
     raise ValueError(f"Unknown repository operation: {operation}")
 
 
@@ -360,6 +371,14 @@ def ensure_repository_admission(
             )
 
     for active in active_work:
+        # An observation neither takes a lock nor waits for one, so it is
+        # skipped from both sides: it never blocks a backup, and it can start
+        # while anything else is running.
+        if OPERATION_CLASS_REPOSITORY_OBSERVE in (
+            requested_class,
+            active.operation_class,
+        ):
+            continue
         conflicts = requested_class == OPERATION_CLASS_REPOSITORY_WRITE or (
             requested_class == OPERATION_CLASS_REPOSITORY_READ
             and active.operation_class == OPERATION_CLASS_REPOSITORY_WRITE
