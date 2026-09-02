@@ -526,6 +526,18 @@ def break_repository_lock(repository: Repository) -> bool:
         cleanup_temp_key_file(temp_key_file)
 
 
+def _is_remote_repository(repository: Repository, db: Session) -> bool:
+    """Return whether a repository may still have a live remote Borg process."""
+    path = getattr(repository, "path", "") or ""
+    repository_type = (getattr(repository, "repository_type", "") or "").lower()
+    return bool(
+        resolve_repository_ssh_connection(repository, db)
+        or getattr(repository, "connection_id", None)
+        or repository_type == "ssh"
+        or path.startswith("ssh://")
+    )
+
+
 def cleanup_orphaned_jobs(db: Session):
     """
     Find and cleanup jobs that were running when container stopped
@@ -648,7 +660,7 @@ def cleanup_orphaned_jobs(db: Session):
             )
 
             if repository:
-                if not repository.connection_id:
+                if not _is_remote_repository(repository, db):
                     # For local repos, we can safely break the lock
                     logger.info(
                         "Attempting to break lock for local repository",
@@ -784,7 +796,7 @@ def cleanup_orphaned_jobs(db: Session):
             )
 
             if repository:
-                if not repository.connection_id:
+                if not _is_remote_repository(repository, db):
                     # For local repos, we can safely break the lock
                     logger.info(
                         "Attempting to break lock for local repository",
