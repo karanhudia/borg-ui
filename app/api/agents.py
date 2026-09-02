@@ -63,7 +63,21 @@ FINAL_AGENT_JOB_STATUSES = {
 }
 
 
-STALE_AGENT_JOB_REQUEUE_AFTER = timedelta(minutes=15)
+# MUST STAY BELOW agent_job_reaper.AGENT_JOB_REAP_AFTER.
+#
+# A job claimed just before an agent's socket drops is never delivered: it
+# sits "claimed" with started_at NULL until something recovers it.
+# _requeue_stale_agent_jobs runs on the agent's hello and on every heartbeat
+# and would recover it, but only for rows older than this window — so while
+# the two windows were equal the reaper always failed the job first and the
+# reconnect had nothing left to requeue.
+#
+# Two minutes gives a reconnecting agent room to reclaim its own work well
+# before the reaper acts. It is safe to be this short because the requeue
+# already skips any job the agent reports in running_job_ids and any job
+# whose own activity is newer than the cutoff, so a genuinely running
+# operation is never requeued however long it takes.
+STALE_AGENT_JOB_REQUEUE_AFTER = timedelta(minutes=2)
 REPOSITORY_OPERATION_JOB_MODELS = {
     "check": CheckJob,
     "compact": CompactJob,
