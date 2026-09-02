@@ -195,8 +195,8 @@ fi
 shift
 for argument in "$@"; do
     case "$argument" in
-        --verbose|--info|--debug|--log-json|--show-version|--help|\
-        --umask=077|--lock-wait=*|--debug-topic=*|--log-level=*) ;;
+        --verbose|--info|--debug|--error|--critical|--log-json|--show-version|--help|\
+        --umask=077|--lock-wait=*|--debug-topic=*|--log-level=*|--storage-quota=*) ;;
         *)
             echo "Unsupported borg serve argument: $argument" >&2
             exit 64
@@ -207,8 +207,10 @@ done
 exec /usr/bin/borg serve --umask=077 --restrict-to-repository /srv/borg "$@"
 ```
 
-Make the wrapper and its parent directories owned by root and not writable by
-the SSH user. Then configure passwordless sudo with `NOSETENV` and an exact
+Make the wrapper, `/srv`, `/srv/borg`, and every parent directory in both paths
+owned by root and not writable by the SSH user. Borg resolves the repository
+path before serving it, so a writable path component could otherwise be
+replaced. Then configure passwordless sudo with `NOSETENV` and an exact
 `env_keep` allowlist. Borg UI uses only
 `BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK`,
 `BORG_RELOCATED_REPO_ACCESS_IS_OK`, `BORG_PASSPHRASE`, and `BORG_REMOTE_PATH`
