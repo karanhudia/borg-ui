@@ -182,7 +182,7 @@ for a remote-direct backup. For example, add a root-owned file with `visudo`:
 
 ```sudoers
 Defaults:<ssh-user> env_keep += "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK BORG_RELOCATED_REPO_ACCESS_IS_OK BORG_PASSPHRASE BORG_REMOTE_PATH"
-<ssh-user> ALL=(root) NOSETENV: /path/to/borg
+<ssh-user> ALL=(root) NOPASSWD: NOSETENV: /path/to/borg
 ```
 
 Do not add `BORG_PASSCOMMAND` to this allowlist. Borg executes that helper, so
