@@ -396,9 +396,9 @@ class RemoteBackupService:
           ssh://user@repo-host:/path::{hostname}-{now} \
           /data /etc
 
-        With use_sudo the borg invocation becomes
-        ``sudo -n --preserve-env=BORG_PASSPHRASE,... borg create ...`` so the
-        variables survive sudo's env_reset.
+        With use_sudo, the sudoers ``env_keep`` allowlist preserves the Borg
+        variables required by the command without granting arbitrary environment
+        control through ``SETENV``.
         """
         # Get DB session for connection lookup
         db = SessionLocal()
@@ -436,15 +436,10 @@ class RemoteBackupService:
 
         # Borg binary path (optionally prefixed with sudo)
         if use_sudo:
-            # sudo's env_reset (the Debian-family default) strips the
-            # assignments above before borg starts; name them explicitly as
-            # preserved. -n fails fast instead of waiting for a password that
-            # can never arrive over a non-interactive ssh command. -H keeps
-            # Borg's root cache and configuration out of the SSH user's home.
-            preserved = ",".join(
-                assignment.split("=", 1)[0] for assignment in env_assignments
-            )
-            cmd_parts.extend(["sudo", "-n", "-H", f"--preserve-env={preserved}"])
+            # sudoers preserves only the documented Borg variables through its
+            # env_keep allowlist. -n fails fast instead of waiting for a password
+            # and -H keeps Borg's root cache out of the SSH user's home.
+            cmd_parts.extend(["sudo", "-n", "-H"])
         cmd_parts.append(shlex.quote(borg_binary_path))
 
         # Create command

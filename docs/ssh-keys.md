@@ -175,22 +175,25 @@ passed to Borg as the repository-side remote Borg path.
 
 When **Use sudo** is enabled on the repository connection, Borg UI runs the
 remote Borg server with `sudo -n -H` for every repository operation. Configure
-passwordless sudo with `SETENV` for the Borg binary. Borg UI preserves only
-`BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK`, `BORG_RELOCATED_REPO_ACCESS_IS_OK`,
-`BORG_PASSPHRASE`, and `BORG_REMOTE_PATH` for a remote-direct backup. An
-equivalent `env_keep` policy is also valid. Before creating a plan, verify the
-policy on the remote host with the same environment-preservation request used
-by Borg UI:
+passwordless sudo with `NOSETENV` and an exact `env_keep` allowlist. Borg UI
+uses only `BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK`,
+`BORG_RELOCATED_REPO_ACCESS_IS_OK`, `BORG_PASSPHRASE`, and `BORG_REMOTE_PATH`
+for a remote-direct backup. For example, add a root-owned file with `visudo`:
+
+```sudoers
+Defaults:<ssh-user> env_keep += "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK BORG_RELOCATED_REPO_ACCESS_IS_OK BORG_PASSPHRASE BORG_REMOTE_PATH"
+<ssh-user> ALL=(root) NOSETENV: /path/to/borg
+```
+
+Do not add `BORG_PASSCOMMAND` to this allowlist. Borg executes that helper, so
+a user-controlled helper must never run as root. If your setup needs a helper,
+use a fixed root-owned wrapper that supplies only the required values.
+
+Before creating a plan, verify that the restricted sudo command works on the
+remote host:
 
 ```bash
-BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes \
-BORG_RELOCATED_REPO_ACCESS_IS_OK=yes \
-BORG_PASSPHRASE=preflight \
-BORG_REMOTE_PATH=borg \
-sudo -n -H \
-  --preserve-env=BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK,\
-BORG_RELOCATED_REPO_ACCESS_IS_OK,BORG_PASSPHRASE,BORG_REMOTE_PATH \
-  /path/to/borg --version
+sudo -n -H /path/to/borg --version
 ```
 
 Ensure that the Borg binary or wrapper and its parent directories cannot be

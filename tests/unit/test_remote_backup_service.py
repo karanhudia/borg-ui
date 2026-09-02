@@ -86,9 +86,7 @@ def test_repository_url_keeps_canonical_ssh_url_for_different_connection(test_db
 
 
 @pytest.mark.asyncio
-async def test_remote_sudo_command_preserves_only_required_borg_environment(
-    test_db, monkeypatch
-):
+async def test_remote_sudo_command_relies_on_sudoers_env_keep(test_db, monkeypatch):
     connection, repository, _job = _remote_entities(test_db)
     connection.use_sudo = True
     test_db.commit()
@@ -106,12 +104,8 @@ async def test_remote_sudo_command_preserves_only_required_borg_environment(
         use_sudo=True,
     )
 
-    preserved_environment = (
-        "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK,"
-        "BORG_RELOCATED_REPO_ACCESS_IS_OK,BORG_REMOTE_PATH"
-    )
-    assert f"--preserve-env={preserved_environment} " in command
-    assert command.count("--preserve-env=") == 1
+    assert "sudo -n -H /usr/local/bin/borg-wrapper create" in command
+    assert "--preserve-env" not in command
     assert "BORG_REMOTE_PATH='sudo -n -H /usr/local/bin/borg-wrapper'" in command
     assert "BORG_PASSPHRASE" not in command
     assert "BORG_RSH" not in command
@@ -157,14 +151,8 @@ async def test_build_remote_command_passes_borg_env_through_sudo(test_db, monkey
         "BORG_PASSPHRASE='s3cret pass' "
         "BORG_REMOTE_PATH=/usr/lib/borg/borg "
     )
-    assert with_sudo.startswith(
-        env_prefix + "sudo -n -H --preserve-env="
-        "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK,"
-        "BORG_RELOCATED_REPO_ACCESS_IS_OK,"
-        "BORG_PASSPHRASE,"
-        "BORG_REMOTE_PATH "
-        "/usr/bin/borg create "
-    )
+    assert with_sudo.startswith(env_prefix + "sudo -n -H /usr/bin/borg create ")
+    assert "--preserve-env" not in with_sudo
     assert without_sudo.startswith(env_prefix + "/usr/bin/borg create ")
     assert "sudo" not in without_sudo
 
@@ -193,12 +181,8 @@ async def test_build_remote_command_preserve_env_lists_only_variables_set(
         source_ssh_connection=connection,
     )
 
-    assert (
-        "sudo -n -H --preserve-env="
-        "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK,"
-        "BORG_RELOCATED_REPO_ACCESS_IS_OK "
-        "/usr/bin/borg create "
-    ) in command
+    assert "sudo -n -H /usr/bin/borg create " in command
+    assert "--preserve-env" not in command
     assert "BORG_PASSPHRASE" not in command
     assert "BORG_REMOTE_PATH" not in command
 
