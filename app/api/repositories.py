@@ -874,7 +874,8 @@ async def _update_agent_repository_stats(repository: Repository, db: Session) ->
             rinfo = json.loads((rinfo_result or {}).get("stdout") or "{}")
             encryption_mode = (rinfo.get("encryption") or {}).get("mode")
             # Borg 1 `info --json` exposes repo-level dedup size in cache.stats;
-            # Borg 2 `repo-info --json` does not (remote size is unknowable).
+            # Borg 2 `repo-info --json` does not. For Borg 2 the size comes
+            # from the agent instead, below.
             stats = (rinfo.get("cache") or {}).get("stats") or {}
             size_bytes = stats.get("unique_csize") or stats.get("unique_size")
             if isinstance(size_bytes, (int, float)) and size_bytes > 0:
@@ -885,6 +886,35 @@ async def _update_agent_repository_stats(repository: Repository, db: Session) ->
                 repository=repository.name,
                 error=str(e),
             )
+
+        # Borg 2 reports no size through repo-info, so ask the agent to
+        # measure the repository directory it already holds locally. Guarded
+        # on total_size so Borg 1 repositories keep using cache.stats above.
+        if total_size is None:
+            try:
+                du_job = queue_agent_repository_operation_job(
+                    db, repository, job_kind="repository.disk_usage"
+                )
+                await dispatch_agent_job_best_effort(
+                    db, du_job, repository_id=repository.id
+                )
+                du_result = await wait_for_agent_repository_operation_job(
+                    db, du_job.id, timeout_seconds=timeouts["info_timeout"]
+                )
+                du_meta = du_result or {}
+                if du_meta.get("return_code", 0) == 0:
+                    # `du -sb` prints "<bytes>\t<path>".
+                    stdout = (du_meta.get("stdout") or "").strip()
+                    first = stdout.split("\n")[0] if stdout else ""
+                    fields = first.split()
+                    if fields and fields[0].isdigit() and int(fields[0]) > 0:
+                        total_size = format_bytes(int(fields[0]))
+            except Exception as e:
+                logger.warning(
+                    "agent disk-usage for stats refresh failed",
+                    repository=repository.name,
+                    error=str(e),
+                )
 
         if list_ok:
             repository.archive_count = archive_count

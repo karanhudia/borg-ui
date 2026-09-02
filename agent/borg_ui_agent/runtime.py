@@ -41,6 +41,7 @@ DEFAULT_CAPABILITIES = [
     "repository.prune",
     "repository.compact",
     "repository.rclone_sync",
+    "repository.disk_usage",
     "agent.list_scripts",
     "script.run",
 ]
@@ -63,6 +64,7 @@ JOB_HANDLERS = {
     "repository.prune": execute_repository_operation_job,
     "repository.compact": execute_repository_operation_job,
     "repository.rclone_sync": execute_repository_operation_job,
+    "repository.disk_usage": execute_repository_operation_job,
 }
 
 

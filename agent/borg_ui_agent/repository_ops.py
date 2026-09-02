@@ -40,6 +40,7 @@ REPOSITORY_JOB_KINDS = {
     "repository.prune",
     "repository.compact",
     "repository.rclone_sync",
+    "repository.disk_usage",
 }
 
 # Kill a streaming extract only when no bytes have flowed for this long — a
@@ -107,6 +108,13 @@ class RepositoryOperationPayload:
         return cmd
 
     def build_command(self, *, rclone_config_path: Optional[str] = None) -> list[str]:
+        if self.job_kind == "repository.disk_usage":
+            if not self.repository_path:
+                raise ValueError(
+                    "repository.disk_usage requires a repository path"
+                )
+            return ["du", "-sb", "--", self.repository_path]
+
         if self.job_kind == "repository.rclone_sync":
             rclone = _rclone_operation(self.operation)
             remote_name = _require_non_empty_string(
@@ -517,6 +525,7 @@ def execute_repository_operation_job(
         "repository.list_archives",
         "repository.delete_archive",
         "repository.break_lock",
+        "repository.disk_usage",
     }:
         try:
             return _execute_short_repository_operation(

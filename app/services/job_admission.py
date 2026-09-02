@@ -36,6 +36,7 @@ OPERATION_REPOSITORY_LIST_ARCHIVES = "repository.list_archives"
 OPERATION_REPOSITORY_LIST_ARCHIVE_CONTENTS = "repository.list_archive_contents"
 OPERATION_REPOSITORY_EXTRACT_ARCHIVE_FILE = "repository.extract_archive_file"
 OPERATION_BREAK_LOCK = "break_lock"
+OPERATION_DISK_USAGE = "repository.disk_usage"
 # Sentinel for an active repository agent job whose kind we don't recognize.
 # Classed WRITE so admission fails closed -- an unknown job might hold a borg
 # lock, and break_lock must never run alongside it.
@@ -77,6 +78,8 @@ READ_OPERATIONS = {
     OPERATION_REPOSITORY_LIST_ARCHIVES,
     OPERATION_REPOSITORY_LIST_ARCHIVE_CONTENTS,
     OPERATION_REPOSITORY_EXTRACT_ARCHIVE_FILE,
+    # du reads directory metadata only and takes no repository lock.
+    OPERATION_DISK_USAGE,
 }
 
 AGENT_JOB_KIND_OPERATIONS = {
@@ -93,6 +96,7 @@ AGENT_JOB_KIND_OPERATIONS = {
     "repository.list_archive_contents": OPERATION_REPOSITORY_LIST_ARCHIVE_CONTENTS,
     "repository.extract_archive_file": OPERATION_REPOSITORY_EXTRACT_ARCHIVE_FILE,
     "repository.restore": OPERATION_RESTORE,
+    "repository.disk_usage": OPERATION_DISK_USAGE,
 }
 
 MAINTENANCE_MODEL_OPERATIONS = {
