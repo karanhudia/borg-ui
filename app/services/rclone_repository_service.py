@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import configparser
 import os
 import shlex
 import shutil
@@ -297,8 +298,38 @@ class RcloneRepositoryService:
             raise ValueError("SSH cloud mirror mount did not return a mount point")
         return mount_point, mount_id, mount_service
 
+    def _rclone_config_section(self, remote: RcloneRemote) -> dict[str, str]:
+        """Read a remote's real values from the server's rclone.conf.
+
+        redacted_config stores secrets as "***" for display, so it cannot be
+        used to build a working config for an agent.
+        """
+        config_path = remote.config_path or str(
+            Path(settings.rclone_config_root) / "rclone.conf"
+        )
+        parser = configparser.RawConfigParser()
+        try:
+            with open(config_path, encoding="utf-8") as handle:
+                parser.read_file(handle)
+        except (OSError, configparser.Error):
+            return {}
+        if not parser.has_section(remote.name):
+            return {}
+        return dict(parser.items(remote.name))
+
     def _agent_rclone_config(self, remote: RcloneRemote) -> dict[str, str]:
-        values = dict(remote.redacted_config or {})
+        # The agent writes these into its own rclone.conf and runs rclone
+        # against it, so the values have to be the real ones. Building this
+        # from redacted_config sent "***" as token, client_id and
+        # client_secret, and rclone failed before touching the network with
+        # "invalid character '*' looking for beginning of value" -- which
+        # surfaces only as "exited with code 1".
+        values = self._rclone_config_section(remote)
+        if not values:
+            # No readable section: fall back to what is known rather than
+            # sending nothing, so a misconfigured path fails in rclone with
+            # a message about the remote instead of a missing type.
+            values = dict(remote.redacted_config or {})
         values["type"] = str(values.get("type") or remote.provider).strip()
         return {
             str(key): _stringify_config_value(value)
