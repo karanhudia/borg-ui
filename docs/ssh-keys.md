@@ -196,7 +196,7 @@ shift
 for argument in "$@"; do
     case "$argument" in
         --verbose|--info|--debug|--log-json|--show-version|--help|\
-        --umask=*|--lock-wait=*|--debug-topic=*|--log-level=*) ;;
+        --umask=077|--lock-wait=*|--debug-topic=*|--log-level=*) ;;
         *)
             echo "Unsupported borg serve argument: $argument" >&2
             exit 64
@@ -204,7 +204,7 @@ for argument in "$@"; do
     esac
 done
 
-exec /usr/bin/borg serve --restrict-to-repository /srv/borg "$@"
+exec /usr/bin/borg serve --umask=077 --restrict-to-repository /srv/borg "$@"
 ```
 
 Make the wrapper and its parent directories owned by root and not writable by
