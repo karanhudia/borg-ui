@@ -48,6 +48,14 @@ def _remote_entities(test_db):
     return connection, repository, job
 
 
+def test_ssh_connection_defaults_to_path_resolved_borg(test_db):
+    connection = SSHConnection(host="path.example", username="backup", port=22)
+    test_db.add(connection)
+    test_db.flush()
+
+    assert connection.borg_binary_path == "borg"
+
+
 def test_repository_url_uses_remote_path_for_same_source_connection(test_db):
     connection, repository, _job = _remote_entities(test_db)
     repository.path = "ssh://backup@docker-host.example:2222/repos/remote-direct"
@@ -172,10 +180,44 @@ async def test_build_remote_command_preserve_env_lists_only_variables_set(
 
 
 @pytest.mark.asyncio
-async def test_execute_remote_backup_updates_same_job_row_and_uses_source_borg_wrapper(
+async def test_build_remote_command_resolves_default_borg_before_sudo(
+    test_db, monkeypatch
+):
+    """The default Borg command must not depend on sudo's secure_path."""
+    connection, repository, _job = _remote_entities(test_db)
+    repository.remote_path = None
+    test_db.commit()
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.SessionLocal", lambda: test_db
+    )
+
+    command = await RemoteBackupService()._build_remote_command(
+        repository=repository,
+        archive_name="{hostname}-{now}",
+        source_paths=["/data"],
+        exclude_patterns=[],
+        borg_binary_path="borg",
+        use_sudo=True,
+        source_ssh_connection=connection,
+    )
+
+    assert command.startswith(
+        "export BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes "
+        "BORG_RELOCATED_REPO_ACCESS_IS_OK=yes && "
+        "borg_path=$(command -v borg) && "
+        "sudo -n --preserve-env="
+        "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK,"
+        'BORG_RELOCATED_REPO_ACCESS_IS_OK "$borg_path" create '
+    )
+
+
+@pytest.mark.asyncio
+async def test_execute_remote_backup_does_not_require_backup_source_flag_and_uses_source_borg_wrapper(
     test_db, monkeypatch
 ):
     connection, repository, job = _remote_entities(test_db)
+    connection.is_backup_source = False
+    test_db.commit()
     service = RemoteBackupService()
     commands = []
     connection_id = connection.id
@@ -311,6 +353,60 @@ async def test_execute_ssh_command_uses_public_key_only_authentication_options(
 
 
 @pytest.mark.asyncio
+async def test_verify_remote_borg_resolves_default_path_before_sudo(monkeypatch):
+    service = RemoteBackupService()
+    connection = SSHConnection(
+        id=7,
+        host="truenas.example",
+        username="backup",
+        port=2222,
+        ssh_key_id=42,
+        borg_binary_path="borg",
+        use_sudo=True,
+    )
+    ssh_key = MagicMock(spec=SSHKey)
+    db = MagicMock()
+
+    def query_side_effect(model):
+        query = MagicMock()
+        if model == SSHConnection:
+            query.filter.return_value.first.return_value = connection
+        elif model == SSHKey:
+            query.filter.return_value.first.return_value = ssh_key
+        return query
+
+    db.query.side_effect = query_side_effect
+    captured_cmd: list[str] = []
+    process = AsyncMock()
+    process.communicate = AsyncMock(return_value=(b"borg 1.4.5", b""))
+    process.returncode = 0
+
+    async def fake_create_subprocess_exec(*cmd, **kwargs):
+        captured_cmd.extend(cmd)
+        return process
+
+    monkeypatch.setattr("app.services.remote_backup_service.SessionLocal", lambda: db)
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.write_ssh_key_to_tempfile",
+        lambda key: "/tmp/source.key",
+    )
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.asyncio.create_subprocess_exec",
+        fake_create_subprocess_exec,
+    )
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.os.unlink", lambda path: None
+    )
+
+    result = await service.verify_remote_borg(connection.id)
+
+    assert result == {"installed": True, "version": "1.4.5", "path": "borg"}
+    assert captured_cmd[-1] == (
+        'borg_path=$(command -v borg) && exec sudo -n -H "$borg_path" --version'
+    )
+
+
+@pytest.mark.asyncio
 async def test_execute_remote_backup_keeps_completed_status_when_success_notification_fails(
     test_db, monkeypatch
 ):
@@ -390,6 +486,31 @@ async def test_execute_remote_backup_records_failure_on_same_job_row(
     assert job.status == "failed"
     assert job.completed_at is not None
     assert job.error_message == "Remote backup failed with exit code 2"
+
+
+@pytest.mark.asyncio
+async def test_execute_remote_backup_rejects_different_source_and_repository_connections(
+    test_db, monkeypatch
+):
+    connection, repository, job = _remote_entities(test_db)
+    other_connection = SSHConnection(host="other.example", username="backup", port=22)
+    test_db.add(other_connection)
+    test_db.flush()
+    repository.connection_id = other_connection.id
+    test_db.commit()
+
+    service = RemoteBackupService()
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.SessionLocal", lambda: test_db
+    )
+
+    with pytest.raises(Exception, match="same SSH connection"):
+        await service.execute_remote_backup(
+            job_id=job.id,
+            source_ssh_connection_id=connection.id,
+            repository_id=repository.id,
+            source_paths=["/var/lib/data"],
+        )
 
 
 @pytest.mark.asyncio

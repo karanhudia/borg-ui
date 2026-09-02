@@ -457,9 +457,7 @@ class SSHConnection(Base):
     is_backup_source = Column(
         Boolean, default=False
     )  # Mark this connection as a backup source
-    borg_binary_path = Column(
-        String, default="/usr/bin/borg"
-    )  # Path to borg on remote host
+    borg_binary_path = Column(String, default="borg")  # Path to borg on remote host
     borg_version = Column(String, nullable=True)  # Detected borg version
     last_borg_check = Column(DateTime, nullable=True)  # Last time borg was verified
 

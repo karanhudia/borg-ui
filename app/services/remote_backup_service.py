@@ -141,11 +141,6 @@ class RemoteBackupService:
             if not ssh_connection:
                 raise Exception(f"SSH connection {source_ssh_connection_id} not found")
 
-            if not ssh_connection.is_backup_source:
-                raise Exception(
-                    f"SSH connection {source_ssh_connection_id} is not enabled as backup source"
-                )
-
             # Load repository
             repository = (
                 db.query(Repository).filter(Repository.id == repository_id).first()
@@ -158,6 +153,11 @@ class RemoteBackupService:
                 raise Exception(
                     "Remote backups currently only support SSH repositories. "
                     "Local repositories will be supported in a future update."
+                )
+            if repository.connection_id != ssh_connection.id:
+                raise Exception(
+                    "Remote direct backups require the source and repository "
+                    "to use the same SSH connection"
                 )
 
             # Store remote hostname for reference
@@ -175,7 +175,7 @@ class RemoteBackupService:
                 compression=compression,
                 custom_flags=custom_flags,
                 upload_ratelimit_kib=upload_ratelimit_kib,
-                borg_binary_path=ssh_connection.borg_binary_path,
+                borg_binary_path=ssh_connection.borg_binary_path or "borg",
                 use_sudo=ssh_connection.use_sudo,
             )
 
@@ -429,6 +429,7 @@ class RemoteBackupService:
         cmd_parts = list(env_assignments)
 
         # Borg binary path (optionally prefixed with sudo)
+        borg_command = shlex.quote(borg_binary_path)
         if use_sudo:
             # sudo's env_reset (the Debian-family default) strips the
             # assignments above before borg starts; name them explicitly as
@@ -437,8 +438,20 @@ class RemoteBackupService:
             preserved = ",".join(
                 assignment.split("=", 1)[0] for assignment in env_assignments
             )
+            if borg_binary_path == "borg":
+                # Resolve Borg with the SSH user's PATH before sudo applies its
+                # secure_path. The default is intentionally path-based so hosts
+                # with Borg outside /usr/bin keep working without extra setup.
+                cmd_parts = [
+                    "export",
+                    *env_assignments,
+                    "&&",
+                    "borg_path=$(command -v borg)",
+                    "&&",
+                ]
+                borg_command = '"$borg_path"'
             cmd_parts.extend(["sudo", "-n", f"--preserve-env={preserved}"])
-        cmd_parts.append(shlex.quote(borg_binary_path))
+        cmd_parts.append(borg_command)
 
         # Create command
         cmd_parts.append("create")
@@ -745,7 +758,17 @@ class RemoteBackupService:
 
             try:
                 # Try to find borg binary
-                borg_path = ssh_connection.borg_binary_path or "/usr/bin/borg"
+                borg_path = ssh_connection.borg_binary_path or "borg"
+
+                if ssh_connection.use_sudo and borg_path == "borg":
+                    remote_command = (
+                        "borg_path=$(command -v borg) && "
+                        'exec sudo -n -H "$borg_path" --version'
+                    )
+                elif ssh_connection.use_sudo:
+                    remote_command = f"sudo -n -H {shlex.quote(borg_path)} --version"
+                else:
+                    remote_command = f"{shlex.quote(borg_path)} --version"
 
                 # Build SSH command to check borg
                 ssh_cmd = [
@@ -758,7 +781,7 @@ class RemoteBackupService:
                     "-p",
                     str(ssh_connection.port),
                     f"{ssh_connection.username}@{ssh_connection.host}",
-                    f"{borg_path} --version",
+                    remote_command,
                 ]
 
                 logger.info(

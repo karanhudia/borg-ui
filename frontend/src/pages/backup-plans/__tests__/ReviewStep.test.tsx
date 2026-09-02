@@ -45,6 +45,10 @@ const translations: Record<string, string> = {
   'backupPlans.wizard.steps.schedule': 'Schedule',
   'backupPlans.wizard.steps.scripts': 'Scripts',
   'backupPlans.wizard.steps.settings': 'Settings',
+  'backupPlans.routePreview.runsOnSshHost': 'Runs on SSH host',
+  'backupPlans.routePreview.directOnSourceTitle': 'Backs up directly on the source machine',
+  'backupPlans.routePreview.directOnSourceDescription':
+    'Borg UI runs Borg over SSH and streams progress here.',
   'common.disabled': 'Disabled',
   'common.enabled': 'Enabled',
   'repositories.moreCount': '+{{count}} more',
@@ -229,5 +233,46 @@ describe('ReviewStep', () => {
     // Agent hooks render `${agent_script_name} (${badge})`, distinct from the
     // repository-script `Script #id` fallback — guards the label from regressing.
     expect(screen.getByText('db-dump.sh (agent)')).toBeInTheDocument()
+  })
+
+  it('explains automatic direct execution for a matching SSH source and repository', () => {
+    const remoteRepository: Repository = {
+      id: 11,
+      name: 'Remote borg repo',
+      path: 'ssh://backup@source.example/backups/borg',
+      repository_type: 'ssh',
+      connection_id: 7,
+    }
+
+    render(
+      <ReviewStep
+        wizardState={{
+          ...createInitialState(),
+          name: 'Direct backup',
+          sourceType: 'remote',
+          sourceSshConnectionId: 7,
+          sourceDirectories: ['/srv/data'],
+          sourceLocations: [
+            {
+              source_type: 'remote',
+              source_ssh_connection_id: 7,
+              agent_machine_id: null,
+              paths: ['/srv/data'],
+            },
+          ],
+          repositoryIds: [remoteRepository.id],
+        }}
+        repositories={[remoteRepository]}
+        agentMachines={[]}
+        selectedSourceConnection={null}
+        scripts={[]}
+        t={t as never}
+      />
+    )
+
+    expect(screen.getByText('Backs up directly on the source machine')).toBeInTheDocument()
+    expect(
+      screen.getByText('Borg UI runs Borg over SSH and streams progress here.')
+    ).toBeInTheDocument()
   })
 })
