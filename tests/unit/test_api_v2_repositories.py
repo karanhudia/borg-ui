@@ -681,10 +681,10 @@ class TestV2RepositoryRoutes:
         ):
             archives_result, info_result = await asyncio.gather(
                 repositories_v2_api.list_archives(
-                    repo.id, current_user=object(), db=test_db
+                    repo.id, current_user=SimpleNamespace(role="admin"), db=test_db
                 ),
                 repositories_v2_api.get_repository_info(
-                    repo.id, current_user=object(), db=test_db
+                    repo.id, current_user=SimpleNamespace(role="admin"), db=test_db
                 ),
             )
 
@@ -717,7 +717,7 @@ class TestV2RepositoryRoutes:
             ) as mock_borg2,
         ):
             result = await repositories_v2_api.list_archives(
-                repo.id, current_user=object(), db=test_db
+                repo.id, current_user=SimpleNamespace(role="admin"), db=test_db
             )
 
         assert result["borg_version"] == 2
@@ -761,7 +761,7 @@ class TestV2RepositoryRoutes:
             ) as mock_borg2,
         ):
             result = await repositories_v2_api.get_repository_stats(
-                repo.id, current_user=object(), db=test_db
+                repo.id, current_user=SimpleNamespace(role="admin"), db=test_db
             )
 
         assert result["borg_version"] == 2
@@ -814,7 +814,7 @@ class TestV2RepositoryRoutes:
             ) as mock_rinfo,
         ):
             result = await repositories_v2_api.get_repository_info(
-                repo.id, current_user=object(), db=test_db
+                repo.id, current_user=SimpleNamespace(role="admin"), db=test_db
             )
 
         assert result["borg_version"] == 2
