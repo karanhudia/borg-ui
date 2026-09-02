@@ -64,6 +64,7 @@ from app.services.repository_wipe_service import (
     repository_wipe_service,
 )
 from app.services.repository_executor import (
+    agent_timezone_for_repository,
     is_agent_executor,
     legacy_execution_target,
     normalize_executor_type,
@@ -101,7 +102,7 @@ from app.services.rclone_repository_service import (
     normalize_rclone_relative_path,
     rclone_repository_service,
 )
-from app.utils.datetime_utils import serialize_datetime
+from app.utils.datetime_utils import parse_borg_archive_time, serialize_datetime
 from app.utils.schedule_time import (
     DEFAULT_SCHEDULE_TIMEZONE,
     InvalidScheduleTimezone,
@@ -486,27 +487,18 @@ def _repository_stats_borg_env(env: Dict[str, str]) -> Dict[str, str]:
     return stats_env
 
 
-def _parse_borg_archive_time(value: Any) -> Optional[datetime]:
-    """Parse a Borg archive timestamp as a naive UTC database value."""
-    if value is None:
-        return None
+def _parse_borg_archive_time(
+    value: Any, *, timezone_name: Optional[str] = None
+) -> Optional[datetime]:
+    """Parse a Borg archive timestamp as a naive UTC database value.
 
-    if isinstance(value, (int, float)):
-        return datetime.fromtimestamp(value, tz=timezone.utc).replace(tzinfo=None)
-
-    if not isinstance(value, str):
-        return None
-
-    normalized = value.strip()
-    if not normalized:
-        return None
-
-    dt = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    else:
-        dt = dt.astimezone(timezone.utc)
-    return dt.replace(tzinfo=None)
+    Naive values are wall clock in the zone borg rendered the listing in -
+    pass the agent's reported zone for agent listings and "UTC" for listings
+    forced to TZ=UTC; the server's local zone is the fallback. Assuming UTC
+    unconditionally shifted last_backup by the UTC offset on every non-UTC
+    deployment.
+    """
+    return parse_borg_archive_time(value, timezone_name=timezone_name)
 
 
 def _load_repository_with_access(
@@ -843,13 +835,18 @@ async def _update_agent_repository_stats(repository: Repository, db: Session) ->
         )
         archive_count = len(archives)
 
+        agent_zone = agent_timezone_for_repository(db, repository)
         archive_times = []
         for archive in archives:
-            archive_time = archive.get("time") or archive.get("start")
-            if not archive_time:
+            archive_time = archive.get("time")
+            if archive_time is None:
+                archive_time = archive.get("start")
+            if archive_time is None:
                 continue
             try:
-                parsed_time = _parse_borg_archive_time(archive_time)
+                parsed_time = _parse_borg_archive_time(
+                    archive_time, timezone_name=agent_zone
+                )
             except ValueError:
                 continue
             if parsed_time:
@@ -958,12 +955,18 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
 
                 archive_times = []
                 for archive in archives:
-                    archive_time = archive.get("time") or archive.get("start")
-                    if not archive_time:
+                    archive_time = archive.get("time")
+                    if archive_time is None:
+                        archive_time = archive.get("start")
+                    if archive_time is None:
                         continue
 
                     try:
-                        parsed_time = _parse_borg_archive_time(archive_time)
+                        # This listing ran under stats_env (TZ=UTC), so borg
+                        # rendered these timestamps in UTC - not server-local.
+                        parsed_time = _parse_borg_archive_time(
+                            archive_time, timezone_name="UTC"
+                        )
                     except ValueError as te:
                         logger.warning(
                             "Failed to parse archive timestamp",

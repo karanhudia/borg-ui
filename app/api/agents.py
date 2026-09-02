@@ -3,6 +3,7 @@ import json
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
+from zoneinfo import ZoneInfo
 
 from fastapi import (
     APIRouter,
@@ -88,6 +89,22 @@ def _as_utc(dt: datetime) -> datetime:
     return dt.astimezone(timezone.utc)
 
 
+def _validated_timezone(value: Optional[str]) -> Optional[str]:
+    """The value if it names a real IANA zone, else None.
+
+    The zone interprets borg's local-time archive timestamps from this agent,
+    so an unknown name must not be stored - the parser would silently fall
+    back anyway, and a validated column keeps that fallback rare.
+    """
+    if not value:
+        return None
+    try:
+        ZoneInfo(value)
+    except Exception:
+        return None
+    return value
+
+
 def _invalid_enrollment_token() -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -102,6 +119,7 @@ class AgentRegisterRequest(BaseModel):
     os: Optional[str] = None
     arch: Optional[str] = None
     agent_version: Optional[str] = None
+    timezone: Optional[str] = None
     borg_versions: list[dict[str, Any]] = Field(default_factory=list)
     capabilities: list[str] = Field(default_factory=list)
     labels: dict[str, Any] = Field(default_factory=dict)
@@ -121,6 +139,7 @@ class AgentHeartbeatRequest(BaseModel):
     agent_id: str
     hostname: Optional[str] = None
     agent_version: Optional[str] = None
+    timezone: Optional[str] = None
     borg_versions: list[dict[str, Any]] = Field(default_factory=list)
     capabilities: list[str] = Field(default_factory=list)
     running_job_ids: list[int] = Field(default_factory=list)
@@ -141,6 +160,7 @@ class AgentSessionHello(BaseModel):
     agent_id: str
     hostname: Optional[str] = None
     agent_version: Optional[str] = None
+    timezone: Optional[str] = None
     borg_versions: list[dict[str, Any]] = Field(default_factory=list)
     capabilities: list[str] = Field(default_factory=list)
     running_job_ids: list[int] = Field(default_factory=list)
@@ -1084,6 +1104,7 @@ async def register_agent(
         os=payload.os,
         arch=payload.arch,
         agent_version=payload.agent_version,
+        timezone=_validated_timezone(payload.timezone),
         default_path=enrollment_token.default_path,
         borg_versions=payload.borg_versions,
         capabilities=payload.capabilities,
@@ -1131,6 +1152,9 @@ async def heartbeat(
     now = _now_utc()
     current_agent.hostname = payload.hostname or current_agent.hostname
     current_agent.agent_version = payload.agent_version or current_agent.agent_version
+    current_agent.timezone = (
+        _validated_timezone(payload.timezone) or current_agent.timezone
+    )
     current_agent.borg_versions = payload.borg_versions
     current_agent.capabilities = payload.capabilities
     current_agent.last_error = payload.last_error
@@ -1196,6 +1220,9 @@ async def session(websocket: WebSocket, db: Session = Depends(get_db)):
         now = _now_utc()
         current_agent.hostname = hello.hostname or current_agent.hostname
         current_agent.agent_version = hello.agent_version or current_agent.agent_version
+        current_agent.timezone = (
+            _validated_timezone(hello.timezone) or current_agent.timezone
+        )
         current_agent.borg_versions = hello.borg_versions
         current_agent.capabilities = hello.capabilities
         current_agent.status = "online"

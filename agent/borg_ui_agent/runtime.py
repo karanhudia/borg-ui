@@ -107,6 +107,7 @@ class AgentRuntime:
             borg_versions=borg_versions,
             capabilities=get_capabilities(),
             running_job_ids=running_job_ids or [],
+            timezone=machine.get("timezone"),
         )
 
     def run_once(self) -> RunOnceResult:

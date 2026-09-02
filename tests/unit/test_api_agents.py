@@ -1759,3 +1759,82 @@ class TestAgentJobNotifications:
             .status
             == "failed"
         )
+
+
+@pytest.mark.unit
+class TestAgentTimezone:
+    """The agent's reported IANA zone interprets borg's local-time archive
+    timestamps; only resolvable names may be stored."""
+
+    def _register_with_timezone(self, test_client, admin_headers, tz):
+        enrollment = _create_enrollment_token(test_client, admin_headers)
+        response = test_client.post(
+            "/api/agents/register",
+            json={
+                "enrollment_token": enrollment["token"],
+                "name": "tz-agent",
+                "hostname": "tz.local",
+                "os": "linux",
+                "arch": "amd64",
+                "agent_version": "0.1.1",
+                "timezone": tz,
+                "borg_versions": [],
+                "capabilities": ["backup.create"],
+            },
+        )
+        assert response.status_code == 200
+        return response.json()
+
+    def test_register_persists_valid_timezone(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        registered = self._register_with_timezone(
+            test_client, admin_headers, "Europe/Berlin"
+        )
+
+        agent = _get_agent(test_db, registered["agent_id"])
+        assert agent.timezone == "Europe/Berlin"
+
+    def test_register_drops_invalid_timezone(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        registered = self._register_with_timezone(
+            test_client, admin_headers, "Not/AZone"
+        )
+
+        agent = _get_agent(test_db, registered["agent_id"])
+        assert agent.timezone is None
+
+    def test_heartbeat_updates_timezone_but_keeps_it_on_omission(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        registered = self._register_with_timezone(
+            test_client, admin_headers, "Europe/Berlin"
+        )
+        headers = _agent_headers(registered["agent_token"])
+
+        heartbeat = {
+            "agent_id": registered["agent_id"],
+            "hostname": "tz.local",
+            "agent_version": "0.1.1",
+            "borg_versions": [],
+            "capabilities": ["backup.create"],
+            "running_job_ids": [],
+        }
+
+        # A heartbeat without a zone (old agent) must not erase the stored one.
+        response = test_client.post(
+            "/api/agents/heartbeat", json=heartbeat, headers=headers
+        )
+        assert response.status_code == 200
+        agent = _get_agent(test_db, registered["agent_id"])
+        assert agent.timezone == "Europe/Berlin"
+
+        response = test_client.post(
+            "/api/agents/heartbeat",
+            json={**heartbeat, "timezone": "America/New_York"},
+            headers=headers,
+        )
+        assert response.status_code == 200
+        test_db.refresh(agent)
+        assert agent.timezone == "America/New_York"

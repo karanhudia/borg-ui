@@ -90,6 +90,9 @@ class AgentMachine(Base):
     os = Column(String, nullable=True)
     arch = Column(String, nullable=True)
     agent_version = Column(String, nullable=True)
+    # IANA zone the agent reported (e.g. "Europe/Berlin"); interprets the
+    # local-time archive timestamps borg emits on that machine.
+    timezone = Column(String, nullable=True)
     default_path = Column(String, nullable=True)
     borg_versions = Column(JSON, nullable=True)
     capabilities = Column(JSON, nullable=True)

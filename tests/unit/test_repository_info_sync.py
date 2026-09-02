@@ -12,7 +12,10 @@ from datetime import datetime
 
 import pytest
 
-from app.services.repository_info_sync import sync_archive_stats_from_info
+from app.services.repository_info_sync import (
+    _newest_archive_time,
+    sync_archive_stats_from_info,
+)
 
 
 class FakeDb:
@@ -179,3 +182,31 @@ def test_the_warning_logs_do_not_read_orm_attributes_after_rollback():
     sync_archive_stats_from_info(repo, {"archives": []}, db)
 
     assert db.rollbacks == 1
+
+
+@pytest.mark.unit
+def test_naive_times_resolve_through_the_given_zone():
+    """Borg emits naive local wall clock; the agent's reported zone converts
+    it - assuming UTC pushed last_backup into the future on non-UTC agents."""
+    newest = _newest_archive_time(
+        [{"name": "a1", "time": "2026-09-02T12:45:14"}],
+        timezone_name="Europe/Berlin",
+    )
+
+    assert newest == datetime(2026, 9, 2, 10, 45, 14)
+
+
+@pytest.mark.unit
+def test_numeric_epoch_times_go_through_the_shared_parser():
+    newest = _newest_archive_time([{"name": "a1", "time": 1788345914}])
+
+    assert newest == datetime(2026, 9, 2, 10, 45, 14)
+
+
+@pytest.mark.unit
+def test_the_zero_epoch_is_a_valid_time_and_wins_over_start():
+    newest = _newest_archive_time(
+        [{"name": "a1", "time": 0, "start": "2026-09-02T12:45:14+00:00"}]
+    )
+
+    assert newest == datetime(1970, 1, 1, 0, 0, 0)

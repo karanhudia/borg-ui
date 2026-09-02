@@ -341,10 +341,91 @@ class TestRepositoryHelperContracts:
             "ssh_path_prefix": "/volume1",
         }
 
-    def test_parse_borg_archive_time_treats_naive_values_as_utc(self):
-        parsed = repositories_api._parse_borg_archive_time("2026-04-27T03:00:06.000000")
+    def test_parse_borg_archive_time_uses_the_given_zone_for_naive_values(self):
+        # Borg emits naive local wall clock; the caller supplies the creating
+        # machine's zone. EDT on this date is UTC-4.
+        parsed = repositories_api._parse_borg_archive_time(
+            "2026-04-27T03:00:06.000000", timezone_name="America/New_York"
+        )
 
-        assert parsed == datetime(2026, 4, 27, 3, 0, 6)
+        assert parsed == datetime(2026, 4, 27, 7, 0, 6)
+
+    @pytest.mark.skipif(
+        not hasattr(__import__("time"), "tzset"), reason="requires POSIX tzset"
+    )
+    def test_parse_borg_archive_time_utc_zone_is_host_independent(self):
+        # The server stats listing runs borg under TZ=UTC (stats_env), so its
+        # naive timestamps must parse as UTC no matter the server's own zone.
+        import os
+        import time
+
+        old_tz = os.environ.get("TZ")
+        os.environ["TZ"] = "Europe/Berlin"
+        time.tzset()
+        try:
+            parsed = repositories_api._parse_borg_archive_time(
+                "2026-07-01T03:00:00", timezone_name="UTC"
+            )
+        finally:
+            if old_tz is None:
+                os.environ.pop("TZ", None)
+            else:
+                os.environ["TZ"] = old_tz
+            time.tzset()
+
+        assert parsed == datetime(2026, 7, 1, 3, 0, 0)
+
+    def test_parse_borg_archive_time_pins_ambiguous_dst_wall_times_to_earlier(self):
+        # Berlin's 2026 fall-back repeats 02:00-02:59 wall times on Oct 25.
+        # Borg gives no disambiguator; the parser pins the EARLIER instant
+        # (CEST, UTC+2) so recency is only ever understated, never overstated.
+        parsed = repositories_api._parse_borg_archive_time(
+            "2026-10-25T02:30:00", timezone_name="Europe/Berlin"
+        )
+
+        assert parsed == datetime(2026, 10, 25, 0, 30, 0)
+
+    def test_parse_borg_archive_time_zone_handles_dst_per_archive_date(self):
+        # The same zone resolves to different offsets on either side of the
+        # DST switch - a fixed offset would misplace half the archives.
+        summer = repositories_api._parse_borg_archive_time(
+            "2026-07-01T03:00:00", timezone_name="Europe/Berlin"
+        )
+        winter = repositories_api._parse_borg_archive_time(
+            "2026-01-15T03:00:00", timezone_name="Europe/Berlin"
+        )
+
+        assert summer == datetime(2026, 7, 1, 1, 0, 0)  # CEST, UTC+2
+        assert winter == datetime(2026, 1, 15, 2, 0, 0)  # CET, UTC+1
+
+    @pytest.mark.skipif(
+        not hasattr(__import__("time"), "tzset"), reason="requires POSIX tzset"
+    )
+    def test_parse_borg_archive_time_falls_back_to_server_local_zone(self):
+        import os
+        import time
+
+        old_tz = os.environ.get("TZ")
+        os.environ["TZ"] = "Europe/Berlin"
+        time.tzset()
+        try:
+            no_zone = repositories_api._parse_borg_archive_time("2026-07-01T03:00:00")
+            bad_zone = repositories_api._parse_borg_archive_time(
+                "2026-07-01T03:00:00", timezone_name="Not/AZone"
+            )
+        finally:
+            if old_tz is None:
+                os.environ.pop("TZ", None)
+            else:
+                os.environ["TZ"] = old_tz
+            time.tzset()
+
+        assert no_zone == datetime(2026, 7, 1, 1, 0, 0)
+        assert bad_zone == datetime(2026, 7, 1, 1, 0, 0)
+
+    def test_parse_borg_archive_time_rejects_out_of_range_epochs(self):
+        assert repositories_api._parse_borg_archive_time(1e18) is None
+        assert repositories_api._parse_borg_archive_time(-1e18) is None
 
     def test_parse_borg_archive_time_converts_offset_values_to_utc(self):
         parsed = repositories_api._parse_borg_archive_time("2026-04-27T03:00:06-04:00")
