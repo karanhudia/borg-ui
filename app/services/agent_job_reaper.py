@@ -69,10 +69,14 @@ def reap_stale_agent_jobs(
     *,
     now: Optional[datetime] = None,
     reap_after: timedelta = AGENT_JOB_REAP_AFTER,
+    failed_backup_job_ids: Optional[list[int]] = None,
 ) -> int:
     """Fail in-flight agent jobs with no activity for `reap_after`.
 
-    Returns the number of jobs reaped.
+    Returns the number of jobs reaped. Backup jobs this pass flipped to failed
+    are appended to `failed_backup_job_ids` (when given) so the caller can send
+    failure notifications from an async context - the reaper is the only place
+    an offline agent's job turns terminal, so no other path notifies for it.
     """
     now = now or datetime.now(timezone.utc)
     cutoff = now - reap_after
@@ -117,17 +121,23 @@ def reap_stale_agent_jobs(
         reaped += 1
 
         if job.backup_job_id:
-            db.query(BackupJob).filter(
-                BackupJob.id == job.backup_job_id,
-                BackupJob.status.notin_(TERMINAL_BACKUP_STATUSES),
-            ).update(
-                {
-                    BackupJob.status: "failed",
-                    BackupJob.completed_at: now,
-                    BackupJob.error_message: message,
-                },
-                synchronize_session=False,
+            backup_job_failed = (
+                db.query(BackupJob)
+                .filter(
+                    BackupJob.id == job.backup_job_id,
+                    BackupJob.status.notin_(TERMINAL_BACKUP_STATUSES),
+                )
+                .update(
+                    {
+                        BackupJob.status: "failed",
+                        BackupJob.completed_at: now,
+                        BackupJob.error_message: message,
+                    },
+                    synchronize_session=False,
+                )
             )
+            if backup_job_failed and failed_backup_job_ids is not None:
+                failed_backup_job_ids.append(job.backup_job_id)
 
     if reaped:
         db.commit()
@@ -138,7 +148,7 @@ def reap_stale_agent_jobs(
     return reaped
 
 
-def _reap_once() -> int:
+def _reap_once(failed_backup_job_ids: Optional[list[int]] = None) -> int:
     """One reap pass with its own session (runs in a worker thread)."""
     from app.utils.process_utils import (
         reconcile_orphaned_maintenance_jobs,
@@ -147,7 +157,7 @@ def _reap_once() -> int:
 
     db = SessionLocal()
     try:
-        reaped = reap_stale_agent_jobs(db)
+        reaped = reap_stale_agent_jobs(db, failed_backup_job_ids=failed_backup_job_ids)
         # Reconcile backup rows stuck in a running maintenance state whose
         # maintenance op died without writing a terminal status (startup-only
         # cleanup previously left these "running" until the next restart).
@@ -157,6 +167,22 @@ def _reap_once() -> int:
         # they block the repository via admission control forever.
         reaped += reconcile_orphaned_maintenance_jobs(db)
         return reaped
+    finally:
+        db.close()
+
+
+async def _notify_reaped_backup_jobs(backup_job_ids: list[int]) -> None:
+    """Send failure notifications for backup jobs the reaper just failed."""
+    from app.services.agent_job_notifications import notify_backup_job_finished
+
+    db = SessionLocal()
+    try:
+        for backup_job_id in backup_job_ids:
+            backup_job = (
+                db.query(BackupJob).filter(BackupJob.id == backup_job_id).first()
+            )
+            if backup_job is not None:
+                await notify_backup_job_finished(db, backup_job)
     finally:
         db.close()
 
@@ -176,7 +202,10 @@ async def start_agent_job_reaper(
             # Offload the synchronous DB work to a thread so a slow query never
             # blocks the event loop. The session is created and used inside the
             # thread (SQLite connections are thread-affine).
-            await asyncio.to_thread(_reap_once)
+            failed_backup_job_ids: list[int] = []
+            await asyncio.to_thread(_reap_once, failed_backup_job_ids)
+            if failed_backup_job_ids:
+                await _notify_reaped_backup_jobs(failed_backup_job_ids)
         except asyncio.CancelledError:
             logger.info("Agent job reaper stopped")
             raise

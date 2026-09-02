@@ -49,6 +49,12 @@ from app.services.agent_job_dispatcher import (
     agent_job_kind as live_agent_job_kind,
     dispatch_agent_job_best_effort,
 )
+from app.services.agent_job_notifications import (
+    notify_backup_job_finished,
+    notify_backup_job_started,
+    notify_check_job_finished,
+    orm_identity_id,
+)
 from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
@@ -527,9 +533,12 @@ def _mark_agent_job_claimed(job: AgentJob, *, now: Optional[datetime] = None) ->
 
 def _mark_agent_job_started(
     job: AgentJob, db: Session, *, started_at: Optional[datetime] = None
-) -> None:
+) -> Optional[BackupJob]:
+    """Returns the linked backup job when this start report is its first one,
+    so the caller can send the backup-start notification exactly once (a
+    requeued job keeps its original started_at and does not notify again)."""
     if job.status in FINAL_AGENT_JOB_STATUSES:
-        return
+        return None
     now = _now_utc()
     if job.claimed_at is None:
         job.claimed_at = now
@@ -537,14 +546,31 @@ def _mark_agent_job_started(
         job.started_at = _normalize_agent_timestamp(started_at)
     if job.status != "cancel_requested":
         job.status = "running"
+    newly_started_backup_job = None
     backup_job = _get_linked_backup_job(job, db)
     if backup_job:
+        # Guarded write: the first start report claims started_at even against
+        # a concurrent report on the other transport, so exactly one report
+        # triggers the backup-start notification.
+        first_start = (
+            db.query(BackupJob)
+            .filter(
+                BackupJob.id == backup_job.id,
+                BackupJob.started_at.is_(None),
+            )
+            .update(
+                {BackupJob.started_at: job.started_at},
+                synchronize_session=False,
+            )
+        )
         backup_job.status = "running"
-        if backup_job.started_at is None:
-            backup_job.started_at = job.started_at
+        db.expire(backup_job, ["started_at"])
+        if first_start:
+            newly_started_backup_job = backup_job
     else:
         _sync_repository_operation_progress(job, db)
     job.updated_at = now
+    return newly_started_backup_job
 
 
 def _apply_agent_job_progress(
@@ -598,41 +624,70 @@ def _append_agent_job_log(
     return True
 
 
+def _claim_terminal_transition(
+    job: AgentJob, db: Session, values: dict[Any, Any]
+) -> bool:
+    """Atomically flip the job into a terminal state while it is still active.
+
+    A concurrent report on the other transport (or the reaper's worker thread)
+    may have finalized the job between this handler's load and its write; the
+    WHERE guard makes exactly one writer win, so linked records are finalized
+    and notifications dispatched exactly once, and a loser cannot overwrite
+    the winner's terminal state. On success the ORM object is refreshed so the
+    caller works with the values it just claimed.
+    """
+    claimed = (
+        db.query(AgentJob)
+        .filter(
+            AgentJob.id == job.id,
+            AgentJob.status.notin_(FINAL_AGENT_JOB_STATUSES),
+        )
+        .update(values, synchronize_session=False)
+    )
+    if not claimed:
+        # Reload so the caller (and its response) sees the winner's state
+        # instead of the stale in-memory row.
+        db.expire(job)
+        return False
+    db.refresh(job)
+    return True
+
+
 def _complete_agent_job(
     job: AgentJob,
     db: Session,
     *,
     result: dict[str, Any],
     completed_at: Optional[datetime] = None,
-) -> None:
+) -> bool:
+    """Returns True when this report moved the job into a terminal state, so
+    the caller notifies exactly once even if the report is redelivered."""
     if job.status in FINAL_AGENT_JOB_STATUSES:
-        return
+        return False
     return_code = result.get("return_code") if isinstance(result, dict) else None
     if return_code is not None and (
         not isinstance(return_code, int) or isinstance(return_code, bool)
     ):
         # A completion report is only trusted with a well-formed exit code.
         # Anything else fails closed instead of being recorded as success.
-        _fail_agent_job(
+        return _fail_agent_job(
             job,
             db,
             error_message=f"agent reported a malformed return code: {return_code!r}",
             completed_at=completed_at,
         )
-        return
     warning = is_borg_warning_exit_code(return_code)
     if isinstance(return_code, int) and return_code != 0 and not warning:
         # A completion report carrying an explicit borg *error* code is a
         # failure, no matter which transport delivered it - the server is
         # authoritative over the classification.
-        _fail_agent_job(
+        return _fail_agent_job(
             job,
             db,
             error_message=f"borg exited with code {return_code}",
             return_code=return_code,
             completed_at=completed_at,
         )
-        return
 
     completed = _normalize_agent_timestamp(completed_at)
     status_value = "completed_with_warnings" if warning else "completed"
@@ -646,11 +701,18 @@ def _complete_agent_job(
         if warning
         else None
     )
-    job.status = status_value
-    job.completed_at = completed
-    job.result = result
-    job.error_message = warning_message
-    job.updated_at = _now_utc()
+    if not _claim_terminal_transition(
+        job,
+        db,
+        {
+            AgentJob.status: status_value,
+            AgentJob.completed_at: completed,
+            AgentJob.result: result,
+            AgentJob.error_message: warning_message,
+            AgentJob.updated_at: _now_utc(),
+        },
+    ):
+        return False
     _finish_linked_backup_job(
         job,
         db,
@@ -672,6 +734,7 @@ def _complete_agent_job(
         completed_at=completed,
         error_message=warning_message,
     )
+    return True
 
 
 def _fail_agent_job(
@@ -681,15 +744,25 @@ def _fail_agent_job(
     error_message: str,
     return_code: Optional[int] = None,
     completed_at: Optional[datetime] = None,
-) -> None:
+) -> bool:
+    """Returns True when this report moved the job into a terminal state."""
     if job.status in FINAL_AGENT_JOB_STATUSES:
-        return
+        return False
     completed = _normalize_agent_timestamp(completed_at)
-    job.status = "failed"
-    job.completed_at = completed
-    job.error_message = error_message
-    job.result = {"return_code": return_code} if return_code is not None else {}
-    job.updated_at = _now_utc()
+    if not _claim_terminal_transition(
+        job,
+        db,
+        {
+            AgentJob.status: "failed",
+            AgentJob.completed_at: completed,
+            AgentJob.error_message: error_message,
+            AgentJob.result: {"return_code": return_code}
+            if return_code is not None
+            else {},
+            AgentJob.updated_at: _now_utc(),
+        },
+    ):
+        return False
     _finish_linked_backup_job(
         job,
         db,
@@ -704,6 +777,32 @@ def _fail_agent_job(
         completed_at=completed,
         error_message=error_message,
     )
+    return True
+
+
+async def _notify_agent_job_outcome(db: Session, job: AgentJob) -> None:
+    """Send user-facing notifications for a finished agent job's linked jobs.
+
+    Server-side runs notify from inside their execution services; an agent job
+    reaches its terminal state only here, so the transport handlers own the
+    dispatch. Called after the terminal state is committed - so even the
+    linked-job lookups (attribute reads on the expired job can hit the
+    database) must stay inside the boundary and never fail the transport.
+    """
+    try:
+        backup_job = _get_linked_backup_job(job, db)
+        if backup_job is not None:
+            await notify_backup_job_finished(db, backup_job)
+            return
+        operation_job = _get_repository_operation_job(job, db)
+        if isinstance(operation_job, CheckJob):
+            await notify_check_job_finished(db, operation_job)
+    except Exception as exc:
+        logger.warning(
+            "Failed to dispatch agent job notification",
+            agent_job_id=orm_identity_id(job),
+            error=str(exc),
+        )
 
 
 def _cancel_agent_job(
@@ -712,9 +811,16 @@ def _cancel_agent_job(
     if job.status in FINAL_AGENT_JOB_STATUSES:
         return
     completed = _normalize_agent_timestamp(completed_at)
-    job.status = "canceled"
-    job.completed_at = completed
-    job.updated_at = _now_utc()
+    if not _claim_terminal_transition(
+        job,
+        db,
+        {
+            AgentJob.status: "canceled",
+            AgentJob.completed_at: completed,
+            AgentJob.updated_at: _now_utc(),
+        },
+    ):
+        return
     _finish_linked_backup_job(
         job,
         db,
@@ -804,10 +910,12 @@ async def _handle_agent_session_message(
 
     if message_type == "job_started":
         if job:
-            _mark_agent_job_started(
+            started_backup_job = _mark_agent_job_started(
                 job, db, started_at=_parse_optional_datetime(message.get("started_at"))
             )
             db.commit()
+            if started_backup_job is not None:
+                await notify_backup_job_started(db, job, started_backup_job)
         return
 
     if message_type == "progress":
@@ -870,13 +978,15 @@ async def _handle_agent_session_message(
             job_id=int(job_id) if job_id else None,
         )
         if job:
-            _complete_agent_job(
+            transitioned = _complete_agent_job(
                 job,
                 db,
                 result=result_payload,
                 completed_at=_parse_optional_datetime(message.get("completed_at")),
             )
             db.commit()
+            if transitioned:
+                await _notify_agent_job_outcome(db, job)
         return
 
     if message_type == "command_error":
@@ -902,7 +1012,7 @@ async def _handle_agent_session_message(
             job_id=int(job_id) if job_id else None,
         )
         if job:
-            _fail_agent_job(
+            transitioned = _fail_agent_job(
                 job,
                 db,
                 error_message=error_message,
@@ -910,6 +1020,8 @@ async def _handle_agent_session_message(
                 completed_at=_parse_optional_datetime(message.get("completed_at")),
             )
             db.commit()
+            if transitioned:
+                await _notify_agent_job_outcome(db, job)
         return
 
     if message_type == "job_canceled":
@@ -1206,22 +1318,12 @@ async def start_job(
             detail={"key": "backend.errors.agents.jobNotStartable"},
         )
 
-    now = _now_utc()
-    if job.claimed_at is None:
-        job.claimed_at = now
-    if job.started_at is None:
-        job.started_at = _normalize_agent_timestamp(payload.started_at)
-    if job.status != "cancel_requested":
-        job.status = "running"
-    backup_job = _get_linked_backup_job(job, db)
-    if backup_job:
-        backup_job.status = "running"
-        if backup_job.started_at is None:
-            backup_job.started_at = job.started_at
-    else:
-        _sync_repository_operation_progress(job, db)
-    job.updated_at = now
+    # Same path the WebSocket transport takes - one place applies a start
+    # report and decides whether it triggers the backup-start notification.
+    started_backup_job = _mark_agent_job_started(job, db, started_at=payload.started_at)
     db.commit()
+    if started_backup_job is not None:
+        await notify_backup_job_started(db, job, started_backup_job)
 
     return AgentJobStatusResponse(id=job.id, status=job.status)
 
@@ -1300,10 +1402,12 @@ async def complete_job(
 
     # Same path the WebSocket transport takes - one place decides how a
     # completion (including borg warning exit codes) is classified.
-    _complete_agent_job(
+    transitioned = _complete_agent_job(
         job, db, result=payload.result, completed_at=payload.completed_at
     )
     db.commit()
+    if transitioned:
+        await _notify_agent_job_outcome(db, job)
 
     return AgentJobStatusResponse(id=job.id, status=job.status)
 
@@ -1363,31 +1467,18 @@ async def fail_job(
     if job.status in FINAL_AGENT_JOB_STATUSES:
         return AgentJobStatusResponse(id=job.id, status=job.status)
 
-    result = {}
-    if payload.return_code is not None:
-        result["return_code"] = payload.return_code
-
-    now = _now_utc()
-    job.status = "failed"
-    job.completed_at = _normalize_agent_timestamp(payload.completed_at)
-    job.error_message = payload.error_message
-    job.result = result
-    job.updated_at = now
-    _finish_linked_backup_job(
+    # Same path the WebSocket transport takes - one place records the failure
+    # and finishes the linked jobs.
+    transitioned = _fail_agent_job(
         job,
         db,
-        status_value="failed",
-        completed_at=job.completed_at,
         error_message=payload.error_message,
-    )
-    _finish_linked_repository_operation_job(
-        job,
-        db,
-        status_value="failed",
-        completed_at=job.completed_at,
-        error_message=payload.error_message,
+        return_code=payload.return_code,
+        completed_at=payload.completed_at,
     )
     db.commit()
+    if transitioned:
+        await _notify_agent_job_outcome(db, job)
 
     return AgentJobStatusResponse(id=job.id, status=job.status)
 
@@ -1403,24 +1494,9 @@ async def mark_job_canceled(
     if job.status in FINAL_AGENT_JOB_STATUSES:
         return AgentJobStatusResponse(id=job.id, status=job.status)
 
-    now = _now_utc()
-    job.status = "canceled"
-    job.completed_at = _normalize_agent_timestamp(payload.completed_at)
-    job.updated_at = now
-    _finish_linked_backup_job(
-        job,
-        db,
-        status_value="cancelled",
-        completed_at=job.completed_at,
-        error_message="Agent job canceled",
-    )
-    _finish_linked_repository_operation_job(
-        job,
-        db,
-        status_value="cancelled",
-        completed_at=job.completed_at,
-        error_message="Agent job canceled",
-    )
+    # Same path the WebSocket transport takes - the guarded transition keeps a
+    # late cancel report from overwriting an already-finalized job.
+    _cancel_agent_job(job, db, completed_at=payload.completed_at)
     db.commit()
 
     return AgentJobStatusResponse(id=job.id, status=job.status)
