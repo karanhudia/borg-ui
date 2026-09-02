@@ -179,21 +179,32 @@ grant sudo directly to the Borg binary. On Borg 1, a user who can choose Borg
 arguments could use `--rsh` to run another command as root.
 
 Instead, set the repository `remote_path` to a root-owned wrapper that accepts
-only Borg's `serve` operation and restricts it to the repository directory. For
-example, create `/usr/local/sbin/borg-serve` with this content, replacing both
-paths for your host:
+only Borg's `serve` operation and restricts it to the exact repository path.
+For example, create `/usr/local/sbin/borg-serve` with this content, replacing
+both paths for your host:
 
-```sh
-#!/bin/sh
-set -eu
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-if [ "${1:-}" != "serve" ]; then
+if [[ "${1:-}" != "serve" ]]; then
     echo "Only borg serve is permitted" >&2
     exit 64
 fi
 
 shift
-exec /usr/bin/borg serve --restrict-to-path /srv/borg "$@"
+for argument in "$@"; do
+    case "$argument" in
+        --verbose|--info|--debug|--log-json|--show-version|--help|\
+        --umask=*|--lock-wait=*|--debug-topic=*|--log-level=*) ;;
+        *)
+            echo "Unsupported borg serve argument: $argument" >&2
+            exit 64
+            ;;
+    esac
+done
+
+exec /usr/bin/borg serve --restrict-to-repository /srv/borg "$@"
 ```
 
 Make the wrapper and its parent directories owned by root and not writable by
@@ -218,7 +229,7 @@ Before creating a plan, verify that the restricted sudo command works on the
 remote host:
 
 ```bash
-sudo -n -H /usr/local/sbin/borg-serve serve --version
+sudo -n -H /usr/local/sbin/borg-serve serve --help
 ```
 
 `-H` keeps root's Borg cache and configuration under `/root` instead of the SSH
