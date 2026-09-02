@@ -174,31 +174,55 @@ them after Borg exits. The repository `remote_path` setting is different: it is
 passed to Borg as the repository-side remote Borg path.
 
 When **Use sudo** is enabled on the repository connection, Borg UI runs the
-remote Borg server with `sudo -n -H` for every repository operation. Configure
-passwordless sudo with `NOSETENV` and an exact `env_keep` allowlist. Borg UI
-uses only `BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK`,
+remote Borg server with `sudo -n -H` for every repository operation. Do not
+grant sudo directly to the Borg binary. On Borg 1, a user who can choose Borg
+arguments could use `--rsh` to run another command as root.
+
+Instead, set the repository `remote_path` to a root-owned wrapper that accepts
+only Borg's `serve` operation and restricts it to the repository directory. For
+example, create `/usr/local/sbin/borg-serve` with this content, replacing both
+paths for your host:
+
+```sh
+#!/bin/sh
+set -eu
+
+if [ "${1:-}" != "serve" ]; then
+    echo "Only borg serve is permitted" >&2
+    exit 64
+fi
+
+shift
+exec /usr/bin/borg serve --restrict-to-path /srv/borg "$@"
+```
+
+Make the wrapper and its parent directories owned by root and not writable by
+the SSH user. Then configure passwordless sudo with `NOSETENV` and an exact
+`env_keep` allowlist. Borg UI uses only
+`BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK`,
 `BORG_RELOCATED_REPO_ACCESS_IS_OK`, `BORG_PASSPHRASE`, and `BORG_REMOTE_PATH`
-for a remote-direct backup. For example, add a root-owned file with `visudo`:
+for a remote-direct backup. Add a root-owned file with `visudo`:
 
 ```sudoers
 Defaults:<ssh-user> env_keep += "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK BORG_RELOCATED_REPO_ACCESS_IS_OK BORG_PASSPHRASE BORG_REMOTE_PATH"
-<ssh-user> ALL=(root) NOPASSWD: NOSETENV: /path/to/borg
+<ssh-user> ALL=(root) NOPASSWD: NOSETENV: /usr/local/sbin/borg-serve
 ```
 
 Do not add `BORG_PASSCOMMAND` to this allowlist. Borg executes that helper, so
 a user-controlled helper must never run as root. If your setup needs a helper,
-use a fixed root-owned wrapper that supplies only the required values.
+use a fixed root-owned wrapper that supplies only the required values. Keep the
+connection's Borg binary path for source-side backups. The sudo wrapper above
+belongs in the repository `remote_path` setting.
 
 Before creating a plan, verify that the restricted sudo command works on the
 remote host:
 
 ```bash
-sudo -n -H /path/to/borg --version
+sudo -n -H /usr/local/sbin/borg-serve serve --version
 ```
 
-Ensure that the Borg binary or wrapper and its parent directories cannot be
-modified by the SSH user. `-H` keeps root's Borg cache and configuration under
-`/root` instead of the SSH user's home.
+`-H` keeps root's Borg cache and configuration under `/root` instead of the SSH
+user's home.
 
 ## Synology and NAS Path Prefixes
 
