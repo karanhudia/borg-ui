@@ -70,3 +70,57 @@ def test_import_repository_records_operation_and_skips_inline_stats(
     first = test_db.query(Operation).filter_by(repository_id=repo.id).first()
     assert first.status == "completed"
     assert first.triggered_by_user_id is not None
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_agent_import_records_operation_and_followups(test_db):
+    """The agent import path returns before the server-managed handoff, so it
+    needs its own coverage that import_connect and its follow-ups are queued.
+    """
+    import app.services.operations.executors.index  # noqa: F401
+    from app.api.repositories import RepositoryImport, _create_agent_repository_record
+    from app.core.security import get_password_hash
+    from app.database.models import AgentMachine, User
+
+    agent = AgentMachine(
+        name="Import Agent",
+        agent_id="agt_import",
+        token_hash=get_password_hash("borgui_agent_secret"),
+        token_prefix="borgui_agent_secret"[:20],
+        status="online",
+        capabilities=["repository.init"],
+    )
+    user = User(username="importer", password_hash=get_password_hash("x"), role="admin")
+    test_db.add_all([agent, user])
+    test_db.commit()
+
+    payload = RepositoryImport(
+        name="agent-imported",
+        path="/srv/agent-repo",
+        encryption="none",
+        compression="lz4",
+        agent_machine_id=agent.id,
+        execution_target="agent",
+    )
+    with patch(
+        "app.api.repositories.mqtt_service.sync_state_with_db", return_value=None
+    ):
+        await _create_agent_repository_record(payload, user, test_db, imported=True)
+
+    repo = test_db.query(Repository).filter_by(name="agent-imported").one()
+    operations = (
+        test_db.query(Operation)
+        .filter_by(repository_id=repo.id)
+        .order_by(Operation.id)
+        .all()
+    )
+    assert [o.kind for o in operations] == [
+        "import_connect",
+        "stats",
+        "archive_sync",
+    ]
+    assert operations[0].status == "completed"
+    assert operations[0].triggered_by_user_id == user.id
+    assert [o.status for o in operations[1:]] == ["queued", "queued"]
+    assert operations[1].depends_on_id == operations[0].id
