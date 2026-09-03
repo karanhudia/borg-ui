@@ -115,7 +115,9 @@ def test_rclone_sync_is_mapped_and_classed_as_a_read():
     # "Unsupported agent repository operation: repository.rclone_sync",
     # never reaching the agent that supports it.
     assert AGENT_JOB_KIND_OPERATIONS["repository.rclone_sync"] == OPERATION_RCLONE_SYNC
-    assert operation_for_agent_job_kind("repository.rclone_sync") == OPERATION_RCLONE_SYNC
+    assert (
+        operation_for_agent_job_kind("repository.rclone_sync") == OPERATION_RCLONE_SYNC
+    )
     # rclone reads the repository and writes only to the remote. It also has
     # to be in one of the two sets: operation_class_for() raises on an
     # operation it cannot classify, so the mapping alone would still fail.
