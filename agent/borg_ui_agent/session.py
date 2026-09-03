@@ -539,9 +539,11 @@ class AgentSessionRuntime:
         # _handle_command -- a daemon worker -- the same bad value only kills
         # that one command. Returning None keeps it out of the registry and
         # leaves _handle_command to fail it exactly as it did before.
+        # OverflowError is not hypothetical: json.loads turns 1e400 into
+        # float("inf"), and int(inf) raises it rather than ValueError.
         try:
             job_id = int(raw_job_id) if raw_job_id is not None else None
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             return None
         if job_id is None or get_job_handler(command) is None:
             return None

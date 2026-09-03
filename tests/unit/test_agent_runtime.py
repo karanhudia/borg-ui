@@ -1058,6 +1058,42 @@ def test_session_loop_does_not_register_unsupported_command(patch_session_platfo
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize("raw_job_id", [float("inf"), float("-inf"), "abc", [1]])
+def test_session_loop_survives_an_uncastable_job_id(patch_session_platform, raw_job_id):
+    """A job_id the cast chokes on must not take the session down with it.
+
+    _job_id_for_dispatch runs on the session thread, so anything it raises
+    unwinds run_session and forces a reconnect, where the same value inside
+    _handle_command only fails that one worker. json.loads yields float("inf")
+    for 1e400, and int(inf) raises OverflowError rather than ValueError, so
+    catching only TypeError/ValueError left that shape live.
+    """
+    from agent.borg_ui_agent.session import AgentSessionRuntime
+
+    socket = FakeWebSocket(
+        [
+            {
+                "type": "command",
+                "command_id": "cmd-bad-id",
+                "command": "backup.create",
+                "job_id": raw_job_id,
+                "payload": {},
+            },
+        ]
+    )
+    runtime = AgentSessionRuntime(
+        AgentConfig("https://borgui.example.com", "agt_123", "secret"),
+        connect=lambda *args, **kwargs: socket,
+        http_client=RecordingHttpClient(),
+    )
+
+    runtime.run_session(max_messages=1)
+
+    assert runtime._cancel_events == {}
+    assert runtime._running_job_ids() == []
+
+
+@pytest.mark.unit
 def test_session_loop_unregisters_after_job_command_completes(monkeypatch):
     """After a normal job command dispatched through the real session loop
     (register-before-start, not the direct _register_cancel call the other
