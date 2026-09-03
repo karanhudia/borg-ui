@@ -1389,6 +1389,127 @@ class RepositoryWipeJob(Base):
     confirmed_by_user = relationship("User", foreign_keys=[confirmed_by_user_id])
 
 
+class Operation(Base):
+    """One unit of work on (usually) one repository. Spec section 6.1."""
+
+    __tablename__ = "operations"
+
+    id = Column(Integer, primary_key=True)
+    repository_id = Column(
+        Integer,
+        ForeignKey("repositories.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    kind = Column(String, nullable=False, index=True)
+    category = Column(String, nullable=False, index=True)
+    status = Column(String, nullable=False, default="queued", index=True)
+    trigger = Column(String, nullable=False, default="manual")
+    priority = Column(Integer, nullable=False, default=10)
+    run_id = Column(String(36), nullable=False, index=True)
+    depends_on_id = Column(
+        Integer, ForeignKey("operations.id", ondelete="SET NULL"), nullable=True
+    )
+    triggered_by_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    scheduled_job_id = Column(
+        Integer, ForeignKey("scheduled_jobs.id", ondelete="SET NULL"), nullable=True
+    )
+    backup_plan_run_id = Column(
+        Integer, ForeignKey("backup_plan_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    execution_mode = Column(
+        String, nullable=True
+    )  # server | remote_ssh | agent | rclone
+    process_pid = Column(Integer, nullable=True)
+    process_start_time = Column(Float, nullable=True)
+    progress_percent = Column(Float, nullable=True)
+    progress_current = Column(Integer, nullable=True)
+    progress_total = Column(Integer, nullable=True)
+    progress_message = Column(String, nullable=True)
+    error_message = Column(Text, nullable=True)
+    skip_reason = Column(String, nullable=True)
+    log_file_path = Column(String, nullable=True)
+    params = Column(JSON, nullable=True)  # kind-specific input, small
+    result = Column(JSON, nullable=True)  # kind-specific output summary, small
+    created_at = Column(DateTime, default=utc_now, nullable=False, index=True)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        Index("ix_operations_repository_status", "repository_id", "status"),
+        Index(
+            "ix_operations_status_priority_created", "status", "priority", "created_at"
+        ),
+        Index("ix_operations_category_created", "category", "created_at"),
+    )
+
+
+class Archive(Base):
+    """Persisted archive list per repository. Spec section 6.4."""
+
+    __tablename__ = "archives"
+
+    id = Column(Integer, primary_key=True)
+    repository_id = Column(
+        Integer,
+        ForeignKey("repositories.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    borg_id = Column(String(64), nullable=False)
+    name = Column(String, nullable=False)
+    series = Column(String, nullable=False, index=True)
+    start = Column(DateTime, nullable=False, index=True)
+    end = Column(DateTime, nullable=True)
+    duration_seconds = Column(Float, nullable=True)
+    nfiles = Column(Integer, nullable=True)
+    original_size = Column(BigInteger, nullable=True)
+    compressed_size = Column(BigInteger, nullable=True)
+    deduplicated_size = Column(BigInteger, nullable=True)
+    hostname = Column(String, nullable=True)
+    username = Column(String, nullable=True)
+    comment = Column(Text, nullable=True)
+    backup_operation_id = Column(
+        Integer, ForeignKey("operations.id", ondelete="SET NULL"), nullable=True
+    )
+    history_state = Column(String, nullable=False, default="pending")
+    history_indexed_at = Column(DateTime, nullable=True)
+    history_rows = Column(Integer, nullable=True)
+    history_truncated = Column(Boolean, nullable=False, default=False)
+    first_seen_at = Column(DateTime, default=utc_now, nullable=False)
+    last_seen_at = Column(DateTime, default=utc_now, nullable=False)
+
+    __table_args__ = (UniqueConstraint("repository_id", "borg_id"),)
+
+
+class ArchiveChange(Base):
+    """One changed path per archive relative to its predecessor. Spec 6.5."""
+
+    __tablename__ = "archive_changes"
+
+    id = Column(Integer, primary_key=True)
+    archive_id = Column(
+        Integer,
+        ForeignKey("archives.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    path = Column(Text, nullable=False)
+    change = Column(String(8), nullable=False)  # added | removed | modified | summary
+    size_before = Column(BigInteger, nullable=True)
+    size_after = Column(BigInteger, nullable=True)
+    mode_changed = Column(Boolean, nullable=False, default=False)
+    owner_changed = Column(Boolean, nullable=False, default=False)
+    summary_count = Column(Integer, nullable=True)
+
+    __table_args__ = (
+        Index("ix_archive_changes_archive_path", "archive_id", "path"),
+        Index("ix_archive_changes_path", "path"),
+    )
+
+
 class SystemSettings(Base):
     __tablename__ = "system_settings"
 
@@ -1438,6 +1559,9 @@ class SystemSettings(Base):
     last_stats_refresh = Column(
         DateTime, nullable=True
     )  # Last time stats were refreshed
+    # Operations runner (spec section 7.3)
+    index_workers = Column(Integer, default=2, nullable=False)
+    background_paused = Column(Boolean, default=False, nullable=False)
     dashboard_backup_warning_days = Column(Integer, default=3, nullable=False)
     dashboard_backup_critical_days = Column(Integer, default=7, nullable=False)
     dashboard_check_warning_days = Column(Integer, default=7, nullable=False)

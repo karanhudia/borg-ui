@@ -29,6 +29,7 @@ from app.api import (
     scripts,
     packages,
     activity,
+    operations,
     scripts_library,
     mounts,
     metrics,
@@ -218,6 +219,7 @@ app.include_router(
 app.include_router(packages.router, prefix="/api/packages", tags=["Packages"])
 app.include_router(notifications.router)
 app.include_router(activity.router)
+app.include_router(operations.router, prefix="/api/operations", tags=["Operations"])
 app.include_router(config.router, prefix="/api")
 app.include_router(mounts.router)  # Mount management API
 
@@ -393,12 +395,28 @@ async def startup_event():
     app.state.background_tasks.append(task1)
     logger.info("Scheduled job checker started")
 
-    # Start stats refresh scheduler (background task)
-    from app.services.stats_refresh_scheduler import stats_refresh_scheduler
+    # Operations runner: recover interrupted rows, register executors, start
+    # the loop, then start the reconcile scheduler that replaces the old
+    # stats refresh loop (spec sections 7.1, 7.5, 7.6).
+    from app.database.database import SessionLocal
+    from app.services.operations.executors import load_default_executors
+    from app.services.operations.reconcile import reconcile_scheduler
+    from app.services.operations.runner import operation_runner
 
-    task2 = asyncio.create_task(stats_refresh_scheduler.start())
+    load_default_executors()
+    try:
+        db = SessionLocal()
+        try:
+            operation_runner.recover_on_startup(db)
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error("Operations recovery failed", error=str(e))
+    task2 = asyncio.create_task(operation_runner.start())
     app.state.background_tasks.append(task2)
-    logger.info("Stats refresh scheduler started")
+    task2b = asyncio.create_task(reconcile_scheduler.start())
+    app.state.background_tasks.append(task2b)
+    logger.info("Operations runner and reconcile scheduler started")
 
     # Initialize MQTT service from database settings (using new implementation)
     from app.services.mqtt_service import mqtt_service, build_mqtt_runtime_config
@@ -475,6 +493,13 @@ async def shutdown_event():
         except asyncio.CancelledError:
             pass
         licensing_refresh_task = None
+
+    # Stop the operations runner and reconcile loop before cancelling tasks
+    from app.services.operations.reconcile import reconcile_scheduler
+    from app.services.operations.runner import operation_runner
+
+    operation_runner.stop()
+    reconcile_scheduler.stop()
 
     # Cancel background tasks
     tasks = getattr(app.state, "background_tasks", [])

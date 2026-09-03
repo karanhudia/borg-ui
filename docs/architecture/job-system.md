@@ -144,6 +144,42 @@ System settings control concurrent work:
 
 Avoid running multiple write operations against the same repository at the same time.
 
+## Operations runner
+
+Derived-data work (repository stats, archive listing, and in later phases
+history indexing) runs through a single in-process runner backed by the
+`operations` table. Each row has a kind, a category, a trigger, a priority,
+and an optional dependency on another row. Rows that share a `run_id` form
+a run, for example an import followed by its stats and archive listing.
+
+Rules:
+
+- One exclusive operation per repository at a time (the repository lane).
+  While a backup, check, prune, compact, wipe, or archive delete is running,
+  exclusive operations wait. Index operations wait too unless
+  `bypass_lock_on_list` or the repository's bypass setting allows them to
+  run alongside.
+- Lower priority number runs first: manual and plan work at 0, scheduled at
+  5, follow-ups at 10, reconcile at 20.
+- A failed, cancelled, or skipped operation skips everything that depends on
+  it with `skip_reason = dependency_failed`.
+- Follow-ups are created automatically when an operation succeeds. An
+  import enqueues stats and archive listing.
+- The reconcile scheduler replaces the old stats refresh loop. Every
+  `stats_refresh_interval_minutes` it enqueues an index run for each
+  repository that has none queued or running. `0` disables it.
+- On startup, running index operations are requeued; other running
+  operations are marked failed unless their recorded process is still
+  alive.
+- Cancelling a running operation is cooperative: the executor observes the
+  request through `ctx.cancelled()` and stops at its next check. Cancelling
+  a queued operation is immediate.
+
+The `/api/operations` routes expose the list, a live queue view, cancel,
+pause and resume of background triggers, and the `index_workers` limit.
+Activity includes operations rows; index-category rows are hidden unless
+the Index category filter is on.
+
 ## Notifications
 
 Job-related notifications are handled by the notification service.

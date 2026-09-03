@@ -135,7 +135,7 @@ Deleted:
   - `LEGACY_STATUS_MAP: dict[str, str]` = `{"pending": "queued", "needs_backup": "skipped", "running_prune": "running", "running_compact": "running", "prune_failed": "failed", "compact_failed": "failed"}`
   - `category_for(kind: str) -> str`, `is_exclusive(kind: str) -> bool`, `validate_kind(kind: str) -> str` (raises `ValueError`), `validate_status(status: str) -> str`, `validate_trigger(trigger: str) -> str`, `priority_for_trigger(trigger: str) -> int`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/unit/test_operations_vocab.py
@@ -227,12 +227,12 @@ def test_validators_reject_unknown_values():
         vocab.validate_trigger("cron")
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `python -m pytest tests/unit/test_operations_vocab.py -q -p no:cacheprovider`
 Expected: FAIL with `ModuleNotFoundError: No module named 'app.services.operations'`
 
-- [ ] **Step 3: Write the module**
+- [x] **Step 3: Write the module**
 
 ```python
 # app/services/operations/__init__.py
@@ -348,7 +348,7 @@ def priority_for_trigger(trigger: str) -> int:
     return _PRIORITY_BY_TRIGGER[validate_trigger(trigger)]
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `python -m pytest tests/unit/test_operations_vocab.py -q -p no:cacheprovider`
 Expected: 5 passed
@@ -366,7 +366,7 @@ Expected: 5 passed
 **Interfaces:**
 - Produces: `Operation`, `Archive`, `ArchiveChange` SQLAlchemy models with the exact columns of spec 6.1, 6.4, 6.5; `SystemSettings.index_workers` (Integer, default 2), `SystemSettings.background_paused` (Boolean, default False); `settings.index_archive_info_per_run` (int, default 20).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/unit/test_operations_models.py
@@ -477,12 +477,12 @@ def test_config_has_index_archive_info_per_run():
     assert settings.index_archive_info_per_run == 20
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `python -m pytest tests/unit/test_operations_models.py -q -p no:cacheprovider`
 Expected: FAIL with `ImportError: cannot import name 'Operation'`
 
-- [ ] **Step 3: Add the models**
+- [x] **Step 3: Add the models**
 
 In `app/database/models.py`, confirm the `from sqlalchemy import (...)` block at the top includes `BigInteger`, `Boolean`, `Column`, `DateTime`, `Float`, `ForeignKey`, `Index`, `Integer`, `JSON`, `String`, `Text`, `UniqueConstraint`; add any that are missing. Then insert directly before `class SystemSettings(Base):`:
 
@@ -610,7 +610,7 @@ In `app/config.py`, inside `class Settings(BaseSettings)` next to `cache_max_siz
     index_archive_info_per_run: int = 20
 ```
 
-- [ ] **Step 4: Write the migration**
+- [x] **Step 4: Write the migration**
 
 ```python
 # app/database/alembic/versions/b1e2f3a4c5d6_add_operations_and_archives.py
@@ -755,7 +755,7 @@ def downgrade() -> None:
 
 Before writing, confirm the head with `grep -rh "^down_revision" app/database/alembic/versions/*.py | sort | uniq -c` and `grep -rh "^revision" app/database/alembic/versions/*.py`; `c7e4f8a1d2b3` must be the only revision no other file revises. If a newer head exists, use it as `down_revision`.
 
-- [ ] **Step 5: Run the tests and the migration check**
+- [x] **Step 5: Run the tests and the migration check**
 
 Run: `python -m pytest tests/unit/test_operations_models.py -q -p no:cacheprovider`
 Expected: 5 passed
@@ -776,7 +776,7 @@ Expected: both complete without error. If the repository has a dedicated migrati
   - `serialize_operation(op: Operation, *, repository_name: str | None = None, repository_path: str | None = None, has_logs: bool = False, followups: list[dict] | None = None) -> dict` returning every key of the `OperationItem` model defined in Task 11: `activity_key`, `id`, `type` (= kind), `kind`, `category`, `status`, `trigger`, `priority`, `run_id`, `depends_on_id`, `repository_id`, `repository`, `repository_path`, `started_at`, `completed_at`, `created_at`, `error_message`, `skip_reason`, `log_file_path`, `triggered_by` (= `"schedule"` when trigger is schedule, else `"manual"`), `schedule_id`, `schedule_name` (None), `backup_plan_id` (None), `backup_plan_run_id`, `backup_plan_name` (None), `archive_name` (from `params.get("archive_name")`), `package_name` (None), `has_logs`, `progress_percent`, `progress_current`, `progress_total`, `progress_message`, `execution_mode`, `params`, `result`, `followups`.
   - `is_terminal(op) -> bool`, `is_success(op) -> bool`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/unit/test_operations_models.py`:
 
@@ -811,12 +811,12 @@ def test_serialize_operation_shape(db):
     assert not is_terminal(op)
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `python -m pytest tests/unit/test_operations_models.py::test_serialize_operation_shape -q -p no:cacheprovider`
 Expected: FAIL with `ModuleNotFoundError`
 
-- [ ] **Step 3: Write the module**
+- [x] **Step 3: Write the module**
 
 ```python
 # app/services/operations/models.py
@@ -886,7 +886,7 @@ def serialize_operation(
     }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `python -m pytest tests/unit/test_operations_models.py -q -p no:cacheprovider`
 Expected: 6 passed
@@ -907,7 +907,7 @@ Expected: 6 passed
   - `enqueue_chain(db, kinds, *, repository_id, trigger, priority=None, run_id=None, depends_on_id=None, triggered_by_user_id=None, scheduled_job_id=None, backup_plan_run_id=None, commit=True) -> list[Operation]`: each operation depends on the previous one; the first depends on `depends_on_id`.
   - `wake_runner() -> None`: imports `operation_runner` from `runner.py` lazily and calls `operation_runner.wake()`; swallows `ImportError` and `RuntimeError` so enqueue works outside an event loop (tests, CLI).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/unit/test_operations_enqueue.py
@@ -995,12 +995,12 @@ def test_new_run_id_is_unique():
     assert new_run_id() != new_run_id()
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `python -m pytest tests/unit/test_operations_enqueue.py -q -p no:cacheprovider`
 Expected: FAIL with `ModuleNotFoundError`
 
-- [ ] **Step 3: Write the module**
+- [x] **Step 3: Write the module**
 
 ```python
 # app/services/operations/enqueue.py
@@ -1116,7 +1116,7 @@ def enqueue_chain(
 
 Note: `enqueue(..., commit=False)` uses `db.flush()` so `op.id` is available for the next link. Because `wake_runner()` is called inside `enqueue`, `enqueue_chain` wakes the runner once per link; that is harmless since `wake()` only sets an event.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `python -m pytest tests/unit/test_operations_enqueue.py -q -p no:cacheprovider`
 Expected: 6 passed
@@ -1134,7 +1134,7 @@ Expected: 6 passed
   - `FOLLOWUPS: dict[str, tuple[str, ...]]` exactly as spec 7.4.
   - `chain_for(kind: str, *, available: Optional[set[str]] = None) -> list[str]`: the chain for `kind`, filtered to kinds present in `available` when given. Unknown kind raises `ValueError`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/unit/test_operations_followups.py
@@ -1182,12 +1182,12 @@ def test_chain_for_rejects_unknown_kind():
         chain_for("bogus")
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `python -m pytest tests/unit/test_operations_followups.py -q -p no:cacheprovider`
 Expected: FAIL with `ModuleNotFoundError`
 
-- [ ] **Step 3: Write the module**
+- [x] **Step 3: Write the module**
 
 ```python
 # app/services/operations/followups.py
@@ -1232,7 +1232,7 @@ def chain_for(kind: str, *, available: Optional[set[str]] = None) -> list[str]:
     return chain
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `python -m pytest tests/unit/test_operations_followups.py -q -p no:cacheprovider`
 Expected: 3 passed
@@ -1273,7 +1273,7 @@ Global limits in `global_slot_available`:
 - `op.kind in INDEX_KINDS`: `running_count(db, kinds=INDEX_KINDS) < settings.index_workers`.
 - Anything else: True.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/unit/test_operations_lanes.py
@@ -1435,12 +1435,12 @@ def test_defaults_when_settings_row_missing(db, repo):
     assert lanes.can_start(db, op, None) is True
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `python -m pytest tests/unit/test_operations_lanes.py -q -p no:cacheprovider`
 Expected: FAIL with `ModuleNotFoundError`
 
-- [ ] **Step 3: Write the module**
+- [x] **Step 3: Write the module**
 
 ```python
 # app/services/operations/lanes.py
@@ -1578,7 +1578,7 @@ def can_start(db: Session, op: Operation, settings: Optional[SystemSettings]) ->
     return True
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `python -m pytest tests/unit/test_operations_lanes.py -q -p no:cacheprovider`
 Expected: 11 passed
@@ -1633,7 +1633,7 @@ Tick algorithm (spec 7.1), inside one session:
 
 - For each `running` row: if `op.kind in INDEX_KINDS`: set `queued`, clear `started_at`, `process_pid`, `process_start_time`, `progress_*`; count `requeued`. Else if `op.process_pid` and `is_process_alive(op.process_pid, int(op.process_start_time or 0))`: leave it, count `kept`. Else set `failed`, `error_message = "interrupted by restart"`, `completed_at = utc_now()`; count `failed`. Commit once at the end. The lock-break step for local repositories is not needed in phase 1 because no exclusive Borg kind has an executor yet; phase 5 adds it when maintenance kinds migrate.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/unit/test_operations_runner.py
@@ -1927,12 +1927,12 @@ async def test_start_loop_dispatches_and_stops(db, repo, runner, registry):
 
 Check `pytest.ini` for `asyncio_mode`; if it is not `auto`, the `@pytest.mark.asyncio` markers above are required and `pytest-asyncio` must already be in `requirements.txt` (search `tests/unit` for `pytest.mark.asyncio` to confirm the convention).
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `python -m pytest tests/unit/test_operations_runner.py -q -p no:cacheprovider`
 Expected: FAIL with `ModuleNotFoundError`
 
-- [ ] **Step 3: Write the registry**
+- [x] **Step 3: Write the registry**
 
 ```python
 # app/services/operations/executors/__init__.py
@@ -1960,7 +1960,7 @@ def registered_kinds() -> set[str]:
     return set(REGISTRY)
 ```
 
-- [ ] **Step 4: Write the runner**
+- [x] **Step 4: Write the runner**
 
 ```python
 # app/services/operations/runner.py
@@ -2277,7 +2277,7 @@ operation_runner = OperationRunner()
 
 Two notes for the implementer. First, the runner imports `events.py`, which Task 8 creates; write Task 8's module before running this task's tests, or temporarily stub the two broadcast coroutines as no-ops and replace them in Task 8. Second, the running-cancel test relies on the executor polling `ctx.cancelled()`; `request_cancel` deliberately does not call `task.cancel()` so that Borg-backed executors in later phases can terminate their child process cleanly before returning. Executors that never poll are documented as not cancellable while running.
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `python -m pytest tests/unit/test_operations_runner.py -q -p no:cacheprovider`
 Expected: 12 passed
@@ -2297,7 +2297,7 @@ Expected: 12 passed
   - `async broadcast_operation_progress(op: Operation) -> None`: event type `operation.progress`, data `{"id", "progress_percent", "progress_current", "progress_total", "progress_message"}`.
   - Both swallow and log exceptions from the event manager so a broken SSE client never fails an operation.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/unit/test_operations_events.py
@@ -2362,12 +2362,12 @@ async def test_broadcast_errors_are_swallowed(monkeypatch):
     await op_events.broadcast_operation_progress(op)
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `python -m pytest tests/unit/test_operations_events.py -q -p no:cacheprovider`
 Expected: FAIL with `ModuleNotFoundError`
 
-- [ ] **Step 3: Write the module**
+- [x] **Step 3: Write the module**
 
 ```python
 # app/services/operations/events.py
@@ -2425,7 +2425,7 @@ async def broadcast_operation_progress(op: Operation) -> None:
         logger.warning("Failed to broadcast operation.progress", operation_id=op.id, error=str(exc))
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `python -m pytest tests/unit/test_operations_events.py tests/unit/test_operations_runner.py -q -p no:cacheprovider`
 Expected: all passed
@@ -2466,7 +2466,7 @@ Executor behaviour:
 6. `ctx.progress(current=len(entries), total=len(entries), message=f"{len(entries)} archives")`.
 7. Return `Outcome(result={"listed": len(entries), "new": len(new_rows), "info_filled": filled, "removed_archive_ids": removed_ids})`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/unit/test_operations_index_executors.py
@@ -2647,12 +2647,12 @@ def test_registry_has_index_kinds():
 
 The `format_bytes` expectation `"2.00 KB"` must match `app.api.repositories.format_bytes(2048)`; run `python -c "from app.api.repositories import format_bytes; print(format_bytes(2048))"` and adjust the assertion to the real output before writing code.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `python -m pytest tests/unit/test_operations_index_executors.py -q -p no:cacheprovider`
 Expected: FAIL with `ImportError` on `index`
 
-- [ ] **Step 3: Write the module**
+- [x] **Step 3: Write the module**
 
 ```python
 # app/services/operations/executors/index.py
@@ -2937,7 +2937,7 @@ Circular import note: `index.py` imports `app.api.repositories`, which imports a
 
 Also confirm `_prepare_repository_borg_env` returns `(env, temp_key_file)` and that the `datetime` returned by `_parse_borg_archive_time` is naive UTC, matching the test expectations; adjust the test's expected `start` value if the helper applies a timezone shift.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `python -m pytest tests/unit/test_operations_index_executors.py -q -p no:cacheprovider`
 Expected: 8 passed
@@ -2962,7 +2962,7 @@ Expected: 8 passed
   - `class ReconcileScheduler` with `start()` and `stop()` mirroring `StatsRefreshScheduler.start()`: reads `stats_refresh_interval_minutes` each loop, `0` disables, sleeps `interval * 60` seconds between runs, first run happens after one interval (same as the old scheduler). Loop body calls `enqueue_reconcile_runs` in a fresh `SessionLocal()`.
   - `reconcile_scheduler = ReconcileScheduler()`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/unit/test_operations_reconcile.py
@@ -3039,12 +3039,12 @@ async def test_scheduler_disabled_when_interval_zero(db, repos, monkeypatch):
     assert db.query(Operation).count() == 0
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `python -m pytest tests/unit/test_operations_reconcile.py -q -p no:cacheprovider`
 Expected: FAIL with `ImportError`
 
-- [ ] **Step 3: Write the module**
+- [x] **Step 3: Write the module**
 
 ```python
 # app/services/operations/reconcile.py
@@ -3153,7 +3153,7 @@ class ReconcileScheduler:
 reconcile_scheduler = ReconcileScheduler()
 ```
 
-- [ ] **Step 4: Wire startup in `app/main.py`**
+- [x] **Step 4: Wire startup in `app/main.py`**
 
 Replace the block
 
@@ -3196,7 +3196,7 @@ with
 
 Then delete `app/services/stats_refresh_scheduler.py` and, in `tests/unit/test_schedulers.py`, remove `from app.services.stats_refresh_scheduler import StatsRefreshScheduler` and every test function that references `StatsRefreshScheduler` (search the file; they will be named with `stats_refresh`). Search the whole repo for other references: `grep -rn stats_refresh_scheduler app tests docs` must return nothing except this plan and the spec.
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `python -m pytest tests/unit/test_operations_reconcile.py tests/unit/test_schedulers.py -q -p no:cacheprovider`
 Expected: all passed, no `ImportError`
@@ -3232,7 +3232,7 @@ Routes (all under `/api/operations`):
 
 Every route that takes an id resolves the row with a shared helper `_get_operation_with_access(db, user, operation_id, required_role)` that loads the row, loads its repository when present, and calls `check_repo_access(db, user, repository, required_role)`; rows without a repository require admin for `operator` access and allow any user for `viewer` access. Error payloads follow the existing `{"key": "backend.errors.…"}` convention; add the keys `backend.errors.operations.notFound` and `backend.errors.operations.alreadyFinished` (no frontend translation is needed in phase 1; phase 3 adds them to the locale files).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/unit/test_api_operations.py
@@ -3403,12 +3403,12 @@ class TestLogs:
 
 Check the exact response keys of `_paginate_log_text` in `app/api/activity.py` (it returns a dict with a lines list and totals) and adjust `body["lines"]` in the test to the real key name before writing code.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `python -m pytest tests/unit/test_api_operations.py -q -p no:cacheprovider`
 Expected: FAIL with 404 responses (router not registered)
 
-- [ ] **Step 3: Write the router**
+- [x] **Step 3: Write the router**
 
 ```python
 # app/api/operations.py
@@ -3784,7 +3784,7 @@ In `app/main.py`, add `operations` to the `from app.api import (...)` list and r
 app.include_router(operations.router, prefix="/api/operations", tags=["Operations"])
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `python -m pytest tests/unit/test_api_operations.py -q -p no:cacheprovider`
 Expected: 14 passed
@@ -3815,7 +3815,7 @@ Rules (spec 9.3):
 
 Logs and delete routes: when `job_type in vocab.KINDS` and no legacy model is mapped for it (in phase 1 that is every kind except `backup`, `restore`, `check`, `restore_check`, `compact`, `prune`, `package`), resolve `Operation` by id and serve `log_file_path` through `_paginate_log_text` (logs), `FileResponse` (download), and delete the row plus its log file (delete, admin only as today, refusing `running` rows with the existing 409 payload). For the seven kinds that still have legacy tables, keep resolving the legacy model; the Operations API in Task 11 serves operations rows of those kinds by id.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/unit/test_activity_union.py
@@ -3924,12 +3924,12 @@ class TestActivityUnion:
 
 Check `PruneJob` for a `scheduled_prune` column (the activity code reads it with `getattr`) and the delete route's exact refusal status for running jobs; align the last assertion with it.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `python -m pytest tests/unit/test_activity_union.py -q -p no:cacheprovider`
 Expected: FAIL (index rows appear or 404 on kinds)
 
-- [ ] **Step 3: Implement the union**
+- [x] **Step 3: Implement the union**
 
 In `app/api/activity.py`:
 
@@ -4090,7 +4090,7 @@ Keep the existing sort, limit, and `_sort_at` pop after that. Because every dict
 
 For logs: read `op.log_file_path` if present and return `_paginate_log_text(text, offset, limit)`. For download: `FileResponse(op.log_file_path, media_type="text/plain", filename=f"operation_{op.id}.log")` or 404 when missing. For delete: refuse when `op.status == "running"` with the same status code and payload the route already uses for running legacy jobs, otherwise delete the log file if present, `db.delete(op)`, commit, and return the route's usual success payload. Define `job_models` before that check in each route (it already exists in logs and delete; add the same dict in the download route if it is built inline there).
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `python -m pytest tests/unit/test_activity_union.py tests/unit/test_api_activity.py -q -p no:cacheprovider`
 Expected: all passed
@@ -4109,7 +4109,7 @@ Expected: all passed
 
 The import route already verified the repository with `verify_existing_repository` before the row was created, so `import_connect` is recorded as already completed; the runner never executes it (there is no executor for it, and it is never queued).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/unit/test_api_repositories_import_operations.py
@@ -4166,12 +4166,12 @@ def test_import_repository_records_operation_and_skips_inline_stats(
 
 Read `import_repository` and its `RepositoryImport` schema before writing the second test: the JSON body above must satisfy the schema's required fields and any validation that runs before `verify_existing_repository` (for example `_validate_upload_ratelimit_kib`, rclone and Borg 2 payload checks). Find an existing import test in `tests/unit/test_api_repositories.py` (search for `"/api/repositories/import"`) and copy its body and patches instead of guessing. The return value of `verify_existing_repository` must match what the route reads from it (search the route for `verify_result[`).
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `python -m pytest tests/unit/test_api_repositories_import_operations.py -q -p no:cacheprovider`
 Expected: FAIL with `ImportError: cannot import name 'record_import_connect'`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Append to `app/services/operations/enqueue.py`:
 
@@ -4246,7 +4246,7 @@ with
 
 The Borg 2 import path (`import_repository_v2` in `app/api/v2/repositories.py`) and the agent and rclone import paths keep their current behaviour in phase 1; they are listed under Open questions for phase 2.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `python -m pytest tests/unit/test_api_repositories_import_operations.py tests/unit/test_api_repositories.py -q -p no:cacheprovider`
 Expected: all passed. If an existing import test asserted that `update_stats` is awaited, update it to assert the `import_connect` row instead.
@@ -4261,7 +4261,7 @@ Expected: all passed. If an existing import test asserted that `update_stats` is
 - Modify: `docs/configuration.md`
 - Test: `tests/unit/test_job_history_retention.py` (append)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/unit/test_job_history_retention.py`:
 
@@ -4290,12 +4290,12 @@ def test_operations_rows_fall_with_cleanup_retention(db):
 
 Match the `_settings(db)` helper and `run_retention` call signature used by the neighbouring tests in that file.
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `python -m pytest tests/unit/test_job_history_retention.py -q -p no:cacheprovider -k operations_rows`
 Expected: FAIL (old row still present)
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `app/services/job_history_retention.py`, import `Operation` from `app.database.models` and add `(Operation, ()),` to `_JOB_TABLES` after `(AvailabilityScheduleSkip, ()),`. Operations have no inline log column; log files on disk follow the existing file-based `log_retention_days` sweep if that sweep reads `log_file_path` from the models it iterates. Check `job_history_retention.py` for how it treats `log_file_path` on other tables and confirm `Operation` gets the same treatment.
 
@@ -4342,7 +4342,7 @@ Add to the settings table in `docs/configuration.md`:
 | `INDEX_ARCHIVE_INFO_PER_RUN` | `20` | Per-archive `borg info` calls one archive listing run may make for newly seen archives; the rest are picked up by later runs |
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `python -m pytest tests/unit/test_job_history_retention.py -q -p no:cacheprovider`
 Expected: all passed
@@ -4353,22 +4353,22 @@ Expected: all passed
 
 **Files:** none new.
 
-- [ ] **Step 1: Full backend test suite**
+- [x] **Step 1: Full backend test suite**
 
 Run: `python -m pytest tests/unit -q -p no:cacheprovider`
 Expected: all passed, zero skipped tests introduced by this phase.
 
-- [ ] **Step 2: Lint and format**
+- [x] **Step 2: Lint and format**
 
 Run: `ruff check app tests && ruff format --check app tests`
 Expected: no findings. Fix and rerun if needed.
 
-- [ ] **Step 3: Migration round trip on a fresh database**
+- [x] **Step 3: Migration round trip on a fresh database**
 
 Run: `DATA_DIR=$(mktemp -d) alembic upgrade head`
 Expected: completes; `operations`, `archives`, `archive_changes` exist.
 
-- [ ] **Step 4: Import smoke check**
+- [x] **Step 4: Import smoke check**
 
 Run: `python -c "import app.main; from app.services.operations.executors import load_default_executors, registered_kinds; load_default_executors(); print(sorted(registered_kinds()))"`
 Expected: `['archive_sync', 'stats']`
@@ -4377,11 +4377,11 @@ Expected: `['archive_sync', 'stats']`
 
 Start the dev stack, import a small local repository through the UI, and confirm with `sqlite3` or the `/api/operations/queue` route that `import_connect` is completed and `stats` and `archive_sync` reach `completed`, that `archives` has one row per archive, and that `repository.archive_count` matches. Confirm that `GET /api/activity/recent` shows the import row with two nested follow-ups.
 
-- [ ] **Step 6: Reference checks**
+- [x] **Step 6: Reference checks**
 
 Run: `grep -rn "stats_refresh_scheduler" app tests` (expect no results) and `grep -rn $'\xe2\x80\x94' app/services/operations app/api/operations.py docs/architecture/job-system.md` (expect no results; the escape is the em dash byte sequence).
 
-- [ ] **Step 7: Verification before completion**
+- [x] **Step 7: Verification before completion**
 
 Invoke `superpowers:verification-before-completion`, paste the command outputs from steps 1 to 6 verbatim into the report, update the progress table in the spec (section 19.1) to `in review`, and stop at gate G2: ask the user whether to commit. Do not commit before the answer.
 

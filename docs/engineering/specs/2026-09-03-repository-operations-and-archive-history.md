@@ -1063,7 +1063,7 @@ Agents update this table and nothing else as work advances. Statuses:
 
 | Phase | Status | Plan file | Branch | Notes |
 | --- | --- | --- | --- | --- |
-| 1 Foundation | plan approved | `docs/engineering/plans/2026-09-03-operations-phase-1-foundation.md` | `feat/operations-phase-1` | Plan approved at G1 on 2026-09-03; implement on Fable 5.1 |
+| 1 Foundation | in review | `docs/engineering/plans/2026-09-03-operations-phase-1-foundation.md` | `feat/operations-phase-1` | Implemented on Fable 5.1 on 2026-09-03; verification passed (2822 passed; the 14 failures are the pre-existing OIDC tests that also fail on main when .env is present); awaiting G2 commit answer; index executors keep the retired scheduler's MQTT state publish; plan step 15.5 live check not run |
 | 2 History | not started | | | |
 | 3 Background work tab | not started | | | May run in parallel with 2 once 2's plan is approved |
 | 4 Archive experience | not started | | | May run in parallel with 2 once 2's plan is approved |

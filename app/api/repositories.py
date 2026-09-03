@@ -3759,15 +3759,16 @@ async def import_repository(
             repository.has_keyfile = True
             db.commit()
 
-        # Update archive count by listing archives (non-blocking - don't fail import)
+        # Record the verified connect step and hand stats and archive listing
+        # to the operations runner (spec section 7.4). The request no longer
+        # waits on Borg for derived data.
         try:
-            from app.core.borg_router import BorgRouter
+            from app.services.operations.enqueue import record_import_connect
 
-            await BorgRouter(repository).update_stats(db)
+            record_import_connect(db, repository, user_id=current_user.id)
         except Exception as e:
-            # Log but don't fail the import - stats can be updated later
             logger.warning(
-                "Failed to update repository stats after import",
+                "Failed to enqueue post-import operations",
                 repository=repository.name,
                 error=str(e),
             )

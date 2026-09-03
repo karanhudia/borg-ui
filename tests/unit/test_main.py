@@ -53,8 +53,13 @@ class TestStartupEvent:
                                                 "app.api.schedule.check_scheduled_jobs",
                                                 return_value=AsyncMock(),
                                             ):
-                                                with patch(
-                                                    "app.services.stats_refresh_scheduler.stats_refresh_scheduler"
+                                                with (
+                                                    patch(
+                                                        "app.services.operations.runner.operation_runner"
+                                                    ),
+                                                    patch(
+                                                        "app.services.operations.reconcile.reconcile_scheduler"
+                                                    ),
                                                 ):
                                                     with patch(
                                                         "app.services.mqtt_sync_scheduler.start_mqtt_sync_scheduler",
@@ -93,7 +98,8 @@ class TestStartupEvent:
             patch("app.utils.process_utils.cleanup_orphaned_jobs"),
             patch("app.utils.process_utils.cleanup_orphaned_mounts"),
             patch("app.api.schedule.check_scheduled_jobs", return_value=AsyncMock()),
-            patch("app.services.stats_refresh_scheduler.stats_refresh_scheduler"),
+            patch("app.services.operations.runner.operation_runner"),
+            patch("app.services.operations.reconcile.reconcile_scheduler"),
             patch(
                 "app.services.mqtt_sync_scheduler.start_mqtt_sync_scheduler",
                 return_value=AsyncMock(),
@@ -149,7 +155,8 @@ class TestStartupEvent:
             patch("app.utils.process_utils.cleanup_orphaned_jobs"),
             patch("app.utils.process_utils.cleanup_orphaned_mounts"),
             patch("app.api.schedule.check_scheduled_jobs", return_value=AsyncMock()),
-            patch("app.services.stats_refresh_scheduler.stats_refresh_scheduler"),
+            patch("app.services.operations.runner.operation_runner"),
+            patch("app.services.operations.reconcile.reconcile_scheduler"),
             patch(
                 "app.services.mqtt_sync_scheduler.start_mqtt_sync_scheduler",
                 return_value=AsyncMock(),
@@ -382,7 +389,8 @@ class TestStartupBuildsSchema:
             patch("app.utils.process_utils.cleanup_orphaned_jobs"),
             patch("app.utils.process_utils.cleanup_orphaned_mounts"),
             patch("app.api.schedule.check_scheduled_jobs", return_value=AsyncMock()),
-            patch("app.services.stats_refresh_scheduler.stats_refresh_scheduler"),
+            patch("app.services.operations.runner.operation_runner"),
+            patch("app.services.operations.reconcile.reconcile_scheduler"),
             patch("asyncio.create_task"),
         ):
             recorder.attach_mock(mock_ensure, "ensure_schema")

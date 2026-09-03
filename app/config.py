@@ -189,6 +189,9 @@ class Settings(BaseSettings):
     cache_ttl_seconds: int = 7200  # 2 hours
     cache_max_size_mb: int = 2048  # 2GB
 
+    # Operations index: per-archive `borg info` calls per archive_sync run
+    index_archive_info_per_run: int = 20
+
     # Backup settings
     max_backup_jobs: int = 5
     backup_timeout: int = 3600  # 1 hour

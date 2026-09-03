@@ -488,3 +488,26 @@ def test_sweep_cascades_from_late_arriving_prune_logs(db, tmp_path):
     assert "Pruning archive" in db.get(PruneJob, prune_row_id).logs
     # Idempotent: a second sweep finds nothing left to do.
     assert sweep_pruned_archive_records(db) == 0
+
+
+@pytest.mark.unit
+def test_operations_rows_fall_with_cleanup_retention(db):
+    from app.database.models import Operation
+    from app.services.operations.enqueue import enqueue
+
+    settings = _settings(db)
+    repo = Repository(name="ops", path="/tmp/ops", encryption="none", compression="lz4")
+    db.add(repo)
+    db.commit()
+    old = enqueue(db, "stats", repository_id=repo.id)
+    old.status = "completed"
+    old.created_at = utc_now() - timedelta(days=200)
+    old.completed_at = utc_now() - timedelta(days=200)
+    fresh = enqueue(db, "stats", repository_id=repo.id)
+    fresh.status = "completed"
+    fresh.completed_at = utc_now()
+    db.commit()
+    old_id, fresh_id = old.id, fresh.id
+    run_retention(db, settings)
+    ids = {o.id for o in db.query(Operation)}
+    assert fresh_id in ids and old_id not in ids

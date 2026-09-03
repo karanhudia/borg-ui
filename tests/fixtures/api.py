@@ -100,7 +100,7 @@ def test_db(tmp_path, monkeypatch):
         patch("app.services.mount_service.SessionLocal", TestingSessionLocal),
         patch("app.services.mqtt_service.SessionLocal", TestingSessionLocal),
         patch("app.services.remote_backup_service.SessionLocal", TestingSessionLocal),
-        patch("app.services.stats_refresh_scheduler.SessionLocal", TestingSessionLocal),
+        patch("app.services.operations.reconcile.SessionLocal", TestingSessionLocal),
         patch("app.services.restore_check_scheduler.SessionLocal", TestingSessionLocal),
         patch("app.api.schedule.SessionLocal", TestingSessionLocal),
         patch("app.api.repositories.SessionLocal", TestingSessionLocal),

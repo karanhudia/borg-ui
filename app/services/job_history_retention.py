@@ -67,6 +67,7 @@ from app.database.models import (
     ScriptExecution,
     SystemSettings,
     utc_now,
+    Operation,
 )
 
 logger = structlog.get_logger()
@@ -97,6 +98,7 @@ _JOB_TABLES = (
     (ScriptExecution, ("stdout", "stderr")),
     (BackupPlanRun, ()),
     (AvailabilityScheduleSkip, ()),
+    (Operation, ()),
 )
 
 
