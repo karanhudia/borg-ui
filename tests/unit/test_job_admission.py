@@ -4,11 +4,15 @@ from fastapi import HTTPException
 from app.core.security import get_password_hash
 from app.database.models import AgentJob, AgentMachine, Repository
 from app.services.job_admission import (
+    AGENT_JOB_KIND_OPERATIONS,
     OPERATION_BACKUP,
     OPERATION_BREAK_LOCK,
+    OPERATION_CLASS_REPOSITORY_READ,
     OPERATION_CLASS_REPOSITORY_WRITE,
+    OPERATION_RCLONE_SYNC,
     ensure_repository_admission,
     operation_class_for,
+    operation_for_agent_job_kind,
 )
 
 
@@ -102,3 +106,19 @@ def test_break_lock_fails_closed_against_unknown_active_repository_job(db_sessio
         ensure_repository_admission(db_session, repo, OPERATION_BREAK_LOCK)
 
     assert exc.value.status_code == 409
+
+
+@pytest.mark.unit
+def test_rclone_sync_is_mapped_and_classed_as_a_read():
+    # Without the mapping, operation_for_agent_job_kind() raises and every
+    # cloud mirror on an agent repository is rejected at admission with
+    # "Unsupported agent repository operation: repository.rclone_sync",
+    # never reaching the agent that supports it.
+    assert AGENT_JOB_KIND_OPERATIONS["repository.rclone_sync"] == OPERATION_RCLONE_SYNC
+    assert (
+        operation_for_agent_job_kind("repository.rclone_sync") == OPERATION_RCLONE_SYNC
+    )
+    # rclone reads the repository and writes only to the remote. It also has
+    # to be in one of the two sets: operation_class_for() raises on an
+    # operation it cannot classify, so the mapping alone would still fail.
+    assert operation_class_for(OPERATION_RCLONE_SYNC) == OPERATION_CLASS_REPOSITORY_READ

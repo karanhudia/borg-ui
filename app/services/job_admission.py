@@ -37,6 +37,7 @@ OPERATION_REPOSITORY_LIST_ARCHIVE_CONTENTS = "repository.list_archive_contents"
 OPERATION_REPOSITORY_EXTRACT_ARCHIVE_FILE = "repository.extract_archive_file"
 OPERATION_BREAK_LOCK = "break_lock"
 OPERATION_DISK_USAGE = "repository.disk_usage"
+OPERATION_RCLONE_SYNC = "repository.rclone_sync"
 # Sentinel for an active repository agent job whose kind we don't recognize.
 # Classed WRITE so admission fails closed -- an unknown job might hold a borg
 # lock, and break_lock must never run alongside it.
@@ -83,6 +84,9 @@ READ_OPERATIONS = {
     OPERATION_REPOSITORY_LIST_ARCHIVES,
     OPERATION_REPOSITORY_LIST_ARCHIVE_CONTENTS,
     OPERATION_REPOSITORY_EXTRACT_ARCHIVE_FILE,
+    # rclone reads the repository and writes only to the remote, so it
+    # cannot corrupt local state the way a write operation can.
+    OPERATION_RCLONE_SYNC,
 }
 
 # du stats the repository directory; it never opens the repository, so it
@@ -106,6 +110,7 @@ AGENT_JOB_KIND_OPERATIONS = {
     "repository.extract_archive_file": OPERATION_REPOSITORY_EXTRACT_ARCHIVE_FILE,
     "repository.restore": OPERATION_RESTORE,
     "repository.disk_usage": OPERATION_DISK_USAGE,
+    "repository.rclone_sync": OPERATION_RCLONE_SYNC,
 }
 
 MAINTENANCE_MODEL_OPERATIONS = {
