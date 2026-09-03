@@ -14,31 +14,38 @@ against with its list_ok check.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, Optional
 
 import structlog
 
 from app.database.models import Repository
+from app.utils.datetime_utils import parse_borg_archive_time
 
 logger = structlog.get_logger()
 
 
-def _newest_archive_time(archives: list) -> Optional[datetime]:
-    """The newest archive timestamp as a naive UTC value, matching the column."""
+def _newest_archive_time(
+    archives: list, *, timezone_name: Optional[str] = None
+) -> Optional[datetime]:
+    """The newest archive timestamp as a naive UTC value, matching the column.
+
+    Naive Borg times are the creating machine's local wall clock; see
+    parse_borg_archive_time for how ``timezone_name`` resolves them.
+    """
     newest = None
     for archive in archives:
         if not isinstance(archive, dict):
             continue
-        value = archive.get("time") or archive.get("start")
-        if not isinstance(value, str) or not value.strip():
+        # The shared parser handles every shape borg may emit (ISO strings
+        # with or without offset, Unix epochs) and returns None for junk.
+        # Select on None, not truthiness - the epoch 0 is a valid time.
+        value = archive.get("time")
+        if value is None:
+            value = archive.get("start")
+        dt = parse_borg_archive_time(value, timezone_name=timezone_name)
+        if dt is None:
             continue
-        try:
-            dt = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
-        except ValueError:
-            continue
-        if dt.tzinfo is not None:
-            dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
         if newest is None or dt > newest:
             newest = dt
     return newest
@@ -59,8 +66,14 @@ def sync_archive_stats_from_info(
     # database and raise — inside the handler that promises never to.
     repository_name = repository.name
     try:
+        # Local import: repository_executor pulls in the admission machinery,
+        # which must not become an import-time dependency of this module.
+        from app.services.repository_executor import agent_timezone_for_repository
+
         repository.archive_count = len(archives)
-        newest = _newest_archive_time(archives)
+        newest = _newest_archive_time(
+            archives, timezone_name=agent_timezone_for_repository(db, repository)
+        )
         if archives:
             # Archives whose times we cannot parse must not wipe a known
             # last_backup — absence of evidence only counts when the list

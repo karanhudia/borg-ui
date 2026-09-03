@@ -81,6 +81,7 @@ def _register(args: argparse.Namespace) -> int:
         agent_version=__version__,
         borg_versions=borg_versions,
         capabilities=get_capabilities(),
+        timezone=machine.get("timezone"),
     )
     config_path = save_config(
         AgentConfig(

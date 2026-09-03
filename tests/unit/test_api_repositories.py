@@ -1371,6 +1371,63 @@ class TestRepositoriesCreate:
         test_db.refresh(repo)
         assert repo.archive_count == 5  # preserved, not overwritten with 0
 
+    @pytest.mark.asyncio
+    async def test_agent_stats_refresh_interprets_archive_times_in_agent_zone(
+        self, test_db
+    ):
+        # Borg reports archive times in the agent's local wall clock; the
+        # refresh must convert them with the agent's reported zone instead of
+        # assuming UTC (which pushed last_backup into the future).
+        from app.api.repositories import _update_agent_repository_stats
+
+        agent = _agent_machine_with_capabilities(
+            "repository.list_archives", "repository.rinfo"
+        )
+        agent.timezone = "Europe/Berlin"
+        repo = Repository(
+            name="Agent Zone Repo",
+            path="/agent/zone/repo",
+            encryption="repokey-blake2",
+            executor_type="agent",
+            execution_target="agent",
+            repository_type="local",
+        )
+        test_db.add_all([agent, repo])
+        test_db.commit()
+        repo.agent_machine_id = agent.id
+        test_db.commit()
+        test_db.refresh(repo)
+
+        list_stdout = json.dumps(
+            {"archives": [{"name": "a1", "time": "2026-09-02T12:45:14"}]}
+        )
+        rinfo_stdout = json.dumps({"encryption": {"mode": "repokey-blake2"}})
+        with (
+            patch(
+                "app.services.repository_executor.queue_agent_repository_operation_job",
+                side_effect=lambda db, r, **kw: SimpleNamespace(id=1),
+            ),
+            patch(
+                "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort",
+                new=AsyncMock(),
+            ),
+            patch(
+                "app.services.repository_executor.wait_for_agent_repository_operation_job",
+                new=AsyncMock(
+                    side_effect=[
+                        {"return_code": 0, "stdout": list_stdout},
+                        {"return_code": 0, "stdout": rinfo_stdout},
+                    ]
+                ),
+            ),
+        ):
+            ok = await _update_agent_repository_stats(repo, test_db)
+
+        assert ok is True
+        test_db.refresh(repo)
+        # 12:45 CEST (UTC+2 on this date) stored as naive UTC.
+        assert repo.last_backup == datetime(2026, 9, 2, 10, 45, 14)
+
     def test_agent_repository_list_archives_queues_agent_job(
         self, test_client: TestClient, admin_headers, test_db
     ):

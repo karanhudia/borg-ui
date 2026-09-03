@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import platform
 import re
 import shutil
@@ -7,6 +8,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Optional
+from zoneinfo import ZoneInfo
 
 
 @dataclass(frozen=True)
@@ -25,11 +27,44 @@ class BorgBinary:
         }
 
 
+def detect_timezone() -> Optional[str]:
+    """The machine's IANA zone name, best effort.
+
+    Borg writes archive timestamps in this machine's local time with no
+    offset; reporting the zone lets the server interpret them correctly.
+    Only a name zoneinfo can resolve is reported - DST needs the zone, a
+    bare offset would misplace archives from the other half of the year.
+    """
+    candidates = [os.environ.get("TZ")]
+    try:
+        candidates.append(Path("/etc/timezone").read_text(encoding="utf-8").strip())
+    except OSError:
+        pass
+    try:
+        # /etc/localtime -> .../zoneinfo/<Area/City> on most distributions.
+        target = Path("/etc/localtime").resolve()
+        parts = target.parts
+        if "zoneinfo" in parts:
+            candidates.append("/".join(parts[parts.index("zoneinfo") + 1 :]))
+    except OSError:
+        pass
+    for name in candidates:
+        if not name:
+            continue
+        try:
+            ZoneInfo(name)
+        except Exception:
+            continue
+        return name
+    return None
+
+
 def detect_platform() -> dict:
     return {
         "hostname": platform.node(),
         "os": platform.system().lower() or "unknown",
         "arch": platform.machine() or "unknown",
+        "timezone": detect_timezone(),
     }
 
 

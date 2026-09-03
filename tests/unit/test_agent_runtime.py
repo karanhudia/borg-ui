@@ -812,6 +812,7 @@ def test_session_runtime_connects_with_websocket_url_and_sends_hello(monkeypatch
         "agent_id": "agt_123",
         "hostname": "host.local",
         "agent_version": "0.1.3",
+        "timezone": None,
         "borg_versions": [],
         "capabilities": get_capabilities(),
         "running_job_ids": [],
@@ -2654,3 +2655,23 @@ def test_cli_unregister_revokes_agent_and_removes_config(
         ("unregister", "agt_cli"),
     ]
     assert "Unregistered agt_cli" in capsys.readouterr().out
+
+
+class TestTimezoneDetection:
+    def test_valid_tz_env_wins(self, monkeypatch):
+        from agent.borg_ui_agent.borg import detect_platform, detect_timezone
+
+        monkeypatch.setenv("TZ", "Europe/Berlin")
+
+        assert detect_timezone() == "Europe/Berlin"
+        assert detect_platform()["timezone"] == "Europe/Berlin"
+
+    def test_invalid_tz_env_is_never_reported(self, monkeypatch):
+        from agent.borg_ui_agent.borg import detect_timezone
+
+        # An unresolvable name must not reach the server - it could not
+        # interpret archive times with it. The fallback may still find the
+        # machine's real zone (or nothing); both are acceptable here.
+        monkeypatch.setenv("TZ", "Not/AZone")
+
+        assert detect_timezone() != "Not/AZone"

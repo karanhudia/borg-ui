@@ -6,7 +6,68 @@ This module provides utilities to ensure consistent serialization to frontend.
 """
 
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
+from zoneinfo import ZoneInfo
+
+
+def parse_borg_archive_time(
+    value: Any, *, timezone_name: Optional[str] = None
+) -> Optional[datetime]:
+    """Parse a Borg archive timestamp into a naive UTC database value.
+
+    Borg stores archive timestamps as absolute values and renders them, with
+    no UTC offset, in the local zone of the process that produced the listing
+    - historical archives included. ``timezone_name`` names that process's
+    IANA zone (the zone an agent reported, or "UTC" for a listing forced to
+    TZ=UTC); without one, naive values are interpreted in this server's local
+    zone. Using the zone (not a fixed offset) keeps archives created on
+    either side of a DST switch correct. Numeric values are Unix epochs and
+    carry no ambiguity.
+    """
+    if value is None:
+        return None
+
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.fromtimestamp(value, tz=timezone.utc).replace(tzinfo=None)
+        except (OverflowError, OSError, ValueError):
+            # Out-of-range epochs (junk input) must not escape into the
+            # transport handlers; absence is handled by every caller.
+            return None
+
+    if not isinstance(value, str):
+        return None
+
+    normalized = value.strip()
+    if not normalized:
+        return None
+
+    try:
+        dt = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+    if dt.tzinfo is None:
+        zone = None
+        if timezone_name:
+            try:
+                zone = ZoneInfo(timezone_name)
+            except Exception:
+                zone = None
+        if zone is not None:
+            # fold=0 pins wall times repeated by a DST fall-back to their
+            # EARLIER instant. Borg gives no disambiguator, so any choice is
+            # off by at most the DST shift for that one hour a year - the
+            # earlier reading only ever understates recency, which is the
+            # safe direction for last_backup and stale monitoring. Excluding
+            # ambiguous values instead could fall back to an arbitrarily
+            # older archive.
+            dt = dt.replace(tzinfo=zone, fold=0)
+        else:
+            # astimezone() on a naive datetime attaches the system zone
+            # (same fold=0 semantics as above).
+            dt = dt.astimezone()
+    return dt.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 def serialize_datetime(dt: Optional[datetime]) -> Optional[str]:

@@ -65,6 +65,24 @@ def is_agent_executor(repository: Repository) -> bool:
     return repository_executor_type(repository) == EXECUTOR_AGENT
 
 
+def agent_timezone_for_repository(db: Session, repository: Repository) -> Optional[str]:
+    """The IANA zone the repository's agent reported, if any.
+
+    Borg renders archive times in the local zone of the process that produced
+    the listing; for an agent-executed repository that is the agent, so its
+    reported (current) zone is the one to interpret those times with. None for
+    non-agent repositories and for agents that never reported a zone.
+    """
+    if not is_agent_executor(repository) or not repository.agent_machine_id:
+        return None
+    agent = (
+        db.query(AgentMachine)
+        .filter(AgentMachine.id == repository.agent_machine_id)
+        .first()
+    )
+    return agent.timezone if agent else None
+
+
 def legacy_execution_target(
     *, executor_type: str, repository_location: Optional[str] = None
 ) -> str:

@@ -468,6 +468,7 @@ class AgentSessionRuntime:
                 "agent_id": self.config.agent_id,
                 "hostname": machine["hostname"],
                 "agent_version": __version__,
+                "timezone": machine.get("timezone"),
                 "borg_versions": borg_versions,
                 "capabilities": get_capabilities(),
                 "running_job_ids": [],

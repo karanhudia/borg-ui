@@ -68,6 +68,7 @@ class AgentClient:
         borg_versions: list[dict[str, Any]],
         capabilities: list[str],
         labels: Optional[dict[str, Any]] = None,
+        timezone: Optional[str] = None,
     ) -> dict[str, Any]:
         return self._request(
             "POST",
@@ -80,6 +81,7 @@ class AgentClient:
                 "os": os_name,
                 "arch": arch,
                 "agent_version": agent_version,
+                "timezone": timezone,
                 "borg_versions": borg_versions,
                 "capabilities": capabilities,
                 "labels": labels or {},
@@ -96,6 +98,7 @@ class AgentClient:
         capabilities: list[str],
         running_job_ids: Optional[list[int]] = None,
         last_error: Optional[str] = None,
+        timezone: Optional[str] = None,
     ) -> dict[str, Any]:
         return self._request(
             "POST",
@@ -104,6 +107,7 @@ class AgentClient:
                 "agent_id": agent_id,
                 "hostname": hostname,
                 "agent_version": agent_version,
+                "timezone": timezone,
                 "borg_versions": borg_versions,
                 "capabilities": capabilities,
                 "running_job_ids": running_job_ids or [],
