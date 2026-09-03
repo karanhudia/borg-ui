@@ -16,6 +16,7 @@ from app.api.repositories import (
     _parse_borg_archive_time,
     _prepare_repository_borg_env,
     _repository_stats_borg_env,
+    agent_timezone_for_repository,
     format_bytes,
     get_operation_timeouts,
 )
@@ -38,14 +39,23 @@ def series_for(name: str, borg_version: int) -> str:
     return name if borg_version == 2 else "default"
 
 
-def archive_fields_from_listing(entry: dict, borg_version: int) -> Optional[dict]:
+def archive_fields_from_listing(
+    entry: dict, borg_version: int, *, timezone_name: Optional[str]
+) -> Optional[dict]:
+    """Map one listing entry to archives columns.
+
+    Borg renders naive wall-clock timestamps in the zone the listing ran in;
+    `timezone_name` names that zone ("UTC" for server listings, the agent's
+    reported zone for agent listings) so `start` and `end` are stored as
+    naive UTC like every other timestamp.
+    """
     borg_id = entry.get("id")
     name = entry.get("name") or entry.get("archive")
     raw_time = entry.get("start") or entry.get("time")
     if not borg_id or not name or not raw_time:
         return None
     try:
-        start = _parse_borg_archive_time(raw_time)
+        start = _parse_borg_archive_time(raw_time, timezone_name=timezone_name)
     except ValueError:
         return None
     if start is None:
@@ -53,7 +63,7 @@ def archive_fields_from_listing(entry: dict, borg_version: int) -> Optional[dict
     end = None
     if entry.get("end"):
         try:
-            end = _parse_borg_archive_time(entry["end"])
+            end = _parse_borg_archive_time(entry["end"], timezone_name=timezone_name)
         except ValueError:
             end = None
     return {
@@ -69,7 +79,11 @@ def archive_fields_from_listing(entry: dict, borg_version: int) -> Optional[dict
 
 
 def apply_listing(
-    db: Session, repository: Repository, entries: list[dict]
+    db: Session,
+    repository: Repository,
+    entries: list[dict],
+    *,
+    timezone_name: Optional[str],
 ) -> tuple[list[Archive], list[int]]:
     """Upsert archives rows from a listing. Returns (new_rows, removed_ids).
 
@@ -84,7 +98,9 @@ def apply_listing(
     new_rows: list[Archive] = []
     now = utc_now()
     for entry in entries:
-        fields = archive_fields_from_listing(entry, repository.borg_version or 1)
+        fields = archive_fields_from_listing(
+            entry, repository.borg_version or 1, timezone_name=timezone_name
+        )
         if fields is None:
             continue
         seen.add(fields["borg_id"])
@@ -113,7 +129,9 @@ def apply_listing(
 
 async def list_archives_for_repository(
     db: Session, repository: Repository, env: dict
-) -> list[dict]:
+) -> tuple[list[dict], Optional[str]]:
+    """Return (entries, timezone_name): the listing and the zone Borg
+    rendered its naive timestamps in."""
     if is_agent_executor(repository):
         from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
         from app.services.repository_executor import (
@@ -129,13 +147,16 @@ async def list_archives_for_repository(
         result = await wait_for_agent_repository_operation_job(
             db, job.id, timeout_seconds=timeouts["list_timeout"]
         )
-        return _agent_result_archives(result)
+        return _agent_result_archives(result), agent_timezone_for_repository(
+            db, repository
+        )
 
     router = BorgRouter(repository)
     stats_env = _repository_stats_borg_env(env)
-    return await run_serialized_repository_command(
+    entries = await run_serialized_repository_command(
         repository.id, lambda: router.list_archives(env=stats_env), scope="metadata"
     )
+    return entries, "UTC"
 
 
 def _info_stats(payload: str) -> Optional[dict]:
@@ -171,6 +192,8 @@ async def fill_archive_info(
         return 0
     filled = 0
     remote_path = effective_repository_remote_path(repository)
+    # TZ=UTC so borg renders the archive end time in UTC (see stats env).
+    info_env = _repository_stats_borg_env(env or {})
     for archive in sorted(archives, key=lambda a: a.start)[:limit]:
         try:
             if (repository.borg_version or 1) == 2:
@@ -182,7 +205,7 @@ async def fill_archive_info(
                     passphrase=repository.passphrase,
                     remote_path=remote_path,
                     bypass_lock=repository.bypass_lock,
-                    env=env or None,
+                    env=info_env,
                 )
             else:
                 from app.core.borg import borg
@@ -193,7 +216,7 @@ async def fill_archive_info(
                     passphrase=repository.passphrase,
                     remote_path=remote_path,
                     bypass_lock=repository.bypass_lock,
-                    env=env or None,
+                    env=info_env,
                 )
         except Exception as exc:
             logger.warning("archive info failed", archive=archive.name, error=str(exc))
@@ -209,7 +232,7 @@ async def fill_archive_info(
         archive.deduplicated_size = info["deduplicated_size"]
         if info["end"]:
             try:
-                archive.end = _parse_borg_archive_time(info["end"])
+                archive.end = _parse_borg_archive_time(info["end"], timezone_name="UTC")
             except ValueError:
                 pass
         if info["duration"] is not None:
@@ -287,8 +310,10 @@ async def run_archive_sync(ctx) -> Outcome:
     db = ctx.db
     env, temp_key_file = _prepare_repository_borg_env(repository, db)
     try:
-        entries = await list_archives_for_repository(db, repository, env)
-        new_rows, removed_ids = apply_listing(db, repository, entries)
+        entries, timezone_name = await list_archives_for_repository(db, repository, env)
+        new_rows, removed_ids = apply_listing(
+            db, repository, entries, timezone_name=timezone_name
+        )
         filled = await fill_archive_info(
             db, repository, new_rows, env, limit=settings.index_archive_info_per_run
         )

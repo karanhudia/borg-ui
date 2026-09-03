@@ -72,16 +72,34 @@ BORG2_ENTRY = {
 
 @pytest.mark.unit
 def test_archive_fields_from_listing_borg1_and_borg2():
-    f1 = index_exec.archive_fields_from_listing(BORG1_ENTRY, 1)
+    f1 = index_exec.archive_fields_from_listing(BORG1_ENTRY, 1, timezone_name="UTC")
     assert f1["borg_id"] == "aa11"
     assert f1["name"] == "nas-2026-09-02T02:00:00"
     assert f1["series"] == "default"
     assert f1["start"] == datetime(2026, 9, 2, 2, 0, 0)
-    f2 = index_exec.archive_fields_from_listing(BORG2_ENTRY, 2)
+    f2 = index_exec.archive_fields_from_listing(BORG2_ENTRY, 2, timezone_name="UTC")
     assert f2["series"] == "nas"
     assert f2["hostname"] == "nas" and f2["username"] == "root"
-    assert index_exec.archive_fields_from_listing({"name": "x"}, 1) is None
-    assert index_exec.archive_fields_from_listing({"id": "x", "name": "n"}, 2) is None
+    assert (
+        index_exec.archive_fields_from_listing({"name": "x"}, 1, timezone_name="UTC")
+        is None
+    )
+    assert (
+        index_exec.archive_fields_from_listing(
+            {"id": "x", "name": "n"}, 2, timezone_name="UTC"
+        )
+        is None
+    )
+
+
+@pytest.mark.unit
+def test_archive_fields_from_listing_converts_wall_clock_zone_to_utc():
+    """Borg renders naive wall-clock times in the listing zone; the stored
+    value is naive UTC, so a Berlin 02:00 in September is 00:00 UTC."""
+    fields = index_exec.archive_fields_from_listing(
+        BORG1_ENTRY, 1, timezone_name="Europe/Berlin"
+    )
+    assert fields["start"] == datetime(2026, 9, 2, 0, 0, 0)
 
 
 @pytest.mark.unit
@@ -95,11 +113,15 @@ def test_apply_listing_upserts_and_reports_removed(db, repo):
     )
     db.add(gone)
     db.commit()
-    new_rows, removed = index_exec.apply_listing(db, repo, [BORG1_ENTRY])
+    new_rows, removed = index_exec.apply_listing(
+        db, repo, [BORG1_ENTRY], timezone_name="UTC"
+    )
     assert [a.borg_id for a in new_rows] == ["aa11"]
     assert removed == [gone.id]
     assert db.query(Archive).count() == 2
-    again_new, again_removed = index_exec.apply_listing(db, repo, [BORG1_ENTRY])
+    again_new, again_removed = index_exec.apply_listing(
+        db, repo, [BORG1_ENTRY], timezone_name="UTC"
+    )
     assert again_new == [] and again_removed == [gone.id]
     row = db.query(Archive).filter_by(borg_id="aa11").one()
     assert row.last_seen_at >= row.first_seen_at
@@ -119,7 +141,7 @@ def test_apply_listing_series_change_resets_history_state(db, repo):
     )
     db.add(existing)
     db.commit()
-    index_exec.apply_listing(db, repo, [BORG2_ENTRY])
+    index_exec.apply_listing(db, repo, [BORG2_ENTRY], timezone_name="UTC")
     db.refresh(existing)
     assert existing.series == "nas"
     assert existing.history_state == "pending"
@@ -131,7 +153,7 @@ async def test_run_archive_sync_updates_repository_columns(db, repo, monkeypatch
     monkeypatch.setattr(
         index_exec,
         "list_archives_for_repository",
-        AsyncMock(return_value=[BORG1_ENTRY]),
+        AsyncMock(return_value=([BORG1_ENTRY], "UTC")),
     )
     monkeypatch.setattr(index_exec, "fill_archive_info", AsyncMock(return_value=1))
     monkeypatch.setattr(
@@ -208,6 +230,7 @@ async def test_fill_archive_info_limits_and_orders_oldest_first(db, repo, monkey
 
     async def fake_info(repository, archive_name, **kwargs):
         seen.append(archive_name)
+        assert kwargs["env"]["TZ"] == "UTC"
         return {
             "success": True,
             "stdout": json.dumps(
@@ -258,7 +281,7 @@ async def test_index_executors_publish_mqtt_state_after_writing_stats(
     monkeypatch.setattr(
         index_exec,
         "list_archives_for_repository",
-        AsyncMock(return_value=[BORG1_ENTRY]),
+        AsyncMock(return_value=([BORG1_ENTRY], "UTC")),
     )
     monkeypatch.setattr(index_exec, "fill_archive_info", AsyncMock(return_value=0))
     monkeypatch.setattr(
@@ -284,7 +307,7 @@ async def test_mqtt_failure_does_not_fail_operation(db, repo, monkeypatch):
     monkeypatch.setattr(
         index_exec,
         "list_archives_for_repository",
-        AsyncMock(return_value=[BORG1_ENTRY]),
+        AsyncMock(return_value=([BORG1_ENTRY], "UTC")),
     )
     monkeypatch.setattr(index_exec, "fill_archive_info", AsyncMock(return_value=0))
     monkeypatch.setattr(

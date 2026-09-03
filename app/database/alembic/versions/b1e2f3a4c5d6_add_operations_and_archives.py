@@ -1,7 +1,7 @@
 """add operations, archives, archive_changes tables and runner settings
 
 Revision ID: b1e2f3a4c5d6
-Revises: c7e4f8a1d2b3
+Revises: b9d2c5e7f1a4
 Create Date: 2026-09-03
 """
 
@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = "b1e2f3a4c5d6"
-down_revision = "c7e4f8a1d2b3"
+down_revision = "b9d2c5e7f1a4"
 branch_labels = None
 depends_on = None
 
