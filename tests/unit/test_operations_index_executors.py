@@ -176,6 +176,38 @@ async def test_run_archive_sync_updates_repository_columns(db, repo, monkeypatch
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_run_archive_sync_clears_last_backup_when_no_archives_remain(
+    db, repo, monkeypatch
+):
+    repo.archive_count = 1
+    repo.last_backup = datetime(2026, 9, 2, 2, 0, 0)
+    db.add(
+        Archive(
+            repository_id=repo.id,
+            borg_id="aa11",
+            name="nas-2026-09-02",
+            series="default",
+            start=datetime(2026, 9, 2, 2, 0, 0),
+        )
+    )
+    db.commit()
+    monkeypatch.setattr(
+        index_exec,
+        "list_archives_for_repository",
+        AsyncMock(return_value=([], "UTC")),
+    )
+    monkeypatch.setattr(index_exec, "fill_archive_info", AsyncMock(return_value=0))
+    monkeypatch.setattr(
+        index_exec, "_prepare_repository_borg_env", lambda repository, db: ({}, None)
+    )
+    await index_exec.run_archive_sync(_ctx(db, repo))
+    db.refresh(repo)
+    assert repo.archive_count == 0
+    assert repo.last_backup is None
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_run_archive_sync_skips_missing_repository(db, repo):
     ctx = _ctx(db, repo)
     ctx.repository_id = 9999

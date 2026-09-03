@@ -329,8 +329,7 @@ async def run_archive_sync(ctx) -> Outcome:
             if a.id not in removed_id_set
         ]
         repository.archive_count = len(rows)
-        if rows:
-            repository.last_backup = max(a.start for a in rows)
+        repository.last_backup = max((a.start for a in rows), default=None)
         db.commit()
         _publish_mqtt_state(db, "operations archive sync")
         ctx.log(
