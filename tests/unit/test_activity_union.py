@@ -2,7 +2,13 @@ from datetime import timedelta
 
 import pytest
 
-from app.database.models import Operation, PruneJob, Repository, utc_now
+from app.database.models import (
+    Operation,
+    PruneJob,
+    Repository,
+    UserRepositoryPermission,
+    utc_now,
+)
 from app.services.operations.enqueue import enqueue, enqueue_chain
 
 
@@ -150,6 +156,31 @@ class TestActivityUnion:
             "/api/activity/recent?trigger=schedule", headers=admin_headers
         ).json()
         assert len(body) == 1 and body[0]["trigger"] == "schedule"
+
+    def test_recent_hides_operations_for_inaccessible_repositories(
+        self, test_client, test_db, test_user, auth_headers
+    ):
+        """A viewer granted one repository must not see another's operations."""
+        allowed = _repo(test_db)
+        denied = Repository(
+            name="denied", path="/tmp/denied", encryption="none", compression="lz4"
+        )
+        test_db.add(denied)
+        test_db.commit()
+        test_db.refresh(denied)
+        test_db.add(
+            UserRepositoryPermission(
+                user_id=test_user.id, repository_id=allowed.id, role="viewer"
+            )
+        )
+        test_db.commit()
+        enqueue(test_db, "import_connect", repository_id=allowed.id, trigger="import")
+        enqueue(test_db, "import_connect", repository_id=denied.id, trigger="import")
+
+        body = test_client.get("/api/activity/recent", headers=auth_headers).json()
+        repo_ids = {item.get("repository_id") for item in body}
+        assert denied.id not in repo_ids
+        assert allowed.id in repo_ids
 
     def test_logs_resolve_operation_kinds(
         self, test_client, test_db, admin_headers, tmp_path

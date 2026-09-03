@@ -398,6 +398,7 @@ def _legacy_trigger(item: dict) -> str:
 def _operation_activity_items(
     db: Session,
     *,
+    current_user: User,
     limit: int,
     job_type: Optional[str],
     status: Optional[str],
@@ -412,7 +413,14 @@ def _operation_activity_items(
     With collapse_runs, follow-ups ride under their top-level parent and are
     shown whenever the parent is; without it every row is top level.
     """
-    q = db.query(Operation)
+    from app.api.operations import (
+        accessible_repository_ids,
+        _scope_to_accessible_repos,
+    )
+
+    q = _scope_to_accessible_repos(
+        db.query(Operation), accessible_repository_ids(db, current_user)
+    )
     if job_type:
         if job_type not in op_vocab.KINDS:
             return []
@@ -1036,6 +1044,7 @@ async def list_recent_activity(
     activities.extend(
         _operation_activity_items(
             db,
+            current_user=current_user,
             limit=limit,
             job_type=job_type,
             status=status,

@@ -124,3 +124,7 @@ async def test_agent_import_records_operation_and_followups(test_db):
     assert operations[0].triggered_by_user_id == user.id
     assert [o.status for o in operations[1:]] == ["queued", "queued"]
     assert operations[1].depends_on_id == operations[0].id
+    assert operations[2].depends_on_id == operations[1].id
+    assert {o.run_id for o in operations} == {operations[0].run_id}
+    assert [o.trigger for o in operations] == ["import", "followup", "followup"]
+    assert [o.triggered_by_user_id for o in operations] == [user.id] * 3
