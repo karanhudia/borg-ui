@@ -1063,7 +1063,7 @@ Agents update this table and nothing else as work advances. Statuses:
 
 | Phase | Status | Plan file | Branch | Notes |
 | --- | --- | --- | --- | --- |
-| 1 Foundation | not started | | | |
+| 1 Foundation | plan approved | `docs/engineering/plans/2026-09-03-operations-phase-1-foundation.md` | `feat/operations-phase-1` | Plan approved at G1 on 2026-09-03; implement on Fable 5.1 |
 | 2 History | not started | | | |
 | 3 Background work tab | not started | | | May run in parallel with 2 once 2's plan is approved |
 | 4 Archive experience | not started | | | May run in parallel with 2 once 2's plan is approved |
@@ -1233,4 +1233,5 @@ Recorded so later sessions do not re-derive or re-litigate them.
 | Hidden rows above the cap collapse to per-subtree summary rows | Drop rows silently or refuse to index | The user sees that truncation happened and where |
 | History layer (diff, file history, search, outlier flags) is Pro under one key `archive_history`; browsing, heatmap, status strip, and the Background work tab stay Community | Gate everything new, or gate nothing | The insight layer is the value that justifies Pro; the operational layer fixes bugs every user has and must not be withheld |
 | Community installs never create history stages, rather than creating and skipping them | Create the operation and mark it skipped with a reason | A permanently skipped column on the board reads as broken, not as locked |
+| Phase 1 plan defaults accepted at G1 (2026-09-03): `index_workers` and `background_paused` are `SystemSettings` columns and only `INDEX_ARCHIVE_INFO_PER_RUN` is an env setting; only the Borg 1 server import route changes in phase 1; Activity shows operations rows to any authenticated user, matching legacy rows; `update_repository_stats` stays untouched apart from the import route; running-operation cancel is cooperative through `ctx.cancelled()` with no hard task cancel | The alternatives listed under the plan's Open questions | Owner approved the plan without changes |
 | No subagents in the workflow; each step runs in the session the user opened, on the model the user selected, with the spec telling the user which model the step wants | Orchestrator dispatching subagents with model overrides | Owner's decision on cost; the gates and the progress table give the same control without a second context per step |
