@@ -66,3 +66,10 @@ def test_agent_config_falls_back_when_the_file_is_unreadable(tmp_path):
     values = rclone_repository_service._agent_rclone_config(remote)
 
     assert values["type"] == "drive"
+    # The whole stored section is carried over, not just the type: an
+    # implementation that dropped redacted_config and set only the provider
+    # would still produce a "type" and would pass on that assertion alone.
+    assert values["scope"] == "drive"
+    assert values["token"] == "***"
+    assert values["client_id"] == "***"
+    assert values["client_secret"] == "***"
