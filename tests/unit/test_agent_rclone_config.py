@@ -73,3 +73,41 @@ def test_agent_config_falls_back_when_the_file_is_unreadable(tmp_path):
     assert values["token"] == "***"
     assert values["client_id"] == "***"
     assert values["client_secret"] == "***"
+
+
+@pytest.mark.unit
+def test_agent_config_falls_back_when_the_file_cannot_be_read(tmp_path, monkeypatch):
+    # The more likely failure in practice: the file exists but the process
+    # cannot read it. rclone.conf holds credentials and is normally 0600, so a
+    # server running as another user hits PermissionError rather than a
+    # missing path. It is an OSError like any other and must not escape.
+    config_path = tmp_path / "rclone.conf"
+    config_path.write_text(CONFIG, encoding="utf-8")
+
+    real_open = open
+
+    def _deny(path, *args, **kwargs):
+        if str(path) == str(config_path):
+            raise PermissionError(13, "Permission denied")
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.open", _deny)
+
+    values = rclone_repository_service._agent_rclone_config(_remote(config_path))
+
+    assert values["type"] == "drive"
+    assert values["scope"] == "drive"
+    assert values["token"] == "***"
+
+
+@pytest.mark.unit
+def test_agent_config_falls_back_when_the_file_is_malformed(tmp_path):
+    # A truncated or hand-edited rclone.conf raises configparser.Error rather
+    # than OSError, and must fall back the same way instead of propagating.
+    config_path = tmp_path / "rclone.conf"
+    config_path.write_text("this is not an ini file\n= broken\n", encoding="utf-8")
+
+    values = rclone_repository_service._agent_rclone_config(_remote(config_path))
+
+    assert values["type"] == "drive"
+    assert values["token"] == "***"
