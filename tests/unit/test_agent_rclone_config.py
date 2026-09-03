@@ -111,3 +111,17 @@ def test_agent_config_falls_back_when_the_file_is_malformed(tmp_path):
 
     assert values["type"] == "drive"
     assert values["token"] == "***"
+
+
+@pytest.mark.unit
+def test_agent_config_falls_back_when_the_file_is_not_utf8(tmp_path):
+    # Non-UTF-8 bytes raise UnicodeDecodeError, which is a ValueError and not
+    # an OSError, so it escaped the handler and propagated out of the stats
+    # refresh instead of falling back.
+    config_path = tmp_path / "rclone.conf"
+    config_path.write_bytes(b"[gdrive]\ntype = drive\ntoken = \xff\xfe binary\n")
+
+    values = rclone_repository_service._agent_rclone_config(_remote(config_path))
+
+    assert values["type"] == "drive"
+    assert values["token"] == "***"

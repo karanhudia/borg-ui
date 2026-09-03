@@ -311,7 +311,10 @@ class RcloneRepositoryService:
         try:
             with open(config_path, encoding="utf-8") as handle:
                 parser.read_file(handle)
-        except (OSError, configparser.Error):
+        # UnicodeError too: a config with non-UTF-8 bytes raises
+        # UnicodeDecodeError, which is a ValueError rather than an OSError and
+        # would otherwise escape and fail the whole stats refresh.
+        except (OSError, UnicodeError, configparser.Error):
             return {}
         if not parser.has_section(remote.name):
             return {}
