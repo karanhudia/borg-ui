@@ -8,7 +8,7 @@ import structlog
 from sqlalchemy.orm import Session
 
 from app.database.database import SessionLocal
-from app.database.models import Operation, Repository, SystemSettings, utc_now
+from app.database.models import Operation, Repository, SystemSettings
 from app.services.operations.enqueue import enqueue_chain
 from app.services.operations.executors import registered_kinds
 from app.services.operations.vocab import PRIORITY_RECONCILE
@@ -17,6 +17,10 @@ logger = structlog.get_logger()
 
 RECONCILE_CHAIN = ("archive_sync", "history_merge", "history_index", "stats")
 DEFAULT_INTERVAL_MINUTES = 60
+# How often to re-check the setting while reconciliation is disabled
+# (stats_refresh_interval_minutes <= 0), so a later positive update resumes
+# it without a process restart.
+POLL_INTERVAL_WHEN_DISABLED_MINUTES = 5
 
 
 def has_active_index_work(db: Session, repository_id: int) -> bool:
@@ -50,9 +54,6 @@ def enqueue_reconcile_runs(db: Session) -> int:
             commit=False,
         )
         count += 1
-    settings = db.query(SystemSettings).first()
-    if settings is not None:
-        settings.last_stats_refresh = utc_now()
     db.commit()
     logger.info("Reconcile runs enqueued", repositories=count, kinds=kinds)
     return count
@@ -79,22 +80,19 @@ class ReconcileScheduler:
         self.running = False
 
     async def start(self) -> None:
-        interval = self._interval_minutes()
-        if interval <= 0:
-            logger.info("Reconcile scheduler disabled (interval=0)")
-            self.running = False
-            return
         self.running = True
-        logger.info("Reconcile scheduler started", interval_minutes=interval)
+        logger.info("Reconcile scheduler started")
         while self.running:
+            interval = self._interval_minutes()
+            if interval <= 0:
+                await asyncio.sleep(POLL_INTERVAL_WHEN_DISABLED_MINUTES * 60)
+                continue
             await asyncio.sleep(interval * 60)
             if not self.running:
                 break
             interval = self._interval_minutes()
             if interval <= 0:
-                logger.info("Reconcile disabled, stopping scheduler")
-                self.running = False
-                break
+                continue
             db = SessionLocal()
             try:
                 enqueue_reconcile_runs(db)

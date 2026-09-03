@@ -295,7 +295,10 @@ async def run_stats(ctx) -> Outcome:
         )
         if total and total > 0:
             repository.total_size = format_bytes(total)
-            db.commit()
+        if system_settings is not None:
+            system_settings.last_stats_refresh = utc_now()
+        db.commit()
+        if total and total > 0:
             _publish_mqtt_state(db, "operations stats")
         ctx.log(f"repository size {total} bytes")
         return Outcome(result={"unique_csize": total})
@@ -317,7 +320,14 @@ async def run_archive_sync(ctx) -> Outcome:
         filled = await fill_archive_info(
             db, repository, new_rows, env, limit=settings.index_archive_info_per_run
         )
-        rows = db.query(Archive).filter(Archive.repository_id == repository.id).all()
+        removed_id_set = set(removed_ids)
+        rows = [
+            a
+            for a in db.query(Archive)
+            .filter(Archive.repository_id == repository.id)
+            .all()
+            if a.id not in removed_id_set
+        ]
         repository.archive_count = len(rows)
         if rows:
             repository.last_backup = max(a.start for a in rows)

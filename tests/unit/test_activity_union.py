@@ -159,6 +159,10 @@ class TestActivityUnion:
         log = tmp_path / "op.log"
         log.write_text("a\nb\n")
         op.log_file_path = str(log)
+        # A queued op has no visible logs under the log-save policy; use a
+        # finished status so the policy check in the logs/download routes
+        # allows reading them.
+        op.status = "completed_with_warnings"
         test_db.commit()
         r = test_client.get(
             f"/api/activity/archive_sync/{op.id}/logs", headers=admin_headers

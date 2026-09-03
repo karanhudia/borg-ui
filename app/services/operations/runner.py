@@ -86,7 +86,7 @@ class OperationContext:
         if message is not None:
             op.progress_message = message
         self.db.commit()
-        await broadcast_operation_progress(op)
+        await broadcast_operation_progress(op, self.db)
 
     def log(self, line: str) -> None:
         if self._log_handle is None:
@@ -152,6 +152,26 @@ class OperationRunner:
 
     def stop(self) -> None:
         self._stopped = True
+
+    async def drain(self, timeout: float = 30.0) -> None:
+        """Request cooperative cancellation for every running task and wait
+        for them to finish, so shutdown goes through
+        `OperationContext.cancelled()` instead of a raw task cancellation.
+        Call `stop()` first so no new tasks start while draining."""
+        tasks = list(self.running_tasks.values())
+        if not tasks:
+            return
+        for operation_id in list(self.running_tasks):
+            await self.request_cancel(operation_id)
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(*tasks, return_exceptions=True), timeout=timeout
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Operations runner drain timed out",
+                remaining=len(self.running_tasks),
+            )
 
     async def start(self) -> None:
         self._stopped = False

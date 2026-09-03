@@ -36,7 +36,7 @@ from app.database.models import (
     ScriptExecution,
 )
 from app.api.auth import get_current_user, User
-from app.core.security import get_current_download_user
+from app.core.security import check_repo_access, get_current_download_user
 from app.utils.datetime_utils import serialize_datetime
 from app.services.backup_service import backup_service
 from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
@@ -143,7 +143,9 @@ def _is_operation_only_kind(job_type: str, job_models: dict) -> bool:
     )
 
 
-def _get_operation_or_404(db: Session, job_type: str, job_id: int) -> Operation:
+def _get_operation_or_404(
+    db: Session, job_type: str, job_id: int, current_user: Optional[User] = None
+) -> Operation:
     op = (
         db.query(Operation)
         .filter(Operation.id == job_id, Operation.kind == job_type)
@@ -157,6 +159,10 @@ def _get_operation_or_404(db: Session, job_type: str, job_id: int) -> Operation:
                 "params": {"jobType": job_type},
             },
         )
+    if current_user is not None and op.repository_id is not None:
+        repo = db.get(Repository, op.repository_id)
+        if repo is not None:
+            check_repo_access(db, current_user, repo, "viewer")
     return op
 
 
@@ -1083,7 +1089,12 @@ async def get_job_logs(
     }
 
     if _is_operation_only_kind(job_type, job_models):
-        op = _get_operation_or_404(db, job_type, job_id)
+        op = _get_operation_or_404(db, job_type, job_id, current_user)
+        policy = get_log_save_policy(db)
+        if not job_has_logs_by_policy(
+            op, policy, output_text=[op.error_message], file_path=op.log_file_path
+        ):
+            raise _no_logs_available_exception()
         return _paginate_log_text(_read_operation_log(op), offset, limit)
 
     if job_type == "script_execution":
@@ -1404,8 +1415,12 @@ async def download_job_logs(
     }
 
     if _is_operation_only_kind(job_type, job_models):
-        op = _get_operation_or_404(db, job_type, job_id)
-        if not op.log_file_path or not os.path.exists(op.log_file_path):
+        op = _get_operation_or_404(db, job_type, job_id, current_user)
+        if (
+            op.status == "running"
+            or not op.log_file_path
+            or not os.path.exists(op.log_file_path)
+        ):
             raise _no_logs_available_exception()
         return FileResponse(
             op.log_file_path,
@@ -1598,7 +1613,7 @@ async def delete_job(
     }
 
     if _is_operation_only_kind(job_type, job_models):
-        op = _get_operation_or_404(db, job_type, job_id)
+        op = _get_operation_or_404(db, job_type, job_id, current_user)
         if op.status == "running":
             raise HTTPException(
                 status_code=400,

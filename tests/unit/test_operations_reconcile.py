@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
@@ -52,7 +54,9 @@ def test_enqueue_reconcile_runs_skips_repos_with_active_index_work(
     assert [r.kind for r in rows] == ["archive_sync", "stats"]
     assert all(r.trigger == "reconcile" and r.priority == 20 for r in rows)
     assert rows[1].depends_on_id == rows[0].id
-    assert db.query(SystemSettings).first().last_stats_refresh is not None
+    # last_stats_refresh is a completion signal, set by the stats executor
+    # once it actually finishes, not when the reconcile chain is enqueued.
+    assert db.query(SystemSettings).first().last_stats_refresh is None
 
 
 @pytest.mark.unit
@@ -84,12 +88,36 @@ def test_enqueue_reconcile_runs_noop_without_executors(db, repos, monkeypatch):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_scheduler_disabled_when_interval_zero(db, repos, monkeypatch):
+async def test_scheduler_stays_alive_when_interval_zero(db, repos, monkeypatch):
+    settings = db.query(SystemSettings).first()
+    settings.stats_refresh_interval_minutes = 0
+    db.commit()
+    monkeypatch.setattr(reconcile, "SessionLocal", lambda: db)
+    monkeypatch.setattr(reconcile, "POLL_INTERVAL_WHEN_DISABLED_MINUTES", 0)
+    scheduler = reconcile.ReconcileScheduler()
+    task = asyncio.create_task(scheduler.start())
+    await asyncio.sleep(0.05)
+    assert scheduler.running is True
+    assert db.query(Operation).count() == 0
+    scheduler.stop()
+    await asyncio.wait_for(task, timeout=1)
+
+
+@pytest.mark.unit
+def test_scheduler_reads_interval_live_each_poll(db, repos, monkeypatch):
+    """The scheduler re-reads stats_refresh_interval_minutes from settings on
+    every poll rather than caching it once at start(), so raising it above 0
+    later resumes reconciliation without another start() call."""
     settings = db.query(SystemSettings).first()
     settings.stats_refresh_interval_minutes = 0
     db.commit()
     monkeypatch.setattr(reconcile, "SessionLocal", lambda: db)
     scheduler = reconcile.ReconcileScheduler()
-    await scheduler.start()
-    assert scheduler.running is False
-    assert db.query(Operation).count() == 0
+    assert scheduler._interval_minutes() == 0
+
+    # _interval_minutes() closes its (test-shared) session each call, which
+    # detaches `settings` from it - re-fetch before mutating again.
+    settings = db.query(SystemSettings).first()
+    settings.stats_refresh_interval_minutes = 30
+    db.commit()
+    assert scheduler._interval_minutes() == 30

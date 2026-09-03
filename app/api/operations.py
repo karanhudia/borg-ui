@@ -18,7 +18,14 @@ from app.core.security import (
     require_any_role,
 )
 from app.database.database import get_db
-from app.database.models import Operation, Repository, SystemSettings, User, utc_now
+from app.database.models import (
+    Operation,
+    Repository,
+    SystemSettings,
+    User,
+    UserRepositoryPermission,
+    utc_now,
+)
 from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.services.operations.lanes import lane_free, running_count
 from app.services.operations.models import is_terminal, serialize_operation
@@ -156,6 +163,27 @@ def _get_operation_with_access(
     return op
 
 
+def accessible_repository_ids(db: Session, user: User) -> Optional[set]:
+    """Repository ids the user may view, or None for "all" (admin or a
+    wildcard `all_repositories_role` grant)."""
+    if user.role == "admin" or getattr(user, "all_repositories_role", None):
+        return None
+    return {
+        p.repository_id
+        for p in db.query(UserRepositoryPermission).filter_by(user_id=user.id).all()
+    }
+
+
+def _scope_to_accessible_repos(q, accessible: Optional[set]):
+    """Restrict an Operation query to rows the user may see: system rows
+    (no repository) plus rows for repositories they're permitted on."""
+    if accessible is None:
+        return q
+    return q.filter(
+        (Operation.repository_id.is_(None)) | (Operation.repository_id.in_(accessible))
+    )
+
+
 def _settings_row(db: Session) -> SystemSettings:
     settings = db.query(SystemSettings).first()
     if settings is None:
@@ -197,7 +225,13 @@ async def list_operations(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    accessible = accessible_repository_ids(db, current_user)
+    if repository_id is not None:
+        repo = db.get(Repository, repository_id)
+        if repo is not None:
+            check_repo_access(db, current_user, repo, "viewer")
     q = db.query(Operation)
+    q = _scope_to_accessible_repos(q, accessible)
     if repository_id is not None:
         q = q.filter(Operation.repository_id == repository_id)
     if category:
@@ -228,15 +262,13 @@ async def get_queue(
     db: Session = Depends(get_db),
 ):
     cutoff = utc_now() - RECENT_WINDOW
-    ops = (
-        db.query(Operation)
-        .filter(
-            (Operation.status.in_(("queued", "running")))
-            | (Operation.completed_at >= cutoff)
-        )
-        .order_by(Operation.priority.asc(), Operation.id.asc())
-        .all()
+    accessible = accessible_repository_ids(db, current_user)
+    q = db.query(Operation).filter(
+        (Operation.status.in_(("queued", "running")))
+        | (Operation.completed_at >= cutoff)
     )
+    q = _scope_to_accessible_repos(q, accessible)
+    ops = q.order_by(Operation.priority.asc(), Operation.id.asc()).all()
     repos = _repositories_by_id(db, ops)
     policy = get_log_save_policy(db)
     groups: dict[Optional[int], list[dict]] = {}

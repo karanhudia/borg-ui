@@ -146,8 +146,7 @@ def record_import_connect(
         completed_at=now,
     )
     db.add(op)
-    db.commit()
-    db.refresh(op)
+    db.flush()
     kinds = chain_for("import_connect", available=registered_kinds())
     if kinds:
         enqueue_chain(
@@ -158,5 +157,8 @@ def record_import_connect(
             run_id=op.run_id,
             depends_on_id=op.id,
             triggered_by_user_id=user_id,
+            commit=False,
         )
+    db.commit()
+    db.refresh(op)
     return op

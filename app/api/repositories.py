@@ -2418,6 +2418,21 @@ async def _create_agent_repository_record(
         user=current_user.username,
     )
 
+    if imported:
+        # Record the verified connect step and hand stats and archive listing
+        # to the operations runner (spec section 7.4), same as the
+        # server-managed Borg 1 import path.
+        try:
+            from app.services.operations.enqueue import record_import_connect
+
+            record_import_connect(db, repository, user_id=current_user.id)
+        except Exception as e:
+            logger.warning(
+                "Failed to enqueue post-import operations",
+                repository=repository.name,
+                error=str(e),
+            )
+
     try:
         mqtt_service.sync_state_with_db(db, reason="agent repository creation")
     except Exception as e:

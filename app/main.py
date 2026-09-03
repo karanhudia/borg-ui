@@ -500,6 +500,7 @@ async def shutdown_event():
 
     operation_runner.stop()
     reconcile_scheduler.stop()
+    await operation_runner.drain()
 
     # Cancel background tasks
     tasks = getattr(app.state, "background_tasks", [])
