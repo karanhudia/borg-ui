@@ -204,6 +204,9 @@ class TestLogs:
         log = tmp_path / f"operation_{op.id}.log"
         log.write_text("line1\nline2\n")
         op.log_file_path = str(log)
+        # The default policy is failed_and_warnings, so use a finished status
+        # it admits; a queued row has no logs by policy and is covered below.
+        op.status = "completed_with_warnings"
         test_db.commit()
         body = test_client.get(
             f"/api/operations/{op.id}/logs?limit=1", headers=admin_headers
@@ -216,9 +219,50 @@ class TestLogs:
         assert r.status_code == 200
         assert b"line2" in r.content
 
+    def test_logs_hidden_for_queued_operation_by_policy(
+        self, test_client, test_db, admin_headers, tmp_path
+    ):
+        """`has_logs` is false for a queued row, so neither log route may serve it."""
+        repo = _repo(test_db)
+        op = enqueue(test_db, "stats", repository_id=repo.id)
+        log = tmp_path / f"operation_{op.id}.log"
+        log.write_text("line1\n")
+        op.log_file_path = str(log)
+        test_db.commit()
+        assert (
+            test_client.get(
+                f"/api/operations/{op.id}/logs", headers=admin_headers
+            ).status_code
+            == 404
+        )
+        assert (
+            test_client.get(
+                f"/api/operations/{op.id}/logs/download", headers=admin_headers
+            ).status_code
+            == 404
+        )
+
+    def test_download_refused_while_operation_running(
+        self, test_client, test_db, admin_headers, tmp_path
+    ):
+        """The runner marks an operation running before the log is fully written."""
+        repo = _repo(test_db)
+        op = enqueue(test_db, "stats", repository_id=repo.id)
+        log = tmp_path / f"operation_{op.id}.log"
+        log.write_text("partial\n")
+        op.log_file_path = str(log)
+        op.status = "running"
+        test_db.commit()
+        r = test_client.get(
+            f"/api/operations/{op.id}/logs/download", headers=admin_headers
+        )
+        assert r.status_code == 404
+
     def test_logs_without_file(self, test_client, test_db, admin_headers):
         repo = _repo(test_db)
         op = enqueue(test_db, "stats", repository_id=repo.id)
+        op.status = "completed_with_warnings"
+        test_db.commit()
         r = test_client.get(f"/api/operations/{op.id}/logs", headers=admin_headers)
         assert r.status_code == 200
         assert r.json()["lines"] == []

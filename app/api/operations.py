@@ -163,6 +163,18 @@ def _get_operation_with_access(
     return op
 
 
+def _require_logs_by_policy(db: Session, op: Operation) -> None:
+    """Serve operation logs only when the save policy says they exist, so the
+    `has_logs` flag on the list routes and these routes cannot disagree."""
+    if not job_has_logs_by_policy(
+        op,
+        get_log_save_policy(db),
+        output_text=[op.error_message],
+        file_path=op.log_file_path,
+    ):
+        raise HTTPException(status_code=404, detail=NOT_FOUND)
+
+
 def accessible_repository_ids(db: Session, user: User) -> Optional[set]:
     """Repository ids the user may view, or None for "all" (admin or a
     wildcard `all_repositories_role` grant)."""
@@ -377,6 +389,7 @@ async def get_operation_logs(
     db: Session = Depends(get_db),
 ):
     op = _get_operation_with_access(db, current_user, operation_id, "viewer")
+    _require_logs_by_policy(db, op)
     text = ""
     if op.log_file_path:
         try:
@@ -394,7 +407,12 @@ async def download_operation_logs(
     db: Session = Depends(get_db),
 ):
     op = _get_operation_with_access(db, current_user, operation_id, "viewer")
-    if not op.log_file_path or not os.path.exists(op.log_file_path):
+    _require_logs_by_policy(db, op)
+    if (
+        op.status == "running"
+        or not op.log_file_path
+        or not os.path.exists(op.log_file_path)
+    ):
         raise HTTPException(status_code=404, detail=NOT_FOUND)
     return FileResponse(
         op.log_file_path, media_type="text/plain", filename=f"operation_{op.id}.log"
