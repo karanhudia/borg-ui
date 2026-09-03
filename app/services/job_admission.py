@@ -36,6 +36,7 @@ OPERATION_REPOSITORY_LIST_ARCHIVES = "repository.list_archives"
 OPERATION_REPOSITORY_LIST_ARCHIVE_CONTENTS = "repository.list_archive_contents"
 OPERATION_REPOSITORY_EXTRACT_ARCHIVE_FILE = "repository.extract_archive_file"
 OPERATION_BREAK_LOCK = "break_lock"
+OPERATION_DISK_USAGE = "repository.disk_usage"
 # Sentinel for an active repository agent job whose kind we don't recognize.
 # Classed WRITE so admission fails closed -- an unknown job might hold a borg
 # lock, and break_lock must never run alongside it.
@@ -43,6 +44,11 @@ OPERATION_UNKNOWN_REPOSITORY = "repository.unknown"
 
 OPERATION_CLASS_REPOSITORY_WRITE = "repository_write"
 OPERATION_CLASS_REPOSITORY_READ = "repository_read"
+# Observation: reads metadata ABOUT the repository without opening it, so it
+# holds no borg lock and conflicts with nothing. Distinct from
+# repository_read, which does open the repository and must therefore still
+# yield to a write.
+OPERATION_CLASS_REPOSITORY_OBSERVE = "repository_observe"
 
 DEFAULT_MANUAL_BACKUP_LIMIT = 1
 DEFAULT_SCHEDULED_BACKUP_LIMIT = 2
@@ -79,6 +85,12 @@ READ_OPERATIONS = {
     OPERATION_REPOSITORY_EXTRACT_ARCHIVE_FILE,
 }
 
+# du stats the repository directory; it never opens the repository, so it
+# neither takes a borg lock nor needs to wait for one.
+OBSERVE_OPERATIONS = {
+    OPERATION_DISK_USAGE,
+}
+
 AGENT_JOB_KIND_OPERATIONS = {
     "repository.check": OPERATION_CHECK,
     "repository.prune": OPERATION_PRUNE,
@@ -93,6 +105,7 @@ AGENT_JOB_KIND_OPERATIONS = {
     "repository.list_archive_contents": OPERATION_REPOSITORY_LIST_ARCHIVE_CONTENTS,
     "repository.extract_archive_file": OPERATION_REPOSITORY_EXTRACT_ARCHIVE_FILE,
     "repository.restore": OPERATION_RESTORE,
+    "repository.disk_usage": OPERATION_DISK_USAGE,
 }
 
 MAINTENANCE_MODEL_OPERATIONS = {
@@ -125,6 +138,8 @@ def operation_class_for(operation: str) -> str:
         return OPERATION_CLASS_REPOSITORY_WRITE
     if operation in READ_OPERATIONS:
         return OPERATION_CLASS_REPOSITORY_READ
+    if operation in OBSERVE_OPERATIONS:
+        return OPERATION_CLASS_REPOSITORY_OBSERVE
     raise ValueError(f"Unknown repository operation: {operation}")
 
 
@@ -356,6 +371,14 @@ def ensure_repository_admission(
             )
 
     for active in active_work:
+        # An observation neither takes a lock nor waits for one, so it is
+        # skipped from both sides: it never blocks a backup, and it can start
+        # while anything else is running.
+        if OPERATION_CLASS_REPOSITORY_OBSERVE in (
+            requested_class,
+            active.operation_class,
+        ):
+            continue
         conflicts = requested_class == OPERATION_CLASS_REPOSITORY_WRITE or (
             requested_class == OPERATION_CLASS_REPOSITORY_READ
             and active.operation_class == OPERATION_CLASS_REPOSITORY_WRITE
