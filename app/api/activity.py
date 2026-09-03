@@ -4,7 +4,7 @@ Activity feed API endpoints.
 Provides a unified view of all operations (backups, restores, checks, compacts, package installs).
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import Any, List, Optional
@@ -31,14 +31,17 @@ from app.database.models import (
     Repository,
     RcloneSyncJob,
     InstalledPackage,
+    Operation,
     ScheduledJob,
     ScriptExecution,
 )
 from app.api.auth import get_current_user, User
-from app.core.security import get_current_download_user
+from app.core.security import check_repo_access, get_current_download_user
 from app.utils.datetime_utils import serialize_datetime
 from app.services.backup_service import backup_service
 from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
+from app.services.operations import vocab as op_vocab
+from app.services.operations.models import serialize_operation
 
 logger = structlog.get_logger()
 
@@ -90,9 +93,28 @@ class ActivityItem(BaseModel):
         None  # Full repository path (for mapping to friendly name)
     )
 
+    # Operations fields (spec 9.1). Optional so legacy rows validate unchanged.
+    kind: Optional[str] = None
+    category: Optional[str] = None
+    trigger: Optional[str] = None
+    priority: Optional[int] = None
+    run_id: Optional[str] = None
+    depends_on_id: Optional[int] = None
+    repository_id: Optional[int] = None
+    progress_percent: Optional[float] = None
+    progress_current: Optional[int] = None
+    progress_total: Optional[int] = None
+    progress_message: Optional[str] = None
+    execution_mode: Optional[str] = None
+    created_at: Optional[datetime] = None
+    followups: List["ActivityItem"] = []
+
     class Config:
         from_attributes = True
         json_encoders = {datetime: lambda v: serialize_datetime(v)}
+
+
+ActivityItem.model_rebuild()
 
 
 def _paginate_log_text(log_text: str, offset: int, limit: int) -> dict:
@@ -108,6 +130,50 @@ def _paginate_log_text(log_text: str, offset: int, limit: int) -> dict:
         "total_lines": total_lines,
         "has_more": end_offset < total_lines,
     }
+
+
+def _is_operation_only_kind(job_type: str, job_models: dict) -> bool:
+    """True for kinds that live only in the operations table in this phase.
+    Kinds that still have a legacy table keep resolving that table here; the
+    /api/operations routes serve their operations rows by id."""
+    return (
+        job_type in op_vocab.KINDS
+        and job_type not in job_models
+        and job_type not in RCLONE_ACTIVITY_OPERATIONS
+    )
+
+
+def _get_operation_or_404(
+    db: Session, job_type: str, job_id: int, current_user: Optional[User] = None
+) -> Operation:
+    op = (
+        db.query(Operation)
+        .filter(Operation.id == job_id, Operation.kind == job_type)
+        .first()
+    )
+    if not op:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "key": "backend.errors.activity.jobNotFound",
+                "params": {"jobType": job_type},
+            },
+        )
+    if current_user is not None and op.repository_id is not None:
+        repo = db.get(Repository, op.repository_id)
+        if repo is not None:
+            check_repo_access(db, current_user, repo, "viewer")
+    return op
+
+
+def _read_operation_log(op: Operation) -> str:
+    if not op.log_file_path:
+        return ""
+    try:
+        with open(op.log_file_path, "r", encoding="utf-8", errors="replace") as fh:
+            return fh.read()
+    except OSError:
+        return ""
 
 
 def _script_execution_display_name(execution: ScriptExecution) -> str:
@@ -309,11 +375,133 @@ def _text_download_response(log_text: str, *, filename: str) -> FileResponse:
         raise e
 
 
+_LEGACY_CATEGORY_BY_TYPE = {
+    "package": "system",
+    "script_execution": "system",
+}
+
+
+def _legacy_category(item_type: str) -> str:
+    if item_type in op_vocab.KINDS:
+        return op_vocab.category_for(item_type)
+    if item_type in RCLONE_ACTIVITY_OPERATIONS:
+        return "mirror"
+    return _LEGACY_CATEGORY_BY_TYPE.get(item_type, "system")
+
+
+def _legacy_trigger(item: dict) -> str:
+    if item.get("backup_plan_run_id"):
+        return "plan"
+    return "schedule" if item.get("triggered_by") == "schedule" else "manual"
+
+
+def _operation_activity_items(
+    db: Session,
+    *,
+    current_user: User,
+    limit: int,
+    job_type: Optional[str],
+    status: Optional[str],
+    category: Optional[List[str]],
+    trigger: Optional[List[str]],
+    collapse_runs: bool,
+    log_save_policy: str,
+) -> List[dict]:
+    """Read operations rows for the Activity union (spec 9.3).
+
+    Index-category rows are hidden unless the category filter names them.
+    With collapse_runs, follow-ups ride under their top-level parent and are
+    shown whenever the parent is; without it every row is top level.
+    """
+    from app.api.operations import (
+        accessible_repository_ids,
+        _scope_to_accessible_repos,
+    )
+
+    q = _scope_to_accessible_repos(
+        db.query(Operation), accessible_repository_ids(db, current_user)
+    )
+    if job_type:
+        if job_type not in op_vocab.KINDS:
+            return []
+        q = q.filter(Operation.kind == job_type)
+    if status:
+        wanted = {status, op_vocab.LEGACY_STATUS_MAP.get(status, status)}
+        q = q.filter(Operation.status.in_(tuple(wanted)))
+    ops = q.order_by(Operation.id.desc()).limit(limit * 4).all()
+    if not ops:
+        return []
+    repo_ids = {op.repository_id for op in ops if op.repository_id is not None}
+    repos = (
+        {
+            r.id: r
+            for r in db.query(Repository).filter(Repository.id.in_(repo_ids)).all()
+        }
+        if repo_ids
+        else {}
+    )
+    by_id: dict[int, dict] = {}
+    for op in ops:
+        repo = repos.get(op.repository_id) if op.repository_id is not None else None
+        item = serialize_operation(
+            op,
+            repository_name=repo.name if repo else None,
+            repository_path=repo.path if repo else None,
+            has_logs=job_has_logs_by_policy(
+                op,
+                log_save_policy,
+                output_text=[op.error_message],
+                file_path=op.log_file_path,
+            ),
+        )
+        item["_sort_at"] = op.started_at or op.created_at
+        item["_depends_on_id"] = op.depends_on_id
+        item["_trigger"] = op.trigger
+        by_id[op.id] = item
+
+    def _visible(item: dict) -> bool:
+        if category:
+            if item["category"] not in category:
+                return False
+        elif item["category"] == "index":
+            return False
+        if trigger and item["trigger"] not in trigger:
+            return False
+        return True
+
+    top_level: List[dict] = []
+    if collapse_runs:
+        top_ids: set[int] = set()
+        for item in by_id.values():
+            if item["_trigger"] != "followup" and _visible(item):
+                top_level.append(item)
+                top_ids.add(item["id"])
+        for item in sorted(by_id.values(), key=lambda i: i["id"]):
+            if item["_trigger"] != "followup":
+                continue
+            parent_id = item["_depends_on_id"]
+            while parent_id in by_id and by_id[parent_id]["_trigger"] == "followup":
+                parent_id = by_id[parent_id]["_depends_on_id"]
+            if parent_id in top_ids:
+                by_id[parent_id]["followups"].append(item)
+    else:
+        top_level = [item for item in by_id.values() if _visible(item)]
+    for item in by_id.values():
+        item.pop("_depends_on_id", None)
+        item.pop("_trigger", None)
+        for followup in item["followups"]:
+            followup.pop("_sort_at", None)
+    return top_level
+
+
 @router.get("/recent", response_model=List[ActivityItem])
 async def list_recent_activity(
     limit: int = 200,
     job_type: Optional[str] = None,  # Filter by type: 'backup', 'restore', etc.
     status: Optional[str] = None,  # Filter by status: 'running', 'completed', 'failed'
+    category: Optional[List[str]] = Query(default=None),
+    trigger: Optional[List[str]] = Query(default=None),
+    collapse_runs: bool = True,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -843,6 +1031,30 @@ async def list_recent_activity(
                 }
             )
 
+    # Derive the operations axes for legacy rows so the new filters apply to
+    # both worlds, then union in operations rows (spec 9.3).
+    for activity in activities:
+        activity.setdefault("category", _legacy_category(activity["type"]))
+        activity.setdefault("trigger", _legacy_trigger(activity))
+        activity.setdefault("followups", [])
+    if category:
+        activities = [a for a in activities if a["category"] in category]
+    if trigger:
+        activities = [a for a in activities if a["trigger"] in trigger]
+    activities.extend(
+        _operation_activity_items(
+            db,
+            current_user=current_user,
+            limit=limit,
+            job_type=job_type,
+            status=status,
+            category=category,
+            trigger=trigger,
+            collapse_runs=collapse_runs,
+            log_save_policy=log_save_policy,
+        )
+    )
+
     # Sort by start time, falling back to creation time for pending jobs.
     activities.sort(
         key=lambda x: x.get("_sort_at") or x["started_at"] or datetime.min,
@@ -884,6 +1096,15 @@ async def get_job_logs(
         "package": PackageInstallJob,
         "script_execution": ScriptExecution,
     }
+
+    if _is_operation_only_kind(job_type, job_models):
+        op = _get_operation_or_404(db, job_type, job_id, current_user)
+        policy = get_log_save_policy(db)
+        if not job_has_logs_by_policy(
+            op, policy, output_text=[op.error_message], file_path=op.log_file_path
+        ):
+            raise _no_logs_available_exception()
+        return _paginate_log_text(_read_operation_log(op), offset, limit)
 
     if job_type == "script_execution":
         execution = (
@@ -1202,6 +1423,29 @@ async def download_job_logs(
         "script_execution": ScriptExecution,
     }
 
+    if _is_operation_only_kind(job_type, job_models):
+        op = _get_operation_or_404(db, job_type, job_id, current_user)
+        # Same policy gate as the paginated route above, so a download cannot
+        # serve logs the log view reports as absent.
+        if not job_has_logs_by_policy(
+            op,
+            get_log_save_policy(db),
+            output_text=[op.error_message],
+            file_path=op.log_file_path,
+        ):
+            raise _no_logs_available_exception()
+        if (
+            op.status == "running"
+            or not op.log_file_path
+            or not os.path.exists(op.log_file_path)
+        ):
+            raise _no_logs_available_exception()
+        return FileResponse(
+            op.log_file_path,
+            media_type="text/plain",
+            filename=f"operation_{op.id}.log",
+        )
+
     if job_type == "script_execution":
         execution = (
             db.query(ScriptExecution).filter(ScriptExecution.id == job_id).first()
@@ -1385,6 +1629,35 @@ async def delete_job(
         "package": PackageInstallJob,
         "script_execution": ScriptExecution,
     }
+
+    if _is_operation_only_kind(job_type, job_models):
+        op = _get_operation_or_404(db, job_type, job_id, current_user)
+        if op.status == "running":
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.activity.cannotDeleteRunningJob"},
+            )
+        if op.log_file_path and os.path.exists(op.log_file_path):
+            try:
+                os.remove(op.log_file_path)
+            except Exception as e:
+                logger.warning(
+                    f"Failed to delete log file for operation {job_id}",
+                    path=op.log_file_path,
+                    error=str(e),
+                )
+        db.delete(op)
+        db.commit()
+        logger.info(
+            f"Deleted {job_type} operation {job_id} by admin user",
+            admin_user=current_user.username,
+        )
+        return {
+            "success": True,
+            "message": "backend.success.activity.jobDeleted",
+            "job_id": job_id,
+            "job_type": job_type,
+        }
 
     if job_type in RCLONE_ACTIVITY_OPERATIONS:
         job = _get_rclone_job(db, job_type, job_id)

@@ -22,7 +22,6 @@ from app.services.mqtt_sync_scheduler import (
     periodic_mqtt_sync,
     start_mqtt_sync_scheduler,
 )
-from app.services.stats_refresh_scheduler import StatsRefreshScheduler
 from app.services.schedule_availability import AvailabilityDecision
 from app.api import schedule as schedule_api
 from app.api.schedule import check_scheduled_jobs, dispatch_due_scheduled_backups
@@ -812,76 +811,6 @@ async def test_check_scheduler_cleans_stale_running_checks_before_capacity_check
     assert stale_job.status == "failed"
     assert stale_job.completed_at is not None
     assert mock_start.call_count == 1
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_stats_refresh_scheduler_updates_repositories_and_settings(db_session):
-    repo1 = Repository(
-        name="Repo 1",
-        path="/tmp/repo1",
-        encryption="none",
-        compression="lz4",
-        repository_type="local",
-    )
-    repo2 = Repository(
-        name="Repo 2",
-        path="/tmp/repo2",
-        encryption="none",
-        compression="lz4",
-        repository_type="local",
-    )
-    settings = SystemSettings()
-    db_session.add_all([repo1, repo2, settings])
-    db_session.commit()
-
-    scheduler = StatsRefreshScheduler()
-    update_results = [True, False]
-    sync_state_with_db = MagicMock()
-    testing_session_local = sessionmaker(
-        bind=db_session.get_bind(), autocommit=False, autoflush=False
-    )
-
-    class FakeRouter:
-        def __init__(self, repo):
-            self.repo = repo
-
-        async def update_stats(self, db):
-            return update_results.pop(0)
-
-    with patch(
-        "app.services.stats_refresh_scheduler.SessionLocal", testing_session_local
-    ):
-        with patch(
-            "app.services.stats_refresh_scheduler.BorgRouter", side_effect=FakeRouter
-        ):
-            with patch(
-                "app.services.mqtt_service.mqtt_service.sync_state_with_db",
-                sync_state_with_db,
-            ):
-                await scheduler.refresh_all_repository_stats()
-
-    verification_session = testing_session_local()
-    settings = verification_session.query(SystemSettings).first()
-    assert settings.last_stats_refresh is not None
-    sync_state_with_db.assert_called_once()
-    verification_session.close()
-
-
-@pytest.mark.unit
-def test_stats_refresh_scheduler_reads_interval_from_settings(db_session):
-    db_session.add(SystemSettings(stats_refresh_interval_minutes=15))
-    db_session.commit()
-
-    scheduler = StatsRefreshScheduler()
-    testing_session_local = sessionmaker(
-        bind=db_session.get_bind(), autocommit=False, autoflush=False
-    )
-
-    with patch(
-        "app.services.stats_refresh_scheduler.SessionLocal", testing_session_local
-    ):
-        assert scheduler._get_refresh_interval_minutes() == 15
 
 
 @pytest.mark.unit

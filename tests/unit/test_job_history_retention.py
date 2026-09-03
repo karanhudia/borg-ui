@@ -488,3 +488,70 @@ def test_sweep_cascades_from_late_arriving_prune_logs(db, tmp_path):
     assert "Pruning archive" in db.get(PruneJob, prune_row_id).logs
     # Idempotent: a second sweep finds nothing left to do.
     assert sweep_pruned_archive_records(db) == 0
+
+
+@pytest.mark.unit
+def test_operations_rows_fall_with_cleanup_retention(db):
+    from app.database.models import Operation
+    from app.services.operations.enqueue import enqueue
+
+    settings = _settings(db)
+    repo = Repository(name="ops", path="/tmp/ops", encryption="none", compression="lz4")
+    db.add(repo)
+    db.commit()
+    old = enqueue(db, "stats", repository_id=repo.id)
+    old.status = "completed"
+    old.created_at = utc_now() - timedelta(days=200)
+    old.completed_at = utc_now() - timedelta(days=200)
+    fresh = enqueue(db, "stats", repository_id=repo.id)
+    fresh.status = "completed"
+    fresh.completed_at = utc_now()
+    db.commit()
+    old_id, fresh_id = old.id, fresh.id
+    run_retention(db, settings)
+    ids = {o.id for o in db.query(Operation)}
+    assert fresh_id in ids and old_id not in ids
+
+
+@pytest.mark.unit
+def test_operation_log_files_follow_both_retention_windows(db, tmp_path):
+    """Operations log to files, not to an inline column, so the row sweep and
+    the log sweep must both reach the files or they outlive everything."""
+    from app.database.models import Operation
+    from app.services.operations.enqueue import enqueue
+
+    settings = _settings(db)
+    repo = Repository(
+        name="ops-logs", path="/tmp/ops-logs", encryption="none", compression="lz4"
+    )
+    db.add(repo)
+    db.commit()
+
+    def _op(age_days):
+        op = enqueue(db, "stats", repository_id=repo.id)
+        op.status = "completed"
+        op.completed_at = utc_now() - timedelta(days=age_days)
+        path = tmp_path / f"operation_{op.id}.log"
+        path.write_text("borg output")
+        op.log_file_path = str(path)
+        db.commit()
+        return op, path
+
+    purged_row, purged_log = _op(200)
+    aged_log_op, aged_log = _op(60)
+    fresh_op, fresh_log = _op(0)
+    purged_row_id, aged_id, fresh_id = purged_row.id, aged_log_op.id, fresh_op.id
+
+    run_retention(db, settings)
+    db.expunge_all()
+
+    # Row past cleanup_retention_days: row and file both gone.
+    assert db.get(Operation, purged_row_id) is None
+    assert not purged_log.exists()
+    # Row past log_retention_days only: file gone, row and its history kept.
+    assert db.get(Operation, aged_id) is not None
+    assert db.get(Operation, aged_id).log_file_path is None
+    assert not aged_log.exists()
+    # Fresh row: untouched.
+    assert db.get(Operation, fresh_id).log_file_path == str(fresh_log)
+    assert fresh_log.exists()

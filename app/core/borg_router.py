@@ -730,12 +730,14 @@ class BorgRouter:
                 job_id, self.repo.id, archive_name
             )
 
-    async def list_archives(self, env: dict = None) -> list:
-        """Return the list of archives for this repository.
+    async def list_archives_checked(self, env: dict = None) -> tuple:
+        """Return (ok, archives) for this repository.
 
-        Used as a version-aware guard before repository deletion.
-        v2: calls borg2 list and parses the JSON archives array.
-        v1: calls borg list and returns the archives list.
+        `ok` is False when borg itself failed - a held lock, a wrong
+        passphrase, an unreachable remote. Callers that write derived state
+        must not treat that as "the repository has no archives": see
+        `list_archives`, which collapses both cases into an empty list and is
+        only safe for callers that just need a best-effort listing.
         """
         import json
 
@@ -764,8 +766,8 @@ class BorgRouter:
                 env=env,
             )
             if not result["success"]:
-                return []
-            return _parse_archives_payload(result.get("stdout", "{}"))
+                return False, []
+            return True, _parse_archives_payload(result.get("stdout", "{}"))
         else:
             from app.core.borg import borg
 
@@ -777,8 +779,18 @@ class BorgRouter:
                 env=env,
             )
             if not result["success"]:
-                return []
-            return _parse_archives_payload(result.get("stdout", ""))
+                return False, []
+            return True, _parse_archives_payload(result.get("stdout", ""))
+
+    async def list_archives(self, env: dict = None) -> list:
+        """Return the list of archives for this repository, [] on failure.
+
+        Used as a version-aware guard before repository deletion.
+        v2: calls borg2 list and parses the JSON archives array.
+        v1: calls borg list and returns the archives list.
+        """
+        _ok, archives = await self.list_archives_checked(env=env)
+        return archives
 
     async def verify_repository(
         self, ssh_key_id: int = None, timeout: int = 60

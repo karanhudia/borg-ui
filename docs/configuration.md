@@ -152,6 +152,16 @@ Priority for UI-managed timeout settings:
 2. environment variable
 3. built-in default
 
+## Operations Index
+
+| Variable | Default | Used for |
+| --- | --- | --- |
+| `INDEX_ARCHIVE_INFO_PER_RUN` | `20` | Per-archive `borg info` calls one archive listing run may make for newly seen archives; the rest are picked up by later runs |
+
+The reconcile interval (`stats_refresh_interval_minutes`) and the
+`index_workers` and `background_paused` runner controls are system settings
+managed in the UI and through `/api/operations`, not environment variables.
+
 ## Archive Browsing Limits
 
 Admins can change archive browsing safety limits in
