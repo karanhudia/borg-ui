@@ -31,7 +31,7 @@ from sqlalchemy import MetaData, create_engine, event, inspect, text
 from sqlalchemy.engine import Engine, make_url
 
 from app.config import settings
-from app.database.database import Base
+from app.database.database import Base, register_utc_session_timezone
 import app.database.models  # noqa: F401  (registers every table on Base)
 
 BACKUP_SUFFIX = "_bak"
@@ -145,6 +145,10 @@ def _engine(url: str, *, disposable: bool = False) -> Engine:
                 cur.execute("PRAGMA synchronous=OFF")
             cur.close()
 
+    # Migrations and the transfer write under the same naive-UTC convention
+    # as the application; alembic reuses this engine's connection, so the
+    # session-zone pin has to be here too (no-op on sqlite).
+    register_utc_session_timezone(engine)
     return engine
 
 
