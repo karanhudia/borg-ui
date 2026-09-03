@@ -233,6 +233,22 @@ async def test_cancel_queued_and_running(db, repo, runner, registry):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_cancel_refused_for_running_rows_this_process_does_not_own(
+    db, repo, runner
+):
+    """Rows left running by another worker, or kept by recovery because their
+    process is still alive, have no task here to observe the flag."""
+    orphan = enqueue(db, "stats", repository_id=repo.id)
+    orphan.status = "running"
+    db.commit()
+    assert await runner.request_cancel(orphan.id) is False
+    assert orphan.id not in runner.cancel_requested
+    db.expire_all()
+    assert db.get(Operation, orphan.id).status == "running"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_progress_and_log(db, repo, runner, registry, tmp_path):
     async def work(ctx):
         ctx.log("hello")

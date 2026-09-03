@@ -127,11 +127,33 @@ def apply_listing(
 # -- Borg access ------------------------------------------------------------------
 
 
+def _agent_listing_ok(result) -> bool:
+    """True when the agent's list job actually ran borg successfully.
+
+    A completed job can still carry a non-zero borg exit with no stdout,
+    which parses to an empty list. Treating that as "no archives" wipes the
+    stored count, so trust the listing (including a legitimately empty
+    repository) only when nothing reports a failure. Mirrors the guard in
+    `_update_agent_repository_stats`; the result shape uses either key.
+    """
+    if not result:
+        # No result at all: the job never came back (timeout, agent gone).
+        return False
+    return (
+        result.get("return_code", 0) == 0 and result.get("success", True) is not False
+    )
+
+
 async def list_archives_for_repository(
     db: Session, repository: Repository, env: dict
-) -> tuple[list[dict], Optional[str]]:
-    """Return (entries, timezone_name): the listing and the zone Borg
-    rendered its naive timestamps in."""
+) -> tuple[bool, list[dict], Optional[str]]:
+    """Return (ok, entries, timezone_name): whether the listing succeeded, the
+    listing itself, and the zone Borg rendered its naive timestamps in.
+
+    `ok` is False when Borg or the agent failed. Callers must not write
+    derived state from a failed listing: an empty list means "borg told us
+    nothing", which is indistinguishable from an empty repository.
+    """
     if is_agent_executor(repository):
         from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
         from app.services.repository_executor import (
@@ -147,16 +169,20 @@ async def list_archives_for_repository(
         result = await wait_for_agent_repository_operation_job(
             db, job.id, timeout_seconds=timeouts["list_timeout"]
         )
-        return _agent_result_archives(result), agent_timezone_for_repository(
-            db, repository
+        return (
+            _agent_listing_ok(result),
+            _agent_result_archives(result),
+            agent_timezone_for_repository(db, repository),
         )
 
     router = BorgRouter(repository)
     stats_env = _repository_stats_borg_env(env)
-    entries = await run_serialized_repository_command(
-        repository.id, lambda: router.list_archives(env=stats_env), scope="metadata"
+    ok, entries = await run_serialized_repository_command(
+        repository.id,
+        lambda: router.list_archives_checked(env=stats_env),
+        scope="metadata",
     )
-    return entries, "UTC"
+    return ok, entries, "UTC"
 
 
 def _info_stats(payload: str) -> Optional[dict]:
@@ -179,6 +205,29 @@ def _info_stats(payload: str) -> Optional[dict]:
     }
 
 
+def archives_needing_info(
+    db: Session, repository: Repository, *, limit: int
+) -> list[Archive]:
+    """Archives still missing their `borg info` stats, oldest first.
+
+    Not just the rows this run created: a repository imported with more
+    archives than `INDEX_ARCHIVE_INFO_PER_RUN` fills the oldest few now and
+    the rest on later runs, which is what the per-run cap is for (spec 6.4).
+    """
+    if limit <= 0:
+        return []
+    return (
+        db.query(Archive)
+        .filter(
+            Archive.repository_id == repository.id,
+            Archive.original_size.is_(None),
+        )
+        .order_by(Archive.start.asc())
+        .limit(limit)
+        .all()
+    )
+
+
 async def fill_archive_info(
     db: Session,
     repository: Repository,
@@ -199,24 +248,32 @@ async def fill_archive_info(
             if (repository.borg_version or 1) == 2:
                 from app.core.borg2 import borg2
 
-                result = await borg2.info_archive(
-                    repository.path,
-                    f"aid:{archive.borg_id}",
-                    passphrase=repository.passphrase,
-                    remote_path=remote_path,
-                    bypass_lock=repository.bypass_lock,
-                    env=info_env,
+                result = await run_serialized_repository_command(
+                    repository.id,
+                    lambda archive=archive: borg2.info_archive(
+                        repository.path,
+                        f"aid:{archive.borg_id}",
+                        passphrase=repository.passphrase,
+                        remote_path=remote_path,
+                        bypass_lock=repository.bypass_lock,
+                        env=info_env,
+                    ),
+                    scope="metadata",
                 )
             else:
                 from app.core.borg import borg
 
-                result = await borg.info_archive(
-                    repository.path,
-                    archive.name,
-                    passphrase=repository.passphrase,
-                    remote_path=remote_path,
-                    bypass_lock=repository.bypass_lock,
-                    env=info_env,
+                result = await run_serialized_repository_command(
+                    repository.id,
+                    lambda archive=archive: borg.info_archive(
+                        repository.path,
+                        archive.name,
+                        passphrase=repository.passphrase,
+                        remote_path=remote_path,
+                        bypass_lock=repository.bypass_lock,
+                        env=info_env,
+                    ),
+                    scope="metadata",
                 )
         except Exception as exc:
             logger.warning("archive info failed", archive=archive.name, error=str(exc))
@@ -269,11 +326,22 @@ async def run_stats(ctx) -> Outcome:
     repository = _load_repository(ctx)
     if repository is None:
         return Outcome(status="skipped", skip_reason="repository_missing")
-    if is_agent_executor(repository):
-        return Outcome(
-            result={"unique_csize": None, "reason": "agent_size_unsupported"}
-        )
     db = ctx.db
+    if is_agent_executor(repository):
+        # The agent measures its own repository (repo-info for Borg 1,
+        # disk_usage for Borg 2) and also refreshes encryption. The retired
+        # stats refresh loop called this for every repository; without it
+        # agent repositories would never refresh size in the background.
+        from app.api.repositories import _update_agent_repository_stats
+
+        updated = await _update_agent_repository_stats(repository, db)
+        if not updated:
+            return Outcome(
+                status="failed", error_message="agent repository stats refresh failed"
+            )
+        _publish_mqtt_state(db, "operations stats")
+        ctx.log(f"agent repository size {repository.total_size}")
+        return Outcome(result={"total_size": repository.total_size, "source": "agent"})
     env, temp_key_file = _prepare_repository_borg_env(repository, db)
     try:
         system_settings = db.query(SystemSettings).first()
@@ -313,12 +381,26 @@ async def run_archive_sync(ctx) -> Outcome:
     db = ctx.db
     env, temp_key_file = _prepare_repository_borg_env(repository, db)
     try:
-        entries, timezone_name = await list_archives_for_repository(db, repository, env)
+        ok, entries, timezone_name = await list_archives_for_repository(
+            db, repository, env
+        )
+        if not ok:
+            # An empty list from a failed borg call is not an empty
+            # repository. Writing it would zero archive_count, clear
+            # last_backup, and report every archive as removed - which
+            # history_merge would then act on.
+            return Outcome(status="failed", error_message="listing archives failed")
         new_rows, removed_ids = apply_listing(
             db, repository, entries, timezone_name=timezone_name
         )
         filled = await fill_archive_info(
-            db, repository, new_rows, env, limit=settings.index_archive_info_per_run
+            db,
+            repository,
+            archives_needing_info(
+                db, repository, limit=settings.index_archive_info_per_run
+            ),
+            env,
+            limit=settings.index_archive_info_per_run,
         )
         removed_id_set = set(removed_ids)
         rows = [

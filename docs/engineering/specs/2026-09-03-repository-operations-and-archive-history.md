@@ -1063,7 +1063,7 @@ Agents update this table and nothing else as work advances. Statuses:
 
 | Phase | Status | Plan file | Branch | Notes |
 | --- | --- | --- | --- | --- |
-| 1 Foundation | in review | `docs/engineering/plans/2026-09-03-operations-phase-1-foundation.md` | `feat/operations-phase-1` | Implemented on Fable 5.1 on 2026-09-03; verification passed (2822 passed; the 14 failures are the pre-existing OIDC tests that also fail on main when .env is present); awaiting G2 commit answer; index executors keep the retired scheduler's MQTT state publish; plan step 15.5 live check not run |
+| 1 Foundation | in progress | `docs/engineering/plans/2026-09-03-operations-phase-1-foundation.md` | `feat/operations-phase-1` | Implemented on Fable 5.1 on 2026-09-03; reviewed on Opus 5 at G3 against 6.1, 6.3, 6.4, 7, 8.1, 8.2, 9.1, 9.3, 9.4 and Appendix B; owner chose apply-fixes on Opus 5 rather than switching to the phase's implement model (Fable 5.1); fixing review findings 1-8 (failed listing wipes stats, agent stats refresh gap, operation log files never purged, activity log download skips the visibility policy, archive info never backfills, per-archive info bypasses the metadata lock, runner woken before commit, cancel bookkeeping); findings 9 (deleting a queued mid-chain operation frees its dependents) and 10 (collapse_runs nesting on /api/operations) deferred to the phases that own them; index executors keep the retired scheduler's MQTT state publish; plan step 15.5 live check not run |
 | 2 History | not started | | | |
 | 3 Background work tab | not started | | | May run in parallel with 2 once 2's plan is approved |
 | 4 Archive experience | not started | | | May run in parallel with 2 once 2's plan is approved |

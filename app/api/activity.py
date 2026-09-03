@@ -1425,6 +1425,15 @@ async def download_job_logs(
 
     if _is_operation_only_kind(job_type, job_models):
         op = _get_operation_or_404(db, job_type, job_id, current_user)
+        # Same policy gate as the paginated route above, so a download cannot
+        # serve logs the log view reports as absent.
+        if not job_has_logs_by_policy(
+            op,
+            get_log_save_policy(db),
+            output_text=[op.error_message],
+            file_path=op.log_file_path,
+        ):
+            raise _no_logs_available_exception()
         if (
             op.status == "running"
             or not op.log_file_path

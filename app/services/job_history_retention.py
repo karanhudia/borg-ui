@@ -191,9 +191,43 @@ def clear_inline_job_logs(db: Session, make_filters) -> int:
     return total
 
 
+def purge_operation_log_files(db: Session, filters) -> int:
+    """Unlink the log files of matching operations and forget their paths.
+
+    Operations write their logs to files, not to an inline column, so the
+    inline-column sweep above cannot reach them. Without this the files
+    outlive both retention windows and the rows that named them.
+    """
+    total = 0
+    while True:
+        rows = (
+            db.query(Operation.id, Operation.log_file_path)
+            .filter(*filters, Operation.log_file_path.isnot(None))
+            .limit(CHUNK_SIZE)
+            .all()
+        )
+        if not rows:
+            return total
+        ids = [row[0] for row in rows]
+        db.query(Operation).filter(Operation.id.in_(ids)).update(
+            {"log_file_path": None}, synchronize_session=False
+        )
+        db.commit()
+        # Unlinked only once the column is cleared, so a failed commit never
+        # leaves a surviving row pointing at a vanished file.
+        for _id, path in rows:
+            try:
+                Path(path).unlink(missing_ok=True)
+            except OSError:
+                pass
+        total += len(rows)
+
+
 def purge_job_rows(db: Session, cutoff) -> int:
     """Delete finished job rows older than cutoff (all job tables)."""
     total = 0
+    # The rows are about to go; their log files must go with them.
+    purge_operation_log_files(db, _older_than(Operation, cutoff))
     for model, _ in _JOB_TABLES:
         total += _delete_chunked(db, model, _older_than(model, cutoff))
     # Retry lineage rows carry only SET NULL pointers at their jobs; once the
@@ -392,6 +426,9 @@ def run_retention(db: Session, settings: Optional[SystemSettings] = None) -> Dic
         "inline_logs_cleared": clear_inline_job_logs(
             db, lambda model: _older_than(model, log_cutoff)
         ),
+        "operation_log_files_deleted": purge_operation_log_files(
+            db, _older_than(Operation, log_cutoff)
+        ),
         # The log save policy applies to the database exactly as it does to
         # the log files: content the policy does not want is dropped at the
         # next pass, no matter how young.
@@ -402,6 +439,11 @@ def run_retention(db: Session, settings: Optional[SystemSettings] = None) -> Dic
         ),
         "policy_inline_logs_cleared": (
             clear_inline_job_logs(db, lambda model: (model.status.in_(discarded),))
+            if discarded
+            else 0
+        ),
+        "policy_operation_log_files_deleted": (
+            purge_operation_log_files(db, (Operation.status.in_(discarded),))
             if discarded
             else 0
         ),

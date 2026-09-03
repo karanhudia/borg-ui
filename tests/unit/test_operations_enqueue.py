@@ -84,5 +84,26 @@ def test_enqueue_wakes_runner(db, repo, monkeypatch):
 
 
 @pytest.mark.unit
+def test_enqueue_defers_the_wake_until_the_row_is_committed(db, repo, monkeypatch):
+    """A wake before the commit sends the runner to look in its own session,
+    where the row does not exist yet; it then sleeps a full poll interval."""
+    calls = []
+    monkeypatch.setattr(
+        "app.services.operations.enqueue.wake_runner", lambda: calls.append(1)
+    )
+    enqueue(db, "stats", repository_id=repo.id, commit=False)
+    assert calls == []
+    db.commit()
+
+    calls.clear()
+    chain = enqueue_chain(
+        db, ["stats", "archive_sync"], repository_id=repo.id, trigger="followup"
+    )
+    assert len(chain) == 2
+    # One wake for the chain, after its commit - not one per row before it.
+    assert calls == [1]
+
+
+@pytest.mark.unit
 def test_new_run_id_is_unique():
     assert new_run_id() != new_run_id()

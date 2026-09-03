@@ -171,6 +171,11 @@ Rules:
 - On startup, running index operations are requeued; other running
   operations are marked failed unless their recorded process is still
   alive.
+- Operations write their logs to files under `data/logs/`. Retention deletes
+  those files at `log_retention_days` and again with the row itself at
+  `cleanup_retention_days`.
+- A failed listing is never written as derived state: if borg or the agent
+  fails, `archive_sync` fails rather than recording the repository as empty.
 - Cancelling a running operation is cooperative: the executor observes the
   request through `ctx.cancelled()` and stops at its next check. Cancelling
   a queued operation is immediate.

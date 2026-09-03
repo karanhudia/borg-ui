@@ -319,6 +319,13 @@ class OperationRunner:
                 await broadcast_operation_updated(op, db)
                 return True
             if op.status == "running":
+                # Cooperative cancellation only reaches an executor this
+                # process is running. A row left running by another worker,
+                # or one recovery kept because its process is still alive,
+                # has no task here to observe the flag - say so instead of
+                # reporting a cancellation that will never happen.
+                if operation_id not in self.running_tasks:
+                    return False
                 self.cancel_requested.add(operation_id)
                 return True
             return False

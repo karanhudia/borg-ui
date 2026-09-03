@@ -206,6 +206,32 @@ class TestActivityUnion:
         assert r.status_code == 200
         assert b"b" in r.content
 
+    def test_download_honours_the_log_visibility_policy(
+        self, test_client, test_db, admin_headers, tmp_path
+    ):
+        """The download route must not serve what the logs route hides, or the
+        policy is only advisory."""
+        repo = _repo(test_db)
+        op = enqueue(test_db, "archive_sync", repository_id=repo.id)
+        log = tmp_path / "queued.log"
+        log.write_text("secret\n")
+        op.log_file_path = str(log)
+        op.status = "queued"
+        test_db.commit()
+        assert (
+            test_client.get(
+                f"/api/activity/archive_sync/{op.id}/logs", headers=admin_headers
+            ).status_code
+            == 404
+        )
+        assert (
+            test_client.get(
+                f"/api/activity/archive_sync/{op.id}/logs/download",
+                headers=admin_headers,
+            ).status_code
+            == 404
+        )
+
     def test_logs_unknown_operation_is_404(self, test_client, test_db, admin_headers):
         r = test_client.get(
             "/api/activity/archive_sync/999/logs", headers=admin_headers

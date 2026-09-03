@@ -73,7 +73,12 @@ def enqueue(
         repository_id=repository_id,
         trigger=trigger,
     )
-    wake_runner()
+    # Only nudge the runner once the row is committed. Waking on a flush
+    # sends the runner to look in its own session, where an uncommitted row
+    # does not exist; it would clear the event and sleep a full poll
+    # interval. Callers passing commit=False wake after their own commit.
+    if commit:
+        wake_runner()
     return op
 
 
@@ -115,6 +120,7 @@ def enqueue_chain(
         db.commit()
         for op in created:
             db.refresh(op)
+        wake_runner()
     return created
 
 
@@ -161,4 +167,5 @@ def record_import_connect(
         )
     db.commit()
     db.refresh(op)
+    wake_runner()
     return op
