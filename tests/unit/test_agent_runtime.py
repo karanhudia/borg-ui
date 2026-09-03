@@ -800,6 +800,230 @@ def test_session_hello_stops_reporting_a_job_once_its_handler_finished(
 
 
 @pytest.mark.unit
+def test_session_loop_registers_cancel_before_worker_thread_starts(monkeypatch):
+    """The startup race this fix closes: _handle_command used to register the
+    cancel event deep in its own body -- after enqueueing the command_ack and
+    after every early-return command check -- so a session that dropped
+    between worker.start() and that point left the worker with no entry in
+    _cancel_events. The disconnect branch in run_session only iterates
+    *existing* _cancel_events entries -- it can't signal a worker that was
+    never registered -- and the next hello's running_job_ids omits it, so the
+    server (see ignore_age_for_undelivered in app/api/agents.py) requeues and
+    redispatches the job onto a fresh worker while the original keeps
+    executing it: double execution of a durable operation.
+
+    Assert the registration is a property of *dispatch itself*, not of
+    thread timing: block the worker at the very first thing _handle_command
+    does (the command_ack enqueue), well before it would reach its own
+    _register_cancel call, then check _cancel_events from the main thread
+    while the worker is still parked there. If registration only happened
+    inside _handle_command (the pre-fix shape), the id would still be
+    missing at this point -- this reproduces the actual gap, not just a
+    handler that hasn't started yet.
+    """
+    from agent.borg_ui_agent.session import AgentSessionRuntime, SessionCommandClient
+
+    worker_parked = threading.Event()
+    release_worker = threading.Event()
+    real_enqueue = SessionCommandClient.enqueue
+
+    def blocking_enqueue(self, payload):
+        # The command_ack enqueue is the first thing _handle_command does --
+        # parking here reproduces "worker thread exists but has not reached
+        # any registration call yet", the exact window the race lived in.
+        if payload.get("type") == "command_ack":
+            worker_parked.set()
+            release_worker.wait(timeout=5)
+        return real_enqueue(self, payload)
+
+    def fake_handler(job, client, *, should_cancel=None):
+        return SimpleNamespace(job_id=job["id"], status="completed", message="done")
+
+    monkeypatch.setattr(SessionCommandClient, "enqueue", blocking_enqueue)
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session.detect_platform",
+        lambda: {"hostname": "host.local", "os": "linux", "arch": "amd64"},
+    )
+    monkeypatch.setattr("agent.borg_ui_agent.session.detect_borg_binaries", lambda: [])
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session.get_job_handler",
+        lambda command: fake_handler if command == "backup.create" else None,
+    )
+
+    socket = FakeWebSocket(
+        [
+            {
+                "type": "command",
+                "command_id": "cmd-race",
+                "command": "backup.create",
+                "job_id": 99,
+                "payload": {},
+            }
+        ]
+    )
+    runtime = AgentSessionRuntime(
+        AgentConfig("https://borgui.example.com", "agt_123", "secret"),
+        connect=lambda *args, **kwargs: socket,
+        http_client=RecordingHttpClient(),
+    )
+
+    session_thread = threading.Thread(
+        target=runtime.run_session, kwargs={"max_messages": 1}
+    )
+    session_thread.start()
+    try:
+        # Wait for the worker to actually be running and parked at its first
+        # instruction, rather than sleeping a fixed duration.
+        assert worker_parked.wait(timeout=5)
+        # The job id must already be visible to hello / the disconnect path
+        # at this point -- registered by the session loop before the worker
+        # thread was even started, not by the worker once it got around to it.
+        assert runtime._running_job_ids() == [99]
+    finally:
+        release_worker.set()
+        session_thread.join(timeout=5)
+
+    # And it drops out again once the worker (and _handle_command's finally)
+    # has actually finished.
+    assert runtime._running_job_ids() == []
+
+
+@pytest.mark.unit
+def test_session_loop_does_not_register_non_job_commands(
+    patch_session_platform, monkeypatch
+):
+    """filesystem.browse, cancel, and a job_id: None message all return early
+    from _handle_command without ever calling _register_cancel. If the
+    session loop registered every incoming command up front (the naive fix),
+    these ids would sit in _cancel_events forever -- nothing unregisters
+    them -- and hello would report phantom running jobs permanently, which
+    would permanently defeat the requeue recovery this branch exists to
+    provide. That is worse than the race being fixed."""
+    from agent.borg_ui_agent.session import AgentSessionRuntime
+
+    socket = FakeWebSocket(
+        [
+            {
+                "type": "command",
+                "command_id": "cmd-browse",
+                "command": "filesystem.browse",
+                "job_id": 201,
+                "payload": {"path": "/"},
+            },
+            {
+                "type": "command",
+                "command_id": "cmd-cancel",
+                "command": "cancel",
+                "job_id": 202,
+                "payload": {"job_id": 202},
+            },
+            {
+                "type": "command",
+                "command_id": "cmd-none",
+                "command": "backup.create",
+                "job_id": None,
+                "payload": {},
+            },
+        ]
+    )
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session.browse_filesystem",
+        lambda path, include_hidden=False: {
+            "success": True,
+            "current_path": path,
+            "parent_path": "/",
+            "items": [],
+        },
+    )
+
+    runtime = AgentSessionRuntime(
+        AgentConfig("https://borgui.example.com", "agt_123", "secret"),
+        connect=lambda *args, **kwargs: socket,
+        http_client=RecordingHttpClient(),
+    )
+    runtime.run_session(max_messages=3)
+
+    assert runtime._cancel_events == {}
+    assert runtime._running_job_ids() == []
+
+
+@pytest.mark.unit
+def test_session_loop_does_not_register_unsupported_command(patch_session_platform):
+    """A command with no registered job handler also returns early from
+    _handle_command (the unsupported_command path) without registering --
+    the dispatch predicate the session loop uses must agree, or this id would
+    leak into _cancel_events with nothing to ever remove it."""
+    from agent.borg_ui_agent.session import AgentSessionRuntime
+
+    socket = FakeWebSocket(
+        [
+            {
+                "type": "command",
+                "command_id": "cmd-unknown",
+                "command": "totally.unknown",
+                "job_id": 303,
+                "payload": {},
+            },
+        ]
+    )
+    runtime = AgentSessionRuntime(
+        AgentConfig("https://borgui.example.com", "agt_123", "secret"),
+        connect=lambda *args, **kwargs: socket,
+        http_client=RecordingHttpClient(),
+    )
+    runtime.run_session(max_messages=1)
+
+    assert runtime._cancel_events == {}
+    assert runtime._running_job_ids() == []
+
+
+@pytest.mark.unit
+def test_session_loop_unregisters_after_job_command_completes(monkeypatch):
+    """After a normal job command dispatched through the real session loop
+    (register-before-start, not the direct _register_cancel call the other
+    hello tests use) finishes, its id must be gone from _cancel_events --
+    otherwise it would be reported by hello forever."""
+    from agent.borg_ui_agent.session import AgentSessionRuntime
+
+    def fake_handler(job, client, *, should_cancel=None):
+        return SimpleNamespace(job_id=job["id"], status="completed", message="done")
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session.detect_platform",
+        lambda: {"hostname": "host.local", "os": "linux", "arch": "amd64"},
+    )
+    monkeypatch.setattr("agent.borg_ui_agent.session.detect_borg_binaries", lambda: [])
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session.get_job_handler",
+        lambda command: fake_handler if command == "backup.create" else None,
+    )
+
+    socket = FakeWebSocket(
+        [
+            {
+                "type": "command",
+                "command_id": "cmd-done",
+                "command": "backup.create",
+                "job_id": 404,
+                "payload": {},
+            }
+        ]
+    )
+    runtime = AgentSessionRuntime(
+        AgentConfig("https://borgui.example.com", "agt_123", "secret"),
+        connect=lambda *args, **kwargs: socket,
+        http_client=RecordingHttpClient(),
+    )
+    # Clean exit (max_messages reached) joins in-flight workers before
+    # returning, so _handle_command's finally has already run by here.
+    runtime.run_session(max_messages=1)
+
+    assert runtime._cancel_events == {}
+    assert runtime._running_job_ids() == []
+
+
+@pytest.mark.unit
 def test_session_runtime_sends_app_heartbeat_while_idle(monkeypatch):
     from agent.borg_ui_agent.session import AgentSessionRuntime
 
