@@ -71,8 +71,7 @@ def test_disk_usage_is_an_observation():
     # holds no borg lock. It is not a plain read either: a read still has to
     # yield to a write, and there is nothing for this to yield to.
     assert (
-        operation_class_for(OPERATION_DISK_USAGE)
-        == OPERATION_CLASS_REPOSITORY_OBSERVE
+        operation_class_for(OPERATION_DISK_USAGE) == OPERATION_CLASS_REPOSITORY_OBSERVE
     )
 
 
