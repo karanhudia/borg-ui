@@ -18,8 +18,8 @@ ARG PYTHON_VERSION=3.12
 FROM python:${PYTHON_VERSION}-slim AS builder
 
 ARG BORG1_VERSION=1.4.5
-ARG BORG2_VERSION=2.0.0b22
-ARG BORGSTORE_VERSION=0.5.5
+ARG BORG2_VERSION=2.0.0b23
+ARG BORGSTORE_VERSION=0.6.1
 
 # Build-time only. OS packages track the base image's Debian release rather than
 # pinned versions (DL3008): upstream does not pin them either and a pin would
@@ -51,11 +51,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # are pulled via the explicit extras below. All are listed even though some
 # share deps (rclone+rest both only need requests), so it is obvious at a glance
 # that no scheme is missing. NB: posixfs is NOT a pip extra — it is always
-# available — so it must not appear in the brackets.
+# available — so it must not appear in the brackets. blake3 is not a backend
+# but Borg 2.0.0b23's id-hash dependency, required by its pyproject.
 # hadolint ignore=DL3013,DL3059
 RUN pip install --no-cache-dir pyfuse3 "borgbackup==${BORG1_VERSION}" && \
     python3 -m venv /opt/borg2-venv && \
-    /opt/borg2-venv/bin/pip install --no-cache-dir pyfuse3 "borgbackup==${BORG2_VERSION}" "borgstore[rclone,sftp,rest,s3]==${BORGSTORE_VERSION}"
+    /opt/borg2-venv/bin/pip install --no-cache-dir pyfuse3 "borgbackup==${BORG2_VERSION}" "borgstore[rclone,sftp,rest,s3,blake3]==${BORGSTORE_VERSION}"
 
 # rclone: fetch the official static binary from downloads.rclone.org rather than
 # the Debian package. The distro package lags upstream by years and ships as a
@@ -93,7 +94,7 @@ FROM python:${PYTHON_VERSION}-slim AS runtime-base
 
 ARG PYTHON_VERSION
 ARG BORG1_VERSION=1.4.5
-ARG BORG2_VERSION=2.0.0b22
+ARG BORG2_VERSION=2.0.0b23
 ENV BORG1_VERSION=${BORG1_VERSION}
 ENV BORG2_VERSION=${BORG2_VERSION}
 

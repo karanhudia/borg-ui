@@ -64,6 +64,11 @@ logger = structlog.get_logger()
 # always meant: `none` has no key at all, and `authenticated` keeps its key in
 # the repository. blake2 modes are not offered — b22 replaced BLAKE2b with
 # BLAKE3 for new repositories.
+#
+# b23 renamed the unencrypted modes: the id hash became part of the mode name
+# (`authenticated-sha256`/`-blake3`, `none-sha256`/`-blake3`), with no alias
+# for the plain b22 names. The combined names borg-ui stores stay stable; the
+# sha256 variants keep exactly what `authenticated`/`none` produced before.
 BORG2_ENCRYPTION_FLAGS: Dict[str, List[str]] = {
     "repokey-aes-ocb": ["--encryption", "aes256-ocb", "--key-location", "repokey"],
     "repokey-chacha20-poly1305": [
@@ -79,8 +84,8 @@ BORG2_ENCRYPTION_FLAGS: Dict[str, List[str]] = {
         "--key-location",
         "keyfile",
     ],
-    "authenticated": ["--encryption", "authenticated"],
-    "none": ["--encryption", "none"],
+    "authenticated": ["--encryption", "authenticated-sha256"],
+    "none": ["--encryption", "none-sha256"],
 }
 
 BORG2_ENCRYPTION_MODES = list(BORG2_ENCRYPTION_FLAGS)
@@ -185,6 +190,10 @@ class Borg2Interface:
         env = os.environ.copy()
         env["BORG_LOCK_WAIT"] = "20"
         env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
+        # Borg 2.0.0b23's pack cache — same defaults and override semantics as
+        # setup_borg_env (app/utils/borg_env.py), see the comment there.
+        env.setdefault("BORG_STORE_CACHE", "1")
+        env.setdefault("BORG_PACK_CACHE_SIZE", str(2 * 1024**3))
         env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
         env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
         ssh_opts = [
@@ -353,8 +362,14 @@ class Borg2Interface:
         ]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
-        env = {"BORG_PASSPHRASE": passphrase} if passphrase else {}
-        return await self._run(cmd, timeout=300, env=env or None)
+        # Repo creation must not touch the shared pack cache: with the cache
+        # enabled, Store.create() also creates the cache backend, which rejects
+        # an already-populated cache directory — and borg misreports that as
+        # "repository already exists".
+        env = {"BORG_STORE_CACHE": ""}
+        if passphrase:
+            env["BORG_PASSPHRASE"] = passphrase
+        return await self._run(cmd, timeout=300, env=env)
 
     async def rinfo(
         self,
@@ -414,8 +429,13 @@ class Borg2Interface:
         cmd = [self.borg_cmd, "-r", repository, "repo-delete", "--force"]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
-        env = {"BORG_PASSPHRASE": passphrase} if passphrase else {}
-        return await self._run(cmd, timeout=300, env=env or None)
+        # Repo deletion must not touch the shared pack cache: with the cache
+        # enabled, Store.destroy() removes the whole cache directory, evicting
+        # every other repository's cached packs.
+        env = {"BORG_STORE_CACHE": ""}
+        if passphrase:
+            env["BORG_PASSPHRASE"] = passphrase
+        return await self._run(cmd, timeout=300, env=env)
 
     # ── Archive listing & info ─────────────────────────────────────────────────
 

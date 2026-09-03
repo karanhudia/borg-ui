@@ -17,7 +17,8 @@ def test_borg2_venv_installs_all_backend_dependencies():
 
     # borgstore version is parameterized as a build ARG, consistent with the
     # borg1/borg2 pins, so CI can override it without editing the install line.
-    assert '"borgstore[rclone,sftp,rest,s3]==${BORGSTORE_VERSION}"' in content
+    # blake3 is not a backend but Borg 2.0.0b23's id-hash dependency.
+    assert '"borgstore[rclone,sftp,rest,s3,blake3]==${BORGSTORE_VERSION}"' in content
     assert re.search(r"^ARG BORGSTORE_VERSION=\S+", content, re.M)
 
 

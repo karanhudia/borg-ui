@@ -1,5 +1,9 @@
-from types import SimpleNamespace
+"""The server-side Borg environment builders share the pack-cache defaults."""
 
+import pytest
+from app.core.borg2 import borg2
+from app.utils.borg_env import setup_borg_env
+from types import SimpleNamespace
 from app.database.models import Repository, SSHConnection
 from app.utils.borg_env import effective_repository_remote_path
 from app.utils.ssh_utils import resolve_repository_ssh_connection
@@ -83,3 +87,35 @@ def test_legacy_ssh_repository_requires_an_unambiguous_connection(test_db):
     test_db.commit()
 
     assert resolve_repository_ssh_connection(repository, test_db) is None
+
+
+@pytest.mark.unit
+def test_setup_borg_env_enables_the_pack_cache_with_a_bounded_size(monkeypatch):
+    """Borg 2.0.0b23's pack cache downloads each pack once instead of
+    re-transferring it on every listing; borg puts it under its own cache
+    directory. An empty container-level BORG_STORE_CACHE disables it.
+    Borg 1 ignores both variables."""
+    monkeypatch.delenv("BORG_STORE_CACHE", raising=False)
+    monkeypatch.delenv("BORG_PACK_CACHE_SIZE", raising=False)
+
+    env = setup_borg_env()
+
+    assert env["BORG_STORE_CACHE"] == "1"
+    assert env["BORG_PACK_CACHE_SIZE"] == str(2 * 1024**3)
+
+    monkeypatch.setenv("BORG_STORE_CACHE", "")
+    monkeypatch.setenv("BORG_PACK_CACHE_SIZE", "1000000")
+    env = setup_borg_env()
+    assert env["BORG_STORE_CACHE"] == ""
+    assert env["BORG_PACK_CACHE_SIZE"] == "1000000"
+
+
+@pytest.mark.unit
+def test_borg2_base_env_carries_the_same_pack_cache_defaults(monkeypatch):
+    monkeypatch.delenv("BORG_STORE_CACHE", raising=False)
+    monkeypatch.delenv("BORG_PACK_CACHE_SIZE", raising=False)
+
+    env = borg2._base_env()
+
+    assert env["BORG_STORE_CACHE"] == "1"
+    assert env["BORG_PACK_CACHE_SIZE"] == str(2 * 1024**3)

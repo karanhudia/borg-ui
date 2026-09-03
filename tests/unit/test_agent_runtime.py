@@ -543,6 +543,56 @@ def test_repository_init_payload_builds_borg1_command():
 
 
 @pytest.mark.unit
+def test_repository_init_disables_the_store_cache(monkeypatch):
+    """repo-create must not create/validate the shared pack cache — borgstore
+    rejects a populated cache directory and borg misreports that as
+    "repository already exists"."""
+    monkeypatch.setenv("BORG_STORE_CACHE", "1")
+    captured = {}
+
+    class _FakePopen:
+        def __init__(self, cmd, **kwargs):
+            captured["env"] = kwargs.get("env")
+            self.returncode = 0
+            self.stdout = []
+
+        def wait(self):
+            return 0
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.repository_ops.subprocess.Popen", _FakePopen
+    )
+
+    class _Client:
+        def send_log(self, job_id, *, sequence, message, stream="stdout"):
+            pass
+
+        def send_progress(self, job_id, progress):
+            pass
+
+        def complete_job(self, job_id, *, result):
+            pass
+
+        def fail_job(self, job_id, *, error_message, return_code=None):
+            pass
+
+    job = {
+        "id": 7,
+        "payload": {
+            "schema_version": 1,
+            "job_kind": "repository.init",
+            "repository": {"path": "/agent/repo2", "borg_version": 2},
+            "operation": {"encryption": "repokey-aes-ocb"},
+        },
+    }
+
+    result = execute_repository_operation_job(job, _Client(), should_cancel=None)
+
+    assert result.status == "completed"
+    assert captured["env"]["BORG_STORE_CACHE"] == ""
+
+
+@pytest.mark.unit
 def test_repository_rinfo_payload_builds_borg2_command():
     payload = RepositoryOperationPayload.from_job_payload(
         {
@@ -2305,6 +2355,24 @@ def test_build_borg_env_overrides_win_but_container_setting_is_kept(monkeypatch)
     monkeypatch.setenv("BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK", "no")
     env = build_borg_env()
     assert env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] == "no"
+
+
+@pytest.mark.unit
+def test_build_borg_env_enables_the_pack_cache_with_a_bounded_size(monkeypatch):
+    """Borg 2.0.0b23's pack cache downloads each pack once instead of
+    re-transferring it on every listing; borg puts it under its own cache
+    directory. An empty container-level BORG_STORE_CACHE disables it."""
+    monkeypatch.delenv("BORG_STORE_CACHE", raising=False)
+    monkeypatch.delenv("BORG_PACK_CACHE_SIZE", raising=False)
+
+    env = build_borg_env()
+
+    assert env["BORG_STORE_CACHE"] == "1"
+    assert env["BORG_PACK_CACHE_SIZE"] == str(2 * 1024**3)
+
+    monkeypatch.setenv("BORG_STORE_CACHE", "")
+    env = build_borg_env()
+    assert env["BORG_STORE_CACHE"] == ""
 
 
 @pytest.mark.unit
