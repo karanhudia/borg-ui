@@ -2173,3 +2173,76 @@ class TestGetJobLogsPlaceholderOffset:
         assert data["lines"][0]["content"] == "Creating archive..."
         assert data["lines"][1]["content"] == "Files: 100 new, 0 changed"
         assert data["lines"][2]["content"] == "Duration: 2.34 seconds"
+
+
+@pytest.mark.unit
+class TestRecentActivityStatusFilter:
+    def test_status_filter_reaches_past_the_row_limit(
+        self, test_client, admin_headers, test_db
+    ):
+        """status=failed must return the newest FAILED jobs, not the failed
+        jobs among the newest rows: a failure buried under more than `limit`
+        newer successes has to stay findable."""
+        from app.database.models import BackupJob
+
+        base = datetime(2026, 9, 1, 12, 0, 0)
+        failed = BackupJob(
+            repository="/repo/buried",
+            status="failed",
+            error_message="borg create exited with code 2",
+            started_at=base,
+        )
+        test_db.add(failed)
+        test_db.add_all(
+            BackupJob(
+                repository="/repo/busy",
+                status="completed",
+                started_at=base + timedelta(minutes=i + 1),
+            )
+            for i in range(6)
+        )
+        test_db.commit()
+
+        response = test_client.get(
+            "/api/activity/recent?status=failed&limit=5", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        items = response.json()
+        assert [item["status"] for item in items] == ["failed"]
+        assert items[0]["error_message"] == "borg create exited with code 2"
+
+    def test_skipped_filter_still_returns_availability_skips(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.database.models import BackupPlan, BackupPlanRun
+
+        occurred_at = datetime(2026, 9, 1, 12, 0, 0)
+        plan = BackupPlan(
+            name="Skip filter plan",
+            source_directories='["/srv/skip"]',
+            schedule_enabled=True,
+            schedule_mode="availability",
+        )
+        test_db.add(plan)
+        test_db.flush()
+        test_db.add(
+            BackupPlanRun(
+                backup_plan_id=plan.id,
+                trigger="availability",
+                status="skipped",
+                skip_reason="source_unavailable",
+                started_at=occurred_at,
+                completed_at=occurred_at,
+                created_at=occurred_at,
+            )
+        )
+        test_db.commit()
+
+        response = test_client.get(
+            "/api/activity/recent?status=skipped", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        items = response.json()
+        assert items and all(item["status"] == "skipped" for item in items)

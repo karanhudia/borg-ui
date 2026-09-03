@@ -329,12 +329,15 @@ async def list_recent_activity(
 
     # Fetch backup jobs
     if not job_type or job_type == "backup":
+        # Filter in SQL, before the limit: "status=failed" must return the
+        # newest failed jobs, not the failed jobs among the newest rows.
+        backup_query = db.query(BackupJob)
+        if status:
+            backup_query = backup_query.filter(BackupJob.status == status)
         backup_jobs = (
-            db.query(BackupJob).order_by(BackupJob.started_at.desc()).limit(limit).all()
+            backup_query.order_by(BackupJob.started_at.desc()).limit(limit).all()
         )
         for job in backup_jobs:
-            if status and job.status != status:
-                continue
             # Get repository name from path
             repo = (
                 db.query(Repository).filter(Repository.path == job.repository).first()
@@ -400,7 +403,9 @@ async def list_recent_activity(
 
     # Availability Plan skips are plan-run records, not BackupJobs: Borg was never
     # invoked, so they must be added independently to Activity.
-    if not job_type or job_type == "availability_check":
+    if (not job_type or job_type == "availability_check") and (
+        not status or status == "skipped"
+    ):
         plan_skips = (
             db.query(BackupPlanRun)
             .filter(
@@ -412,8 +417,6 @@ async def list_recent_activity(
             .all()
         )
         for run in plan_skips:
-            if status and status != "skipped":
-                continue
             plan = (
                 db.get(BackupPlan, run.backup_plan_id) if run.backup_plan_id else None
             )
@@ -449,8 +452,6 @@ async def list_recent_activity(
             .all()
         )
         for skip in automation_skips:
-            if status and status != "skipped":
-                continue
             schedule = db.get(ScheduledJob, skip.scheduled_job_id)
             activities.append(
                 {
@@ -475,15 +476,13 @@ async def list_recent_activity(
 
     # Fetch restore jobs
     if not job_type or job_type == "restore":
+        restore_query = db.query(RestoreJob)
+        if status:
+            restore_query = restore_query.filter(RestoreJob.status == status)
         restore_jobs = (
-            db.query(RestoreJob)
-            .order_by(RestoreJob.started_at.desc())
-            .limit(limit)
-            .all()
+            restore_query.order_by(RestoreJob.started_at.desc()).limit(limit).all()
         )
         for job in restore_jobs:
-            if status and job.status != status:
-                continue
             # Get repository name from path
             repo = (
                 db.query(Repository).filter(Repository.path == job.repository).first()
@@ -515,10 +514,11 @@ async def list_recent_activity(
 
     # Fetch check jobs
     if not job_type or job_type == "check":
-        check_jobs = db.query(CheckJob).order_by(CheckJob.id.desc()).limit(limit).all()
+        check_query = db.query(CheckJob)
+        if status:
+            check_query = check_query.filter(CheckJob.status == status)
+        check_jobs = check_query.order_by(CheckJob.id.desc()).limit(limit).all()
         for job in check_jobs:
-            if status and job.status != status:
-                continue
             # Get repository name from repository_id, with fallback to stored path
             repo = (
                 db.query(Repository).filter(Repository.id == job.repository_id).first()
@@ -559,15 +559,15 @@ async def list_recent_activity(
 
     # Fetch restore check jobs
     if not job_type or job_type == "restore_check":
+        restore_check_query = db.query(RestoreCheckJob)
+        if status:
+            restore_check_query = restore_check_query.filter(
+                RestoreCheckJob.status == status
+            )
         restore_check_jobs = (
-            db.query(RestoreCheckJob)
-            .order_by(RestoreCheckJob.id.desc())
-            .limit(limit)
-            .all()
+            restore_check_query.order_by(RestoreCheckJob.id.desc()).limit(limit).all()
         )
         for job in restore_check_jobs:
-            if status and job.status != status:
-                continue
             repo = (
                 db.query(Repository).filter(Repository.id == job.repository_id).first()
             )
@@ -609,15 +609,13 @@ async def list_recent_activity(
 
     # Fetch compact jobs
     if not job_type or job_type == "compact":
+        compact_query = db.query(CompactJob)
+        if status:
+            compact_query = compact_query.filter(CompactJob.status == status)
         compact_jobs = (
-            db.query(CompactJob)
-            .order_by(CompactJob.started_at.desc())
-            .limit(limit)
-            .all()
+            compact_query.order_by(CompactJob.started_at.desc()).limit(limit).all()
         )
         for job in compact_jobs:
-            if status and job.status != status:
-                continue
             # Get repository name from repository_id, with fallback to stored path
             repo = (
                 db.query(Repository).filter(Repository.id == job.repository_id).first()
@@ -659,12 +657,11 @@ async def list_recent_activity(
 
     # Fetch prune jobs
     if not job_type or job_type == "prune":
-        prune_jobs = (
-            db.query(PruneJob).order_by(PruneJob.started_at.desc()).limit(limit).all()
-        )
+        prune_query = db.query(PruneJob)
+        if status:
+            prune_query = prune_query.filter(PruneJob.status == status)
+        prune_jobs = prune_query.order_by(PruneJob.started_at.desc()).limit(limit).all()
         for job in prune_jobs:
-            if status and job.status != status:
-                continue
             # Get repository name from repository_id, with fallback to stored path
             repo = (
                 db.query(Repository).filter(Repository.id == job.repository_id).first()
@@ -706,15 +703,15 @@ async def list_recent_activity(
 
     # Fetch package install jobs
     if not job_type or job_type == "package":
+        package_query = db.query(PackageInstallJob)
+        if status:
+            package_query = package_query.filter(PackageInstallJob.status == status)
         package_jobs = (
-            db.query(PackageInstallJob)
-            .order_by(PackageInstallJob.started_at.desc())
+            package_query.order_by(PackageInstallJob.started_at.desc())
             .limit(limit)
             .all()
         )
         for job in package_jobs:
-            if status and job.status != status:
-                continue
             # Get package name from package_id
             package = (
                 db.query(InstalledPackage)
@@ -752,15 +749,13 @@ async def list_recent_activity(
 
     # Fetch script executions
     if not job_type or job_type == "script_execution":
+        script_query = db.query(ScriptExecution)
+        if status:
+            script_query = script_query.filter(ScriptExecution.status == status)
         script_executions = (
-            db.query(ScriptExecution)
-            .order_by(ScriptExecution.started_at.desc())
-            .limit(limit)
-            .all()
+            script_query.order_by(ScriptExecution.started_at.desc()).limit(limit).all()
         )
         for execution in script_executions:
-            if status and execution.status != status:
-                continue
             script_name = _script_execution_display_name(execution)
             backup_plan_name = None
             if execution.backup_plan:
@@ -808,16 +803,13 @@ async def list_recent_activity(
             if job_type in RCLONE_ACTIVITY_OPERATIONS
             else list(RCLONE_ACTIVITY_OPERATIONS.values())
         )
-        rclone_jobs = (
-            db.query(RcloneSyncJob)
-            .filter(RcloneSyncJob.operation.in_(operations))
-            .order_by(RcloneSyncJob.id.desc())
-            .limit(limit)
-            .all()
+        rclone_query = db.query(RcloneSyncJob).filter(
+            RcloneSyncJob.operation.in_(operations)
         )
+        if status:
+            rclone_query = rclone_query.filter(RcloneSyncJob.status == status)
+        rclone_jobs = rclone_query.order_by(RcloneSyncJob.id.desc()).limit(limit).all()
         for job in rclone_jobs:
-            if status and job.status != status:
-                continue
             repo = (
                 db.query(Repository).filter(Repository.id == job.repository_id).first()
             )
