@@ -18,17 +18,25 @@ const ArchiveNameTemplateInput: React.FC<ArchiveNameTemplateInputProps> = ({
   jobName = 'example-job',
 }) => {
   const { t } = useTranslation()
-  // Generate preview of archive name with current timestamp
+  // Generate preview of archive name with current timestamp.
+  // {now}/{date}/{time} render in the creating machine's local time (matching
+  // the backend and borg's own expansion); {utcnow} renders in UTC. The
+  // formats mirror the backend expansion exactly, millisecond precision
+  // included, so the preview matches the generated archive name.
   const previewName = useMemo(() => {
     const now = new Date()
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const pad3 = (n: number) => String(n).padStart(3, '0')
     const timestamp = Math.floor(now.getTime() / 1000)
-    const date = now.toISOString().split('T')[0]
-    const time = now.toTimeString().split(' ')[0].replace(/:/g, '-')
-    const isoString = now.toISOString().replace(/[:.]/g, '-').slice(0, -5)
+    const date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+    const time = now.toTimeString().split(' ')[0]
+    const localIso = `${date}T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}.${pad3(now.getMilliseconds())}`
+    const utcIso = now.toISOString().slice(0, -1)
 
     return value
       .replace(/{job_name}/g, jobName)
-      .replace(/{now}/g, isoString)
+      .replace(/{utcnow}/g, utcIso)
+      .replace(/{now}/g, localIso)
       .replace(/{date}/g, date)
       .replace(/{time}/g, time)
       .replace(/{timestamp}/g, String(timestamp))

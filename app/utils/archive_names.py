@@ -6,6 +6,7 @@ This module centralizes archive name generation and sanitization.
 """
 
 import re
+from datetime import datetime, timezone
 from typing import Optional
 
 TIME_PLACEHOLDER_PATTERN = re.compile(
@@ -58,7 +59,12 @@ def build_archive_name(
         job_name:       Raw job name (may contain spaces/slashes).
         repo_name:      Raw repo name (may contain spaces/slashes). Optional.
         template:       Archive name template with {job_name}, {repo_name},
-                        {now}, {date}, {time}, {timestamp} placeholders.
+                        {now}, {utcnow}, {date}, {time}, {timestamp}
+                        placeholders. {now}/{date}/{time} render in the
+                        creating process's local zone; {utcnow} is the UTC
+                        sibling for names that must sort consistently across
+                        mixed-zone fleets. Formatted variants ({now:%Y...})
+                        pass through for borg's own expansion.
         timestamp:      ISO datetime string for {now} placeholder and default name.
         date:           Date string for {date} placeholder (YYYY-MM-DD).
         time_str:       Time string for {time} placeholder (HH:MM:SS).
@@ -87,6 +93,14 @@ def build_archive_name(
                 )
         else:
             archive_name = archive_name.replace("{now}", timestamp)
+            if "{utcnow}" in archive_name:
+                # Same shape as the {now} timestamps the callers build
+                # (millisecond precision keeps rapid runs unique), rendered
+                # in UTC instead of the creating process's zone.
+                archive_name = archive_name.replace(
+                    "{utcnow}",
+                    datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3],
+                )
             if date is not None:
                 archive_name = archive_name.replace("{date}", date)
             if time_str is not None:
