@@ -2006,6 +2006,19 @@ class BackupService:
                 mqtt_service.sync_state_with_db(
                     db, reason="backup failed: no valid source paths"
                 )
+
+                # This early return never reaches the shared failure epilogue,
+                # so the notification has to go out here.
+                try:
+                    await notification_service.send_backup_failure(
+                        db, repository, job.error_message, job_id, job_name
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "Failed to send backup failure notification",
+                        error=str(e),
+                    )
+
                 return
             logger.info(
                 "Source paths prepared",

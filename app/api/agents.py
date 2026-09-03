@@ -70,7 +70,35 @@ FINAL_AGENT_JOB_STATUSES = {
 }
 
 
-STALE_AGENT_JOB_REQUEUE_AFTER = timedelta(minutes=15)
+# MUST STAY BELOW agent_job_reaper.AGENT_JOB_REAP_AFTER.
+#
+# A job claimed just before an agent's socket drops is never delivered: it
+# sits "claimed" with started_at NULL until something recovers it.
+# _requeue_stale_agent_jobs runs on the REST /heartbeat path (polling agents)
+# and on the WebSocket session's hello (session agents reconnecting), but the
+# two paths now lean on this window differently.
+#
+# On /heartbeat this window is still the whole story: a polling agent's own
+# claim→start gap is real work in progress, not a dropped delivery, so a job
+# only requeues once it has sat idle longer than this.
+#
+# At hello it is not needed for the case it was originally sized for. A
+# session agent that just said hello cannot have a delivery in flight that
+# predates its own hello — so an undelivered claimed job (started_at NULL)
+# the agent does not list in running_job_ids is requeued regardless of age
+# on that path. This window still applies to every other job seen at hello
+# (running jobs, and claimed jobs still reported as running). Without this
+# split, a reconnect inside the window found the stranded job "too fresh"
+# and had no further chance to recover it until the next disconnect or the
+# reaper — session heartbeats are WS messages that never call this function,
+# so hello was the only opportunity.
+#
+# Two minutes gives a polling agent room to reclaim its own work well before
+# the reaper acts. It is safe to be this short because the requeue already
+# skips any job the agent reports in running_job_ids and any job whose own
+# activity is newer than the cutoff, so a genuinely running operation is
+# never requeued however long it takes.
+STALE_AGENT_JOB_REQUEUE_AFTER = timedelta(minutes=2)
 REPOSITORY_OPERATION_JOB_MODELS = {
     "check": CheckJob,
     "compact": CompactJob,
@@ -335,6 +363,7 @@ def _requeue_stale_agent_jobs(
     *,
     now: datetime,
     running_job_ids: list[int],
+    ignore_age_for_undelivered: bool = False,
 ) -> None:
     running_ids = set(running_job_ids)
     stale_cutoff = now - STALE_AGENT_JOB_REQUEUE_AFTER
@@ -349,7 +378,10 @@ def _requeue_stale_agent_jobs(
     for job in jobs:
         if job.id in running_ids:
             continue
-        if _job_activity_at(job) > stale_cutoff:
+
+        undelivered = job.status == "claimed" and job.started_at is None
+        skip_age_check = ignore_age_for_undelivered and undelivered
+        if not skip_age_check and _job_activity_at(job) > stale_cutoff:
             continue
 
         if _is_request_scoped_repository_job(job):
@@ -1234,6 +1266,7 @@ async def session(websocket: WebSocket, db: Session = Depends(get_db)):
             current_agent,
             now=now,
             running_job_ids=hello.running_job_ids,
+            ignore_age_for_undelivered=True,
         )
         db.commit()
 

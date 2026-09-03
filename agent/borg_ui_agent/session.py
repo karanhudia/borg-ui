@@ -372,12 +372,43 @@ class AgentSessionRuntime:
                     continue
                 message = json.loads(raw_message)
                 if isinstance(message, dict) and message.get("type") == "command":
-                    worker = threading.Thread(
-                        target=self._handle_command,
-                        args=(outbox, message, closing),
-                        daemon=True,
+                    # Register the cancel event here, before the worker thread
+                    # even exists, not inside _handle_command. _handle_command
+                    # registers deep into its own body (after the ack, after
+                    # every early-return command), so a session that drops
+                    # between worker.start() and that point leaves the worker
+                    # with no entry in _cancel_events: the disconnect branch
+                    # below can't signal it (it only iterates existing
+                    # entries) and the next hello's running_job_ids omits it,
+                    # so the server requeues and redispatches the job onto a
+                    # new worker while this one is still executing it --
+                    # double-running a durable operation. Only register for a
+                    # message that will actually reach a job handler (mirrors
+                    # _handle_command's own dispatch conditions below) --
+                    # registering unconditionally would leave ids for
+                    # early-return commands (filesystem.browse, cancel, ...)
+                    # stuck in _cancel_events forever, since nothing would
+                    # ever unregister them.
+                    job_id = self._job_id_for_dispatch(message)
+                    cancel_event = (
+                        self._register_cancel(job_id) if job_id is not None else None
                     )
-                    worker.start()
+                    try:
+                        worker = threading.Thread(
+                            target=self._handle_command,
+                            args=(outbox, message, closing),
+                            kwargs={"cancel_event": cancel_event},
+                            daemon=True,
+                        )
+                        worker.start()
+                    except Exception:
+                        # The thread never ran, so nothing will ever reach
+                        # _handle_command's finally to unregister this id --
+                        # do it here or it leaks in _cancel_events (and hello)
+                        # permanently.
+                        if job_id is not None:
+                            self._unregister_cancel(job_id)
+                        raise
                     workers.append(worker)
                     workers = [w for w in workers if w.is_alive()]
                 handled += 1
@@ -471,22 +502,73 @@ class AgentSessionRuntime:
                 "timezone": machine.get("timezone"),
                 "borg_versions": borg_versions,
                 "capabilities": get_capabilities(),
-                "running_job_ids": [],
+                # The server treats this as authoritative: on this path it
+                # requeues-and-redispatches any "claimed"/undelivered job absent
+                # from the list, regardless of age (see
+                # ignore_age_for_undelivered in app/api/agents.py). _cancel_events
+                # lives on this instance, not the session, so a worker whose
+                # cancellation is still cooperative-pending survives a dropped
+                # socket and keeps running here. Reporting an empty list on
+                # reconnect would tell the server "I have nothing," and it would
+                # requeue and redispatch a job this agent is still executing —
+                # double-running a durable operation.
+                "running_job_ids": self._running_job_ids(),
             }
         )
         with self._writing(socket):
             socket.send(message)
+
+    def _running_job_ids(self) -> list[int]:
+        """Snapshot of job ids with a live worker on this agent instance right
+        now (registered in _register_cancel, cleared in _unregister_cancel's
+        finally). Taken under _registry_lock; the lock is released before this
+        returns so hello's I/O never runs while holding it."""
+        with self._registry_lock:
+            return sorted(self._cancel_events.keys())
+
+    @staticmethod
+    def _job_id_for_dispatch(message: dict[str, Any]) -> Optional[int]:
+        """Return the job id if, and only if, this message will reach a job
+        handler in _handle_command below -- i.e. it survives every one of
+        that method's early returns. Used by the session loop to register the
+        cancel event before the worker thread starts (see the register-before-
+        start comment in run_session); kept in lockstep with _handle_command's
+        own dispatch conditions on purpose, since a mismatch would either miss
+        the registration (the race this exists to close) or register an id
+        that nothing ever unregisters (a permanent phantom in hello)."""
+        command = str(message.get("command") or "")
+        if command in (
+            "filesystem.browse",
+            "diagnostics.run",
+            "agent.repository_defaults",
+            "agent.list_scripts",
+            "cancel",
+        ):
+            return None
+        raw_job_id = message.get("job_id")
+        job_id = int(raw_job_id) if raw_job_id is not None else None
+        if job_id is None or get_job_handler(command) is None:
+            return None
+        return job_id
 
     def _handle_command(
         self,
         outbox: "queue.Queue[str]",
         message: dict[str, Any],
         closing: Optional[threading.Event] = None,
+        cancel_event: Optional[threading.Event] = None,
     ) -> None:
         """Handle one server command (runs in a worker thread): ack it, then run
         the matching handler with cooperative cancellation wired in. Outgoing
         frames go to ``outbox`` for the session thread to write; ``closing``
-        suppresses them once the owning session has been torn down."""
+        suppresses them once the owning session has been torn down.
+
+        ``cancel_event`` is the event the session loop already registered for
+        this job via _job_id_for_dispatch/_register_cancel, closing the
+        register-before-start race (see run_session). It defaults to None so
+        direct callers (tests, or any future caller that predates this) keep
+        working: this method then falls back to registering it itself, same
+        as before this fix."""
         command_id = str(message.get("command_id") or "")
         command = str(message.get("command") or "")
         raw_job_id = message.get("job_id")
@@ -543,7 +625,11 @@ class AgentSessionRuntime:
             )
             return
 
-        cancel_event = self._register_cancel(job_id)
+        # Normally already registered by the session loop before this thread
+        # even started (see _job_id_for_dispatch); only register here when a
+        # caller invoked this method directly without doing that (e.g. a test).
+        if cancel_event is None:
+            cancel_event = self._register_cancel(job_id)
         try:
             result = handler(
                 {"id": job_id, "type": command, "payload": payload},

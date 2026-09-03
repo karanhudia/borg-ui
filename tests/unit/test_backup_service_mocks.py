@@ -1508,3 +1508,63 @@ async def test_execute_backup_rejects_observe_mode(
 
     assert job.status == "failed"
     assert job.error_message == json.dumps({"key": "backend.errors.borg.unknownError"})
+
+
+@pytest.mark.asyncio
+async def test_empty_source_paths_failure_sends_notification(
+    backup_service_fixture, mock_db_session
+):
+    # The no-valid-source-paths early return (all SSH mounts failed) never
+    # reaches the shared failure epilogue, so it must notify on its own (#858).
+    job_id = 858
+    repo = Repository(
+        id=1,
+        path="/backups/repo",
+        name="Repo",
+        source_directories='["ssh://backup@gone.example:22/data"]',
+    )
+    job = BackupJob(id=job_id, status="pending")
+
+    def query_side_effect(model):
+        m = MagicMock()
+        if model == BackupJob:
+            m.filter.return_value.first.return_value = job
+        elif model == Repository:
+            m.filter.return_value.first.return_value = repo
+        elif model == SystemSettings:
+            m.first.return_value = SystemSettings()
+        elif model == RepositoryScript:
+            m.filter.return_value.count.return_value = 0
+        return m
+
+    mock_db_session.query.side_effect = query_side_effect
+    notifications = _notification_service_mock()
+
+    with (
+        patch("app.services.backup_service.SessionLocal", return_value=mock_db_session),
+        patch(
+            "app.services.backup_service.BorgRouter.validate_local_repository_access",
+            return_value=None,
+        ),
+        patch.object(
+            backup_service_fixture,
+            "_prepare_source_paths",
+            AsyncMock(return_value=([], [])),
+        ),
+        patch.object(
+            backup_service_fixture,
+            "_calculate_and_update_size_background",
+            new=AsyncMock(),
+        ),
+        patch("app.services.backup_service.mqtt_service", MagicMock()),
+        patch("app.services.backup_service.notification_service", notifications),
+    ):
+        await backup_service_fixture.execute_backup(
+            job_id, repo.path, db=mock_db_session
+        )
+
+    assert job.status == "failed"
+    assert "failedPrepareSourcePaths" in (job.error_message or "")
+    notifications.send_backup_failure.assert_awaited_once()
+    notified_error = notifications.send_backup_failure.await_args.args[2]
+    assert "failedPrepareSourcePaths" in notified_error
