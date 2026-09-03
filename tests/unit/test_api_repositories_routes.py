@@ -354,7 +354,7 @@ class TestRepositoryHelperContracts:
         not hasattr(__import__("time"), "tzset"), reason="requires POSIX tzset"
     )
     def test_parse_borg_archive_time_utc_zone_is_host_independent(self):
-        # The server stats listing runs borg under TZ=UTC (stats_env), so its
+        # Server listings run borg under TZ=UTC (pinned in the wrappers), so
         # naive timestamps must parse as UTC no matter the server's own zone.
         import os
         import time
@@ -432,6 +432,59 @@ class TestRepositoryHelperContracts:
 
         assert parsed == datetime(2026, 4, 27, 7, 0, 6)
 
+    def test_normalize_archive_listing_times_adds_an_explicit_utc_offset(self):
+        # Naive strings read as browser-local in the frontend; the response
+        # must carry the offset. Non-dict entries pass through untouched.
+        archives = [{"name": "a", "time": "2026-07-01T03:00:00"}, "junk"]
+
+        normalized = repositories_api._normalize_archive_listing_times(
+            archives, timezone_name="UTC"
+        )
+
+        assert normalized[0]["time"] == "2026-07-01T03:00:00+00:00"
+        assert normalized[1] == "junk"
+        # The input listing is not mutated.
+        assert archives[0]["time"] == "2026-07-01T03:00:00"
+
+    def test_normalize_archive_listing_times_applies_the_agent_zone(self):
+        # An old agent renders in its machine zone and reports that zone.
+        archives = [{"name": "a", "start": "2026-07-01T03:00:00"}]
+
+        normalized = repositories_api._normalize_archive_listing_times(
+            archives, timezone_name="Europe/Berlin"
+        )
+
+        assert normalized[0]["start"] == "2026-07-01T01:00:00+00:00"
+
+    def test_normalize_archive_listing_times_serializes_numeric_epochs(self):
+        # Epoch 0 included - falsy but a valid time.
+        archives = [{"name": "a", "time": 0}, {"name": "b", "start": 1767225600}]
+
+        normalized = repositories_api._normalize_archive_listing_times(
+            archives, timezone_name="UTC"
+        )
+
+        assert normalized[0]["time"] == "1970-01-01T00:00:00+00:00"
+        assert normalized[1]["start"] == "2026-01-01T00:00:00+00:00"
+
+    def test_normalize_archive_listing_times_keeps_out_of_range_epochs_raw(self):
+        archives = [{"name": "a", "time": 1e18}]
+
+        normalized = repositories_api._normalize_archive_listing_times(
+            archives, timezone_name="UTC"
+        )
+
+        assert normalized[0]["time"] == 1e18
+
+    def test_normalize_archive_listing_times_keeps_unparseable_strings(self):
+        archives = [{"name": "a", "time": "not-a-timestamp"}]
+
+        normalized = repositories_api._normalize_archive_listing_times(
+            archives, timezone_name="UTC"
+        )
+
+        assert normalized[0]["time"] == "not-a-timestamp"
+
     @pytest.mark.asyncio
     async def test_update_repository_stats_updates_archive_count_size_and_last_backup(
         self, test_db
@@ -467,7 +520,8 @@ class TestRepositoryHelperContracts:
         assert repo.total_size == "2.00 MB"
         assert repo.last_backup == datetime(2024, 2, 1, 12, 0)
         mock_list.assert_awaited_once()
-        assert mock_list.await_args.kwargs["env"]["TZ"] == "UTC"
+        # TZ=UTC is pinned inside the wrapper methods (mocked away here);
+        # test_borg_wrapper / test_borg2 cover the pin itself.
         assert mock_list.await_args.kwargs["env"]["BORG_PASSPHRASE"] == "secret"
         assert mock_size.await_args.kwargs["use_bypass_lock"] is True
         assert mock_size.await_args.kwargs["env"]["BORG_PASSPHRASE"] == "secret"
@@ -557,7 +611,6 @@ class TestRepositoryHelperContracts:
         assert repo.archive_count == 2
         assert repo.last_backup == datetime(2024, 2, 1, 12, 0)
         mock_list.assert_awaited_once()
-        assert mock_list.await_args.kwargs["env"]["TZ"] == "UTC"
 
     @pytest.mark.asyncio
     async def test_update_repository_stats_chooses_latest_archive_by_utc_instant(

@@ -26,7 +26,7 @@ from app.database.models import (
 from app.services.log_policy import DEFAULT_LOG_SAVE_POLICY, job_has_logs_by_policy
 from app.services.repository_command_lock import run_serialized_repository_command
 from app.utils.borg_env import build_repository_borg_env, cleanup_temp_key_file
-from app.utils.datetime_utils import serialize_datetime
+from app.utils.datetime_utils import serialize_borg_archive_time, serialize_datetime
 
 logger = structlog.get_logger()
 
@@ -82,11 +82,20 @@ def normalize_archive_manifest(
         if isinstance(tags, str):
             tags = [tags]
 
+        # Select on None, not truthiness - the epoch 0 is a valid time.
+        time_value = archive.get("time")
+        if time_value is None:
+            time_value = archive.get("start")
+
         manifest.append(
             {
                 "identity": str(identity_value),
                 "name": _archive_display_name(archive),
-                "time": archive.get("time") or archive.get("start"),
+                # Wipe listings are server-side wrapper calls (TZ=UTC).
+                "time": serialize_borg_archive_time(
+                    time_value,
+                    timezone_name="UTC",
+                ),
                 "id": archive.get("id"),
                 "protected": "@PROT" in tags,
             }
