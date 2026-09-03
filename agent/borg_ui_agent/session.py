@@ -470,11 +470,29 @@ class AgentSessionRuntime:
                 "agent_version": __version__,
                 "borg_versions": borg_versions,
                 "capabilities": get_capabilities(),
-                "running_job_ids": [],
+                # The server treats this as authoritative: on this path it
+                # requeues-and-redispatches any "claimed"/undelivered job absent
+                # from the list, regardless of age (see
+                # ignore_age_for_undelivered in app/api/agents.py). _cancel_events
+                # lives on this instance, not the session, so a worker whose
+                # cancellation is still cooperative-pending survives a dropped
+                # socket and keeps running here. Reporting an empty list on
+                # reconnect would tell the server "I have nothing," and it would
+                # requeue and redispatch a job this agent is still executing —
+                # double-running a durable operation.
+                "running_job_ids": self._running_job_ids(),
             }
         )
         with self._writing(socket):
             socket.send(message)
+
+    def _running_job_ids(self) -> list[int]:
+        """Snapshot of job ids with a live worker on this agent instance right
+        now (registered in _register_cancel, cleared in _unregister_cancel's
+        finally). Taken under _registry_lock; the lock is released before this
+        returns so hello's I/O never runs while holding it."""
+        with self._registry_lock:
+            return sorted(self._cancel_events.keys())
 
     def _handle_command(
         self,

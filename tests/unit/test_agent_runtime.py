@@ -728,6 +728,78 @@ def test_session_runtime_connects_with_websocket_url_and_sends_hello(monkeypatch
 
 
 @pytest.mark.unit
+def test_session_hello_reports_a_worker_still_registered_from_a_prior_session(
+    patch_session_platform,
+):
+    """running_job_ids must reflect live workers, not just this session.
+
+    _cancel_events lives on the AgentSessionRuntime instance (created once in
+    __init__), not per-session, so a worker started before a reconnect is
+    still registered here. If hello reported [] anyway, the server would
+    treat the job as not-in-flight and requeue + redispatch it onto a fresh
+    worker while the old one is still running — double execution of a
+    durable operation. Simulate that surviving worker by registering its
+    cancel event directly, the same way _handle_command does before running
+    a handler.
+    """
+    from agent.borg_ui_agent.session import AgentSessionRuntime
+
+    socket = FakeWebSocket([])
+    runtime = AgentSessionRuntime(
+        AgentConfig("https://borgui.example.com", "agt_123", "secret"),
+        connect=lambda *args, **kwargs: socket,
+    )
+    runtime._register_cancel(77)
+
+    runtime.run_session(max_messages=0)
+
+    assert socket.sent[0]["type"] == "hello"
+    assert socket.sent[0]["running_job_ids"] == [77]
+
+
+@pytest.mark.unit
+def test_session_hello_reports_empty_list_when_idle(patch_session_platform):
+    """The ordinary case: no worker registered, hello must still say so
+    explicitly (not merely by omission) so the server's age-window skip for
+    a "still running" job never fires spuriously."""
+    from agent.borg_ui_agent.session import AgentSessionRuntime
+
+    socket = FakeWebSocket([])
+    runtime = AgentSessionRuntime(
+        AgentConfig("https://borgui.example.com", "agt_123", "secret"),
+        connect=lambda *args, **kwargs: socket,
+    )
+
+    runtime.run_session(max_messages=0)
+
+    assert socket.sent[0]["running_job_ids"] == []
+
+
+@pytest.mark.unit
+def test_session_hello_stops_reporting_a_job_once_its_handler_finished(
+    patch_session_platform,
+):
+    """A job id must drop out of running_job_ids once _unregister_cancel has
+    run (the handler's finally, i.e. the worker is actually done) — otherwise
+    a completed job would keep looking "still running" to the server forever
+    and the requeue-on-hello recovery for a genuinely stranded job would
+    never kick in for it."""
+    from agent.borg_ui_agent.session import AgentSessionRuntime
+
+    socket = FakeWebSocket([])
+    runtime = AgentSessionRuntime(
+        AgentConfig("https://borgui.example.com", "agt_123", "secret"),
+        connect=lambda *args, **kwargs: socket,
+    )
+    runtime._register_cancel(77)
+    runtime._unregister_cancel(77)
+
+    runtime.run_session(max_messages=0)
+
+    assert socket.sent[0]["running_job_ids"] == []
+
+
+@pytest.mark.unit
 def test_session_runtime_sends_app_heartbeat_while_idle(monkeypatch):
     from agent.borg_ui_agent.session import AgentSessionRuntime
 
