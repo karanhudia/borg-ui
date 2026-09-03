@@ -42,6 +42,33 @@ REPOSITORY_JOB_KINDS = {
     "repository.rclone_sync",
 }
 
+# Borg 2.0.0b22 split repo-create's single --encryption value into the cipher,
+# where the key is stored, and the id hash. The server sends the combined mode
+# name it stores, so the agent translates it the same way the server does for
+# its own repositories (app/core/borg2.py: BORG2_ENCRYPTION_FLAGS). The two are
+# separate packages and share no imports, so the table is stated twice; a mode
+# missing here is rejected up front with the mode name, mirroring the server —
+# passing it to repo-create would fail with an argument-parsing error that
+# does not name the actual problem.
+BORG2_ENCRYPTION_FLAGS = {
+    "repokey-aes-ocb": ["--encryption", "aes256-ocb", "--key-location", "repokey"],
+    "repokey-chacha20-poly1305": [
+        "--encryption",
+        "chacha20-poly1305",
+        "--key-location",
+        "repokey",
+    ],
+    "keyfile-aes-ocb": ["--encryption", "aes256-ocb", "--key-location", "keyfile"],
+    "keyfile-chacha20-poly1305": [
+        "--encryption",
+        "chacha20-poly1305",
+        "--key-location",
+        "keyfile",
+    ],
+    "authenticated": ["--encryption", "authenticated"],
+    "none": ["--encryption", "none"],
+}
+
 # Kill a streaming extract only when no bytes have flowed for this long — a
 # wedged borg, not a slow one. Idle (not an absolute cap) so a legitimately
 # large/slow download is never truncated mid-transfer.
@@ -143,10 +170,15 @@ class RepositoryOperationPayload:
                 raise ValueError("repository.init requires operation.encryption")
             encryption = encryption.strip()
             if self.borg_version == 2:
+                encryption_flags = BORG2_ENCRYPTION_FLAGS.get(encryption)
+                if encryption_flags is None:
+                    raise ValueError(
+                        f"unsupported Borg 2 encryption mode {encryption!r}; "
+                        "expected one of " + ", ".join(BORG2_ENCRYPTION_FLAGS)
+                    )
                 return [
                     *self._base_borg2("repo-create"),
-                    "--encryption",
-                    encryption,
+                    *encryption_flags,
                 ]
             return [
                 *self._base_borg1("init"),
@@ -360,7 +392,13 @@ class RepositoryOperationPayload:
                     cmd.extend([flag, str(int(value))])
             keep_within = operation.get("keep_within")
             if keep_within is not None and str(keep_within).strip():
-                cmd.append(f"--keep-within={str(keep_within).strip()}")
+                # Borg 2.0.0b22 removed --keep-within (and --keep-last) in
+                # favour of --keep, which takes either form: a count or an
+                # interval like "1d". Borg 1 keeps the old spelling.
+                if self.borg_version == 2:
+                    cmd.extend(["--keep", str(keep_within).strip()])
+                else:
+                    cmd.append(f"--keep-within={str(keep_within).strip()}")
             if dry_run:
                 cmd.append("--dry-run")
             if self.borg_version == 1:

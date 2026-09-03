@@ -48,6 +48,7 @@ from app.core.security import get_current_user, check_repo_access, decrypt_secre
 from app.core.borg import BorgInterface
 from app.core.borg_router import BorgRouter
 from app.core.borg_errors import is_lock_error
+from app.core.borg2 import normalize_repo_info_encryption
 from app.core.features import (
     FEATURES,
     get_current_plan,
@@ -868,6 +869,13 @@ async def _update_agent_repository_stats(repository: Repository, db: Session) ->
                 db, rinfo_job.id, timeout_seconds=timeouts["info_timeout"]
             )
             rinfo = json.loads((rinfo_result or {}).get("stdout") or "{}")
+            # Deliberately NOT normalize_repo_info_encryption() here. That fills
+            # `mode` with the bare cipher for Borg 2.0.0b22, which is right for
+            # display but wrong for this column: the stored value is the combined
+            # name the repository was created with (repokey-aes-ocb), and b22's
+            # repo-info does not report the key location, so writing its cipher
+            # back would drop that half for good. No mode, no write — the stored
+            # name stands.
             encryption_mode = (rinfo.get("encryption") or {}).get("mode")
             # Borg 1 `info --json` exposes repo-level dedup size in cache.stats;
             # Borg 2 `repo-info --json` does not (remote size is unknowable).
@@ -6085,7 +6093,7 @@ async def get_repository_info(
                 agent_job.id,
                 timeout_seconds=get_operation_timeouts(db)["info_timeout"],
             )
-            info_data = _parse_agent_json_result(result)
+            info_data = normalize_repo_info_encryption(_parse_agent_json_result(result))
 
             # The dialog's stats panel (the Borg 2 view in particular) is driven
             # by `archives`. Borg 2 `info --json` already carries the archive list
@@ -6143,7 +6151,7 @@ async def get_repository_info(
         )
         # Parse JSON output
         try:
-            info_data = json.loads(stdout.decode())
+            info_data = normalize_repo_info_encryption(json.loads(stdout.decode()))
 
             # Extract relevant information
             repository_info = info_data.get("repository", {})

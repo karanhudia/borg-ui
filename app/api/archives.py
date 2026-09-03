@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.api.archive_download import extract_file_download, resolve_extracted_file_path
 from app.core.borg import borg
 from app.core.borg_router import BorgRouter
+from app.core.borg2 import normalize_repo_info_encryption
 from app.core.security import (
     check_repo_access,
     get_current_download_user,
@@ -308,7 +309,9 @@ async def get_archive_info(
                 "comment": archive_info.get("comment", ""),
                 # Repository info
                 "repository": archive_data.get("repository", {}),
-                "encryption": archive_data.get("encryption", {}),
+                "encryption": normalize_repo_info_encryption(archive_data).get(
+                    "encryption", {}
+                ),
                 "cache": archive_data.get("cache", {}),
             }
 

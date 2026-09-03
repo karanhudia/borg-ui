@@ -157,7 +157,9 @@ class PruneV2Service:
             if keep_yearly > 0:
                 cmd.extend(["--keep-yearly", str(keep_yearly)])
             if keep_within and keep_within.strip():
-                cmd.append(f"--keep-within={keep_within.strip()}")
+                # Borg 2.0.0b22 removed --keep-within (and --keep-last) in favour
+                # of --keep, which takes either form: a count or an interval.
+                cmd.extend(["--keep", keep_within.strip()])
             if dry_run:
                 cmd.append("--dry-run")
 

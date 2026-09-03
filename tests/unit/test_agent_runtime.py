@@ -675,14 +675,56 @@ def test_repository_init_payload_builds_borg2_command():
 
     command = payload.build_command()
 
+    # Borg 2.0.0b22 takes the cipher and the key location separately; the server
+    # still sends the combined mode name it stores.
     assert command == [
         "borg2",
         "-r",
         "/agent/repo2",
         "repo-create",
         "--encryption",
-        "repokey-aes-ocb",
+        "aes256-ocb",
+        "--key-location",
+        "repokey",
     ]
+
+
+@pytest.mark.unit
+def test_repository_init_payload_rejects_unknown_borg2_encryption_mode():
+    """A mode the table does not know (a legacy blake2 name, a typo) must fail
+    with the mode's name, mirroring the server — handed to repo-create it dies
+    at argument parsing, which does not name the actual problem."""
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "schema_version": 1,
+            "job_kind": "repository.init",
+            "repository": {"path": "/agent/repo2", "borg_version": 2},
+            "operation": {"encryption": "repokey-blake2"},
+        }
+    )
+
+    with pytest.raises(
+        ValueError, match="unsupported Borg 2 encryption mode 'repokey-blake2'"
+    ):
+        payload.build_command()
+
+
+@pytest.mark.unit
+def test_borg1_prune_keeps_the_old_keep_within_spelling():
+    """--keep-within was removed in Borg 2.0.0b22 only; Borg 1 never gained
+    --keep, so the two majors part ways on this flag."""
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "job_kind": "repository.prune",
+            "repository": {"path": "/agent/repo", "borg_version": 1},
+            "operation": {"keep_daily": 7, "keep_within": "1d"},
+        }
+    )
+
+    command = payload.build_command()
+
+    assert "--keep-within=1d" in command
+    assert "--keep" not in command
 
 
 @pytest.mark.unit
@@ -1754,7 +1796,8 @@ def test_repository_operation_payload_builds_agent_local_commands():
         "7",
         "--keep-3monthly",
         "3",
-        "--keep-within=1d",
+        "--keep",
+        "1d",
         "--dry-run",
     ]
     # Borg 1 prune keeps --stats; quarterly is --keep-3monthly on borg1 too
