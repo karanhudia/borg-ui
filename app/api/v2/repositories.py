@@ -30,7 +30,7 @@ from app.services.repository_executor import (
 )
 from app.services.v2.repository_service import repository_v2_service
 from app.utils.fs import calculate_path_size_bytes
-from app.utils.borg_env import repository_borg_env
+from app.utils.borg_env import effective_repository_remote_path, repository_borg_env
 from app.utils.archive_job_metadata import enrich_archives_with_backup_metadata
 from app.utils.repository_paths import build_ssh_repository_path
 from app.utils.source_locations import legacy_source_fields, normalize_source_locations
@@ -575,7 +575,7 @@ async def get_repository_info(
             result = await borg2.info_repo(
                 repository=repo.path,
                 passphrase=repo.passphrase,
-                remote_path=repo.remote_path,
+                remote_path=effective_repository_remote_path(repo),
                 bypass_lock=bypass_lock,
                 timeout=info_timeout,
                 env=env,
@@ -603,7 +603,7 @@ async def get_repository_info(
             rinfo_result = await borg2.rinfo(
                 repository=repo.path,
                 passphrase=repo.passphrase,
-                remote_path=repo.remote_path,
+                remote_path=effective_repository_remote_path(repo),
                 env=env,
             )
         if rinfo_result["success"]:
@@ -686,7 +686,7 @@ async def list_archives(
                 result = await borg2.list_archives(
                     repo.path,
                     passphrase=repo.passphrase,
-                    remote_path=repo.remote_path,
+                    remote_path=effective_repository_remote_path(repo),
                     bypass_lock=bypass_lock,
                     env=env,
                 )
@@ -737,7 +737,7 @@ async def get_repository_stats(
             result = await borg2.rinfo(
                 repository=repo.path,
                 passphrase=repo.passphrase,
-                remote_path=repo.remote_path,
+                remote_path=effective_repository_remote_path(repo),
                 bypass_lock=_resolve_bypass_lock(repo, db, "bypass_lock_on_info"),
                 timeout=info_timeout,
                 env=env,

@@ -94,11 +94,35 @@ def test_repository_url_keeps_canonical_ssh_url_for_different_connection(test_db
 
 
 @pytest.mark.asyncio
+async def test_remote_sudo_command_relies_on_sudoers_env_keep(test_db, monkeypatch):
+    connection, repository, _job = _remote_entities(test_db)
+    connection.use_sudo = True
+    test_db.commit()
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.SessionLocal", lambda: test_db
+    )
+
+    command = await RemoteBackupService()._build_remote_command(
+        repository=repository,
+        source_ssh_connection=connection,
+        archive_name="test",
+        source_paths=["/srv/data"],
+        exclude_patterns=[],
+        borg_binary_path=connection.borg_binary_path,
+        use_sudo=True,
+    )
+
+    assert "sudo -n -H /usr/local/bin/borg-wrapper create" in command
+    assert "--preserve-env" not in command
+    assert "BORG_REMOTE_PATH='sudo -n -H /usr/local/bin/borg-wrapper'" in command
+    assert "BORG_PASSPHRASE" not in command
+    assert "BORG_RSH" not in command
+
+
+@pytest.mark.asyncio
 async def test_build_remote_command_passes_borg_env_through_sudo(test_db, monkeypatch):
-    """sudo's env_reset (the Debian-family default) drops the BORG_* shell
-    assignments in front of the command, so with use_sudo they must be named
-    explicitly as preserved - otherwise borg prompts for a passphrase that
-    can never arrive and exits 2 before touching the repository."""
+    """The documented sudoers env_keep allowlist preserves the required Borg
+    variables without allowing the command to override sudo's environment."""
     connection, repository, _job = _remote_entities(test_db)
     repository.encryption = "repokey"
     repository.passphrase = "s3cret pass"
@@ -133,14 +157,8 @@ async def test_build_remote_command_passes_borg_env_through_sudo(test_db, monkey
         "BORG_PASSPHRASE='s3cret pass' "
         "BORG_REMOTE_PATH=/usr/lib/borg/borg "
     )
-    assert with_sudo.startswith(
-        env_prefix + "sudo -n --preserve-env="
-        "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK,"
-        "BORG_RELOCATED_REPO_ACCESS_IS_OK,"
-        "BORG_PASSPHRASE,"
-        "BORG_REMOTE_PATH "
-        "/usr/bin/borg create "
-    )
+    assert with_sudo.startswith(env_prefix + "sudo -n -H /usr/bin/borg create ")
+    assert "--preserve-env" not in with_sudo
     assert without_sudo.startswith(env_prefix + "/usr/bin/borg create ")
     assert "sudo" not in without_sudo
 
@@ -169,12 +187,8 @@ async def test_build_remote_command_preserve_env_lists_only_variables_set(
         source_ssh_connection=connection,
     )
 
-    assert (
-        "sudo -n --preserve-env="
-        "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK,"
-        "BORG_RELOCATED_REPO_ACCESS_IS_OK "
-        "/usr/bin/borg create "
-    ) in command
+    assert "sudo -n -H /usr/bin/borg create " in command
+    assert "--preserve-env" not in command
     assert "BORG_PASSPHRASE" not in command
     assert "BORG_REMOTE_PATH" not in command
 
@@ -205,18 +219,18 @@ async def test_build_remote_command_resolves_default_borg_before_sudo(
         "export BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes "
         "BORG_RELOCATED_REPO_ACCESS_IS_OK=yes && "
         "borg_path=$(command -v borg) && "
-        "sudo -n --preserve-env="
-        "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK,"
-        'BORG_RELOCATED_REPO_ACCESS_IS_OK "$borg_path" create '
+        'sudo -n -H "$borg_path" create '
     )
 
 
 @pytest.mark.asyncio
-async def test_execute_remote_backup_does_not_require_backup_source_flag_and_uses_source_borg_wrapper(
+async def test_execute_remote_backup_supports_legacy_repository_urls_without_backup_source_flag(
     test_db, monkeypatch
 ):
     connection, repository, job = _remote_entities(test_db)
     connection.is_backup_source = False
+    repository.connection_id = None
+    repository.path = "ssh://backup@docker-host.example:2222/repos/remote-direct"
     test_db.commit()
     service = RemoteBackupService()
     commands = []

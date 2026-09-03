@@ -35,11 +35,12 @@ from app.services.repository_executor import (
 )
 from app.utils.borg_env import (
     cleanup_temp_key_file,
+    effective_repository_remote_path,
     get_standard_ssh_opts,
     setup_borg_env,
 )
 from app.utils.ssh_utils import (
-    resolve_repo_ssh_key_file,
+    resolve_repo_ssh_key_file,  # noqa: F401
 )  # Backward-compatible patch target for tests
 from app.utils.datetime_utils import serialize_datetime
 
@@ -51,6 +52,8 @@ def _build_repo_env(repo: Repository, db: Session):
     temp_key_file = resolve_repo_ssh_key_file(repo, db)
     ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
     env = setup_borg_env(passphrase=repo.passphrase, ssh_opts=ssh_opts)
+    if remote_path := effective_repository_remote_path(repo):
+        env["BORG_REMOTE_PATH"] = remote_path
     return env, temp_key_file
 
 
@@ -222,7 +225,7 @@ async def list_archives(
         try:
             result = await borg.list_archives(
                 repo.path,
-                remote_path=repo.remote_path,
+                remote_path=effective_repository_remote_path(repo),
                 passphrase=repo.passphrase,
                 bypass_lock=repo.bypass_lock,
                 env=env,
@@ -264,7 +267,7 @@ async def get_archive_info(
             result = await borg.info_archive(
                 repo.path,
                 archive_id,
-                remote_path=repo.remote_path,
+                remote_path=effective_repository_remote_path(repo),
                 passphrase=repo.passphrase,
                 bypass_lock=repo.bypass_lock,
                 env=env,
@@ -316,7 +319,7 @@ async def get_archive_info(
                     list_result = await borg.list_archive_contents(
                         repo.path,
                         archive_id,
-                        remote_path=repo.remote_path,
+                        remote_path=effective_repository_remote_path(repo),
                         passphrase=repo.passphrase,
                         bypass_lock=repo.bypass_lock,
                         env=env,
@@ -390,7 +393,7 @@ async def get_archive_contents(
                 repo.path,
                 archive_id,
                 path,
-                remote_path=repo.remote_path,
+                remote_path=effective_repository_remote_path(repo),
                 passphrase=repo.passphrase,
                 bypass_lock=repo.bypass_lock,
                 env=env,
@@ -558,7 +561,7 @@ async def download_file_from_archive(
                     [file_path],
                     temp_dir,
                     dry_run=False,
-                    remote_path=repo.remote_path,
+                    remote_path=effective_repository_remote_path(repo),
                     passphrase=repo.passphrase,
                     bypass_lock=repo.bypass_lock,
                     env=env,

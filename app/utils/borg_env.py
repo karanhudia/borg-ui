@@ -2,13 +2,17 @@
 
 from contextlib import contextmanager
 import os
+import shlex
 from pathlib import Path
 from typing import Iterator, Optional
+
+from sqlalchemy.orm import object_session
 
 from app.config import settings
 from app.utils.ssh_utils import (
     public_key_only_ssh_args,
     resolve_repo_ssh_key_file,
+    resolve_repository_ssh_connection,
     resolve_ssh_key_file_by_id,
 )
 
@@ -98,6 +102,36 @@ def cleanup_temp_key_file(temp_key_file: Optional[str]) -> None:
         os.unlink(temp_key_file)
 
 
+def effective_repository_remote_path(repository, db=None) -> Optional[str]:
+    """Return the Borg command used by an SSH repository's remote server.
+
+    Borg runs its remote side as the SSH user by default. A repository attached
+    to a connection with ``use_sudo`` needs that remote server to run as root
+    instead, otherwise it cannot access data written by a remote-direct backup
+    that ran as root. ``-n`` prevents an unattended command from hanging for a
+    password and ``-H`` keeps root's Borg state out of the SSH user's home.
+    """
+    configured_path = getattr(repository, "remote_path", None)
+    connection = getattr(repository, "repository_connection", None)
+    if getattr(connection, "use_sudo", None) is not True:
+        session = db
+        if session is None:
+            try:
+                session = object_session(repository)
+            except Exception:
+                session = None
+        if session is not None:
+            connection = resolve_repository_ssh_connection(repository, session)
+
+    if not connection or getattr(connection, "use_sudo", False) is not True:
+        return configured_path
+
+    borg_path = (
+        getattr(connection, "borg_binary_path", None) or configured_path or "borg"
+    )
+    return f"sudo -n -H {shlex.quote(borg_path)}"
+
+
 def build_repository_borg_env(
     repository,
     db,
@@ -119,6 +153,9 @@ def build_repository_borg_env(
         lock_wait=lock_wait,
         show_progress=show_progress,
     )
+    remote_path = effective_repository_remote_path(repository, db)
+    if remote_path:
+        env["BORG_REMOTE_PATH"] = remote_path
     return env, temp_key_file
 
 

@@ -21,7 +21,11 @@ from app.core.borg2 import _get_borg2_binary
 from app.config import settings
 from app.services.maintenance_state import apply_compact_completion
 from app.utils.db_retries import commit_with_retry
-from app.utils.borg_env import build_repository_borg_env, cleanup_temp_key_file
+from app.utils.borg_env import (
+    build_repository_borg_env,
+    cleanup_temp_key_file,
+    effective_repository_remote_path,
+)
 from app.utils.ssh_utils import (
     resolve_repo_ssh_key_file,  # noqa: F401
 )  # Backward-compatible patch target for tests
@@ -175,8 +179,8 @@ class CompactV2Service:
                 "--progress",
                 "--log-json",
             ]
-            if repository.remote_path:
-                cmd.extend(["--remote-path", repository.remote_path])
+            if remote_path := effective_repository_remote_path(repository):
+                cmd.extend(["--remote-path", remote_path])
 
             logger.info(
                 "Starting borg2 compact",

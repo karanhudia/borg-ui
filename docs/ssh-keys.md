@@ -66,7 +66,7 @@ Common options:
 | SFTP deployment mode | Key deployment needs SFTP mode, for example Hetzner Storage Box |
 | SSH path prefix | SSH commands need a prefix that SFTP browsing does not, for example some NAS paths |
 | Logical mount point | You want a friendly name for the remote machine in path pickers |
-| Use sudo | The SSH user's own permissions are not enough: SSHFS runs the remote SFTP server through sudo, and Remote Direct Backups run `borg create` through sudo (see below) |
+| Use sudo | Remote source files or a remote repository need root access; see the sudo requirements below |
 
 SFTP deployment mode can break some older SSH servers or NAS devices. Disable it when key deployment fails on those systems.
 
@@ -173,30 +173,69 @@ script, for example to pause Docker containers before Borg starts and resume
 them after Borg exits. The repository `remote_path` setting is different: it is
 passed to Borg as the repository-side remote Borg path.
 
-With *Use sudo* enabled, Borg UI runs
-`sudo -n --preserve-env=BORG_PASSPHRASE,... borg create ...` on the source
-host, so the passphrase and the other `BORG_*` variables survive sudo's
-`env_reset` (the default on Debian, Ubuntu and Raspberry Pi OS). The SSH user
-needs passwordless sudo that also allows preserving those variables. Prefer a
-rule scoped to the Borg binary with the `SETENV:` tag, for example
-`backup ALL=(root) NOPASSWD: SETENV: /usr/bin/borg` - the path in the rule must
-be the connection's configured Borg binary path, exactly as entered, wrapper
-scripts included, because that is what runs after `sudo`.
+When **Use sudo** is enabled on the repository connection, Borg UI runs the
+remote Borg server with `sudo -n -H` for every repository operation. Do not
+grant sudo directly to the Borg binary. On Borg 1, a user who can choose Borg
+arguments could use `--rsh` to run another command as root.
 
-::: warning The sudo target must not be writable by the SSH user
-The configured Borg binary or wrapper - and every parent directory on its
-path - must be owned by root and not writable by the SSH user. A file or
-directory the SSH user can modify turns the sudo rule into root code
-execution: the user replaces the target (or redirects a parent directory)
-and sudo runs it as root.
-:::
+Instead, set the repository `remote_path` to a root-owned wrapper that accepts
+only Borg's `serve` operation and restricts it to the exact repository path.
+For example, create `/usr/local/sbin/borg-serve` with this content, replacing
+both paths for your host:
 
-The unrestricted
-`NOPASSWD: ALL` that many images grant their default user works as well, but
-it lets the SSH user run any command as root - use it only where that is
-intentional, and prefer the scoped `SETENV` rule otherwise.
-Without either, sudo refuses the command or the environment and the backup
-fails before it touches the repository.
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "${1:-}" != "serve" ]]; then
+    echo "Only borg serve is permitted" >&2
+    exit 64
+fi
+
+shift
+for argument in "$@"; do
+    case "$argument" in
+        --verbose|--info|--debug|--error|--critical|--log-json|--show-version|--help|\
+        --umask=077|--lock-wait=*|--debug-topic=*|--log-level=*|--storage-quota=*) ;;
+        *)
+            echo "Unsupported borg serve argument: $argument" >&2
+            exit 64
+            ;;
+    esac
+done
+
+exec /usr/bin/borg serve --umask=077 --restrict-to-repository /srv/borg "$@"
+```
+
+Make the wrapper, `/srv`, `/srv/borg`, and every parent directory in both paths
+owned by root and not writable by the SSH user. Borg resolves the repository
+path before serving it, so a writable path component could otherwise be
+replaced. Then configure passwordless sudo with `NOSETENV` and an exact
+`env_keep` allowlist. Borg UI uses only
+`BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK`,
+`BORG_RELOCATED_REPO_ACCESS_IS_OK`, `BORG_PASSPHRASE`, and `BORG_REMOTE_PATH`
+for a remote-direct backup. Add a root-owned file with `visudo`:
+
+```sudoers
+Defaults:<ssh-user> env_keep += "BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK BORG_RELOCATED_REPO_ACCESS_IS_OK BORG_PASSPHRASE BORG_REMOTE_PATH"
+<ssh-user> ALL=(root) NOPASSWD: NOSETENV: /usr/local/sbin/borg-serve
+```
+
+Do not add `BORG_PASSCOMMAND` to this allowlist. Borg executes that helper, so
+a user-controlled helper must never run as root. If your setup needs a helper,
+use a fixed root-owned wrapper that supplies only the required values. Keep the
+connection's Borg binary path for source-side backups. The sudo wrapper above
+belongs in the repository `remote_path` setting.
+
+Before creating a plan, verify that the restricted sudo command works on the
+remote host:
+
+```bash
+sudo -n -H /usr/local/sbin/borg-serve serve --help
+```
+
+`-H` keeps root's Borg cache and configuration under `/root` instead of the SSH
+user's home.
 
 ## Synology and NAS Path Prefixes
 

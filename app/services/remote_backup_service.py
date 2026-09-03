@@ -18,12 +18,17 @@ import structlog
 from sqlalchemy.orm import Session
 
 from app.database.models import BackupJob, Repository, SSHConnection, SSHKey
+from app.utils.borg_env import effective_repository_remote_path
 from app.database.database import SessionLocal
 from app.config import settings
 from app.core.borg_errors import is_borg_warning_exit_code
 from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.services.notification_service import notification_service
-from app.utils.ssh_utils import ssh_key_auth_args, write_ssh_key_to_tempfile
+from app.utils.ssh_utils import (
+    resolve_repository_ssh_connection,
+    ssh_key_auth_args,
+    write_ssh_key_to_tempfile,
+)
 
 logger = structlog.get_logger()
 
@@ -148,13 +153,13 @@ class RemoteBackupService:
             if not repository:
                 raise Exception(f"Repository {repository_id} not found")
 
-            # Verify repository is SSH type (Phase 1 limitation)
-            if not repository.connection_id:
+            repository_connection = resolve_repository_ssh_connection(repository, db)
+            if not repository_connection:
                 raise Exception(
                     "Remote backups currently only support SSH repositories. "
                     "Local repositories will be supported in a future update."
                 )
-            if repository.connection_id != ssh_connection.id:
+            if repository_connection.id != ssh_connection.id:
                 raise Exception(
                     "Remote direct backups require the source and repository "
                     "to use the same SSH connection"
@@ -391,9 +396,9 @@ class RemoteBackupService:
           ssh://user@repo-host:/path::{hostname}-{now} \
           /data /etc
 
-        With use_sudo the borg invocation becomes
-        ``sudo -n --preserve-env=BORG_PASSPHRASE,... borg create ...`` so the
-        variables survive sudo's env_reset.
+        With use_sudo, the sudoers ``env_keep`` allowlist preserves the Borg
+        variables required by the command without granting arbitrary environment
+        control through ``SETENV``.
         """
         # Get DB session for connection lookup
         db = SessionLocal()
@@ -401,6 +406,7 @@ class RemoteBackupService:
             repo_url = self._get_repository_url(
                 repository, db, source_ssh_connection=source_ssh_connection
             )
+            remote_path = effective_repository_remote_path(repository, db)
         finally:
             db.close()
 
@@ -420,28 +426,25 @@ class RemoteBackupService:
             escaped_passphrase = shlex.quote(repository.passphrase)
             env_assignments.append(f"BORG_PASSPHRASE={escaped_passphrase}")
 
-        # Add remote path if configured
-        if repository.remote_path:
-            env_assignments.append(
-                f"BORG_REMOTE_PATH={shlex.quote(repository.remote_path)}"
-            )
+        # The effective path applies the repository connection's sudo policy.
+        # For remote-direct backups this makes Borg use the same privileged
+        # identity when it contacts the repository as other repository actions.
+        if remote_path:
+            env_assignments.append(f"BORG_REMOTE_PATH={shlex.quote(remote_path)}")
 
         cmd_parts = list(env_assignments)
 
         # Borg binary path (optionally prefixed with sudo)
         borg_command = shlex.quote(borg_binary_path)
         if use_sudo:
-            # sudo's env_reset (the Debian-family default) strips the
-            # assignments above before borg starts; name them explicitly as
-            # preserved. -n fails fast instead of waiting for a password that
-            # can never arrive over a non-interactive ssh command.
-            preserved = ",".join(
-                assignment.split("=", 1)[0] for assignment in env_assignments
-            )
+            # sudoers preserves only the documented Borg variables through its
+            # env_keep allowlist. -n fails fast instead of waiting for a password
+            # and -H keeps Borg's root cache out of the SSH user's home.
             if borg_binary_path == "borg":
                 # Resolve Borg with the SSH user's PATH before sudo applies its
-                # secure_path. The default is intentionally path-based so hosts
-                # with Borg outside /usr/bin keep working without extra setup.
+                # secure_path. The documented sudoers env_keep allowlist keeps
+                # the required Borg variables while NOSETENV prevents arbitrary
+                # environment changes.
                 cmd_parts = [
                     "export",
                     *env_assignments,
@@ -450,7 +453,7 @@ class RemoteBackupService:
                     "&&",
                 ]
                 borg_command = '"$borg_path"'
-            cmd_parts.extend(["sudo", "-n", f"--preserve-env={preserved}"])
+            cmd_parts.extend(["sudo", "-n", "-H"])
         cmd_parts.append(borg_command)
 
         # Create command
@@ -507,10 +510,11 @@ class RemoteBackupService:
         Examples:
         - SSH repo: ssh://backup@repo-host:22/path
         """
-        if repository.connection_id:
+        connection = resolve_repository_ssh_connection(repository, db)
+        if connection:
             if (
                 source_ssh_connection is not None
-                and repository.connection_id == source_ssh_connection.id
+                and connection.id == source_ssh_connection.id
             ):
                 return self._extract_remote_repository_path(repository.path)
 
@@ -520,13 +524,6 @@ class RemoteBackupService:
                 return repository.path
 
             # Get SSH connection details
-            connection = (
-                db.query(SSHConnection)
-                .filter(SSHConnection.id == repository.connection_id)
-                .first()
-            )
-            if not connection:
-                raise ValueError(f"SSH connection {repository.connection_id} not found")
             return f"ssh://{connection.username}@{connection.host}:{connection.port}{repository.path}"
         else:
             raise NotImplementedError(

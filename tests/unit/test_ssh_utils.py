@@ -87,6 +87,9 @@ class TestResolveRepoSshKeyFile:
             m = MagicMock()
             if model == SSHConnection:
                 m.filter.return_value.first.return_value = connection
+                m.filter.return_value.limit.return_value.all.return_value = (
+                    [connection] if connection else []
+                )
             elif model == SSHKey:
                 m.filter.return_value.first.return_value = ssh_key
             return m

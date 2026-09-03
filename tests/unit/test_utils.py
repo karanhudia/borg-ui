@@ -721,6 +721,46 @@ class TestProcessUtils:
         mock_is_process_alive.assert_called_once_with(4321, 8765)
         mock_break_repository_lock.assert_called_once_with(repo)
 
+    @patch("app.utils.process_utils.break_repository_lock")
+    @patch(
+        "app.utils.process_utils.resolve_repository_ssh_connection",
+        return_value=MagicMock(id=9),
+    )
+    @patch("app.utils.process_utils.is_process_alive", return_value=False)
+    def test_cleanup_orphaned_jobs_does_not_break_resolved_legacy_ssh_lock(
+        self,
+        mock_is_process_alive,
+        mock_resolve_connection,
+        mock_break_repository_lock,
+        db_session,
+    ):
+        repo = Repository(
+            name="Legacy SSH Check Repo",
+            path="ssh://backup@example.com:2222/repos/legacy-check",
+            encryption="none",
+            repository_type="ssh",
+        )
+        db_session.add(repo)
+        db_session.flush()
+        check_job = CheckJob(
+            repository_id=repo.id,
+            repository_path=repo.path,
+            status="running",
+            process_pid=4321,
+            process_start_time=8765,
+        )
+        db_session.add(check_job)
+        db_session.commit()
+
+        cleanup_orphaned_jobs(db_session)
+
+        db_session.refresh(check_job)
+        assert check_job.status == "failed"
+        assert "warningRemoteProcessMayBeRunning" in check_job.error_message
+        mock_is_process_alive.assert_called_once_with(4321, 8765)
+        mock_resolve_connection.assert_called_with(repo, db_session)
+        mock_break_repository_lock.assert_not_called()
+
     @patch("app.utils.process_utils.break_repository_lock", return_value=True)
     @patch("app.utils.process_utils.is_process_alive", return_value=False)
     def test_cleanup_orphaned_jobs_matches_running_check_parent_by_repository_path(

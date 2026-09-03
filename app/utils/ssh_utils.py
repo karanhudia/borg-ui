@@ -78,15 +78,26 @@ def _find_matching_ssh_connection(path: str, db) -> Optional[SSHConnection]:
     if not parsed.hostname or not parsed.username:
         return None
 
-    return (
+    matches = (
         db.query(SSHConnection)
         .filter(
             SSHConnection.host == parsed.hostname,
             SSHConnection.username == parsed.username,
             SSHConnection.port == port,
         )
-        .first()
+        .limit(2)
+        .all()
     )
+    return matches[0] if len(matches) == 1 else None
+
+
+def resolve_repository_ssh_connection(repository, db) -> Optional[SSHConnection]:
+    """Resolve a repository's configured or legacy URL-matched SSH connection."""
+    connection_id = getattr(repository, "connection_id", None)
+    if connection_id:
+        return db.query(SSHConnection).filter(SSHConnection.id == connection_id).first()
+
+    return _find_matching_ssh_connection(getattr(repository, "path", "") or "", db)
 
 
 def resolve_repo_ssh_key_file(repository, db) -> Optional[str]:
@@ -112,9 +123,7 @@ def resolve_repo_ssh_key_file(repository, db) -> Optional[str]:
     is_ssh_path = repo_path.startswith("ssh://")
 
     if connection_id:
-        connection = (
-            db.query(SSHConnection).filter(SSHConnection.id == connection_id).first()
-        )
+        connection = resolve_repository_ssh_connection(repository, db)
         if connection and connection.ssh_key_id:
             ssh_key = (
                 db.query(SSHKey).filter(SSHKey.id == connection.ssh_key_id).first()
@@ -122,7 +131,7 @@ def resolve_repo_ssh_key_file(repository, db) -> Optional[str]:
     elif ssh_key_id and (repository_type == "ssh" or is_ssh_path):
         ssh_key = db.query(SSHKey).filter(SSHKey.id == ssh_key_id).first()
     elif is_ssh_path:
-        connection = _find_matching_ssh_connection(repo_path, db)
+        connection = resolve_repository_ssh_connection(repository, db)
         if connection and connection.ssh_key_id:
             logger.info(
                 "Resolved SSH key from matching connection",

@@ -10,9 +10,14 @@ from typing import Optional
 import structlog
 from datetime import datetime, timedelta
 from sqlalchemy import and_, func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 from app.config import settings
 from app.core.borg_router import BorgRouter
+from app.utils.borg_env import (
+    cleanup_temp_key_file,
+    effective_repository_remote_path,
+    get_standard_ssh_opts,
+)
 from app.database.models import (
     AgentJob,
     BackupPlanRun,
@@ -30,7 +35,10 @@ from app.utils.backup_maintenance import (
     COMPLETED_BACKUP_STATUSES,
     RUNNING_BACKUP_MAINTENANCE_FAILURES,
 )
-from app.utils.ssh_utils import public_key_only_ssh_args
+from app.utils.ssh_utils import (
+    resolve_repo_ssh_key_file,
+    resolve_repository_ssh_connection,
+)
 
 logger = structlog.get_logger()
 
@@ -461,10 +469,16 @@ def break_repository_lock(repository: Repository) -> bool:
     Returns:
         True if lock was successfully broken, False otherwise
     """
+    temp_key_file = None
     try:
+        try:
+            db = object_session(repository)
+        except Exception:
+            db = None
+        connection = resolve_repository_ssh_connection(repository, db) if db else None
         cmd = BorgRouter(repository).build_break_lock_command(
             repository_path=repository.path,
-            remote_path=repository.remote_path,
+            remote_path=effective_repository_remote_path(repository, db),
         )
 
         # Set environment variables
@@ -472,17 +486,14 @@ def break_repository_lock(repository: Repository) -> bool:
         if repository.passphrase:
             env["BORG_PASSPHRASE"] = repository.passphrase
 
-        # For remote repos, add SSH options
-        if repository.connection_id:
-            ssh_opts = [
-                *public_key_only_ssh_args(),
-                "-o",
-                "StrictHostKeyChecking=no",
-                "-o",
-                "UserKnownHostsFile=/dev/null",
-                "-o",
-                "LogLevel=ERROR",
-            ]
+        # For remote repos, use the same resolved connection for the Borg
+        # remote command and SSH identity, including legacy ssh:// URLs.
+        if connection:
+            temp_key_file = resolve_repo_ssh_key_file(repository, db)
+            ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
+            env["BORG_RSH"] = f"ssh {' '.join(ssh_opts)}"
+        elif repository.connection_id:
+            ssh_opts = get_standard_ssh_opts()
             env["BORG_RSH"] = f"ssh {' '.join(ssh_opts)}"
 
         # Execute break-lock command
@@ -511,6 +522,20 @@ def break_repository_lock(repository: Repository) -> bool:
             "Error breaking repository lock", repository_id=repository.id, error=str(e)
         )
         return False
+    finally:
+        cleanup_temp_key_file(temp_key_file)
+
+
+def _is_remote_repository(repository: Repository, db: Session) -> bool:
+    """Return whether a repository may still have a live remote Borg process."""
+    path = getattr(repository, "path", "") or ""
+    repository_type = (getattr(repository, "repository_type", "") or "").lower()
+    return bool(
+        resolve_repository_ssh_connection(repository, db)
+        or getattr(repository, "connection_id", None)
+        or repository_type == "ssh"
+        or path.startswith("ssh://")
+    )
 
 
 def cleanup_orphaned_jobs(db: Session):
@@ -635,7 +660,7 @@ def cleanup_orphaned_jobs(db: Session):
             )
 
             if repository:
-                if not repository.connection_id:
+                if not _is_remote_repository(repository, db):
                     # For local repos, we can safely break the lock
                     logger.info(
                         "Attempting to break lock for local repository",
@@ -771,7 +796,7 @@ def cleanup_orphaned_jobs(db: Session):
             )
 
             if repository:
-                if not repository.connection_id:
+                if not _is_remote_repository(repository, db):
                     # For local repos, we can safely break the lock
                     logger.info(
                         "Attempting to break lock for local repository",
