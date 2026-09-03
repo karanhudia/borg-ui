@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -12,7 +13,10 @@ from app.database.models import (
     AgentJobLog,
     AgentMachine,
     BackupJob,
+    BackupPlan,
+    CheckJob,
     LicensingState,
+    Repository,
 )
 
 
@@ -1307,3 +1311,451 @@ class TestAgentJobReaper:
 
         test_db.refresh(backup_job)
         assert backup_job.status == "completed"
+
+
+NOTIFIER_PATCH_TARGET = "app.services.agent_job_notifications.notification_service"
+
+
+@pytest.mark.unit
+class TestAgentJobNotifications:
+    """Agent-executed jobs must fire the same user-facing notifications the
+    server-side execution paths send from inside their services."""
+
+    def _register(self, test_client, test_db, admin_headers):
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        return agent, _agent_headers(registered["agent_token"])
+
+    def _linked_backup_job(self, test_db, agent, *, agent_status="running"):
+        backup_job = BackupJob(repository="/repo", status="running")
+        test_db.add(backup_job)
+        test_db.commit()
+        test_db.refresh(backup_job)
+        job = _create_agent_job(test_db, agent, status=agent_status)
+        job.backup_job_id = backup_job.id
+        test_db.commit()
+        return job, backup_job
+
+    def test_completed_backup_job_sends_success_notification(
+        self, test_client, test_db, admin_headers
+    ):
+        agent, headers = self._register(test_client, test_db, admin_headers)
+        job, backup_job = self._linked_backup_job(test_db, agent)
+
+        with patch(NOTIFIER_PATCH_TARGET, new_callable=AsyncMock) as notifier:
+            response = test_client.post(
+                f"/api/agents/jobs/{job.id}/complete",
+                json={"result": {"archive_name": "agent-archive", "return_code": 0}},
+                headers=headers,
+            )
+
+        assert response.status_code == 200
+        notifier.send_backup_success.assert_awaited_once()
+        args = notifier.send_backup_success.await_args.args
+        assert args[1] == "/repo"
+        assert args[2] == "agent-archive"
+        notifier.send_backup_warning.assert_not_awaited()
+        notifier.send_backup_failure.assert_not_awaited()
+
+    def test_warning_completion_sends_warning_notification(
+        self, test_client, test_db, admin_headers
+    ):
+        agent, headers = self._register(test_client, test_db, admin_headers)
+        job, backup_job = self._linked_backup_job(test_db, agent)
+
+        with patch(NOTIFIER_PATCH_TARGET, new_callable=AsyncMock) as notifier:
+            response = test_client.post(
+                f"/api/agents/jobs/{job.id}/complete",
+                json={"result": {"archive_name": "agent-archive", "return_code": 1}},
+                headers=headers,
+            )
+
+        assert response.status_code == 200
+        notifier.send_backup_warning.assert_awaited_once()
+        notifier.send_backup_success.assert_not_awaited()
+
+    def test_error_return_code_sends_failure_notification(
+        self, test_client, test_db, admin_headers
+    ):
+        agent, headers = self._register(test_client, test_db, admin_headers)
+        job, backup_job = self._linked_backup_job(test_db, agent)
+
+        with patch(NOTIFIER_PATCH_TARGET, new_callable=AsyncMock) as notifier:
+            response = test_client.post(
+                f"/api/agents/jobs/{job.id}/complete",
+                json={"result": {"return_code": 2}},
+                headers=headers,
+            )
+
+        assert response.status_code == 200
+        notifier.send_backup_failure.assert_awaited_once()
+        args = notifier.send_backup_failure.await_args.args
+        assert args[1] == "/repo"
+        assert "borg exited with code 2" in args[2]
+        assert args[3] == backup_job.id
+        notifier.send_backup_success.assert_not_awaited()
+
+    def test_failed_job_sends_failure_notification(
+        self, test_client, test_db, admin_headers
+    ):
+        agent, headers = self._register(test_client, test_db, admin_headers)
+        job, backup_job = self._linked_backup_job(test_db, agent)
+
+        with patch(NOTIFIER_PATCH_TARGET, new_callable=AsyncMock) as notifier:
+            response = test_client.post(
+                f"/api/agents/jobs/{job.id}/fail",
+                json={"error_message": "disk full", "return_code": 2},
+                headers=headers,
+            )
+
+        assert response.status_code == 200
+        notifier.send_backup_failure.assert_awaited_once()
+        args = notifier.send_backup_failure.await_args.args
+        assert args[2] == "disk full"
+
+    def test_repeated_completion_does_not_duplicate_notification(
+        self, test_client, test_db, admin_headers
+    ):
+        agent, headers = self._register(test_client, test_db, admin_headers)
+        job, backup_job = self._linked_backup_job(test_db, agent)
+
+        with patch(NOTIFIER_PATCH_TARGET, new_callable=AsyncMock) as notifier:
+            for _ in range(2):
+                response = test_client.post(
+                    f"/api/agents/jobs/{job.id}/complete",
+                    json={
+                        "result": {"archive_name": "agent-archive", "return_code": 0}
+                    },
+                    headers=headers,
+                )
+                assert response.status_code == 200
+
+        notifier.send_backup_success.assert_awaited_once()
+
+    def test_first_start_report_sends_backup_start_notification(
+        self, test_client, test_db, admin_headers
+    ):
+        agent, headers = self._register(test_client, test_db, admin_headers)
+        job, backup_job = self._linked_backup_job(
+            test_db, agent, agent_status="claimed"
+        )
+
+        with patch(NOTIFIER_PATCH_TARGET, new_callable=AsyncMock) as notifier:
+            for _ in range(2):
+                response = test_client.post(
+                    f"/api/agents/jobs/{job.id}/start",
+                    json={},
+                    headers=headers,
+                )
+                assert response.status_code == 200
+
+        notifier.send_backup_start.assert_awaited_once()
+        args = notifier.send_backup_start.await_args.args
+        assert args[1] == "/repo"
+
+    def _agent_check_job(self, test_db, agent, *, name="agent-check-repo"):
+        repository = Repository(name=name, path=f"/{name}")
+        test_db.add(repository)
+        test_db.commit()
+        test_db.refresh(repository)
+        check_job = CheckJob(repository_id=repository.id, status="running")
+        test_db.add(check_job)
+        test_db.commit()
+        test_db.refresh(check_job)
+        now = datetime.now(timezone.utc)
+        job = AgentJob(
+            agent_machine_id=agent.id,
+            job_type="repository",
+            status="running",
+            payload={
+                "schema_version": 1,
+                "job_kind": "repository.check",
+                "repository": {"id": repository.id},
+                "operation": {"maintenance_job": {"kind": "check", "id": check_job.id}},
+            },
+            created_at=now,
+            updated_at=now,
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+        return job, check_job, repository
+
+    def test_agent_check_completion_sends_check_notification(
+        self, test_client, test_db, admin_headers
+    ):
+        agent, headers = self._register(test_client, test_db, admin_headers)
+        job, check_job, repository = self._agent_check_job(test_db, agent)
+
+        with patch(NOTIFIER_PATCH_TARGET, new_callable=AsyncMock) as notifier:
+            response = test_client.post(
+                f"/api/agents/jobs/{job.id}/complete",
+                json={"result": {"return_code": 0}},
+                headers=headers,
+            )
+
+        assert response.status_code == 200
+        notifier.send_check_completion.assert_awaited_once()
+        kwargs = notifier.send_check_completion.await_args.kwargs
+        assert kwargs["status"] == "completed"
+        assert kwargs["repository_name"] == repository.name
+        assert kwargs["check_type"] == "manual"
+
+    def test_agent_check_failure_sends_check_notification(
+        self, test_client, test_db, admin_headers
+    ):
+        agent, headers = self._register(test_client, test_db, admin_headers)
+        job, check_job, repository = self._agent_check_job(
+            test_db, agent, name="agent-check-repo-2"
+        )
+
+        with patch(NOTIFIER_PATCH_TARGET, new_callable=AsyncMock) as notifier:
+            response = test_client.post(
+                f"/api/agents/jobs/{job.id}/fail",
+                json={"error_message": "check failed", "return_code": 2},
+                headers=headers,
+            )
+
+        assert response.status_code == 200
+        notifier.send_check_completion.assert_awaited_once()
+        kwargs = notifier.send_check_completion.await_args.kwargs
+        assert kwargs["status"] == "failed"
+        assert kwargs["error_message"] == "check failed"
+
+    async def test_notify_backup_job_finished_prefers_plan_name(self, test_db):
+        from app.services.agent_job_notifications import notify_backup_job_finished
+
+        plan = BackupPlan(name="nightly", source_directories="[]")
+        test_db.add(plan)
+        test_db.commit()
+        test_db.refresh(plan)
+        backup_job = BackupJob(
+            repository="/repo",
+            status="failed",
+            backup_plan_id=plan.id,
+            error_message="agent session lost",
+        )
+        test_db.add(backup_job)
+        test_db.commit()
+        test_db.refresh(backup_job)
+
+        with patch(NOTIFIER_PATCH_TARGET, new_callable=AsyncMock) as notifier:
+            await notify_backup_job_finished(test_db, backup_job)
+
+        notifier.send_backup_failure.assert_awaited_once()
+        args = notifier.send_backup_failure.await_args.args
+        assert args[2] == "agent session lost"
+        assert args[4] == "nightly"
+
+    async def test_notify_backup_job_finished_skips_cancelled(self, test_db):
+        from app.services.agent_job_notifications import notify_backup_job_finished
+
+        backup_job = BackupJob(repository="/repo", status="cancelled")
+        test_db.add(backup_job)
+        test_db.commit()
+
+        with patch(NOTIFIER_PATCH_TARGET, new_callable=AsyncMock) as notifier:
+            await notify_backup_job_finished(test_db, backup_job)
+
+        notifier.send_backup_failure.assert_not_awaited()
+        notifier.send_backup_success.assert_not_awaited()
+
+    def test_reaper_collects_failed_backup_jobs_for_notification(
+        self, test_client, test_db, admin_headers
+    ):
+        from app.services.agent_job_reaper import reap_stale_agent_jobs
+
+        agent, _headers = self._register(test_client, test_db, admin_headers)
+        backup_job = BackupJob(repository="/repo", status="running")
+        test_db.add(backup_job)
+        test_db.commit()
+        test_db.refresh(backup_job)
+        job = _create_agent_job(test_db, agent, status="running")
+        stale_at = datetime.now(timezone.utc) - timedelta(minutes=30)
+        job.backup_job_id = backup_job.id
+        job.started_at = stale_at
+        job.updated_at = stale_at
+        test_db.commit()
+
+        failed_backup_job_ids: list[int] = []
+        reaped = reap_stale_agent_jobs(
+            test_db, failed_backup_job_ids=failed_backup_job_ids
+        )
+
+        assert reaped == 1
+        assert failed_backup_job_ids == [backup_job.id]
+
+    def test_reaper_does_not_collect_terminal_backup_jobs(
+        self, test_client, test_db, admin_headers
+    ):
+        from app.services.agent_job_reaper import reap_stale_agent_jobs
+
+        agent, _headers = self._register(test_client, test_db, admin_headers)
+        backup_job = BackupJob(repository="/repo", status="completed")
+        test_db.add(backup_job)
+        test_db.commit()
+        test_db.refresh(backup_job)
+        job = _create_agent_job(test_db, agent, status="running")
+        stale_at = datetime.now(timezone.utc) - timedelta(minutes=30)
+        job.backup_job_id = backup_job.id
+        job.started_at = stale_at
+        job.updated_at = stale_at
+        test_db.commit()
+
+        failed_backup_job_ids: list[int] = []
+        reap_stale_agent_jobs(test_db, failed_backup_job_ids=failed_backup_job_ids)
+
+        assert failed_backup_job_ids == []
+
+    def test_stale_completion_report_cannot_double_finalize(
+        self, test_client, test_db, admin_headers
+    ):
+        from sqlalchemy.orm import Session as SASession
+
+        from app.api.agents import _complete_agent_job
+
+        agent, _headers = self._register(test_client, test_db, admin_headers)
+        job, backup_job = self._linked_backup_job(test_db, agent)
+
+        # A second session models the other transport holding a stale view of
+        # the still-running job (its read transaction already closed, as after
+        # a completed request cycle).
+        stale_db = SASession(bind=test_db.get_bind(), expire_on_commit=False)
+        try:
+            stale_job = stale_db.query(AgentJob).filter(AgentJob.id == job.id).first()
+            assert stale_job.status == "running"
+            stale_db.commit()
+
+            # The reaper (or the other transport) finalizes the job first.
+            test_db.query(AgentJob).filter(AgentJob.id == job.id).update(
+                {AgentJob.status: "failed", AgentJob.error_message: "reaped"},
+                synchronize_session=False,
+            )
+            test_db.query(BackupJob).filter(BackupJob.id == backup_job.id).update(
+                {BackupJob.status: "failed", BackupJob.error_message: "reaped"},
+                synchronize_session=False,
+            )
+            test_db.commit()
+
+            transitioned = _complete_agent_job(
+                stale_job, stale_db, result={"archive_name": "late", "return_code": 0}
+            )
+            stale_db.commit()
+            assert transitioned is False
+        finally:
+            stale_db.close()
+
+        test_db.expire_all()
+        assert (
+            test_db.query(AgentJob).filter(AgentJob.id == job.id).first().status
+            == "failed"
+        )
+        linked = test_db.query(BackupJob).filter(BackupJob.id == backup_job.id).first()
+        assert linked.status == "failed"
+        assert linked.error_message == "reaped"
+
+    def test_stale_start_report_does_not_claim_start_notification(
+        self, test_client, test_db, admin_headers
+    ):
+        from sqlalchemy.orm import Session as SASession
+
+        from app.api.agents import _mark_agent_job_started
+
+        agent, _headers = self._register(test_client, test_db, admin_headers)
+        job, backup_job = self._linked_backup_job(
+            test_db, agent, agent_status="claimed"
+        )
+
+        stale_db = SASession(bind=test_db.get_bind(), expire_on_commit=False)
+        try:
+            stale_job = stale_db.query(AgentJob).filter(AgentJob.id == job.id).first()
+            stale_db.commit()
+
+            first = _mark_agent_job_started(job, test_db)
+            test_db.commit()
+            assert first is not None
+
+            second = _mark_agent_job_started(stale_job, stale_db)
+            stale_db.commit()
+            assert second is None
+        finally:
+            stale_db.close()
+
+    async def test_expired_object_reads_stay_inside_notification_boundary(
+        self, test_db
+    ):
+        from app.services.agent_job_notifications import notify_backup_job_finished
+
+        backup_job = BackupJob(repository="/repo", status="failed", error_message="x")
+        test_db.add(backup_job)
+        test_db.commit()
+        test_db.refresh(backup_job)
+        # Detached + expired: every attribute read raises, modeling a refresh
+        # failure on the committed (expired) row after the job turned final.
+        test_db.expire(backup_job)
+        test_db.expunge(backup_job)
+
+        with patch(NOTIFIER_PATCH_TARGET, new_callable=AsyncMock) as notifier:
+            await notify_backup_job_finished(test_db, backup_job)
+
+        notifier.send_backup_failure.assert_not_awaited()
+
+    async def test_notifier_failure_does_not_propagate(self, test_db):
+        from app.services.agent_job_notifications import notify_backup_job_finished
+
+        backup_job = BackupJob(repository="/repo", status="failed", error_message="x")
+        test_db.add(backup_job)
+        test_db.commit()
+        test_db.refresh(backup_job)
+
+        with patch(NOTIFIER_PATCH_TARGET, new_callable=AsyncMock) as notifier:
+            notifier.send_backup_failure.side_effect = RuntimeError("boom")
+            await notify_backup_job_finished(test_db, backup_job)
+
+        notifier.send_backup_failure.assert_awaited_once()
+
+    def test_stale_cancel_report_cannot_overwrite_terminal_state(
+        self, test_client, test_db, admin_headers
+    ):
+        from sqlalchemy.orm import Session as SASession
+
+        from app.api.agents import _cancel_agent_job
+
+        agent, _headers = self._register(test_client, test_db, admin_headers)
+        job, backup_job = self._linked_backup_job(test_db, agent)
+
+        stale_db = SASession(bind=test_db.get_bind(), expire_on_commit=False)
+        try:
+            stale_job = stale_db.query(AgentJob).filter(AgentJob.id == job.id).first()
+            stale_db.commit()
+
+            test_db.query(AgentJob).filter(AgentJob.id == job.id).update(
+                {AgentJob.status: "failed", AgentJob.error_message: "reaped"},
+                synchronize_session=False,
+            )
+            test_db.query(BackupJob).filter(BackupJob.id == backup_job.id).update(
+                {BackupJob.status: "failed", BackupJob.error_message: "reaped"},
+                synchronize_session=False,
+            )
+            test_db.commit()
+
+            _cancel_agent_job(stale_job, stale_db)
+            stale_db.commit()
+        finally:
+            stale_db.close()
+
+        test_db.expire_all()
+        assert (
+            test_db.query(AgentJob).filter(AgentJob.id == job.id).first().status
+            == "failed"
+        )
+        assert (
+            test_db.query(BackupJob)
+            .filter(BackupJob.id == backup_job.id)
+            .first()
+            .status
+            == "failed"
+        )
