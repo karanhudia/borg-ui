@@ -7106,6 +7106,188 @@
           }
         }
       ]
+    },
+    {
+      "name": "24. Archive index and history",
+      "item": [
+        {
+          "name": "List archives (index)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/repositories/1/archives",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "repositories",
+                "1",
+                "archives"
+              ]
+            },
+            "description": "Backend route: `GET /api/repositories/{repo_id}/archives`\n\nSource: `app/api/archive_index.py`"
+          }
+        },
+        {
+          "name": "Archive heatmap",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/repositories/1/archives/heatmap",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "repositories",
+                "1",
+                "archives",
+                "heatmap"
+              ]
+            },
+            "description": "Backend route: `GET /api/repositories/{repo_id}/archives/heatmap`\n\nSource: `app/api/archive_index.py`"
+          }
+        },
+        {
+          "name": "Archive detail",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/repositories/1/archives/1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "repositories",
+                "1",
+                "archives",
+                "1"
+              ]
+            },
+            "description": "Backend route: `GET /api/repositories/{repo_id}/archives/{archive_id}`\n\nSource: `app/api/archive_index.py`"
+          }
+        },
+        {
+          "name": "Archive changes (Pro)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/repositories/1/archives/1/changes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "repositories",
+                "1",
+                "archives",
+                "1",
+                "changes"
+              ]
+            },
+            "description": "Backend route: `GET /api/repositories/{repo_id}/archives/{archive_id}/changes`\n\nSource: `app/api/archive_index.py`"
+          }
+        },
+        {
+          "name": "Path history (Pro)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/repositories/1/history?path=home/user/file.txt",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "repositories",
+                "1",
+                "history"
+              ],
+              "query": [
+                {
+                  "key": "path",
+                  "value": "home/user/file.txt"
+                }
+              ]
+            },
+            "description": "Backend route: `GET /api/repositories/{repo_id}/history`\n\nSource: `app/api/archive_index.py`"
+          }
+        },
+        {
+          "name": "Search paths (Pro)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/repositories/1/search?q=invoice",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "repositories",
+                "1",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "invoice"
+                }
+              ]
+            },
+            "description": "Backend route: `GET /api/repositories/{repo_id}/search`\n\nSource: `app/api/archive_index.py`"
+          }
+        },
+        {
+          "name": "Status strip",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/repositories/1/status-strip",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "repositories",
+                "1",
+                "status-strip"
+              ]
+            },
+            "description": "Backend route: `GET /api/repositories/{repo_id}/status-strip`\n\nSource: `app/api/archive_index.py`"
+          }
+        },
+        {
+          "name": "Rebuild derived data",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/repositories/1/rebuild",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "repositories",
+                "1",
+                "rebuild"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"from\": \"stats\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Backend route: `POST /api/repositories/{repo_id}/rebuild`\n\nSource: `app/api/archive_index.py`"
+          }
+        }
+      ]
     }
   ]
 }

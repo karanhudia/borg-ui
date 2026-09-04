@@ -11,11 +11,41 @@ from __future__ import annotations
 from datetime import datetime
 
 import pytest
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import sessionmaker
 
+from app.database.models import Archive, Base, Repository, SystemSettings
 from app.services.repository_info_sync import (
     _newest_archive_time,
     sync_archive_stats_from_info,
 )
+
+
+@pytest.fixture()
+def db():
+    engine = create_engine("sqlite:///:memory:")
+
+    @event.listens_for(engine, "connect")
+    def _fk_on(dbapi_conn, record):
+        dbapi_conn.execute("PRAGMA foreign_keys=ON")
+
+    Base.metadata.create_all(engine)
+    session = sessionmaker(bind=engine)()
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+@pytest.fixture()
+def repo(db):
+    r = Repository(
+        name="r", path="/tmp/r", encryption="none", compression="lz4", borg_version=1
+    )
+    db.add(r)
+    db.add(SystemSettings())
+    db.commit()
+    return r
 
 
 class FakeDb:
@@ -210,3 +240,35 @@ def test_the_zero_epoch_is_a_valid_time_and_wins_over_start():
     )
 
     assert newest == datetime(1970, 1, 1, 0, 0, 0)
+
+
+@pytest.mark.unit
+def test_sync_writes_archive_rows_and_derives_columns(db, repo):
+    """Borg 2 info entries carry id, name, and time; they upsert `archives`
+    and the repository columns are derived from that table (spec 6.4)."""
+    # Offset-carrying, matching the live-fixture shape used elsewhere in this
+    # file: a bare naive time with no timezone_name would otherwise resolve
+    # in the test server's own local zone rather than UTC.
+    repo.borg_version = 2
+    db.commit()
+    info = {
+        "archives": [
+            {"id": "a1", "name": "nas", "time": "2026-09-01T02:00:00+00:00"},
+            {"id": "a2", "name": "nas", "time": "2026-09-02T02:00:00+00:00"},
+        ]
+    }
+    sync_archive_stats_from_info(repo, info, db)
+    assert db.query(Archive).filter_by(repository_id=repo.id).count() == 2
+    assert repo.archive_count == 2
+    assert repo.last_backup == datetime(2026, 9, 2, 2, 0, 0)
+
+
+@pytest.mark.unit
+def test_sync_falls_back_to_columns_when_entries_lack_ids(db, repo):
+    repo.borg_version = 2
+    db.commit()
+    sync_archive_stats_from_info(
+        repo, {"archives": [{"name": "nas", "time": "2026-09-02T02:00:00.000000"}]}, db
+    )
+    assert db.query(Archive).count() == 0
+    assert repo.archive_count == 1

@@ -220,6 +220,18 @@ class UserRepositoryPermission(Base):
     __table_args__ = (UniqueConstraint("user_id", "repository_id"),)
 
 
+# Default history index excludes (spec 6.7). Seeded on every repository
+# creation path through the column default and backfilled by migration
+# c2d3e4f5a6b7 for rows that predate it.
+DEFAULT_HISTORY_INDEX_EXCLUDES: tuple[str, ...] = (
+    "**/.cache/**",
+    "**/Library/Caches/**",
+    "**/node_modules/**",
+    "**/__pycache__/**",
+    "**/.git/objects/**",
+)
+
+
 class Repository(Base):
     __tablename__ = "repositories"
     __table_args__ = (Index("idx_repositories_source_ssh", "source_ssh_connection_id"),)
@@ -320,6 +332,11 @@ class Repository(Base):
     # Borg version this repository was created with (1 or 2)
     # Controls which binary and /api/v2/ routes are used for all operations
     borg_version = Column(Integer, default=1, nullable=False)
+
+    # Glob patterns the history index drops from borg diff output (spec 6.7)
+    history_index_excludes = Column(
+        JSON, nullable=True, default=lambda: list(DEFAULT_HISTORY_INDEX_EXCLUDES)
+    )
 
     # Custom flags for borg create command (advanced users)
     custom_flags = Column(
@@ -1562,6 +1579,9 @@ class SystemSettings(Base):
     # Operations runner (spec section 7.3)
     index_workers = Column(Integer, default=2, nullable=False)
     background_paused = Column(Boolean, default=False, nullable=False)
+    # Set once the first post-phase-2 startup has enqueued a reconcile run
+    # for every repository (spec 14)
+    history_bootstrap_at = Column(DateTime, nullable=True)
     dashboard_backup_warning_days = Column(Integer, default=3, nullable=False)
     dashboard_backup_critical_days = Column(Integer, default=7, nullable=False)
     dashboard_check_warning_days = Column(Integer, default=7, nullable=False)

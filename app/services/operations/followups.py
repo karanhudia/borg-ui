@@ -24,16 +24,31 @@ FOLLOWUPS: dict[str, tuple[str, ...]] = {
     "history_merge": (),
 }
 
+HISTORY_KINDS: frozenset[str] = frozenset({"history_index", "history_merge"})
 
-def chain_for(kind: str, *, available: Optional[set[str]] = None) -> list[str]:
+
+def chain_for(
+    kind: str, *, available: Optional[set[str]] = None, history: bool = True
+) -> list[str]:
     """Return the follow-up kinds for `kind`, in order.
 
-    When `available` is given (the runner passes its registered executor
-    kinds), kinds without an executor are dropped so no row is created that
-    can never run.
+    `available` drops kinds without an executor. `history=False` drops the
+    history kinds for Community installs (spec 11.2): the stage does not
+    exist rather than being created and skipped (Appendix B).
     """
     validate_kind(kind)
     chain = list(FOLLOWUPS[kind])
     if available is not None:
         chain = [k for k in chain if k in available]
+    if not history:
+        chain = [k for k in chain if k not in HISTORY_KINDS]
     return chain
+
+
+def history_enabled(db) -> bool:
+    """True when the current plan includes the archive_history feature
+    (spec 11.2). Imported lazily: app.core.features pulls in the licensing
+    service, which must not be an import-time dependency of the runner."""
+    from app.core.features import Plan, get_current_plan, plan_includes
+
+    return plan_includes(get_current_plan(db), Plan.PRO)

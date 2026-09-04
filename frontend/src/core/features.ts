@@ -18,6 +18,7 @@ export const FEATURES = {
   container_backups: 'pro',
   backup_reports: 'pro',
   alerting_monitoring: 'pro',
+  archive_history: 'pro',
   multi_user: 'community',
   extra_users: 'pro',
   rbac: 'enterprise',

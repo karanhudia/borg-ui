@@ -192,6 +192,10 @@ class Settings(BaseSettings):
     # Operations index: per-archive `borg info` calls per archive_sync run
     index_archive_info_per_run: int = 20
 
+    # Operations index: change rows stored per archive before the rest is
+    # collapsed into per-subtree summary rows (spec 6.7)
+    index_history_max_rows: int = 200000
+
     # Backup settings
     max_backup_jobs: int = 5
     backup_timeout: int = 3600  # 1 hour

@@ -163,3 +163,24 @@ curl -sS "$BASE_URL/api/backup/logs/$JOB_ID/download" \
   -H "X-Borg-Authorization: Bearer $TOKEN" \
   -o "backup_job_${JOB_ID}_logs.txt"
 ```
+
+## Archive index and history
+
+Database-backed archive routes under `/api/repositories/{id}`. Routes
+marked Pro require the `archive_history` feature and return the standard
+plan 403 payload otherwise.
+
+| Method | Route | Plan | Purpose |
+| --- | --- | --- | --- |
+| GET | `/archives` | Community | Archives from the index with `series`, `since`, `until` filters and `sync_state` |
+| GET | `/archives/live` | Community | The previous live `borg list` route, kept for the Archives page until it switches to the index |
+| GET | `/archives/heatmap` | Community | Per series, per day counts and sizes; `missed_run` days; outlier flags on Pro |
+| GET | `/archives/{archive_id}` | Community | One archive with history state and neighbours |
+| GET | `/status-strip` | Community | Latest terminal operation per cell; overdue flags on Pro |
+| POST | `/rebuild` | Community (`history` stage is Pro) | Body `{"from": "stats" \| "archives" \| "history"}` |
+| GET | `/archives/{archive_id}/changes` | Pro | Changes against the predecessor or `compare_to` |
+| GET | `/history?path=` | Pro | Every archive that touched a path, with present ranges |
+| GET | `/search?q=` | Pro | Filename search across all archives |
+
+`GET /api/archives/list` is deprecated and sends `Deprecation: true` with a
+`Link` header pointing at the index route.

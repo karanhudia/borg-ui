@@ -433,6 +433,62 @@ class BorgRouter:
             env=env,
         )
 
+    def diff_archives(
+        self, archive_a: str, archive_b: str, *, env: dict = None, timeout: int = 3600
+    ):
+        """Stream diff lines. Pass `aid:<id>` references for Borg 2 and
+        archive names for Borg 1."""
+        if self.is_v2:
+            from app.core.borg2 import borg2
+
+            return borg2.diff_archives(
+                self.repo.path,
+                archive_a,
+                archive_b,
+                passphrase=self.repo.passphrase,
+                remote_path=effective_repository_remote_path(self.repo),
+                env=env,
+                timeout=timeout,
+            )
+        from app.core.borg import borg
+
+        return borg.diff_archives(
+            self.repo.path,
+            archive_a,
+            archive_b,
+            remote_path=effective_repository_remote_path(self.repo),
+            passphrase=self.repo.passphrase,
+            bypass_lock=self.repo.bypass_lock,
+            env=env,
+            timeout=timeout,
+        )
+
+    def list_archive_lines(
+        self, archive: str, *, env: dict = None, timeout: int = 3600
+    ):
+        if self.is_v2:
+            from app.core.borg2 import borg2
+
+            return borg2.list_archive_lines(
+                self.repo.path,
+                archive,
+                passphrase=self.repo.passphrase,
+                remote_path=effective_repository_remote_path(self.repo),
+                env=env,
+                timeout=timeout,
+            )
+        from app.core.borg import borg
+
+        return borg.list_archive_lines(
+            self.repo.path,
+            archive,
+            remote_path=effective_repository_remote_path(self.repo),
+            passphrase=self.repo.passphrase,
+            bypass_lock=self.repo.bypass_lock,
+            env=env,
+            timeout=timeout,
+        )
+
     async def update_stats(self, db: Session) -> bool:
         """Refresh archive count and size stats for this repository.
 

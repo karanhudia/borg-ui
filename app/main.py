@@ -15,6 +15,7 @@ from app.api import (
     backup,
     backup_plans,
     archives,
+    archive_index,
     restore,
     schedule,
     settings as settings_api,
@@ -204,6 +205,9 @@ app.include_router(settings_api.router, prefix="/api/settings", tags=["Settings"
 app.include_router(events.router, prefix="/api/events", tags=["Events"])
 app.include_router(
     repositories.router, prefix="/api/repositories", tags=["Repositories"]
+)
+app.include_router(
+    archive_index.router, prefix="/api/repositories", tags=["Archive index"]
 )
 app.include_router(rclone.public_router, prefix="/api/rclone", tags=["Rclone"])
 app.include_router(rclone.router, prefix="/api/rclone", tags=["Rclone"])
@@ -417,6 +421,17 @@ async def startup_event():
     task2b = asyncio.create_task(reconcile_scheduler.start())
     app.state.background_tasks.append(task2b)
     logger.info("Operations runner and reconcile scheduler started")
+
+    try:
+        db = SessionLocal()
+        try:
+            from app.services.operations.reconcile import bootstrap_history_once
+
+            bootstrap_history_once(db)
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error("History bootstrap failed", error=str(e))
 
     # Initialize MQTT service from database settings (using new implementation)
     from app.services.mqtt_service import mqtt_service, build_mqtt_runtime_config

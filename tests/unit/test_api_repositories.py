@@ -1454,7 +1454,7 @@ class TestRepositoriesCreate:
             new=AsyncMock(return_value={"data": {"archives": [{"name": "archive-1"}]}}),
         ) as wait_for_agent:
             response = test_client.get(
-                f"/api/repositories/{repo.id}/archives", headers=admin_headers
+                f"/api/repositories/{repo.id}/archives/live", headers=admin_headers
             )
 
         assert response.status_code == 200

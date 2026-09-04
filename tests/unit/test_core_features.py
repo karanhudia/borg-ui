@@ -33,6 +33,11 @@ class TestPlanIncludes:
         assert plan_includes(Plan.ENTERPRISE, FEATURES["remote_clients"]) is True
         assert plan_includes(Plan.COMMUNITY, FEATURES["remote_clients"]) is False
 
+    def test_archive_history_is_a_pro_feature(self):
+        assert FEATURES["archive_history"] == Plan.PRO
+        assert plan_includes(Plan.COMMUNITY, FEATURES["archive_history"]) is False
+        assert plan_includes(Plan.PRO, FEATURES["archive_history"]) is True
+
     @pytest.mark.parametrize(
         "feature",
         [

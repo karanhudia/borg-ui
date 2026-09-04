@@ -3,14 +3,16 @@ instead of calling Borg for every repository in a loop, it enqueues one
 index run per repository and lets the runner pace the work."""
 
 import asyncio
+from typing import Optional
 
 import structlog
 from sqlalchemy.orm import Session
 
 from app.database.database import SessionLocal
-from app.database.models import Operation, Repository, SystemSettings
+from app.database.models import Operation, Repository, SystemSettings, utc_now
 from app.services.operations.enqueue import enqueue_chain
 from app.services.operations.executors import registered_kinds
+from app.services.operations.followups import HISTORY_KINDS, history_enabled
 from app.services.operations.vocab import PRIORITY_RECONCILE
 
 logger = structlog.get_logger()
@@ -36,9 +38,15 @@ def has_active_index_work(db: Session, repository_id: int) -> bool:
     )
 
 
-def enqueue_reconcile_runs(db: Session) -> int:
+def enqueue_reconcile_runs(db: Session, *, history: Optional[bool] = None) -> int:
     available = registered_kinds()
-    kinds = [k for k in RECONCILE_CHAIN if k in available]
+    if history is None:
+        history = history_enabled(db)
+    kinds = [
+        k
+        for k in RECONCILE_CHAIN
+        if k in available and (history or k not in HISTORY_KINDS)
+    ]
     if not kinds:
         return 0
     count = 0
@@ -56,6 +64,20 @@ def enqueue_reconcile_runs(db: Session) -> int:
         count += 1
     db.commit()
     logger.info("Reconcile runs enqueued", repositories=count, kinds=kinds)
+    return count
+
+
+def bootstrap_history_once(db: Session) -> int:
+    """First startup after phase 2: enqueue a reconcile run for every
+    repository at priority 20 (spec 14). Recorded on SystemSettings so it
+    runs once per install, not once per restart."""
+    system_settings = db.query(SystemSettings).first()
+    if system_settings is None or system_settings.history_bootstrap_at is not None:
+        return 0
+    count = enqueue_reconcile_runs(db)
+    system_settings.history_bootstrap_at = utc_now()
+    db.commit()
+    logger.info("History bootstrap enqueued", repositories=count)
     return count
 
 

@@ -1,14 +1,17 @@
 """Write archive stats back to the repository row from a fresh `info` listing.
 
-The repository card renders the stored archive_count/last_backup columns; they
+The repository card renders the stored archive_count/last_backup columns, they
 are written by the stats refresh and, in part, by backup completion. The info
 dialog fetches the authoritative archive list moments later and used to throw
-it away — so a backup finishing between a stats refresh and the info click left
-the dialog showing two archives while the card still said one.
+it away, so a backup finishing between a stats refresh and the info click left
+the dialog showing two archives while the card still said one. When the info
+entries carry ids the sync now also upserts the archives table (spec 6.4) and
+derives the columns from it; when they do not, it falls back to writing the
+columns directly from the listing.
 
 Borg 2 only: Borg 1's repository-level `info --json` carries no archive list,
 so the parsed shape yields [] even for a populated repository, and writing that
-back would wipe a real count to 0 — the same trap the stats refresh guards
+back would wipe a real count to 0, the same trap the stats refresh guards
 against with its list_ok check.
 """
 
@@ -70,10 +73,22 @@ def sync_archive_stats_from_info(
         # which must not become an import-time dependency of this module.
         from app.services.repository_executor import agent_timezone_for_repository
 
+        timezone_name = agent_timezone_for_repository(db, repository)
+        if archives and all(isinstance(a, dict) and a.get("id") for a in archives):
+            # Full entries: keep the archives table in step with what the
+            # dialog just showed, then derive the columns from it.
+            from app.services.operations.executors.index import (
+                apply_listing,
+                write_repository_archive_columns,
+            )
+
+            _, removed = apply_listing(
+                db, repository, archives, timezone_name=timezone_name
+            )
+            write_repository_archive_columns(db, repository, exclude_ids=removed)
+            return
         repository.archive_count = len(archives)
-        newest = _newest_archive_time(
-            archives, timezone_name=agent_timezone_for_repository(db, repository)
-        )
+        newest = _newest_archive_time(archives, timezone_name=timezone_name)
         if archives:
             # Archives whose times we cannot parse must not wipe a known
             # last_backup — absence of evidence only counts when the list

@@ -155,7 +155,7 @@ Modified:
   - `SystemSettings.history_bootstrap_at: Optional[datetime]`
   - `FEATURES["archive_history"] == Plan.PRO` on both sides
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/unit/test_core_features.py` inside `TestPlanIncludes`:
 
@@ -231,7 +231,7 @@ describe('features', () => {
 })
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `python -m pytest tests/unit/test_core_features.py tests/unit/test_history_defaults.py tests/unit/test_config.py -q -p no:cacheprovider`
 Expected: FAIL with `KeyError: 'archive_history'`, `ImportError` for `DEFAULT_HISTORY_INDEX_EXCLUDES`, `AttributeError` for `index_history_max_rows`.
@@ -239,7 +239,7 @@ Expected: FAIL with `KeyError: 'archive_history'`, `ImportError` for `DEFAULT_HI
 Run: `cd frontend && npx vitest run src/core`
 Expected: FAIL, `archive_history` is not a key of `FEATURES`.
 
-- [ ] **Step 3: Add the settings, columns, and keys**
+- [x] **Step 3: Add the settings, columns, and keys**
 
 `app/config.py`, after `index_archive_info_per_run`:
 
@@ -323,7 +323,7 @@ After editing, run `diff -q docs/plan-content.json frontend/src/data/plan-conten
 | `INDEX_HISTORY_MAX_ROWS` | `200000` | Change rows stored per archive by the history index; changes past the cap collapse into per-subtree summary rows and the archive is marked truncated |
 ```
 
-- [ ] **Step 4: Write the migration**
+- [x] **Step 4: Write the migration**
 
 Create `app/database/alembic/versions/c2d3e4f5a6b7_add_history_index_excludes.py`:
 
@@ -378,7 +378,7 @@ def downgrade() -> None:
         batch.drop_column("history_index_excludes")
 ```
 
-- [ ] **Step 5: Run the tests and the migration**
+- [x] **Step 5: Run the tests and the migration**
 
 Run: `python -m pytest tests/unit/test_core_features.py tests/unit/test_history_defaults.py tests/unit/test_config.py -q -p no:cacheprovider`
 Expected: PASS.
@@ -412,7 +412,7 @@ Expected: no findings.
   - `infer_series(name: str, borg_version: int, prefixes: Sequence[str] = ()) -> str`
   - `index.archive_fields_from_listing(entry, borg_version, *, timezone_name, series_prefixes=())`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/unit/test_series_inference.py`:
 
@@ -536,12 +536,12 @@ and add:
     assert f1p["series"] == "nas"
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `python -m pytest tests/unit/test_series_inference.py tests/unit/test_operations_index_executors.py -q -p no:cacheprovider`
 Expected: FAIL with `ModuleNotFoundError: app.services.operations.series` and the series assertion.
 
-- [ ] **Step 3: Write the series module**
+- [x] **Step 3: Write the series module**
 
 Create `app/services/operations/series.py`:
 
@@ -689,7 +689,7 @@ Check the timezone attribute name on `ScheduledJob` (the column comment
 near `app/database/models.py:789` says "IANA timezone used to interpret
 cron_expression"); use that column name instead of `getattr` once known.
 
-- [ ] **Step 4: Wire it into the index executor**
+- [x] **Step 4: Wire it into the index executor**
 
 In `app/services/operations/executors/index.py`:
 
@@ -734,7 +734,7 @@ In `apply_listing`, before the loop:
 
 and pass `series_prefixes=prefixes` to `archive_fields_from_listing`.
 
-- [ ] **Step 5: Run the tests**
+- [x] **Step 5: Run the tests**
 
 Run: `python -m pytest tests/unit/test_series_inference.py tests/unit/test_operations_index_executors.py -q -p no:cacheprovider`
 Expected: PASS.
@@ -765,7 +765,7 @@ Expected: no findings.
   - `Borg2.diff_archives(repository, archive_a, archive_b, *, passphrase=None, remote_path=None, env=None, timeout=3600)`, `Borg2.list_archive_lines(repository, archive, *, ...)`
   - `BorgRouter.diff_archives(archive_a: str, archive_b: str, *, env=None, timeout=3600) -> CommandLineStream`, `BorgRouter.list_archive_lines(archive: str, *, env=None, timeout=3600) -> CommandLineStream`. Callers pass `aid:<borg_id>` for Borg 2 and the archive name for Borg 1.
 
-- [ ] **Step 1: Capture fixtures with `borg-live-debug`**
+- [x] **Step 1: Capture fixtures with `borg-live-debug`**
 
 Invoke the `borg-live-debug` skill. Inside the container, for each Borg
 version (the container ships both binaries; the skill documents which
@@ -816,7 +816,7 @@ directory), `src/dir_new/f.txt` (added), `src/mode.sh` (mode change),
 `-` and a numeric `size`, `src/dir_a` with type `d`, and `src/link` with
 type `l`.
 
-- [ ] **Step 2: Write the failing parser tests**
+- [x] **Step 2: Write the failing parser tests**
 
 Create `tests/unit/test_borg_diff_parsing.py`:
 
@@ -994,12 +994,12 @@ If `Borg.__new__` leaves attributes the methods need unset (check
 `Borg.__init__` at `app/core/borg.py:21`), set them on the instance in the
 test the same way `borg_cmd` is set.
 
-- [ ] **Step 3: Run the tests to verify they fail**
+- [x] **Step 3: Run the tests to verify they fail**
 
 Run: `python -m pytest tests/unit/test_borg_diff_parsing.py tests/unit/test_borg_stream.py -q -p no:cacheprovider`
 Expected: FAIL with `ModuleNotFoundError` for `app.core.borg_diff` and `app.core.borg_stream`.
 
-- [ ] **Step 4: Write the stream runner**
+- [x] **Step 4: Write the stream runner**
 
 Create `app/core/borg_stream.py`:
 
@@ -1077,7 +1077,7 @@ class CommandLineStream:
         await self._finish()
 ```
 
-- [ ] **Step 5: Write the parser**
+- [x] **Step 5: Write the parser**
 
 Create `app/core/borg_diff.py`:
 
@@ -1196,7 +1196,7 @@ If the captured Borg 2 fixture spells a change type differently from the
 `PRESENCE_TYPES` keys above (for example a link change reported under
 another label), add that spelling to the tables; do not weaken the tests.
 
-- [ ] **Step 6: Add the wrappers**
+- [x] **Step 6: Add the wrappers**
 
 `app/core/borg.py`: move the environment construction at the top of
 `_execute_command` (from `exec_env = os.environ.copy()` through the last
@@ -1371,7 +1371,7 @@ with `from app.core.borg_stream import CommandLineStream` at the top.
         )
 ```
 
-- [ ] **Step 7: Run the tests**
+- [x] **Step 7: Run the tests**
 
 Run: `python -m pytest tests/unit/test_borg_diff_parsing.py tests/unit/test_borg_stream.py -q -p no:cacheprovider`
 Expected: PASS.
@@ -1394,7 +1394,7 @@ Expected: PASS, no findings.
   - `fold_sequence(deltas: Iterable[dict[str, Change]]) -> dict[str, Change]`
   - `change_from_row(row: ArchiveChange) -> Change`, `rows_to_changes(rows: Iterable[ArchiveChange]) -> dict[str, Change]`, `change_to_row_dict(change: Change, archive_id: int) -> dict`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/unit/test_changes_fold.py`:
 
@@ -1517,12 +1517,12 @@ def test_fold_sequence_equals_direct_diff_of_endpoints():
     assert fold_sequence([a1]) == a1
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `python -m pytest tests/unit/test_changes_fold.py -q -p no:cacheprovider`
 Expected: FAIL with `ModuleNotFoundError: app.services.operations.history_fold`.
 
-- [ ] **Step 3: Write the fold module**
+- [x] **Step 3: Write the fold module**
 
 Create `app/services/operations/history_fold.py`:
 
@@ -1638,7 +1638,7 @@ def change_to_row_dict(change: Change, archive_id: int) -> dict:
     }
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 Run: `python -m pytest tests/unit/test_changes_fold.py -q -p no:cacheprovider && ruff check app tests`
 Expected: PASS, no findings.
@@ -1666,7 +1666,7 @@ Expected: PASS, no findings.
   - `run_history_index(ctx) -> Outcome` registered as `history_index`
   - `OperationCancelled` exception
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/unit/test_history_index.py`:
 
@@ -1921,12 +1921,12 @@ def test_registered():
 `test_registered` also covers Task 6; it fails until both executors exist.
 The `progress` label uses the arrow character per spec 8.3.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `python -m pytest tests/unit/test_history_index.py -q -p no:cacheprovider`
 Expected: FAIL with `ImportError` for `app.services.operations.executors.history`.
 
-- [ ] **Step 3: Write the executor module (index half)**
+- [x] **Step 3: Write the executor module (index half)**
 
 Create `app/services/operations/executors/history.py`:
 
@@ -2316,7 +2316,7 @@ def history_enabled(db) -> bool:
     return plan_includes(get_current_plan(db), Plan.PRO)
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 Run: `python -m pytest tests/unit/test_history_index.py -q -p no:cacheprovider`
 Expected: PASS except `test_registered` (needs Task 6).
@@ -2339,7 +2339,7 @@ Expected: PASS, no findings.
   - `merge_removed_archive(db, removed: Archive) -> str` returning `folded | reset | dropped`
   - `run_history_merge(ctx) -> Outcome` registered as `history_merge`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/unit/test_history_merge.py`:
 
@@ -2509,12 +2509,12 @@ async def test_merge_is_atomic_per_archive(db, repo):
     assert {x.path for x in db.query(ArchiveChange).filter_by(archive_id=s.id)} == {"b"}
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `python -m pytest tests/unit/test_history_merge.py -q -p no:cacheprovider`
 Expected: FAIL with `AttributeError: run_history_merge`.
 
-- [ ] **Step 3: Append the merge half**
+- [x] **Step 3: Append the merge half**
 
 Append to `app/services/operations/executors/history.py`:
 
@@ -2617,7 +2617,7 @@ executors.register("history_index", run_history_index)
 executors.register("history_merge", run_history_merge)
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 Run: `python -m pytest tests/unit/test_history_merge.py tests/unit/test_history_index.py -q -p no:cacheprovider`
 Expected: PASS, including `test_registered`.
@@ -2646,7 +2646,7 @@ still passes because it passes `available` explicitly.
   - `reconcile.bootstrap_history_once(db) -> int`
   - `licensing_service._on_plan_changed(db, before: str, after: str) -> None`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/unit/test_operations_followups.py`:
 
@@ -2756,12 +2756,12 @@ def test_pro_activation_enqueues_reconcile_runs(db_session, activation_keys):
 Adjust `_build_document(...)` arguments to the helper's actual signature at
 `tests/unit/test_licensing_service.py:23`.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `python -m pytest tests/unit/test_operations_followups.py tests/unit/test_operations_reconcile.py tests/unit/test_operations_runner.py tests/unit/test_licensing_service.py -q -p no:cacheprovider`
 Expected: FAIL (`HISTORY_KINDS` missing, unexpected `history` kwarg, no operations enqueued on activation).
 
-- [ ] **Step 3: Make chains, reconcile, and licensing plan aware**
+- [x] **Step 3: Make chains, reconcile, and licensing plan aware**
 
 `app/services/operations/followups.py`:
 
@@ -2872,7 +2872,7 @@ after `db.commit()`: `_on_plan_changed(db, before, get_effective_plan_value(db))
         logger.error("History bootstrap failed", error=str(e))
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 Run: `python -m pytest tests/unit/test_operations_followups.py tests/unit/test_operations_reconcile.py tests/unit/test_operations_runner.py tests/unit/test_licensing_service.py tests/unit/test_api_repositories_import_operations.py -q -p no:cacheprovider`
 Expected: PASS. If an import test asserted the `history_index` follow-up
@@ -2894,7 +2894,7 @@ Expected: PASS, no findings.
 **Interfaces:**
 - Produces: `index.write_repository_archive_columns(db, repository, *, exclude_ids: Iterable[int] = ()) -> None` (writes `archive_count` and `last_backup` from the `archives` table and commits)
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Read `tests/unit/test_repository_info_sync.py` first; keep its existing
 tests and change expectations only where they assert the repository row is
@@ -2940,12 +2940,12 @@ Use the file's own repository fixture; the `db`/`repo` names above follow
 `test_operations_index_executors.py` (Borg 2 repositories need
 `borg_version=2`).
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `python -m pytest tests/unit/test_repository_info_sync.py -q -p no:cacheprovider`
 Expected: FAIL, no `archives` rows are written.
 
-- [ ] **Step 3: Extract the column writer and switch the sync**
+- [x] **Step 3: Extract the column writer and switch the sync**
 
 In `app/services/operations/executors/index.py` replace the block in
 `run_archive_sync` that computes `rows`, `repository.archive_count`, and
@@ -2997,7 +2997,7 @@ Update the module docstring: the sync now writes `archives` rows when the
 info entries carry ids, and falls back to the columns otherwise. Replace
 the em dashes in that docstring with commas while there.
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 Run: `python -m pytest tests/unit/test_repository_info_sync.py tests/unit/test_operations_index_executors.py -q -p no:cacheprovider && ruff check app tests`
 Expected: PASS, no findings.
@@ -3024,7 +3024,7 @@ Expected: PASS, no findings.
   - `overdue(cell: str, last_completed_at: Optional[datetime], now: datetime) -> bool`
   - `series_flags(archives: Sequence[ArchiveLike]) -> dict[int, list[str]]` where `ArchiveLike` has `id`, `start`, `deduplicated_size`, `nfiles`, `duration_seconds`; returns `size_outlier` / `duration_outlier` per archive id
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/unit/test_anomalies.py`:
 
@@ -3120,12 +3120,12 @@ def test_series_flags_per_archive():
     assert an.series_flags(archives)[8] == ["size_outlier"]
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `python -m pytest tests/unit/test_anomalies.py -q -p no:cacheprovider`
 Expected: FAIL with `ModuleNotFoundError`.
 
-- [ ] **Step 3: Write the module**
+- [x] **Step 3: Write the module**
 
 Create `app/services/operations/anomalies.py`:
 
@@ -3277,7 +3277,7 @@ right and the test is right: the run at 02:00 on the sixth is after `until`,
 so it is excluded; make sure `naive > until` compares full datetimes, not
 dates.
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 Run: `python -m pytest tests/unit/test_anomalies.py -q -p no:cacheprovider && ruff check app tests`
 Expected: PASS, no findings.
@@ -3304,7 +3304,7 @@ Expected: PASS, no findings.
   - Routes: `GET /{repo_id}/archives`, `GET /{repo_id}/archives/heatmap`, `GET /{repo_id}/archives/{archive_id}`, `GET /{repo_id}/status-strip`, `POST /{repo_id}/rebuild`
   - The live Borg listing moves to `GET /{repo_id}/archives/live` (Open questions 1)
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/unit/test_api_archive_index.py`:
 
@@ -3550,12 +3550,12 @@ implicit access to all repositories in this codebase, replace the assertion
 with the pattern used by the RBAC tests for a viewer without a permission
 row.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `python -m pytest tests/unit/test_api_archive_index.py tests/unit/test_api_archives.py -q -p no:cacheprovider`
 Expected: FAIL with 404 / 405 responses and missing headers.
 
-- [ ] **Step 3: Move the live route, add the settings field, deprecate `/archives/list`**
+- [x] **Step 3: Move the live route, add the settings field, deprecate `/archives/list`**
 
 `app/api/repositories.py:6028`: change `@router.get("/{repo_id}/archives")`
 to `@router.get("/{repo_id}/archives/live")` and the docstring to
@@ -3595,7 +3595,7 @@ importing `DEFAULT_HISTORY_INDEX_EXCLUDES` from `app.database.models`.
         )
 ```
 
-- [ ] **Step 4: Write the legacy status helper**
+- [x] **Step 4: Write the legacy status helper**
 
 Create `app/services/operations/legacy_status.py`:
 
@@ -3641,7 +3641,7 @@ def latest_legacy_terminal(
     return (row.status, row.completed_at) if row else None
 ```
 
-- [ ] **Step 5: Write the router (community half)**
+- [x] **Step 5: Write the router (community half)**
 
 Create `app/api/archive_index.py`:
 
@@ -3990,7 +3990,7 @@ app.include_router(
 
 with `archive_index` added to the `from app.api import ...` list.
 
-- [ ] **Step 6: Run the tests**
+- [x] **Step 6: Run the tests**
 
 Run: `python -m pytest tests/unit/test_api_archive_index.py tests/unit/test_api_archives.py tests/unit/test_api_repositories.py -q -p no:cacheprovider`
 Expected: PASS except the Pro-only classes added in Task 11. Any
@@ -4015,7 +4015,7 @@ Expected: PASS, no findings.
 - Consumes: `fold_sequence`, `rows_to_changes`, `Change` (Task 4); `require_feature("archive_history")`
 - Produces: `GET /{repo_id}/archives/{archive_id}/changes`, `GET /{repo_id}/history`, `GET /{repo_id}/search`; helper `present_ranges(entries) -> list[dict]`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/unit/test_api_archive_index.py`:
 
@@ -4165,12 +4165,12 @@ class TestSearch:
         assert test_client.get(f"/api/repositories/{repo.id}/search?q=", headers=admin_headers).status_code == 422
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `python -m pytest tests/unit/test_api_archive_index.py -q -p no:cacheprovider`
 Expected: the new classes FAIL with 404.
 
-- [ ] **Step 3: Append the Pro routes**
+- [x] **Step 3: Append the Pro routes**
 
 Append to `app/api/archive_index.py`:
 
@@ -4379,7 +4379,7 @@ async def search_paths(
     return {"query": q, "results": results[:limit], "truncated": truncated}
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 Run: `python -m pytest tests/unit/test_api_archive_index.py -q -p no:cacheprovider`
 Expected: PASS.
@@ -4398,7 +4398,7 @@ Expected: PASS, no findings.
 - Modify: `Borg_UI_API.postman_collection.json` (new folder)
 - Test: whole suite
 
-- [ ] **Step 1: Job system doc**
+- [x] **Step 1: Job system doc**
 
 Append to the "Operations runner" section of
 `docs/architecture/job-system.md`, before "## Notifications":
@@ -4436,7 +4436,7 @@ index; `from = archives` refetches per-archive info; `from = stats`
 re-measures the repository.
 ```
 
-- [ ] **Step 2: Cache doc**
+- [x] **Step 2: Cache doc**
 
 In `docs/cache.md`, after the sentence "There are two separate caches
 involved in normal Docker deployments:" and its list, add:
@@ -4449,7 +4449,7 @@ the archive list, the Changes tab, file history, and search. Folder
 browsing keeps going through Borg and the caches above.
 ```
 
-- [ ] **Step 3: API doc**
+- [x] **Step 3: API doc**
 
 Append to `docs/api.md`:
 
@@ -4476,7 +4476,7 @@ plan 403 payload otherwise.
 `Link` header pointing at the index route.
 ```
 
-- [ ] **Step 4: Postman collection**
+- [x] **Step 4: Postman collection**
 
 Add a folder to `Borg_UI_API.postman_collection.json` next to the other
 numbered folders (copy the structure of an existing GET item, keeping the
@@ -4501,7 +4501,7 @@ collection's variable names for base URL and token):
 Match the existing items' `header` and `auth` blocks exactly; validate with
 `python -c "import json; json.load(open('Borg_UI_API.postman_collection.json'))"`.
 
-- [ ] **Step 5: Phase verification (superpowers:verification-before-completion)**
+- [x] **Step 5: Phase verification (superpowers:verification-before-completion)**
 
 Run, and paste the output at gate G2:
 
@@ -4529,7 +4529,7 @@ merge outcome in the next `history_merge` result. Record the result in
 the spec's Notes column; if the container is unavailable, record "live
 check not run" as phase 1 did.
 
-- [ ] **Step 6: Gate G2**
+- [x] **Step 6: Gate G2**
 
 Set the spec's phase 2 row to `in review`, show the verification output,
 and ask whether to commit. Suggested commit message:

@@ -46,6 +46,7 @@ from typing import Dict, List, Optional
 import structlog
 
 from app.config import settings
+from app.core.borg_stream import CommandLineStream
 from app.utils.ssh_utils import public_key_only_ssh_args
 
 logger = structlog.get_logger()
@@ -501,6 +502,45 @@ class Borg2Interface:
         if passphrase:
             exec_env["BORG_PASSPHRASE"] = passphrase
         return await self._run_streaming(cmd, max_lines=max_lines, env=exec_env or None)
+
+    def diff_archives(
+        self,
+        repository: str,
+        archive_a: str,
+        archive_b: str,
+        *,
+        passphrase: Optional[str] = None,
+        remote_path: Optional[str] = None,
+        env: Optional[Dict] = None,
+        timeout: int = 3600,
+    ) -> "CommandLineStream":
+        cmd = [self.borg_cmd, "-r", repository, "diff", "--json-lines"]
+        if remote_path:
+            cmd.extend(["--remote-path", remote_path])
+        cmd.extend([archive_a, archive_b])
+        exec_env = self._base_env(env)
+        if passphrase:
+            exec_env["BORG_PASSPHRASE"] = passphrase
+        return CommandLineStream(cmd, env=exec_env, timeout=timeout)
+
+    def list_archive_lines(
+        self,
+        repository: str,
+        archive: str,
+        *,
+        passphrase: Optional[str] = None,
+        remote_path: Optional[str] = None,
+        env: Optional[Dict] = None,
+        timeout: int = 3600,
+    ) -> "CommandLineStream":
+        cmd = [self.borg_cmd, "-r", repository, "list", "--json-lines"]
+        if remote_path:
+            cmd.extend(["--remote-path", remote_path])
+        cmd.append(archive)
+        exec_env = self._base_env(env)
+        if passphrase:
+            exec_env["BORG_PASSPHRASE"] = passphrase
+        return CommandLineStream(cmd, env=exec_env, timeout=timeout)
 
     # ── Backup operations ──────────────────────────────────────────────────────
 

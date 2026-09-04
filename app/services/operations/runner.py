@@ -18,7 +18,7 @@ from app.services.operations.events import (
     broadcast_operation_progress,
     broadcast_operation_updated,
 )
-from app.services.operations.followups import chain_for
+from app.services.operations.followups import chain_for, history_enabled
 from app.services.operations.lanes import can_start
 from app.services.operations.vocab import INDEX_KINDS, SUCCESS_STATUSES
 from app.utils.process_utils import is_process_alive
@@ -283,7 +283,11 @@ class OperationRunner:
             db.commit()
             await broadcast_operation_updated(op, db)
             if op.status in SUCCESS_STATUSES:
-                kinds = chain_for(op.kind, available=self._registered_kinds())
+                kinds = chain_for(
+                    op.kind,
+                    available=self._registered_kinds(),
+                    history=history_enabled(db),
+                )
                 if kinds:
                     enqueue_chain(
                         db,

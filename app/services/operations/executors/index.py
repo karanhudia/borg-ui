@@ -1,12 +1,9 @@
 """Index executors: stats and archive_sync (spec sections 8.1 and 8.2).
-
-Series inference here is the phase 1 placeholder: Borg 2 uses the archive
-name (Borg 2 defines series that way); Borg 1 uses "default". Phase 2
-replaces `series_for` with the full inference of spec section 6.6.
+Series inference follows spec 6.6 through `app.services.operations.series`.
 """
 
 import json
-from typing import Optional
+from typing import Iterable, Optional, Sequence
 
 import structlog
 from sqlalchemy.orm import Session
@@ -25,6 +22,7 @@ from app.core.borg_router import BorgRouter
 from app.database.models import Archive, Repository, SystemSettings, utc_now
 from app.services.operations import executors
 from app.services.operations.runner import Outcome
+from app.services.operations.series import infer_series, series_prefixes_for_repository
 from app.services.repository_command_lock import run_serialized_repository_command
 from app.services.repository_executor import is_agent_executor
 from app.utils.borg_env import cleanup_temp_key_file, effective_repository_remote_path
@@ -35,12 +33,16 @@ logger = structlog.get_logger()
 # -- pure helpers ---------------------------------------------------------------
 
 
-def series_for(name: str, borg_version: int) -> str:
-    return name if borg_version == 2 else "default"
+def series_for(name: str, borg_version: int, prefixes: Sequence[str] = ()) -> str:
+    return infer_series(name, borg_version, prefixes)
 
 
 def archive_fields_from_listing(
-    entry: dict, borg_version: int, *, timezone_name: Optional[str]
+    entry: dict,
+    borg_version: int,
+    *,
+    timezone_name: Optional[str],
+    series_prefixes: Sequence[str] = (),
 ) -> Optional[dict]:
     """Map one listing entry to archives columns.
 
@@ -69,7 +71,7 @@ def archive_fields_from_listing(
     return {
         "borg_id": str(borg_id),
         "name": name,
-        "series": series_for(name, borg_version),
+        "series": series_for(name, borg_version, series_prefixes),
         "start": start,
         "end": end,
         "hostname": entry.get("hostname"),
@@ -97,9 +99,13 @@ def apply_listing(
     seen: set[str] = set()
     new_rows: list[Archive] = []
     now = utc_now()
+    prefixes = series_prefixes_for_repository(db, repository)
     for entry in entries:
         fields = archive_fields_from_listing(
-            entry, repository.borg_version or 1, timezone_name=timezone_name
+            entry,
+            repository.borg_version or 1,
+            timezone_name=timezone_name,
+            series_prefixes=prefixes,
         )
         if fields is None:
             continue
@@ -122,6 +128,23 @@ def apply_listing(
     for row in new_rows:
         db.refresh(row)
     return new_rows, removed
+
+
+def write_repository_archive_columns(
+    db: Session, repository: Repository, *, exclude_ids: Iterable[int] = ()
+) -> None:
+    """Derive archive_count and last_backup from the archives table (spec
+    6.4). `exclude_ids` are rows reported removed that history_merge has
+    not deleted yet."""
+    excluded = set(exclude_ids)
+    rows = [
+        a
+        for a in db.query(Archive).filter(Archive.repository_id == repository.id).all()
+        if a.id not in excluded
+    ]
+    repository.archive_count = len(rows)
+    repository.last_backup = max((a.start for a in rows), default=None)
+    db.commit()
 
 
 # -- Borg access ------------------------------------------------------------------
@@ -402,17 +425,7 @@ async def run_archive_sync(ctx) -> Outcome:
             env,
             limit=settings.index_archive_info_per_run,
         )
-        removed_id_set = set(removed_ids)
-        rows = [
-            a
-            for a in db.query(Archive)
-            .filter(Archive.repository_id == repository.id)
-            .all()
-            if a.id not in removed_id_set
-        ]
-        repository.archive_count = len(rows)
-        repository.last_backup = max((a.start for a in rows), default=None)
-        db.commit()
+        write_repository_archive_columns(db, repository, exclude_ids=removed_ids)
         _publish_mqtt_state(db, "operations archive sync")
         ctx.log(
             f"listed {len(entries)} archives, {len(new_rows)} new, {filled} info fetched"

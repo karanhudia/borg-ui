@@ -1,10 +1,17 @@
 import asyncio
+from unittest.mock import patch
 
 import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
-from app.database.models import Base, Operation, Repository, SystemSettings
+from app.database.models import (
+    Base,
+    LicensingState,
+    Operation,
+    Repository,
+    SystemSettings,
+)
 from app.services.operations import reconcile
 from app.services.operations.enqueue import enqueue
 
@@ -69,7 +76,7 @@ def test_enqueue_reconcile_runs_includes_history_kinds_when_registered(
         lambda: {"stats", "archive_sync", "history_merge", "history_index"},
     )
     a, _ = repos
-    reconcile.enqueue_reconcile_runs(db)
+    reconcile.enqueue_reconcile_runs(db, history=True)
     kinds = [
         r.kind
         for r in db.query(Operation)
@@ -77,6 +84,86 @@ def test_enqueue_reconcile_runs_includes_history_kinds_when_registered(
         .order_by(Operation.id)
     ]
     assert kinds == ["archive_sync", "history_merge", "history_index", "stats"]
+
+
+@pytest.mark.unit
+def test_enqueue_reconcile_runs_omits_history_kinds_for_community(
+    db, repos, monkeypatch
+):
+    monkeypatch.setattr(
+        reconcile,
+        "registered_kinds",
+        lambda: {"stats", "archive_sync", "history_merge", "history_index"},
+    )
+    a, _ = repos
+    reconcile.enqueue_reconcile_runs(db, history=False)
+    kinds = [
+        r.kind
+        for r in db.query(Operation)
+        .filter(Operation.repository_id == a.id)
+        .order_by(Operation.id)
+    ]
+    assert kinds == ["archive_sync", "stats"]
+
+
+@pytest.mark.unit
+def test_enqueue_reconcile_runs_asks_the_plan_when_history_is_none(
+    db, repos, monkeypatch
+):
+    monkeypatch.setattr(
+        reconcile,
+        "registered_kinds",
+        lambda: {"stats", "archive_sync", "history_merge", "history_index"},
+    )
+    a, _ = repos
+    reconcile.enqueue_reconcile_runs(db)
+    kinds = [
+        r.kind
+        for r in db.query(Operation)
+        .filter(Operation.repository_id == a.id)
+        .order_by(Operation.id)
+    ]
+    assert kinds == ["archive_sync", "stats"]
+    for op in db.query(Operation).filter(Operation.repository_id == a.id):
+        op.status = "completed"
+    db.commit()
+
+    # get_or_create_licensing_state created the single row above; flip its
+    # plan rather than inserting a second one (lookups always take the
+    # first row in the table).
+    state = db.query(LicensingState).first()
+    if state is None:
+        db.add(LicensingState(instance_id="t-reconcile", plan="pro", status="active"))
+    else:
+        state.plan = "pro"
+        state.status = "active"
+    db.commit()
+    reconcile.enqueue_reconcile_runs(db)
+    kinds = [
+        r.kind
+        for r in db.query(Operation)
+        .filter(Operation.repository_id == a.id)
+        .order_by(Operation.id)
+    ]
+    assert kinds == [
+        "archive_sync",
+        "stats",
+        "archive_sync",
+        "history_merge",
+        "history_index",
+        "stats",
+    ]
+
+
+@pytest.mark.unit
+def test_bootstrap_history_once_runs_a_single_time(db, repos):
+    with patch(
+        "app.services.operations.reconcile.enqueue_reconcile_runs", return_value=1
+    ) as enq:
+        assert reconcile.bootstrap_history_once(db) == 1
+        assert reconcile.bootstrap_history_once(db) == 0
+    assert enq.call_count == 1
+    assert db.query(SystemSettings).first().history_bootstrap_at is not None
 
 
 @pytest.mark.unit

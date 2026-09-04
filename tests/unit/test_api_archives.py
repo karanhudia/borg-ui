@@ -730,3 +730,27 @@ def test_archive_extract_selector_addresses_borg2_id_via_aid():
     assert _archive_extract_selector("m3s01", borg2) == "m3s01"
     # Borg 1 never uses aid: (unique names)
     assert _archive_extract_selector(hex_id, borg1) == hex_id
+
+
+@pytest.mark.unit
+def test_archives_list_route_sends_deprecation_headers(
+    test_client, test_db, admin_headers, monkeypatch
+):
+    """Spec 9.2: /archives/list stays one release and is marked deprecated."""
+    repo = Repository(
+        name="dep-repo", path="/tmp/dep-repo", encryption="none", compression="lz4"
+    )
+    test_db.add(repo)
+    test_db.commit()
+
+    with patch(
+        "app.api.archives.borg.list_archives",
+        new=AsyncMock(return_value={"success": True, "stdout": "{}"}),
+    ):
+        r = test_client.get(
+            f"/api/archives/list?repository={repo.path}", headers=admin_headers
+        )
+
+    assert r.status_code == 200
+    assert r.headers["deprecation"] == "true"
+    assert "/archives" in r.headers["link"]

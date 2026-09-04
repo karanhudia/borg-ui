@@ -153,3 +153,8 @@ class TestResolveDatabaseUrl:
         while the real database sits unused."""
         with pytest.raises(RuntimeError, match=missing):
             resolve_database_url(env, "/data")
+
+
+@pytest.mark.unit
+def test_index_history_max_rows_default():
+    assert Settings().index_history_max_rows == 200000
