@@ -1412,5 +1412,49 @@ class TestV2LiveArchiveRoute:
         ):
             assert path in paths
             # The client issues a GET; a path present under some other method
-            # would not serve it.
+            # would not serve it. This is a declaration check only: the schema
+            # is generated per route and cannot see shadowing, so the real
+            # guard is the request-level test below (and, for v1,
+            # test_api_repositories.py's agent listing test).
             assert "get" in paths[path]
+
+    @pytest.mark.parametrize("suffix", ["archives", "archives/live"])
+    def test_v2_live_listing_is_reachable_through_routing(
+        self, test_client, admin_headers, test_db, suffix
+    ):
+        """A request, not a schema lookup. The v2 alias is what BorgApiClient
+        issues for a Borg 2 repository, and nothing else in the suite exercises
+        it, so an auth, dependency, or routing regression on it would ship
+        unnoticed. Both paths must reach the same handler.
+
+        The archive-index router that could shadow `live` is mounted only under
+        `/api/repositories`, so the v2 prefix carries no shadowing risk; the v1
+        side of that is covered by the agent listing test in
+        test_api_repositories.py, which fails with a 422 if the include order
+        in main.py is reversed.
+        """
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db, name="Live Repo", path="/tmp/v2-live-repo")
+        agent_stdout = json.dumps({"archives": [{"name": "m3s02", "id": "deadbeef"}]})
+
+        with (
+            patch("app.api.v2.repositories.is_agent_executor", return_value=True),
+            patch(
+                "app.api.v2.repositories.queue_agent_repository_operation_job",
+                return_value=SimpleNamespace(id=101),
+            ),
+            patch(
+                "app.api.v2.repositories.dispatch_agent_job_best_effort",
+                new=AsyncMock(),
+            ),
+            patch(
+                "app.api.v2.repositories.wait_for_agent_repository_operation_job",
+                new=AsyncMock(return_value={"success": True, "stdout": agent_stdout}),
+            ),
+        ):
+            response = test_client.get(
+                f"/api/v2/repositories/{repo.id}/{suffix}", headers=admin_headers
+            )
+
+        assert response.status_code == 200
+        assert response.json()["archives"][0]["name"] == "m3s02"
