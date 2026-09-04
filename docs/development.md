@@ -153,7 +153,7 @@ Install hooks if you use them locally:
 pre-commit install --hook-type pre-commit --hook-type pre-push
 ```
 
-Make sure frontend dependencies are installed first, otherwise pre-push hooks that call `prettier`, `tsc`, or `eslint` will fail.
+Make sure frontend dependencies are installed first, otherwise pre-push hooks that call `prettier`, `tsc`, or `oxlint` will fail.
 
 ## Releases
 
