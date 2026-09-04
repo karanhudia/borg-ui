@@ -18,6 +18,7 @@ from app.services.archive_browse_service import (
 )
 from app.services.cache_service import archive_cache
 from app.services.repository_executor import (
+    agent_timezone_for_repository,
     get_agent_archive_browse_job,
     is_agent_executor,
     queue_agent_repository_operation_job,
@@ -72,11 +73,25 @@ def _build_repo_env(repo: Repository, db: Session):
     return env, temp_key_file
 
 
+# Bump when the shape or semantics of cached archive items change, so entries
+# written by an older build are never served. Raised for the mtime timezone
+# change: pre-change entries carry naive-local mtimes and bypass the parser on
+# a cache hit.
+_ARCHIVE_CONTENTS_CACHE_VERSION = "v2-utc-mtime"
+
+
+def _get_raw_items_cache_key(archive_name: str) -> str:
+    return f"{_ARCHIVE_CONTENTS_CACHE_VERSION}::{archive_name}"
+
+
 def _get_browse_result_cache_key(archive_name: str, path: str) -> str:
     normalized_path = path.strip("/")
     if not normalized_path:
-        return f"{archive_name}::browse-managed-root"
-    return f"{archive_name}::browse-managed::{normalized_path}"
+        return f"{_ARCHIVE_CONTENTS_CACHE_VERSION}::{archive_name}::browse-managed-root"
+    return (
+        f"{_ARCHIVE_CONTENTS_CACHE_VERSION}::{archive_name}"
+        f"::browse-managed::{normalized_path}"
+    )
 
 
 def _is_browse_result_payload(items) -> bool:
@@ -208,7 +223,9 @@ async def browse_archive_contents(
             )
             return {"items": cached_result}
 
-        all_items = await archive_cache.get(repository_id, archive_name)
+        all_items = await archive_cache.get(
+            repository_id, _get_raw_items_cache_key(archive_name)
+        )
 
         if all_items is not None:
             logger.info(
@@ -297,11 +314,20 @@ async def browse_archive_contents(
                         },
                     )
 
-                all_items = parse_archive_items(result["stdout"])
+                # An agent listing renders mtimes in the agent's zone; a
+                # server-side listing runs under TZ=UTC (the wrapper pins it).
+                mtime_zone = (
+                    agent_timezone_for_repository(db, repository)
+                    if is_agent_executor(repository)
+                    else "UTC"
+                )
+                all_items = parse_archive_items(
+                    result["stdout"], timezone_name=mtime_zone
+                )
 
                 # Store in cache (cache service will enforce its own size limits)
                 cache_success = await archive_cache.set(
-                    repository_id, archive_name, all_items
+                    repository_id, _get_raw_items_cache_key(archive_name), all_items
                 )
                 if cache_success:
                     logger.info(
