@@ -934,6 +934,13 @@
       "deleteFailed": "Impossibile eliminare l'archivio",
       "restoreFailed": "Impossibile avviare il ripristino",
       "notSelected": "Repository o archivio non selezionato"
+    },
+    "sync": {
+      "fresh": "Sincronizzato {{ago}}",
+      "syncing": "Sincronizzazione in corso",
+      "stale": "La sincronizzazione non è aggiornata",
+      "never": "Non ancora indicizzato",
+      "rebuild": "Ricostruisci"
     }
   },
   "restore": {

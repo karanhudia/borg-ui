@@ -934,6 +934,13 @@
       "deleteFailed": "Error al eliminar el archivo",
       "restoreFailed": "Error al iniciar la restauración",
       "notSelected": "Repositorio o archivo no seleccionado"
+    },
+    "sync": {
+      "fresh": "Sincronizado {{ago}}",
+      "syncing": "Sincronizando",
+      "stale": "La sincronización está desactualizada",
+      "never": "Aún no indexado",
+      "rebuild": "Reconstruir"
     }
   },
   "restore": {

@@ -934,6 +934,13 @@
       "deleteFailed": "Archiv konnte nicht gelöscht werden",
       "restoreFailed": "Wiederherstellung konnte nicht gestartet werden",
       "notSelected": "Repository oder Archiv nicht ausgewählt"
+    },
+    "sync": {
+      "fresh": "Synchronisiert {{ago}}",
+      "syncing": "Wird synchronisiert",
+      "stale": "Synchronisierung ist veraltet",
+      "never": "Noch nicht indiziert",
+      "rebuild": "Neu aufbauen"
     }
   },
   "restore": {

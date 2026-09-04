@@ -934,6 +934,13 @@
       "deleteFailed": "Failed to delete archive",
       "restoreFailed": "Failed to start restore",
       "notSelected": "Repository or archive not selected"
+    },
+    "sync": {
+      "fresh": "Synced {{ago}}",
+      "syncing": "Syncing",
+      "stale": "Sync is out of date",
+      "never": "Not indexed yet",
+      "rebuild": "Rebuild"
     }
   },
   "restore": {
