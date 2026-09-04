@@ -1427,6 +1427,8 @@ export const mountsAPI = {
     repository_id: number
     archive_name?: string
     mount_point?: string
+    // Borg 2 series archives share one name; the id addresses exactly one.
+    archive_id?: string
   }) => api.post('/mounts/borg', data),
 
   // Unmount a mounted archive
