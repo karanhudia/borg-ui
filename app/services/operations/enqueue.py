@@ -137,6 +137,16 @@ def record_import_connect(
     from app.services.operations.executors import registered_kinds
     from app.services.operations.followups import chain_for, history_enabled
 
+    # Resolve the chain before the row exists: the plan lookup behind
+    # history_enabled commits the session, and a flushed import_connect row
+    # committed that way would outlive a failure in the enqueue step below as
+    # an orphan without its follow-ups, beyond the reach of the caller's
+    # rollback.
+    kinds = chain_for(
+        "import_connect",
+        available=registered_kinds(),
+        history=history_enabled(db),
+    )
     now = utc_now()
     op = Operation(
         repository_id=repository.id,
@@ -153,11 +163,6 @@ def record_import_connect(
     )
     db.add(op)
     db.flush()
-    kinds = chain_for(
-        "import_connect",
-        available=registered_kinds(),
-        history=history_enabled(db),
-    )
     if kinds:
         enqueue_chain(
             db,

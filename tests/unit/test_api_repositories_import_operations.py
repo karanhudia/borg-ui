@@ -128,3 +128,126 @@ async def test_agent_import_records_operation_and_followups(test_db):
     assert {o.run_id for o in operations} == {operations[0].run_id}
     assert [o.trigger for o in operations] == ["import", "followup", "followup"]
     assert [o.triggered_by_user_id for o in operations] == [user.id] * 3
+
+
+def _rollback_spy(session):
+    """Count rollbacks on the request session without changing their effect."""
+    calls = {"n": 0}
+    real_rollback = session.rollback
+
+    def counting_rollback(*args, **kwargs):
+        calls["n"] += 1
+        return real_rollback(*args, **kwargs)
+
+    return calls, counting_rollback
+
+
+# The failure is injected into the enqueue step that runs AFTER the recorder
+# has added and flushed the import_connect row: the row genuinely sits in the
+# session when the rollback must happen. Failing the recorder itself would
+# leave nothing to roll back and prove nothing.
+_CHAIN_FAILURE = patch(
+    "app.services.operations.enqueue.enqueue_chain",
+    side_effect=RuntimeError("chain build failed"),
+)
+
+
+@pytest.mark.unit
+def test_import_records_failure_rolls_back_the_session(
+    test_client, test_db, admin_headers, tmp_path
+):
+    """If building the follow-up chain raises after import_connect has been
+    flushed, the endpoint must roll the session back before continuing
+    best-effort - otherwise the half-flushed row is committed later without
+    its follow-ups, and the session is left unusable (#897 review finding)."""
+    import app.services.operations.executors.index  # noqa: F401
+
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    (repo_path / "config").write_text("[repository]\n", encoding="utf-8")
+    verify_result = {"success": True, "info": {"encryption": {"mode": "none"}}}
+    rollback_calls, counting_rollback = _rollback_spy(test_db)
+
+    with (
+        patch(
+            "app.api.repositories.verify_existing_repository",
+            new=AsyncMock(return_value=verify_result),
+        ),
+        patch("app.core.borg_router.BorgRouter.update_stats", new=AsyncMock()),
+        patch(
+            "app.api.repositories.mqtt_service.sync_state_with_db", return_value=None
+        ),
+        _CHAIN_FAILURE,
+        patch.object(test_db, "rollback", counting_rollback),
+    ):
+        response = test_client.post(
+            "/api/repositories/import",
+            json={
+                "name": "imported-rollback",
+                "path": str(repo_path),
+                "encryption": "none",
+                "compression": "lz4",
+            },
+            headers=admin_headers,
+        )
+
+    # Best-effort: the import still succeeds despite the follow-up failure ...
+    assert response.status_code in (200, 201), response.text
+    # ... the session was rolled back to contain it ...
+    assert rollback_calls["n"] >= 1
+    # ... which discards the flushed import_connect row instead of leaving it
+    # for a later commit, while the repository committed before it survives.
+    assert (
+        test_db.query(Operation).filter(Operation.kind == "import_connect").all() == []
+    )
+    assert test_db.query(Repository).filter_by(name="imported-rollback").one()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_agent_import_failure_rolls_back_the_session(test_db):
+    """The agent import path records import_connect through the same recorder
+    and must roll back the same way when the enqueue step fails after the
+    flush."""
+    import app.services.operations.executors.index  # noqa: F401
+    from app.api.repositories import RepositoryImport, _create_agent_repository_record
+    from app.core.security import get_password_hash
+    from app.database.models import AgentMachine, User
+
+    agent = AgentMachine(
+        name="Rollback Agent",
+        agent_id="agt_rollback",
+        token_hash=get_password_hash("borgui_agent_secret"),
+        token_prefix="borgui_agent_secret"[:20],
+        status="online",
+        capabilities=["repository.init"],
+    )
+    user = User(
+        username="rollback-importer", password_hash=get_password_hash("x"), role="admin"
+    )
+    test_db.add_all([agent, user])
+    test_db.commit()
+    payload = RepositoryImport(
+        name="agent-rollback",
+        path="/srv/agent-rollback",
+        encryption="none",
+        compression="lz4",
+        agent_machine_id=agent.id,
+        execution_target="agent",
+    )
+    rollback_calls, counting_rollback = _rollback_spy(test_db)
+
+    with (
+        patch(
+            "app.api.repositories.mqtt_service.sync_state_with_db", return_value=None
+        ),
+        _CHAIN_FAILURE,
+        patch.object(test_db, "rollback", counting_rollback),
+    ):
+        await _create_agent_repository_record(payload, user, test_db, imported=True)
+
+    assert rollback_calls["n"] >= 1
+    assert (
+        test_db.query(Operation).filter(Operation.kind == "import_connect").all() == []
+    )
+    assert test_db.query(Repository).filter_by(name="agent-rollback").one()
