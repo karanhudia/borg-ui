@@ -27,9 +27,24 @@ vi.mock('../../services/authHeaders', () => ({
   getBackendTargetTokenParams: () => ({ token: 'test-token' }),
 }))
 
+let activeTargetId = 'local'
+let targetListener: ((reason: string) => void) | null = null
+
+vi.mock('../../services/remoteBackends/storage', () => ({
+  getActiveBackendTarget: () => ({ id: activeTargetId }),
+  subscribeRemoteBackendStorage: (listener: (reason: string) => void) => {
+    targetListener = listener
+    return () => {
+      targetListener = null
+    }
+  },
+}))
+
 describe('useOperationEvents', () => {
   beforeEach(() => {
     FakeEventSource.instances = []
+    activeTargetId = 'local'
+    targetListener = null
     vi.stubGlobal('EventSource', FakeEventSource)
     vi.useFakeTimers()
   })
@@ -119,5 +134,30 @@ describe('useOperationEvents', () => {
 
     unmount()
     expect(FakeEventSource.instances[1].closed).toBe(true)
+  })
+
+  it('rebinds the stream when the active backend target changes', () => {
+    const { unmount } = renderHook(() => useOperationEvents(vi.fn(), vi.fn()))
+    expect(FakeEventSource.instances).toHaveLength(1)
+
+    activeTargetId = 'remote-1'
+    act(() => {
+      targetListener?.('target')
+    })
+
+    expect(FakeEventSource.instances[0].closed).toBe(true)
+    expect(FakeEventSource.instances).toHaveLength(2)
+
+    unmount()
+    expect(FakeEventSource.instances[1].closed).toBe(true)
+  })
+
+  it('leaves the stream alone when an unrelated storage change fires', () => {
+    renderHook(() => useOperationEvents(vi.fn(), vi.fn()))
+    act(() => {
+      targetListener?.('token')
+    })
+    expect(FakeEventSource.instances).toHaveLength(1)
+    expect(FakeEventSource.instances[0].closed).toBe(false)
   })
 })

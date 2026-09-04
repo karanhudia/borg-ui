@@ -254,7 +254,10 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
               { name: 'Notifications', href: '/settings/notifications', icon: Bell },
             ],
           },
-          ...(canManageSystemSettings
+          // The System group also carries Background work, which operators
+          // reach without `settings.system.manage`, so the group renders for
+          // either permission and each admin-only child stays guarded.
+          ...(canManageSystemSettings || canViewBackgroundWork
             ? [
                 {
                   name: 'System',
@@ -264,12 +267,16 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
                     ...(canManageLicensing
                       ? [{ name: 'Licensing', href: '/settings/licensing', icon: SettingsIcon }]
                       : []),
-                    { name: 'System', href: '/settings/system', icon: SettingsIcon },
-                    {
-                      name: 'Monitoring & Reports',
-                      href: '/settings/monitoring',
-                      icon: Activity,
-                    },
+                    ...(canManageSystemSettings
+                      ? [
+                          { name: 'System', href: '/settings/system', icon: SettingsIcon },
+                          {
+                            name: 'Monitoring & Reports',
+                            href: '/settings/monitoring',
+                            icon: Activity,
+                          },
+                        ]
+                      : []),
                     ...(canViewBackgroundWork
                       ? [
                           {
@@ -282,8 +289,12 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
                     ...(showMqttNav && canManageMqtt
                       ? [{ name: 'MQTT', href: '/settings/mqtt', icon: Wifi }]
                       : []),
-                    { name: 'Cache', href: '/settings/cache', icon: Server },
-                    { name: 'Logs', href: '/settings/logs', icon: FileText },
+                    ...(canManageSystemSettings
+                      ? [
+                          { name: 'Cache', href: '/settings/cache', icon: Server },
+                          { name: 'Logs', href: '/settings/logs', icon: FileText },
+                        ]
+                      : []),
                     ...(canManagePackages
                       ? [{ name: 'Packages', href: '/settings/packages', icon: Package }]
                       : []),

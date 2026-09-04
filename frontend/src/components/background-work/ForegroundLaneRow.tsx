@@ -31,13 +31,15 @@ export default function ForegroundLaneRow({ operation }: ForegroundLaneRowProps)
       <Typography variant="caption" color="text.secondary">
         {t('operations.background.holdsLane')}
       </Typography>
-      <MuiLink
-        component={RouterLink}
-        to={`/activity?repository_id=${operation.repository_id}`}
-        sx={{ ml: 'auto' }}
-      >
-        {t('operations.background.viewActivity')}
-      </MuiLink>
+      {operation.repository_id != null && (
+        <MuiLink
+          component={RouterLink}
+          to={`/activity?repository_id=${operation.repository_id}`}
+          sx={{ ml: 'auto' }}
+        >
+          {t('operations.background.viewActivity')}
+        </MuiLink>
+      )}
     </Box>
   )
 }

@@ -4,6 +4,8 @@ import { renderWithProviders, screen, waitFor, userEvent } from '../../test/test
 import AppSidebar from '../AppSidebar'
 
 const {
+  mockAuthorization,
+  mockHasGlobalPermission,
   mockApiGet,
   mockGetSystemSettings,
   mockListBackupPlans,
@@ -26,6 +28,13 @@ const {
     schedule: true,
   },
   mockGetTabDisabledReason: vi.fn<(key: string) => string | null>(() => null),
+  mockAuthorization: {
+    // Empty by default, which is what the real hook yields before its query
+    // resolves; individual tests opt into a role.
+    globalRoleRank: new Map<string, number>(),
+    currentGlobalRole: 'admin' as string | null,
+  },
+  mockHasGlobalPermission: vi.fn((_permission: string) => true),
 }))
 
 vi.mock('../../services/api', () => ({
@@ -72,8 +81,12 @@ vi.mock('../../hooks/useAuth', () => ({
         'settings.ssh.manage',
       ],
     },
-    hasGlobalPermission: () => true,
+    hasGlobalPermission: mockHasGlobalPermission,
   }),
+}))
+
+vi.mock('../../hooks/useAuthorization', () => ({
+  useAuthorization: () => mockAuthorization,
 }))
 
 vi.mock('../../hooks/usePlan', () => ({
@@ -111,6 +124,9 @@ function renderSidebar({
 describe('AppSidebar', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockHasGlobalPermission.mockImplementation(() => true)
+    mockAuthorization.globalRoleRank = new Map()
+    mockAuthorization.currentGlobalRole = 'admin'
     Object.assign(mockTabEnablement, {
       dashboard: true,
       connections: true,
@@ -255,6 +271,40 @@ describe('AppSidebar', () => {
     await waitFor(() => {
       expect(screen.queryAllByRole('link', { name: /repositories/i })).toHaveLength(0)
       expect(screen.getAllByText('Repositories').length).toBeGreaterThan(0)
+    })
+  })
+
+  it('shows Background work to an operator who cannot manage system settings', async () => {
+    mockAuthorization.globalRoleRank = new Map([
+      ['viewer', 10],
+      ['operator', 20],
+      ['admin', 30],
+    ])
+    mockAuthorization.currentGlobalRole = 'operator'
+    mockHasGlobalPermission.mockImplementation(() => false)
+
+    renderSidebar({ initialRoute: '/settings/background-work' })
+
+    expect(await screen.findAllByRole('link', { name: /background work/i })).not.toHaveLength(0)
+    // The System group renders for this role, but its admin-only children
+    // must not come with it.
+    expect(screen.queryAllByRole('link', { name: /^logs$/i })).toHaveLength(0)
+    expect(screen.queryAllByRole('link', { name: /^cache$/i })).toHaveLength(0)
+  })
+
+  it('hides Background work from a viewer', async () => {
+    mockAuthorization.globalRoleRank = new Map([
+      ['viewer', 10],
+      ['operator', 20],
+      ['admin', 30],
+    ])
+    mockAuthorization.currentGlobalRole = 'viewer'
+    mockHasGlobalPermission.mockImplementation(() => false)
+
+    renderSidebar()
+
+    await waitFor(() => {
+      expect(screen.queryAllByRole('link', { name: /background work/i })).toHaveLength(0)
     })
   })
 })

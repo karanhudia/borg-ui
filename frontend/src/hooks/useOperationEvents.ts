@@ -1,5 +1,8 @@
 import { useEffect, useRef } from 'react'
-import { getActiveBackendTarget } from '../services/remoteBackends/storage'
+import {
+  getActiveBackendTarget,
+  subscribeRemoteBackendStorage,
+} from '../services/remoteBackends/storage'
 import { buildApiUrl } from '../services/remoteBackends/gateway'
 import { getBackendTargetTokenParams } from '../services/authHeaders'
 import type { OperationItem, OperationProgressEvent } from '../types/operations'
@@ -24,6 +27,8 @@ type Handlers = {
 const subscribers = new Set<{ current: Handlers }>()
 let source: EventSource | null = null
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+let openTargetId: string | null = null
+let unsubscribeTargetChanges: (() => void) | null = null
 
 const RECONNECT_DELAY_MS = 5000
 
@@ -65,9 +70,27 @@ function openSource(): void {
   // does, or the board would merge the local machine's events into a remote
   // machine's queue.
   const url = buildApiUrl('/events/stream', getBackendTargetTokenParams(target.id))
+  openTargetId = target.id
   source = new EventSource(url)
   source.onmessage = handleMessage
   source.onerror = handleError
+}
+
+/**
+ * Switching the active backend does not remount the consumers, so the shared
+ * connection has to be rebound by hand or it would keep streaming the old
+ * machine's operations.
+ */
+function handleTargetChange(): void {
+  if (subscribers.size === 0) return
+  if (getActiveBackendTarget().id === openTargetId) return
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer)
+    reconnectTimer = null
+  }
+  source?.close()
+  source = null
+  openSource()
 }
 
 function closeSourceIfIdle(): void {
@@ -76,6 +99,9 @@ function closeSourceIfIdle(): void {
     clearTimeout(reconnectTimer)
     reconnectTimer = null
   }
+  unsubscribeTargetChanges?.()
+  unsubscribeTargetChanges = null
+  openTargetId = null
   if (!source) return
   source.close()
   source = null
@@ -100,6 +126,9 @@ export function useOperationEvents(
   useEffect(() => {
     const entry = handlers
     subscribers.add(entry)
+    unsubscribeTargetChanges ??= subscribeRemoteBackendStorage((reason) => {
+      if (reason === 'target') handleTargetChange()
+    })
     openSource()
     return () => {
       subscribers.delete(entry)
