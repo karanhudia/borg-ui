@@ -372,23 +372,11 @@ class AgentSessionRuntime:
                     continue
                 message = json.loads(raw_message)
                 if isinstance(message, dict) and message.get("type") == "command":
-                    # Register the cancel event here, before the worker thread
-                    # even exists, not inside _handle_command. _handle_command
-                    # registers deep into its own body (after the ack, after
-                    # every early-return command), so a session that drops
-                    # between worker.start() and that point leaves the worker
-                    # with no entry in _cancel_events: the disconnect branch
-                    # below can't signal it (it only iterates existing
-                    # entries) and the next hello's running_job_ids omits it,
-                    # so the server requeues and redispatches the job onto a
-                    # new worker while this one is still executing it --
-                    # double-running a durable operation. Only register for a
-                    # message that will actually reach a job handler (mirrors
-                    # _handle_command's own dispatch conditions below) --
-                    # registering unconditionally would leave ids for
-                    # early-return commands (filesystem.browse, cancel, ...)
-                    # stuck in _cancel_events forever, since nothing would
-                    # ever unregister them.
+                    # Register before the worker thread exists: a session that
+                    # drops before _handle_command registers leaves the worker
+                    # unsignalable and absent from hello, and the server
+                    # redispatches a job still running here. See
+                    # _job_id_for_dispatch for why only some messages register.
                     job_id = self._job_id_for_dispatch(message)
                     cancel_event = (
                         self._register_cancel(job_id) if job_id is not None else None
@@ -546,7 +534,17 @@ class AgentSessionRuntime:
         ):
             return None
         raw_job_id = message.get("job_id")
-        job_id = int(raw_job_id) if raw_job_id is not None else None
+        # Cast defensively: this runs on the session thread, so an unparseable
+        # job_id raised here would unwind the whole session. Inside
+        # _handle_command -- a daemon worker -- the same bad value only kills
+        # that one command. Returning None keeps it out of the registry and
+        # leaves _handle_command to fail it exactly as it did before.
+        # OverflowError is not hypothetical: json.loads turns 1e400 into
+        # float("inf"), and int(inf) raises it rather than ValueError.
+        try:
+            job_id = int(raw_job_id) if raw_job_id is not None else None
+        except (TypeError, ValueError, OverflowError):
+            return None
         if job_id is None or get_job_handler(command) is None:
             return None
         return job_id

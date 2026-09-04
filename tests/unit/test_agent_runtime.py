@@ -894,25 +894,11 @@ def test_session_hello_stops_reporting_a_job_once_its_handler_finished(
 
 @pytest.mark.unit
 def test_session_loop_registers_cancel_before_worker_thread_starts(monkeypatch):
-    """The startup race this fix closes: _handle_command used to register the
-    cancel event deep in its own body -- after enqueueing the command_ack and
-    after every early-return command check -- so a session that dropped
-    between worker.start() and that point left the worker with no entry in
-    _cancel_events. The disconnect branch in run_session only iterates
-    *existing* _cancel_events entries -- it can't signal a worker that was
-    never registered -- and the next hello's running_job_ids omits it, so the
-    server (see ignore_age_for_undelivered in app/api/agents.py) requeues and
-    redispatches the job onto a fresh worker while the original keeps
-    executing it: double execution of a durable operation.
+    """Registration must be a property of dispatch, not of thread timing.
 
-    Assert the registration is a property of *dispatch itself*, not of
-    thread timing: block the worker at the very first thing _handle_command
-    does (the command_ack enqueue), well before it would reach its own
-    _register_cancel call, then check _cancel_events from the main thread
-    while the worker is still parked there. If registration only happened
-    inside _handle_command (the pre-fix shape), the id would still be
-    missing at this point -- this reproduces the actual gap, not just a
-    handler that hasn't started yet.
+    See _job_id_for_dispatch for the race. Park the worker at the very first
+    thing _handle_command does, well before its own _register_cancel, so a
+    regression to registering inside the worker leaves the id missing here.
     """
     from agent.borg_ui_agent.session import AgentSessionRuntime, SessionCommandClient
 
@@ -1065,6 +1051,42 @@ def test_session_loop_does_not_register_unsupported_command(patch_session_platfo
         connect=lambda *args, **kwargs: socket,
         http_client=RecordingHttpClient(),
     )
+    runtime.run_session(max_messages=1)
+
+    assert runtime._cancel_events == {}
+    assert runtime._running_job_ids() == []
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("raw_job_id", [float("inf"), float("-inf"), "abc", [1]])
+def test_session_loop_survives_an_uncastable_job_id(patch_session_platform, raw_job_id):
+    """A job_id the cast chokes on must not take the session down with it.
+
+    _job_id_for_dispatch runs on the session thread, so anything it raises
+    unwinds run_session and forces a reconnect, where the same value inside
+    _handle_command only fails that one worker. json.loads yields float("inf")
+    for 1e400, and int(inf) raises OverflowError rather than ValueError, so
+    catching only TypeError/ValueError left that shape live.
+    """
+    from agent.borg_ui_agent.session import AgentSessionRuntime
+
+    socket = FakeWebSocket(
+        [
+            {
+                "type": "command",
+                "command_id": "cmd-bad-id",
+                "command": "backup.create",
+                "job_id": raw_job_id,
+                "payload": {},
+            },
+        ]
+    )
+    runtime = AgentSessionRuntime(
+        AgentConfig("https://borgui.example.com", "agt_123", "secret"),
+        connect=lambda *args, **kwargs: socket,
+        http_client=RecordingHttpClient(),
+    )
+
     runtime.run_session(max_messages=1)
 
     assert runtime._cancel_events == {}
