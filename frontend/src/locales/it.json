@@ -155,7 +155,8 @@
       "scripts": "Script",
       "users": "Utenti",
       "exportImport": "Esporta/Importa",
-      "beta": "Beta"
+      "beta": "Beta",
+      "backgroundWork": "Lavoro in background"
     },
     "menu": {
       "openDrawer": "Apri navigazione",
@@ -291,7 +292,11 @@
       "emptyAgents": "Nessun agente registrato.",
       "emptyJobs": "Nessun processo agente ancora.",
       "emptyTokens": "Nessun token di registrazione creato.",
-      "tabs": { "agents": "Agenti", "jobs": "Processi", "tokens": "Token di registrazione" },
+      "tabs": {
+        "agents": "Agenti",
+        "jobs": "Processi",
+        "tokens": "Token di registrazione"
+      },
       "toasts": {
         "tokenCreated": "Token di registrazione creato",
         "tokenRevoked": "Token di registrazione revocato",
@@ -434,10 +439,20 @@
     },
     "add": {
       "title": "Aggiungi agente",
-      "steps": { "target": "Destinazione", "details": "Dettagli", "install": "Installa" },
-      "errors": { "createToken": "Impossibile creare il token di registrazione" },
+      "steps": {
+        "target": "Destinazione",
+        "details": "Dettagli",
+        "install": "Installa"
+      },
+      "errors": {
+        "createToken": "Impossibile creare il token di registrazione"
+      },
       "platform": "Piattaforma",
-      "platforms": { "linux": "Linux", "macos": "macOS", "windows": "Windows" },
+      "platforms": {
+        "linux": "Linux",
+        "macos": "macOS",
+        "windows": "Windows"
+      },
       "selected": "Selezionato",
       "comingLater": "Disponibile in seguito",
       "serverUrl": "URL del server",
@@ -3237,6 +3252,88 @@
     "failedToSend": "Impossibile inviare il report backup",
     "lastReport": "Ultimo report:"
   },
+  "operations": {
+    "category": {
+      "import": "Importa",
+      "backup": "Backup",
+      "restore": "Ripristina",
+      "maintenance": "Manutenzione",
+      "index": "Indice",
+      "mirror": "Mirror",
+      "system": "Sistema"
+    },
+    "background": {
+      "systemRow": "Sistema",
+      "retry": "Riprova",
+      "waiting": "in attesa",
+      "failed": "non riuscito",
+      "plan": "piano",
+      "holdsLane": "→ occupa la corsia",
+      "viewActivity": "Attività ▸",
+      "stage": {
+        "connect": "Connetti",
+        "stats": "Statistiche",
+        "archives": "Archivi",
+        "history": "Indice cronologia",
+        "ready": "Pronto"
+      },
+      "workers": "worker: indice {{count}}",
+      "emptyTitle": "Nessuna attività in corso",
+      "emptyDescription": "Il lavoro in background apparirà qui alla prossima importazione, backup o esecuzione di riconciliazione.",
+      "rebuildFrom": "Ricostruisci da",
+      "rebuildStage": {
+        "stats": "Statistiche",
+        "archives": "Archivi",
+        "history": "Cronologia"
+      },
+      "title": "Lavoro in background",
+      "pause": "Pausa",
+      "resume": "Riprendi",
+      "rebuildNeedsRepository": "Scegli un repository dalla sua scheda per ricostruirlo.",
+      "never": "Mai",
+      "syncing": "Sincronizzazione",
+      "rebuildMenu": "Ricostruisci…",
+      "pauseFailed": "Impossibile modificare lo stato della coda in background.",
+      "openTrack": "Apri la traccia di esecuzione di {{repository}}",
+      "rebuildFailed": "Non è stato possibile avviare la ricostruzione.",
+      "queueFailed": "Impossibile caricare la coda in background.",
+      "pauseAdminOnly": "Solo gli amministratori possono mettere in pausa il lavoro in background."
+    },
+    "status": {
+      "queued": "In coda",
+      "running": "In esecuzione",
+      "completed": "Completato",
+      "completed_with_warnings": "Completato con avvisi",
+      "failed": "Non riuscito",
+      "cancelled": "Annullato",
+      "skipped": "Saltato"
+    },
+    "kind": {
+      "import_connect": "connetti",
+      "backup": "backup",
+      "restore": "ripristina",
+      "restore_check": "verifica ripristino",
+      "check": "verifica",
+      "prune": "potatura",
+      "compact": "compattazione",
+      "delete_archive": "elimina archivio",
+      "wipe": "cancella",
+      "rclone_sync": "sincronizzazione mirror",
+      "package_install": "installazione pacchetto",
+      "stats": "statistiche",
+      "archive_sync": "sincronizzazione archivio",
+      "history_index": "indice cronologia",
+      "history_merge": "unione cronologia"
+    },
+    "strip": {
+      "backup": "Backup",
+      "check": "Verifica",
+      "prune": "Sfoltimento",
+      "compact": "Compattazione",
+      "index": "Indice",
+      "mirror": "Mirror"
+    }
+  },
   "notifications": {
     "title": "Servizi di Notifica",
     "subtitle": "Configura i servizi di notifica per avvisi di backup e ripristino",
@@ -3804,7 +3901,10 @@
     "noScheduledChecksDesc": "Configura controlli automatici del repository per garantire l'integrità dei dati",
     "needRepository": "Devi creare almeno un repository prima di pianificare i controlli.",
     "repositoryNotFound": "Repository non trovato",
-    "status": { "cancelled": "Annullato", "running": "In esecuzione" },
+    "status": {
+      "cancelled": "Annullato",
+      "running": "In esecuzione"
+    },
     "historyTitle": "Cronologia controlli pianificati",
     "historyShowing": "Mostra {{filtered}} di {{total}} job di controllo pianificato",
     "historyShowingFiltered": "Mostra {{filtered}} di {{total}} job di controllo pianificato (filtrati)",
@@ -4384,7 +4484,10 @@
           "label": "File chiave (ChaCha20)",
           "description": "File chiave con ChaCha20"
         },
-        "none": { "label": "Nessuna", "description": "Nessuna crittografia (non consigliato)" }
+        "none": {
+          "label": "Nessuna",
+          "description": "Nessuna crittografia (non consigliato)"
+        }
       },
       "borgKeyfileTitle": "File Chiave Borg (Opzionale)",
       "borgKeyfileDesc": "I file chiave Borg sono tipicamente archiviati senza estensione in ~/.config/borg/keys/",

@@ -155,7 +155,8 @@
       "scripts": "Skripte",
       "users": "Benutzer",
       "exportImport": "Export/Import",
-      "beta": "Beta"
+      "beta": "Beta",
+      "backgroundWork": "Hintergrundarbeit"
     },
     "menu": {
       "openDrawer": "Navigation öffnen",
@@ -291,7 +292,11 @@
       "emptyAgents": "Keine Agenten registriert.",
       "emptyJobs": "Noch keine Agent-Jobs.",
       "emptyTokens": "Keine Registrierungstoken erstellt.",
-      "tabs": { "agents": "Agenten", "jobs": "Jobs", "tokens": "Registrierungstoken" },
+      "tabs": {
+        "agents": "Agenten",
+        "jobs": "Jobs",
+        "tokens": "Registrierungstoken"
+      },
       "toasts": {
         "tokenCreated": "Registrierungstoken erstellt",
         "tokenRevoked": "Registrierungstoken widerrufen",
@@ -434,10 +439,20 @@
     },
     "add": {
       "title": "Agent hinzufügen",
-      "steps": { "target": "Ziel", "details": "Details", "install": "Installieren" },
-      "errors": { "createToken": "Registrierungstoken konnte nicht erstellt werden" },
+      "steps": {
+        "target": "Ziel",
+        "details": "Details",
+        "install": "Installieren"
+      },
+      "errors": {
+        "createToken": "Registrierungstoken konnte nicht erstellt werden"
+      },
       "platform": "Plattform",
-      "platforms": { "linux": "Linux", "macos": "macOS", "windows": "Windows" },
+      "platforms": {
+        "linux": "Linux",
+        "macos": "macOS",
+        "windows": "Windows"
+      },
       "selected": "Ausgewählt",
       "comingLater": "Demnächst verfügbar",
       "serverUrl": "Server-URL",
@@ -3237,6 +3252,88 @@
     "failedToSend": "Backup-Bericht konnte nicht gesendet werden",
     "lastReport": "Letzter Bericht:"
   },
+  "operations": {
+    "category": {
+      "import": "Import",
+      "backup": "Sicherung",
+      "restore": "Wiederherstellung",
+      "maintenance": "Wartung",
+      "index": "Index",
+      "mirror": "Spiegelung",
+      "system": "System"
+    },
+    "background": {
+      "systemRow": "System",
+      "retry": "Wiederholen",
+      "waiting": "wartet",
+      "failed": "fehlgeschlagen",
+      "plan": "Plan",
+      "holdsLane": "→ blockiert die Warteschlange",
+      "viewActivity": "Aktivität ▸",
+      "stage": {
+        "connect": "Verbinden",
+        "stats": "Statistik",
+        "archives": "Archive",
+        "history": "Verlaufsindex",
+        "ready": "Fertig"
+      },
+      "workers": "Worker: Index {{count}}",
+      "emptyTitle": "Nichts läuft gerade",
+      "emptyDescription": "Hintergrundarbeit erscheint hier, sobald ein Import, eine Sicherung oder ein Abgleichlauf startet.",
+      "rebuildFrom": "Neu aufbauen ab",
+      "rebuildStage": {
+        "stats": "Statistik",
+        "archives": "Archive",
+        "history": "Verlauf"
+      },
+      "title": "Hintergrundarbeit",
+      "pause": "Pausieren",
+      "resume": "Fortsetzen",
+      "rebuildNeedsRepository": "Wähle ein Repository aus seiner Karte, um es neu aufzubauen.",
+      "never": "Nie",
+      "syncing": "Synchronisiert",
+      "rebuildMenu": "Neu aufbauen…",
+      "pauseFailed": "Der Zustand der Hintergrundwarteschlange konnte nicht geändert werden.",
+      "openTrack": "Ablaufverfolgung für {{repository}} öffnen",
+      "rebuildFailed": "Der Neuaufbau konnte nicht gestartet werden.",
+      "queueFailed": "Die Hintergrundwarteschlange konnte nicht geladen werden.",
+      "pauseAdminOnly": "Nur Administratoren können Hintergrundarbeiten pausieren."
+    },
+    "status": {
+      "queued": "In Warteschlange",
+      "running": "Läuft",
+      "completed": "Abgeschlossen",
+      "completed_with_warnings": "Abgeschlossen mit Warnungen",
+      "failed": "Fehlgeschlagen",
+      "cancelled": "Abgebrochen",
+      "skipped": "Übersprungen"
+    },
+    "kind": {
+      "import_connect": "Verbinden",
+      "backup": "Sicherung",
+      "restore": "Wiederherstellung",
+      "restore_check": "Wiederherstellungsprüfung",
+      "check": "Prüfung",
+      "prune": "Bereinigung",
+      "compact": "Komprimierung",
+      "delete_archive": "Archiv löschen",
+      "wipe": "Löschen",
+      "rclone_sync": "Spiegel-Sync",
+      "package_install": "Paketinstallation",
+      "stats": "Statistik",
+      "archive_sync": "Archiv-Sync",
+      "history_index": "Verlaufsindex",
+      "history_merge": "Verlauf zusammenführen"
+    },
+    "strip": {
+      "backup": "Sicherung",
+      "check": "Prüfung",
+      "prune": "Bereinigung",
+      "compact": "Verdichtung",
+      "index": "Index",
+      "mirror": "Spiegelung"
+    }
+  },
   "notifications": {
     "title": "Benachrichtigungsdienste",
     "subtitle": "Konfiguriere Benachrichtigungsdienste für Sicherungs- und Wiederherstellungswarnungen",
@@ -3804,7 +3901,10 @@
     "noScheduledChecksDesc": "Konfiguriere automatische Repository-Überprüfungen, um die Datenintegrität sicherzustellen",
     "needRepository": "Du musst mindestens ein Repository erstellen, bevor du Überprüfungen planst.",
     "repositoryNotFound": "Repository nicht gefunden",
-    "status": { "cancelled": "Abgebrochen", "running": "Wird ausgeführt" },
+    "status": {
+      "cancelled": "Abgebrochen",
+      "running": "Wird ausgeführt"
+    },
     "historyTitle": "Verlauf geplanter Überprüfungen",
     "historyShowing": "Zeige {{filtered}} von {{total}} geplanten Überprüfungsjobs",
     "historyShowingFiltered": "Zeige {{filtered}} von {{total}} geplanten Überprüfungsjobs (gefiltert)",
@@ -4384,7 +4484,10 @@
           "label": "Schlüsseldatei (ChaCha20)",
           "description": "Schlüsseldatei mit ChaCha20"
         },
-        "none": { "label": "Keine", "description": "Keine Verschlüsselung (nicht empfohlen)" }
+        "none": {
+          "label": "Keine",
+          "description": "Keine Verschlüsselung (nicht empfohlen)"
+        }
       },
       "borgKeyfileTitle": "Borg-Schlüsseldatei (Optional)",
       "borgKeyfileDesc": "Borg-Schlüsseldateien werden typischerweise ohne Dateiendung in ~/.config/borg/keys/ gespeichert",

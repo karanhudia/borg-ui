@@ -37,6 +37,7 @@ import { useAnalytics } from '../hooks/useAnalytics'
 import { Repository } from '../types'
 import type { RepoAction } from '../hooks/usePermissions'
 import OperationalCard from './OperationalCard'
+import OperationStatusStrip from './OperationStatusStrip'
 
 interface RepositoryCardProps {
   repository: Repository
@@ -856,6 +857,8 @@ export default function RepositoryCard({
             )
           })}
         </Box>
+
+        <OperationStatusStrip repositoryId={repository.id} />
 
         {/* ── Secondary Metadata ── */}
         <Box

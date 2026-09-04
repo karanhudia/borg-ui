@@ -4,6 +4,7 @@ import { useParams } from 'react-router-dom'
 import { Box } from '@mui/material'
 import { settingsAPI } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
+import { useAuthorization } from '../hooks/useAuthorization'
 import { useAnalytics } from '../hooks/useAnalytics'
 import AccountTab from '../components/AccountTab'
 import AppearanceTab from '../components/AppearanceTab'
@@ -21,6 +22,7 @@ import MqttSettingsTab from '../components/MqttSettingsTab'
 import UsersTab from '../components/UsersTab'
 import TabContentLayout from '../components/shared/TabContentLayout'
 import MonitoringReportsTab from '../components/MonitoringReportsTab'
+import BackgroundWorkTab from '../components/BackgroundWorkTab'
 import Scripts from './Scripts'
 import Activity from './Activity'
 
@@ -37,6 +39,10 @@ const Settings: React.FC = () => {
   const canManageMounts = hasGlobalPermission('settings.mounts.manage')
   const canManageScripts = hasGlobalPermission('settings.scripts.manage')
   const canManageExportImport = hasGlobalPermission('settings.export_import.manage')
+  const { globalRoleRank, currentGlobalRole } = useAuthorization()
+  const canViewBackgroundWork =
+    (globalRoleRank?.get(currentGlobalRole ?? '') ?? 0) >=
+    (globalRoleRank?.get('operator') ?? Infinity)
   const { trackSettings, EventAction } = useAnalytics()
   const { tab } = useParams<{ tab?: string }>()
   const { data: systemSettingsData } = useQuery({
@@ -63,6 +69,7 @@ const Settings: React.FC = () => {
       ...(canManageLicensing ? ['licensing'] : []),
       ...(canManageSystem ? ['system'] : []),
       ...(canManageSystem ? ['monitoring'] : []),
+      ...(canViewBackgroundWork ? ['background-work'] : []),
       ...(mqttBetaEnabled && canManageMqtt ? ['mqtt'] : []),
       ...(canManageBeta ? ['beta'] : []),
       ...(canManageCache ? ['cache'] : []),
@@ -86,6 +93,7 @@ const Settings: React.FC = () => {
     canManageScripts,
     canManageExportImport,
     mqttBetaEnabled,
+    canViewBackgroundWork,
   ])
 
   const tabOrder = React.useMemo(() => getTabOrder(), [getTabOrder])
@@ -161,6 +169,13 @@ const Settings: React.FC = () => {
       {currentTabId === 'monitoring' && canManageSystem && (
         <TabContentLayout>
           <MonitoringReportsTab />
+        </TabContentLayout>
+      )}
+
+      {/* Background Work Tab - Admin/Operator */}
+      {currentTabId === 'background-work' && canViewBackgroundWork && (
+        <TabContentLayout>
+          <BackgroundWorkTab />
         </TabContentLayout>
       )}
 

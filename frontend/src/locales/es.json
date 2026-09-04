@@ -155,7 +155,8 @@
       "scripts": "Scripts",
       "users": "Usuarios",
       "exportImport": "Exportar/Importar",
-      "beta": "Beta"
+      "beta": "Beta",
+      "backgroundWork": "Trabajo en segundo plano"
     },
     "menu": {
       "openDrawer": "Abrir navegación",
@@ -291,7 +292,11 @@
       "emptyAgents": "No hay agentes registrados.",
       "emptyJobs": "Aún no hay trabajos de agente.",
       "emptyTokens": "No se han creado tokens de registro.",
-      "tabs": { "agents": "Agentes", "jobs": "Trabajos", "tokens": "Tokens de registro" },
+      "tabs": {
+        "agents": "Agentes",
+        "jobs": "Trabajos",
+        "tokens": "Tokens de registro"
+      },
       "toasts": {
         "tokenCreated": "Token de registro creado",
         "tokenRevoked": "Token de registro revocado",
@@ -434,10 +439,20 @@
     },
     "add": {
       "title": "Añadir agente",
-      "steps": { "target": "Destino", "details": "Detalles", "install": "Instalar" },
-      "errors": { "createToken": "No se pudo crear el token de inscripción" },
+      "steps": {
+        "target": "Destino",
+        "details": "Detalles",
+        "install": "Instalar"
+      },
+      "errors": {
+        "createToken": "No se pudo crear el token de inscripción"
+      },
       "platform": "Plataforma",
-      "platforms": { "linux": "Linux", "macos": "macOS", "windows": "Windows" },
+      "platforms": {
+        "linux": "Linux",
+        "macos": "macOS",
+        "windows": "Windows"
+      },
       "selected": "Seleccionado",
       "comingLater": "Próximamente",
       "serverUrl": "URL del servidor",
@@ -511,7 +526,10 @@
     "closeWithoutCopyingTitle": "¿Cerrar sin copiar?",
     "closeWithoutCopyingDescription": "No has copiado el token. Una vez que cierres este diálogo, no podrá recuperarse.",
     "closeAnyway": "Cerrar de todos modos",
-    "errors": { "generate": "No se pudo generar el token", "revoke": "No se pudo revocar el token" }
+    "errors": {
+      "generate": "No se pudo generar el token",
+      "revoke": "No se pudo revocar el token"
+    }
   },
   "accountPassword": {
     "title": "Cambiar contraseña",
@@ -3234,6 +3252,88 @@
     "failedToSend": "Error al enviar el informe de copias",
     "lastReport": "Último informe:"
   },
+  "operations": {
+    "category": {
+      "import": "Importar",
+      "backup": "Copia de seguridad",
+      "restore": "Restaurar",
+      "maintenance": "Mantenimiento",
+      "index": "Índice",
+      "mirror": "Espejo",
+      "system": "Sistema"
+    },
+    "background": {
+      "systemRow": "Sistema",
+      "retry": "Reintentar",
+      "waiting": "esperando",
+      "failed": "fallido",
+      "plan": "plan",
+      "holdsLane": "→ ocupa el carril",
+      "viewActivity": "Actividad ▸",
+      "stage": {
+        "connect": "Conectar",
+        "stats": "Estadísticas",
+        "archives": "Archivos",
+        "history": "Índice de historial",
+        "ready": "Listo"
+      },
+      "workers": "trabajadores: índice {{count}}",
+      "emptyTitle": "No hay nada en ejecución",
+      "emptyDescription": "El trabajo en segundo plano aparecerá aquí la próxima vez que se inicie una importación, copia de seguridad o reconciliación.",
+      "rebuildFrom": "Reconstruir desde",
+      "rebuildStage": {
+        "stats": "Estadísticas",
+        "archives": "Archivos",
+        "history": "Historial"
+      },
+      "title": "Trabajo en segundo plano",
+      "pause": "Pausar",
+      "resume": "Reanudar",
+      "rebuildNeedsRepository": "Elige un repositorio desde su tarjeta para reconstruirlo.",
+      "never": "Nunca",
+      "syncing": "Sincronizando",
+      "rebuildMenu": "Reconstruir…",
+      "pauseFailed": "No se pudo cambiar el estado de la cola en segundo plano.",
+      "openTrack": "Abrir el seguimiento de ejecución de {{repository}}",
+      "rebuildFailed": "No se pudo iniciar la reconstrucción.",
+      "queueFailed": "No se pudo cargar la cola en segundo plano.",
+      "pauseAdminOnly": "Solo los administradores pueden pausar el trabajo en segundo plano."
+    },
+    "status": {
+      "queued": "En cola",
+      "running": "En ejecución",
+      "completed": "Completado",
+      "completed_with_warnings": "Completado con advertencias",
+      "failed": "Fallido",
+      "cancelled": "Cancelado",
+      "skipped": "Omitido"
+    },
+    "kind": {
+      "import_connect": "conectar",
+      "backup": "copia de seguridad",
+      "restore": "restaurar",
+      "restore_check": "verificación de restauración",
+      "check": "verificación",
+      "prune": "poda",
+      "compact": "compactación",
+      "delete_archive": "eliminar archivo",
+      "wipe": "borrar",
+      "rclone_sync": "sincronización de espejo",
+      "package_install": "instalación de paquete",
+      "stats": "estadísticas",
+      "archive_sync": "sincronización de archivo",
+      "history_index": "índice de historial",
+      "history_merge": "fusión de historial"
+    },
+    "strip": {
+      "backup": "Copia de seguridad",
+      "check": "Verificación",
+      "prune": "Poda",
+      "compact": "Compactación",
+      "index": "Índice",
+      "mirror": "Espejo"
+    }
+  },
   "notifications": {
     "title": "Servicios de notificación",
     "subtitle": "Configura servicios de notificación para alertas de copia de seguridad y restauración",
@@ -3801,7 +3901,10 @@
     "noScheduledChecksDesc": "Configura comprobaciones automáticas del repositorio para garantizar la integridad de los datos",
     "needRepository": "Necesitas crear al menos un repositorio antes de programar comprobaciones.",
     "repositoryNotFound": "Repositorio no encontrado",
-    "status": { "cancelled": "Cancelado", "running": "En ejecución" },
+    "status": {
+      "cancelled": "Cancelado",
+      "running": "En ejecución"
+    },
     "historyTitle": "Historial de comprobaciones programadas",
     "historyShowing": "Mostrando {{filtered}} de {{total}} trabajos de comprobación programada",
     "historyShowingFiltered": "Mostrando {{filtered}} de {{total}} trabajos de comprobación programada (filtrados)",
@@ -4381,7 +4484,10 @@
           "label": "Archivo de clave (ChaCha20)",
           "description": "Archivo de clave con ChaCha20"
         },
-        "none": { "label": "Ninguna", "description": "Sin cifrado (no recomendado)" }
+        "none": {
+          "label": "Ninguna",
+          "description": "Sin cifrado (no recomendado)"
+        }
       },
       "borgKeyfileTitle": "Archivo de clave Borg (Opcional)",
       "borgKeyfileDesc": "Los archivos de clave Borg se almacenan típicamente sin extensión de archivo en ~/.config/borg/keys/",

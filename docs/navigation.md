@@ -60,6 +60,7 @@ administration.
 | Licensing | Manage license status and plan-gated capabilities. |
 | System | Configure runtime settings, backup health thresholds, timeouts, and maintenance controls. |
 | Monitoring & Reports | Configure backup reports, monitoring behavior, and recent activity included in reports. |
+| Background work | View and control queued and running index, stats, and archive-sync work across repositories: pause, resume, adjust index workers, and rebuild derived data. Visible to admins and operators. |
 | MQTT | Configure MQTT and Home Assistant integration. This appears when MQTT is enabled. |
 | Cache | Configure Redis/cache behavior and clear cache entries when needed. |
 | Logs | Review log storage and cleanup controls. |

@@ -155,7 +155,8 @@
       "scripts": "Scripts",
       "users": "Users",
       "exportImport": "Export/Import",
-      "beta": "Beta"
+      "beta": "Beta",
+      "backgroundWork": "Background work"
     },
     "menu": {
       "openDrawer": "Open navigation",
@@ -291,7 +292,11 @@
       "emptyAgents": "No agents enrolled.",
       "emptyJobs": "No agent jobs yet.",
       "emptyTokens": "No enrollment tokens created.",
-      "tabs": { "agents": "Agents", "jobs": "Jobs", "tokens": "Enrollment Tokens" },
+      "tabs": {
+        "agents": "Agents",
+        "jobs": "Jobs",
+        "tokens": "Enrollment Tokens"
+      },
       "toasts": {
         "tokenCreated": "Enrollment token created",
         "tokenRevoked": "Enrollment token revoked",
@@ -434,10 +439,20 @@
     },
     "add": {
       "title": "Add Agent",
-      "steps": { "target": "Target", "details": "Details", "install": "Install" },
-      "errors": { "createToken": "Failed to create enrollment token" },
+      "steps": {
+        "target": "Target",
+        "details": "Details",
+        "install": "Install"
+      },
+      "errors": {
+        "createToken": "Failed to create enrollment token"
+      },
       "platform": "Platform",
-      "platforms": { "linux": "Linux", "macos": "macOS", "windows": "Windows" },
+      "platforms": {
+        "linux": "Linux",
+        "macos": "macOS",
+        "windows": "Windows"
+      },
       "selected": "Selected",
       "comingLater": "Coming later",
       "serverUrl": "Server URL",
@@ -511,7 +526,10 @@
     "closeWithoutCopyingTitle": "Close without copying?",
     "closeWithoutCopyingDescription": "You haven't copied the token. Once you close this dialog, the token cannot be retrieved.",
     "closeAnyway": "Close anyway",
-    "errors": { "generate": "Failed to generate token", "revoke": "Failed to revoke token" }
+    "errors": {
+      "generate": "Failed to generate token",
+      "revoke": "Failed to revoke token"
+    }
   },
   "accountPassword": {
     "title": "Change password",
@@ -3234,6 +3252,88 @@
     "failedToSend": "Failed to send backup report",
     "lastReport": "Last report:"
   },
+  "operations": {
+    "category": {
+      "import": "Import",
+      "backup": "Backup",
+      "restore": "Restore",
+      "maintenance": "Maintenance",
+      "index": "Index",
+      "mirror": "Mirror",
+      "system": "System"
+    },
+    "background": {
+      "systemRow": "System",
+      "retry": "Retry",
+      "waiting": "waiting",
+      "failed": "failed",
+      "plan": "plan",
+      "holdsLane": "→ holds the lane",
+      "viewActivity": "Activity ▸",
+      "stage": {
+        "connect": "Connect",
+        "stats": "Stats",
+        "archives": "Archives",
+        "history": "History index",
+        "ready": "Ready"
+      },
+      "workers": "workers: index {{count}}",
+      "emptyTitle": "Nothing is running",
+      "emptyDescription": "Background work will appear here the next time an import, backup, or reconcile run starts.",
+      "rebuildFrom": "Rebuild from",
+      "rebuildStage": {
+        "stats": "Stats",
+        "archives": "Archives",
+        "history": "History"
+      },
+      "title": "Background work",
+      "pause": "Pause",
+      "resume": "Resume",
+      "rebuildNeedsRepository": "Choose a repository from its card to rebuild.",
+      "never": "Never",
+      "syncing": "Syncing",
+      "rebuildMenu": "Rebuild…",
+      "pauseFailed": "Could not change the background queue state.",
+      "openTrack": "Open the run track for {{repository}}",
+      "rebuildFailed": "The rebuild could not be started.",
+      "queueFailed": "The background queue could not be loaded.",
+      "pauseAdminOnly": "Only administrators can pause background work."
+    },
+    "status": {
+      "queued": "Queued",
+      "running": "Running",
+      "completed": "Completed",
+      "completed_with_warnings": "Completed with warnings",
+      "failed": "Failed",
+      "cancelled": "Cancelled",
+      "skipped": "Skipped"
+    },
+    "kind": {
+      "import_connect": "connect",
+      "backup": "backup",
+      "restore": "restore",
+      "restore_check": "restore check",
+      "check": "check",
+      "prune": "prune",
+      "compact": "compact",
+      "delete_archive": "delete archive",
+      "wipe": "wipe",
+      "rclone_sync": "mirror sync",
+      "package_install": "package install",
+      "stats": "stats",
+      "archive_sync": "archive sync",
+      "history_index": "history index",
+      "history_merge": "history merge"
+    },
+    "strip": {
+      "backup": "Backup",
+      "check": "Check",
+      "prune": "Prune",
+      "compact": "Compact",
+      "index": "Index",
+      "mirror": "Mirror"
+    }
+  },
   "notifications": {
     "title": "Notification Services",
     "subtitle": "Configure notification services for backup and restore alerts",
@@ -3801,7 +3901,10 @@
     "noScheduledChecksDesc": "Configure automatic repository checks to ensure data integrity",
     "needRepository": "You need to create at least one repository before scheduling checks.",
     "repositoryNotFound": "Repository not found",
-    "status": { "cancelled": "Cancelled", "running": "Running" },
+    "status": {
+      "cancelled": "Cancelled",
+      "running": "Running"
+    },
     "historyTitle": "Scheduled Check History",
     "historyShowing": "Showing {{filtered}} of {{total}} scheduled check jobs",
     "historyShowingFiltered": "Showing {{filtered}} of {{total}} scheduled check jobs (filtered)",
@@ -4357,7 +4460,10 @@
           "label": "Repository Key (BLAKE2)",
           "description": "Faster hashing variant"
         },
-        "keyfile": { "label": "Key File", "description": "Key stored in a separate file" },
+        "keyfile": {
+          "label": "Key File",
+          "description": "Key stored in a separate file"
+        },
         "keyfile-blake2": {
           "label": "Key File (BLAKE2)",
           "description": "Key file with faster hashing"
@@ -4378,7 +4484,10 @@
           "label": "Key File (ChaCha20)",
           "description": "Key file with ChaCha20"
         },
-        "none": { "label": "None", "description": "No encryption (not recommended)" }
+        "none": {
+          "label": "None",
+          "description": "No encryption (not recommended)"
+        }
       },
       "borgKeyfileTitle": "Borg Keyfile (Optional)",
       "borgKeyfileDesc": "Borg keyfiles are typically stored without a file extension in ~/.config/borg/keys/",

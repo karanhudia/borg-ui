@@ -1,7 +1,7 @@
 - **NEVER commit or push without asking first**
 - Always run test suite before pushing to github
 - Always add a new test or update existing when a new feature is added or a bug is fixed
-- Ask every time you push if a release is required, if i answer yes, you decide if minor, major or patch and do it
+- Never ask about releases on a push. Cut a release only when I ask for one.
 
 ## Release Process
 - Creating a git tag automatically triggers a GitHub release
