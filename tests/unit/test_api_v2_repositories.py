@@ -1406,5 +1406,11 @@ class TestV2LiveArchiveRoute:
         from app.main import app
 
         paths = app.openapi()["paths"]
-        assert "/api/repositories/{repo_id}/archives/live" in paths
-        assert "/api/v2/repositories/{repo_id}/archives/live" in paths
+        for path in (
+            "/api/repositories/{repo_id}/archives/live",
+            "/api/v2/repositories/{repo_id}/archives/live",
+        ):
+            assert path in paths
+            # The client issues a GET; a path present under some other method
+            # would not serve it.
+            assert "get" in paths[path]

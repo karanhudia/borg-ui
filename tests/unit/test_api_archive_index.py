@@ -170,6 +170,7 @@ class TestArchiveList:
         # necessarily expose a `path` of their own.
         paths = test_client.app.openapi()["paths"]
         assert "/api/repositories/{repo_id}/archives/live" in paths
+        assert "get" in paths["/api/repositories/{repo_id}/archives/live"]
 
     def test_requires_repository_access(self, test_client, test_db, auth_headers):
         repo = _repo(test_db)
