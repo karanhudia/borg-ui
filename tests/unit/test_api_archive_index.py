@@ -165,10 +165,10 @@ class TestArchiveList:
 
     def test_live_listing_moved(self, test_client, test_db, admin_headers):
         repo = _repo(test_db)
-        # Mounted sub-applications and included routers have no `path`.
-        paths = {
-            route.path for route in test_client.app.routes if hasattr(route, "path")
-        }
+        # The generated schema rather than app.routes: how the route table is
+        # nested varies between FastAPI versions, and included routers do not
+        # necessarily expose a `path` of their own.
+        paths = test_client.app.openapi()["paths"]
         assert "/api/repositories/{repo_id}/archives/live" in paths
 
     def test_requires_repository_access(self, test_client, test_db, auth_headers):

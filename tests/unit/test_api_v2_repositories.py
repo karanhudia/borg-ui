@@ -1401,3 +1401,10 @@ class TestV2LiveArchiveRoute:
 
         assert "/{repo_id}/archives/live" in paths
         assert paths["/{repo_id}/archives/live"] is paths["/{repo_id}/archives"]
+
+    def test_both_live_paths_are_served_by_the_app(self):
+        from app.main import app
+
+        paths = app.openapi()["paths"]
+        assert "/api/repositories/{repo_id}/archives/live" in paths
+        assert "/api/v2/repositories/{repo_id}/archives/live" in paths
