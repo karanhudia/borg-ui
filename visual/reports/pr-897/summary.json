@@ -1,22 +1,47 @@
 {
-  "generatedAt": "2026-09-04T06:51:30.543Z",
+  "generatedAt": "2026-09-04T07:23:30.761Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #897 visual report",
-    "commitSha": "22e314467f0c",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/33845782096"
+    "commitSha": "39b4aa0179ce",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/33847536188"
   },
   "totals": {
     "baseline": 474,
-    "actual": 474,
+    "actual": 480,
     "compared": 474,
     "changed": 0,
-    "added": 0,
+    "added": 6,
     "removed": 0,
     "unchanged": 474
   },
   "changed": [],
-  "added": [],
+  "added": [
+    {
+      "fileName": "components-archivenametemplateinput--local-time-template--mobile.png",
+      "actualPath": "images/actual/components-archivenametemplateinput--local-time-template--mobile.png"
+    },
+    {
+      "fileName": "components-archivenametemplateinput--local-time-template.png",
+      "actualPath": "images/actual/components-archivenametemplateinput--local-time-template.png"
+    },
+    {
+      "fileName": "components-archivenametemplateinput--local-versus-utc-preview--mobile.png",
+      "actualPath": "images/actual/components-archivenametemplateinput--local-versus-utc-preview--mobile.png"
+    },
+    {
+      "fileName": "components-archivenametemplateinput--local-versus-utc-preview.png",
+      "actualPath": "images/actual/components-archivenametemplateinput--local-versus-utc-preview.png"
+    },
+    {
+      "fileName": "components-archivenametemplateinput--utc-template--mobile.png",
+      "actualPath": "images/actual/components-archivenametemplateinput--utc-template--mobile.png"
+    },
+    {
+      "fileName": "components-archivenametemplateinput--utc-template.png",
+      "actualPath": "images/actual/components-archivenametemplateinput--utc-template.png"
+    }
+  ],
   "removed": [],
   "unchanged": [
     {
