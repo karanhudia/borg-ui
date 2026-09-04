@@ -91,8 +91,8 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
   const canManageSsh = hasGlobalPermission('settings.ssh.manage')
   const { globalRoleRank, currentGlobalRole } = useAuthorization()
   const canViewBackgroundWork =
-    (globalRoleRank.get(currentGlobalRole ?? '') ?? 0) >=
-    (globalRoleRank.get('operator') ?? Infinity)
+    (globalRoleRank?.get(currentGlobalRole ?? '') ?? 0) >=
+    (globalRoleRank?.get('operator') ?? Infinity)
   const { tabEnablement, getTabDisabledReason } = useTabEnablement()
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null)
   const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({})

@@ -41,8 +41,8 @@ const Settings: React.FC = () => {
   const canManageExportImport = hasGlobalPermission('settings.export_import.manage')
   const { globalRoleRank, currentGlobalRole } = useAuthorization()
   const canViewBackgroundWork =
-    (globalRoleRank.get(currentGlobalRole ?? '') ?? 0) >=
-    (globalRoleRank.get('operator') ?? Infinity)
+    (globalRoleRank?.get(currentGlobalRole ?? '') ?? 0) >=
+    (globalRoleRank?.get('operator') ?? Infinity)
   const { trackSettings, EventAction } = useAnalytics()
   const { tab } = useParams<{ tab?: string }>()
   const { data: systemSettingsData } = useQuery({
