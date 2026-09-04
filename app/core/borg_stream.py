@@ -9,6 +9,12 @@ from typing import AsyncIterator, Optional
 # past anything a filesystem allows.
 LINE_LIMIT = 4 * 1024 * 1024
 
+# Ceiling on a single streamed command. Generous on purpose: a first listing of
+# an archive with tens of millions of files, or a diff against a slow remote,
+# legitimately runs for hours, and killing it mid-stream marks the archive
+# failed. This only stops a command that never ends.
+MAX_DURATION = 24 * 3600
+
 
 class CommandLineStream:
     """Async iterator over a command's stdout lines.
@@ -18,11 +24,20 @@ class CommandLineStream:
     """
 
     def __init__(
-        self, cmd: list[str], *, env: Optional[dict] = None, timeout: int = 3600
+        self,
+        cmd: list[str],
+        *,
+        env: Optional[dict] = None,
+        timeout: int = 3600,
+        max_duration: int = MAX_DURATION,
     ):
         self.cmd = cmd
         self.env = env
+        # `timeout` is the idle bound: how long to wait for the next line. A
+        # long listing that keeps producing output must be allowed to finish,
+        # so the total run is bounded separately and far more generously.
         self.timeout = timeout
+        self.max_duration = max_duration
         self.return_code: Optional[int] = None
         self.stderr: str = ""
         self._process: Optional[asyncio.subprocess.Process] = None
@@ -42,17 +57,19 @@ class CommandLineStream:
 
     async def __aiter__(self) -> AsyncIterator[str]:
         await self._start()
-        # One deadline for the whole command, not one per read: a borg that
-        # emits a line just often enough would otherwise never time out, and
-        # run_history_index holds the repository metadata lock while it reads.
-        deadline = asyncio.get_running_loop().time() + self.timeout
+        # Two bounds. The per-read timeout catches a command that has stopped
+        # producing output; the deadline catches one that emits a line just
+        # often enough to never look idle, which would otherwise hold the
+        # repository metadata lock indefinitely.
+        deadline = asyncio.get_running_loop().time() + self.max_duration
         try:
             while True:
                 remaining = deadline - asyncio.get_running_loop().time()
                 if remaining <= 0:
                     raise asyncio.TimeoutError()
                 line = await asyncio.wait_for(
-                    self._process.stdout.readline(), timeout=remaining
+                    self._process.stdout.readline(),
+                    timeout=min(self.timeout, remaining),
                 )
                 if not line:
                     break

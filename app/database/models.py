@@ -1495,6 +1495,10 @@ class Archive(Base):
     history_indexed_at = Column(DateTime, nullable=True)
     history_rows = Column(Integer, nullable=True)
     history_truncated = Column(Boolean, nullable=False, default=False)
+    # Consecutive failed history_index attempts. Bounds the retry of an archive
+    # that fails deterministically, since each attempt is a full borg diff
+    # under the repository metadata lock. Reset to 0 once it indexes.
+    history_attempts = Column(Integer, nullable=False, default=0)
     first_seen_at = Column(DateTime, default=utc_now, nullable=False)
     last_seen_at = Column(DateTime, default=utc_now, nullable=False)
 

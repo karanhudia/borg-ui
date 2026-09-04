@@ -84,11 +84,21 @@ def expected_days_from_cron(
 
 
 def expected_days_from_gap(
-    first: datetime, until: datetime, gap: timedelta
+    first: datetime, last: datetime, until: datetime, gap: timedelta
 ) -> set[date]:
+    """Expected days at cadence `gap`, phased on `last` rather than `first`.
+
+    The newest archive is the best evidence of when the backup currently runs;
+    anchoring on the oldest lets a schedule that moved drift out of phase and
+    report a missed day for the offset between the old time and the new one.
+    """
     step = max(gap, timedelta(days=1))
     days: set[date] = set()
-    current = first
+    current = last
+    while current >= first and len(days) < MAX_EXPECTED_DAYS:
+        days.add(current.date())
+        current -= step
+    current = last + step
     while current < until and len(days) < MAX_EXPECTED_DAYS:
         days.add(current.date())
         current += step
@@ -120,8 +130,8 @@ def missed_run_days(
         if gap is None:
             return set()
         # `until` directly: the helper already stops at the last expected time
-        # before it, so subtracting a gap only hid a run that was already due.
-        expected = expected_days_from_gap(first, until, gap)
+        # before it, so subtracting a gap would hide a run that is already due.
+        expected = expected_days_from_gap(first, max(starts), until, gap)
     return {d for d in expected if d not in present and d >= first.date()}
 
 

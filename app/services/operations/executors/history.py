@@ -45,6 +45,12 @@ logger = structlog.get_logger()
 BATCH_SIZE = 5000
 SUMMARY_DEPTH = 3
 SIZE_LOOKUP_CHUNK = 500
+
+# How many times an archive that fails to index is retried before it is left
+# alone. Each attempt is a full borg diff under the repository metadata lock,
+# so retrying a deterministic failure forever would block other metadata work
+# on that repository once per reconcile run, indefinitely.
+MAX_HISTORY_ATTEMPTS = 3
 # borg exits 1 for warnings; the diff is still complete
 BORG_OK_EXIT_CODES = (0, 1)
 
@@ -318,6 +324,7 @@ def write_archive_rows(db: Session, archive: Archive, collector: RowCollector) -
     archive.history_indexed_at = utc_now()
     archive.history_rows = len(collector.detail) + len(summaries)
     archive.history_truncated = collector.truncated
+    archive.history_attempts = 0
     db.commit()
 
 
@@ -333,8 +340,9 @@ async def run_history_index(ctx) -> Outcome:
         return Outcome(status="skipped", skip_reason="plan_locked")
     # "failed" is retried: nothing else moves an archive out of that state, so
     # skipping it would stall the series for good, since every later archive
-    # needs an indexed predecessor.
-    pending = (
+    # needs an indexed predecessor. The retry is bounded, because each attempt
+    # costs a full diff under the repository lock.
+    candidates = (
         db.query(Archive)
         .filter(
             Archive.repository_id == repository.id,
@@ -343,6 +351,13 @@ async def run_history_index(ctx) -> Outcome:
         .order_by(Archive.series.asc(), Archive.start.asc(), Archive.id.asc())
         .all()
     )
+    exhausted = [
+        a
+        for a in candidates
+        if a.history_state == "failed"
+        and (a.history_attempts or 0) >= MAX_HISTORY_ATTEMPTS
+    ]
+    pending = [a for a in candidates if a not in exhausted]
     if is_agent_executor(repository):
         for archive in pending:
             archive.history_state = "skipped"
@@ -353,7 +368,15 @@ async def run_history_index(ctx) -> Outcome:
             result={"archives": len(pending)},
         )
     if not pending:
-        return Outcome(result={"indexed": 0, "failed": 0, "left_pending": 0})
+        return Outcome(
+            status="completed_with_warnings" if exhausted else "completed",
+            result={
+                "indexed": 0,
+                "failed": 0,
+                "left_pending": 0,
+                "exhausted": len(exhausted),
+            },
+        )
     excludes = compile_excludes(repository.history_index_excludes)
     max_rows = settings.index_history_max_rows
     env, temp_key_file = _prepare_repository_borg_env(repository, db)
@@ -397,6 +420,7 @@ async def run_history_index(ctx) -> Outcome:
             except Exception as exc:
                 db.rollback()
                 archive.history_state = "failed"
+                archive.history_attempts = (archive.history_attempts or 0) + 1
                 db.commit()
                 failed += 1
                 ctx.log(f"{label}: failed: {exc}")
@@ -409,11 +433,18 @@ async def run_history_index(ctx) -> Outcome:
         await ctx.progress(current=total, total=total, message=f"{indexed} indexed")
         # left > 0 means an archive could not be diffed because its predecessor
         # is not indexed; reporting that as a clean completion would hide a
-        # stalled series.
-        status = "completed_with_warnings" if failed or left else "completed"
+        # stalled series. Same for archives that have used up their retries.
+        status = (
+            "completed_with_warnings" if failed or left or exhausted else "completed"
+        )
         return Outcome(
             status=status,
-            result={"indexed": indexed, "failed": failed, "left_pending": left},
+            result={
+                "indexed": indexed,
+                "failed": failed,
+                "left_pending": left,
+                "exhausted": len(exhausted),
+            },
         )
     finally:
         cleanup_temp_key_file(temp_key_file)

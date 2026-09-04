@@ -24,7 +24,11 @@ from app.database.models import (
 )
 from app.services.operations import anomalies
 from app.services.operations.enqueue import enqueue_chain
-from app.services.operations.executors.history import predecessor_of, successor_of
+from app.services.operations.executors.history import (
+    SIZE_LOOKUP_CHUNK,
+    predecessor_of,
+    successor_of,
+)
 from app.services.operations.followups import PLAN_GATED_KINDS, history_enabled
 from app.services.operations.history_fold import Change, fold_sequence, rows_to_changes
 from app.services.operations.legacy_status import latest_legacy_terminal
@@ -469,9 +473,13 @@ async def archive_changes(
         # One query for the whole window: a row per archive turned this into N
         # round trips over a table capped per archive, not in total.
         by_archive: dict[int, list] = {a.id: [] for a in between}
-        if between:
+        # Chunked like known_sizes in the history executor: one bind parameter
+        # per archive, and older SQLite builds cap those at 999, which a few
+        # years of daily backups passes.
+        ids = list(by_archive)
+        for i in range(0, len(ids), SIZE_LOOKUP_CHUNK):
             for row in db.query(ArchiveChange).filter(
-                ArchiveChange.archive_id.in_(list(by_archive))
+                ArchiveChange.archive_id.in_(ids[i : i + SIZE_LOOKUP_CHUNK])
             ):
                 by_archive[row.archive_id].append(row)
         deltas = [rows_to_changes(by_archive[a.id]) for a in between]

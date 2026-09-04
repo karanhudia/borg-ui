@@ -48,8 +48,12 @@ def test_expected_days_from_cron_and_gap():
         "0 2 * * *", datetime(2026, 9, 1), datetime(2026, 9, 4), "UTC"
     )
     assert days == {date(2026, 9, 1), date(2026, 9, 2), date(2026, 9, 3)}
+    # first, last, until: the cadence is phased on the newest archive.
     days = an.expected_days_from_gap(
-        datetime(2026, 9, 1, 2), datetime(2026, 9, 8), timedelta(days=2)
+        datetime(2026, 9, 1, 2),
+        datetime(2026, 9, 7, 2),
+        datetime(2026, 9, 8),
+        timedelta(days=2),
     )
     assert days == {
         date(2026, 9, 1),
@@ -59,7 +63,10 @@ def test_expected_days_from_cron_and_gap():
     }
     # sub-daily cadence is capped at one expected day per day
     days = an.expected_days_from_gap(
-        datetime(2026, 9, 1), datetime(2026, 9, 3), timedelta(hours=6)
+        datetime(2026, 9, 1),
+        datetime(2026, 9, 2, 18),
+        datetime(2026, 9, 3),
+        timedelta(hours=6),
     )
     assert days == {date(2026, 9, 1), date(2026, 9, 2)}
 
@@ -168,3 +175,25 @@ def test_gap_cadence_counts_a_run_that_is_already_due():
     # Not yet due at 01:00, when the 02:00 run has not come round.
     missed = an.missed_run_days(starts, until=datetime(2026, 9, 6, 1))
     assert missed == {date(2026, 9, 3)}
+
+
+@pytest.mark.unit
+def test_gap_projection_is_anchored_on_the_newest_archive():
+    """Anchoring on the oldest archive lets a schedule that moved drift out of
+    phase: a year of 02:00 backups that switched to 20:00 would project today's
+    run at 02:00 and flag today as missed for eighteen hours, every day. The
+    cadence is phased on the most recent archive instead."""
+    starts = [datetime(2026, 8, d, 2) for d in range(1, 29)]
+    starts += [datetime(2026, 8, d, 20) for d in range(29, 32)]
+    starts.append(datetime(2026, 9, 1, 20))
+
+    # Just after the 20:00 run landed: nothing is missed.
+    assert an.missed_run_days(starts, until=datetime(2026, 9, 1, 20, 30)) == set()
+
+    # The next day, before 20:00, the run is not due yet either.
+    assert an.missed_run_days(starts, until=datetime(2026, 9, 2, 10)) == set()
+
+    # Once it is due and has not landed, it is missed.
+    assert an.missed_run_days(starts, until=datetime(2026, 9, 2, 20, 30)) == {
+        date(2026, 9, 2)
+    }

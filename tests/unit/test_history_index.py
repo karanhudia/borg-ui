@@ -177,7 +177,7 @@ async def test_first_archive_gets_full_listing_without_directories_or_excludes(
     ]
     out = await history.run_history_index(_ctx(db, repo))
     assert out.status == "completed"
-    assert out.result == {"indexed": 1, "failed": 0, "left_pending": 0}
+    assert out.result == {"indexed": 1, "failed": 0, "left_pending": 0, "exhausted": 0}
     db.refresh(a1)
     assert a1.history_state == "indexed"
     assert a1.history_rows == 2
@@ -243,11 +243,48 @@ async def test_predecessor_not_indexed_leaves_archive_pending(db, repo):
     # against and stays pending.
     FakeRouter.lists["first"] = FakeStream([L("a", 1)], return_code=2, stderr="boom")
     out = await history.run_history_index(_ctx(db, repo))
-    assert out.result == {"indexed": 0, "failed": 1, "left_pending": 1}
+    assert out.result == {"indexed": 0, "failed": 1, "left_pending": 1, "exhausted": 0}
     db.refresh(a1)
     db.refresh(a2)
     assert a1.history_state == "failed"
     assert a2.history_state == "pending"
+
+
+@pytest.mark.unit
+async def test_retries_are_bounded_so_a_broken_archive_stops_costing_a_diff(db, repo):
+    """Retrying forever means a full borg diff on every reconcile run, each one
+    holding the repository metadata lock. After MAX_HISTORY_ATTEMPTS the
+    archive is left alone; the run still reports the stall."""
+    a1 = _archive(db, repo, "first", 1)
+    FakeRouter.lists["first"] = FakeStream([L("a", 1)], return_code=2, stderr="boom")
+
+    for expected in range(1, history.MAX_HISTORY_ATTEMPTS + 1):
+        out = await history.run_history_index(_ctx(db, repo))
+        assert out.result["failed"] == 1
+        db.refresh(a1)
+        assert a1.history_state == "failed"
+        assert a1.history_attempts == expected
+
+    # Exhausted: no further diff is attempted, and the stall stays visible.
+    out = await history.run_history_index(_ctx(db, repo))
+    assert out.result["failed"] == 0
+    assert out.result["exhausted"] == 1
+    assert out.status == "completed_with_warnings"
+    db.refresh(a1)
+    assert a1.history_attempts == history.MAX_HISTORY_ATTEMPTS
+
+
+@pytest.mark.unit
+async def test_a_successful_index_clears_the_attempt_counter(db, repo):
+    a1 = _archive(db, repo, "first", 1, state="failed")
+    a1.history_attempts = 2
+    db.commit()
+    FakeRouter.lists["first"] = [L("a", 1)]
+
+    await history.run_history_index(_ctx(db, repo))
+
+    db.refresh(a1)
+    assert a1.history_state == "indexed" and a1.history_attempts == 0
 
 
 @pytest.mark.unit
@@ -263,7 +300,7 @@ async def test_a_failed_archive_is_retried_on_the_next_run(db, repo):
     out = await history.run_history_index(_ctx(db, repo))
 
     assert out.status == "completed"
-    assert out.result == {"indexed": 2, "failed": 0, "left_pending": 0}
+    assert out.result == {"indexed": 2, "failed": 0, "left_pending": 0, "exhausted": 0}
     db.refresh(a1)
     db.refresh(a2)
     assert a1.history_state == "indexed" and a2.history_state == "indexed"
@@ -279,7 +316,7 @@ async def test_archives_left_pending_report_a_warning_status(db, repo):
     out = await history.run_history_index(_ctx(db, repo))
 
     assert out.status == "completed_with_warnings"
-    assert out.result == {"indexed": 0, "failed": 0, "left_pending": 1}
+    assert out.result == {"indexed": 0, "failed": 0, "left_pending": 1, "exhausted": 0}
 
 
 @pytest.mark.unit
@@ -289,7 +326,7 @@ async def test_two_pending_archives_index_in_order_within_one_run(db, repo):
     FakeRouter.lists["first"] = [L("a", 1)]
     FakeRouter.diffs[("first", "second")] = [D_MOD("a", 4, 0)]
     out = await history.run_history_index(_ctx(db, repo))
-    assert out.result == {"indexed": 2, "failed": 0, "left_pending": 0}
+    assert out.result == {"indexed": 2, "failed": 0, "left_pending": 0, "exhausted": 0}
     row = db.query(ArchiveChange).filter_by(archive_id=a2.id).one()
     assert (row.size_before, row.size_after) == (1, 5)
 

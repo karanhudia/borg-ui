@@ -757,3 +757,52 @@ class TestFoldAndSearchBounds:
         assert len(r.json()["results"]) == 3 and r.json()["truncated"] is True
         # Only the three paths on this page are grouped, not all twelve.
         assert loaded == [3]
+
+
+@pytest.mark.unit
+class TestWideCompareWindow:
+    def test_compare_window_larger_than_the_sqlite_variable_limit(
+        self, test_client, test_db, admin_headers
+    ):
+        """The window is bound one parameter per archive. Older SQLite builds
+        cap that at 999, which three years of daily backups passes, so the
+        query is chunked like known_sizes does for the same pattern. Modern
+        builds allow 32766, so this exercises the wide window rather than
+        reproducing the limit itself."""
+        repo = _repo(test_db)
+        _pro(test_db)
+        first = _archive(test_db, repo, "a0", 1)
+        _change(test_db, first, "a", "added", after=1)
+        rows = [
+            Archive(
+                repository_id=repo.id,
+                borg_id=f"id-w{i}",
+                name=f"w{i}",
+                series="nas",
+                start=datetime(2026, 9, 1, 2) + timedelta(hours=i + 1),
+                history_state="indexed",
+            )
+            for i in range(1100)
+        ]
+        test_db.add_all(rows)
+        test_db.commit()
+        last = rows[-1]
+        test_db.add(
+            ArchiveChange(
+                archive_id=last.id,
+                path="a",
+                change="modified",
+                size_before=1,
+                size_after=2,
+            )
+        )
+        test_db.commit()
+
+        r = test_client.get(
+            f"/api/repositories/{repo.id}/archives/{last.id}/changes"
+            f"?compare_to={first.id}",
+            headers=admin_headers,
+        )
+
+        assert r.status_code == 200
+        assert {c["path"] for c in r.json()["changes"]} == {"a"}
