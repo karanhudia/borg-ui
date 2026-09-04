@@ -22,8 +22,8 @@
     "noFallthroughCasesInSwitch": true,
     "ignoreDeprecations": "6.0",
 
-    /* Path mapping */
-    "baseUrl": ".",
+    /* Path mapping — paths are relative to this file (baseUrl was removed in
+       TypeScript 7); the "@/*" alias resolves to ./src/* without it. */
     "paths": {
       "@/*": ["./src/*"]
     }
