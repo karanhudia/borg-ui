@@ -291,7 +291,11 @@
       "emptyAgents": "Nessun agente registrato.",
       "emptyJobs": "Nessun processo agente ancora.",
       "emptyTokens": "Nessun token di registrazione creato.",
-      "tabs": { "agents": "Agenti", "jobs": "Processi", "tokens": "Token di registrazione" },
+      "tabs": {
+        "agents": "Agenti",
+        "jobs": "Processi",
+        "tokens": "Token di registrazione"
+      },
       "toasts": {
         "tokenCreated": "Token di registrazione creato",
         "tokenRevoked": "Token di registrazione revocato",
@@ -434,10 +438,20 @@
     },
     "add": {
       "title": "Aggiungi agente",
-      "steps": { "target": "Destinazione", "details": "Dettagli", "install": "Installa" },
-      "errors": { "createToken": "Impossibile creare il token di registrazione" },
+      "steps": {
+        "target": "Destinazione",
+        "details": "Dettagli",
+        "install": "Installa"
+      },
+      "errors": {
+        "createToken": "Impossibile creare il token di registrazione"
+      },
       "platform": "Piattaforma",
-      "platforms": { "linux": "Linux", "macos": "macOS", "windows": "Windows" },
+      "platforms": {
+        "linux": "Linux",
+        "macos": "macOS",
+        "windows": "Windows"
+      },
       "selected": "Selezionato",
       "comingLater": "Disponibile in seguito",
       "serverUrl": "URL del server",
@@ -3237,6 +3251,17 @@
     "failedToSend": "Impossibile inviare il report backup",
     "lastReport": "Ultimo report:"
   },
+  "operations": {
+    "category": {
+      "import": "Importa",
+      "backup": "Backup",
+      "restore": "Ripristina",
+      "maintenance": "Manutenzione",
+      "index": "Indice",
+      "mirror": "Mirror",
+      "system": "Sistema"
+    }
+  },
   "notifications": {
     "title": "Servizi di Notifica",
     "subtitle": "Configura i servizi di notifica per avvisi di backup e ripristino",
@@ -3804,7 +3829,10 @@
     "noScheduledChecksDesc": "Configura controlli automatici del repository per garantire l'integrità dei dati",
     "needRepository": "Devi creare almeno un repository prima di pianificare i controlli.",
     "repositoryNotFound": "Repository non trovato",
-    "status": { "cancelled": "Annullato", "running": "In esecuzione" },
+    "status": {
+      "cancelled": "Annullato",
+      "running": "In esecuzione"
+    },
     "historyTitle": "Cronologia controlli pianificati",
     "historyShowing": "Mostra {{filtered}} di {{total}} job di controllo pianificato",
     "historyShowingFiltered": "Mostra {{filtered}} di {{total}} job di controllo pianificato (filtrati)",
@@ -4384,7 +4412,10 @@
           "label": "File chiave (ChaCha20)",
           "description": "File chiave con ChaCha20"
         },
-        "none": { "label": "Nessuna", "description": "Nessuna crittografia (non consigliato)" }
+        "none": {
+          "label": "Nessuna",
+          "description": "Nessuna crittografia (non consigliato)"
+        }
       },
       "borgKeyfileTitle": "File Chiave Borg (Opzionale)",
       "borgKeyfileDesc": "I file chiave Borg sono tipicamente archiviati senza estensione in ~/.config/borg/keys/",

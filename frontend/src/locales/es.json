@@ -291,7 +291,11 @@
       "emptyAgents": "No hay agentes registrados.",
       "emptyJobs": "Aún no hay trabajos de agente.",
       "emptyTokens": "No se han creado tokens de registro.",
-      "tabs": { "agents": "Agentes", "jobs": "Trabajos", "tokens": "Tokens de registro" },
+      "tabs": {
+        "agents": "Agentes",
+        "jobs": "Trabajos",
+        "tokens": "Tokens de registro"
+      },
       "toasts": {
         "tokenCreated": "Token de registro creado",
         "tokenRevoked": "Token de registro revocado",
@@ -434,10 +438,20 @@
     },
     "add": {
       "title": "Añadir agente",
-      "steps": { "target": "Destino", "details": "Detalles", "install": "Instalar" },
-      "errors": { "createToken": "No se pudo crear el token de inscripción" },
+      "steps": {
+        "target": "Destino",
+        "details": "Detalles",
+        "install": "Instalar"
+      },
+      "errors": {
+        "createToken": "No se pudo crear el token de inscripción"
+      },
       "platform": "Plataforma",
-      "platforms": { "linux": "Linux", "macos": "macOS", "windows": "Windows" },
+      "platforms": {
+        "linux": "Linux",
+        "macos": "macOS",
+        "windows": "Windows"
+      },
       "selected": "Seleccionado",
       "comingLater": "Próximamente",
       "serverUrl": "URL del servidor",
@@ -511,7 +525,10 @@
     "closeWithoutCopyingTitle": "¿Cerrar sin copiar?",
     "closeWithoutCopyingDescription": "No has copiado el token. Una vez que cierres este diálogo, no podrá recuperarse.",
     "closeAnyway": "Cerrar de todos modos",
-    "errors": { "generate": "No se pudo generar el token", "revoke": "No se pudo revocar el token" }
+    "errors": {
+      "generate": "No se pudo generar el token",
+      "revoke": "No se pudo revocar el token"
+    }
   },
   "accountPassword": {
     "title": "Cambiar contraseña",
@@ -3234,6 +3251,17 @@
     "failedToSend": "Error al enviar el informe de copias",
     "lastReport": "Último informe:"
   },
+  "operations": {
+    "category": {
+      "import": "Importar",
+      "backup": "Copia de seguridad",
+      "restore": "Restaurar",
+      "maintenance": "Mantenimiento",
+      "index": "Índice",
+      "mirror": "Espejo",
+      "system": "Sistema"
+    }
+  },
   "notifications": {
     "title": "Servicios de notificación",
     "subtitle": "Configura servicios de notificación para alertas de copia de seguridad y restauración",
@@ -3801,7 +3829,10 @@
     "noScheduledChecksDesc": "Configura comprobaciones automáticas del repositorio para garantizar la integridad de los datos",
     "needRepository": "Necesitas crear al menos un repositorio antes de programar comprobaciones.",
     "repositoryNotFound": "Repositorio no encontrado",
-    "status": { "cancelled": "Cancelado", "running": "En ejecución" },
+    "status": {
+      "cancelled": "Cancelado",
+      "running": "En ejecución"
+    },
     "historyTitle": "Historial de comprobaciones programadas",
     "historyShowing": "Mostrando {{filtered}} de {{total}} trabajos de comprobación programada",
     "historyShowingFiltered": "Mostrando {{filtered}} de {{total}} trabajos de comprobación programada (filtrados)",
@@ -4381,7 +4412,10 @@
           "label": "Archivo de clave (ChaCha20)",
           "description": "Archivo de clave con ChaCha20"
         },
-        "none": { "label": "Ninguna", "description": "Sin cifrado (no recomendado)" }
+        "none": {
+          "label": "Ninguna",
+          "description": "Sin cifrado (no recomendado)"
+        }
       },
       "borgKeyfileTitle": "Archivo de clave Borg (Opcional)",
       "borgKeyfileDesc": "Los archivos de clave Borg se almacenan típicamente sin extensión de archivo en ~/.config/borg/keys/",

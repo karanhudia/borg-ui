@@ -291,7 +291,11 @@
       "emptyAgents": "No agents enrolled.",
       "emptyJobs": "No agent jobs yet.",
       "emptyTokens": "No enrollment tokens created.",
-      "tabs": { "agents": "Agents", "jobs": "Jobs", "tokens": "Enrollment Tokens" },
+      "tabs": {
+        "agents": "Agents",
+        "jobs": "Jobs",
+        "tokens": "Enrollment Tokens"
+      },
       "toasts": {
         "tokenCreated": "Enrollment token created",
         "tokenRevoked": "Enrollment token revoked",
@@ -434,10 +438,20 @@
     },
     "add": {
       "title": "Add Agent",
-      "steps": { "target": "Target", "details": "Details", "install": "Install" },
-      "errors": { "createToken": "Failed to create enrollment token" },
+      "steps": {
+        "target": "Target",
+        "details": "Details",
+        "install": "Install"
+      },
+      "errors": {
+        "createToken": "Failed to create enrollment token"
+      },
       "platform": "Platform",
-      "platforms": { "linux": "Linux", "macos": "macOS", "windows": "Windows" },
+      "platforms": {
+        "linux": "Linux",
+        "macos": "macOS",
+        "windows": "Windows"
+      },
       "selected": "Selected",
       "comingLater": "Coming later",
       "serverUrl": "Server URL",
@@ -511,7 +525,10 @@
     "closeWithoutCopyingTitle": "Close without copying?",
     "closeWithoutCopyingDescription": "You haven't copied the token. Once you close this dialog, the token cannot be retrieved.",
     "closeAnyway": "Close anyway",
-    "errors": { "generate": "Failed to generate token", "revoke": "Failed to revoke token" }
+    "errors": {
+      "generate": "Failed to generate token",
+      "revoke": "Failed to revoke token"
+    }
   },
   "accountPassword": {
     "title": "Change password",
@@ -3234,6 +3251,17 @@
     "failedToSend": "Failed to send backup report",
     "lastReport": "Last report:"
   },
+  "operations": {
+    "category": {
+      "import": "Import",
+      "backup": "Backup",
+      "restore": "Restore",
+      "maintenance": "Maintenance",
+      "index": "Index",
+      "mirror": "Mirror",
+      "system": "System"
+    }
+  },
   "notifications": {
     "title": "Notification Services",
     "subtitle": "Configure notification services for backup and restore alerts",
@@ -3801,7 +3829,10 @@
     "noScheduledChecksDesc": "Configure automatic repository checks to ensure data integrity",
     "needRepository": "You need to create at least one repository before scheduling checks.",
     "repositoryNotFound": "Repository not found",
-    "status": { "cancelled": "Cancelled", "running": "Running" },
+    "status": {
+      "cancelled": "Cancelled",
+      "running": "Running"
+    },
     "historyTitle": "Scheduled Check History",
     "historyShowing": "Showing {{filtered}} of {{total}} scheduled check jobs",
     "historyShowingFiltered": "Showing {{filtered}} of {{total}} scheduled check jobs (filtered)",
@@ -4357,7 +4388,10 @@
           "label": "Repository Key (BLAKE2)",
           "description": "Faster hashing variant"
         },
-        "keyfile": { "label": "Key File", "description": "Key stored in a separate file" },
+        "keyfile": {
+          "label": "Key File",
+          "description": "Key stored in a separate file"
+        },
         "keyfile-blake2": {
           "label": "Key File (BLAKE2)",
           "description": "Key file with faster hashing"
@@ -4378,7 +4412,10 @@
           "label": "Key File (ChaCha20)",
           "description": "Key file with ChaCha20"
         },
-        "none": { "label": "None", "description": "No encryption (not recommended)" }
+        "none": {
+          "label": "None",
+          "description": "No encryption (not recommended)"
+        }
       },
       "borgKeyfileTitle": "Borg Keyfile (Optional)",
       "borgKeyfileDesc": "Borg keyfiles are typically stored without a file extension in ~/.config/borg/keys/",

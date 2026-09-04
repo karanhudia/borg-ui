@@ -291,7 +291,11 @@
       "emptyAgents": "Keine Agenten registriert.",
       "emptyJobs": "Noch keine Agent-Jobs.",
       "emptyTokens": "Keine Registrierungstoken erstellt.",
-      "tabs": { "agents": "Agenten", "jobs": "Jobs", "tokens": "Registrierungstoken" },
+      "tabs": {
+        "agents": "Agenten",
+        "jobs": "Jobs",
+        "tokens": "Registrierungstoken"
+      },
       "toasts": {
         "tokenCreated": "Registrierungstoken erstellt",
         "tokenRevoked": "Registrierungstoken widerrufen",
@@ -434,10 +438,20 @@
     },
     "add": {
       "title": "Agent hinzufügen",
-      "steps": { "target": "Ziel", "details": "Details", "install": "Installieren" },
-      "errors": { "createToken": "Registrierungstoken konnte nicht erstellt werden" },
+      "steps": {
+        "target": "Ziel",
+        "details": "Details",
+        "install": "Installieren"
+      },
+      "errors": {
+        "createToken": "Registrierungstoken konnte nicht erstellt werden"
+      },
       "platform": "Plattform",
-      "platforms": { "linux": "Linux", "macos": "macOS", "windows": "Windows" },
+      "platforms": {
+        "linux": "Linux",
+        "macos": "macOS",
+        "windows": "Windows"
+      },
       "selected": "Ausgewählt",
       "comingLater": "Demnächst verfügbar",
       "serverUrl": "Server-URL",
@@ -3237,6 +3251,17 @@
     "failedToSend": "Backup-Bericht konnte nicht gesendet werden",
     "lastReport": "Letzter Bericht:"
   },
+  "operations": {
+    "category": {
+      "import": "Import",
+      "backup": "Sicherung",
+      "restore": "Wiederherstellung",
+      "maintenance": "Wartung",
+      "index": "Index",
+      "mirror": "Spiegelung",
+      "system": "System"
+    }
+  },
   "notifications": {
     "title": "Benachrichtigungsdienste",
     "subtitle": "Konfiguriere Benachrichtigungsdienste für Sicherungs- und Wiederherstellungswarnungen",
@@ -3804,7 +3829,10 @@
     "noScheduledChecksDesc": "Konfiguriere automatische Repository-Überprüfungen, um die Datenintegrität sicherzustellen",
     "needRepository": "Du musst mindestens ein Repository erstellen, bevor du Überprüfungen planst.",
     "repositoryNotFound": "Repository nicht gefunden",
-    "status": { "cancelled": "Abgebrochen", "running": "Wird ausgeführt" },
+    "status": {
+      "cancelled": "Abgebrochen",
+      "running": "Wird ausgeführt"
+    },
     "historyTitle": "Verlauf geplanter Überprüfungen",
     "historyShowing": "Zeige {{filtered}} von {{total}} geplanten Überprüfungsjobs",
     "historyShowingFiltered": "Zeige {{filtered}} von {{total}} geplanten Überprüfungsjobs (gefiltert)",
@@ -4384,7 +4412,10 @@
           "label": "Schlüsseldatei (ChaCha20)",
           "description": "Schlüsseldatei mit ChaCha20"
         },
-        "none": { "label": "Keine", "description": "Keine Verschlüsselung (nicht empfohlen)" }
+        "none": {
+          "label": "Keine",
+          "description": "Keine Verschlüsselung (nicht empfohlen)"
+        }
       },
       "borgKeyfileTitle": "Borg-Schlüsseldatei (Optional)",
       "borgKeyfileDesc": "Borg-Schlüsseldateien werden typischerweise ohne Dateiendung in ~/.config/borg/keys/ gespeichert",
