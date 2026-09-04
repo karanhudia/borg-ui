@@ -200,8 +200,11 @@ Two more index kinds fill and maintain `archive_changes`:
   by the first three path segments and the archive is marked truncated.
   Each archive is written in one transaction; a crash leaves it either
   fully indexed or pending. An archive whose predecessor is not indexed
-  yet stays pending for the next run. Managed-agent repositories skip the
-  stage with `agent_diff_unsupported`.
+  yet stays pending for the next run, and the run reports
+  `completed_with_warnings` so a stalled series is visible. An archive that
+  failed is retried on the next run: nothing else moves it out of that
+  state, and every later archive in the series waits on it. Managed-agent
+  repositories skip the stage with `agent_diff_unsupported`.
 - `history_merge` consumes `removed_archive_ids` from the `archive_sync`
   it depends on. A removed archive's rows are folded into its successor
   (the table in the spec, section 8.4), or the successor is reset to
@@ -209,9 +212,12 @@ Two more index kinds fill and maintain `archive_changes`:
   simply dropped when there is no successor. The archive row is deleted
   afterwards.
 
-Both kinds exist only while the plan includes `archive_history`. On
-Community installs the follow-up chains and the reconcile run omit them;
+Only `history_index` is gated on the plan including `archive_history`; on
+Community installs the follow-up chains and the reconcile run omit it, and
 activating a Pro licence enqueues a reconcile run for every repository.
+`history_merge` runs on every plan, because it is what deletes the rows of
+archives that have left the repository: `archive_sync` reports them and
+deliberately leaves the deletion to it.
 `POST /api/repositories/{id}/rebuild` with `from = history` resets the
 index; `from = archives` refetches per-archive info; `from = stats`
 re-measures the repository.

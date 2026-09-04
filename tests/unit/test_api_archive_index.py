@@ -165,7 +165,10 @@ class TestArchiveList:
 
     def test_live_listing_moved(self, test_client, test_db, admin_headers):
         repo = _repo(test_db)
-        paths = {route.path for route in test_client.app.routes}
+        # Mounted sub-applications and included routers have no `path`.
+        paths = {
+            route.path for route in test_client.app.routes if hasattr(route, "path")
+        }
         assert "/api/repositories/{repo_id}/archives/live" in paths
 
     def test_requires_repository_access(self, test_client, test_db, auth_headers):
@@ -292,7 +295,10 @@ class TestRebuild:
             headers=admin_headers,
         )
         kinds = [test_db.get(Operation, i).kind for i in r.json()["operations"]]
-        assert kinds == ["archive_sync", "stats"]
+        # history_merge is not plan gated: it is the only deleter of rows for
+        # archives that have left the repository, so a Community rebuild needs
+        # it too. history_index is gated and absent here.
+        assert kinds == ["archive_sync", "history_merge", "stats"]
         ops = test_db.query(Operation).all()
         assert all(o.trigger == "manual" and o.priority == 20 for o in ops)
         test_db.refresh(a)
@@ -361,6 +367,32 @@ class TestRepositorySettings:
         assert r.status_code == 200
         test_db.refresh(repo)
         assert repo.history_index_excludes == ["**/tmp/**"]
+
+    def test_an_explicitly_empty_exclude_list_survives_the_round_trip(
+        self, test_client, test_db, admin_headers
+    ):
+        """Clearing every pattern stores []; the defaults are only a fallback
+        for a row that predates the column. Reading [] back as the defaults
+        would show five active patterns while the indexer excludes nothing."""
+        repo = _repo(test_db)
+        r = test_client.put(
+            f"/api/repositories/{repo.id}",
+            json={"history_index_excludes": []},
+            headers=admin_headers,
+        )
+        assert r.status_code == 200
+        test_db.refresh(repo)
+        assert repo.history_index_excludes == []
+
+        single = test_client.get(
+            f"/api/repositories/{repo.id}", headers=admin_headers
+        ).json()["repository"]
+        assert single["history_index_excludes"] == []
+
+        listed = test_client.get("/api/repositories/", headers=admin_headers).json()
+        rows = listed if isinstance(listed, list) else listed["repositories"]
+        row = next(x for x in rows if x["id"] == repo.id)
+        assert row["history_index_excludes"] == []
 
 
 def _change(test_db, archive, path, change, before=None, after=None, count=None):
@@ -607,3 +639,120 @@ class TestSearch:
             ).status_code
             == 422
         )
+
+
+@pytest.mark.unit
+class TestTimezoneAwareRangeParams:
+    """`?until=...Z` parses into an aware datetime, but Archive.start and the
+    anomaly helpers are naive UTC, so the value has to be normalised before it
+    reaches either."""
+
+    def test_heatmap_accepts_offset_carrying_bounds(
+        self, test_client, test_db, admin_headers
+    ):
+        repo = _repo(test_db)
+        _archive(test_db, repo, "a1", 1)
+        _archive(test_db, repo, "a2", 3)
+
+        r = test_client.get(
+            f"/api/repositories/{repo.id}/archives/heatmap",
+            params={
+                "since": "2026-08-01T00:00:00Z",
+                "until": "2026-10-01T00:00:00+02:00",
+            },
+            headers=admin_headers,
+        )
+
+        assert r.status_code == 200
+        assert r.json()["series"][0]["days"]
+
+    def test_list_accepts_offset_carrying_bounds(
+        self, test_client, test_db, admin_headers
+    ):
+        repo = _repo(test_db)
+        _archive(test_db, repo, "a1", 1)
+
+        r = test_client.get(
+            f"/api/repositories/{repo.id}/archives",
+            params={"since": "2026-08-01T00:00:00Z", "until": "2026-10-01T00:00:00Z"},
+            headers=admin_headers,
+        )
+
+        assert r.status_code == 200
+        assert len(r.json()["archives"]) == 1
+
+
+@pytest.mark.unit
+class TestFoldAndSearchBounds:
+    def test_changes_reports_an_incomplete_fold(
+        self, test_client, test_db, admin_headers
+    ):
+        """An intermediate archive that was never indexed contributes an empty
+        delta, so the fold silently omits whatever changed in that window. The
+        response has to say so."""
+        repo = _repo(test_db)
+        _pro(test_db)
+        a1 = _archive(test_db, repo, "a1", 1)
+        a2 = _archive(test_db, repo, "a2", 2, state="failed")
+        a3 = _archive(test_db, repo, "a3", 3)
+        _change(test_db, a1, "a", "added", after=10)
+        _change(test_db, a3, "c", "added", after=1)
+
+        r = test_client.get(
+            f"/api/repositories/{repo.id}/archives/{a3.id}/changes?compare_to={a1.id}",
+            headers=admin_headers,
+        )
+
+        body = r.json()
+        assert body["incomplete"] is True
+        assert body["unindexed_archive_ids"] == [a2.id]
+
+    def test_complete_fold_is_not_flagged(self, test_client, test_db, admin_headers):
+        repo = _repo(test_db)
+        _pro(test_db)
+        a1 = _archive(test_db, repo, "a1", 1)
+        a2 = _archive(test_db, repo, "a2", 2)
+        a3 = _archive(test_db, repo, "a3", 3)
+        _change(test_db, a2, "a", "added", after=10)
+        _change(test_db, a3, "c", "added", after=1)
+
+        r = test_client.get(
+            f"/api/repositories/{repo.id}/archives/{a3.id}/changes?compare_to={a1.id}",
+            headers=admin_headers,
+        )
+
+        body = r.json()
+        assert body["incomplete"] is False and body["unindexed_archive_ids"] == []
+
+    def test_search_bounds_the_scan_to_the_page_of_paths(
+        self, test_client, test_db, admin_headers, monkeypatch
+    ):
+        """The grouped result was limited only after every matching change row
+        had been loaded, so a broad query pulled the whole table into memory.
+        The path page must be bounded in SQL."""
+        from app.api import archive_index
+
+        repo = _repo(test_db)
+        _pro(test_db)
+        a1 = _archive(test_db, repo, "a1", 1)
+        for i in range(12):
+            _change(test_db, a1, f"file-{i:02d}.txt", "added", after=1)
+
+        loaded: list[int] = []
+        original = archive_index.rows_for_paths
+
+        def counting(db, repository, paths):
+            rows = original(db, repository, paths)
+            loaded.append(len(rows))
+            return rows
+
+        monkeypatch.setattr(archive_index, "rows_for_paths", counting)
+        r = test_client.get(
+            f"/api/repositories/{repo.id}/search?q=file&limit=3",
+            headers=admin_headers,
+        )
+
+        assert r.status_code == 200
+        assert len(r.json()["results"]) == 3 and r.json()["truncated"] is True
+        # Only the three paths on this page are grouped, not all twelve.
+        assert loaded == [3]

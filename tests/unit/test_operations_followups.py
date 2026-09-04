@@ -50,7 +50,6 @@ def test_chain_for_drops_history_kinds_for_community():
 
     assert HISTORY_KINDS == {"history_index", "history_merge"}
     assert chain_for("backup", history=False) == ["archive_sync", "stats"]
-    assert chain_for("prune", history=False) == ["archive_sync", "stats"]
     assert chain_for("import_connect", history=False) == ["stats", "archive_sync"]
     assert chain_for("backup", history=True) == [
         "archive_sync",
@@ -76,3 +75,28 @@ def test_history_enabled_follows_plan(db_session):
     state.status = "active"
     db_session.commit()
     assert history_enabled(db_session) is True
+
+
+@pytest.mark.unit
+def test_community_keeps_history_merge_so_removed_archives_are_deleted():
+    """history_merge is the only place an Archive row is deleted, so dropping
+    it on Community would leave every pruned archive in the table forever.
+    Only history_index is plan gated (spec 11.2)."""
+    from app.services.operations.followups import PLAN_GATED_KINDS
+
+    assert PLAN_GATED_KINDS == {"history_index"}
+    assert chain_for("prune", history=False) == [
+        "archive_sync",
+        "history_merge",
+        "stats",
+    ]
+    assert chain_for("delete_archive", history=False) == [
+        "archive_sync",
+        "history_merge",
+        "stats",
+    ]
+    assert chain_for("wipe", history=False) == [
+        "archive_sync",
+        "history_merge",
+        "stats",
+    ]

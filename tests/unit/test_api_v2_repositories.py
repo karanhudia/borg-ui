@@ -1384,3 +1384,20 @@ class TestV2RepositoryRoutes:
 
         assert response.status_code == 200
         assert mock_rinfo.await_args.kwargs["bypass_lock"] is True
+
+
+class TestV2LiveArchiveRoute:
+    """The persisted archive index owns `/repositories/{id}/archives` on the v1
+    router, so the live borg listing is reached at `/archives/live` there. The
+    v2 router keeps its own live listing and must answer the same path, so one
+    client method serves both borg versions."""
+
+    def test_live_alias_shares_the_list_archives_endpoint(self):
+        paths = {
+            route.path: route.endpoint
+            for route in repositories_v2_api.router.routes
+            if getattr(route, "path", None)
+        }
+
+        assert "/{repo_id}/archives/live" in paths
+        assert paths["/{repo_id}/archives/live"] is paths["/{repo_id}/archives"]

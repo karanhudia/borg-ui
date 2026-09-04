@@ -1,7 +1,7 @@
 """Database-backed archive routes (spec section 9.2): list, detail,
 heatmap, status strip, rebuild, and (Pro) changes, history, search."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -25,7 +25,7 @@ from app.database.models import (
 from app.services.operations import anomalies
 from app.services.operations.enqueue import enqueue_chain
 from app.services.operations.executors.history import predecessor_of, successor_of
-from app.services.operations.followups import HISTORY_KINDS, history_enabled
+from app.services.operations.followups import PLAN_GATED_KINDS, history_enabled
 from app.services.operations.history_fold import Change, fold_sequence, rows_to_changes
 from app.services.operations.legacy_status import latest_legacy_terminal
 from app.services.operations.series import cron_for_repository
@@ -114,6 +114,15 @@ def sync_state_for(
     return "fresh", last_at
 
 
+def _naive_utc(value: Optional[datetime]) -> Optional[datetime]:
+    """Archive.start and Operation timestamps round-trip as naive UTC, so a
+    query param that carries an offset (`?until=...Z`) is converted before it
+    is compared with them or handed to the anomaly helpers."""
+    if value is None or value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 def _archives_query(db: Session, repository: Repository, series, since, until):
     q = db.query(Archive).filter(Archive.repository_id == repository.id)
     if series:
@@ -136,7 +145,7 @@ async def list_archives(
 ):
     repository = _repo(db, current_user, repo_id)
     rows = (
-        _archives_query(db, repository, series, since, until)
+        _archives_query(db, repository, series, _naive_utc(since), _naive_utc(until))
         .order_by(Archive.start.desc(), Archive.id.desc())
         .all()
     )
@@ -166,8 +175,8 @@ async def archives_heatmap(
     db: Session = Depends(get_db),
 ):
     repository = _repo(db, current_user, repo_id)
-    until = until or utc_now().replace(tzinfo=None)
-    since = since or until - timedelta(days=365)
+    until = _naive_utc(until) or utc_now().replace(tzinfo=None)
+    since = _naive_utc(since) or until - timedelta(days=365)
     pro = history_enabled(db)
     rows = (
         _archives_query(db, repository, None, since, until)
@@ -337,7 +346,7 @@ async def rebuild(
     if body.from_stage == "archives":
         for a in archives:
             a.original_size = None
-        kinds = ["archive_sync", "history_index", "stats"]
+        kinds = ["archive_sync", "history_merge", "history_index", "stats"]
     elif body.from_stage == "history":
         ids = [a.id for a in archives]
         if ids:
@@ -353,7 +362,7 @@ async def rebuild(
     else:
         kinds = ["stats"]
     if not history:
-        kinds = [k for k in kinds if k not in HISTORY_KINDS]
+        kinds = [k for k in kinds if k not in PLAN_GATED_KINDS]
     db.commit()
     ops = enqueue_chain(
         db,
@@ -430,7 +439,10 @@ async def archive_changes(
             "changes": [],
             "totals": _totals([]),
             "next_cursor": None,
+            "incomplete": True,
+            "unindexed_archive_ids": [target.id],
         }
+    unindexed: list[int] = []
     if compare is None or (predecessor is not None and compare.id == predecessor.id):
         changes = list(
             rows_to_changes(
@@ -451,12 +463,18 @@ async def archive_changes(
             .order_by(Archive.start.asc(), Archive.id.asc())
             .all()
         )
-        deltas = [
-            rows_to_changes(
-                db.query(ArchiveChange).filter(ArchiveChange.archive_id == a.id).all()
-            )
-            for a in between
-        ]
+        # An archive that was never indexed has no rows, so it would fold in as
+        # an empty delta and quietly drop whatever changed in its window.
+        unindexed = [a.id for a in between if a.history_state != "indexed"]
+        # One query for the whole window: a row per archive turned this into N
+        # round trips over a table capped per archive, not in total.
+        by_archive: dict[int, list] = {a.id: [] for a in between}
+        if between:
+            for row in db.query(ArchiveChange).filter(
+                ArchiveChange.archive_id.in_(list(by_archive))
+            ):
+                by_archive[row.archive_id].append(row)
+        deltas = [rows_to_changes(by_archive[a.id]) for a in between]
         changes = list(fold_sequence(deltas).values())
     if path_prefix:
         changes = [c for c in changes if c.path.startswith(path_prefix)]
@@ -472,6 +490,8 @@ async def archive_changes(
         "changes": [_serialize_change(c) for c in page],
         "totals": _totals(changes),
         "next_cursor": next_cursor,
+        "incomplete": bool(unindexed),
+        "unindexed_archive_ids": unindexed,
     }
 
 
@@ -552,19 +572,39 @@ def _like_escape(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
-@router.get("/{repo_id}/search", dependencies=[ARCHIVE_HISTORY])
-async def search_paths(
-    repo_id: int,
-    q: str = Query(min_length=1),
-    limit: int = Query(default=50, ge=1, le=MAX_LIMIT),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Filename search over archive_changes.path, grouped by path (spec
-    9.2). Case-insensitive LIKE; FTS5 is a listed follow-up."""
-    repository = _repo(db, current_user, repo_id)
-    pattern = f"%{_like_escape(q)}%"
+def _search_filter(repository: Repository, q: str):
+    pattern = f"%{_like_escape(q)}%".lower()
+    return (
+        Archive.repository_id == repository.id,
+        ArchiveChange.change != "summary",
+        func.lower(ArchiveChange.path).like(pattern, escape="\\"),
+    )
+
+
+def matching_paths(
+    db: Session, repository: Repository, q: str, limit: int
+) -> tuple[list[str], bool]:
+    """The page of distinct paths a search returns, bounded in SQL. Grouping
+    every matching change row first meant a broad query loaded the whole table
+    before the limit was applied."""
     rows = (
+        db.query(ArchiveChange.path)
+        .join(Archive, Archive.id == ArchiveChange.archive_id)
+        .filter(*_search_filter(repository, q))
+        .distinct()
+        .order_by(ArchiveChange.path.asc())
+        .limit(limit + 1)
+        .all()
+    )
+    paths = [p for (p,) in rows]
+    return paths[:limit], len(paths) > limit
+
+
+def rows_for_paths(db: Session, repository: Repository, paths: list[str]) -> list:
+    """The change rows of the paths on this page, oldest archive first."""
+    if not paths:
+        return []
+    return (
         db.query(
             ArchiveChange.path,
             ArchiveChange.change,
@@ -576,11 +616,26 @@ async def search_paths(
         .filter(
             Archive.repository_id == repository.id,
             ArchiveChange.change != "summary",
-            func.lower(ArchiveChange.path).like(pattern.lower(), escape="\\"),
+            ArchiveChange.path.in_(paths),
         )
         .order_by(ArchiveChange.path.asc(), Archive.start.asc(), Archive.id.asc())
         .all()
     )
+
+
+@router.get("/{repo_id}/search", dependencies=[ARCHIVE_HISTORY])
+async def search_paths(
+    repo_id: int,
+    q: str = Query(min_length=1),
+    limit: int = Query(default=50, ge=1, le=MAX_LIMIT),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Filename search over archive_changes.path, grouped by path (spec
+    9.2). Case-insensitive LIKE; FTS5 is a listed follow-up."""
+    repository = _repo(db, current_user, repo_id)
+    paths, truncated = matching_paths(db, repository, q, limit)
+    rows = rows_for_paths(db, repository, paths)
     grouped: dict[str, dict] = {}
     for path, change, archive_id, start, series in rows:
         entry = grouped.setdefault(
@@ -603,5 +658,4 @@ async def search_paths(
     results = list(grouped.values())
     for entry in results:
         entry["present_in_latest"] = entry.pop("last_change") != "removed"
-    truncated = len(results) > limit
-    return {"query": q, "results": results[:limit], "truncated": truncated}
+    return {"query": q, "results": results, "truncated": truncated}

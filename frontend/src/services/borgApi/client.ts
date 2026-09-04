@@ -142,7 +142,10 @@ export class BorgApiClient {
   // ── Archives ─────────────────────────────────────────────────────────────
 
   listArchives() {
-    return httpClient.get(`${this.repoBase}/archives`)
+    // `/archives` is the persisted archive index, whose rows carry database ids
+    // and no borg archive name; the live borg listing is `/archives/live` on
+    // both routers.
+    return httpClient.get(`${this.repoBase}/archives/live`)
   }
 
   getArchiveInfo(archiveId: string, includeFiles = false, fileLimit = 1000) {

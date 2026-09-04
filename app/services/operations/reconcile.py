@@ -12,7 +12,7 @@ from app.database.database import SessionLocal
 from app.database.models import Operation, Repository, SystemSettings, utc_now
 from app.services.operations.enqueue import enqueue_chain
 from app.services.operations.executors import registered_kinds
-from app.services.operations.followups import HISTORY_KINDS, history_enabled
+from app.services.operations.followups import PLAN_GATED_KINDS, history_enabled
 from app.services.operations.vocab import PRIORITY_RECONCILE
 
 logger = structlog.get_logger()
@@ -45,7 +45,7 @@ def enqueue_reconcile_runs(db: Session, *, history: Optional[bool] = None) -> in
     kinds = [
         k
         for k in RECONCILE_CHAIN
-        if k in available and (history or k not in HISTORY_KINDS)
+        if k in available and (history or k not in PLAN_GATED_KINDS)
     ]
     if not kinds:
         return 0
@@ -74,9 +74,32 @@ def bootstrap_history_once(db: Session) -> int:
     system_settings = db.query(SystemSettings).first()
     if system_settings is None or system_settings.history_bootstrap_at is not None:
         return 0
-    count = enqueue_reconcile_runs(db)
-    system_settings.history_bootstrap_at = utc_now()
+    # Claim first and commit, so a second process starting at the same time
+    # sees the timestamp and stops rather than enqueueing a duplicate set of
+    # chains. The conditional UPDATE is what makes the claim exclusive; only
+    # the caller whose UPDATE matched a row goes on.
+    claimed = (
+        db.query(SystemSettings)
+        .filter(
+            SystemSettings.id == system_settings.id,
+            SystemSettings.history_bootstrap_at.is_(None),
+        )
+        .update({"history_bootstrap_at": utc_now()}, synchronize_session=False)
+    )
     db.commit()
+    if not claimed:
+        return 0
+    try:
+        count = enqueue_reconcile_runs(db)
+    except Exception:
+        # Release the claim, or the bootstrap is recorded as done and the
+        # install never gets its history.
+        db.rollback()
+        db.query(SystemSettings).filter(SystemSettings.id == system_settings.id).update(
+            {"history_bootstrap_at": None}, synchronize_session=False
+        )
+        db.commit()
+        raise
     logger.info("History bootstrap enqueued", repositories=count)
     return count
 

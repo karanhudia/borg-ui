@@ -128,3 +128,43 @@ def test_series_flags_per_archive():
         )
     ]
     assert an.series_flags(archives)[8] == ["size_outlier"]
+
+
+@pytest.mark.unit
+def test_cron_days_stay_in_utc_for_a_non_utc_schedule():
+    """Archive starts are naive UTC, so the expected days must be UTC days too.
+    A Europe/Berlin 01:00 schedule fires at 23:00 UTC the day before, and every
+    one of those runs has to line up with the archive it produced, or the
+    heatmap flags almost every day as a missed run."""
+    # 2026-09-02 01:00 Berlin (CEST, UTC+2) is 2026-09-01 23:00 UTC.
+    days = an.expected_days_from_cron(
+        "0 1 * * *",
+        datetime(2026, 9, 1, 12),
+        datetime(2026, 9, 4),
+        "Europe/Berlin",
+    )
+    assert days == {date(2026, 9, 1), date(2026, 9, 2), date(2026, 9, 3)}
+
+    starts = [datetime(2026, 9, d, 23) for d in (1, 2, 4)]
+    missed = an.missed_run_days(
+        starts,
+        until=datetime(2026, 9, 6),
+        cron_expression="0 1 * * *",
+        timezone_name="Europe/Berlin",
+    )
+    assert missed == {date(2026, 9, 3), date(2026, 9, 5)}
+
+
+@pytest.mark.unit
+def test_gap_cadence_counts_a_run_that_is_already_due():
+    """`until - gap` hid the newest expected run even once it was overdue.
+    expected_days_from_gap already stops at the last expected time before
+    `until`, so the subtraction only cost a day of coverage."""
+    starts = [datetime(2026, 9, d, 2) for d in (1, 2, 4, 5)]
+
+    missed = an.missed_run_days(starts, until=datetime(2026, 9, 6, 10))
+    assert missed == {date(2026, 9, 3), date(2026, 9, 6)}
+
+    # Not yet due at 01:00, when the 02:00 run has not come round.
+    missed = an.missed_run_days(starts, until=datetime(2026, 9, 6, 1))
+    assert missed == {date(2026, 9, 3)}

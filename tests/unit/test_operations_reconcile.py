@@ -103,7 +103,9 @@ def test_enqueue_reconcile_runs_omits_history_kinds_for_community(
         .filter(Operation.repository_id == a.id)
         .order_by(Operation.id)
     ]
-    assert kinds == ["archive_sync", "stats"]
+    # history_merge stays: it is what deletes rows for archives that are gone,
+    # which Community installs need just as much as Pro ones.
+    assert kinds == ["archive_sync", "history_merge", "stats"]
 
 
 @pytest.mark.unit
@@ -123,7 +125,7 @@ def test_enqueue_reconcile_runs_asks_the_plan_when_history_is_none(
         .filter(Operation.repository_id == a.id)
         .order_by(Operation.id)
     ]
-    assert kinds == ["archive_sync", "stats"]
+    assert kinds == ["archive_sync", "history_merge", "stats"]
     for op in db.query(Operation).filter(Operation.repository_id == a.id):
         op.status = "completed"
     db.commit()
@@ -147,6 +149,7 @@ def test_enqueue_reconcile_runs_asks_the_plan_when_history_is_none(
     ]
     assert kinds == [
         "archive_sync",
+        "history_merge",
         "stats",
         "archive_sync",
         "history_merge",
@@ -208,3 +211,36 @@ def test_scheduler_reads_interval_live_each_poll(db, repos, monkeypatch):
     settings.stats_refresh_interval_minutes = 30
     db.commit()
     assert scheduler._interval_minutes() == 30
+
+
+@pytest.mark.unit
+def test_bootstrap_claims_the_flag_before_enqueueing(db, repos, monkeypatch):
+    """Two processes starting at once both read a null history_bootstrap_at and
+    would each enqueue a full set of chains. The claim has to be committed
+    before the enqueue, so the second caller sees it and stops."""
+    seen: list[int] = []
+
+    def enqueue(session):
+        # What a concurrent starter observes at this point in the first call.
+        other = session.query(SystemSettings).first()
+        seen.append(0 if other.history_bootstrap_at is None else 1)
+        return 3
+
+    monkeypatch.setattr(reconcile, "enqueue_reconcile_runs", enqueue)
+    assert reconcile.bootstrap_history_once(db) == 3
+    assert seen == [1]
+    assert reconcile.bootstrap_history_once(db) == 0
+
+
+@pytest.mark.unit
+def test_a_failed_bootstrap_releases_its_claim(db, repos, monkeypatch):
+    """Otherwise the bootstrap is recorded as done and never runs again."""
+
+    def boom(session):
+        raise RuntimeError("enqueue failed")
+
+    monkeypatch.setattr(reconcile, "enqueue_reconcile_runs", boom)
+    with pytest.raises(RuntimeError):
+        reconcile.bootstrap_history_once(db)
+
+    assert db.query(SystemSettings).first().history_bootstrap_at is None

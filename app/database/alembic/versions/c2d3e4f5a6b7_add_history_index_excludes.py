@@ -5,8 +5,6 @@ Revises: b1e2f3a4c5d6
 Create Date: 2026-09-04
 """
 
-import json
-
 from alembic import op
 import sqlalchemy as sa
 
@@ -33,11 +31,13 @@ def upgrade() -> None:
         batch.add_column(
             sa.Column("history_bootstrap_at", sa.DateTime(), nullable=True)
         )
+    # Bind through sa.JSON so the parameter is typed: a plain string is cast to
+    # VARCHAR, which Postgres refuses to assign to a json column.
     op.execute(
         sa.text(
             "UPDATE repositories SET history_index_excludes = :value "
             "WHERE history_index_excludes IS NULL"
-        ).bindparams(value=json.dumps(DEFAULT_EXCLUDES))
+        ).bindparams(sa.bindparam("value", value=DEFAULT_EXCLUDES, type_=sa.JSON()))
     )
 
 

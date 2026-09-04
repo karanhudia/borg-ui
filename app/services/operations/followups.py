@@ -26,6 +26,12 @@ FOLLOWUPS: dict[str, tuple[str, ...]] = {
 
 HISTORY_KINDS: frozenset[str] = frozenset({"history_index", "history_merge"})
 
+# Of the two, only history_index is a Pro feature. history_merge is what
+# deletes the rows of archives that are gone from the repository, and
+# apply_listing deliberately leaves that deletion to it, so a Community
+# install that dropped it would keep every pruned archive in the table.
+PLAN_GATED_KINDS: frozenset[str] = frozenset({"history_index"})
+
 
 def chain_for(
     kind: str, *, available: Optional[set[str]] = None, history: bool = True
@@ -33,15 +39,16 @@ def chain_for(
     """Return the follow-up kinds for `kind`, in order.
 
     `available` drops kinds without an executor. `history=False` drops the
-    history kinds for Community installs (spec 11.2): the stage does not
-    exist rather than being created and skipped (Appendix B).
+    plan gated kinds for Community installs (spec 11.2): the stage does not
+    exist rather than being created and skipped (Appendix B). history_merge
+    is not gated; see PLAN_GATED_KINDS.
     """
     validate_kind(kind)
     chain = list(FOLLOWUPS[kind])
     if available is not None:
         chain = [k for k in chain if k in available]
     if not history:
-        chain = [k for k in chain if k not in HISTORY_KINDS]
+        chain = [k for k in chain if k not in PLAN_GATED_KINDS]
     return chain
 
 

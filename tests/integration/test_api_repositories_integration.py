@@ -498,11 +498,12 @@ class TestRepositoryWithArchives:
     def test_list_repository_archives_returns_real_borg_archives(
         self, test_client: TestClient, admin_headers, db_borg_repo_with_archives
     ):
-        """Test listing repository archives through FastAPI."""
+        """Test listing repository archives through FastAPI. `/archives` is the
+        persisted archive index; the live borg listing is `/archives/live`."""
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
 
         response = test_client.get(
-            f"/api/repositories/{repo.id}/archives",
+            f"/api/repositories/{repo.id}/archives/live",
             headers=admin_headers,
         )
 

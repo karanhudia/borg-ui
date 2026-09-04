@@ -651,12 +651,18 @@ async def get_repository_info(
 
 
 @router.get("/{repo_id}/archives")
+@router.get("/{repo_id}/archives/live")
 async def list_archives(
     repo_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List all archives in a Borg 2 repository."""
+    """List all archives in a Borg 2 repository, straight from borg.
+
+    Served at `/archives/live` as well, so one client method reaches the
+    live listing on both borg versions: on the v1 router that path is what
+    the persisted archive index left free (see `app/api/archive_index.py`).
+    """
 
     async def _operation():
         repo = (

@@ -3087,8 +3087,14 @@ async def get_repositories(
                 "mode": repo.mode
                 or "full",  # Default to "full" for backward compatibility
                 "bypass_lock": repo.bypass_lock or False,
-                "history_index_excludes": repo.history_index_excludes
-                or list(DEFAULT_HISTORY_INDEX_EXCLUDES),
+                # `is None` rather than falsy: an operator who cleared every
+                # pattern stored [], and the defaults are only the fallback for
+                # a row that predates the column.
+                "history_index_excludes": (
+                    list(DEFAULT_HISTORY_INDEX_EXCLUDES)
+                    if repo.history_index_excludes is None
+                    else repo.history_index_excludes
+                ),
                 "custom_flags": repo.custom_flags,
                 "upload_ratelimit_kib": repo.upload_ratelimit_kib,
                 "has_running_maintenance": has_check or has_compact or has_prune,
@@ -4145,8 +4151,11 @@ async def get_repository(
             ),
             "source_locations": _repository_source_locations(repository),
             "upload_ratelimit_kib": repository.upload_ratelimit_kib,
-            "history_index_excludes": repository.history_index_excludes
-            or list(DEFAULT_HISTORY_INDEX_EXCLUDES),
+            "history_index_excludes": (
+                list(DEFAULT_HISTORY_INDEX_EXCLUDES)
+                if repository.history_index_excludes is None
+                else repository.history_index_excludes
+            ),
             "stats": stats,
         }
         rclone_storage = _serialize_rclone_storage(repository, db)

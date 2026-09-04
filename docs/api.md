@@ -173,14 +173,17 @@ plan 403 payload otherwise.
 | Method | Route | Plan | Purpose |
 | --- | --- | --- | --- |
 | GET | `/archives` | Community | Archives from the index with `series`, `since`, `until` filters and `sync_state` |
-| GET | `/archives/live` | Community | The previous live `borg list` route, kept for the Archives page until it switches to the index |
+| GET | `/archives/live` | Community | The previous live `borg list` route, kept for the Archives page until it switches to the index. Also served by the v2 router at `/api/v2/repositories/{id}/archives/live`, so one client reaches the live listing on both borg versions |
 | GET | `/archives/heatmap` | Community | Per series, per day counts and sizes; `missed_run` days; outlier flags on Pro |
 | GET | `/archives/{archive_id}` | Community | One archive with history state and neighbours |
 | GET | `/status-strip` | Community | Latest terminal operation per cell; overdue flags on Pro |
 | POST | `/rebuild` | Community (`history` stage is Pro) | Body `{"from": "stats" \| "archives" \| "history"}` |
-| GET | `/archives/{archive_id}/changes` | Pro | Changes against the predecessor or `compare_to` |
+| GET | `/archives/{archive_id}/changes` | Pro | Changes against the predecessor or `compare_to`. `incomplete` and `unindexed_archive_ids` flag a fold whose window contains an archive that was never indexed |
 | GET | `/history?path=` | Pro | Every archive that touched a path, with present ranges |
 | GET | `/search?q=` | Pro | Filename search across all archives |
 
 `GET /api/archives/list` is deprecated and sends `Deprecation: true` with a
 `Link` header pointing at the index route.
+
+`since` and `until` accept an offset (`2026-01-01T00:00:00Z`); the value is
+converted to UTC before it reaches the index, which stores naive UTC.

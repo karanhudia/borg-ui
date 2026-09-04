@@ -15,7 +15,7 @@ There are two separate caches involved in normal Docker deployments:
 - Borg UI archive cache: Redis or the in-memory fallback used by archive browsing.
 - Borg files cache: Borg's own cache under the default `BORG_CACHE_DIR` (`/home/borg/.cache/borg`), used by `borg create` to avoid reprocessing unchanged files during backups.
 
-Neither cache is the persisted archive index. The `archives` and `archive_changes` tables (see `docs/architecture/job-system.md`, "History index") are written by the operations runner and never expire; they back the archive list, the Changes tab, file history, and search. Folder browsing keeps going through Borg and the caches above.
+Neither cache is the persisted archive index. The `archives` and `archive_changes` tables (see `docs/architecture/job-system.md`, "History index") are written by the operations runner and back the archive list, the Changes tab, file history, and search. They have no TTL and are never evicted, but they are not permanent either: they follow the repository's own archives. When a prune or an archive delete removes an archive, `history_merge` folds its change rows into the next archive and deletes its row, so the index tracks what the repository actually holds. Folder browsing keeps going through Borg and the caches above.
 
 Redis does not make backup creation faster. If backup jobs are slow after a container pull or restart, troubleshoot the Borg files cache and source mounts first. See [Slow first backup after a pull or restart](troubleshooting#slow-first-backup-after-a-pull-or-restart).
 

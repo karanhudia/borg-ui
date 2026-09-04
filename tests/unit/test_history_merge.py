@@ -288,3 +288,29 @@ async def test_progress_and_log_name_the_removed_archive(db, repo):
     await history.run_history_merge(ctx)
     assert logged == ["gone: dropped"]
     assert ctx.progress.await_args_list[-1].kwargs["message"] == "gone"
+
+
+@pytest.mark.unit
+async def test_fold_result_is_capped_like_an_indexed_archive(db, repo, monkeypatch):
+    """fold_pair keeps rows that are distinct in either archive, so a successor
+    could pass index_history_max_rows after one merge and grow further with
+    each later removal. The cap and its summary rollup apply to the fold too."""
+    monkeypatch.setattr(history.settings, "index_history_max_rows", 3)
+    r = _archive(db, repo, "r", 2)
+    s = _archive(db, repo, "s", 3)
+    for i in range(3):
+        _row(db, r, f"old/dir/f{i}", "added", after=1)
+    for i in range(3):
+        _row(db, s, f"new/dir/f{i}", "added", after=1)
+    op = _ops(db, repo, [r.id])
+
+    out = await history.run_history_merge(_ctx(db, repo, op))
+
+    assert out.result["folded"] == 1
+    rows = db.query(ArchiveChange).filter_by(archive_id=s.id).all()
+    detail = [x for x in rows if x.change != "summary"]
+    summary = [x for x in rows if x.change == "summary"]
+    assert len(detail) == 3
+    assert sum(x.summary_count for x in summary) == 3
+    db.refresh(s)
+    assert s.history_rows == len(rows) and s.history_truncated is True

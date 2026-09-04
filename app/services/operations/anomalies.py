@@ -1,7 +1,7 @@
 """Anomaly rules (spec section 9.5). Pure functions; the heatmap and
 status-strip routes call them and decide which flags the plan may show."""
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional, Sequence
 from zoneinfo import ZoneInfo
 
@@ -67,12 +67,16 @@ def expected_days_from_cron(
     timezone_name: Optional[str] = None,
 ) -> set[date]:
     tz = ZoneInfo(timezone_name) if timezone_name else None
-    base = start.replace(tzinfo=tz) if tz else start
+    # `start` and `until` are naive UTC, matching Archive.start. A cron fires in
+    # its own zone, so the base is converted into that zone and every firing is
+    # converted back, keeping the returned days in UTC like the archive days
+    # they are compared against.
+    base = start.replace(tzinfo=timezone.utc).astimezone(tz) if tz else start
     it = croniter(cron_expression, base)
     days: set[date] = set()
     while len(days) < MAX_EXPECTED_DAYS:
         nxt = it.get_next(datetime)
-        naive = nxt.replace(tzinfo=None) if nxt.tzinfo else nxt
+        naive = nxt.astimezone(timezone.utc).replace(tzinfo=None) if nxt.tzinfo else nxt
         if naive > until:
             break
         days.add(naive.date())
@@ -115,7 +119,9 @@ def missed_run_days(
         gap = median_gap(starts)
         if gap is None:
             return set()
-        expected = expected_days_from_gap(first, until - gap, gap)
+        # `until` directly: the helper already stops at the last expected time
+        # before it, so subtracting a gap only hid a run that was already due.
+        expected = expected_days_from_gap(first, until, gap)
     return {d for d in expected if d not in present and d >= first.date()}
 
 

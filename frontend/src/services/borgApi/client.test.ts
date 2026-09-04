@@ -86,7 +86,7 @@ describe('BorgApiClient', () => {
     client.fetchArchiveFile('archive-1', '/etc/hosts')
 
     expect(getMock).toHaveBeenCalledWith('/repositories/7/info')
-    expect(getMock).toHaveBeenCalledWith('/repositories/7/archives')
+    expect(getMock).toHaveBeenCalledWith('/repositories/7/archives/live')
     expect(getMock).toHaveBeenCalledWith('/archives/archive-1/info', {
       params: { repository: 7, include_files: false, file_limit: 1000 },
     })
@@ -111,6 +111,23 @@ describe('BorgApiClient', () => {
       params: { repository: 7, archive: 'archive-1', file_path: '/etc/hosts' },
       responseType: 'blob',
     })
+  })
+
+  it('lists archives from the live borg route, not the database-backed index', async () => {
+    const clientModule = await import('./client')
+    const getMock = vi.spyOn(clientModule.httpClient, 'get').mockResolvedValue({} as never)
+    const { BorgApiClient } = clientModule
+    // `/repositories/{id}/archives` is the persisted archive index since the
+    // history phase; its rows carry database ids and no borg archive name, so
+    // the page listing must stay on the live route for both borg versions.
+    const v1 = new BorgApiClient({ id: 7, borg_version: 1, path: '/repo-v1' } as never)
+    const v2 = new BorgApiClient({ id: 9, borg_version: 2, path: '/repo-v2' } as never)
+
+    v1.listArchives()
+    v2.listArchives()
+
+    expect(getMock).toHaveBeenCalledWith('/repositories/7/archives/live')
+    expect(getMock).toHaveBeenCalledWith('/v2/repositories/9/archives/live')
   })
 
   it('addresses a Borg 2 archive by aid: on the v1 (agent) browse route', async () => {

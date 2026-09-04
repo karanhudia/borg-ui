@@ -74,14 +74,27 @@ def sync_archive_stats_from_info(
         from app.services.repository_executor import agent_timezone_for_repository
 
         timezone_name = agent_timezone_for_repository(db, repository)
-        if archives and all(isinstance(a, dict) and a.get("id") for a in archives):
-            # Full entries: keep the archives table in step with what the
-            # dialog just showed, then derive the columns from it.
-            from app.services.operations.executors.index import (
-                apply_listing,
-                write_repository_archive_columns,
-            )
+        # Full entries only: apply_listing skips one it cannot map and reports
+        # the archive behind it as removed, which would drop archive_count and
+        # stale last_backup on a partial listing. The check is the mapper
+        # itself, so the two can never drift apart.
+        from app.services.operations.executors.index import (
+            apply_listing,
+            archive_fields_from_listing,
+            write_repository_archive_columns,
+        )
 
+        complete = bool(archives) and all(
+            isinstance(a, dict)
+            and archive_fields_from_listing(
+                a, repository.borg_version or 2, timezone_name=timezone_name
+            )
+            is not None
+            for a in archives
+        )
+        if complete:
+            # Keep the archives table in step with what the dialog just showed,
+            # then derive the columns from it.
             _, removed = apply_listing(
                 db, repository, archives, timezone_name=timezone_name
             )

@@ -144,7 +144,7 @@ def test_glob_excludes():
     assert not history.is_excluded("dir/a.log", compiled)
     assert history.is_excluded("home/k/tmp/f", compiled)
     assert not history.is_excluded("home/k/tmp", compiled)
-    assert history.compile_excludes(None) == []
+    assert history.compile_excludes([]) == []
 
 
 @pytest.mark.unit
@@ -237,12 +237,49 @@ async def test_known_size_comes_from_the_latest_earlier_archive_in_the_series(db
 
 @pytest.mark.unit
 async def test_predecessor_not_indexed_leaves_archive_pending(db, repo):
-    _archive(db, repo, "first", 1, state="failed")
+    a1 = _archive(db, repo, "first", 1)
     a2 = _archive(db, repo, "second", 2)
+    # "first" fails in this run, so "second" has no indexed predecessor to diff
+    # against and stays pending.
+    FakeRouter.lists["first"] = FakeStream([L("a", 1)], return_code=2, stderr="boom")
     out = await history.run_history_index(_ctx(db, repo))
-    assert out.result == {"indexed": 0, "failed": 0, "left_pending": 1}
+    assert out.result == {"indexed": 0, "failed": 1, "left_pending": 1}
+    db.refresh(a1)
     db.refresh(a2)
+    assert a1.history_state == "failed"
     assert a2.history_state == "pending"
+
+
+@pytest.mark.unit
+async def test_a_failed_archive_is_retried_on_the_next_run(db, repo):
+    """Nothing else moves an archive out of "failed", so a run that skipped it
+    would stall the whole series for good: every later archive would fail the
+    indexed-predecessor check forever."""
+    a1 = _archive(db, repo, "first", 1, state="failed")
+    a2 = _archive(db, repo, "second", 2)
+    FakeRouter.lists["first"] = [L("a", 1)]
+    FakeRouter.diffs[("first", "second")] = [D_ADD("b", 2)]
+
+    out = await history.run_history_index(_ctx(db, repo))
+
+    assert out.status == "completed"
+    assert out.result == {"indexed": 2, "failed": 0, "left_pending": 0}
+    db.refresh(a1)
+    db.refresh(a2)
+    assert a1.history_state == "indexed" and a2.history_state == "indexed"
+
+
+@pytest.mark.unit
+async def test_archives_left_pending_report_a_warning_status(db, repo):
+    """A run that indexed nothing because a predecessor is not indexed must not
+    look like a clean success."""
+    _archive(db, repo, "first", 1, state="skipped")
+    _archive(db, repo, "second", 2)
+
+    out = await history.run_history_index(_ctx(db, repo))
+
+    assert out.status == "completed_with_warnings"
+    assert out.result == {"indexed": 0, "failed": 0, "left_pending": 1}
 
 
 @pytest.mark.unit
@@ -399,3 +436,17 @@ def test_registered():
 
     load_default_executors()
     assert {"history_index", "history_merge"} <= registered_kinds()
+
+
+@pytest.mark.unit
+def test_null_excludes_fall_back_to_the_defaults():
+    """A row that predates the column reads back as the defaults through the
+    API, so the indexer has to apply the same fallback. An explicit empty list
+    still means "exclude nothing"."""
+    from app.database.models import DEFAULT_HISTORY_INDEX_EXCLUDES
+
+    compiled = history.compile_excludes(None)
+    assert len(compiled) == len(DEFAULT_HISTORY_INDEX_EXCLUDES)
+    assert history.is_excluded("home/u/.cache/pip/x", compiled) is True
+
+    assert history.compile_excludes([]) == []

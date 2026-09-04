@@ -19,7 +19,14 @@ from app.api.repositories import _prepare_repository_borg_env
 from app.config import settings
 from app.core.borg_diff import ChangeRecord, parse_diff_line, parse_list_line
 from app.core.borg_router import BorgRouter
-from app.database.models import Archive, ArchiveChange, Operation, Repository, utc_now
+from app.database.models import (
+    DEFAULT_HISTORY_INDEX_EXCLUDES,
+    Archive,
+    ArchiveChange,
+    Operation,
+    Repository,
+    utc_now,
+)
 from app.services.operations import executors
 from app.services.operations.executors.index import _load_repository
 from app.services.operations.followups import history_enabled
@@ -76,7 +83,11 @@ def glob_to_regex(pattern: str) -> re.Pattern:
 
 
 def compile_excludes(patterns: Optional[list[str]]) -> list[re.Pattern]:
-    return [glob_to_regex(p) for p in (patterns or []) if p]
+    """None means the column predates the row and the defaults apply, matching
+    what the API reports for it. An empty list means exclude nothing."""
+    if patterns is None:
+        patterns = list(DEFAULT_HISTORY_INDEX_EXCLUDES)
+    return [glob_to_regex(p) for p in patterns if p]
 
 
 def is_excluded(path: str, compiled: list[re.Pattern]) -> bool:
@@ -88,6 +99,40 @@ def summary_prefix(path: str) -> str:
 
 
 # -- row collection -------------------------------------------------------------
+
+
+def summary_row_dicts(archive_id: int, overflow: Counter) -> list[dict]:
+    return [
+        {
+            "archive_id": archive_id,
+            "path": prefix,
+            "change": "summary",
+            "size_before": None,
+            "size_after": None,
+            "mode_changed": False,
+            "owner_changed": False,
+            "summary_count": n,
+        }
+        for prefix, n in sorted(overflow.items())
+    ]
+
+
+def capped_rows(
+    archive_id: int, changes, max_rows: int
+) -> tuple[list[dict], list[dict], bool]:
+    """Detail rows up to `max_rows`, the rest collapsed into summary rows, the
+    same spec 6.7 cap RowCollector applies while indexing. Summary rows already
+    present in `changes` keep their counts."""
+    detail: list[dict] = []
+    overflow: Counter = Counter()
+    for change in changes:
+        if change.change == "summary":
+            overflow[summary_prefix(change.path)] += change.summary_count or 0
+        elif len(detail) < max_rows:
+            detail.append(change_to_row_dict(change, archive_id))
+        else:
+            overflow[summary_prefix(change.path)] += 1
+    return detail, summary_row_dicts(archive_id, overflow), bool(overflow)
 
 
 class RowCollector:
@@ -128,19 +173,7 @@ class RowCollector:
         return bool(self.overflow)
 
     def summary_rows(self) -> list[dict]:
-        return [
-            {
-                "archive_id": self.archive_id,
-                "path": prefix,
-                "change": "summary",
-                "size_before": None,
-                "size_after": None,
-                "mode_changed": False,
-                "owner_changed": False,
-                "summary_count": n,
-            }
-            for prefix, n in sorted(self.overflow.items())
-        ]
+        return summary_row_dicts(self.archive_id, self.overflow)
 
 
 def known_sizes(
@@ -298,10 +331,14 @@ async def run_history_index(ctx) -> Outcome:
     db = ctx.db
     if not history_enabled(db):
         return Outcome(status="skipped", skip_reason="plan_locked")
+    # "failed" is retried: nothing else moves an archive out of that state, so
+    # skipping it would stall the series for good, since every later archive
+    # needs an indexed predecessor.
     pending = (
         db.query(Archive)
         .filter(
-            Archive.repository_id == repository.id, Archive.history_state == "pending"
+            Archive.repository_id == repository.id,
+            Archive.history_state.in_(("pending", "failed")),
         )
         .order_by(Archive.series.asc(), Archive.start.asc(), Archive.id.asc())
         .all()
@@ -370,7 +407,10 @@ async def run_history_index(ctx) -> Outcome:
                     error=str(exc),
                 )
         await ctx.progress(current=total, total=total, message=f"{indexed} indexed")
-        status = "completed_with_warnings" if failed else "completed"
+        # left > 0 means an archive could not be diffed because its predecessor
+        # is not indexed; reporting that as a clean completion would hide a
+        # stalled series.
+        status = "completed_with_warnings" if failed or left else "completed"
         return Outcome(
             status=status,
             result={"indexed": indexed, "failed": failed, "left_pending": left},
@@ -429,12 +469,17 @@ def merge_removed_archive(db: Session, removed: Archive) -> str:
             )
             folded = list(fold_pair(older, newer).values())
             _delete_rows(db, successor.id)
-            mappings = [change_to_row_dict(c, successor.id) for c in folded]
+            # The fold keeps rows distinct in either archive, so it can exceed
+            # the per-archive cap; apply the same cap the indexer does.
+            detail, summaries, overflowed = capped_rows(
+                successor.id, folded, settings.index_history_max_rows
+            )
+            mappings = detail + summaries
             for i in range(0, len(mappings), BATCH_SIZE):
                 db.bulk_insert_mappings(ArchiveChange, mappings[i : i + BATCH_SIZE])
             successor.history_rows = len(mappings)
             successor.history_truncated = bool(
-                successor.history_truncated or removed.history_truncated
+                overflowed or successor.history_truncated or removed.history_truncated
             )
             outcome = "folded"
         elif successor.history_state == "indexed":
