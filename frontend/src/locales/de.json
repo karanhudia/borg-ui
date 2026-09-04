@@ -952,6 +952,17 @@
       "legendLess": "Weniger",
       "legendMore": "Mehr",
       "tooltip": "{{count}} am {{date}} · {{size}} · {{duration}}"
+    },
+    "search": {
+      "placeholder": "Dateien in diesem Repository durchsuchen",
+      "title": "Suchergebnisse",
+      "columnPath": "Pfad",
+      "columnLastSeen": "Zuletzt gesehen",
+      "columnPresent": "Vorhanden",
+      "present": "In der neuesten",
+      "absent": "Nicht in der neuesten",
+      "empty": "Keine passenden Dateien",
+      "truncated": "Zeigt die ersten {{count}} Treffer"
     }
   },
   "restore": {

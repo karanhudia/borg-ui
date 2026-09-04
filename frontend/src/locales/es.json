@@ -952,6 +952,17 @@
       "legendLess": "Menos",
       "legendMore": "Más",
       "tooltip": "{{count}} el {{date}} · {{size}} · {{duration}}"
+    },
+    "search": {
+      "placeholder": "Buscar archivos en este repositorio",
+      "title": "Resultados de la búsqueda",
+      "columnPath": "Ruta",
+      "columnLastSeen": "Visto por última vez",
+      "columnPresent": "Presente",
+      "present": "En la más reciente",
+      "absent": "No está en la más reciente",
+      "empty": "No hay archivos coincidentes",
+      "truncated": "Mostrando las primeras {{count}} coincidencias"
     }
   },
   "restore": {
