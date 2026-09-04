@@ -3260,6 +3260,21 @@
       "index": "Index",
       "mirror": "Mirror",
       "system": "System"
+    },
+    "background": {
+      "systemRow": "System",
+      "retry": "Retry",
+      "waiting": "waiting",
+      "failed": "failed"
+    },
+    "status": {
+      "queued": "Queued",
+      "running": "Running",
+      "completed": "Completed",
+      "completed_with_warnings": "Completed with warnings",
+      "failed": "Failed",
+      "cancelled": "Cancelled",
+      "skipped": "Skipped"
     }
   },
   "notifications": {

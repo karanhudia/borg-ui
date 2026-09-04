@@ -3260,6 +3260,21 @@
       "index": "Indice",
       "mirror": "Mirror",
       "system": "Sistema"
+    },
+    "background": {
+      "systemRow": "Sistema",
+      "retry": "Riprova",
+      "waiting": "in attesa",
+      "failed": "non riuscito"
+    },
+    "status": {
+      "queued": "In coda",
+      "running": "In esecuzione",
+      "completed": "Completato",
+      "completed_with_warnings": "Completato con avvisi",
+      "failed": "Non riuscito",
+      "cancelled": "Annullato",
+      "skipped": "Saltato"
     }
   },
   "notifications": {

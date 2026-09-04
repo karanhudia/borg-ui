@@ -3260,6 +3260,21 @@
       "index": "Índice",
       "mirror": "Espejo",
       "system": "Sistema"
+    },
+    "background": {
+      "systemRow": "Sistema",
+      "retry": "Reintentar",
+      "waiting": "esperando",
+      "failed": "fallido"
+    },
+    "status": {
+      "queued": "En cola",
+      "running": "En ejecución",
+      "completed": "Completado",
+      "completed_with_warnings": "Completado con advertencias",
+      "failed": "Fallido",
+      "cancelled": "Cancelado",
+      "skipped": "Omitido"
     }
   },
   "notifications": {

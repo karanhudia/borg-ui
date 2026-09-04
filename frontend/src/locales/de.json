@@ -3260,6 +3260,21 @@
       "index": "Index",
       "mirror": "Spiegelung",
       "system": "System"
+    },
+    "background": {
+      "systemRow": "System",
+      "retry": "Wiederholen",
+      "waiting": "wartet",
+      "failed": "fehlgeschlagen"
+    },
+    "status": {
+      "queued": "In Warteschlange",
+      "running": "Läuft",
+      "completed": "Abgeschlossen",
+      "completed_with_warnings": "Abgeschlossen mit Warnungen",
+      "failed": "Fehlgeschlagen",
+      "cancelled": "Abgebrochen",
+      "skipped": "Übersprungen"
     }
   },
   "notifications": {
