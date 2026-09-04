@@ -120,7 +120,31 @@ export const FullAccessEndingSoonDrawer: Story = {
   render: (args) => <PlanInfoDrawerStory {...args} />,
 }
 
-/** Full access has ended: warning with the "Restore Pro features" action and the expiry offer link. */
+/** Already on Pro: the footer sells Enterprise, never Pro again. */
+export const ProPlanDrawer: Story = {
+  args: {
+    open: true,
+    plan: 'pro',
+    appVersion: '2.0.2',
+    features: featureMap,
+    onClose: () => {},
+  },
+  render: (args) => <PlanInfoDrawerStory {...args} />,
+}
+
+/** Enterprise: nothing above it, so there is no upgrade button. */
+export const EnterprisePlanDrawer: Story = {
+  args: {
+    open: true,
+    plan: 'enterprise',
+    appVersion: '2.0.2',
+    features: featureMap,
+    onClose: () => {},
+  },
+  render: (args) => <PlanInfoDrawerStory {...args} />,
+}
+
+/** Full access has ended: warning with the "Restore Pro features" button under the text and the expiry offer link. */
 export const FullAccessExpiredDrawer: Story = {
   args: {
     open: true,

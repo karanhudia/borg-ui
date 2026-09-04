@@ -417,4 +417,32 @@ describe('PlanInfoDrawer', () => {
       buildBuyUrl({ plan: 'pro', src: 'app-expired', offer: 'expired' })
     )
   })
+
+  it('sells Enterprise, not Pro, to an instance already on Pro', async () => {
+    const user = userEvent.setup()
+
+    renderWithProviders(
+      <PlanInfoDrawer open={true} onClose={vi.fn()} plan="pro" features={featureMap} />
+    )
+
+    expect(screen.queryByRole('link', { name: /upgrade to pro/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /upgrade to enterprise/i })).toHaveAttribute(
+      'href',
+      buildBuyUrl({ plan: 'enterprise', src: 'app-drawer' })
+    )
+
+    // The Upgrade tab opens on the Pro column for a Pro instance; it must not
+    // offer to buy Pro again.
+    await user.click(screen.getByText('Upgrade'))
+    expect(screen.queryByRole('link', { name: /upgrade to pro/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /upgrade to enterprise/i })).toBeInTheDocument()
+  })
+
+  it('shows no upgrade button on Enterprise', () => {
+    renderWithProviders(
+      <PlanInfoDrawer open={true} onClose={vi.fn()} plan="enterprise" features={featureMap} />
+    )
+
+    expect(screen.queryByRole('link', { name: /upgrade to/i })).not.toBeInTheDocument()
+  })
 })

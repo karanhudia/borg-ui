@@ -92,6 +92,15 @@ function normalizePlan(plan: Plan | string | null | undefined): Plan {
   return 'community'
 }
 
+const PLAN_RANK: Record<Plan, number> = { community: 0, pro: 1, enterprise: 2 }
+
+// The tier directly above the current plan, or null on the top tier.
+function nextPlanAbove(plan: Plan): 'pro' | 'enterprise' | null {
+  if (plan === 'community') return 'pro'
+  if (plan === 'pro') return 'enterprise'
+  return null
+}
+
 export default function PlanInfoDrawer({
   open,
   onClose,
@@ -206,10 +215,15 @@ export default function PlanInfoDrawer({
     }
   }, [initialSelectedPlan, normalizedPlan, open])
 
-  // The footer link always sells Pro unless the user is browsing Enterprise on the
-  // Upgrade tab. The same value drives the href, the label, and the analytics event.
-  const buyPlan: 'pro' | 'enterprise' =
-    activeTab === 'upgrade' && selectedPlan === 'enterprise' ? 'enterprise' : 'pro'
+  // The footer sells the tier above the current plan, or the plan being browsed on
+  // the Upgrade tab when that is higher than what the instance already has. On
+  // Enterprise there is nothing to sell, so the footer button is hidden. The same
+  // value drives the href, the label, and the analytics event.
+  const browsedUpgrade =
+    activeTab === 'upgrade' && PLAN_RANK[selectedPlan] > PLAN_RANK[normalizedPlan]
+      ? (selectedPlan as 'pro' | 'enterprise')
+      : null
+  const buyPlan: 'pro' | 'enterprise' | null = browsedUpgrade ?? nextPlanAbove(normalizedPlan)
   const buySource = isFullAccess
     ? 'app-trial'
     : entitlement?.ui_state === 'full_access_expired'
@@ -218,12 +232,46 @@ export default function PlanInfoDrawer({
   const buyOffer = entitlement?.ui_state === 'full_access_expired' ? 'expired' : undefined
 
   const handleBuyClick = () => {
+    if (!buyPlan) return
     trackPlan(EventAction.VIEW, {
       surface: 'plan_drawer',
       operation: 'open_buy_link',
       selected_plan: buyPlan,
     })
   }
+
+  // Shown at the top of both tabs once full access has ended. The CTA sits under
+  // the text rather than in the Alert action slot, which squeezed the message to
+  // one word per line inside the narrow drawer.
+  const expiredNotice = (
+    <Alert
+      severity="warning"
+      sx={{ mb: 2, fontSize: '0.75rem', '& .MuiAlert-message': { width: '100%' } }}
+    >
+      {t('plan.fullAccessExpiredNotice')}
+      <Button
+        color="inherit"
+        variant="outlined"
+        size="small"
+        fullWidth
+        component="a"
+        href={buildBuyUrl({ plan: 'pro', src: 'app-expired', offer: 'expired' })}
+        target="_blank"
+        rel="noreferrer"
+        onClick={() =>
+          trackPlan(EventAction.VIEW, {
+            surface: 'plan_drawer',
+            operation: 'open_buy_link',
+            selected_plan: 'pro',
+            context: 'full_access_expired',
+          })
+        }
+        sx={{ mt: 1.25, fontWeight: 700 }}
+      >
+        {t('plan.expiredUpgradeCta')}
+      </Button>
+    </Alert>
+  )
 
   const yourPlanTabColor = color
   const upgradeTabColor = selectedColor
@@ -347,35 +395,7 @@ export default function PlanInfoDrawer({
         <Box sx={{ flex: 1, overflowY: 'auto', px: 2.5, py: 2 }}>
           {activeTab === 'your-plan' && (
             <>
-              {entitlement?.ui_state === 'full_access_expired' && (
-                <Alert
-                  severity="warning"
-                  sx={{ mb: 2, fontSize: '0.75rem', alignItems: 'center' }}
-                  action={
-                    <Button
-                      color="inherit"
-                      size="small"
-                      component="a"
-                      href={buildBuyUrl({ plan: 'pro', src: 'app-expired', offer: 'expired' })}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={() =>
-                        trackPlan(EventAction.VIEW, {
-                          surface: 'plan_drawer',
-                          operation: 'open_buy_link',
-                          selected_plan: 'pro',
-                          context: 'full_access_expired',
-                        })
-                      }
-                      sx={{ whiteSpace: 'nowrap', fontWeight: 700 }}
-                    >
-                      {t('plan.expiredUpgradeCta')}
-                    </Button>
-                  }
-                >
-                  {t('plan.fullAccessExpiredNotice')}
-                </Alert>
-              )}
+              {entitlement?.ui_state === 'full_access_expired' && expiredNotice}
               {entitlement?.last_refresh_error && (
                 <Alert severity="warning" sx={{ mb: 2, fontSize: '0.75rem' }}>
                   {t('plan.lastRefreshError', { error: entitlement.last_refresh_error })}
@@ -488,35 +508,7 @@ export default function PlanInfoDrawer({
 
           {activeTab === 'upgrade' && (
             <>
-              {entitlement?.ui_state === 'full_access_expired' && (
-                <Alert
-                  severity="warning"
-                  sx={{ mb: 2, fontSize: '0.75rem', alignItems: 'center' }}
-                  action={
-                    <Button
-                      color="inherit"
-                      size="small"
-                      component="a"
-                      href={buildBuyUrl({ plan: 'pro', src: 'app-expired', offer: 'expired' })}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={() =>
-                        trackPlan(EventAction.VIEW, {
-                          surface: 'plan_drawer',
-                          operation: 'open_buy_link',
-                          selected_plan: 'pro',
-                          context: 'full_access_expired',
-                        })
-                      }
-                      sx={{ whiteSpace: 'nowrap', fontWeight: 700 }}
-                    >
-                      {t('plan.expiredUpgradeCta')}
-                    </Button>
-                  }
-                >
-                  {t('plan.fullAccessExpiredNotice')}
-                </Alert>
-              )}
+              {entitlement?.ui_state === 'full_access_expired' && expiredNotice}
               {entitlement?.last_refresh_error && (
                 <Alert severity="warning" sx={{ mb: 2, fontSize: '0.75rem' }}>
                   {t('plan.lastRefreshError', { error: entitlement.last_refresh_error })}
@@ -862,17 +854,19 @@ export default function PlanInfoDrawer({
               </Typography>
             </Box>
           )}
-          <Button
-            component="a"
-            href={buildBuyUrl({ plan: buyPlan, src: buySource, offer: buyOffer })}
-            target="_blank"
-            rel="noreferrer"
-            variant="contained"
-            fullWidth
-            onClick={handleBuyClick}
-          >
-            {t('plan.buyLink', { plan: planLabel(buyPlan) })}
-          </Button>
+          {buyPlan && (
+            <Button
+              component="a"
+              href={buildBuyUrl({ plan: buyPlan, src: buySource, offer: buyOffer })}
+              target="_blank"
+              rel="noreferrer"
+              variant="contained"
+              fullWidth
+              onClick={handleBuyClick}
+            >
+              {t('plan.buyLink', { plan: planLabel(buyPlan) })}
+            </Button>
+          )}
         </Box>
       </Box>
     </Drawer>
