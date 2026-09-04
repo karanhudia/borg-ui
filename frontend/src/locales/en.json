@@ -3265,7 +3265,10 @@
       "systemRow": "System",
       "retry": "Retry",
       "waiting": "waiting",
-      "failed": "failed"
+      "failed": "failed",
+      "plan": "plan",
+      "holdsLane": "→ holds the lane",
+      "viewActivity": "Activity ▸"
     },
     "status": {
       "queued": "Queued",
@@ -3275,6 +3278,23 @@
       "failed": "Failed",
       "cancelled": "Cancelled",
       "skipped": "Skipped"
+    },
+    "kind": {
+      "import_connect": "connect",
+      "backup": "backup",
+      "restore": "restore",
+      "restore_check": "restore check",
+      "check": "check",
+      "prune": "prune",
+      "compact": "compact",
+      "delete_archive": "delete archive",
+      "wipe": "wipe",
+      "rclone_sync": "mirror sync",
+      "package_install": "package install",
+      "stats": "stats",
+      "archive_sync": "archive sync",
+      "history_index": "history index",
+      "history_merge": "history merge"
     }
   },
   "notifications": {

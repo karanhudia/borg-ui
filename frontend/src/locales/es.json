@@ -3265,7 +3265,10 @@
       "systemRow": "Sistema",
       "retry": "Reintentar",
       "waiting": "esperando",
-      "failed": "fallido"
+      "failed": "fallido",
+      "plan": "plan",
+      "holdsLane": "→ ocupa el carril",
+      "viewActivity": "Actividad ▸"
     },
     "status": {
       "queued": "En cola",
@@ -3275,6 +3278,23 @@
       "failed": "Fallido",
       "cancelled": "Cancelado",
       "skipped": "Omitido"
+    },
+    "kind": {
+      "import_connect": "conectar",
+      "backup": "copia de seguridad",
+      "restore": "restaurar",
+      "restore_check": "verificación de restauración",
+      "check": "verificación",
+      "prune": "poda",
+      "compact": "compactación",
+      "delete_archive": "eliminar archivo",
+      "wipe": "borrar",
+      "rclone_sync": "sincronización de espejo",
+      "package_install": "instalación de paquete",
+      "stats": "estadísticas",
+      "archive_sync": "sincronización de archivo",
+      "history_index": "índice de historial",
+      "history_merge": "fusión de historial"
     }
   },
   "notifications": {

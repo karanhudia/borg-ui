@@ -3265,7 +3265,10 @@
       "systemRow": "System",
       "retry": "Wiederholen",
       "waiting": "wartet",
-      "failed": "fehlgeschlagen"
+      "failed": "fehlgeschlagen",
+      "plan": "Plan",
+      "holdsLane": "→ blockiert die Warteschlange",
+      "viewActivity": "Aktivität ▸"
     },
     "status": {
       "queued": "In Warteschlange",
@@ -3275,6 +3278,23 @@
       "failed": "Fehlgeschlagen",
       "cancelled": "Abgebrochen",
       "skipped": "Übersprungen"
+    },
+    "kind": {
+      "import_connect": "Verbinden",
+      "backup": "Sicherung",
+      "restore": "Wiederherstellung",
+      "restore_check": "Wiederherstellungsprüfung",
+      "check": "Prüfung",
+      "prune": "Bereinigung",
+      "compact": "Komprimierung",
+      "delete_archive": "Archiv löschen",
+      "wipe": "Löschen",
+      "rclone_sync": "Spiegel-Sync",
+      "package_install": "Paketinstallation",
+      "stats": "Statistik",
+      "archive_sync": "Archiv-Sync",
+      "history_index": "Verlaufsindex",
+      "history_merge": "Verlauf zusammenführen"
     }
   },
   "notifications": {
