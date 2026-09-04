@@ -1,4 +1,4 @@
-/** Show the remaining-days countdown in the plan badge once the trial is inside this window. */
+/** Show the remaining-days countdown in the plan badge once fewer than this many days remain. */
 export const FULL_ACCESS_COUNTDOWN_THRESHOLD_DAYS = 14
 
 export function fullAccessDaysLeft(

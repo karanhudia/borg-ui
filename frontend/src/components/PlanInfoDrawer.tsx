@@ -206,11 +206,22 @@ export default function PlanInfoDrawer({
     }
   }, [initialSelectedPlan, normalizedPlan, open])
 
+  // The footer link always sells Pro unless the user is browsing Enterprise on the
+  // Upgrade tab. The same value drives the href, the label, and the analytics event.
+  const buyPlan: 'pro' | 'enterprise' =
+    activeTab === 'upgrade' && selectedPlan === 'enterprise' ? 'enterprise' : 'pro'
+  const buySource = isFullAccess
+    ? 'app-trial'
+    : entitlement?.ui_state === 'full_access_expired'
+      ? 'app-expired'
+      : 'app-drawer'
+  const buyOffer = entitlement?.ui_state === 'full_access_expired' ? 'expired' : undefined
+
   const handleBuyClick = () => {
     trackPlan(EventAction.VIEW, {
       surface: 'plan_drawer',
       operation: 'open_buy_link',
-      selected_plan: selectedPlan,
+      selected_plan: buyPlan,
     })
   }
 
@@ -853,24 +864,14 @@ export default function PlanInfoDrawer({
           )}
           <Button
             component="a"
-            href={buildBuyUrl({
-              plan: activeTab === 'upgrade' && selectedPlan === 'enterprise' ? 'enterprise' : 'pro',
-              src: isFullAccess
-                ? 'app-trial'
-                : entitlement?.ui_state === 'full_access_expired'
-                  ? 'app-expired'
-                  : 'app-drawer',
-              offer: entitlement?.ui_state === 'full_access_expired' ? 'expired' : undefined,
-            })}
+            href={buildBuyUrl({ plan: buyPlan, src: buySource, offer: buyOffer })}
             target="_blank"
             rel="noreferrer"
             variant="contained"
             fullWidth
             onClick={handleBuyClick}
           >
-            {t('plan.buyLink', {
-              plan: planLabel(activeTab === 'upgrade' ? selectedPlan : 'pro'),
-            })}
+            {t('plan.buyLink', { plan: planLabel(buyPlan) })}
           </Button>
         </Box>
       </Box>

@@ -17,7 +17,7 @@ export default function PlanBadge({ plan, entitlement, onClick }: PlanBadgeProps
   const color = isFullAccess ? PLAN_COLOR.enterprise : PLAN_COLOR[plan]
   const daysLeft = fullAccessDaysLeft(isFullAccess ? entitlement?.expires_at : null)
   const label = isFullAccess
-    ? daysLeft !== null && daysLeft <= FULL_ACCESS_COUNTDOWN_THRESHOLD_DAYS
+    ? daysLeft !== null && daysLeft < FULL_ACCESS_COUNTDOWN_THRESHOLD_DAYS
       ? `${t('plan.fullAccessLabel')} · ${t('plan.daysShort', { count: daysLeft })}`
       : t('plan.fullAccessLabel')
     : PLAN_LABEL[plan]

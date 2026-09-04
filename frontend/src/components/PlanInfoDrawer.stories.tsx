@@ -4,6 +4,7 @@ import { Box, CssBaseline } from '@mui/material'
 import { ThemeProvider } from '@mui/material/styles'
 import { darkTheme } from '../theme'
 import PlanInfoDrawer from './PlanInfoDrawer'
+import type { EntitlementInfo } from '../hooks/useSystemInfo'
 
 const featureMap = {
   borg_v2: 'pro',
@@ -14,6 +15,34 @@ const featureMap = {
   managed_agents: 'pro',
   rbac: 'enterprise',
 } as const
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+const fullAccessEndingSoon: EntitlementInfo = {
+  status: 'active',
+  access_level: 'full_access',
+  is_full_access: true,
+  full_access_consumed: true,
+  expires_at: new Date(Date.now() + 6 * DAY_MS).toISOString(),
+  starts_at: new Date(Date.now() - 54 * DAY_MS).toISOString(),
+  instance_id: 'inst_story',
+  ui_state: 'full_access_active',
+  last_refresh_at: null,
+  last_refresh_error: null,
+}
+
+const fullAccessExpired: EntitlementInfo = {
+  status: 'expired',
+  access_level: 'community',
+  is_full_access: false,
+  full_access_consumed: true,
+  expires_at: null,
+  starts_at: null,
+  instance_id: 'inst_story',
+  ui_state: 'full_access_expired',
+  last_refresh_at: null,
+  last_refresh_error: null,
+}
 
 function PlanInfoDrawerStory(args: ComponentProps<typeof PlanInfoDrawer>) {
   const hostRef = useRef<HTMLDivElement>(null)
@@ -76,4 +105,30 @@ export const DarkCommunityUpgradeDrawer: Story = {
       <PlanInfoDrawerStory {...args} />
     </ThemeProvider>
   ),
+}
+
+/** Six days of full access left: countdown banner plus the trial-sourced buy link. */
+export const FullAccessEndingSoonDrawer: Story = {
+  args: {
+    open: true,
+    plan: 'community',
+    appVersion: '2.0.2',
+    features: featureMap,
+    entitlement: fullAccessEndingSoon,
+    onClose: () => {},
+  },
+  render: (args) => <PlanInfoDrawerStory {...args} />,
+}
+
+/** Full access has ended: warning with the "Restore Pro features" action and the expiry offer link. */
+export const FullAccessExpiredDrawer: Story = {
+  args: {
+    open: true,
+    plan: 'community',
+    appVersion: '2.0.2',
+    features: featureMap,
+    entitlement: fullAccessExpired,
+    onClose: () => {},
+  },
+  render: (args) => <PlanInfoDrawerStory {...args} />,
 }
