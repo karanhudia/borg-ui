@@ -5769,7 +5769,10 @@
     "upgradeNudgeAfterTitle": "Schalten Sie mehr mit Pro oder Enterprise frei",
     "upgradeNudgePro": "Pro",
     "upgradeNudgeEnterprise": "Enterprise",
-    "viewUpgradeOptions": "Upgrade-Optionen anzeigen"
+    "viewUpgradeOptions": "Upgrade-Optionen anzeigen",
+    "expiredUpgradeCta": "Pro-Funktionen wiederherstellen",
+    "daysShort_one": "noch {{count}} Tag",
+    "daysShort_other": "noch {{count}} Tage"
   },
   "licensing": {
     "title": "Lizenzierung",

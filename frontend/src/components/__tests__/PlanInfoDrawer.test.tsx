@@ -3,7 +3,7 @@ import { renderWithProviders, screen, userEvent } from '../../test/test-utils'
 import { darkTheme, theme } from '../../theme'
 import PlanInfoDrawer from '../PlanInfoDrawer'
 import { getPlanDrawerContrastPairs } from '../planDrawerColors'
-import { BUY_URL } from '../../utils/externalLinks'
+import { buildBuyUrl } from '../../utils/externalLinks'
 import type { Plan } from '../../core/features'
 
 type Rgb = [number, number, number]
@@ -379,13 +379,42 @@ describe('PlanInfoDrawer', () => {
       <PlanInfoDrawer open={true} onClose={vi.fn()} plan="community" features={featureMap} />
     )
 
-    expect(screen.getByRole('link', { name: /upgrade to pro/i })).toHaveAttribute('href', BUY_URL)
+    expect(screen.getByRole('link', { name: /upgrade to pro/i })).toHaveAttribute(
+      'href',
+      buildBuyUrl({ plan: 'pro', src: 'app-drawer' })
+    )
 
     await user.click(screen.getByText('Enterprise'))
 
     expect(screen.getByRole('link', { name: /upgrade to enterprise/i })).toHaveAttribute(
       'href',
-      BUY_URL
+      buildBuyUrl({ plan: 'enterprise', src: 'app-drawer' })
+    )
+  })
+
+  it('offers a direct upgrade with the expiry offer once full access has ended', () => {
+    renderWithProviders(
+      <PlanInfoDrawer
+        open={true}
+        onClose={vi.fn()}
+        plan="community"
+        features={featureMap}
+        entitlement={
+          {
+            status: 'expired',
+            is_full_access: false,
+            full_access_consumed: true,
+            ui_state: 'full_access_expired',
+            expires_at: null,
+          } as never
+        }
+      />
+    )
+
+    const cta = screen.getByRole('link', { name: /restore pro features/i })
+    expect(cta).toHaveAttribute(
+      'href',
+      buildBuyUrl({ plan: 'pro', src: 'app-expired', offer: 'expired' })
     )
   })
 })
