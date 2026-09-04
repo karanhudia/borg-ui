@@ -43,7 +43,7 @@ export default function PipelineRepositoryCard({
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography variant="body2" fontWeight={600} noWrap>
+        <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
           {operation.repository ?? t('operations.background.systemRow')}
         </Typography>
         {isFailed && onRetry && (

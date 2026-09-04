@@ -31,9 +31,11 @@ import {
   Activity,
   Cloud,
   Network,
+  Layers,
 } from 'lucide-react'
 import api, { settingsAPI, backupPlansAPI } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
+import { useAuthorization } from '../hooks/useAuthorization'
 import NavItem from './NavItem'
 import NavGroup from './NavGroup'
 import SidebarVersionInfo from './SidebarVersionInfo'
@@ -87,6 +89,10 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
   const canManageBeta = hasGlobalPermission('settings.beta.manage')
   const canManageMounts = hasGlobalPermission('settings.mounts.manage')
   const canManageSsh = hasGlobalPermission('settings.ssh.manage')
+  const { globalRoleRank, currentGlobalRole } = useAuthorization()
+  const canViewBackgroundWork =
+    (globalRoleRank.get(currentGlobalRole ?? '') ?? 0) >=
+    (globalRoleRank.get('operator') ?? Infinity)
   const { tabEnablement, getTabDisabledReason } = useTabEnablement()
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null)
   const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({})
@@ -114,6 +120,7 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
       Preferences: t('navigation.settings.preferences'),
       Notifications: t('navigation.settings.notifications'),
       'Monitoring & Reports': t('navigation.settings.monitoringReports'),
+      'Background work': t('navigation.settings.backgroundWork'),
       MQTT: t('navigation.settings.mqtt'),
       Cache: t('navigation.settings.cache'),
       Logs: t('navigation.settings.logs'),
@@ -263,6 +270,15 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
                       href: '/settings/monitoring',
                       icon: Activity,
                     },
+                    ...(canViewBackgroundWork
+                      ? [
+                          {
+                            name: 'Background work',
+                            href: '/settings/background-work',
+                            icon: Layers,
+                          },
+                        ]
+                      : []),
                     ...(showMqttNav && canManageMqtt
                       ? [{ name: 'MQTT', href: '/settings/mqtt', icon: Wifi }]
                       : []),
@@ -317,6 +333,7 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
     canManageBeta,
     canManageMounts,
     canManageSsh,
+    canViewBackgroundWork,
   ])
 
   // Auto-expand menus based on current route
@@ -333,6 +350,7 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
       } else if (
         path.includes('/system') ||
         path.includes('/monitoring') ||
+        path.includes('/background-work') ||
         path.includes('/mqtt') ||
         path.includes('/cache') ||
         path.includes('/logs') ||

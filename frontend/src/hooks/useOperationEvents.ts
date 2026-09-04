@@ -21,8 +21,11 @@ export function useOperationEvents(
 ): void {
   const onUpdatedRef = useRef(onUpdated)
   const onProgressRef = useRef(onProgress)
-  onUpdatedRef.current = onUpdated
-  onProgressRef.current = onProgress
+
+  useEffect(() => {
+    onUpdatedRef.current = onUpdated
+    onProgressRef.current = onProgress
+  })
 
   useEffect(() => {
     const token = getAccessToken()

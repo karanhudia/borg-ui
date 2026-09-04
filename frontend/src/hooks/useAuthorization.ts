@@ -53,5 +53,6 @@ export function useAuthorization() {
     assignableRepositoryRolesFor,
     hasGlobalPermission,
     currentGlobalRole: user?.role ?? null,
+    globalRoleRank,
   }
 }

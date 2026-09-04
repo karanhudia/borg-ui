@@ -155,7 +155,8 @@
       "scripts": "Script",
       "users": "Utenti",
       "exportImport": "Esporta/Importa",
-      "beta": "Beta"
+      "beta": "Beta",
+      "backgroundWork": "Lavoro in background"
     },
     "menu": {
       "openDrawer": "Apri navigazione",
@@ -3284,7 +3285,11 @@
         "stats": "Statistiche",
         "archives": "Archivi",
         "history": "Cronologia"
-      }
+      },
+      "title": "Lavoro in background",
+      "pause": "Pausa",
+      "resume": "Riprendi",
+      "rebuildNeedsRepository": "Scegli un repository dalla sua scheda per ricostruirlo."
     },
     "status": {
       "queued": "In coda",

@@ -14,7 +14,7 @@ export default function ForegroundLaneRow({ operation }: ForegroundLaneRowProps)
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1 }}>
       <CategoryToken category={operation.category} />
-      <Typography variant="body2" component="span" fontWeight={600}>
+      <Typography variant="body2" component="span" sx={{ fontWeight: 600 }}>
         {operation.repository}
       </Typography>
       <Typography variant="body2" component="span">

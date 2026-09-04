@@ -23,7 +23,7 @@ type Story = StoryObj<typeof meta>
 
 export const AllCategories: Story = {
   render: () => (
-    <Stack direction="row" spacing={1} flexWrap="wrap">
+    <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
       {CATEGORIES.map((category) => (
         <CategoryToken key={category} category={category} />
       ))}
