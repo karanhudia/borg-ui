@@ -3268,7 +3268,17 @@
       "failed": "fallido",
       "plan": "plan",
       "holdsLane": "→ ocupa el carril",
-      "viewActivity": "Actividad ▸"
+      "viewActivity": "Actividad ▸",
+      "stage": {
+        "connect": "Conectar",
+        "stats": "Estadísticas",
+        "archives": "Archivos",
+        "history": "Índice de historial",
+        "ready": "Listo"
+      },
+      "workers": "trabajadores: índice {{count}}",
+      "emptyTitle": "No hay nada en ejecución",
+      "emptyDescription": "El trabajo en segundo plano aparecerá aquí la próxima vez que se inicie una importación, copia de seguridad o reconciliación."
     },
     "status": {
       "queued": "En cola",

@@ -3268,7 +3268,17 @@
       "failed": "non riuscito",
       "plan": "piano",
       "holdsLane": "→ occupa la corsia",
-      "viewActivity": "Attività ▸"
+      "viewActivity": "Attività ▸",
+      "stage": {
+        "connect": "Connetti",
+        "stats": "Statistiche",
+        "archives": "Archivi",
+        "history": "Indice cronologia",
+        "ready": "Pronto"
+      },
+      "workers": "worker: indice {{count}}",
+      "emptyTitle": "Nessuna attività in corso",
+      "emptyDescription": "Il lavoro in background apparirà qui alla prossima importazione, backup o esecuzione di riconciliazione."
     },
     "status": {
       "queued": "In coda",

@@ -3268,7 +3268,17 @@
       "failed": "fehlgeschlagen",
       "plan": "Plan",
       "holdsLane": "→ blockiert die Warteschlange",
-      "viewActivity": "Aktivität ▸"
+      "viewActivity": "Aktivität ▸",
+      "stage": {
+        "connect": "Verbinden",
+        "stats": "Statistik",
+        "archives": "Archive",
+        "history": "Verlaufsindex",
+        "ready": "Fertig"
+      },
+      "workers": "Worker: Index {{count}}",
+      "emptyTitle": "Nichts läuft gerade",
+      "emptyDescription": "Hintergrundarbeit erscheint hier, sobald ein Import, eine Sicherung oder ein Abgleichlauf startet."
     },
     "status": {
       "queued": "In Warteschlange",

@@ -3268,7 +3268,17 @@
       "failed": "failed",
       "plan": "plan",
       "holdsLane": "→ holds the lane",
-      "viewActivity": "Activity ▸"
+      "viewActivity": "Activity ▸",
+      "stage": {
+        "connect": "Connect",
+        "stats": "Stats",
+        "archives": "Archives",
+        "history": "History index",
+        "ready": "Ready"
+      },
+      "workers": "workers: index {{count}}",
+      "emptyTitle": "Nothing is running",
+      "emptyDescription": "Background work will appear here the next time an import, backup, or reconcile run starts."
     },
     "status": {
       "queued": "Queued",
