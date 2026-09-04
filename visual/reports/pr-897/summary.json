@@ -1,45 +1,29 @@
 {
-  "generatedAt": "2026-09-04T05:02:30.455Z",
+  "generatedAt": "2026-09-04T05:55:45.088Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #897 visual report",
-    "commitSha": "93792c6664ed",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/33838581058"
+    "commitSha": "9820af2f8390",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/33841912393"
   },
   "totals": {
     "baseline": 474,
     "actual": 474,
     "compared": 474,
-    "changed": 1,
+    "changed": 0,
     "added": 0,
     "removed": 0,
-    "unchanged": 473
+    "unchanged": 474
   },
-  "changed": [
-    {
-      "fileName": "backup-plans-reviewstep--agent-source-to-same-agent-repo.png",
-      "baselinePath": "images/baseline/backup-plans-reviewstep--agent-source-to-same-agent-repo.png",
-      "actualPath": "images/actual/backup-plans-reviewstep--agent-source-to-same-agent-repo.png",
-      "diffPath": "images/diff/backup-plans-reviewstep--agent-source-to-same-agent-repo.png",
-      "diffPixels": 1024000,
-      "totalPixels": 1024000,
-      "diffRatio": 1,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    }
-  ],
+  "changed": [],
   "added": [],
   "removed": [],
   "unchanged": [
     {
       "fileName": "backup-plans-reviewstep--agent-source-to-same-agent-repo--mobile.png"
+    },
+    {
+      "fileName": "backup-plans-reviewstep--agent-source-to-same-agent-repo.png"
     },
     {
       "fileName": "backup-plans-reviewstep--database-source-to-server-repo--mobile.png"
