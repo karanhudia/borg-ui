@@ -3289,7 +3289,9 @@
       "title": "Trabajo en segundo plano",
       "pause": "Pausar",
       "resume": "Reanudar",
-      "rebuildNeedsRepository": "Elige un repositorio desde su tarjeta para reconstruirlo."
+      "rebuildNeedsRepository": "Elige un repositorio desde su tarjeta para reconstruirlo.",
+      "never": "Nunca",
+      "syncing": "Sincronizando"
     },
     "status": {
       "queued": "En cola",

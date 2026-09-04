@@ -3289,7 +3289,9 @@
       "title": "Background work",
       "pause": "Pause",
       "resume": "Resume",
-      "rebuildNeedsRepository": "Choose a repository from its card to rebuild."
+      "rebuildNeedsRepository": "Choose a repository from its card to rebuild.",
+      "never": "Never",
+      "syncing": "Syncing"
     },
     "status": {
       "queued": "Queued",

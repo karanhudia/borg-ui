@@ -28,6 +28,7 @@ export function useOperationEvents(
   })
 
   useEffect(() => {
+    if (typeof EventSource === 'undefined') return undefined
     const token = getAccessToken()
     const url = `${BASE_PATH}/api/events/stream${token ? `?token=${encodeURIComponent(token)}` : ''}`
     const source = new EventSource(url)

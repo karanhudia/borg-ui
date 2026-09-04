@@ -3289,7 +3289,9 @@
       "title": "Lavoro in background",
       "pause": "Pausa",
       "resume": "Riprendi",
-      "rebuildNeedsRepository": "Scegli un repository dalla sua scheda per ricostruirlo."
+      "rebuildNeedsRepository": "Scegli un repository dalla sua scheda per ricostruirlo.",
+      "never": "Mai",
+      "syncing": "Sincronizzazione"
     },
     "status": {
       "queued": "In coda",

@@ -3289,7 +3289,9 @@
       "title": "Hintergrundarbeit",
       "pause": "Pausieren",
       "resume": "Fortsetzen",
-      "rebuildNeedsRepository": "Wähle ein Repository aus seiner Karte, um es neu aufzubauen."
+      "rebuildNeedsRepository": "Wähle ein Repository aus seiner Karte, um es neu aufzubauen.",
+      "never": "Nie",
+      "syncing": "Synchronisiert"
     },
     "status": {
       "queued": "In Warteschlange",
