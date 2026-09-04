@@ -33,6 +33,15 @@ import type {
   RebuildStage,
   RebuildResponse,
 } from '../types/operations'
+import type {
+  ArchiveListResponse,
+  HeatmapResponse,
+  ArchiveDetailResponse,
+  ChangesResponse,
+  ChangeType,
+  PathHistoryResponse,
+  SearchResponse,
+} from '../types/archives'
 
 export type AuthTransportMode = 'jwt' | 'proxy' | 'insecure-no-auth'
 
@@ -704,6 +713,33 @@ export const archivesAPI = {
     api.get<StatusStripResponse>(`/repositories/${repositoryId}/status-strip`),
   rebuild: (repositoryId: number, from: RebuildStage) =>
     api.post<RebuildResponse>(`/repositories/${repositoryId}/rebuild`, { from }),
+  listStored: (
+    repositoryId: number,
+    params?: { series?: string; since?: string; until?: string }
+  ) => api.get<ArchiveListResponse>(`/repositories/${repositoryId}/archives`, { params }),
+  getHeatmap: (repositoryId: number, params?: { since?: string; until?: string }) =>
+    api.get<HeatmapResponse>(`/repositories/${repositoryId}/archives/heatmap`, { params }),
+  getArchive: (repositoryId: number, archiveId: number) =>
+    api.get<ArchiveDetailResponse>(`/repositories/${repositoryId}/archives/${archiveId}`),
+  getChanges: (
+    repositoryId: number,
+    archiveId: number,
+    params?: {
+      compare_to?: number
+      path_prefix?: string
+      change?: ChangeType[]
+      limit?: number
+      cursor?: string
+    }
+  ) =>
+    api.get<ChangesResponse>(`/repositories/${repositoryId}/archives/${archiveId}/changes`, {
+      params,
+      paramsSerializer: { indexes: null },
+    }),
+  getPathHistory: (repositoryId: number, path: string) =>
+    api.get<PathHistoryResponse>(`/repositories/${repositoryId}/history`, { params: { path } }),
+  search: (repositoryId: number, q: string, limit?: number) =>
+    api.get<SearchResponse>(`/repositories/${repositoryId}/search`, { params: { q, limit } }),
 }
 
 export const operationsAPI = {
