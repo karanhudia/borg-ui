@@ -278,3 +278,13 @@ async def test_execute_marks_compact_failure_after_successful_delete(db_session)
     assert preview.status == "completed_compaction_failed"
     assert preview.phase == "compact_failed"
     assert "compact failed" in (preview.error_message or "")
+
+
+def test_manifest_preserves_epoch_zero_time():
+    # 0 is falsy but a valid epoch - it must win over the start fallback.
+    manifest = normalize_archive_manifest(
+        borg_version=1,
+        archives=[{"name": "a", "time": 0, "start": "2026-05-17T00:00:00"}],
+    )
+
+    assert manifest[0]["time"] == "1970-01-01T00:00:00+00:00"

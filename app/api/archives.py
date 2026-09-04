@@ -43,7 +43,7 @@ from app.utils.borg_env import (
 from app.utils.ssh_utils import (
     resolve_repo_ssh_key_file,  # noqa: F401
 )  # Backward-compatible patch target for tests
-from app.utils.datetime_utils import serialize_datetime
+from app.utils.datetime_utils import serialize_borg_archive_time, serialize_datetime
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -300,8 +300,14 @@ async def get_archive_info(
             enhanced_info = {
                 "name": archive_info.get("name"),
                 "id": archive_info.get("id"),
-                "start": archive_info.get("start"),
-                "end": archive_info.get("end"),
+                # info_archive runs under TZ=UTC; re-render with an explicit
+                # offset so the frontend does not read the value as local time.
+                "start": serialize_borg_archive_time(
+                    archive_info.get("start"), timezone_name="UTC"
+                ),
+                "end": serialize_borg_archive_time(
+                    archive_info.get("end"), timezone_name="UTC"
+                ),
                 "duration": archive_info.get("duration"),
                 "stats": archive_info.get("stats", {}),
                 # Creation metadata

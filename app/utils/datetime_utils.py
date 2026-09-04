@@ -70,6 +70,23 @@ def parse_borg_archive_time(
     return dt.astimezone(timezone.utc).replace(tzinfo=None)
 
 
+def serialize_borg_archive_time(
+    value: Any, *, timezone_name: Optional[str] = None
+) -> Optional[str]:
+    """Re-render a borg-rendered timestamp as an ISO-8601 UTC string with offset.
+
+    Borg's own rendering may be naive (borg1), which JavaScript's Date parses
+    as browser-local time; serializing with an explicit offset makes the value
+    self-describing for display. ``timezone_name`` has the same semantics as in
+    parse_borg_archive_time. Unparseable strings are returned unchanged so a
+    response never loses the raw value.
+    """
+    parsed = parse_borg_archive_time(value, timezone_name=timezone_name)
+    if parsed is None:
+        return value if isinstance(value, str) else None
+    return serialize_datetime(parsed)
+
+
 def serialize_datetime(dt: Optional[datetime]) -> Optional[str]:
     """
     Serialize a datetime to ISO format with UTC timezone.

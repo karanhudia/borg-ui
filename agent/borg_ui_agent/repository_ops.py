@@ -43,6 +43,17 @@ REPOSITORY_JOB_KINDS = {
     "repository.disk_usage",
 }
 
+# Kinds whose stdout the server parses timestamps out of. These run under
+# TZ=UTC so borg1's naive rendering is UTC wall clock; borg2 renders an
+# explicit offset either way. Contents listings (browse) stay in the machine
+# zone - their mtimes are relayed for display, not interpreted.
+MACHINE_PARSED_JOB_KINDS = {
+    "repository.info",
+    "repository.rinfo",
+    "repository.archive_info",
+    "repository.list_archives",
+}
+
 # Borg 2.0.0b22 split repo-create's single --encryption value into the cipher,
 # where the key is stored, and the id hash. The server sends the combined mode
 # name it stores, so the agent translates it the same way the server does for
@@ -549,6 +560,11 @@ def execute_repository_operation_job(
         )
 
     env = build_borg_env(payload.environment)
+    if payload.job_kind in MACHINE_PARSED_JOB_KINDS:
+        # The server parses timestamps out of these outputs; pin the render
+        # zone so they come out UTC. Applied after the server-sent overrides:
+        # the reported machine timezone is "UTC" on the same contract.
+        env["TZ"] = "UTC"
     if payload.job_kind == "repository.init":
         # Repo creation must not touch the shared pack cache: borgstore
         # rejects an already-populated cache directory on create, and borg

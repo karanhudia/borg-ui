@@ -71,9 +71,21 @@ def sync_archive_stats_from_info(
     try:
         # Local import: repository_executor pulls in the admission machinery,
         # which must not become an import-time dependency of this module.
-        from app.services.repository_executor import agent_timezone_for_repository
+        from app.services.repository_executor import (
+            agent_timezone_for_repository,
+            is_agent_executor,
+        )
 
-        timezone_name = agent_timezone_for_repository(db, repository)
+        # Two distinct render zones, and the two None cases must stay apart:
+        # an agent listing renders in the agent's zone (reported zone, or the
+        # server-local fallback for agents that never reported one), while a
+        # server-side listing now runs under TZ=UTC - so "UTC" is its
+        # provenance, not the server's own zone.
+        timezone_name = (
+            agent_timezone_for_repository(db, repository)
+            if is_agent_executor(repository)
+            else "UTC"
+        )
         # Full entries only: apply_listing skips one it cannot map and reports
         # the archive behind it as removed, which would drop archive_count and
         # stale last_backup on a partial listing. The check is the mapper

@@ -306,3 +306,52 @@ def test_entries_missing_a_name_or_time_do_not_look_like_removals(db, repo):
     # a separate, pre-existing limitation of a partial listing.
     assert db.query(Archive).filter_by(repository_id=repo.id).count() == 2
     assert repo.archive_count == 2
+
+
+@pytest.mark.unit
+@pytest.mark.skipif(
+    not hasattr(__import__("time"), "tzset"), reason="requires POSIX tzset"
+)
+def test_server_side_naive_times_are_read_as_utc_not_server_local():
+    # Server-side listings run under TZ=UTC, so a naive value is UTC wall
+    # clock - it must not be reinterpreted in the server's own zone.
+    import os
+    import time
+
+    repo = FakeRepo(borg_version=2)
+    db = FakeDb()
+    info = {"archives": [{"name": "a", "start": "2026-07-01T03:00:00"}]}
+
+    old_tz = os.environ.get("TZ")
+    os.environ["TZ"] = "Europe/Berlin"
+    time.tzset()
+    try:
+        sync_archive_stats_from_info(repo, info, db)
+    finally:
+        if old_tz is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = old_tz
+        time.tzset()
+
+    assert repo.last_backup == datetime(2026, 7, 1, 3, 0, 0)
+
+
+@pytest.mark.unit
+def test_agent_repos_keep_the_reported_agent_zone():
+    from unittest.mock import patch
+
+    repo = FakeRepo(borg_version=2)
+    repo.executor_type = "agent"
+    repo.agent_machine_id = 7
+    db = FakeDb()
+    info = {"archives": [{"name": "a", "start": "2026-07-01T03:00:00"}]}
+
+    with patch(
+        "app.services.repository_executor.agent_timezone_for_repository",
+        return_value="Europe/Berlin",
+    ):
+        sync_archive_stats_from_info(repo, info, db)
+
+    # CEST is UTC+2 on this date.
+    assert repo.last_backup == datetime(2026, 7, 1, 1, 0, 0)

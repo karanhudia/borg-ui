@@ -537,8 +537,11 @@ class BorgInterface:
         exec_env = env.copy() if env else {}
         if passphrase:
             exec_env["BORG_PASSPHRASE"] = passphrase
+        # This output is machine-parsed; borg renders timestamps naive in the
+        # process zone, so pin it to UTC and parse with timezone_name="UTC".
+        exec_env["TZ"] = "UTC"
 
-        return await self._execute_command(cmd, env=exec_env if exec_env else None)
+        return await self._execute_command(cmd, env=exec_env)
 
     async def info_archive(
         self,
@@ -560,8 +563,10 @@ class BorgInterface:
         exec_env = env.copy() if env else {}
         if passphrase:
             exec_env["BORG_PASSPHRASE"] = passphrase
+        # Machine-parsed output: render timestamps in UTC (see list_archives).
+        exec_env["TZ"] = "UTC"
 
-        return await self._execute_command(cmd, env=exec_env if exec_env else None)
+        return await self._execute_command(cmd, env=exec_env)
 
     async def list_archive_contents(
         self,
