@@ -1,4 +1,9 @@
+from datetime import datetime, timezone
+from unittest.mock import patch
+
 from app.utils.archive_names import sanitize_archive_component, build_archive_name
+
+_FROZEN_UTC = datetime(2026, 1, 2, 3, 4, 5, 678000, tzinfo=timezone.utc)
 
 
 # ==========================================
@@ -191,3 +196,53 @@ class TestBuildArchiveName:
             stable_series=True,
         )
         assert result == "nightly-plan-primary-repo"
+
+
+class TestUtcnowPlaceholder:
+    def test_utcnow_expands_to_the_exact_utc_instant(self):
+        # Frozen clock: assert the exact value, not just its shape - a
+        # local-clock implementation would produce a different string.
+        with patch("app.utils.archive_names.datetime") as mock_dt:
+            mock_dt.now.return_value = _FROZEN_UTC
+            result = build_archive_name(
+                job_name="my job",
+                repo_name=None,
+                template="{job_name}-{utcnow}",
+                timestamp="2025-01-01T12:00:00",
+            )
+        # A regression to datetime.now() without timezone.utc must not pass.
+        mock_dt.now.assert_called_once_with(timezone.utc)
+        assert result == "my-job-2026-01-02T03:04:05.678"
+
+    def test_utcnow_and_now_can_coexist(self):
+        with patch("app.utils.archive_names.datetime") as mock_dt:
+            mock_dt.now.return_value = _FROZEN_UTC
+            result = build_archive_name(
+                job_name="job",
+                repo_name=None,
+                template="{now}-vs-{utcnow}",
+                timestamp="2025-01-01T12:00:00",
+            )
+        mock_dt.now.assert_called_once_with(timezone.utc)
+        assert result == "2025-01-01T12:00:00-vs-2026-01-02T03:04:05.678"
+
+    def test_formatted_utcnow_passes_through_for_borg(self):
+        # {utcnow:%Y-%m-%d} is borg's own placeholder syntax - left for borg
+        # to expand, exactly like formatted {now:...} today.
+        result = build_archive_name(
+            job_name="job",
+            repo_name=None,
+            template="{job_name}-{utcnow:%Y-%m-%d}",
+            timestamp="2025-01-01T12:00:00",
+        )
+        assert result == "job-{utcnow:%Y-%m-%d}"
+
+    def test_stable_series_strips_utcnow(self):
+        result = build_archive_name(
+            job_name="job",
+            repo_name=None,
+            template="{job_name}-{utcnow}",
+            timestamp="2025-01-01T12:00:00",
+            stable_series=True,
+        )
+        assert result == "job"

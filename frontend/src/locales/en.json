@@ -3682,7 +3682,7 @@
   },
   "archiveNameTemplate": {
     "label": "Archive Name Template",
-    "hint": "Customize archive naming. Available placeholders: {job_name}, {now}, {date}, {time}, {timestamp}",
+    "hint": "Customize archive naming. Available placeholders: {job_name}, {now}, {utcnow}, {date}, {time}, {timestamp}. {now}, {date} and {time} use the creating machine's local time, {utcnow} uses UTC, and {timestamp} is Unix time. The preview uses your browser's clock.",
     "preview": "Preview:"
   },
   "remoteMachineCard": {

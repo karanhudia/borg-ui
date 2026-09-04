@@ -3682,7 +3682,7 @@
   },
   "archiveNameTemplate": {
     "label": "Plantilla de nombre de archivo",
-    "hint": "Personaliza la nomenclatura del archivo. Marcadores disponibles: {job_name}, {now}, {date}, {time}, {timestamp}",
+    "hint": "Personaliza la nomenclatura del archivo. Marcadores disponibles: {job_name}, {now}, {utcnow}, {date}, {time}, {timestamp}. {now}, {date} y {time} usan la hora local de la máquina que crea el archivo, {utcnow} usa UTC y {timestamp} es tiempo Unix. La vista previa usa el reloj del navegador.",
     "preview": "Vista previa:"
   },
   "remoteMachineCard": {

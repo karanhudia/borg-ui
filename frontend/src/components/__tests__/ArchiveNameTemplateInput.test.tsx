@@ -1,3 +1,8 @@
+// Pin a non-UTC, DST-free zone (UTC+14) before anything touches Date: the
+// UTC assertions below must fail for a local-clock implementation even when
+// the test runner itself happens to run in UTC.
+process.env.TZ = 'Pacific/Kiritimati'
+
 import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 import ArchiveNameTemplateInput from '../ArchiveNameTemplateInput'
@@ -30,7 +35,9 @@ describe('ArchiveNameTemplateInput', () => {
     render(<ArchiveNameTemplateInput {...defaultProps} />)
 
     expect(
-      screen.getByText(/Available placeholders: {job_name}, {now}, {date}, {time}, {timestamp}/i)
+      screen.getByText(
+        /Available placeholders: {job_name}, {now}, {utcnow}, {date}, {time}, {timestamp}/i
+      )
     ).toBeInTheDocument()
   })
 
@@ -77,8 +84,8 @@ describe('ArchiveNameTemplateInput', () => {
   it('generates preview with time placeholder', () => {
     render(<ArchiveNameTemplateInput value="{time}" onChange={vi.fn()} />)
 
-    // Time format should be HH-MM-SS
-    const preview = screen.getByText(/\d{2}-\d{2}-\d{2}/)
+    // Time format should be HH:MM:SS, as the backend produces it
+    const preview = screen.getByText(/\d{2}:\d{2}:\d{2}/)
     expect(preview).toBeInTheDocument()
   })
 
@@ -93,9 +100,25 @@ describe('ArchiveNameTemplateInput', () => {
   it('generates preview with now placeholder', () => {
     render(<ArchiveNameTemplateInput value="{now}" onChange={vi.fn()} />)
 
-    // Now format should be ISO string with replacements
-    const preview = screen.getByText(/\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}/)
+    // Now format mirrors the backend: ISO with milliseconds, local time
+    const preview = screen.getByText(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}/)
     expect(preview).toBeInTheDocument()
+  })
+
+  it('generates preview with utcnow placeholder', () => {
+    // Frozen clock plus the module-level non-UTC TZ pin: the exact-value
+    // assertion fails for a local-clock implementation (17:04 local there).
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-01-02T03:04:05.678Z'))
+    try {
+      render(<ArchiveNameTemplateInput value="{utcnow}" onChange={vi.fn()} />)
+
+      const preview = screen.getByText(/2026-01-02T03:04:05\.678/)
+      expect(preview).toBeInTheDocument()
+      expect(preview.textContent).not.toContain('{utcnow}')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('generates preview with multiple placeholders', () => {
@@ -107,7 +130,7 @@ describe('ArchiveNameTemplateInput', () => {
       />
     )
 
-    const preview = screen.getByText(/test-job-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}/)
+    const preview = screen.getByText(/test-job-\d{4}-\d{2}-\d{2}-\d{2}:\d{2}:\d{2}/)
     expect(preview).toBeInTheDocument()
   })
 

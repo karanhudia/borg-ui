@@ -3685,7 +3685,7 @@
   },
   "archiveNameTemplate": {
     "label": "Archivnamen-Vorlage",
-    "hint": "Archivbenennung anpassen. Verfügbare Platzhalter: {job_name}, {now}, {date}, {time}, {timestamp}",
+    "hint": "Archivbenennung anpassen. Verfügbare Platzhalter: {job_name}, {now}, {utcnow}, {date}, {time}, {timestamp}. {now}, {date} und {time} verwenden die lokale Zeit der erstellenden Maschine, {utcnow} verwendet UTC, {timestamp} ist Unix-Zeit. Die Vorschau verwendet die Browser-Uhr.",
     "preview": "Vorschau:"
   },
   "remoteMachineCard": {

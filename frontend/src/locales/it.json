@@ -3685,7 +3685,7 @@
   },
   "archiveNameTemplate": {
     "label": "Template Nome Archivio",
-    "hint": "Personalizza la denominazione dell'archivio. Segnaposto disponibili: {job_name}, {now}, {date}, {time}, {timestamp}",
+    "hint": "Personalizza la denominazione dell'archivio. Segnaposto disponibili: {job_name}, {now}, {utcnow}, {date}, {time}, {timestamp}. {now}, {date} e {time} usano l'ora locale della macchina che crea l'archivio, {utcnow} usa UTC e {timestamp} è tempo Unix. L'anteprima usa l'orologio del browser.",
     "preview": "Anteprima:"
   },
   "remoteMachineCard": {
