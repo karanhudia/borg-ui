@@ -3291,7 +3291,13 @@
       "resume": "Riprendi",
       "rebuildNeedsRepository": "Scegli un repository dalla sua scheda per ricostruirlo.",
       "never": "Mai",
-      "syncing": "Sincronizzazione"
+      "syncing": "Sincronizzazione",
+      "rebuildMenu": "Ricostruisci…",
+      "pauseFailed": "Impossibile modificare lo stato della coda in background.",
+      "openTrack": "Apri la traccia di esecuzione di {{repository}}",
+      "rebuildFailed": "Non è stato possibile avviare la ricostruzione.",
+      "queueFailed": "Impossibile caricare la coda in background.",
+      "pauseAdminOnly": "Solo gli amministratori possono mettere in pausa il lavoro in background."
     },
     "status": {
       "queued": "In coda",
@@ -3318,6 +3324,14 @@
       "archive_sync": "sincronizzazione archivio",
       "history_index": "indice cronologia",
       "history_merge": "unione cronologia"
+    },
+    "strip": {
+      "backup": "Backup",
+      "check": "Verifica",
+      "prune": "Sfoltimento",
+      "compact": "Compattazione",
+      "index": "Indice",
+      "mirror": "Mirror"
     }
   },
   "notifications": {

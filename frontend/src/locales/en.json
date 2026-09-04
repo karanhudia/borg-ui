@@ -3291,7 +3291,13 @@
       "resume": "Resume",
       "rebuildNeedsRepository": "Choose a repository from its card to rebuild.",
       "never": "Never",
-      "syncing": "Syncing"
+      "syncing": "Syncing",
+      "rebuildMenu": "Rebuild…",
+      "pauseFailed": "Could not change the background queue state.",
+      "openTrack": "Open the run track for {{repository}}",
+      "rebuildFailed": "The rebuild could not be started.",
+      "queueFailed": "The background queue could not be loaded.",
+      "pauseAdminOnly": "Only administrators can pause background work."
     },
     "status": {
       "queued": "Queued",
@@ -3318,6 +3324,14 @@
       "archive_sync": "archive sync",
       "history_index": "history index",
       "history_merge": "history merge"
+    },
+    "strip": {
+      "backup": "Backup",
+      "check": "Check",
+      "prune": "Prune",
+      "compact": "Compact",
+      "index": "Index",
+      "mirror": "Mirror"
     }
   },
   "notifications": {

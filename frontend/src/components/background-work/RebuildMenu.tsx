@@ -22,7 +22,7 @@ export default function RebuildMenu({ onSelect }: RebuildMenuProps) {
         variant="outlined"
         size="small"
       >
-        {t('operations.background.rebuildFrom').replace(' from', '…')}
+        {t('operations.background.rebuildMenu')}
       </Button>
       <Menu anchorEl={anchorEl} open={!!anchorEl} onClose={() => setAnchorEl(null)}>
         {STAGES.map((stage) => (

@@ -10,13 +10,15 @@ interface PipelineStageColumnProps {
     operations: OperationItem[]
   }
   workerControl?: ReactNode
-  onRetry?: (operationId: number) => void
+  onRetry?: (operation: OperationItem) => void
+  onOpen?: (operation: OperationItem) => void
 }
 
 export default function PipelineStageColumn({
   stage,
   workerControl,
   onRetry,
+  onOpen,
 }: PipelineStageColumnProps) {
   return (
     <Box sx={{ minWidth: 200, flex: 1 }}>
@@ -25,7 +27,7 @@ export default function PipelineStageColumn({
         <Chip size="small" label={stage.operations.length} />
       </Box>
       {stage.operations.map((op) => (
-        <PipelineRepositoryCard key={op.id} operation={op} onRetry={onRetry} />
+        <PipelineRepositoryCard key={op.id} operation={op} onRetry={onRetry} onOpen={onOpen} />
       ))}
       {workerControl}
     </Box>

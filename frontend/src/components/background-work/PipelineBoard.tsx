@@ -1,14 +1,21 @@
-import { useCallback, useMemo } from 'react'
-import { Box, Stack, Typography } from '@mui/material'
+import { useCallback, useMemo, useState } from 'react'
+import { Alert, Box, Stack, Typography } from '@mui/material'
 import { ListChecks } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import PipelineStageColumn from './PipelineStageColumn'
 import ForegroundLaneRow from './ForegroundLaneRow'
+import RepositoryTrackDialog from './RepositoryTrackDialog'
 import EmptyStateCard from '../EmptyStateCard'
-import { operationsAPI } from '../../services/api'
+import { retryStageFor } from './retryStage'
+import { archivesAPI, operationsAPI } from '../../services/api'
 import { useOperationEvents } from '../../hooks/useOperationEvents'
-import type { OperationItem, OperationProgressEvent, QueueResponse } from '../../types/operations'
+import type {
+  OperationItem,
+  OperationProgressEvent,
+  QueueResponse,
+  RebuildStage,
+} from '../../types/operations'
 
 const QUEUE_KEY = ['operations-queue'] as const
 
@@ -31,7 +38,8 @@ const FOREGROUND_CATEGORIES = new Set(['backup', 'restore', 'maintenance'])
 export default function PipelineBoard() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const { data, isLoading } = useQuery({
+  const [trackRepository, setTrackRepository] = useState<{ id: number; name: string } | null>(null)
+  const { data, isLoading, isError } = useQuery({
     queryKey: QUEUE_KEY,
     queryFn: () => operationsAPI.getQueue().then((r) => r.data),
     refetchInterval: 15000,
@@ -41,16 +49,34 @@ export default function PipelineBoard() {
     (updated: OperationItem) => {
       queryClient.setQueryData<QueueResponse | undefined>(QUEUE_KEY, (current) => {
         if (!current) return current
+        const known = current.repositories.some(
+          (repo) =>
+            repo.repository_id === updated.repository_id ||
+            repo.operations.some((op) => op.id === updated.id)
+        )
+        const repositories = current.repositories.map((repo) => ({
+          ...repo,
+          operations: repo.operations.some((op) => op.id === updated.id)
+            ? repo.operations.map((op) => (op.id === updated.id ? updated : op))
+            : repo.repository_id === updated.repository_id
+              ? [...repo.operations, updated]
+              : repo.operations,
+        }))
+        // The first operation for a repository the cache has never seen would
+        // otherwise stay invisible until the next refetch.
         return {
           ...current,
-          repositories: current.repositories.map((repo) => ({
-            ...repo,
-            operations: repo.operations.some((op) => op.id === updated.id)
-              ? repo.operations.map((op) => (op.id === updated.id ? updated : op))
-              : repo.repository_id === updated.repository_id
-                ? [...repo.operations, updated]
-                : repo.operations,
-          })),
+          repositories: known
+            ? repositories
+            : [
+                ...repositories,
+                {
+                  repository_id: updated.repository_id,
+                  repository_name: updated.repository ?? 'System',
+                  lane_busy: false,
+                  operations: [updated],
+                },
+              ],
         }
       })
     },
@@ -88,14 +114,34 @@ export default function PipelineBoard() {
 
   const readyOperations = allOperations.filter((op) => TERMINAL_STATUSES.has(op.status))
 
-  const handleRetry = useCallback((_operationId: number) => {
-    // Retry is a rebuild-from-stage action owned by RebuildMenu (Task 8); a
-    // per-card retry re-enqueues the same kind at manual priority via the
-    // rebuild route, wired in Task 9 where the repository id is available
-    // from the queue row.
+  const retryMutation = useMutation({
+    mutationFn: ({ repositoryId, stage }: { repositoryId: number; stage: RebuildStage }) =>
+      archivesAPI.rebuild(repositoryId, stage),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: QUEUE_KEY }),
+  })
+
+  const handleRetry = useCallback(
+    (operation: OperationItem) => {
+      const stage = retryStageFor(operation)
+      if (!stage || operation.repository_id == null) return
+      retryMutation.mutate({ repositoryId: operation.repository_id, stage })
+    },
+    [retryMutation]
+  )
+
+  const handleOpen = useCallback((operation: OperationItem) => {
+    if (operation.repository_id == null) return
+    setTrackRepository({
+      id: operation.repository_id,
+      name: operation.repository ?? String(operation.repository_id),
+    })
   }, [])
 
-  if (!isLoading && allOperations.length === 0) {
+  if (isError) {
+    return <Alert severity="error">{t('operations.background.queueFailed')}</Alert>
+  }
+
+  if (!isLoading && data && allOperations.length === 0) {
     return (
       <EmptyStateCard
         icon={<ListChecks size={48} />}
@@ -135,6 +181,7 @@ export default function PipelineBoard() {
               ) : undefined
             }
             onRetry={handleRetry}
+            onOpen={handleOpen}
           />
         ))}
         <PipelineStageColumn
@@ -143,8 +190,21 @@ export default function PipelineBoard() {
             label: t('operations.background.stage.ready'),
             operations: readyOperations,
           }}
+          // Failed rows are terminal, so they land here rather than in a
+          // stage column - this is the only place the retry control renders.
+          onRetry={handleRetry}
+          onOpen={handleOpen}
         />
       </Stack>
+      {trackRepository && (
+        <RepositoryTrackDialog
+          open
+          onClose={() => setTrackRepository(null)}
+          repositoryId={trackRepository.id}
+          repositoryName={trackRepository.name}
+          operations={allOperations.filter((op) => op.repository_id === trackRepository.id)}
+        />
+      )}
     </Box>
   )
 }

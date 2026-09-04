@@ -58,11 +58,28 @@ describe('PipelineRepositoryCard', () => {
       />
     )
     fireEvent.click(screen.getByRole('button', { name: /retry/i }))
-    expect(onRetry).toHaveBeenCalledWith(1)
+    expect(onRetry).toHaveBeenCalledWith(expect.objectContaining({ id: 1, kind: 'archive_sync' }))
   })
 
   it('renders no retry action for a running operation', () => {
     render(<PipelineRepositoryCard operation={baseOp} onRetry={vi.fn()} />)
     expect(screen.queryByRole('button', { name: /retry/i })).not.toBeInTheDocument()
+  })
+
+  it('renders no retry action for a kind with no rebuild stage', () => {
+    render(
+      <PipelineRepositoryCard
+        operation={{ ...baseOp, kind: 'import_connect', category: 'import', status: 'failed' }}
+        onRetry={vi.fn()}
+      />
+    )
+    expect(screen.queryByRole('button', { name: /retry/i })).not.toBeInTheDocument()
+  })
+
+  it('opens the run track when the card is activated', () => {
+    const onOpen = vi.fn()
+    render(<PipelineRepositoryCard operation={baseOp} onOpen={onOpen} />)
+    fireEvent.click(screen.getByRole('button', { name: /nas/i }))
+    expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }))
   })
 })

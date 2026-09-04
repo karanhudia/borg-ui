@@ -1,14 +1,17 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import PipelineBoard from '../PipelineBoard'
-import { operationsAPI } from '../../../services/api'
+import { archivesAPI, operationsAPI } from '../../../services/api'
 
 vi.mock('../../../services/api', () => ({
   operationsAPI: {
     getQueue: vi.fn(),
     cancel: vi.fn(),
+  },
+  archivesAPI: {
+    rebuild: vi.fn(),
   },
 }))
 
@@ -130,5 +133,57 @@ describe('PipelineBoard', () => {
     })
     renderBoard()
     await waitFor(() => expect(screen.getByText(/nothing is running/i)).toBeInTheDocument())
+  })
+
+  it('retries a failed stage through the rebuild route', async () => {
+    ;(operationsAPI.getQueue as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: {
+        repositories: [
+          {
+            repository_id: 5,
+            repository_name: 'nas',
+            lane_busy: false,
+            operations: [
+              queueOp({ id: 9, repository_id: 5, kind: 'archive_sync', status: 'failed' }),
+            ],
+          },
+        ],
+        limits: { index_workers: 2 },
+        paused: false,
+      },
+    })
+    ;(archivesAPI.rebuild as ReturnType<typeof vi.fn>).mockResolvedValue({ data: {} })
+    renderBoard()
+
+    const retry = await screen.findByRole('button', { name: /retry/i })
+    fireEvent.click(retry)
+    await waitFor(() => expect(archivesAPI.rebuild).toHaveBeenCalledWith(5, 'archives'))
+  })
+
+  it('opens the repository track dialog from a card', async () => {
+    ;(operationsAPI.getQueue as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: {
+        repositories: [
+          {
+            repository_id: 5,
+            repository_name: 'nas',
+            lane_busy: false,
+            operations: [queueOp({ id: 11, repository_id: 5, kind: 'stats', status: 'queued' })],
+          },
+        ],
+        limits: { index_workers: 2 },
+        paused: false,
+      },
+    })
+    renderBoard()
+
+    fireEvent.click(await screen.findByRole('button', { name: /nas/i }))
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+  })
+
+  it('reports a failed queue fetch instead of showing an empty board', async () => {
+    ;(operationsAPI.getQueue as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('boom'))
+    renderBoard()
+    expect(await screen.findByText(/could not be loaded/i)).toBeInTheDocument()
   })
 })

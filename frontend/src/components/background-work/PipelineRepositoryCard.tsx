@@ -10,26 +10,50 @@ import {
 import { RotateCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatElapsedTime } from '../../utils/dateUtils'
+import { retryStageFor } from './retryStage'
 import type { OperationItem } from '../../types/operations'
 
 interface PipelineRepositoryCardProps {
   operation: OperationItem
-  onRetry?: (operationId: number) => void
+  onRetry?: (operation: OperationItem) => void
+  onOpen?: (operation: OperationItem) => void
 }
 
 export default function PipelineRepositoryCard({
   operation,
   onRetry,
+  onOpen,
 }: PipelineRepositoryCardProps) {
   const { t } = useTranslation()
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
   const isFailed = operation.status === 'failed'
+  const retryable = isFailed && retryStageFor(operation) !== null
   const isRunning = operation.status === 'running'
+  const openable = onOpen != null && operation.repository_id != null
 
   return (
     <Box
+      role={openable ? 'button' : undefined}
+      tabIndex={openable ? 0 : undefined}
+      aria-label={
+        openable
+          ? t('operations.background.openTrack', { repository: operation.repository })
+          : undefined
+      }
+      onClick={openable ? () => onOpen(operation) : undefined}
+      onKeyDown={
+        openable
+          ? (event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                onOpen(operation)
+              }
+            }
+          : undefined
+      }
       sx={{
+        cursor: openable ? 'pointer' : 'default',
         border: '1px solid',
         borderColor: isFailed
           ? alpha(theme.palette.error.main, 0.4)
@@ -46,12 +70,15 @@ export default function PipelineRepositoryCard({
         <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
           {operation.repository ?? t('operations.background.systemRow')}
         </Typography>
-        {isFailed && onRetry && (
+        {retryable && onRetry && (
           <Tooltip title={t('operations.background.retry')}>
             <IconButton
               size="small"
               aria-label={t('operations.background.retry')}
-              onClick={() => onRetry(operation.id)}
+              onClick={(event) => {
+                event.stopPropagation()
+                onRetry(operation)
+              }}
             >
               <RotateCw size={14} />
             </IconButton>

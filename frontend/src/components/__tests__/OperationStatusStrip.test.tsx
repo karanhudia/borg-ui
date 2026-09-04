@@ -80,6 +80,56 @@ describe('OperationStatusStrip', () => {
     )
   })
 
+  it('labels maintenance cells distinctly instead of collapsing them', async () => {
+    ;(archivesAPI.getStatusStrip as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: {
+        cells: ['check', 'prune', 'compact'].map((cell) => ({
+          cell,
+          status: 'completed',
+          completed_at: '2026-09-04T00:00:00Z',
+          age_seconds: 7200,
+          threshold_days: 30,
+          overdue: false,
+          running: false,
+          source: 'operations',
+        })),
+        overdue_available: true,
+      },
+    })
+    renderStrip()
+    await waitFor(() => expect(screen.getByText('Check')).toBeInTheDocument())
+    expect(screen.getByText('Prune')).toBeInTheDocument()
+    expect(screen.getByText('Compact')).toBeInTheDocument()
+    expect(screen.queryByText('Maintenance')).not.toBeInTheDocument()
+  })
+
+  it('marks a failed cell as failed rather than done', async () => {
+    ;(archivesAPI.getStatusStrip as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: {
+        cells: [
+          {
+            cell: 'backup',
+            status: 'failed',
+            completed_at: '2026-09-04T00:00:00Z',
+            age_seconds: 7200,
+            threshold_days: 2,
+            overdue: false,
+            running: false,
+            source: 'operations',
+          },
+        ],
+        overdue_available: true,
+      },
+    })
+    renderStrip()
+    await waitFor(() =>
+      expect(screen.getByTestId('status-strip-cell-backup')).toHaveAttribute(
+        'data-status',
+        'failed'
+      )
+    )
+  })
+
   it('omits the mirror cell when the backend omits it', async () => {
     ;(archivesAPI.getStatusStrip as ReturnType<typeof vi.fn>).mockResolvedValue({
       data: {

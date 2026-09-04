@@ -211,6 +211,20 @@ export const formatTimeRange = (
 }
 
 /**
+ * Parse a timestamp coming from the backend.
+ *
+ * Datetimes are stored naive-UTC (SQLite) and some routes emit them without
+ * an offset, which `new Date()` reads as *local* time per the ES spec - a
+ * viewer at UTC+5:30 would see a backup finished a minute ago as "in about 5
+ * hours". Treat an offset-less value as UTC, and leave anything that already
+ * carries an offset alone.
+ */
+export const parseBackendDate = (value: string): Date => {
+  const hasZone = /(?:Z|[+-]\d{2}:?\d{2})$/.test(value)
+  return new Date(hasZone ? value : `${value}Z`)
+}
+
+/**
  * Calculate elapsed time from a start date to now
  * Example: "2025-11-09T14:56:53Z" -> "Running for 2 hours"
  */
@@ -218,7 +232,7 @@ export const formatElapsedTime = (startTime: string | null | undefined): string 
   if (!startTime) return ''
 
   try {
-    const start = new Date(startTime)
+    const start = parseBackendDate(startTime)
     const durationMs = Date.now() - start.getTime()
     const durationSec = Math.max(0, Math.floor(durationMs / 1000))
 

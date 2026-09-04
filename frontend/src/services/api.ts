@@ -718,7 +718,14 @@ export const operationsAPI = {
     since?: string
     limit?: number
     cursor?: number
-  }) => api.get<{ items: OperationItem[]; next_cursor: number | null }>('/operations/', { params }),
+  }) =>
+    api.get<{ items: OperationItem[]; next_cursor: number | null }>('/operations/', {
+      params,
+      // FastAPI's `Query(list[str])` reads repeated keys (`kind=a&kind=b`);
+      // axios's default serializer would emit `kind[]=a`, which the route
+      // ignores, silently returning unfiltered results.
+      paramsSerializer: { indexes: null },
+    }),
   pause: () => api.post('/operations/pause'),
   resume: () => api.post('/operations/resume'),
   updateLimits: (indexWorkers: number) =>

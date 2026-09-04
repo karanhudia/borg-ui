@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Box, Typography, Button, Stack, DialogContent, DialogActions } from '@mui/material'
+import { Alert, Box, Typography, Button, Stack, DialogContent, DialogActions } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import ResponsiveDialog from '../shared/ResponsiveDialog'
 import RichSelect from '../shared/RichSelect'
@@ -27,14 +27,21 @@ export default function RepositoryTrackDialog({
   const { t } = useTranslation()
   const [stage, setStage] = useState<RebuildStage>('stats')
   const [submitting, setSubmitting] = useState(false)
+  const [failed, setFailed] = useState(false)
 
   const handleRebuild = async () => {
     setSubmitting(true)
+    setFailed(false)
     try {
       await archivesAPI.rebuild(repositoryId, stage)
+      onClose()
+    } catch {
+      // A rebuild can be refused (repository permissions, or the
+      // `archive_history` plan gate), and closing on failure would read as
+      // success. Keep the dialog open and say so.
+      setFailed(true)
     } finally {
       setSubmitting(false)
-      onClose()
     }
   }
 
@@ -55,6 +62,11 @@ export default function RepositoryTrackDialog({
             </Box>
           ))}
         </Stack>
+        {failed && (
+          <Alert severity="error" sx={{ mt: 1 }}>
+            {t('operations.background.rebuildFailed')}
+          </Alert>
+        )}
         <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 1, pt: 1 }}>
           <RichSelect
             value={stage}

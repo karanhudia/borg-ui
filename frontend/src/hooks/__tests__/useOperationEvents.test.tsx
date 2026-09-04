@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { renderHook } from '@testing-library/react'
+import { act, renderHook } from '@testing-library/react'
 import { useOperationEvents } from '../useOperationEvents'
 
 class FakeEventSource {
@@ -7,6 +7,7 @@ class FakeEventSource {
   onmessage: ((ev: MessageEvent) => void) | null = null
   onerror: (() => void) | null = null
   closed = false
+  readyState = 1
   constructor(public url: string) {
     FakeEventSource.instances.push(this)
   }
@@ -16,18 +17,24 @@ class FakeEventSource {
   emit(data: unknown) {
     this.onmessage?.({ data: JSON.stringify(data) } as MessageEvent)
   }
+  fail() {
+    this.readyState = 2
+    this.onerror?.()
+  }
 }
 
 vi.mock('../../services/authHeaders', () => ({
-  getAccessToken: () => 'test-token',
+  getBackendTargetTokenParams: () => ({ token: 'test-token' }),
 }))
 
 describe('useOperationEvents', () => {
   beforeEach(() => {
     FakeEventSource.instances = []
     vi.stubGlobal('EventSource', FakeEventSource)
+    vi.useFakeTimers()
   })
   afterEach(() => {
+    vi.useRealTimers()
     vi.unstubAllGlobals()
   })
 
@@ -76,5 +83,41 @@ describe('useOperationEvents', () => {
     const { unmount } = renderHook(() => useOperationEvents(vi.fn(), vi.fn()))
     unmount()
     expect(FakeEventSource.instances[0].closed).toBe(true)
+  })
+
+  it('shares one connection across consumers and fans events out to each', () => {
+    const first = vi.fn()
+    const second = vi.fn()
+    const a = renderHook(() => useOperationEvents(first, vi.fn()))
+    const b = renderHook(() => useOperationEvents(second, vi.fn()))
+
+    expect(FakeEventSource.instances).toHaveLength(1)
+
+    const op = { id: 7, status: 'running' }
+    FakeEventSource.instances[0].emit({ type: 'operation.updated', data: op, timestamp: 't' })
+    expect(first).toHaveBeenCalledWith(op)
+    expect(second).toHaveBeenCalledWith(op)
+
+    a.unmount()
+    expect(FakeEventSource.instances[0].closed).toBe(false)
+    b.unmount()
+    expect(FakeEventSource.instances[0].closed).toBe(true)
+  })
+
+  it('reopens the stream after the connection dies', () => {
+    const { unmount } = renderHook(() => useOperationEvents(vi.fn(), vi.fn()))
+    expect(FakeEventSource.instances).toHaveLength(1)
+
+    FakeEventSource.instances[0].fail()
+    expect(FakeEventSource.instances[0].closed).toBe(true)
+
+    act(() => {
+      vi.advanceTimersByTime(5000)
+    })
+    expect(FakeEventSource.instances).toHaveLength(2)
+    expect(FakeEventSource.instances[1].closed).toBe(false)
+
+    unmount()
+    expect(FakeEventSource.instances[1].closed).toBe(true)
   })
 })
