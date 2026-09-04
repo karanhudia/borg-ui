@@ -1525,10 +1525,13 @@ class ArchiveChange(Base):
     owner_changed = Column(Boolean, nullable=False, default=False)
     summary_count = Column(Integer, nullable=True)
 
-    __table_args__ = (
-        Index("ix_archive_changes_archive_path", "archive_id", "path"),
-        Index("ix_archive_changes_path", "path"),
-    )
+    # No B-tree index on the unbounded `path` Text column: PostgreSQL caps a
+    # B-tree entry at ~1/3 of a page (~2.7 KB, after compressing the value), so
+    # a long archived path that does not compress well makes the INSERT of its
+    # own change row fail. archive_id keeps its own index
+    # (Column index=True) for the per-archive reads; the repository-wide
+    # "which archives touched this exact path" lookup drives off that FK index
+    # and filters path, which stays correct without a dedicated path index.
 
 
 class SystemSettings(Base):
