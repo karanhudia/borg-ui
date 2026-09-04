@@ -963,6 +963,26 @@
       "absent": "No está en la más reciente",
       "empty": "No hay archivos coincidentes",
       "truncated": "Mostrando las primeras {{count}} coincidencias"
+    },
+    "detail": {
+      "tabChanges": "Cambios",
+      "tabChangesWithCounts": "Cambios (+{{added}} −{{removed}} ~{{modified}})",
+      "tabFiles": "Archivos",
+      "tabInfo": "Info",
+      "series": "Serie",
+      "started": "Iniciado",
+      "duration": "Duración",
+      "originalSize": "Tamaño original",
+      "compressedSize": "Tamaño comprimido",
+      "deduplicatedSize": "Tamaño deduplicado",
+      "files": "Archivos",
+      "hostname": "Nombre de host",
+      "username": "Nombre de usuario",
+      "comment": "Comentario",
+      "loadFailed": "Este archivo no se pudo cargar.",
+      "restore": "Restaurar",
+      "mount": "Montar",
+      "delete": "Eliminar"
     }
   },
   "restore": {

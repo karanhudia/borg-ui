@@ -963,6 +963,26 @@
       "absent": "Nicht in der neuesten",
       "empty": "Keine passenden Dateien",
       "truncated": "Zeigt die ersten {{count}} Treffer"
+    },
+    "detail": {
+      "tabChanges": "Änderungen",
+      "tabChangesWithCounts": "Änderungen (+{{added}} −{{removed}} ~{{modified}})",
+      "tabFiles": "Dateien",
+      "tabInfo": "Info",
+      "series": "Serie",
+      "started": "Gestartet",
+      "duration": "Dauer",
+      "originalSize": "Originalgröße",
+      "compressedSize": "Komprimierte Größe",
+      "deduplicatedSize": "Deduplizierte Größe",
+      "files": "Dateien",
+      "hostname": "Hostname",
+      "username": "Benutzername",
+      "comment": "Kommentar",
+      "loadFailed": "Dieses Archiv konnte nicht geladen werden.",
+      "restore": "Wiederherstellen",
+      "mount": "Einhängen",
+      "delete": "Löschen"
     }
   },
   "restore": {

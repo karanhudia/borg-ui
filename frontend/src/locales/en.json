@@ -963,6 +963,26 @@
       "absent": "Not in latest",
       "empty": "No matching files",
       "truncated": "Showing the first {{count}} matches"
+    },
+    "detail": {
+      "tabChanges": "Changes",
+      "tabChangesWithCounts": "Changes (+{{added}} −{{removed}} ~{{modified}})",
+      "tabFiles": "Files",
+      "tabInfo": "Info",
+      "series": "Series",
+      "started": "Started",
+      "duration": "Duration",
+      "originalSize": "Original size",
+      "compressedSize": "Compressed size",
+      "deduplicatedSize": "Deduplicated size",
+      "files": "Files",
+      "hostname": "Hostname",
+      "username": "Username",
+      "comment": "Comment",
+      "loadFailed": "This archive could not be loaded.",
+      "restore": "Restore",
+      "mount": "Mount",
+      "delete": "Delete"
     }
   },
   "restore": {

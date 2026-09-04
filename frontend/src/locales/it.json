@@ -963,6 +963,26 @@
       "absent": "Non nell'ultimo",
       "empty": "Nessun file corrispondente",
       "truncated": "Mostrando i primi {{count}} risultati"
+    },
+    "detail": {
+      "tabChanges": "Modifiche",
+      "tabChangesWithCounts": "Modifiche (+{{added}} −{{removed}} ~{{modified}})",
+      "tabFiles": "File",
+      "tabInfo": "Info",
+      "series": "Serie",
+      "started": "Avviato",
+      "duration": "Durata",
+      "originalSize": "Dimensione originale",
+      "compressedSize": "Dimensione compressa",
+      "deduplicatedSize": "Dimensione deduplicata",
+      "files": "File",
+      "hostname": "Hostname",
+      "username": "Nome utente",
+      "comment": "Commento",
+      "loadFailed": "Questo archivio non può essere caricato.",
+      "restore": "Ripristina",
+      "mount": "Monta",
+      "delete": "Elimina"
     }
   },
   "restore": {
