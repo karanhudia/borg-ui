@@ -25,6 +25,14 @@ import type {
   RcloneStorage,
   SourceLocation,
 } from '../types'
+import type {
+  OperationItem,
+  QueueResponse,
+  QueueLimits,
+  StatusStripResponse,
+  RebuildStage,
+  RebuildResponse,
+} from '../types/operations'
 
 export type AuthTransportMode = 'jwt' | 'proxy' | 'insecure-no-auth'
 
@@ -692,6 +700,30 @@ export const archivesAPI = {
         file_path: filePath,
       })
     ),
+  getStatusStrip: (repositoryId: number) =>
+    api.get<StatusStripResponse>(`/repositories/${repositoryId}/status-strip`),
+  rebuild: (repositoryId: number, from: RebuildStage) =>
+    api.post<RebuildResponse>(`/repositories/${repositoryId}/rebuild`, { from }),
+}
+
+export const operationsAPI = {
+  getQueue: () => api.get<QueueResponse>('/operations/queue'),
+  list: (params?: {
+    repository_id?: number
+    category?: string[]
+    kind?: string[]
+    status?: string[]
+    trigger?: string[]
+    run_id?: string
+    since?: string
+    limit?: number
+    cursor?: number
+  }) => api.get<{ items: OperationItem[]; next_cursor: number | null }>('/operations/', { params }),
+  pause: () => api.post('/operations/pause'),
+  resume: () => api.post('/operations/resume'),
+  updateLimits: (indexWorkers: number) =>
+    api.put<QueueLimits>('/operations/limits', { index_workers: indexWorkers }),
+  cancel: (operationId: number) => api.post(`/operations/${operationId}/cancel`),
 }
 
 export const restoreAPI = {
