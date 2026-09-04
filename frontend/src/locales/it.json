@@ -998,6 +998,25 @@
       "rebuildLink": "Ricostruisci l'indice della cronologia",
       "empty": "Nessuna modifica tra questi archivi.",
       "showMore": "Mostra altro"
+    },
+    "files": {
+      "size": "Dimensione",
+      "modified": "Modificato",
+      "owner": "Proprietario",
+      "permissions": "Permessi",
+      "restore": "Ripristina",
+      "download": "Scarica",
+      "history": "Cronologia",
+      "firstSeen": "Visto per la prima volta",
+      "unchanged": "Invariato",
+      "changed": "Modificato",
+      "restoreThis": "Ripristina questo",
+      "notPresent": "Non presente in {{count}} archivi precedenti",
+      "selected": "{{count}} selezionati ({{size}})",
+      "restoreSelection": "Ripristina selezione",
+      "searchInArchive": "Cerca in questo archivio",
+      "folderMetadata": "Cartella",
+      "noSelection": "Seleziona un file o una cartella per vedere i dettagli."
     }
   },
   "restore": {

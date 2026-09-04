@@ -998,6 +998,25 @@
       "rebuildLink": "Verlaufsindex neu aufbauen",
       "empty": "Keine Änderungen zwischen diesen Archiven.",
       "showMore": "Mehr anzeigen"
+    },
+    "files": {
+      "size": "Größe",
+      "modified": "Geändert",
+      "owner": "Besitzer",
+      "permissions": "Berechtigungen",
+      "restore": "Wiederherstellen",
+      "download": "Herunterladen",
+      "history": "Verlauf",
+      "firstSeen": "Zuerst gesehen",
+      "unchanged": "Unverändert",
+      "changed": "Geändert",
+      "restoreThis": "Dies wiederherstellen",
+      "notPresent": "Nicht vorhanden in {{count}} älteren Archiven",
+      "selected": "{{count}} ausgewählt ({{size}})",
+      "restoreSelection": "Auswahl wiederherstellen",
+      "searchInArchive": "In diesem Archiv suchen",
+      "folderMetadata": "Ordner",
+      "noSelection": "Wähle eine Datei oder einen Ordner, um Details zu sehen."
     }
   },
   "restore": {

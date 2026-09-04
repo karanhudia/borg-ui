@@ -998,6 +998,25 @@
       "rebuildLink": "Reconstruir el índice de historial",
       "empty": "No hay cambios entre estos archivos.",
       "showMore": "Mostrar más"
+    },
+    "files": {
+      "size": "Tamaño",
+      "modified": "Modificado",
+      "owner": "Propietario",
+      "permissions": "Permisos",
+      "restore": "Restaurar",
+      "download": "Descargar",
+      "history": "Historial",
+      "firstSeen": "Visto por primera vez",
+      "unchanged": "Sin cambios",
+      "changed": "Cambiado",
+      "restoreThis": "Restaurar esto",
+      "notPresent": "No presente en {{count}} archivos anteriores",
+      "selected": "{{count}} seleccionados ({{size}})",
+      "restoreSelection": "Restaurar selección",
+      "searchInArchive": "Buscar en este archivo",
+      "folderMetadata": "Carpeta",
+      "noSelection": "Selecciona un archivo o carpeta para ver los detalles."
     }
   },
   "restore": {

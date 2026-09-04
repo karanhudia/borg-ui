@@ -1,0 +1,77 @@
+import { describe, it, expect, vi } from 'vitest'
+import { screen, fireEvent } from '@testing-library/react'
+import { renderWithProviders } from '../../../test/test-utils'
+import ArchiveFileDetailsPane from '../ArchiveFileDetailsPane'
+
+vi.mock('../../../hooks/usePlan', () => ({
+  usePlan: () => ({
+    plan: 'community',
+    isLoading: false,
+    isPro: false,
+    isFree: true,
+    can: () => true,
+  }),
+}))
+
+vi.mock('../../../services/api', () => ({
+  archivesAPI: {
+    getPathHistory: vi.fn(),
+    listStored: vi.fn(),
+  },
+}))
+
+describe('ArchiveFileDetailsPane', () => {
+  it('shows folder metadata when selectedPath is null', () => {
+    renderWithProviders(
+      <ArchiveFileDetailsPane
+        repositoryId={7}
+        selectedPath={null}
+        selectedEntry={null}
+        onRestore={vi.fn()}
+        onDownload={vi.fn()}
+      />
+    )
+    expect(screen.getByText(/folder/i)).toBeInTheDocument()
+  })
+
+  it('shows file metadata when a file is selected', () => {
+    renderWithProviders(
+      <ArchiveFileDetailsPane
+        repositoryId={7}
+        selectedPath="home/karan/docs/invoices.xlsx"
+        selectedEntry={{
+          name: 'invoices.xlsx',
+          type: 'file',
+          path: 'home/karan/docs/invoices.xlsx',
+          size: 412_000,
+        }}
+        onRestore={vi.fn()}
+        onDownload={vi.fn()}
+      />
+    )
+    expect(screen.getByText('invoices.xlsx')).toBeInTheDocument()
+  })
+
+  it('calls onRestore and onDownload', () => {
+    const onRestore = vi.fn()
+    const onDownload = vi.fn()
+    renderWithProviders(
+      <ArchiveFileDetailsPane
+        repositoryId={7}
+        selectedPath="home/karan/docs/invoices.xlsx"
+        selectedEntry={{
+          name: 'invoices.xlsx',
+          type: 'file',
+          path: 'home/karan/docs/invoices.xlsx',
+          size: 412_000,
+        }}
+        onRestore={onRestore}
+        onDownload={onDownload}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: /^restore$/i }))
+    expect(onRestore).toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: /^download$/i }))
+    expect(onDownload).toHaveBeenCalled()
+  })
+})

@@ -998,6 +998,25 @@
       "rebuildLink": "Rebuild the history index",
       "empty": "No changes between these archives.",
       "showMore": "Show more"
+    },
+    "files": {
+      "size": "Size",
+      "modified": "Modified",
+      "owner": "Owner",
+      "permissions": "Permissions",
+      "restore": "Restore",
+      "download": "Download",
+      "history": "History",
+      "firstSeen": "First seen",
+      "unchanged": "Unchanged",
+      "changed": "Changed",
+      "restoreThis": "Restore this",
+      "notPresent": "Not present in {{count}} older archives",
+      "selected": "{{count}} selected ({{size}})",
+      "restoreSelection": "Restore selection",
+      "searchInArchive": "Search in this archive",
+      "folderMetadata": "Folder",
+      "noSelection": "Select a file or folder to see details."
     }
   },
   "restore": {

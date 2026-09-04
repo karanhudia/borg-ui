@@ -11,6 +11,7 @@ import { translateBackendKey, type BackendDetail } from '../utils/translateBacke
 import { parseBackendDate } from '../utils/dateUtils'
 import ArchiveInfoTab from '../components/archives/ArchiveInfoTab'
 import ArchiveChangesTab from '../components/archives/ArchiveChangesTab'
+import ArchiveFilesTab from '../components/archives/ArchiveFilesTab'
 import DeleteArchiveDialog from '../components/DeleteArchiveDialog'
 import MountArchiveDialog from '../components/MountArchiveDialog'
 import MountSuccessToast from '../components/MountSuccessToast'
@@ -232,7 +233,9 @@ export default function ArchiveDetail() {
       {activeTab === 'changes' && (
         <ArchiveChangesTab repositoryId={repositoryId} archive={archive} />
       )}
-      {activeTab === 'files' && <Box />}
+      {activeTab === 'files' && repository && (
+        <ArchiveFilesTab repositoryId={repositoryId} repository={repository} archive={archive} />
+      )}
       {activeTab === 'info' && <ArchiveInfoTab archive={archive} />}
 
       {repository && legacyArchive && (

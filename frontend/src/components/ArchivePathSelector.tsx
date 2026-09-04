@@ -32,7 +32,7 @@ import type { Archive } from '../types'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import type { RestorePathMetadata } from '../utils/restorePaths'
 
-interface ArchiveItem {
+export interface ArchiveItem {
   name: string
   type: 'file' | 'directory'
   path: string
