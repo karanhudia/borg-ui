@@ -13,7 +13,7 @@ import {
 import { useTheme } from '@mui/material/styles'
 import { X, Check, Sparkles, Clock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { Plan } from '../core/features'
+import { nextPlanAbove, type Plan } from '../core/features'
 import { useAnalytics } from '../hooks/useAnalytics'
 import type { EntitlementInfo } from '../hooks/useSystemInfo'
 import { usePlanContent } from '../hooks/usePlanContent'
@@ -93,13 +93,6 @@ function normalizePlan(plan: Plan | string | null | undefined): Plan {
 }
 
 const PLAN_RANK: Record<Plan, number> = { community: 0, pro: 1, enterprise: 2 }
-
-// The tier directly above the current plan, or null on the top tier.
-function nextPlanAbove(plan: Plan): 'pro' | 'enterprise' | null {
-  if (plan === 'community') return 'pro'
-  if (plan === 'pro') return 'enterprise'
-  return null
-}
 
 export default function PlanInfoDrawer({
   open,

@@ -162,7 +162,9 @@ describe('LicensingTab', () => {
 
     renderWithProviders(<LicensingTab />)
 
-    const buyLink = screen.getByRole('link', { name: /upgrade to pro/i })
+    // The mocked plan is Pro, so the link must sell Enterprise, not Pro again.
+    const buyLink = screen.getByRole('link', { name: /upgrade to enterprise/i })
+    expect(screen.queryByRole('link', { name: /upgrade to pro/i })).not.toBeInTheDocument()
     expect(buyLink).toHaveAttribute('href', BUY_URL)
     buyLink.addEventListener('click', (event) => event.preventDefault())
 
