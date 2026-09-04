@@ -1,10 +1,11 @@
 import { describe, it, expect, vi } from 'vitest'
+import { useEffect } from 'react'
 import { screen, fireEvent } from '@testing-library/react'
 import { renderWithProviders } from '../../../test/test-utils'
 import ArchiveFilesTab from '../ArchiveFilesTab'
 import type { ArchiveDetailResponse } from '../../../types/archives'
 import type { Repository } from '@/types'
-import type { ArchivePathSelectionData } from '../../ArchivePathSelector'
+import type { ArchiveBrowseState, ArchivePathSelectionData } from '../../ArchivePathSelector'
 
 vi.mock('../../../hooks/usePlan', () => ({
   usePlan: () => ({
@@ -23,14 +24,37 @@ vi.mock('../../../services/api', () => ({
   },
 }))
 
-vi.mock('../../ArchivePathSelector', () => ({
-  default: ({
-    data,
-    onChange,
-  }: {
-    data: ArchivePathSelectionData
-    onChange: (data: Partial<ArchivePathSelectionData>) => void
-  }) => (
+const browseItems = [
+  { name: 'docs', type: 'directory' as const, path: 'home/karan/docs' },
+  { name: 'invoices.xlsx', type: 'file' as const, path: 'home/karan/invoices.xlsx' },
+]
+
+function MockArchivePathSelector({
+  data,
+  onChange,
+  onBrowseStateChange,
+}: {
+  data: ArchivePathSelectionData
+  onChange: (data: Partial<ArchivePathSelectionData>) => void
+  onBrowseStateChange?: (state: ArchiveBrowseState) => void
+}) {
+  useEffect(() => {
+    onBrowseStateChange?.({
+      currentPath: 'home/karan',
+      items: browseItems,
+      navigateTo: vi.fn(),
+      activateItem: (item) => {
+        if (item.type === 'file') {
+          onChange({
+            selectedPaths: [...data.selectedPaths, item.path],
+            selectedItems: [...(data.selectedItems || []), { path: item.path, type: item.type }],
+          })
+        }
+      },
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  return (
     <button
       data-testid="archive-path-selector"
       onClick={() =>
@@ -43,7 +67,11 @@ vi.mock('../../ArchivePathSelector', () => ({
         })
       }
     />
-  ),
+  )
+}
+
+vi.mock('../../ArchivePathSelector', () => ({
+  default: MockArchivePathSelector,
 }))
 
 const archive: ArchiveDetailResponse = {
@@ -98,5 +126,47 @@ describe('ArchiveFilesTab', () => {
     )
     fireEvent.click(screen.getByTestId('archive-path-selector'))
     expect(screen.getByText(/1 selected/i)).toBeInTheDocument()
+  })
+
+  describe('keyboard navigation', () => {
+    function renderTab() {
+      const { container } = renderWithProviders(
+        <ArchiveFilesTab repositoryId={7} repository={repository} archive={archive} />
+      )
+      return container.firstChild as HTMLElement
+    }
+
+    it('moves the active row with ArrowDown', () => {
+      const root = renderTab()
+      fireEvent.keyDown(root, { key: 'ArrowDown' })
+      fireEvent.keyDown(root, { key: 'Enter' })
+      expect(screen.getByText(/1 selected/i)).toBeInTheDocument()
+    })
+
+    it('does not intercept Enter while focus is inside a text input', () => {
+      renderTab()
+      const input = document.createElement('input')
+      document.body.appendChild(input)
+      input.focus()
+      fireEvent.keyDown(input, { key: 'ArrowDown' })
+      expect(screen.queryByText(/selected/i)).not.toBeInTheDocument()
+      document.body.removeChild(input)
+    })
+
+    it('opens restore for the selection on "r"', () => {
+      const onRestorePaths = vi.fn()
+      const { container } = renderWithProviders(
+        <ArchiveFilesTab
+          repositoryId={7}
+          repository={repository}
+          archive={archive}
+          onRestorePaths={onRestorePaths}
+        />
+      )
+      const root = container.firstChild as HTMLElement
+      fireEvent.click(screen.getByTestId('archive-path-selector'))
+      fireEvent.keyDown(root, { key: 'r' })
+      expect(onRestorePaths).toHaveBeenCalledWith(['home/karan/docs/invoices.xlsx'])
+    })
   })
 })

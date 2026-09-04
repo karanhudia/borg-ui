@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Box, Button, Stack, Typography, useMediaQuery, useTheme } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import ArchivePathSelector, {
+  type ArchiveBrowseState,
   type ArchiveItem,
   type ArchivePathSelectionData,
 } from '../ArchivePathSelector'
@@ -35,6 +36,8 @@ export default function ArchiveFilesTab({
   })
   const [lastClicked, setLastClicked] = useState<ArchiveItem | null>(null)
   const [detailsOpenMobile, setDetailsOpenMobile] = useState(false)
+  const [browseState, setBrowseState] = useState<ArchiveBrowseState | null>(null)
+  const [activeIndex, setActiveIndex] = useState(0)
 
   const handleSelectionChange = (partial: Partial<ArchivePathSelectionData>) => {
     const nextPaths = partial.selectedPaths ?? selection.selectedPaths
@@ -55,6 +58,39 @@ export default function ArchiveFilesTab({
 
   const archiveRef = getBorgVersion(repository) === 2 ? `aid:${archive.borg_id}` : archive.name
 
+  const isTypingTarget = (target: EventTarget | null) => {
+    const el = target as HTMLElement | null
+    return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')
+  }
+
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if (isTypingTarget(event.target)) return
+    if (!browseState) return
+    const { items, currentPath, navigateTo, activateItem } = browseState
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      setActiveIndex((i) => Math.min(i + 1, Math.max(items.length - 1, 0)))
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      setActiveIndex((i) => Math.max(i - 1, 0))
+    } else if (event.key === 'Enter') {
+      const item = items[activeIndex]
+      if (item) {
+        activateItem(item)
+        if (item.type === 'directory') setActiveIndex(0)
+      }
+    } else if (event.key === 'Backspace') {
+      event.preventDefault()
+      const parts = currentPath.split('/').filter(Boolean)
+      parts.pop()
+      navigateTo(parts.join('/'))
+      setActiveIndex(0)
+    } else if (event.key === 'r' && selectedCount > 0) {
+      onRestorePaths?.(selection.selectedPaths)
+    }
+  }
+
   const detailsPane = (
     <ArchiveFileDetailsPane
       repositoryId={repositoryId}
@@ -68,7 +104,7 @@ export default function ArchiveFilesTab({
   )
 
   return (
-    <Box>
+    <Box onKeyDown={handleKeyDown}>
       <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', md: 'row' } }}>
         <Box sx={{ flex: '1 1 60%' }}>
           <ArchivePathSelector
@@ -76,6 +112,7 @@ export default function ArchiveFilesTab({
             archive={{ id: archive.borg_id, name: archive.name }}
             data={selection}
             onChange={handleSelectionChange}
+            onBrowseStateChange={setBrowseState}
           />
         </Box>
         {!isMobile && <Box sx={{ flex: '1 1 40%' }}>{detailsPane}</Box>}

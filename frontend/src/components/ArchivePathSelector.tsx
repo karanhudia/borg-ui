@@ -61,6 +61,13 @@ export interface ArchivePathSelectionData {
   selectedItems?: RestorePathMetadata[]
 }
 
+export interface ArchiveBrowseState {
+  currentPath: string
+  items: ArchiveItem[]
+  navigateTo: (path: string) => void
+  activateItem: (item: ArchiveItem) => void
+}
+
 interface ArchivePathSelectorProps {
   repository: Repository
   archive: Pick<Archive, 'id' | 'name'>
@@ -69,6 +76,10 @@ interface ArchivePathSelectorProps {
   title?: string
   subtitle?: string
   helpText?: string
+  /** Optional escape hatch reporting the current browse state and imperative
+   *  navigation, so a wrapper (e.g. keyboard shortcuts) can drive this
+   *  component without it becoming a controlled component. */
+  onBrowseStateChange?: (state: ArchiveBrowseState) => void
 }
 
 export default function ArchivePathSelector({
@@ -79,6 +90,7 @@ export default function ArchivePathSelector({
   title,
   subtitle,
   helpText,
+  onBrowseStateChange,
 }: ArchivePathSelectorProps) {
   const { t } = useTranslation()
   const [currentPath, setCurrentPath] = useState<string>('')
@@ -173,6 +185,16 @@ export default function ArchivePathSelector({
   const navigateToPath = (targetPath: string) => {
     setCurrentPath(targetPath)
   }
+
+  useEffect(() => {
+    onBrowseStateChange?.({
+      currentPath,
+      items,
+      navigateTo: navigateToPath,
+      activateItem: handleItemClick,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPath, items])
 
   const formatSize = (bytes?: number): string => {
     if (!bytes) return '0 B'
