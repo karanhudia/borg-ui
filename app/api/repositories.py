@@ -103,7 +103,11 @@ from app.services.rclone_repository_service import (
     normalize_rclone_relative_path,
     rclone_repository_service,
 )
-from app.utils.datetime_utils import parse_borg_archive_time, serialize_datetime
+from app.utils.datetime_utils import (
+    parse_borg_archive_time,
+    serialize_borg_archive_time,
+    serialize_datetime,
+)
 from app.utils.schedule_time import (
     DEFAULT_SCHEDULE_TIMEZONE,
     InvalidScheduleTimezone,
@@ -482,10 +486,44 @@ def _prepare_repository_borg_env(repository: Repository, db: Session):
 
 
 def _repository_stats_borg_env(env: Dict[str, str]) -> Dict[str, str]:
-    """Return a Borg environment that renders archive timestamps in UTC."""
+    """Return a Borg environment that renders archive timestamps in UTC.
+
+    The machine-parsed wrapper invocations pin TZ=UTC themselves now, so this
+    is redundant for them - kept because the operations runner (#888) builds
+    explicit stats envs through it, and double-pinning is harmless.
+    """
     stats_env = env.copy()
     stats_env["TZ"] = "UTC"
     return stats_env
+
+
+def _normalize_archive_listing_times(
+    archives: List[Any], *, timezone_name: Optional[str]
+) -> List[Any]:
+    """Re-render borg archive timestamps with an explicit UTC offset.
+
+    Borg's own rendering may be naive, which the frontend's Date parsing
+    reads as browser-local time. ``timezone_name`` names the zone borg
+    rendered the listing in ("UTC" for TZ=UTC-forced server listings, the
+    agent-reported zone for agent listings).
+    """
+    normalized = []
+    for archive in archives:
+        if not isinstance(archive, dict):
+            normalized.append(archive)
+            continue
+        updated = dict(archive)
+        for field in ("time", "start", "end"):
+            value = updated.get(field)
+            if isinstance(value, bool) or not isinstance(value, (str, int, float)):
+                continue
+            serialized = serialize_borg_archive_time(value, timezone_name=timezone_name)
+            # Unparseable values keep their raw form rather than dropping
+            # to None - the response never loses information.
+            if isinstance(serialized, str):
+                updated[field] = serialized
+        normalized.append(updated)
+    return normalized
 
 
 def _parse_borg_archive_time(
@@ -587,6 +625,9 @@ async def _run_repository_command(
 ):
     """Execute a repository-scoped Borg command with common SSH/env handling."""
     env, temp_key_file = _prepare_repository_borg_env(repository, db)
+    # Both callers machine-parse the JSON output; pin the render zone so borg1
+    # timestamps come out UTC instead of server-local.
+    env["TZ"] = "UTC"
     try:
         if temp_key_file and log_message:
             logger.info(log_message, **(log_fields or {}))
@@ -961,12 +1002,11 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
             system_settings and system_settings.bypass_lock_on_list
         )
         env, temp_key_file = _prepare_repository_borg_env(repository, db)
-        stats_env = _repository_stats_borg_env(env)
 
         router = BorgRouter(repository)
 
         # Get archive list and count
-        archives = await router.list_archives(env=stats_env)
+        archives = await router.list_archives(env=env)
 
         archive_count = 0
         total_size = None
@@ -993,8 +1033,8 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
                         continue
 
                     try:
-                        # This listing ran under stats_env (TZ=UTC), so borg
-                        # rendered these timestamps in UTC - not server-local.
+                        # Wrapper listings run under TZ=UTC, so borg rendered
+                        # these timestamps in UTC - not server-local.
                         parsed_time = _parse_borg_archive_time(
                             archive_time, timezone_name="UTC"
                         )
@@ -6071,6 +6111,9 @@ async def list_repository_archives(
             )
             archives_data = _parse_agent_json_result(result)
             archives = archives_data.get("archives", [])
+            archives = _normalize_archive_listing_times(
+                archives, timezone_name=agent_timezone_for_repository(db, repository)
+            )
             archives = enrich_archives_with_backup_metadata(archives, repository, db)
             logger.info(
                 "Agent repository archives listed successfully",
@@ -6117,6 +6160,8 @@ async def list_repository_archives(
         try:
             archives_data = json.loads(stdout.decode())
             archives = archives_data.get("archives", [])
+            # The listing ran under TZ=UTC (_run_repository_command).
+            archives = _normalize_archive_listing_times(archives, timezone_name="UTC")
             archives = enrich_archives_with_backup_metadata(archives, repository, db)
 
             logger.info(

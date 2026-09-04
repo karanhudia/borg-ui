@@ -176,3 +176,48 @@ class TestBorgRepository:
             # URLs should be valid strings
             assert isinstance(url, str)
             assert len(url) > 0
+
+
+class TestMachineParsedRenderZone:
+    """Machine-parsed listings run under TZ=UTC; human-facing output does not."""
+
+    @pytest.mark.asyncio
+    async def test_list_archives_pins_tz_utc(self):
+        borg = BorgInterface()
+        with patch.object(
+            borg,
+            "_execute_command",
+            new=AsyncMock(return_value={"success": True, "stdout": ""}),
+        ) as mock_execute:
+            await borg.list_archives("/repo", passphrase="pw", env={"BORG_RSH": "ssh"})
+
+        env = mock_execute.await_args.kwargs["env"]
+        assert env["TZ"] == "UTC"
+        assert env["BORG_PASSPHRASE"] == "pw"
+        assert env["BORG_RSH"] == "ssh"
+
+    @pytest.mark.asyncio
+    async def test_info_archive_pins_tz_utc(self):
+        borg = BorgInterface()
+        with patch.object(
+            borg,
+            "_execute_command",
+            new=AsyncMock(return_value={"success": True, "stdout": ""}),
+        ) as mock_execute:
+            await borg.info_archive("/repo", "archive-1")
+
+        assert mock_execute.await_args.kwargs["env"]["TZ"] == "UTC"
+
+    @pytest.mark.asyncio
+    async def test_run_backup_keeps_the_process_zone(self):
+        # create output is parsed for the resolved archive name only; pinning
+        # TZ here would change what {now} archive names render as.
+        borg = BorgInterface()
+        with patch.object(
+            borg,
+            "_execute_command",
+            new=AsyncMock(return_value={"success": True, "stdout": ""}),
+        ) as mock_execute:
+            await borg.run_backup("/repo", ["/data"], passphrase="pw")
+
+        assert "TZ" not in (mock_execute.await_args.kwargs["env"] or {})
