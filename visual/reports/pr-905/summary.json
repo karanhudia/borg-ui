@@ -1,17 +1,17 @@
 {
-  "generatedAt": "2026-09-04T16:29:41.579Z",
+  "generatedAt": "2026-09-04T17:01:55.150Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #905 visual report",
-    "commitSha": "cf605ff27cf4",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/33894819011"
+    "commitSha": "820074a676cb",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/33897816356"
   },
   "totals": {
     "baseline": 510,
-    "actual": 524,
+    "actual": 528,
     "compared": 510,
     "changed": 0,
-    "added": 14,
+    "added": 18,
     "removed": 0,
     "unchanged": 510
   },
@@ -58,6 +58,14 @@
       "actualPath": "images/actual/components-planbadge--pro.png"
     },
     {
+      "fileName": "components-planinfodrawer--enterprise-plan-drawer--mobile.png",
+      "actualPath": "images/actual/components-planinfodrawer--enterprise-plan-drawer--mobile.png"
+    },
+    {
+      "fileName": "components-planinfodrawer--enterprise-plan-drawer.png",
+      "actualPath": "images/actual/components-planinfodrawer--enterprise-plan-drawer.png"
+    },
+    {
       "fileName": "components-planinfodrawer--full-access-ending-soon-drawer--mobile.png",
       "actualPath": "images/actual/components-planinfodrawer--full-access-ending-soon-drawer--mobile.png"
     },
@@ -72,6 +80,14 @@
     {
       "fileName": "components-planinfodrawer--full-access-expired-drawer.png",
       "actualPath": "images/actual/components-planinfodrawer--full-access-expired-drawer.png"
+    },
+    {
+      "fileName": "components-planinfodrawer--pro-plan-drawer--mobile.png",
+      "actualPath": "images/actual/components-planinfodrawer--pro-plan-drawer--mobile.png"
+    },
+    {
+      "fileName": "components-planinfodrawer--pro-plan-drawer.png",
+      "actualPath": "images/actual/components-planinfodrawer--pro-plan-drawer.png"
     }
   ],
   "removed": [],
