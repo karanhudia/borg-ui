@@ -158,3 +158,49 @@ class TestResolveDatabaseUrl:
 @pytest.mark.unit
 def test_index_history_max_rows_default():
     assert Settings().index_history_max_rows == 200000
+
+
+@pytest.mark.unit
+def test_resolve_ssh_home_dir_defaults_to_ssh_keys_dir():
+    """Native installs (LXC) deploy keys next to the rest of the data."""
+    from app.config import resolve_ssh_home_dir
+
+    assert (
+        resolve_ssh_home_dir({}, "/opt/borg-ui/data/ssh_keys")
+        == "/opt/borg-ui/data/ssh_keys"
+    )
+    assert (
+        resolve_ssh_home_dir({"SSH_HOME_DIR": ""}, "/data/ssh_keys") == "/data/ssh_keys"
+    )
+
+
+@pytest.mark.unit
+def test_resolve_ssh_home_dir_honours_env_override():
+    """Docker exports SSH_HOME_DIR=/home/borg/.ssh from the entrypoint."""
+    from app.config import resolve_ssh_home_dir
+
+    assert (
+        resolve_ssh_home_dir({"SSH_HOME_DIR": "/home/borg/.ssh"}, "/data/ssh_keys")
+        == "/home/borg/.ssh"
+    )
+
+
+@pytest.mark.unit
+def test_resolve_secret_key_file_lives_under_data_dir():
+    from pathlib import Path
+
+    from app.config import resolve_secret_key_file
+
+    assert resolve_secret_key_file("/data") == Path("/data/.secret_key")
+    assert resolve_secret_key_file("/opt/borg-ui/data") == Path(
+        "/opt/borg-ui/data/.secret_key"
+    )
+
+
+@pytest.mark.unit
+def test_module_settings_ssh_home_dir_derives_from_ssh_keys_dir():
+    """With no SSH_HOME_DIR in the test env the two settings are the same dir."""
+    from app.config import settings
+
+    assert settings.ssh_keys_dir == f"{settings.data_dir}/ssh_keys"
+    assert settings.ssh_home_dir == settings.ssh_keys_dir

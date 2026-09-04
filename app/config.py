@@ -57,6 +57,27 @@ def resolve_database_url(env: Mapping[str, str], data_dir: str) -> str:
     return f"postgresql+psycopg://{user}:{password}@{host}:{port}/{name}"
 
 
+def resolve_ssh_home_dir(env: Mapping[str, str], ssh_keys_dir: str) -> str:
+    """Directory the system SSH key pair is deployed to on disk.
+
+    Defaults to ssh_keys_dir (``$DATA_DIR/ssh_keys``), so a native install
+    (for example the Proxmox LXC running from /opt/borg-ui as root) keeps its
+    keys next to the rest of its data without any extra configuration.
+
+    SSH_HOME_DIR overrides it. The Docker entrypoint exports it as
+    /home/borg/.ssh: normally that is a symlink to /data/ssh_keys, so both names
+    are the same directory, but when a user bind-mounts /home/borg/.ssh the
+    entrypoint keeps the mount and the keys must still land there so plain
+    ``ssh`` in hooks finds them under ~/.ssh.
+    """
+    return env.get("SSH_HOME_DIR") or ssh_keys_dir
+
+
+def resolve_secret_key_file(data_dir: str) -> Path:
+    """Path of the persisted auto-generated SECRET_KEY under data_dir."""
+    return Path(data_dir) / ".secret_key"
+
+
 class Settings(BaseSettings):
     """Application settings"""
 
@@ -112,6 +133,7 @@ class Settings(BaseSettings):
 
     # SSH keys directory - auto-derived from data_dir
     ssh_keys_dir: str = ""  # Will be auto-derived from data_dir
+    ssh_home_dir: str = ""  # Where the system key is deployed; see resolve_ssh_home_dir
 
     # Logging settings
     log_level: str = "INFO"
@@ -274,12 +296,13 @@ settings.database_url = resolve_database_url(os.environ, settings.data_dir)
 
 # 2. SSH keys directory - always derived from data_dir
 settings.ssh_keys_dir = f"{settings.data_dir}/ssh_keys"
+settings.ssh_home_dir = resolve_ssh_home_dir(os.environ, settings.ssh_keys_dir)
 
 # 3. Log file - always derived from data_dir
 settings.log_file = f"{settings.data_dir}/logs/borg-ui.log"
 
 # 4. SECRET_KEY - auto-generate on first run if not provided
-secret_key_file = Path(settings.data_dir) / ".secret_key"
+secret_key_file = resolve_secret_key_file(settings.data_dir)
 env_secret_key = os.getenv("SECRET_KEY")
 
 if env_secret_key:
