@@ -941,6 +941,17 @@
       "stale": "Sync is out of date",
       "never": "Not indexed yet",
       "rebuild": "Rebuild"
+    },
+    "heatmap": {
+      "none": "No archives",
+      "archives_one": "{{count}} archive",
+      "archives_other": "{{count}} archives",
+      "missed": "Expected a run, none found",
+      "sizeOutlier": "Unusually small",
+      "durationOutlier": "Unusually slow",
+      "legendLess": "Less",
+      "legendMore": "More",
+      "tooltip": "{{count}} on {{date}} · {{size}} · {{duration}}"
     }
   },
   "restore": {

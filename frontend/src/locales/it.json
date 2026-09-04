@@ -941,6 +941,17 @@
       "stale": "La sincronizzazione non è aggiornata",
       "never": "Non ancora indicizzato",
       "rebuild": "Ricostruisci"
+    },
+    "heatmap": {
+      "none": "Nessun archivio",
+      "archives_one": "{{count}} archivio",
+      "archives_other": "{{count}} archivi",
+      "missed": "Era atteso un backup, nessuno trovato",
+      "sizeOutlier": "Insolitamente piccolo",
+      "durationOutlier": "Insolitamente lento",
+      "legendLess": "Meno",
+      "legendMore": "Più",
+      "tooltip": "{{count}} il {{date}} · {{size}} · {{duration}}"
     }
   },
   "restore": {

@@ -941,6 +941,17 @@
       "stale": "Synchronisierung ist veraltet",
       "never": "Noch nicht indiziert",
       "rebuild": "Neu aufbauen"
+    },
+    "heatmap": {
+      "none": "Keine Archive",
+      "archives_one": "{{count}} Archiv",
+      "archives_other": "{{count}} Archive",
+      "missed": "Ein Lauf wurde erwartet, keiner gefunden",
+      "sizeOutlier": "Ungewöhnlich klein",
+      "durationOutlier": "Ungewöhnlich langsam",
+      "legendLess": "Weniger",
+      "legendMore": "Mehr",
+      "tooltip": "{{count}} am {{date}} · {{size}} · {{duration}}"
     }
   },
   "restore": {
