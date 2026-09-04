@@ -135,7 +135,7 @@ def record_import_connect(
     """
     from app.database.models import utc_now
     from app.services.operations.executors import registered_kinds
-    from app.services.operations.followups import chain_for
+    from app.services.operations.followups import chain_for, history_enabled
 
     now = utc_now()
     op = Operation(
@@ -153,7 +153,11 @@ def record_import_connect(
     )
     db.add(op)
     db.flush()
-    kinds = chain_for("import_connect", available=registered_kinds())
+    kinds = chain_for(
+        "import_connect",
+        available=registered_kinds(),
+        history=history_enabled(db),
+    )
     if kinds:
         enqueue_chain(
             db,

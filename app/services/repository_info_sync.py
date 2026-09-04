@@ -1,14 +1,17 @@
 """Write archive stats back to the repository row from a fresh `info` listing.
 
-The repository card renders the stored archive_count/last_backup columns; they
+The repository card renders the stored archive_count/last_backup columns, they
 are written by the stats refresh and, in part, by backup completion. The info
 dialog fetches the authoritative archive list moments later and used to throw
-it away — so a backup finishing between a stats refresh and the info click left
-the dialog showing two archives while the card still said one.
+it away, so a backup finishing between a stats refresh and the info click left
+the dialog showing two archives while the card still said one. When the info
+entries carry ids the sync now also upserts the archives table (spec 6.4) and
+derives the columns from it; when they do not, it falls back to writing the
+columns directly from the listing.
 
 Borg 2 only: Borg 1's repository-level `info --json` carries no archive list,
 so the parsed shape yields [] even for a populated repository, and writing that
-back would wipe a real count to 0 — the same trap the stats refresh guards
+back would wipe a real count to 0, the same trap the stats refresh guards
 against with its list_ok check.
 """
 
@@ -70,10 +73,35 @@ def sync_archive_stats_from_info(
         # which must not become an import-time dependency of this module.
         from app.services.repository_executor import agent_timezone_for_repository
 
-        repository.archive_count = len(archives)
-        newest = _newest_archive_time(
-            archives, timezone_name=agent_timezone_for_repository(db, repository)
+        timezone_name = agent_timezone_for_repository(db, repository)
+        # Full entries only: apply_listing skips one it cannot map and reports
+        # the archive behind it as removed, which would drop archive_count and
+        # stale last_backup on a partial listing. The check is the mapper
+        # itself, so the two can never drift apart.
+        from app.services.operations.executors.index import (
+            apply_listing,
+            archive_fields_from_listing,
+            write_repository_archive_columns,
         )
+
+        complete = bool(archives) and all(
+            isinstance(a, dict)
+            and archive_fields_from_listing(
+                a, repository.borg_version or 2, timezone_name=timezone_name
+            )
+            is not None
+            for a in archives
+        )
+        if complete:
+            # Keep the archives table in step with what the dialog just showed,
+            # then derive the columns from it.
+            _, removed = apply_listing(
+                db, repository, archives, timezone_name=timezone_name
+            )
+            write_repository_archive_columns(db, repository, exclude_ids=removed)
+            return
+        repository.archive_count = len(archives)
+        newest = _newest_archive_time(archives, timezone_name=timezone_name)
         if archives:
             # Archives whose times we cannot parse must not wipe a known
             # last_backup — absence of evidence only counts when the list

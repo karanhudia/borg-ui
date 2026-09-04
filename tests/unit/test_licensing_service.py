@@ -276,3 +276,28 @@ async def test_deactivate_paid_license_requires_stored_license_id(db_session):
         RuntimeError, match="No active paid license is stored for this instance"
     ):
         await deactivate_paid_license(db_session)
+
+
+@pytest.mark.unit
+def test_pro_activation_enqueues_reconcile_runs(db_session, activation_keys):
+    from app.database.models import Operation, Repository
+
+    db_session.add(
+        Repository(name="r", path="/tmp/r", encryption="none", compression="lz4")
+    )
+    db_session.commit()
+    state = get_or_create_licensing_state(db_session)
+    document = _build_document(
+        activation_keys, instance_id=state.instance_id, plan="pro", is_trial=False
+    )
+    with patch(
+        "app.services.operations.reconcile.registered_kinds",
+        return_value={"archive_sync", "history_merge", "history_index", "stats"},
+    ):
+        import_offline_entitlement(db_session, document)
+    kinds = [o.kind for o in db_session.query(Operation).order_by(Operation.id).all()]
+    assert kinds == ["archive_sync", "history_merge", "history_index", "stats"]
+    assert all(o.trigger == "reconcile" for o in db_session.query(Operation).all())
+    # A second Pro entitlement does not enqueue again
+    import_offline_entitlement(db_session, document)
+    assert db_session.query(Operation).count() == 4

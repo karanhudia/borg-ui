@@ -185,6 +185,43 @@ pause and resume of background triggers, and the `index_workers` limit.
 Activity includes operations rows; index-category rows are hidden unless
 the Index category filter is on.
 
+### History index
+
+Two more index kinds fill and maintain `archive_changes`:
+
+- `history_index` (exclusive, takes the lane) walks every series of a
+  repository by archive start. The first archive of a series stores its
+  full listing as `added` rows from `borg list --json-lines`; every later
+  archive stores the output of `borg diff --json-lines` against its
+  predecessor. Paths matching `repository.history_index_excludes` are
+  dropped. Modified files get absolute sizes from the last known size of
+  the path in the series, since `borg diff` only reports byte deltas. Past
+  `INDEX_HISTORY_MAX_ROWS` the rest is collapsed into `summary` rows keyed
+  by the first three path segments and the archive is marked truncated.
+  Each archive is written in one transaction; a crash leaves it either
+  fully indexed or pending. An archive whose predecessor is not indexed
+  yet stays pending for the next run, and the run reports
+  `completed_with_warnings` so a stalled series is visible. An archive that
+  failed is retried on the next run: nothing else moves it out of that
+  state, and every later archive in the series waits on it. Managed-agent
+  repositories skip the stage with `agent_diff_unsupported`.
+- `history_merge` consumes `removed_archive_ids` from the `archive_sync`
+  it depends on. A removed archive's rows are folded into its successor
+  (the table in the spec, section 8.4), or the successor is reset to
+  pending when the removed archive was never indexed, or the rows are
+  simply dropped when there is no successor. The archive row is deleted
+  afterwards.
+
+Only `history_index` is gated on the plan including `archive_history`; on
+Community installs the follow-up chains and the reconcile run omit it, and
+activating a Pro licence enqueues a reconcile run for every repository.
+`history_merge` runs on every plan, because it is what deletes the rows of
+archives that have left the repository: `archive_sync` reports them and
+deliberately leaves the deletion to it.
+`POST /api/repositories/{id}/rebuild` with `from = history` resets the
+index; `from = archives` refetches per-archive info; `from = stats`
+re-measures the repository.
+
 ## Notifications
 
 Job-related notifications are handled by the notification service.

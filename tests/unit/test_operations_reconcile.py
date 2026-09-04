@@ -1,10 +1,17 @@
 import asyncio
+from unittest.mock import patch
 
 import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
-from app.database.models import Base, Operation, Repository, SystemSettings
+from app.database.models import (
+    Base,
+    LicensingState,
+    Operation,
+    Repository,
+    SystemSettings,
+)
 from app.services.operations import reconcile
 from app.services.operations.enqueue import enqueue
 
@@ -69,7 +76,7 @@ def test_enqueue_reconcile_runs_includes_history_kinds_when_registered(
         lambda: {"stats", "archive_sync", "history_merge", "history_index"},
     )
     a, _ = repos
-    reconcile.enqueue_reconcile_runs(db)
+    reconcile.enqueue_reconcile_runs(db, history=True)
     kinds = [
         r.kind
         for r in db.query(Operation)
@@ -77,6 +84,89 @@ def test_enqueue_reconcile_runs_includes_history_kinds_when_registered(
         .order_by(Operation.id)
     ]
     assert kinds == ["archive_sync", "history_merge", "history_index", "stats"]
+
+
+@pytest.mark.unit
+def test_enqueue_reconcile_runs_omits_history_kinds_for_community(
+    db, repos, monkeypatch
+):
+    monkeypatch.setattr(
+        reconcile,
+        "registered_kinds",
+        lambda: {"stats", "archive_sync", "history_merge", "history_index"},
+    )
+    a, _ = repos
+    reconcile.enqueue_reconcile_runs(db, history=False)
+    kinds = [
+        r.kind
+        for r in db.query(Operation)
+        .filter(Operation.repository_id == a.id)
+        .order_by(Operation.id)
+    ]
+    # history_merge stays: it is what deletes rows for archives that are gone,
+    # which Community installs need just as much as Pro ones.
+    assert kinds == ["archive_sync", "history_merge", "stats"]
+
+
+@pytest.mark.unit
+def test_enqueue_reconcile_runs_asks_the_plan_when_history_is_none(
+    db, repos, monkeypatch
+):
+    monkeypatch.setattr(
+        reconcile,
+        "registered_kinds",
+        lambda: {"stats", "archive_sync", "history_merge", "history_index"},
+    )
+    a, _ = repos
+    reconcile.enqueue_reconcile_runs(db)
+    kinds = [
+        r.kind
+        for r in db.query(Operation)
+        .filter(Operation.repository_id == a.id)
+        .order_by(Operation.id)
+    ]
+    assert kinds == ["archive_sync", "history_merge", "stats"]
+    for op in db.query(Operation).filter(Operation.repository_id == a.id):
+        op.status = "completed"
+    db.commit()
+
+    # get_or_create_licensing_state created the single row above; flip its
+    # plan rather than inserting a second one (lookups always take the
+    # first row in the table).
+    state = db.query(LicensingState).first()
+    if state is None:
+        db.add(LicensingState(instance_id="t-reconcile", plan="pro", status="active"))
+    else:
+        state.plan = "pro"
+        state.status = "active"
+    db.commit()
+    reconcile.enqueue_reconcile_runs(db)
+    kinds = [
+        r.kind
+        for r in db.query(Operation)
+        .filter(Operation.repository_id == a.id)
+        .order_by(Operation.id)
+    ]
+    assert kinds == [
+        "archive_sync",
+        "history_merge",
+        "stats",
+        "archive_sync",
+        "history_merge",
+        "history_index",
+        "stats",
+    ]
+
+
+@pytest.mark.unit
+def test_bootstrap_history_once_runs_a_single_time(db, repos):
+    with patch(
+        "app.services.operations.reconcile.enqueue_reconcile_runs", return_value=1
+    ) as enq:
+        assert reconcile.bootstrap_history_once(db) == 1
+        assert reconcile.bootstrap_history_once(db) == 0
+    assert enq.call_count == 1
+    assert db.query(SystemSettings).first().history_bootstrap_at is not None
 
 
 @pytest.mark.unit
@@ -121,3 +211,36 @@ def test_scheduler_reads_interval_live_each_poll(db, repos, monkeypatch):
     settings.stats_refresh_interval_minutes = 30
     db.commit()
     assert scheduler._interval_minutes() == 30
+
+
+@pytest.mark.unit
+def test_bootstrap_claims_the_flag_before_enqueueing(db, repos, monkeypatch):
+    """Two processes starting at once both read a null history_bootstrap_at and
+    would each enqueue a full set of chains. The claim has to be committed
+    before the enqueue, so the second caller sees it and stops."""
+    seen: list[int] = []
+
+    def enqueue(session):
+        # What a concurrent starter observes at this point in the first call.
+        other = session.query(SystemSettings).first()
+        seen.append(0 if other.history_bootstrap_at is None else 1)
+        return 3
+
+    monkeypatch.setattr(reconcile, "enqueue_reconcile_runs", enqueue)
+    assert reconcile.bootstrap_history_once(db) == 3
+    assert seen == [1]
+    assert reconcile.bootstrap_history_once(db) == 0
+
+
+@pytest.mark.unit
+def test_a_failed_bootstrap_releases_its_claim(db, repos, monkeypatch):
+    """Otherwise the bootstrap is recorded as done and never runs again."""
+
+    def boom(session):
+        raise RuntimeError("enqueue failed")
+
+    monkeypatch.setattr(reconcile, "enqueue_reconcile_runs", boom)
+    with pytest.raises(RuntimeError):
+        reconcile.bootstrap_history_once(db)
+
+    assert db.query(SystemSettings).first().history_bootstrap_at is None

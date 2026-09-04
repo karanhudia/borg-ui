@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from urllib.parse import quote
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.responses import FileResponse  # noqa: F401 - retained as a patch target in download endpoint tests
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -215,6 +215,7 @@ async def _stream_agent_archive_file(
 @router.get("/list")
 async def list_archives(
     repository: str,
+    response: Response,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -239,6 +240,10 @@ async def list_archives(
                 detail=f"Failed to list archives: {result['stderr']}",
             )
 
+        response.headers["Deprecation"] = "true"
+        response.headers["Link"] = (
+            f'</api/repositories/{repo.id}/archives>; rel="successor-version"'
+        )
         return {"archives": result["stdout"]}
     except HTTPException:
         raise

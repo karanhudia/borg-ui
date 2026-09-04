@@ -6,6 +6,7 @@ import structlog
 from typing import Dict, List
 from datetime import datetime, timezone
 from app.config import settings
+from app.core.borg_stream import CommandLineStream
 from app.utils.ssh_utils import public_key_only_ssh_args
 
 logger = structlog.get_logger()
@@ -63,13 +64,10 @@ class BorgInterface:
 
         return os.path.expanduser("~/.cache/borg")
 
-    async def _execute_command(
-        self, cmd: List[str], timeout: int = 3600, cwd: str = None, env: dict = None
-    ) -> Dict:
-        """Execute a command with real-time output capture"""
-        logger.info("Executing command", command=" ".join(cmd), cwd=cwd)
-
-        # Set up environment with SSH options for remote repositories
+    def _build_exec_env(self, env: dict = None) -> dict:
+        """Process environment for a borg invocation: the inherited
+        environment, the lock and hostname settings every call needs, and
+        the caller's overrides on top."""
         exec_env = os.environ.copy()
 
         # Configure lock behavior with quick timeout
@@ -100,6 +98,16 @@ class BorgInterface:
         # Merge any additional environment variables
         if env:
             exec_env.update(env)
+
+        return exec_env
+
+    async def _execute_command(
+        self, cmd: List[str], timeout: int = 3600, cwd: str = None, env: dict = None
+    ) -> Dict:
+        """Execute a command with real-time output capture"""
+        logger.info("Executing command", command=" ".join(cmd), cwd=cwd)
+
+        exec_env = self._build_exec_env(env)
 
         try:
             process = await asyncio.create_subprocess_exec(
@@ -599,6 +607,54 @@ class BorgInterface:
         return await self._execute_command_streaming(
             cmd, max_lines=max_lines, env=exec_env if exec_env else None
         )
+
+    def diff_archives(
+        self,
+        repository: str,
+        archive_a: str,
+        archive_b: str,
+        *,
+        remote_path: str = None,
+        passphrase: str = None,
+        bypass_lock: bool = False,
+        env: dict = None,
+        timeout: int = 3600,
+    ) -> "CommandLineStream":
+        """Stream `borg diff --json-lines` between two archives (spec 8.3)."""
+        cmd = [self.borg_cmd, "diff"]
+        if remote_path:
+            cmd.extend(["--remote-path", remote_path])
+        if bypass_lock:
+            cmd.append("--bypass-lock")
+        cmd.extend(["--json-lines", f"{repository}::{archive_a}", archive_b])
+        exec_env = self._build_exec_env(env)
+        if passphrase:
+            exec_env["BORG_PASSPHRASE"] = passphrase
+        return CommandLineStream(cmd, env=exec_env, timeout=timeout)
+
+    def list_archive_lines(
+        self,
+        repository: str,
+        archive: str,
+        *,
+        remote_path: str = None,
+        passphrase: str = None,
+        bypass_lock: bool = False,
+        env: dict = None,
+        timeout: int = 3600,
+    ) -> "CommandLineStream":
+        """Stream `borg list --json-lines` for one archive (first archive of
+        a series, spec 8.3)."""
+        cmd = [self.borg_cmd, "list"]
+        if remote_path:
+            cmd.extend(["--remote-path", remote_path])
+        if bypass_lock:
+            cmd.append("--bypass-lock")
+        cmd.extend(["--json-lines", f"{repository}::{archive}"])
+        exec_env = self._build_exec_env(env)
+        if passphrase:
+            exec_env["BORG_PASSPHRASE"] = passphrase
+        return CommandLineStream(cmd, env=exec_env, timeout=timeout)
 
     async def extract_archive(
         self,

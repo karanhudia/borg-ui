@@ -231,6 +231,27 @@ def _validate_entitlement_document(
     return None
 
 
+def _on_plan_changed(db: Session, before: str, after: str) -> None:
+    """Spec 11.2: a Pro activation enqueues a reconcile run for every
+    repository so history builds in the background. Lapses do nothing;
+    rows stay and the gated routes hide them."""
+    from app.core.features import Plan, plan_includes
+    from app.services.operations.reconcile import enqueue_reconcile_runs
+
+    try:
+        was_pro = plan_includes(Plan(before), Plan.PRO)
+        is_pro = plan_includes(Plan(after), Plan.PRO)
+    except ValueError:
+        return
+    if is_pro and not was_pro:
+        try:
+            enqueue_reconcile_runs(db, history=True)
+        except Exception as exc:
+            logger.warning(
+                "Failed to enqueue reconcile after activation", error=str(exc)
+            )
+
+
 def _apply_entitlement(
     db: Session,
     state: LicensingState,
@@ -239,6 +260,7 @@ def _apply_entitlement(
     key_id: str | None = None,
     refresh_error: str | None = None,
 ) -> None:
+    before = get_effective_plan_value(db)
     state.entitlement_id = payload.get("entitlement_id")
     state.key_id = key_id
     state.customer_id = payload.get("customer_id")
@@ -257,6 +279,7 @@ def _apply_entitlement(
     state.signature = signature
     refresh_status_if_expired(state)
     db.commit()
+    _on_plan_changed(db, before, get_effective_plan_value(db))
 
 
 async def _post_activation(

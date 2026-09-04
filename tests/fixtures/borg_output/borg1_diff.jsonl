@@ -1,0 +1,10 @@
+{"changes": [{"new_ctime": "2026-09-04T07:22:49.076937", "old_ctime": "2026-09-04T07:22:48.121943", "type": "ctime"}, {"new_mtime": "2026-09-04T07:22:49.076937", "old_mtime": "2026-09-04T07:22:48.121943", "type": "mtime"}], "path": "src"}
+{"changes": [{"added": 15, "removed": 5, "type": "modified"}, {"new_ctime": "2026-09-04T07:22:49.069937", "old_ctime": "2026-09-04T07:22:48.120944", "type": "ctime"}, {"new_mtime": "2026-09-04T07:22:49.069937", "old_mtime": "2026-09-04T07:22:48.120944", "type": "mtime"}], "path": "src/grow.txt"}
+{"changes": [{"new_mode": "-rwxr-xr-x", "old_mode": "-rw-r--r--", "type": "mode"}, {"new_ctime": "2026-09-04T07:22:49.074937", "old_ctime": "2026-09-04T07:22:48.120944", "type": "ctime"}], "path": "src/mode.sh"}
+{"changes": [{"type": "changed link"}, {"new_ctime": "2026-09-04T07:22:49.075937", "old_ctime": "2026-09-04T07:22:48.121943", "type": "ctime"}, {"new_mtime": "2026-09-04T07:22:49.075937", "old_mtime": "2026-09-04T07:22:48.121943", "type": "mtime"}], "path": "src/link_changed"}
+{"changes": [{"size": 4, "type": "added"}], "path": "src/new.txt"}
+{"changes": [{"type": "added link"}], "path": "src/link_added"}
+{"changes": [{"type": "added directory"}], "path": "src/dir_new"}
+{"changes": [{"size": 2, "type": "added"}], "path": "src/dir_new/f.txt"}
+{"changes": [{"size": 5, "type": "removed"}], "path": "src/gone.txt"}
+{"changes": [{"type": "removed link"}], "path": "src/link_removed"}

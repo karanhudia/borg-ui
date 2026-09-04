@@ -377,6 +377,23 @@
       "availability": "included"
     },
     {
+      "id": "archive_history",
+      "plan": "pro",
+      "label": "Archive history and change tracking",
+      "label_localized": {
+        "es": "Historial de archivos y seguimiento de cambios",
+        "de": "Archivverlauf und Änderungsverfolgung",
+        "it": "Cronologia degli archivi e tracciamento delle modifiche"
+      },
+      "description": "See what each backup added, removed, or modified, follow a file across archives, and search for files that only exist in old backups.",
+      "description_localized": {
+        "es": "Consulta qué añadió, eliminó o modificó cada copia, sigue un archivo a través de los archivos y busca archivos que solo existen en copias antiguas.",
+        "de": "Sehen Sie, was jedes Backup hinzugefügt, entfernt oder geändert hat, verfolgen Sie eine Datei über Archive hinweg und suchen Sie nach Dateien, die nur in alten Backups existieren.",
+        "it": "Scopri cosa ha aggiunto, rimosso o modificato ogni backup, segui un file attraverso gli archivi e cerca file che esistono solo nei backup precedenti."
+      },
+      "availability": "included"
+    },
+    {
       "id": "rbac",
       "plan": "enterprise",
       "label": "RBAC",

@@ -17,6 +17,7 @@ import uuid
 
 from app.database.database import get_db, SessionLocal
 from app.database.models import (
+    DEFAULT_HISTORY_INDEX_EXCLUDES,
     User,
     Repository,
     RepositoryStorage,
@@ -1319,6 +1320,7 @@ class RepositoryUpdate(BaseModel):
         None  # full: backups + observability, observe: observability-only
     )
     bypass_lock: Optional[bool] = None  # Use --bypass-lock for read-only storage access
+    history_index_excludes: Optional[List[str]] = None
     custom_flags: Optional[str] = None  # Custom command-line flags for borg create
     upload_ratelimit_kib: Optional[int] = None
     source_connection_id: Optional[int] = (
@@ -3085,6 +3087,14 @@ async def get_repositories(
                 "mode": repo.mode
                 or "full",  # Default to "full" for backward compatibility
                 "bypass_lock": repo.bypass_lock or False,
+                # `is None` rather than falsy: an operator who cleared every
+                # pattern stored [], and the defaults are only the fallback for
+                # a row that predates the column.
+                "history_index_excludes": (
+                    list(DEFAULT_HISTORY_INDEX_EXCLUDES)
+                    if repo.history_index_excludes is None
+                    else repo.history_index_excludes
+                ),
                 "custom_flags": repo.custom_flags,
                 "upload_ratelimit_kib": repo.upload_ratelimit_kib,
                 "has_running_maintenance": has_check or has_compact or has_prune,
@@ -4141,6 +4151,11 @@ async def get_repository(
             ),
             "source_locations": _repository_source_locations(repository),
             "upload_ratelimit_kib": repository.upload_ratelimit_kib,
+            "history_index_excludes": (
+                list(DEFAULT_HISTORY_INDEX_EXCLUDES)
+                if repository.history_index_excludes is None
+                else repository.history_index_excludes
+            ),
             "stats": stats,
         }
         rclone_storage = _serialize_rclone_storage(repository, db)
@@ -4915,6 +4930,11 @@ async def update_repository(
 
         if repo_data.bypass_lock is not None:
             repository.bypass_lock = repo_data.bypass_lock
+
+        if repo_data.history_index_excludes is not None:
+            repository.history_index_excludes = [
+                p.strip() for p in repo_data.history_index_excludes if p and p.strip()
+            ]
 
         if repo_data.custom_flags is not None:
             repository.custom_flags = repo_data.custom_flags
@@ -6025,13 +6045,15 @@ async def initialize_borg_repository(
     return result
 
 
-@router.get("/{repo_id}/archives")
+@router.get("/{repo_id}/archives/live")
 async def list_repository_archives(
     repo_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List all archives in a repository using borg list"""
+    """List archives straight from borg. The database-backed list is
+    `GET /{repo_id}/archives` in `app/api/archive_index.py`; this route
+    stays for the Archives page until phase 4."""
 
     async def _operation():
         repository = _load_repository_with_access(repo_id, current_user, db, "viewer")

@@ -172,6 +172,60 @@ async def test_followups_created_on_success_only_for_registered_kinds(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_followups_skip_history_kinds_on_community(
+    db, repo, runner, registry, monkeypatch
+):
+    """A successful backup on a Community install enqueues archive_sync and
+    stats but no history_index, even though its executor is registered."""
+
+    async def ok(ctx):
+        return Outcome()
+
+    registry["backup"] = ok
+    registry["archive_sync"] = ok
+    registry["history_index"] = ok
+    registry["stats"] = ok
+
+    monkeypatch.setattr(
+        "app.services.operations.runner.history_enabled", lambda db: False
+    )
+    enqueue(db, "backup", repository_id=repo.id, trigger="manual")
+    await _drain(runner)
+    db.expire_all()
+    rows = db.query(Operation).order_by(Operation.id).all()
+    assert [r.kind for r in rows] == ["backup", "archive_sync", "stats"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_followups_include_history_kinds_on_pro(
+    db, repo, runner, registry, monkeypatch
+):
+    async def ok(ctx):
+        return Outcome()
+
+    registry["backup"] = ok
+    registry["archive_sync"] = ok
+    registry["history_index"] = ok
+    registry["stats"] = ok
+
+    monkeypatch.setattr(
+        "app.services.operations.runner.history_enabled", lambda db: True
+    )
+    enqueue(db, "backup", repository_id=repo.id, trigger="manual")
+    await _drain(runner)
+    db.expire_all()
+    rows = db.query(Operation).order_by(Operation.id).all()
+    assert [r.kind for r in rows] == [
+        "backup",
+        "archive_sync",
+        "history_index",
+        "stats",
+    ]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_no_followups_on_failure(db, repo, runner, registry):
     async def fail(ctx):
         return Outcome(status="failed", error_message="nope")

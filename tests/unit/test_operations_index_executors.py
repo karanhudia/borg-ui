@@ -75,8 +75,12 @@ def test_archive_fields_from_listing_borg1_and_borg2():
     f1 = index_exec.archive_fields_from_listing(BORG1_ENTRY, 1, timezone_name="UTC")
     assert f1["borg_id"] == "aa11"
     assert f1["name"] == "nas-2026-09-02T02:00:00"
-    assert f1["series"] == "default"
+    assert f1["series"] == "nas"
     assert f1["start"] == datetime(2026, 9, 2, 2, 0, 0)
+    f1p = index_exec.archive_fields_from_listing(
+        BORG1_ENTRY, 1, timezone_name="UTC", series_prefixes=["nas"]
+    )
+    assert f1p["series"] == "nas"
     f2 = index_exec.archive_fields_from_listing(BORG2_ENTRY, 2, timezone_name="UTC")
     assert f2["series"] == "nas"
     assert f2["hostname"] == "nas" and f2["username"] == "root"

@@ -28,6 +28,7 @@ FEATURES: dict[str, Plan] = {
     "container_backups": Plan.PRO,
     "backup_reports": Plan.PRO,
     "alerting_monitoring": Plan.PRO,
+    "archive_history": Plan.PRO,  # change deltas, file history, search, outlier flags
     "multi_user": Plan.COMMUNITY,  # up to 5 users
     "extra_users": Plan.PRO,  # >5 users (up to 10 on Pro)
     "rbac": Plan.ENTERPRISE,  # role-based access control
