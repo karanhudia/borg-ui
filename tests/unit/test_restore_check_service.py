@@ -363,3 +363,129 @@ async def test_restore_check_canary_without_archives_saves_actionable_logs(
     assert "Mode: Canary" in log_text
     assert "Run a backup" in log_text
     verification.close()
+
+
+class FakeBorg2SeriesRouter(FakeBorgRouter):
+    """A Borg 2 series: every archive shares the name, ids differ."""
+
+    captured_extract_archives: list[str] = []
+
+    async def list_archives(self, env=None):
+        return [
+            {
+                "name": "myplan-daily",
+                "id": "ab12cd34ef56ab12",
+                "start": "2026-01-01T00:00:00Z",
+            },
+            {
+                "name": "myplan-daily",
+                "id": "ef56gh78ab12cd34",
+                "start": "2026-01-02T00:00:00Z",
+            },
+        ]
+
+    def build_restore_extract_command(
+        self,
+        repository_path,
+        archive_name,
+        paths,
+        remote_path=None,
+        bypass_lock=False,
+    ):
+        FakeBorg2SeriesRouter.captured_extract_archives.append(archive_name)
+        return ["borg2", "extract", archive_name, *paths]
+
+
+class TestArchiveSelector:
+    def test_borg2_series_archives_are_addressed_by_aid(self):
+        from app.services.restore_check_service import _get_archive_selector
+
+        repo = Repository(borg_version=2)
+        archive = {"name": "myplan-daily", "id": "ab12cd34ef56ab12"}
+
+        assert _get_archive_selector(archive, repo) == "aid:ab12cd34ef56ab12"
+
+    def test_borg2_without_id_falls_back_to_the_name(self):
+        from app.services.restore_check_service import _get_archive_selector
+
+        repo = Repository(borg_version=2)
+
+        assert _get_archive_selector({"name": "solo"}, repo) == "solo"
+
+    def test_borg1_keeps_the_unique_name(self):
+        from app.services.restore_check_service import _get_archive_selector
+
+        repo = Repository(borg_version=1)
+        archive = {"name": "backup-2026-01-01", "id": "ab12cd34ef56ab12"}
+
+        assert _get_archive_selector(archive, repo) == "backup-2026-01-01"
+
+    def test_string_entries_pass_through(self):
+        from app.services.restore_check_service import _get_archive_selector
+
+        assert (
+            _get_archive_selector("backup-1", Repository(borg_version=2)) == "backup-1"
+        )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_borg2_restore_check_extracts_by_aid_selector(
+    db_session, testing_session_local
+):
+    # A series name matches every archive in the series - borg refuses the
+    # extract (#863). The check must address the LATEST archive by aid:.
+    repo = Repository(
+        name="Borg2 Series Repo",
+        path="/tmp/restore-check-b2",
+        encryption="none",
+        compression="lz4",
+        repository_type="local",
+        bypass_lock=True,
+        borg_version=2,
+    )
+    db_session.add(repo)
+    db_session.commit()
+    db_session.refresh(repo)
+    job = RestoreCheckJob(
+        repository_id=repo.id,
+        repository_path=repo.path,
+        status="pending",
+        full_archive=True,
+    )
+    db_session.add(job)
+    db_session.commit()
+    db_session.refresh(job)
+
+    service = RestoreCheckService()
+    process = FakeRestoreCheckProcess(returncode=0)
+    FakeBorg2SeriesRouter.captured_extract_archives = []
+
+    with (
+        patch("app.services.restore_check_service.SessionLocal", testing_session_local),
+        patch("app.services.restore_check_service.BorgRouter", FakeBorg2SeriesRouter),
+        patch(
+            "app.services.restore_check_service.build_repository_borg_env",
+            return_value=({}, None),
+        ),
+        patch("app.services.restore_check_service.cleanup_temp_key_file"),
+        patch(
+            "app.services.restore_check_service.get_process_start_time",
+            return_value=123456,
+        ),
+        patch(
+            "app.services.restore_check_service.asyncio.create_subprocess_exec",
+            return_value=process,
+        ),
+    ):
+        await service.execute_restore_check(job.id, repo.id)
+
+    verification = testing_session_local()
+    refreshed_job = verification.get(RestoreCheckJob, job.id)
+
+    # The newest archive of the series, addressed by id - never by the name.
+    assert FakeBorg2SeriesRouter.captured_extract_archives == ["aid:ef56gh78ab12cd34"]
+    assert refreshed_job.status == "completed"
+    # The job row keeps the human-readable series name for display.
+    assert refreshed_job.archive_name == "myplan-daily"
+    verification.close()
