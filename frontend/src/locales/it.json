@@ -983,6 +983,21 @@
       "restore": "Ripristina",
       "mount": "Monta",
       "delete": "Elimina"
+    },
+    "changes": {
+      "compareWith": "Confronta con",
+      "previous": "precedente",
+      "net": "Netto",
+      "added": "Aggiunto",
+      "removed": "Rimosso",
+      "modified": "Modificato",
+      "summaryRow": "{{count}} altri in {{path}}",
+      "truncated": "L'indice di questo archivio è stato troncato al limite di righe, quindi alcuni percorsi sono riassunti.",
+      "pending": "Questo archivio non è stato ancora indicizzato.",
+      "skipped": "L'indicizzazione della cronologia è stata saltata per questo archivio.",
+      "rebuildLink": "Ricostruisci l'indice della cronologia",
+      "empty": "Nessuna modifica tra questi archivi.",
+      "showMore": "Mostra altro"
     }
   },
   "restore": {

@@ -983,6 +983,21 @@
       "restore": "Restore",
       "mount": "Mount",
       "delete": "Delete"
+    },
+    "changes": {
+      "compareWith": "Compare with",
+      "previous": "previous",
+      "net": "Net",
+      "added": "Added",
+      "removed": "Removed",
+      "modified": "Modified",
+      "summaryRow": "{{count}} more in {{path}}",
+      "truncated": "This archive's index was truncated at the row cap, so some paths are summarised.",
+      "pending": "This archive has not been indexed yet.",
+      "skipped": "History indexing was skipped for this archive.",
+      "rebuildLink": "Rebuild the history index",
+      "empty": "No changes between these archives.",
+      "showMore": "Show more"
     }
   },
   "restore": {

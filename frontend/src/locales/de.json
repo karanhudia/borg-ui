@@ -983,6 +983,21 @@
       "restore": "Wiederherstellen",
       "mount": "Einhängen",
       "delete": "Löschen"
+    },
+    "changes": {
+      "compareWith": "Vergleichen mit",
+      "previous": "vorherigem",
+      "net": "Netto",
+      "added": "Hinzugefügt",
+      "removed": "Entfernt",
+      "modified": "Geändert",
+      "summaryRow": "{{count}} weitere in {{path}}",
+      "truncated": "Der Index dieses Archivs wurde bei der Zeilenobergrenze abgeschnitten, sodass einige Pfade zusammengefasst sind.",
+      "pending": "Dieses Archiv wurde noch nicht indiziert.",
+      "skipped": "Die Verlaufsindizierung wurde für dieses Archiv übersprungen.",
+      "rebuildLink": "Verlaufsindex neu aufbauen",
+      "empty": "Keine Änderungen zwischen diesen Archiven.",
+      "showMore": "Mehr anzeigen"
     }
   },
   "restore": {

@@ -983,6 +983,21 @@
       "restore": "Restaurar",
       "mount": "Montar",
       "delete": "Eliminar"
+    },
+    "changes": {
+      "compareWith": "Comparar con",
+      "previous": "anterior",
+      "net": "Neto",
+      "added": "Añadido",
+      "removed": "Eliminado",
+      "modified": "Modificado",
+      "summaryRow": "{{count}} más en {{path}}",
+      "truncated": "El índice de este archivo se truncó en el límite de filas, por lo que algunas rutas están resumidas.",
+      "pending": "Este archivo aún no ha sido indexado.",
+      "skipped": "La indexación del historial se omitió para este archivo.",
+      "rebuildLink": "Reconstruir el índice de historial",
+      "empty": "No hay cambios entre estos archivos.",
+      "showMore": "Mostrar más"
     }
   },
   "restore": {

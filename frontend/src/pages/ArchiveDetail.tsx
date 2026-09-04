@@ -10,6 +10,7 @@ import { getBorgVersion } from '../utils/repoCapabilities'
 import { translateBackendKey, type BackendDetail } from '../utils/translateBackendKey'
 import { parseBackendDate } from '../utils/dateUtils'
 import ArchiveInfoTab from '../components/archives/ArchiveInfoTab'
+import ArchiveChangesTab from '../components/archives/ArchiveChangesTab'
 import DeleteArchiveDialog from '../components/DeleteArchiveDialog'
 import MountArchiveDialog from '../components/MountArchiveDialog'
 import MountSuccessToast from '../components/MountSuccessToast'
@@ -154,6 +155,17 @@ export default function ArchiveDetail() {
     },
   })
 
+  const { data: changesForLabel } = useQuery({
+    queryKey: ['archive-changes', repositoryId, archiveId, archive?.predecessor_id, []],
+    queryFn: () =>
+      archivesAPI
+        .getChanges(repositoryId, archiveId, {
+          compare_to: archive?.predecessor_id ?? undefined,
+        })
+        .then((res) => res.data),
+    enabled: validParams && !!archive,
+  })
+
   if (!validParams || archiveErrored) {
     return (
       <Box sx={{ p: 3 }}>
@@ -166,10 +178,11 @@ export default function ArchiveDetail() {
     return <Box sx={{ p: 3 }} />
   }
 
-  const tabLabel =
-    activeTab === 'changes'
-      ? t('archives.detail.tabChangesWithCounts', { added: 0, removed: 0, modified: 0 })
-      : t('archives.detail.tabChanges')
+  const tabLabel = t('archives.detail.tabChangesWithCounts', {
+    added: changesForLabel?.totals.added ?? 0,
+    removed: changesForLabel?.totals.removed ?? 0,
+    modified: changesForLabel?.totals.modified ?? 0,
+  })
 
   return (
     <Box sx={{ p: 3 }}>
@@ -216,7 +229,9 @@ export default function ArchiveDetail() {
         <Tab label={t('archives.detail.tabInfo')} value="info" />
       </Tabs>
 
-      {activeTab === 'changes' && <Box />}
+      {activeTab === 'changes' && (
+        <ArchiveChangesTab repositoryId={repositoryId} archive={archive} />
+      )}
       {activeTab === 'files' && <Box />}
       {activeTab === 'info' && <ArchiveInfoTab archive={archive} />}
 
