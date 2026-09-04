@@ -3278,7 +3278,13 @@
       },
       "workers": "Worker: Index {{count}}",
       "emptyTitle": "Nichts läuft gerade",
-      "emptyDescription": "Hintergrundarbeit erscheint hier, sobald ein Import, eine Sicherung oder ein Abgleichlauf startet."
+      "emptyDescription": "Hintergrundarbeit erscheint hier, sobald ein Import, eine Sicherung oder ein Abgleichlauf startet.",
+      "rebuildFrom": "Neu aufbauen ab",
+      "rebuildStage": {
+        "stats": "Statistik",
+        "archives": "Archive",
+        "history": "Verlauf"
+      }
     },
     "status": {
       "queued": "In Warteschlange",

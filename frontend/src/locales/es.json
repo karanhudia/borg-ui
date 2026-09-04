@@ -3278,7 +3278,13 @@
       },
       "workers": "trabajadores: índice {{count}}",
       "emptyTitle": "No hay nada en ejecución",
-      "emptyDescription": "El trabajo en segundo plano aparecerá aquí la próxima vez que se inicie una importación, copia de seguridad o reconciliación."
+      "emptyDescription": "El trabajo en segundo plano aparecerá aquí la próxima vez que se inicie una importación, copia de seguridad o reconciliación.",
+      "rebuildFrom": "Reconstruir desde",
+      "rebuildStage": {
+        "stats": "Estadísticas",
+        "archives": "Archivos",
+        "history": "Historial"
+      }
     },
     "status": {
       "queued": "En cola",

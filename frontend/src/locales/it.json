@@ -3278,7 +3278,13 @@
       },
       "workers": "worker: indice {{count}}",
       "emptyTitle": "Nessuna attività in corso",
-      "emptyDescription": "Il lavoro in background apparirà qui alla prossima importazione, backup o esecuzione di riconciliazione."
+      "emptyDescription": "Il lavoro in background apparirà qui alla prossima importazione, backup o esecuzione di riconciliazione.",
+      "rebuildFrom": "Ricostruisci da",
+      "rebuildStage": {
+        "stats": "Statistiche",
+        "archives": "Archivi",
+        "history": "Cronologia"
+      }
     },
     "status": {
       "queued": "In coda",

@@ -3278,7 +3278,13 @@
       },
       "workers": "workers: index {{count}}",
       "emptyTitle": "Nothing is running",
-      "emptyDescription": "Background work will appear here the next time an import, backup, or reconcile run starts."
+      "emptyDescription": "Background work will appear here the next time an import, backup, or reconcile run starts.",
+      "rebuildFrom": "Rebuild from",
+      "rebuildStage": {
+        "stats": "Stats",
+        "archives": "Archives",
+        "history": "History"
+      }
     },
     "status": {
       "queued": "Queued",
