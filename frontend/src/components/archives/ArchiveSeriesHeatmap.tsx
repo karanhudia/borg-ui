@@ -139,7 +139,8 @@ function SeriesBand({
           flexShrink: 0,
           pr: 1.5,
           fontWeight: 600,
-          lineHeight: `${CELL + GAP}px`,
+          lineHeight: 1.3,
+          mt: '-2px',
           position: 'sticky',
           left: 0,
           bgcolor: 'background.paper',
@@ -262,7 +263,7 @@ export default function ArchiveSeriesHeatmap({ data, onSelectDay }: ArchiveSerie
 
   return (
     <Stack spacing={2}>
-      <Box ref={scrollRef} sx={{ overflowX: 'auto', pb: 1 }}>
+      <Box ref={scrollRef} sx={{ overflowX: 'auto', pb: 1, bgcolor: 'background.paper' }}>
         <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 0.5 }}>
           <Box
             sx={{

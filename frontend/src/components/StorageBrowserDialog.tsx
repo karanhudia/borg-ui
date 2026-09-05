@@ -207,7 +207,7 @@ export default function StorageBrowserDialog({
           }}
         >
           <FolderOpen size={24} />
-          <Box sx={{ minWidth: 0 }}>
+          <Box sx={{ minWidth: 0, flexGrow: 1 }}>
             <Typography
               variant="h6"
               sx={{
@@ -233,7 +233,6 @@ export default function StorageBrowserDialog({
             // title is one line or carries a subtitle.
             <Box
               sx={{
-                ml: 'auto',
                 pl: 2,
                 flexShrink: 0,
                 display: 'flex',
