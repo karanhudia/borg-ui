@@ -27,6 +27,10 @@ def parse_borg_archive_time(
     if value is None:
         return None
 
+    # bool is an int subclass; True would otherwise parse as epoch 1.
+    if isinstance(value, bool):
+        return None
+
     if isinstance(value, (int, float)):
         try:
             return datetime.fromtimestamp(value, tz=timezone.utc).replace(tzinfo=None)

@@ -4,7 +4,6 @@ import json
 import os
 import structlog
 from typing import Dict, List
-from datetime import datetime, timezone
 from app.config import settings
 from app.core.borg_stream import CommandLineStream
 from app.utils.ssh_utils import public_key_only_ssh_args
@@ -828,115 +827,6 @@ class BorgInterface:
             env["BORG_PASSPHRASE"] = passphrase
 
         return await self._execute_command(cmd, env=env if env else None)
-
-    async def get_repository_info(
-        self, repository_path: str, remote_path: str = None, bypass_lock: bool = False
-    ) -> Dict:
-        """Get detailed information about a specific repository"""
-        try:
-            # Get repository info using borg info
-            cmd = ["borg", "info"]
-            if remote_path:
-                cmd.extend(["--remote-path", remote_path])
-            if bypass_lock:
-                cmd.append("--bypass-lock")
-            cmd.extend([repository_path, "--json"])
-            result = await self._execute_command(cmd, timeout=60)
-
-            if not result["success"]:
-                return {
-                    "success": False,
-                    "error": result["stderr"],
-                    "last_backup": None,
-                    "backup_count": 0,
-                    "total_size": 0,
-                    "compression_ratio": 0,
-                    "integrity_check": False,
-                    "disk_usage": 0,
-                }
-
-            # Parse JSON output
-            try:
-                info_data = json.loads(result["stdout"])
-                archives = info_data.get("archives", [])
-
-                # Calculate total size
-                total_size = sum(
-                    archive.get("stats", {}).get("size", 0) for archive in archives
-                )
-
-                # Get compression ratio (average)
-                compression_ratios = []
-                for archive in archives:
-                    stats = archive.get("stats", {})
-                    if stats.get("size") and stats.get("csize"):
-                        ratio = stats["csize"] / stats["size"]
-                        compression_ratios.append(ratio)
-
-                avg_compression_ratio = (
-                    sum(compression_ratios) / len(compression_ratios)
-                    if compression_ratios
-                    else 0
-                )
-
-                # Get last backup time
-                last_backup = None
-                if archives:
-                    latest_archive = max(archives, key=lambda x: x.get("time", 0))
-                    # Convert Unix timestamp to timezone-aware UTC datetime, then to ISO format
-                    last_backup = datetime.fromtimestamp(
-                        latest_archive["time"], tz=timezone.utc
-                    ).isoformat()
-
-                # Check disk usage
-                disk_usage = 0
-                try:
-                    import psutil
-
-                    disk = psutil.disk_usage(os.path.dirname(repository_path))
-                    disk_usage = disk.percent
-                except:
-                    pass
-
-                return {
-                    "success": True,
-                    "last_backup": last_backup,
-                    "backup_count": len(archives),
-                    "total_size": total_size,
-                    "compression_ratio": avg_compression_ratio,
-                    "integrity_check": True,  # If we can read the repo, it's likely intact
-                    "disk_usage": disk_usage,
-                }
-
-            except json.JSONDecodeError as e:
-                logger.error("Failed to parse repository info JSON", error=str(e))
-                return {
-                    "success": False,
-                    "error": "Failed to parse repository information",
-                    "last_backup": None,
-                    "backup_count": 0,
-                    "total_size": 0,
-                    "compression_ratio": 0,
-                    "integrity_check": False,
-                    "disk_usage": 0,
-                }
-
-        except Exception as e:
-            logger.error(
-                "Failed to get repository info",
-                repository=repository_path,
-                error=str(e),
-            )
-            return {
-                "success": False,
-                "error": str(e),
-                "last_backup": None,
-                "backup_count": 0,
-                "total_size": 0,
-                "compression_ratio": 0,
-                "integrity_check": False,
-                "disk_usage": 0,
-            }
 
     def get_version(self) -> str:
         """Get Borg version"""
