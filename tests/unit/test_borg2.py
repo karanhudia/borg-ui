@@ -40,7 +40,7 @@ async def test_list_archive_contents_uses_absolute_depth_for_browse():
             "docs/sub",
         ],
         max_lines=1_000_000,
-        env=None,
+        env={"TZ": "UTC"},
     )
 
 
@@ -61,7 +61,7 @@ async def test_list_archive_contents_omits_depth_when_not_requested():
     mock_run.assert_awaited_once_with(
         ["borg2", "-r", "/repo", "list", "--json-lines", "archive-1"],
         max_lines=1_000_000,
-        env=None,
+        env={"TZ": "UTC"},
     )
 
 

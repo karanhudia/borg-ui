@@ -10,6 +10,18 @@ from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
 
+def utc_now() -> datetime:
+    """Naive-UTC now - the canonical form for database writes.
+
+    Datetime columns store naive UTC. A naive-UTC value round-trips
+    identically on SQLite and PostgreSQL and never depends on the session
+    timezone; an aware value written to `timestamp without time zone` is
+    converted through the session zone first (safe only because the engine
+    pins it to UTC). New "now" writes should use this helper.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 def parse_borg_archive_time(
     value: Any, *, timezone_name: Optional[str] = None
 ) -> Optional[datetime]:
@@ -25,6 +37,10 @@ def parse_borg_archive_time(
     carry no ambiguity.
     """
     if value is None:
+        return None
+
+    # bool is an int subclass; True would otherwise parse as epoch 1.
+    if isinstance(value, bool):
         return None
 
     if isinstance(value, (int, float)):

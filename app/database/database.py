@@ -47,6 +47,40 @@ if settings.database_url.startswith("sqlite"):
         cursor.close()
 
 
+def _set_utc_session_timezone(dbapi_conn, connection_record):
+    # SET TIME ZONE is transactional: run outside a transaction, otherwise the
+    # pool's reset-on-return rollback reverts it and only the connection's
+    # first checkout is UTC (every reuse falls back to the server default).
+    # The SQLAlchemy recipe for SET-on-connect: flip the DBAPI connection to
+    # autocommit around the statement, then restore.
+    previous_autocommit = dbapi_conn.autocommit
+    dbapi_conn.autocommit = True
+    try:
+        cursor = dbapi_conn.cursor()
+        cursor.execute("SET TIME ZONE 'UTC'")
+        cursor.close()
+    finally:
+        dbapi_conn.autocommit = previous_autocommit
+
+
+def register_utc_session_timezone(target_engine) -> None:
+    """Pin the session timezone to UTC on PostgreSQL connections.
+
+    Datetime columns store naive UTC. An aware value written to
+    `timestamp without time zone` is converted through the SESSION zone
+    before the offset is stripped - correct only while that zone is UTC.
+    Pinning it here makes the convention hold by construction instead of
+    by the server's or environment's default. No-op on SQLite, whose
+    storage never consults a session zone.
+    """
+    if target_engine.dialect.name != "postgresql":
+        return
+    event.listen(target_engine, "connect", _set_utc_session_timezone)
+
+
+register_utc_session_timezone(engine)
+
+
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
