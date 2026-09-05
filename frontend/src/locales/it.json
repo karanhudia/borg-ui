@@ -951,7 +951,7 @@
       "none": "Nessun archivio",
       "archives_one": "{{count}} archivio",
       "archives_other": "{{count}} archivi",
-      "missed": "Era atteso un backup, nessuno trovato",
+      "missed": "L'esecuzione pianificata non è avvenuta",
       "sizeOutlier": "Insolitamente piccolo",
       "durationOutlier": "Insolitamente lento",
       "legendLess": "Meno",
@@ -959,7 +959,11 @@
       "tooltip": "{{count}} il {{date}} · {{size}} · {{duration}}",
       "showSmaller": "Mostra {{count}} serie più piccole",
       "hideSmaller": "Nascondi le serie più piccole",
-      "smallerNote": "Le serie con meno di {{count}} archivi sono raggruppate qui. I nomi che differiscono solo per maiuscole o punteggiatura sono lo stesso backup con nomi diversi."
+      "smallerNote": "Le serie con meno di {{count}} archivi sono raggruppate qui. I nomi che differiscono solo per maiuscole o punteggiatura sono lo stesso backup con nomi diversi.",
+      "missedTotal_one": "{{count}} giorno mancato",
+      "missedTotal_other": "{{count}} giorni mancati",
+      "pickArchive": "{{count}} archivi il {{date}}",
+      "legendMissed": "Esecuzione mancata"
     },
     "search": {
       "placeholder": "Cerca file in questo repository",

@@ -5,12 +5,13 @@ import type { HeatmapResponse } from '../../types/archives'
 
 interface HeatmapLegendProps {
   flagsAvailable: HeatmapResponse['flags_available']
+  missedTotal?: number
 }
 
 const SCALE_STEPS = [0.25, 0.425, 0.6, 0.775, 0.95]
 const SWATCH = 10
 
-export default function HeatmapLegend({ flagsAvailable }: HeatmapLegendProps) {
+export default function HeatmapLegend({ flagsAvailable, missedTotal }: HeatmapLegendProps) {
   const { t } = useTranslation()
   const theme = useTheme()
 
@@ -28,10 +29,7 @@ export default function HeatmapLegend({ flagsAvailable }: HeatmapLegendProps) {
     {
       key: 'missed',
       available: flagsAvailable.missed_run,
-      sample: {
-        bgcolor: alpha(theme.palette.text.primary, 0.06),
-        border: `1px dashed ${alpha(theme.palette.error.main, 0.55)}`,
-      },
+      sample: { bgcolor: alpha(theme.palette.error.main, 0.16) },
     },
     {
       key: 'sizeOutlier',
@@ -69,7 +67,10 @@ export default function HeatmapLegend({ flagsAvailable }: HeatmapLegendProps) {
         <Stack key={key} direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
           {swatch(sample)}
           <Typography variant="caption" color="text.secondary">
-            {t(`archives.heatmap.${key}`)}
+            {key === 'missed' ? t('archives.heatmap.legendMissed') : t(`archives.heatmap.${key}`)}
+            {key === 'missed' && available && missedTotal != null
+              ? ` (${t('archives.heatmap.missedTotal', { count: missedTotal })})`
+              : ''}
           </Typography>
           {!available && (
             <Chip

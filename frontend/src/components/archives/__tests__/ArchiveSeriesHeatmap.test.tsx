@@ -99,6 +99,52 @@ describe('ArchiveSeriesHeatmap', () => {
   it('places the legend under the bands', () => {
     render(<ArchiveSeriesHeatmap data={data} onSelectDay={vi.fn()} />)
     expect(screen.getByText('Less')).toBeInTheDocument()
-    expect(screen.getByText(/expected a run/i)).toBeInTheDocument()
+    expect(screen.getByText(/missed run/i)).toBeInTheDocument()
+  })
+})
+
+describe('ArchiveSeriesHeatmap days with several archives', () => {
+  const multi: HeatmapResponse = {
+    ...data,
+    series: [
+      series('nightly', [
+        day('2026-09-01', { count: 2, archive_ids: [12, 13] }),
+        day('2026-09-02'),
+      ]),
+    ],
+  }
+  const lookup = (id: number) =>
+    ({
+      12: { name: 'nightly-2026-09-01T02:00', start: '2026-09-01T02:00:00Z', size: 1024 },
+      13: { name: 'nightly-2026-09-01T14:00', start: '2026-09-01T14:00:00Z', size: 2048 },
+    })[id]
+
+  it('offers a chooser instead of opening the first archive', () => {
+    const onSelectDay = vi.fn()
+    const onSelectArchive = vi.fn()
+    render(
+      <ArchiveSeriesHeatmap
+        data={multi}
+        onSelectDay={onSelectDay}
+        onSelectArchive={onSelectArchive}
+        archiveLookup={lookup}
+      />
+    )
+    fireEvent.click(screen.getByTestId('heatmap-day-nightly-2026-09-01'))
+    expect(onSelectDay).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('menuitem', { name: /14:00/ }))
+    expect(onSelectArchive).toHaveBeenCalledWith(13)
+  })
+
+  it('still opens a single-archive day directly', () => {
+    const onSelectDay = vi.fn()
+    render(<ArchiveSeriesHeatmap data={multi} onSelectDay={onSelectDay} archiveLookup={lookup} />)
+    fireEvent.click(screen.getByTestId('heatmap-day-nightly-2026-09-02'))
+    expect(onSelectDay).toHaveBeenCalled()
+  })
+
+  it('totals the missed days in the legend', () => {
+    render(<ArchiveSeriesHeatmap data={data} onSelectDay={vi.fn()} />)
+    expect(screen.getByText(/1 missed day/)).toBeInTheDocument()
   })
 })

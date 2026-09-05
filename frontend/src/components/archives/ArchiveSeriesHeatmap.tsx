@@ -1,14 +1,40 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Box, Button, Stack, Tooltip, Typography, alpha, useTheme } from '@mui/material'
+import {
+  Box,
+  Button,
+  ListItemText,
+  Menu,
+  MenuItem,
+  Stack,
+  Tooltip,
+  Typography,
+  alpha,
+  useTheme,
+} from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import { addDays, addWeeks, format, max, min, parseISO, startOfWeek, subWeeks } from 'date-fns'
 import HeatmapLegend from './HeatmapLegend'
-import { formatBytes, formatDurationSeconds } from '../../utils/dateUtils'
+import { formatBytes, formatDurationSeconds, parseBackendDate } from '../../utils/dateUtils'
 import type { HeatmapDay, HeatmapResponse, HeatmapSeries } from '../../types/archives'
+
+export interface HeatmapArchiveSummary {
+  name: string
+  start: string
+  size: number | null
+}
 
 interface ArchiveSeriesHeatmapProps {
   data: HeatmapResponse
+  // A day with one archive opens it straight away.
   onSelectDay: (day: HeatmapDay) => void
+  // A day with several archives shows a chooser; picking one calls this.
+  onSelectArchive?: (archiveId: number) => void
+  archiveLookup?: (archiveId: number) => HeatmapArchiveSummary | undefined
+}
+
+interface Chooser {
+  anchor: HTMLElement
+  day: HeatmapDay
 }
 
 // Calendar geometry: columns are weeks, rows are weekdays, so a year is
@@ -142,10 +168,12 @@ function SeriesBand({
   series,
   window,
   onSelectDay,
+  onOpenChooser,
 }: {
   series: HeatmapSeries
   window: Window
   onSelectDay: (day: HeatmapDay) => void
+  onOpenChooser: (anchor: HTMLElement, day: HeatmapDay) => void
 }) {
   const { t } = useTranslation()
   const theme = useTheme()
@@ -197,6 +225,12 @@ function SeriesBand({
           const hasArchives = (day?.archive_ids.length ?? 0) > 0
           const hasAnomalies = (day?.anomalies.length ?? 0) > 0
           const isMissed = missed.has(iso)
+          const activate = (target: HTMLElement) => {
+            if (!day || !hasArchives) return
+            if (day.archive_ids.length > 1) onOpenChooser(target, day)
+            else onSelectDay(day)
+          }
+          const showCount = window.cell >= 14 && count > 1
           const cell = (
             <Box
               key={iso}
@@ -215,13 +249,13 @@ function SeriesBand({
                     })
                   : undefined
               }
-              onClick={hasArchives && day ? () => onSelectDay(day) : undefined}
+              onClick={hasArchives ? (event) => activate(event.currentTarget) : undefined}
               onKeyDown={
-                hasArchives && day
+                hasArchives
                   ? (event) => {
                       if (event.key === 'Enter' || event.key === ' ') {
                         event.preventDefault()
-                        onSelectDay(day)
+                        activate(event.currentTarget)
                       }
                     }
                   : undefined
@@ -234,15 +268,25 @@ function SeriesBand({
                 cursor: hasArchives ? 'pointer' : 'default',
                 bgcolor: hasArchives
                   ? alpha(theme.palette.primary.main, countScale(count))
-                  : alpha(theme.palette.text.primary, 0.06),
-                border: isMissed ? `1px dashed ${alpha(theme.palette.error.main, 0.55)}` : 'none',
+                  : isMissed
+                    ? alpha(theme.palette.error.main, 0.16)
+                    : alpha(theme.palette.text.primary, 0.06),
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: Math.max(8, window.cell - 6),
+                fontWeight: 700,
+                lineHeight: 1,
+                color: theme.palette.primary.contrastText,
                 boxShadow: hasAnomalies ? `inset 0 0 0 2px ${theme.palette.warning.main}` : 'none',
                 '&:focus-visible': {
                   outline: `2px solid ${theme.palette.primary.main}`,
                   outlineOffset: 1,
                 },
               }}
-            />
+            >
+              {showCount ? count : null}
+            </Box>
           )
           if (!hasArchives && !isMissed) return cell
           return (
@@ -268,8 +312,15 @@ function SeriesBand({
   )
 }
 
-export default function ArchiveSeriesHeatmap({ data, onSelectDay }: ArchiveSeriesHeatmapProps) {
+export default function ArchiveSeriesHeatmap({
+  data,
+  onSelectDay,
+  onSelectArchive,
+  archiveLookup,
+}: ArchiveSeriesHeatmapProps) {
   const { t } = useTranslation()
+  const [chooser, setChooser] = useState<Chooser | null>(null)
+  const missedTotal = data.series.reduce((sum, s) => sum + s.missed_days.length, 0)
   const [showSmall, setShowSmall] = useState(false)
   const [scrollRef, containerWidth] = useContainerWidth()
   const today = useMemo(() => new Date(), [])
@@ -316,10 +367,49 @@ export default function ArchiveSeriesHeatmap({ data, onSelectDay }: ArchiveSerie
               series={series}
               window={window}
               onSelectDay={onSelectDay}
+              onOpenChooser={(anchor, day) => setChooser({ anchor, day })}
             />
           ))}
         </Stack>
       </Box>
+      <Menu open={chooser != null} anchorEl={chooser?.anchor} onClose={() => setChooser(null)}>
+        {chooser && (
+          <Typography variant="caption" sx={{ px: 2, py: 0.5, color: 'text.secondary' }}>
+            {t('archives.heatmap.pickArchive', {
+              count: chooser.day.archive_ids.length,
+              date: chooser.day.date,
+            })}
+          </Typography>
+        )}
+        {chooser?.day.archive_ids.map((id) => {
+          const summary = archiveLookup?.(id)
+          const time = summary
+            ? parseBackendDate(summary.start).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              })
+            : String(id)
+          return (
+            <MenuItem
+              key={id}
+              onClick={() => {
+                setChooser(null)
+                if (onSelectArchive) onSelectArchive(id)
+                else onSelectDay({ ...chooser.day, archive_ids: [id] })
+              }}
+            >
+              <ListItemText
+                primary={time}
+                secondary={
+                  summary
+                    ? `${summary.name}${summary.size != null ? ` · ${formatBytes(summary.size)}` : ''}`
+                    : undefined
+                }
+              />
+            </MenuItem>
+          )
+        })}
+      </Menu>
       {folded.length > 0 && (
         <Box>
           <Button size="small" variant="text" onClick={() => setShowSmall((value) => !value)}>
@@ -334,7 +424,7 @@ export default function ArchiveSeriesHeatmap({ data, onSelectDay }: ArchiveSerie
           )}
         </Box>
       )}
-      <HeatmapLegend flagsAvailable={data.flags_available} />
+      <HeatmapLegend flagsAvailable={data.flags_available} missedTotal={missedTotal} />
     </Stack>
   )
 }

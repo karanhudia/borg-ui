@@ -951,7 +951,7 @@
       "none": "No archives",
       "archives_one": "{{count}} archive",
       "archives_other": "{{count}} archives",
-      "missed": "Expected a run, none found",
+      "missed": "Scheduled run did not happen",
       "sizeOutlier": "Unusually small",
       "durationOutlier": "Unusually slow",
       "legendLess": "Less",
@@ -959,7 +959,11 @@
       "tooltip": "{{count}} on {{date}} · {{size}} · {{duration}}",
       "showSmaller": "Show {{count}} smaller series",
       "hideSmaller": "Hide smaller series",
-      "smallerNote": "Series with fewer than {{count}} archives are folded here. Names that differ only by case or punctuation are the same backup under different names."
+      "smallerNote": "Series with fewer than {{count}} archives are folded here. Names that differ only by case or punctuation are the same backup under different names.",
+      "missedTotal_one": "{{count}} missed day",
+      "missedTotal_other": "{{count}} missed days",
+      "pickArchive": "{{count}} archives on {{date}}",
+      "legendMissed": "Missed run"
     },
     "search": {
       "placeholder": "Search files in this repository",
