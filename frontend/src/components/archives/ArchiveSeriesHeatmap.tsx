@@ -14,9 +14,11 @@ interface ArchiveSeriesHeatmapProps {
 // Calendar geometry: columns are weeks, rows are weekdays, so a year is
 // 53 columns wide and seven cells tall, and every series band shares one
 // month axis at the top.
-export const CELL = 10
+// Cells grow with the panel: at least 10 px so a year fits on a laptop,
+// at most 18 px so the calendar stays a calendar on a wide monitor.
+const MIN_CELL = 10
+const MAX_CELL = 18
 export const GAP = 2
-const WEEK_WIDTH = CELL + GAP
 const LABEL_WIDTH = 200
 const WEEKDAY_WIDTH = 18
 const WEEKS_BY_DEFAULT = 52
@@ -37,19 +39,42 @@ interface Window {
   start: Date
   weeks: number
   today: Date
+  cell: number
 }
 
-function buildWindow(series: HeatmapSeries[], today: Date): Window {
+function useContainerWidth(): [React.RefObject<HTMLDivElement | null>, number] {
+  const ref = useRef<HTMLDivElement>(null)
+  const [width, setWidth] = useState(0)
+  useEffect(() => {
+    const node = ref.current
+    if (!node || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver((entries) => {
+      setWidth(Math.floor(entries[0]?.contentRect.width ?? 0))
+    })
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
+  return [ref, width]
+}
+
+function cellSizeFor(containerWidth: number, weeks: number): number {
+  if (containerWidth <= 0 || weeks <= 0) return MIN_CELL
+  const available = containerWidth - LABEL_WIDTH - WEEKDAY_WIDTH - 4
+  return Math.max(MIN_CELL, Math.min(MAX_CELL, Math.floor(available / weeks) - GAP))
+}
+
+function buildWindow(series: HeatmapSeries[], today: Date, cell: number): Window {
   const dates = series.flatMap((s) => [...s.days.map((d) => d.date), ...s.missed_days])
   const earliest = dates.length > 0 ? min(dates.map((d) => parseISO(d))) : today
   const defaultStart = subWeeks(today, WEEKS_BY_DEFAULT - 1)
   const start = startOfWeek(min([earliest, defaultStart]), { weekStartsOn: 1 })
   const end = startOfWeek(max([today, ...dates.map((d) => parseISO(d))]), { weekStartsOn: 1 })
   const weeks = Math.round((end.getTime() - start.getTime()) / (7 * 24 * 3600 * 1000)) + 1
-  return { start, weeks, today }
+  return { start, weeks, today, cell }
 }
 
 function MonthAxis({ window }: { window: Window }) {
+  const weekWidth = window.cell + GAP
   const labels: { column: number; label: string }[] = []
   let lastMonth = -1
   for (let w = 0; w < window.weeks; w++) {
@@ -63,7 +88,7 @@ function MonthAxis({ window }: { window: Window }) {
   return (
     <Box
       data-testid="heatmap-month-axis"
-      sx={{ position: 'relative', height: 18, width: window.weeks * WEEK_WIDTH }}
+      sx={{ position: 'relative', height: 18, width: window.weeks * weekWidth }}
     >
       {labels.map(({ column, label }, index) => {
         // A month that starts in the last column has no room for its label.
@@ -75,7 +100,7 @@ function MonthAxis({ window }: { window: Window }) {
             variant="caption"
             sx={{
               position: 'absolute',
-              left: column * WEEK_WIDTH,
+              left: column * weekWidth,
               color: 'text.secondary',
               lineHeight: '18px',
             }}
@@ -88,7 +113,7 @@ function MonthAxis({ window }: { window: Window }) {
   )
 }
 
-function WeekdayColumn() {
+function WeekdayColumn({ cell }: { cell: number }) {
   const monday = startOfWeek(new Date(), { weekStartsOn: 1 })
   return (
     <Box sx={{ width: WEEKDAY_WIDTH, flexShrink: 0 }}>
@@ -98,9 +123,9 @@ function WeekdayColumn() {
           variant="caption"
           sx={{
             display: 'block',
-            height: CELL,
-            lineHeight: `${CELL}px`,
-            fontSize: 8,
+            height: cell,
+            lineHeight: `${cell}px`,
+            fontSize: cell >= 14 ? 10 : 8,
             mb: `${GAP}px`,
             color: 'text.secondary',
             visibility: offset % 2 === 0 ? 'visible' : 'hidden',
@@ -153,12 +178,12 @@ function SeriesBand({
       >
         {series.series}
       </Typography>
-      <WeekdayColumn />
+      <WeekdayColumn cell={window.cell} />
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: `repeat(${window.weeks}, ${CELL}px)`,
-          gridTemplateRows: `repeat(7, ${CELL}px)`,
+          gridTemplateColumns: `repeat(${window.weeks}, ${window.cell}px)`,
+          gridTemplateRows: `repeat(7, ${window.cell}px)`,
           gridAutoFlow: 'column',
           gap: `${GAP}px`,
         }}
@@ -202,9 +227,9 @@ function SeriesBand({
                   : undefined
               }
               sx={{
-                width: CELL,
-                height: CELL,
-                borderRadius: '2px',
+                width: window.cell,
+                height: window.cell,
+                borderRadius: window.cell >= 14 ? '3px' : '2px',
                 boxSizing: 'border-box',
                 cursor: hasArchives ? 'pointer' : 'default',
                 bgcolor: hasArchives
@@ -246,9 +271,11 @@ function SeriesBand({
 export default function ArchiveSeriesHeatmap({ data, onSelectDay }: ArchiveSeriesHeatmapProps) {
   const { t } = useTranslation()
   const [showSmall, setShowSmall] = useState(false)
-  const scrollRef = useRef<HTMLDivElement>(null)
+  const [scrollRef, containerWidth] = useContainerWidth()
   const today = useMemo(() => new Date(), [])
-  const window = useMemo(() => buildWindow(data.series, today), [data.series, today])
+  const weeks = useMemo(() => buildWindow(data.series, today, MIN_CELL).weeks, [data.series, today])
+  const cell = cellSizeFor(containerWidth, weeks)
+  const window = useMemo(() => buildWindow(data.series, today, cell), [data.series, today, cell])
 
   const archiveCount = (series: HeatmapSeries) =>
     series.days.reduce((sum, day) => sum + day.count, 0)
@@ -263,7 +290,7 @@ export default function ArchiveSeriesHeatmap({ data, onSelectDay }: ArchiveSerie
     // should land.
     const node = scrollRef.current
     if (node) node.scrollLeft = node.scrollWidth
-  }, [window.weeks])
+  }, [window.weeks, window.cell, scrollRef])
 
   return (
     <Stack spacing={2}>
