@@ -5904,7 +5904,10 @@
     "upgradeNudgeAfterTitle": "Desbloquea más con Pro o Enterprise",
     "upgradeNudgePro": "Pro",
     "upgradeNudgeEnterprise": "Enterprise",
-    "viewUpgradeOptions": "Ver opciones de mejora"
+    "viewUpgradeOptions": "Ver opciones de mejora",
+    "expiredUpgradeCta": "Recuperar funciones Pro",
+    "daysShort_one": "queda {{count}} día",
+    "daysShort_other": "quedan {{count}} días"
   },
   "licensing": {
     "title": "Licencias",

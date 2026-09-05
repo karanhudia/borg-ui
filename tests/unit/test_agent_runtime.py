@@ -2326,6 +2326,53 @@ def test_repository_extract_file_job_returns_base64_content(monkeypatch):
 
 
 @pytest.mark.unit
+def test_machine_parsed_repository_operations_run_under_tz_utc(monkeypatch):
+    import os
+
+    seen_env = {}
+
+    def fake_run(cmd, *, text, capture_output, env, timeout):
+        seen_env.update(env)
+        return SimpleNamespace(returncode=0, stdout='{"archives":[]}', stderr="")
+
+    monkeypatch.setattr("agent.borg_ui_agent.repository_ops.subprocess.run", fake_run)
+    monkeypatch.setenv("TZ", "Europe/Berlin")
+    client = FakeRuntimeClient([])
+
+    result = execute_repository_operation_job(
+        {
+            "id": 92,
+            "payload": {
+                "job_kind": "repository.list_archives",
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+            },
+        },
+        client,
+    )
+
+    # The server parses these timestamps with the reported zone ("UTC"), so
+    # the listing must really render in UTC - even with TZ set on the machine.
+    assert result.status == "completed"
+    assert seen_env["TZ"] == "UTC"
+
+    seen_env.clear()
+    result = execute_repository_operation_job(
+        {
+            "id": 93,
+            "payload": {
+                "job_kind": "repository.break_lock",
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+            },
+        },
+        client,
+    )
+
+    # Non-parsed operations keep the machine zone untouched.
+    assert result.status == "completed"
+    assert seen_env.get("TZ") == os.environ.get("TZ")
+
+
+@pytest.mark.unit
 def test_repository_extract_file_streams_artifact_when_delivery_requested(monkeypatch):
     uploaded = {}
 
@@ -2975,21 +3022,12 @@ def test_cli_unregister_revokes_agent_and_removes_config(
     assert "Unregistered agt_cli" in capsys.readouterr().out
 
 
-class TestTimezoneDetection:
-    def test_valid_tz_env_wins(self, monkeypatch):
-        from agent.borg_ui_agent.borg import detect_platform, detect_timezone
+class TestReportedTimezone:
+    def test_reports_utc_regardless_of_machine_zone(self, monkeypatch):
+        from agent.borg_ui_agent.borg import detect_platform
 
+        # The reported zone is the one borg renders machine-parsed output in,
+        # which the agent pins to UTC - not the machine's own zone.
         monkeypatch.setenv("TZ", "Europe/Berlin")
 
-        assert detect_timezone() == "Europe/Berlin"
-        assert detect_platform()["timezone"] == "Europe/Berlin"
-
-    def test_invalid_tz_env_is_never_reported(self, monkeypatch):
-        from agent.borg_ui_agent.borg import detect_timezone
-
-        # An unresolvable name must not reach the server - it could not
-        # interpret archive times with it. The fallback may still find the
-        # machine's real zone (or nothing); both are acceptable here.
-        monkeypatch.setenv("TZ", "Not/AZone")
-
-        assert detect_timezone() != "Not/AZone"
+        assert detect_platform()["timezone"] == "UTC"

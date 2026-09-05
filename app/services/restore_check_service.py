@@ -87,6 +87,24 @@ def _get_archive_name(archive: dict | str | None) -> str:
     return ""
 
 
+def _get_archive_selector(archive: dict | str | None, repository) -> str:
+    """Selector that resolves to exactly one archive.
+
+    Borg 2 archives in a series share one name and are told apart by id, so
+    extract needs the aid: selector - a bare series name matches every
+    archive in the series and borg refuses to pick one. Borg 1 names are
+    unique and are passed as-is.
+    """
+    name = _get_archive_name(archive)
+    if getattr(repository, "borg_version", 1) != 2:
+        return name
+    if isinstance(archive, dict):
+        archive_id = archive.get("id")
+        if isinstance(archive_id, str) and archive_id:
+            return f"aid:{archive_id}"
+    return name
+
+
 # Upper bounds so a delegated restore-check cannot wait on the agent forever:
 # fail if the job is never claimed (agent offline) or goes silent (agent died).
 _AGENT_OP_CLAIM_TIMEOUT_SECONDS = 120
@@ -238,6 +256,7 @@ class RestoreCheckService:
             archives = await BorgRouter(repository).list_archives(env=env)
             archive = _select_latest_archive(archives)
             archive_name = _get_archive_name(archive)
+            archive_selector = _get_archive_selector(archive, repository)
             if not archive_name:
                 job.status = "needs_backup" if use_canary else "failed"
                 job.error_message = (
@@ -308,7 +327,7 @@ class RestoreCheckService:
             async def run_extract(paths: list[str]) -> int | None:
                 cmd = BorgRouter(repository).build_restore_extract_command(
                     repository_path=repository.path,
-                    archive_name=archive_name,
+                    archive_name=archive_selector,
                     paths=paths,
                     remote_path=effective_repository_remote_path(repository),
                     bypass_lock=repository.bypass_lock,
@@ -520,6 +539,7 @@ class RestoreCheckService:
 
         archive = _select_latest_archive(archives)
         archive_name = _get_archive_name(archive)
+        archive_selector = _get_archive_selector(archive, repository)
         if not archive_name:
             job.status = "needs_backup" if use_canary else "failed"
             job.error_message = (
@@ -574,7 +594,7 @@ class RestoreCheckService:
         )
 
         operation: dict = {
-            "archive": archive_name,
+            "archive": archive_selector,
             "paths": restore_paths,
             "target": {"type": "temp"},
         }
@@ -605,7 +625,7 @@ class RestoreCheckService:
             return
 
         await dispatch_agent_job_best_effort(
-            db, agent_job, repository_id=repository.id, archive=archive_name
+            db, agent_job, repository_id=repository.id, archive=archive_selector
         )
 
         try:

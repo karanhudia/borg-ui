@@ -359,7 +359,8 @@ class TestV2ArchiveRoutes:
                 "user": "root",
                 "group": "root",
                 "size": 11,
-                "mtime": "2026-04-04T00:00:00",
+                # Server-side listing ran under TZ=UTC; mtime carries the offset.
+                "mtime": "2026-04-04T00:00:00+00:00",
                 "healthy": True,
             }
         ]
@@ -609,7 +610,7 @@ class TestV2ArchiveRoutes:
             browse_depth=6,
         )
         mock_cache_set.assert_awaited_once_with(
-            repo.id, "archive-1::managed-path::docs/sub::fast", []
+            repo.id, "v2-utc-mtime::archive-1::managed-path::docs/sub::fast", []
         )
 
     def test_get_archive_contents_hides_directory_size_when_fast_mode_enabled(
@@ -738,7 +739,7 @@ class TestV2ArchiveRoutes:
         assert response.status_code == 200
         assert response.json()["items"] == cached_items
         mock_cache_get.assert_awaited_once_with(
-            repo.id, "archive-1::managed-path::docs"
+            repo.id, "v2-utc-mtime::archive-1::managed-path::docs"
         )
         mock_contents.assert_not_called()
 
@@ -776,7 +777,7 @@ class TestV2ArchiveRoutes:
         assert response.status_code == 200
         assert response.json()["items"] == cached_items
         mock_cache_get.assert_awaited_once_with(
-            repo.id, f"aid:{archive_id}::managed-path::docs"
+            repo.id, f"v2-utc-mtime::aid:{archive_id}::managed-path::docs"
         )
         mock_contents.assert_not_called()
 
@@ -830,11 +831,15 @@ class TestV2ArchiveRoutes:
         assert response.status_code == 200
         assert mock_cache_set.await_count == 3
         calls = [call.args for call in mock_cache_set.await_args_list]
-        assert calls[0] == (repo.id, "archive-1::raw", parse_archive_items(stdout))
+        assert calls[0] == (
+            repo.id,
+            "v2-utc-mtime::archive-1::raw",
+            parse_archive_items(stdout, timezone_name="UTC"),
+        )
         assert calls[1][0] == repo.id
-        assert calls[1][1] == "archive-1::managed-root"
+        assert calls[1][1] == "v2-utc-mtime::archive-1::managed-root"
         assert calls[2][0] == repo.id
-        assert calls[2][1] == "archive-1::managed-path::docs"
+        assert calls[2][1] == "v2-utc-mtime::archive-1::managed-path::docs"
         assert calls[2][2] == response.json()["items"]
 
     def test_download_file_success(

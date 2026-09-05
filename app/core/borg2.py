@@ -392,7 +392,10 @@ class Borg2Interface:
         exec_env = env.copy() if env else {}
         if passphrase:
             exec_env["BORG_PASSPHRASE"] = passphrase
-        return await self._run(cmd, timeout=60, env=exec_env or None)
+        # Machine-parsed output: render timestamps in UTC (borg2 timestamps
+        # carry an offset either way; pinned for uniformity with borg1).
+        exec_env["TZ"] = "UTC"
+        return await self._run(cmd, timeout=60, env=exec_env)
 
     async def info_repo(
         self,
@@ -415,7 +418,9 @@ class Borg2Interface:
         exec_env = env.copy() if env else {}
         if passphrase:
             exec_env["BORG_PASSPHRASE"] = passphrase
-        return await self._run(cmd, timeout=timeout, env=exec_env or None)
+        # Machine-parsed output: render timestamps in UTC (see rinfo).
+        exec_env["TZ"] = "UTC"
+        return await self._run(cmd, timeout=timeout, env=exec_env)
 
     async def rdelete(
         self,
@@ -457,7 +462,9 @@ class Borg2Interface:
         exec_env = env.copy() if env else {}
         if passphrase:
             exec_env["BORG_PASSPHRASE"] = passphrase
-        return await self._run(cmd, env=exec_env or None)
+        # Machine-parsed output: render timestamps in UTC (see rinfo).
+        exec_env["TZ"] = "UTC"
+        return await self._run(cmd, env=exec_env)
 
     async def info_archive(
         self,
@@ -475,7 +482,9 @@ class Borg2Interface:
         exec_env = env.copy() if env else {}
         if passphrase:
             exec_env["BORG_PASSPHRASE"] = passphrase
-        return await self._run(cmd, env=exec_env or None)
+        # Machine-parsed output: render timestamps in UTC (see rinfo).
+        exec_env["TZ"] = "UTC"
+        return await self._run(cmd, env=exec_env)
 
     async def list_archive_contents(
         self,
@@ -501,7 +510,9 @@ class Borg2Interface:
         exec_env = env.copy() if env else {}
         if passphrase:
             exec_env["BORG_PASSPHRASE"] = passphrase
-        return await self._run_streaming(cmd, max_lines=max_lines, env=exec_env or None)
+        # Machine-parsed output: render file mtimes in UTC (see list_archives).
+        exec_env["TZ"] = "UTC"
+        return await self._run_streaming(cmd, max_lines=max_lines, env=exec_env)
 
     def diff_archives(
         self,
@@ -521,6 +532,8 @@ class Borg2Interface:
         exec_env = self._base_env(env)
         if passphrase:
             exec_env["BORG_PASSPHRASE"] = passphrase
+        # Machine-parsed output: render timestamps in UTC (see list_archives).
+        exec_env["TZ"] = "UTC"
         return CommandLineStream(cmd, env=exec_env, timeout=timeout)
 
     def list_archive_lines(
@@ -540,6 +553,8 @@ class Borg2Interface:
         exec_env = self._base_env(env)
         if passphrase:
             exec_env["BORG_PASSPHRASE"] = passphrase
+        # Machine-parsed output: render timestamps in UTC (see list_archives).
+        exec_env["TZ"] = "UTC"
         return CommandLineStream(cmd, env=exec_env, timeout=timeout)
 
     # ── Backup operations ──────────────────────────────────────────────────────

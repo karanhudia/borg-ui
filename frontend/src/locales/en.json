@@ -5904,7 +5904,10 @@
     "upgradeNudgeAfterTitle": "Unlock more on Pro or Enterprise",
     "upgradeNudgePro": "Pro",
     "upgradeNudgeEnterprise": "Enterprise",
-    "viewUpgradeOptions": "View upgrade options"
+    "viewUpgradeOptions": "View upgrade options",
+    "expiredUpgradeCta": "Restore Pro features",
+    "daysShort_one": "{{count}} day left",
+    "daysShort_other": "{{count}} days left"
   },
   "licensing": {
     "title": "Licensing",

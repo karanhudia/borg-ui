@@ -40,7 +40,7 @@ async def test_list_archive_contents_uses_absolute_depth_for_browse():
             "docs/sub",
         ],
         max_lines=1_000_000,
-        env=None,
+        env={"TZ": "UTC"},
     )
 
 
@@ -61,7 +61,7 @@ async def test_list_archive_contents_omits_depth_when_not_requested():
     mock_run.assert_awaited_once_with(
         ["borg2", "-r", "/repo", "list", "--json-lines", "archive-1"],
         max_lines=1_000_000,
-        env=None,
+        env={"TZ": "UTC"},
     )
 
 
@@ -350,3 +350,27 @@ async def test_rdelete_disables_the_store_cache():
         await borg2.rdelete(repository="/repo")
 
     assert mock_run.await_args.kwargs["env"] == {"BORG_STORE_CACHE": ""}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "method,args",
+    [
+        ("list_archives", ("/repo",)),
+        ("info_archive", ("/repo", "archive-1")),
+        ("rinfo", ("/repo",)),
+        ("info_repo", ("/repo",)),
+    ],
+)
+async def test_machine_parsed_output_renders_timestamps_in_utc(method, args):
+    with patch.object(
+        borg2,
+        "_run",
+        new=AsyncMock(return_value={"success": True, "stdout": ""}),
+    ) as mock_run:
+        await getattr(borg2, method)(*args, passphrase="pw")
+
+    env = mock_run.await_args.kwargs["env"]
+    assert env["TZ"] == "UTC"
+    assert env["BORG_PASSPHRASE"] == "pw"

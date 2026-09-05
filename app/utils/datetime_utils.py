@@ -10,6 +10,18 @@ from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
 
+def utc_now() -> datetime:
+    """Naive-UTC now - the canonical form for database writes.
+
+    Datetime columns store naive UTC. A naive-UTC value round-trips
+    identically on SQLite and PostgreSQL and never depends on the session
+    timezone; an aware value written to `timestamp without time zone` is
+    converted through the session zone first (safe only because the engine
+    pins it to UTC). New "now" writes should use this helper.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 def parse_borg_archive_time(
     value: Any, *, timezone_name: Optional[str] = None
 ) -> Optional[datetime]:
@@ -25,6 +37,10 @@ def parse_borg_archive_time(
     carry no ambiguity.
     """
     if value is None:
+        return None
+
+    # bool is an int subclass; True would otherwise parse as epoch 1.
+    if isinstance(value, bool):
         return None
 
     if isinstance(value, (int, float)):
@@ -68,6 +84,23 @@ def parse_borg_archive_time(
             # (same fold=0 semantics as above).
             dt = dt.astimezone()
     return dt.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def serialize_borg_archive_time(
+    value: Any, *, timezone_name: Optional[str] = None
+) -> Optional[str]:
+    """Re-render a borg-rendered timestamp as an ISO-8601 UTC string with offset.
+
+    Borg's own rendering may be naive (borg1), which JavaScript's Date parses
+    as browser-local time; serializing with an explicit offset makes the value
+    self-describing for display. ``timezone_name`` has the same semantics as in
+    parse_borg_archive_time. Unparseable strings are returned unchanged so a
+    response never loses the raw value.
+    """
+    parsed = parse_borg_archive_time(value, timezone_name=timezone_name)
+    if parsed is None:
+        return value if isinstance(value, str) else None
+    return serialize_datetime(parsed)
 
 
 def serialize_datetime(dt: Optional[datetime]) -> Optional[str]:

@@ -37,8 +37,10 @@ the file; the manual cleanup endpoint runs VACUUM for that.
 from __future__ import annotations
 
 import re
-from datetime import timedelta
+from datetime import timedelta, timezone
 from pathlib import Path
+
+from app.config import settings as app_config
 from typing import Dict, Iterable, Optional
 
 import structlog
@@ -127,15 +129,58 @@ def _older_than(model, cutoff):
     return (timestamp < cutoff,)
 
 
+def _referenced_log_files(db: Session, paths: list[str]) -> set:
+    """The subset of paths some surviving row still names.
+
+    log_file_path carries no uniqueness guarantee, so an expired row and a
+    retained one can point at the same file - deleting by the expired row
+    alone would take the retained row's log with it.
+    """
+    referenced: set = set()
+    if not paths:
+        return referenced
+    for model, _ in _JOB_TABLES:
+        column = getattr(model, "log_file_path", None)
+        if column is None:
+            continue
+        for (path,) in db.query(column).filter(column.in_(paths)):
+            referenced.add(path)
+    return referenced
+
+
 def _delete_chunked(db: Session, model, filters) -> int:
-    """Delete matching rows in CHUNK_SIZE batches, committing per batch."""
+    """Delete matching rows in CHUNK_SIZE batches, committing per batch.
+
+    Rows that name a log file take it with them: paths are captured before
+    the delete and unlinked only after the commit, so a failed commit never
+    leaves a surviving row pointing at a vanished file. Unlink errors are
+    tolerated - retention must not fail over a file the filesystem already
+    lost.
+    """
+    log_column = getattr(model, "log_file_path", None)
     total = 0
     while True:
-        ids = [row[0] for row in db.query(model.id).filter(*filters).limit(CHUNK_SIZE)]
+        log_files: list[str] = []
+        if log_column is not None:
+            rows = (
+                db.query(model.id, log_column).filter(*filters).limit(CHUNK_SIZE).all()
+            )
+            ids = [row[0] for row in rows]
+            log_files = [row[1] for row in rows if row[1]]
+        else:
+            ids = [
+                row[0] for row in db.query(model.id).filter(*filters).limit(CHUNK_SIZE)
+            ]
         if not ids:
             return total
         db.query(model).filter(model.id.in_(ids)).delete(synchronize_session=False)
         db.commit()
+        still_referenced = _referenced_log_files(db, log_files)
+        for path in set(log_files) - still_referenced:
+            try:
+                Path(path).unlink(missing_ok=True)
+            except OSError:
+                pass
         total += len(ids)
 
 
@@ -223,11 +268,51 @@ def purge_operation_log_files(db: Session, filters) -> int:
         total += len(rows)
 
 
-def purge_job_rows(db: Session, cutoff) -> int:
-    """Delete finished job rows older than cutoff (all job tables)."""
+def sweep_orphaned_log_files(db: Session, cutoff) -> int:
+    """Unlink job-log files that no row references anymore.
+
+    Rows purged before file cleanup existed - and any crash between a
+    chunk's commit and its unlink - leave files behind that no DB-driven
+    pass can ever find again. Swept here by age (file mtime against the
+    row-retention cutoff), restricted to *.log inside the log directory,
+    and never touching a file some live row still names.
+    """
+    log_dir = Path(app_config.data_dir) / "logs"
+    if not log_dir.is_dir():
+        return 0
+
+    referenced: set = set()
+    for model, _ in _JOB_TABLES:
+        column = getattr(model, "log_file_path", None)
+        if column is None:
+            continue
+        for (path,) in db.query(column).filter(column.isnot(None)):
+            referenced.add(path)
+
+    cutoff_ts = (
+        cutoff if cutoff.tzinfo else cutoff.replace(tzinfo=timezone.utc)
+    ).timestamp()
     total = 0
-    # The rows are about to go; their log files must go with them.
-    purge_operation_log_files(db, _older_than(Operation, cutoff))
+    for file in log_dir.glob("*.log"):
+        try:
+            if str(file) in referenced:
+                continue
+            if file.stat().st_mtime >= cutoff_ts:
+                continue
+            file.unlink(missing_ok=True)
+            total += 1
+        except OSError:
+            continue
+    return total
+
+
+def purge_job_rows(db: Session, cutoff) -> int:
+    """Delete finished job rows older than cutoff (all job tables).
+
+    _delete_chunked takes each row's log file with it, uniformly for every
+    model that names one - no per-model special case.
+    """
+    total = 0
     for model, _ in _JOB_TABLES:
         total += _delete_chunked(db, model, _older_than(model, cutoff))
     # Retry lineage rows carry only SET NULL pointers at their jobs; once the
@@ -448,6 +533,9 @@ def run_retention(db: Session, settings: Optional[SystemSettings] = None) -> Dic
             else 0
         ),
         "job_rows_deleted": purge_job_rows(db, now - timedelta(days=row_days)),
+        "orphaned_log_files_deleted": sweep_orphaned_log_files(
+            db, now - timedelta(days=row_days)
+        ),
         "pruned_archive_records_removed": sweep_pruned_archive_records(db),
     }
     if any(results.values()):

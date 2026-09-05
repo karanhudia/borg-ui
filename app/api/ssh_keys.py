@@ -7,7 +7,9 @@ import math
 import structlog
 import os
 import subprocess
+import sys
 import asyncio
+from pathlib import Path
 import tempfile
 import time
 
@@ -28,6 +30,12 @@ from app.utils.datetime_utils import serialize_datetime
 from app.utils.ssh_host_validation import normalize_ssh_host
 from app.utils.ssh_utils import ssh_key_auth_args, write_ssh_key_to_tempfile
 import hashlib
+
+# Located relative to this package rather than a fixed /app/... path so the
+# deploy step also works when the app is installed somewhere else (LXC).
+DEPLOY_SSH_KEY_SCRIPT = (
+    Path(__file__).resolve().parents[1] / "scripts" / "deploy_ssh_key.py"
+)
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["ssh-keys"], dependencies=[Depends(authorize_request)])
@@ -619,7 +627,7 @@ async def generate_ssh_key(
         # Deploy SSH key immediately to filesystem
         try:
             deploy_result = subprocess.run(
-                ["python3", "/app/app/scripts/deploy_ssh_key.py"],
+                [sys.executable, str(DEPLOY_SSH_KEY_SCRIPT)],
                 capture_output=True,
                 text=True,
                 timeout=10,
@@ -794,17 +802,18 @@ async def import_ssh_key(
             user=current_user.username,
         )
 
-        # Deploy SSH key to filesystem (this will write to /home/borg/.ssh)
+        # Deploy SSH key to filesystem (writes to settings.ssh_home_dir)
         try:
             deploy_result = subprocess.run(
-                ["python3", "/app/app/scripts/deploy_ssh_key.py"],
+                [sys.executable, str(DEPLOY_SSH_KEY_SCRIPT)],
                 capture_output=True,
                 text=True,
                 timeout=10,
             )
             if deploy_result.returncode == 0:
                 logger.info(
-                    "Imported SSH key deployed to /home/borg/.ssh",
+                    "Imported SSH key deployed to filesystem",
+                    ssh_home_dir=settings.ssh_home_dir,
                     stdout=deploy_result.stdout,
                 )
             else:
@@ -2407,7 +2416,7 @@ async def delete_ssh_key(
 
         # Remove key files from filesystem
         try:
-            ssh_dir = os.path.join(settings.ssh_keys_dir or "/home/borg/.ssh")
+            ssh_dir = settings.ssh_home_dir
             private_key_path = os.path.join(ssh_dir, f"id_{key_type}")
             public_key_path = os.path.join(ssh_dir, f"id_{key_type}.pub")
 

@@ -555,3 +555,193 @@ def test_operation_log_files_follow_both_retention_windows(db, tmp_path):
     # Fresh row: untouched.
     assert db.get(Operation, fresh_id).log_file_path == str(fresh_log)
     assert fresh_log.exists()
+
+
+@pytest.mark.unit
+def test_row_purge_takes_log_files_along_for_every_model(db, tmp_path):
+    # #895: deleting expired rows must unlink their log_file_path files -
+    # uniformly, not as an Operation-only special case.
+    from app.database.models import CheckJob, CompactJob, Repository, RestoreCheckJob
+
+    settings = _settings(db)
+    repo = Repository(
+        name="Retention Repo",
+        path="/tmp/retention-repo",
+        encryption="none",
+        repository_type="local",
+    )
+    db.add(repo)
+    db.commit()
+    old = utc_now() - timedelta(days=120)
+    fresh = utc_now() - timedelta(days=10)
+
+    expired_files = []
+    kept_file = tmp_path / "kept_check.log"
+    kept_file.write_text("keep me", encoding="utf-8")
+    missing_file = tmp_path / "already_gone.log"  # never created
+
+    for index, model in enumerate((CheckJob, CompactJob, RestoreCheckJob)):
+        log_file = tmp_path / f"expired_{index}.log"
+        log_file.write_text("old log", encoding="utf-8")
+        expired_files.append(log_file)
+        db.add(
+            model(
+                repository_id=repo.id,
+                status="completed",
+                completed_at=old,
+                created_at=old,
+                log_file_path=str(log_file),
+            )
+        )
+    # An expired row whose file is already gone must not break the purge.
+    db.add(
+        CheckJob(
+            repository_id=repo.id,
+            status="failed",
+            completed_at=old,
+            created_at=old,
+            log_file_path=str(missing_file),
+        )
+    )
+    # A row inside the window keeps row AND file.
+    db.add(
+        CheckJob(
+            repository_id=repo.id,
+            status="completed",
+            completed_at=fresh,
+            created_at=fresh,
+            log_file_path=str(kept_file),
+        )
+    )
+    db.commit()
+
+    run_retention(db, settings)
+
+    db.expunge_all()
+    for log_file in expired_files:
+        assert not log_file.exists()
+    assert kept_file.exists()
+    from app.database.models import CheckJob as CheckJobModel
+
+    assert db.query(CheckJobModel).count() == 1
+
+
+@pytest.mark.unit
+def test_orphaned_log_files_are_swept_by_age_unless_referenced(
+    db, tmp_path, monkeypatch
+):
+    # Files whose rows were purged before file cleanup existed have no row
+    # pointing at them anymore - only an age-based filesystem sweep can
+    # reclaim them. Referenced and young files must survive.
+    import os
+    import time as time_module
+
+    from app.database.models import CheckJob
+    from app.services.job_history_retention import sweep_orphaned_log_files
+
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    monkeypatch.setattr(
+        "app.services.job_history_retention.app_config.data_dir", str(tmp_path)
+    )
+
+    old_ts = time_module.time() - 200 * 86400
+
+    orphan_old = log_dir / "check_job_1_20260101_000000.log"
+    orphan_old.write_text("orphan", encoding="utf-8")
+    os.utime(orphan_old, (old_ts, old_ts))
+
+    referenced_old = log_dir / "check_job_2_20260101_000000.log"
+    referenced_old.write_text("still referenced", encoding="utf-8")
+    os.utime(referenced_old, (old_ts, old_ts))
+
+    orphan_young = log_dir / "check_job_3_20260901_000000.log"
+    orphan_young.write_text("young orphan", encoding="utf-8")
+
+    not_a_log = log_dir / "notes.txt"
+    not_a_log.write_text("keep", encoding="utf-8")
+    os.utime(not_a_log, (old_ts, old_ts))
+
+    repo = Repository(
+        name="Sweep Repo",
+        path="/tmp/sweep-repo",
+        encryption="none",
+        repository_type="local",
+    )
+    db.add(repo)
+    db.commit()
+    db.add(
+        CheckJob(
+            repository_id=repo.id,
+            status="completed",
+            completed_at=utc_now(),
+            created_at=utc_now(),
+            log_file_path=str(referenced_old),
+        )
+    )
+    db.commit()
+
+    removed = sweep_orphaned_log_files(db, utc_now() - timedelta(days=90))
+
+    assert removed == 1
+    assert not orphan_old.exists()
+    assert referenced_old.exists()
+    assert orphan_young.exists()
+    assert not_a_log.exists()
+
+
+@pytest.mark.unit
+def test_shared_log_file_survives_when_a_live_row_still_references_it(db, tmp_path):
+    # log_file_path is not unique: an expired and a retained row can name the
+    # same file - purging the expired row must not take the survivor's log.
+    from app.database.models import CheckJob
+
+    settings = _settings(db)
+    old = utc_now() - timedelta(days=120)
+    fresh = utc_now() - timedelta(days=10)
+
+    shared = tmp_path / "shared_check.log"
+    shared.write_text("shared", encoding="utf-8")
+    solo = tmp_path / "solo_check.log"
+    solo.write_text("solo", encoding="utf-8")
+
+    repo = Repository(
+        name="Shared Log Repo",
+        path="/tmp/shared-log-repo",
+        encryption="none",
+        repository_type="local",
+    )
+    db.add(repo)
+    db.commit()
+    db.add_all(
+        [
+            CheckJob(
+                repository_id=repo.id,
+                status="completed",
+                completed_at=old,
+                created_at=old,
+                log_file_path=str(shared),
+            ),
+            CheckJob(
+                repository_id=repo.id,
+                status="completed",
+                completed_at=fresh,
+                created_at=fresh,
+                log_file_path=str(shared),
+            ),
+            CheckJob(
+                repository_id=repo.id,
+                status="completed",
+                completed_at=old,
+                created_at=old,
+                log_file_path=str(solo),
+            ),
+        ]
+    )
+    db.commit()
+
+    run_retention(db, settings)
+
+    db.expunge_all()
+    assert shared.exists()
+    assert not solo.exists()
