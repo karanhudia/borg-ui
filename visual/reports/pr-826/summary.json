@@ -1,22 +1,111 @@
 {
-  "generatedAt": "2026-09-04T17:57:30.832Z",
+  "generatedAt": "2026-09-05T06:24:59.689Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #826 visual report",
-    "commitSha": "121958280d6f",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/33902764965"
+    "commitSha": "6ec4d4a99885",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/33949454759"
   },
   "totals": {
     "baseline": 510,
-    "actual": 510,
+    "actual": 532,
     "compared": 510,
     "changed": 0,
-    "added": 0,
+    "added": 22,
     "removed": 0,
     "unchanged": 510
   },
   "changed": [],
-  "added": [],
+  "added": [
+    {
+      "fileName": "components-licensingtab--enterprise-no-upgrade-link--mobile.png",
+      "actualPath": "images/actual/components-licensingtab--enterprise-no-upgrade-link--mobile.png"
+    },
+    {
+      "fileName": "components-licensingtab--enterprise-no-upgrade-link.png",
+      "actualPath": "images/actual/components-licensingtab--enterprise-no-upgrade-link.png"
+    },
+    {
+      "fileName": "components-licensingtab--pro-with-upgrade-link--mobile.png",
+      "actualPath": "images/actual/components-licensingtab--pro-with-upgrade-link--mobile.png"
+    },
+    {
+      "fileName": "components-licensingtab--pro-with-upgrade-link.png",
+      "actualPath": "images/actual/components-licensingtab--pro-with-upgrade-link.png"
+    },
+    {
+      "fileName": "components-planbadge--all-states--mobile.png",
+      "actualPath": "images/actual/components-planbadge--all-states--mobile.png"
+    },
+    {
+      "fileName": "components-planbadge--all-states.png",
+      "actualPath": "images/actual/components-planbadge--all-states.png"
+    },
+    {
+      "fileName": "components-planbadge--community--mobile.png",
+      "actualPath": "images/actual/components-planbadge--community--mobile.png"
+    },
+    {
+      "fileName": "components-planbadge--community.png",
+      "actualPath": "images/actual/components-planbadge--community.png"
+    },
+    {
+      "fileName": "components-planbadge--full-access-countdown--mobile.png",
+      "actualPath": "images/actual/components-planbadge--full-access-countdown--mobile.png"
+    },
+    {
+      "fileName": "components-planbadge--full-access-countdown.png",
+      "actualPath": "images/actual/components-planbadge--full-access-countdown.png"
+    },
+    {
+      "fileName": "components-planbadge--full-access-early--mobile.png",
+      "actualPath": "images/actual/components-planbadge--full-access-early--mobile.png"
+    },
+    {
+      "fileName": "components-planbadge--full-access-early.png",
+      "actualPath": "images/actual/components-planbadge--full-access-early.png"
+    },
+    {
+      "fileName": "components-planbadge--pro--mobile.png",
+      "actualPath": "images/actual/components-planbadge--pro--mobile.png"
+    },
+    {
+      "fileName": "components-planbadge--pro.png",
+      "actualPath": "images/actual/components-planbadge--pro.png"
+    },
+    {
+      "fileName": "components-planinfodrawer--enterprise-plan-drawer--mobile.png",
+      "actualPath": "images/actual/components-planinfodrawer--enterprise-plan-drawer--mobile.png"
+    },
+    {
+      "fileName": "components-planinfodrawer--enterprise-plan-drawer.png",
+      "actualPath": "images/actual/components-planinfodrawer--enterprise-plan-drawer.png"
+    },
+    {
+      "fileName": "components-planinfodrawer--full-access-ending-soon-drawer--mobile.png",
+      "actualPath": "images/actual/components-planinfodrawer--full-access-ending-soon-drawer--mobile.png"
+    },
+    {
+      "fileName": "components-planinfodrawer--full-access-ending-soon-drawer.png",
+      "actualPath": "images/actual/components-planinfodrawer--full-access-ending-soon-drawer.png"
+    },
+    {
+      "fileName": "components-planinfodrawer--full-access-expired-drawer--mobile.png",
+      "actualPath": "images/actual/components-planinfodrawer--full-access-expired-drawer--mobile.png"
+    },
+    {
+      "fileName": "components-planinfodrawer--full-access-expired-drawer.png",
+      "actualPath": "images/actual/components-planinfodrawer--full-access-expired-drawer.png"
+    },
+    {
+      "fileName": "components-planinfodrawer--pro-plan-drawer--mobile.png",
+      "actualPath": "images/actual/components-planinfodrawer--pro-plan-drawer--mobile.png"
+    },
+    {
+      "fileName": "components-planinfodrawer--pro-plan-drawer.png",
+      "actualPath": "images/actual/components-planinfodrawer--pro-plan-drawer.png"
+    }
+  ],
   "removed": [],
   "unchanged": [
     {
