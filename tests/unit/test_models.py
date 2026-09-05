@@ -49,6 +49,41 @@ def test_repository_model_defaults():
 
 
 @pytest.mark.unit
+def test_repository_passphrase_encrypted_at_rest(db_session, db_engine):
+    """Repository.passphrase must be stored encrypted, not in plaintext."""
+    from sqlalchemy import text
+
+    repo = Repository(
+        name="Encrypted Repo", path="/tmp/encrypted-repo", passphrase="supersecret"
+    )
+    db_session.add(repo)
+    db_session.commit()
+    db_session.refresh(repo)
+
+    # Reading back through the ORM decrypts transparently.
+    assert repo.passphrase == "supersecret"
+
+    # The raw column value on disk must never be the plaintext passphrase.
+    with db_engine.connect() as connection:
+        raw_value = connection.execute(
+            text("SELECT passphrase FROM repositories WHERE id = :id"), {"id": repo.id}
+        ).scalar()
+    assert raw_value != "supersecret"
+    assert raw_value is not None
+
+
+@pytest.mark.unit
+def test_repository_passphrase_none_stays_none(db_session):
+    """A repository with no passphrase must round-trip as None, not raise."""
+    repo = Repository(name="No Passphrase Repo", path="/tmp/no-passphrase-repo")
+    db_session.add(repo)
+    db_session.commit()
+    db_session.refresh(repo)
+
+    assert repo.passphrase is None
+
+
+@pytest.mark.unit
 def test_user_model_creation():
     """Test User model instantiation"""
     user = User(username="testuser", password_hash="hashed_pwd_123", is_active=True)
