@@ -198,6 +198,14 @@ describe('Archives page, database-backed view (spec 10.3)', () => {
     })
   })
 
+  it('shows no restore strip when the repository has never been restored', async () => {
+    renderWithProviders(<Archives />, { queryClient })
+    const user = userEvent.setup()
+    await user.click(screen.getByText('Select Repo'))
+    await waitFor(() => expect(screen.getByTestId('archive-series-heatmap')).toBeInTheDocument())
+    expect(screen.queryByText(/no recent restores/i)).not.toBeInTheDocument()
+  })
+
   it('switches to the list view and persists the choice', async () => {
     renderWithProviders(<Archives />, { queryClient })
     const user = userEvent.setup()

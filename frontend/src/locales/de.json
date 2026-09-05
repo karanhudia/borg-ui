@@ -956,7 +956,10 @@
       "durationOutlier": "Ungewöhnlich langsam",
       "legendLess": "Weniger",
       "legendMore": "Mehr",
-      "tooltip": "{{count}} am {{date}} · {{size}} · {{duration}}"
+      "tooltip": "{{count}} am {{date}} · {{size}} · {{duration}}",
+      "showSmaller": "{{count}} kleinere Serien anzeigen",
+      "hideSmaller": "Kleinere Serien ausblenden",
+      "smallerNote": "Serien mit weniger als {{count}} Archiven sind hier zusammengefasst. Namen, die sich nur in Groß- und Kleinschreibung oder Satzzeichen unterscheiden, sind dasselbe Backup unter verschiedenen Namen."
     },
     "search": {
       "placeholder": "Dateien in diesem Repository durchsuchen",

@@ -95,3 +95,53 @@ export const Empty: Story = {
     },
   },
 }
+
+const nightlyYear = (() => {
+  const days = []
+  const start = new Date()
+  start.setDate(start.getDate() - 364)
+  for (let i = 0; i < 365; i++) {
+    const date = new Date(start)
+    date.setDate(start.getDate() + i)
+    // Skip a few days so the calendar shows gaps, and flag a slow run.
+    if (i % 23 === 0) continue
+    const iso = date.toISOString().slice(0, 10)
+    days.push(
+      day(iso, { count: i % 9 === 0 ? 2 : 1, anomalies: i % 61 === 0 ? ['duration_outlier'] : [] })
+    )
+  }
+  return days
+})()
+
+export const FullYear: Story = {
+  args: {
+    data: {
+      since: null,
+      until: null,
+      series: [
+        {
+          series: 'nightly',
+          days: nightlyYear,
+          missed_days: nightlyYear.length > 30 ? [nightlyYear[30].date] : [],
+          first: nightlyYear[0]?.date ?? null,
+          last: nightlyYear[nightlyYear.length - 1]?.date ?? null,
+        },
+        {
+          series: 'weekly-offsite',
+          days: nightlyYear.filter((_d, i) => i % 7 === 0),
+          missed_days: [],
+          first: nightlyYear[0]?.date ?? null,
+          last: nightlyYear[nightlyYear.length - 1]?.date ?? null,
+        },
+        {
+          series: 'Downloads-backup',
+          days: nightlyYear.slice(0, 2),
+          missed_days: [],
+          first: nightlyYear[0]?.date ?? null,
+          last: nightlyYear[1]?.date ?? null,
+        },
+      ],
+      flags_available: { missed_run: true, size_outlier: true, duration_outlier: true },
+    },
+  },
+}

@@ -956,7 +956,10 @@
       "durationOutlier": "Insolitamente lento",
       "legendLess": "Meno",
       "legendMore": "Più",
-      "tooltip": "{{count}} il {{date}} · {{size}} · {{duration}}"
+      "tooltip": "{{count}} il {{date}} · {{size}} · {{duration}}",
+      "showSmaller": "Mostra {{count}} serie più piccole",
+      "hideSmaller": "Nascondi le serie più piccole",
+      "smallerNote": "Le serie con meno di {{count}} archivi sono raggruppate qui. I nomi che differiscono solo per maiuscole o punteggiatura sono lo stesso backup con nomi diversi."
     },
     "search": {
       "placeholder": "Cerca file in questo repository",

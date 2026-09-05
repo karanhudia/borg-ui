@@ -956,7 +956,10 @@
       "durationOutlier": "Inusualmente lento",
       "legendLess": "Menos",
       "legendMore": "Más",
-      "tooltip": "{{count}} el {{date}} · {{size}} · {{duration}}"
+      "tooltip": "{{count}} el {{date}} · {{size}} · {{duration}}",
+      "showSmaller": "Mostrar {{count}} series más pequeñas",
+      "hideSmaller": "Ocultar series más pequeñas",
+      "smallerNote": "Las series con menos de {{count}} archivos se agrupan aquí. Los nombres que solo difieren en mayúsculas o puntuación son la misma copia con distintos nombres."
     },
     "search": {
       "placeholder": "Buscar archivos en este repositorio",

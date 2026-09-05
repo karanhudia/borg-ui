@@ -619,58 +619,59 @@ const Archives: React.FC = () => {
       )}
 
       {/* ── Context panel: stats + last restore ── */}
-      {selectedRepositoryId &&
-        (loadingRepoInfo || repositoryStats || restoreJobsData?.data?.jobs) && (
-          <Box sx={{ ...panelSx, mb: 3 }}>
-            {/* Stats */}
-            <Box sx={{ p: 2.5 }}>
-              {loadingRepoInfo ? (
-                <RepositoryStatsGridSkeleton />
-              ) : repositoryStats ? (
-                <RepositoryStatsGrid
-                  stats={repositoryStats}
-                  archivesCount={archivesList.length}
-                  borgVersion={selectedRepository?.borg_version}
-                  archivesLoading={loadingArchives || repoInfoPending}
-                />
-              ) : null}
-            </Box>
-            {/* Last Restore */}
-            {restoreJobsData?.data?.jobs && (
-              <Box
-                sx={{
-                  px: 2.5,
-                  py: 2,
-                  borderTop: '1px solid',
-                  borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.06),
-                  bgcolor: isDark ? alpha('#fff', 0.012) : alpha('#000', 0.01),
-                }}
-              >
-                <LastRestoreSection restoreJob={lastRestoreJob} />
-              </Box>
-            )}
+      {selectedRepositoryId && (loadingRepoInfo || repositoryStats || lastRestoreJob) && (
+        <Box sx={{ ...panelSx, mb: 3 }}>
+          {/* Stats */}
+          <Box sx={{ p: 2.5 }}>
+            {loadingRepoInfo ? (
+              <RepositoryStatsGridSkeleton />
+            ) : repositoryStats ? (
+              <RepositoryStatsGrid
+                stats={repositoryStats}
+                archivesCount={archivesList.length}
+                borgVersion={selectedRepository?.borg_version}
+                archivesLoading={loadingArchives || repoInfoPending}
+              />
+            ) : null}
           </Box>
-        )}
+          {/* Last Restore, only when there is one to show */}
+          {lastRestoreJob && (
+            <Box
+              sx={{
+                px: 2.5,
+                py: 2,
+                borderTop: '1px solid',
+                borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.06),
+                bgcolor: isDark ? alpha('#fff', 0.012) : alpha('#000', 0.01),
+              }}
+            >
+              <LastRestoreSection restoreJob={lastRestoreJob} />
+            </Box>
+          )}
+        </Box>
+      )}
 
       {/* ── Archives list ── */}
       {selectedRepositoryId && (
         <>
           <Box
             sx={{
+              ...panelSx,
               display: 'flex',
               flexWrap: 'wrap',
               alignItems: 'center',
-              justifyContent: 'space-between',
               gap: 2,
+              px: 2,
+              py: 1.5,
               mb: 2,
             }}
           >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <SyncStateChip
-                state={syncState}
-                lastSyncedAt={lastSyncedAt}
-                onRebuild={handleRebuildSync}
-              />
+            <SyncStateChip
+              state={syncState}
+              lastSyncedAt={lastSyncedAt}
+              onRebuild={handleRebuildSync}
+            />
+            <Box sx={{ flex: '1 1 260px', minWidth: 0 }}>
               <ArchiveSearchField
                 repositoryId={selectedRepositoryId}
                 newestArchiveId={newestArchiveId}
@@ -685,6 +686,7 @@ const Archives: React.FC = () => {
                 setViewMode(value)
                 localStorage.setItem('archives-view-mode', value)
               }}
+              sx={{ ml: { sm: 'auto' } }}
             >
               <ToggleButton value="heatmap">{t('archives.view.heatmap')}</ToggleButton>
               <ToggleButton value="list">{t('archives.view.list')}</ToggleButton>
@@ -692,7 +694,12 @@ const Archives: React.FC = () => {
           </Box>
           {viewMode === 'heatmap' ? (
             heatmapData?.data ? (
-              <ArchiveSeriesHeatmap data={heatmapData.data} onSelectDay={handleSelectHeatmapDay} />
+              <Box sx={{ ...panelSx, p: 2.5 }}>
+                <ArchiveSeriesHeatmap
+                  data={heatmapData.data}
+                  onSelectDay={handleSelectHeatmapDay}
+                />
+              </Box>
             ) : null
           ) : (
             <ArchivesList
