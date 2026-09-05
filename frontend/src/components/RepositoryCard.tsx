@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Box, Typography, Button, IconButton, Tooltip, Chip, useTheme, alpha } from '@mui/material'
 import { format, isTomorrow, isToday, isThisYear } from 'date-fns'
@@ -26,6 +27,7 @@ import {
   CalendarClock,
   ListChecks,
   Unlock,
+  History,
 } from 'lucide-react'
 import { useMaintenanceJobs } from '../hooks/useMaintenanceJobs'
 import BorgVersionChip from './BorgVersionChip'
@@ -106,6 +108,7 @@ export default function RepositoryCard({
   const isDark = theme.palette.mode === 'dark'
   const queryClient = useQueryClient()
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const { trackRepository, trackBackup, trackArchive, EventAction } = useAnalytics()
 
   const capabilities = getRepoCapabilities(repository)
@@ -1077,6 +1080,26 @@ export default function RepositoryCard({
                     sx={coloredIconBtnSx('primary')}
                   >
                     <ListChecks size={16} />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            )}
+
+            {canDo('view') && (
+              <Tooltip title={t('repositoryCard.buttons.operations')} arrow>
+                <span>
+                  <IconButton
+                    size="small"
+                    onClick={() => {
+                      trackRepository(EventAction.VIEW, repository, {
+                        destination: 'operations',
+                      })
+                      navigate(`/activity?repository_id=${repository.id}`)
+                    }}
+                    aria-label={t('repositoryCard.buttons.operations')}
+                    sx={coloredIconBtnSx('secondary')}
+                  >
+                    <History size={16} />
                   </IconButton>
                 </span>
               </Tooltip>

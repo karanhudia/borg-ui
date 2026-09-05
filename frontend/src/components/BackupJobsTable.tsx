@@ -32,6 +32,18 @@ import { buildDownloadUrl } from '@/utils/downloadUrl'
 import { downloadArchiveFile } from '../utils/downloadArchiveFile'
 import ArchiveContentsDialog from './ArchiveContentsDialog'
 import type { Repository as FullRepository, Archive } from '../types'
+import RunChainRow, { type RunChainOperation } from './activity/RunChainRow'
+
+function jobToRunChainOperation(job: Job): RunChainOperation {
+  return {
+    id: job.id,
+    kind: job.kind ?? job.type ?? '',
+    status: job.status,
+    progress_current: job.progress_current,
+    progress_total: job.progress_total,
+    followups: (job.followups ?? []).map(jobToRunChainOperation),
+  }
+}
 
 interface EmptyState {
   icon?: React.ReactNode
@@ -861,6 +873,11 @@ export const BackupJobsTable = <T extends Job = Job>({
           actionButtons.length > 0 ? `${Math.max(130, actionButtons.length * 34)}px` : undefined
         }
         getRowKey={getRowKey || ((job: T) => String((job as Job).id))}
+        renderSubRow={(job) => {
+          const followups = (job as Job).followups
+          if (!followups || followups.length === 0) return null
+          return <RunChainRow operation={jobToRunChainOperation(job as Job)} />
+        }}
         loading={loading}
         headerBgColor={headerBgColor}
         enableHover={enableHover}

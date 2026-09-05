@@ -926,6 +926,7 @@
     "noRepositories": "No se encontraron repositorios. Crea un repositorio primero.",
     "selectRepository": "Selecciona un repositorio para ver sus archivos",
     "deletionStarted": "Eliminación de archivo iniciada en segundo plano (ID de trabajo: {{id}})",
+    "openFullPage": "Abrir página completa",
     "mountTimeout": "Tiempo de espera de montaje: Los repositorios grandes pueden necesitar más tiempo para montarse.",
     "mountFailed": "Error al montar el archivo: {{error}}",
     "restoreStarted": "¡Trabajo de restauración iniciado! Comprueba la pestaña de Actividad para monitorizar el progreso.",
@@ -934,6 +935,118 @@
       "deleteFailed": "Error al eliminar el archivo",
       "restoreFailed": "Error al iniciar la restauración",
       "notSelected": "Repositorio o archivo no seleccionado"
+    },
+    "sync": {
+      "fresh": "Sincronizado {{ago}}",
+      "syncing": "Sincronizando",
+      "stale": "La sincronización está desactualizada",
+      "never": "Aún no indexado",
+      "rebuild": "Reconstruir índice"
+    },
+    "view": {
+      "heatmap": "Mapa de calor",
+      "list": "Lista",
+      "scaleDays": "Días",
+      "scaleHours": "Horas",
+      "scaleLabel": "Escala"
+    },
+    "heatmap": {
+      "none": "Sin archivos",
+      "archives_one": "{{count}} archivo",
+      "archives_other": "{{count}} archivos",
+      "missed": "La ejecución programada no ocurrió",
+      "sizeOutlier": "Inusualmente pequeño",
+      "durationOutlier": "Inusualmente lento",
+      "legendLess": "Menos",
+      "legendMore": "Más",
+      "tooltip": "{{count}} el {{date}} · {{size}} · {{duration}}",
+      "showSmaller": "Mostrar {{count}} series más pequeñas",
+      "hideSmaller": "Ocultar series más pequeñas",
+      "smallerNote": "Las series con menos de {{count}} archivos se agrupan aquí. Los nombres que solo difieren en mayúsculas o puntuación son la misma copia con distintos nombres.",
+      "missedTotal_one": "{{count}} día sin ejecución",
+      "missedTotal_other": "{{count}} días sin ejecución",
+      "pickArchive": "{{count}} archivos el {{date}}",
+      "legendMissed": "Ejecución perdida"
+    },
+    "search": {
+      "placeholder": "Buscar archivos en este repositorio",
+      "title": "Resultados de la búsqueda",
+      "columnPath": "Ruta",
+      "columnLastSeen": "Visto por última vez",
+      "columnPresent": "Presente",
+      "present": "En la más reciente",
+      "absent": "No está en la más reciente",
+      "empty": "No hay archivos coincidentes",
+      "truncated": "Mostrando las primeras {{count}} coincidencias"
+    },
+    "detail": {
+      "tabChanges": "Cambios",
+      "tabChangesWithCounts": "Cambios (+{{added}} −{{removed}} ~{{modified}})",
+      "tabFiles": "Archivos",
+      "tabInfo": "Info",
+      "series": "Serie",
+      "started": "Iniciado",
+      "duration": "Duración",
+      "originalSize": "Tamaño original",
+      "compressedSize": "Tamaño comprimido",
+      "deduplicatedSize": "Tamaño deduplicado",
+      "files": "Archivos",
+      "hostname": "Nombre de host",
+      "username": "Nombre de usuario",
+      "comment": "Comentario",
+      "loadFailed": "Este archivo no se pudo cargar.",
+      "restore": "Restaurar",
+      "mount": "Montar",
+      "delete": "Eliminar",
+      "tabChangesLabel": "Cambios"
+    },
+    "changes": {
+      "compareWith": "Comparar con",
+      "previous": "anterior",
+      "net": "Neto",
+      "added": "Añadido",
+      "removed": "Eliminado",
+      "modified": "Modificado",
+      "summaryRow": "{{count}} más en {{path}}",
+      "truncated": "El índice de este archivo se truncó en el límite de filas, por lo que algunas rutas están resumidas.",
+      "pending": "Este archivo aún no ha sido indexado.",
+      "skipped": "La indexación del historial se omitió para este archivo.",
+      "rebuildLink": "Reconstruir el índice de historial",
+      "empty": "No hay cambios entre estos archivos.",
+      "showMore": "Mostrar más",
+      "filterLabel": "Tipo de cambio",
+      "delta": "{{sign}}{{size}}",
+      "summaryFolder": "Carpeta"
+    },
+    "files": {
+      "size": "Tamaño",
+      "modified": "Modificado",
+      "owner": "Propietario",
+      "permissions": "Permisos",
+      "restore": "Restaurar",
+      "download": "Descargar",
+      "history": "Historial",
+      "firstSeen": "Visto por primera vez",
+      "unchanged": "Sin cambios",
+      "changed": "Cambiado",
+      "restoreThis": "Restaurar esto",
+      "notPresent": "No presente en {{count}} archivos anteriores",
+      "selected": "{{count}} seleccionados ({{size}})",
+      "restoreSelection": "Restaurar selección",
+      "searchInArchive": "Buscar en este archivo",
+      "folderMetadata": "Carpeta",
+      "noSelection": "Selecciona un archivo o carpeta para ver los detalles.",
+      "path": "Ruta",
+      "historyEmpty": "Ningún archivo anterior contiene esta ruta.",
+      "type": "Tipo",
+      "typeFile": "Fichero",
+      "typeDirectory": "Carpeta"
+    },
+    "toolbarOperations": "Operaciones",
+    "hourly": {
+      "window": "Últimas {{count}} semanas, una fila por hora",
+      "tooltip": "{{count}} a las {{time}} el {{date}}",
+      "none": "No hay archivos en las últimas {{count}} semanas."
     }
   },
   "restore": {
@@ -1884,6 +1997,39 @@
     "empty": {
       "title": "Sin actividad",
       "message": "No hay operaciones que coincidan con tus filtros"
+    },
+    "filterCategory": "Categoría",
+    "filterTrigger": "Disparador",
+    "allTriggers": "Todos los disparadores",
+    "triggers": {
+      "manual": "Manual",
+      "schedule": "Programación",
+      "plan": "Plan",
+      "import": "Importación",
+      "followup": "Seguimiento",
+      "reconcile": "Reconciliación",
+      "retry": "Reintento"
+    },
+    "followupsCollapsed": "{{count}} seguimientos",
+    "operations": "Operaciones",
+    "followupsCollapsed_one": "{{count}} seguimiento",
+    "repositoryView": {
+      "back": "Toda la actividad",
+      "subtitle": "Ejecuciones en este repositorio, las más recientes primero",
+      "today": "Hoy",
+      "yesterday": "Ayer",
+      "empty": "Ninguna ejecución de este repositorio coincide con estos filtros.",
+      "loadFailed": "No se pudieron cargar las ejecuciones.",
+      "logs": "Registros",
+      "errorDetails": "Detalles del error",
+      "triggerSource": {
+        "plan": "Plan: {{name}}",
+        "schedule": "Programación: {{name}}"
+      }
+    },
+    "repositoryScope": {
+      "label": "Repositorio",
+      "all": "Todos los repositorios"
     }
   },
   "availabilitySchedule": {
@@ -2585,7 +2731,8 @@
       "delete": "Eliminar",
       "permanentDelete": "Eliminar archivos permanentemente",
       "createBackupPlan": "Crear plan de copia",
-      "createBackupPlanSourceRequired": "Añade rutas de origen antes de crear un plan de copia"
+      "createBackupPlanSourceRequired": "Añade rutas de origen antes de crear un plan de copia",
+      "operations": "Operaciones"
     },
     "legacySources": {
       "title": "Configuración de origen heredada",
@@ -3263,33 +3410,26 @@
       "system": "Sistema"
     },
     "background": {
-      "systemRow": "Sistema",
       "retry": "Reintentar",
-      "waiting": "esperando",
-      "failed": "fallido",
       "plan": "plan",
-      "holdsLane": "→ ocupa el carril",
-      "viewActivity": "Actividad ▸",
       "stage": {
         "connect": "Conectar",
         "stats": "Estadísticas",
-        "archives": "Archivos",
-        "history": "Índice de historial",
-        "ready": "Listo"
+        "archives": "Lista de archivos",
+        "history": "Historial de ficheros"
       },
-      "workers": "trabajadores: índice {{count}}",
+      "workers": "{{count}} workers",
       "emptyTitle": "No hay nada en ejecución",
-      "emptyDescription": "El trabajo en segundo plano aparecerá aquí la próxima vez que se inicie una importación, copia de seguridad o reconciliación.",
+      "emptyDescription": "Las importaciones, copias y reconciliaciones muestran aquí sus pasos mientras se ejecutan.",
       "rebuildFrom": "Reconstruir desde",
       "rebuildStage": {
         "stats": "Estadísticas",
-        "archives": "Archivos",
-        "history": "Historial"
+        "archives": "Lista de archivos",
+        "history": "Historial de ficheros"
       },
       "title": "Trabajo en segundo plano",
       "pause": "Pausar",
       "resume": "Reanudar",
-      "rebuildNeedsRepository": "Elige un repositorio desde su tarjeta para reconstruirlo.",
       "never": "Nunca",
       "syncing": "Sincronizando",
       "rebuildMenu": "Reconstruir…",
@@ -3297,7 +3437,56 @@
       "openTrack": "Abrir el seguimiento de ejecución de {{repository}}",
       "rebuildFailed": "No se pudo iniciar la reconstrucción.",
       "queueFailed": "No se pudo cargar la cola en segundo plano.",
-      "pauseAdminOnly": "Solo los administradores pueden pausar el trabajo en segundo plano."
+      "pauseAdminOnly": "Solo los administradores pueden pausar el trabajo en segundo plano.",
+      "reason": {
+        "paused": "En pausa",
+        "lane_busy": "Esperando a que termine la copia de este repositorio",
+        "workers": "Esperando un worker de índice",
+        "queued": "Siguiente en la cola"
+      },
+      "foregroundRunning": "{{kind}} en ejecución desde hace {{elapsed}}",
+      "viewRuns": "Ver ejecuciones",
+      "stageDone": "Listo",
+      "stageFailed": "Fallido",
+      "repositoryColumn": "Repositorio",
+      "workersLabel": "Workers de índice",
+      "workersDecrease": "Menos workers de índice",
+      "workersIncrease": "Más workers de índice",
+      "workersFailed": "No se pudo cambiar el número de workers.",
+      "pausedBanner": "El trabajo en segundo plano está en pausa. Los pasos en cola no empezarán hasta que lo reanudes.",
+      "lastReconcile": "La última reconciliación se ejecutó {{ago}}.",
+      "lastReconcileNever": "Todavía no se ha ejecutado ninguna reconciliación.",
+      "rebuildRepository": "Repositorio",
+      "rebuildStarted": "Reconstrucción iniciada para {{repository}}.",
+      "subtitle": "Lo que Borg UI está haciendo ahora mismo con tus repositorios.",
+      "rebuildTitle": "Reconstruir datos derivados",
+      "rebuildDescription": "Borg UI mantiene tres tipos de datos derivados por repositorio, construidos en este orden. Elige la primera etapa que parezca incorrecta; esa y todas las posteriores se reconstruyen, las anteriores se conservan.",
+      "rebuildAction": "Reconstruir",
+      "rebuildRow": "Reconstruir {{repository}}",
+      "proOnly": "Pro",
+      "stages": {
+        "stats": {
+          "title": "Estadísticas",
+          "what": "Tamaño del repositorio y número de archivos en la tarjeta del repositorio y el panel.",
+          "cost": "Tarda segundos."
+        },
+        "archives": {
+          "title": "Lista de archivos",
+          "what": "La lista de archivos detrás de la página Archivos, el mapa de calor y el navegador de archivos.",
+          "cost": "Menos de un minuto en la mayoría de repositorios."
+        },
+        "history": {
+          "title": "Historial de ficheros",
+          "what": "Qué cambió entre archivos, para la pestaña Cambios, el historial de ficheros y la búsqueda.",
+          "cost": "La etapa más lenta. Indexa un archivo cada vez en segundo plano."
+        }
+      },
+      "stageWillRebuild": "Se reconstruirá",
+      "stageKept": "Se conserva",
+      "stageStart": "Empezar aquí",
+      "rebuildSummary": "Reconstruir {{stages}} de {{repository}}. Navegar y las copias siguen funcionando mientras tanto; los datos nuevos sustituyen a los antiguos cuando termina cada etapa.",
+      "rebuildSummaryAll": "Reconstruir todo de {{repository}}. Navegar y las copias siguen funcionando mientras tanto; los datos nuevos sustituyen a los antiguos cuando termina cada etapa.",
+      "stageJoin": " y "
     },
     "status": {
       "queued": "En cola",
@@ -3323,7 +3512,11 @@
       "stats": "estadísticas",
       "archive_sync": "sincronización de archivo",
       "history_index": "índice de historial",
-      "history_merge": "fusión de historial"
+      "history_merge": "fusión de historial",
+      "script_execution": "script",
+      "availability_check": "comprobación de disponibilidad",
+      "rclone_hydrate": "hidratación de réplica",
+      "package": "instalación de paquete"
     },
     "strip": {
       "backup": "Copia de seguridad",

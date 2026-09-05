@@ -1,12 +1,12 @@
 import { QueryClient } from '@tanstack/react-query'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders, screen, userEvent, waitFor } from '../../test/test-utils'
 import Archives from '../Archives'
 import * as apiModule from '../../services/api'
 import { toast } from 'react-hot-toast'
 
 const trackArchive = vi.fn()
-const borgListArchivesMock = vi.fn()
+const listStoredMock = vi.fn()
 const borgGetInfoMock = vi.fn()
 const borgDeleteArchiveMock = vi.fn()
 const { downloadArchiveFileMock } = vi.hoisted(() => ({ downloadArchiveFileMock: vi.fn() }))
@@ -129,12 +129,15 @@ vi.mock('../../hooks/usePermissions', () => ({
 vi.mock('../../services/borgApi', () => ({
   BorgApiClient: vi.fn(function MockBorgApiClient() {
     return {
-      listArchives: borgListArchivesMock,
       getInfo: borgGetInfoMock,
       deleteArchive: borgDeleteArchiveMock,
     }
   }),
 }))
+
+vi.mock('../../components/archives/SyncStateChip', () => ({ default: () => null }))
+vi.mock('../../components/archives/ArchiveSearchField', () => ({ default: () => null }))
+vi.mock('../../components/archives/ArchiveSeriesHeatmap', () => ({ default: () => null }))
 
 vi.mock('../../utils/downloadArchiveFile', () => ({
   downloadArchiveFile: downloadArchiveFileMock,
@@ -144,6 +147,9 @@ vi.mock('../../services/api', () => ({
   archivesAPI: {
     deleteArchive: vi.fn(),
     downloadFile: vi.fn(),
+    listStored: vi.fn(),
+    getHeatmap: vi.fn(),
+    rebuild: vi.fn(),
   },
   repositoriesAPI: {
     getRepositories: vi.fn(),
@@ -203,6 +209,9 @@ describe('Archives page actions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.stubGlobal('open', vi.fn())
+    // The list actions this suite drives come from the (mocked) list view;
+    // force it so the heatmap, which defaults on, doesn't hide them.
+    localStorage.setItem('archives-view-mode', 'list')
     vi.mocked(apiModule.repositoriesAPI.getRepositories).mockResolvedValue({
       data: { repositories: [repository] },
     } as never)
@@ -215,14 +224,47 @@ describe('Archives page actions', () => {
     vi.mocked(apiModule.mountsAPI.mountBorgArchive).mockResolvedValue({
       data: { mount_point: '/mnt/archive-1' },
     } as never)
-    borgListArchivesMock.mockResolvedValue({
+    listStoredMock.mockResolvedValue({
       data: {
-        archives: [{ id: 'a1', name: 'archive-1', start: '2026-01-01T00:00:00Z' }],
+        archives: [
+          {
+            id: 1,
+            repository_id: 1,
+            borg_id: 'a1',
+            name: 'archive-1',
+            series: 'default',
+            start: '2026-01-01T00:00:00Z',
+            end: null,
+            duration_seconds: null,
+            nfiles: null,
+            original_size: null,
+            compressed_size: null,
+            deduplicated_size: null,
+            hostname: null,
+            username: null,
+            comment: null,
+            backup_operation_id: null,
+            history_state: 'indexed',
+            history_indexed_at: null,
+            history_rows: null,
+            history_truncated: false,
+            first_seen_at: null,
+            last_seen_at: null,
+          },
+        ],
+        series: ['default'],
+        sync_state: 'fresh',
+        last_synced_at: null,
       },
     })
+    vi.mocked(apiModule.archivesAPI.listStored).mockImplementation(listStoredMock)
     borgGetInfoMock.mockResolvedValue({ data: { info: {} } })
     borgDeleteArchiveMock.mockResolvedValue({ data: { job_id: 7 } })
     downloadArchiveFileMock.mockResolvedValue(undefined)
+  })
+
+  afterEach(() => {
+    localStorage.clear()
   })
 
   it('tracks filter/view and calls download, restore, and mount APIs from archive actions', async () => {
@@ -236,7 +278,7 @@ describe('Archives page actions', () => {
     await user.click(await screen.findByText('Select Repo'))
 
     await waitFor(() => {
-      expect(borgListArchivesMock).toHaveBeenCalledTimes(1)
+      expect(listStoredMock).toHaveBeenCalledTimes(1)
       expect(borgGetInfoMock).toHaveBeenCalledTimes(1)
       expect(trackArchive).toHaveBeenCalledWith('Filter', repository, {
         surface: 'archives_page',
@@ -340,12 +382,12 @@ describe('Archives page actions', () => {
     await waitFor(() => {
       expect(borgGetInfoMock).toHaveBeenCalledTimes(1)
     })
-    expect(borgListArchivesMock).not.toHaveBeenCalled()
+    expect(listStoredMock).not.toHaveBeenCalled()
 
     repoInfoDeferred.resolve({ data: { info: {} } })
 
     await waitFor(() => {
-      expect(borgListArchivesMock).toHaveBeenCalledTimes(1)
+      expect(listStoredMock).toHaveBeenCalledTimes(1)
     })
   })
 

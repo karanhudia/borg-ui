@@ -926,6 +926,7 @@
     "noRepositories": "Keine Repositories gefunden. Erstelle zuerst ein Repository.",
     "selectRepository": "Wähle ein Repository aus, um seine Archive anzuzeigen",
     "deletionStarted": "Archivlöschung im Hintergrund gestartet (Aufgaben-ID: {{id}})",
+    "openFullPage": "Volle Seite öffnen",
     "mountTimeout": "Einhänge-Timeout: Große Repositories benötigen möglicherweise mehr Zeit zum Einhängen.",
     "mountFailed": "Fehler beim Einhängen des Archivs: {{error}}",
     "restoreStarted": "Wiederherstellungsaufgabe gestartet! Überprüfe den Aktivitäts-Tab, um den Fortschritt zu überwachen.",
@@ -934,6 +935,118 @@
       "deleteFailed": "Archiv konnte nicht gelöscht werden",
       "restoreFailed": "Wiederherstellung konnte nicht gestartet werden",
       "notSelected": "Repository oder Archiv nicht ausgewählt"
+    },
+    "sync": {
+      "fresh": "Synchronisiert {{ago}}",
+      "syncing": "Wird synchronisiert",
+      "stale": "Synchronisierung ist veraltet",
+      "never": "Noch nicht indiziert",
+      "rebuild": "Index neu aufbauen"
+    },
+    "view": {
+      "heatmap": "Heatmap",
+      "list": "Liste",
+      "scaleDays": "Tage",
+      "scaleHours": "Stunden",
+      "scaleLabel": "Skala"
+    },
+    "heatmap": {
+      "none": "Keine Archive",
+      "archives_one": "{{count}} Archiv",
+      "archives_other": "{{count}} Archive",
+      "missed": "Geplanter Lauf fand nicht statt",
+      "sizeOutlier": "Ungewöhnlich klein",
+      "durationOutlier": "Ungewöhnlich langsam",
+      "legendLess": "Weniger",
+      "legendMore": "Mehr",
+      "tooltip": "{{count}} am {{date}} · {{size}} · {{duration}}",
+      "showSmaller": "{{count}} kleinere Serien anzeigen",
+      "hideSmaller": "Kleinere Serien ausblenden",
+      "smallerNote": "Serien mit weniger als {{count}} Archiven sind hier zusammengefasst. Namen, die sich nur in Groß- und Kleinschreibung oder Satzzeichen unterscheiden, sind dasselbe Backup unter verschiedenen Namen.",
+      "missedTotal_one": "{{count}} verpasster Tag",
+      "missedTotal_other": "{{count}} verpasste Tage",
+      "pickArchive": "{{count}} Archive am {{date}}",
+      "legendMissed": "Verpasster Lauf"
+    },
+    "search": {
+      "placeholder": "Dateien in diesem Repository durchsuchen",
+      "title": "Suchergebnisse",
+      "columnPath": "Pfad",
+      "columnLastSeen": "Zuletzt gesehen",
+      "columnPresent": "Vorhanden",
+      "present": "In der neuesten",
+      "absent": "Nicht in der neuesten",
+      "empty": "Keine passenden Dateien",
+      "truncated": "Zeigt die ersten {{count}} Treffer"
+    },
+    "detail": {
+      "tabChanges": "Änderungen",
+      "tabChangesWithCounts": "Änderungen (+{{added}} −{{removed}} ~{{modified}})",
+      "tabFiles": "Dateien",
+      "tabInfo": "Info",
+      "series": "Serie",
+      "started": "Gestartet",
+      "duration": "Dauer",
+      "originalSize": "Originalgröße",
+      "compressedSize": "Komprimierte Größe",
+      "deduplicatedSize": "Deduplizierte Größe",
+      "files": "Dateien",
+      "hostname": "Hostname",
+      "username": "Benutzername",
+      "comment": "Kommentar",
+      "loadFailed": "Dieses Archiv konnte nicht geladen werden.",
+      "restore": "Wiederherstellen",
+      "mount": "Einhängen",
+      "delete": "Löschen",
+      "tabChangesLabel": "Änderungen"
+    },
+    "changes": {
+      "compareWith": "Vergleichen mit",
+      "previous": "vorherigem",
+      "net": "Netto",
+      "added": "Hinzugefügt",
+      "removed": "Entfernt",
+      "modified": "Geändert",
+      "summaryRow": "{{count}} weitere in {{path}}",
+      "truncated": "Der Index dieses Archivs wurde bei der Zeilenobergrenze abgeschnitten, sodass einige Pfade zusammengefasst sind.",
+      "pending": "Dieses Archiv wurde noch nicht indiziert.",
+      "skipped": "Die Verlaufsindizierung wurde für dieses Archiv übersprungen.",
+      "rebuildLink": "Verlaufsindex neu aufbauen",
+      "empty": "Keine Änderungen zwischen diesen Archiven.",
+      "showMore": "Mehr anzeigen",
+      "filterLabel": "Änderungstyp",
+      "delta": "{{sign}}{{size}}",
+      "summaryFolder": "Ordner"
+    },
+    "files": {
+      "size": "Größe",
+      "modified": "Geändert",
+      "owner": "Besitzer",
+      "permissions": "Berechtigungen",
+      "restore": "Wiederherstellen",
+      "download": "Herunterladen",
+      "history": "Verlauf",
+      "firstSeen": "Zuerst gesehen",
+      "unchanged": "Unverändert",
+      "changed": "Geändert",
+      "restoreThis": "Dies wiederherstellen",
+      "notPresent": "Nicht vorhanden in {{count}} älteren Archiven",
+      "selected": "{{count}} ausgewählt ({{size}})",
+      "restoreSelection": "Auswahl wiederherstellen",
+      "searchInArchive": "In diesem Archiv suchen",
+      "folderMetadata": "Ordner",
+      "noSelection": "Wähle eine Datei oder einen Ordner, um Details zu sehen.",
+      "path": "Pfad",
+      "historyEmpty": "Kein früheres Archiv enthält diesen Pfad.",
+      "type": "Typ",
+      "typeFile": "Datei",
+      "typeDirectory": "Ordner"
+    },
+    "toolbarOperations": "Vorgänge",
+    "hourly": {
+      "window": "Letzte {{count}} Wochen, eine Zeile pro Stunde",
+      "tooltip": "{{count}} um {{time}} am {{date}}",
+      "none": "Keine Archive in den letzten {{count}} Wochen."
     }
   },
   "restore": {
@@ -1884,6 +1997,39 @@
     "empty": {
       "title": "Keine Aktivität gefunden",
       "message": "Es gibt keine Vorgänge, die deinen Filtern entsprechen"
+    },
+    "filterCategory": "Kategorie",
+    "filterTrigger": "Auslöser",
+    "allTriggers": "Alle Auslöser",
+    "triggers": {
+      "manual": "Manuell",
+      "schedule": "Zeitplan",
+      "plan": "Plan",
+      "import": "Import",
+      "followup": "Folgeaktion",
+      "reconcile": "Abgleich",
+      "retry": "Wiederholung"
+    },
+    "followupsCollapsed": "{{count}} Folgeaktionen",
+    "operations": "Vorgänge",
+    "followupsCollapsed_one": "{{count}} Folgeaktion",
+    "repositoryView": {
+      "back": "Gesamte Aktivität",
+      "subtitle": "Läufe in diesem Repository, neueste zuerst",
+      "today": "Heute",
+      "yesterday": "Gestern",
+      "empty": "Keine Läufe in diesem Repository passen zu diesen Filtern.",
+      "loadFailed": "Die Läufe konnten nicht geladen werden.",
+      "logs": "Protokoll",
+      "errorDetails": "Fehlerdetails",
+      "triggerSource": {
+        "plan": "Plan: {{name}}",
+        "schedule": "Zeitplan: {{name}}"
+      }
+    },
+    "repositoryScope": {
+      "label": "Repository",
+      "all": "Alle Repositorys"
     }
   },
   "availabilitySchedule": {
@@ -2585,7 +2731,8 @@
       "delete": "Löschen",
       "permanentDelete": "Dateien dauerhaft löschen",
       "createBackupPlan": "Backup-Plan erstellen",
-      "createBackupPlanSourceRequired": "Quellpfade hinzufügen, bevor ein Backup-Plan erstellt wird"
+      "createBackupPlanSourceRequired": "Quellpfade hinzufügen, bevor ein Backup-Plan erstellt wird",
+      "operations": "Vorgänge"
     },
     "legacySources": {
       "title": "Legacy-Quelleinstellungen",
@@ -3263,33 +3410,26 @@
       "system": "System"
     },
     "background": {
-      "systemRow": "System",
       "retry": "Wiederholen",
-      "waiting": "wartet",
-      "failed": "fehlgeschlagen",
       "plan": "Plan",
-      "holdsLane": "→ blockiert die Warteschlange",
-      "viewActivity": "Aktivität ▸",
       "stage": {
         "connect": "Verbinden",
         "stats": "Statistik",
-        "archives": "Archive",
-        "history": "Verlaufsindex",
-        "ready": "Fertig"
+        "archives": "Archivliste",
+        "history": "Dateiverlauf"
       },
-      "workers": "Worker: Index {{count}}",
+      "workers": "{{count}} Worker",
       "emptyTitle": "Nichts läuft gerade",
-      "emptyDescription": "Hintergrundarbeit erscheint hier, sobald ein Import, eine Sicherung oder ein Abgleichlauf startet.",
+      "emptyDescription": "Import-, Backup- und Abgleichläufe zeigen hier ihre Schritte, während sie laufen.",
       "rebuildFrom": "Neu aufbauen ab",
       "rebuildStage": {
         "stats": "Statistik",
-        "archives": "Archive",
-        "history": "Verlauf"
+        "archives": "Archivliste",
+        "history": "Dateiverlauf"
       },
       "title": "Hintergrundarbeit",
       "pause": "Pausieren",
       "resume": "Fortsetzen",
-      "rebuildNeedsRepository": "Wähle ein Repository aus seiner Karte, um es neu aufzubauen.",
       "never": "Nie",
       "syncing": "Synchronisiert",
       "rebuildMenu": "Neu aufbauen…",
@@ -3297,7 +3437,56 @@
       "openTrack": "Ablaufverfolgung für {{repository}} öffnen",
       "rebuildFailed": "Der Neuaufbau konnte nicht gestartet werden.",
       "queueFailed": "Die Hintergrundwarteschlange konnte nicht geladen werden.",
-      "pauseAdminOnly": "Nur Administratoren können Hintergrundarbeiten pausieren."
+      "pauseAdminOnly": "Nur Administratoren können Hintergrundarbeiten pausieren.",
+      "reason": {
+        "paused": "Pausiert",
+        "lane_busy": "Wartet, bis das Backup dieses Repositorys fertig ist",
+        "workers": "Wartet auf einen Index-Worker",
+        "queued": "Als Nächstes dran"
+      },
+      "foregroundRunning": "{{kind}} läuft seit {{elapsed}}",
+      "viewRuns": "Läufe anzeigen",
+      "stageDone": "Fertig",
+      "stageFailed": "Fehlgeschlagen",
+      "repositoryColumn": "Repository",
+      "workersLabel": "Index-Worker",
+      "workersDecrease": "Weniger Index-Worker",
+      "workersIncrease": "Mehr Index-Worker",
+      "workersFailed": "Die Anzahl der Worker konnte nicht geändert werden.",
+      "pausedBanner": "Hintergrundarbeit ist pausiert. Wartende Schritte starten erst nach dem Fortsetzen.",
+      "lastReconcile": "Der letzte Abgleich lief {{ago}}.",
+      "lastReconcileNever": "Es wurde noch kein Abgleich ausgeführt.",
+      "rebuildRepository": "Repository",
+      "rebuildStarted": "Neuaufbau für {{repository}} gestartet.",
+      "subtitle": "Was Borg UI gerade mit deinen Repositorys macht.",
+      "rebuildTitle": "Abgeleitete Daten neu aufbauen",
+      "rebuildDescription": "Borg UI hält für jedes Repository drei Arten abgeleiteter Daten, die in dieser Reihenfolge aufgebaut werden. Wähle den ersten Schritt, der falsch aussieht; er und alle folgenden werden neu aufgebaut, frühere bleiben erhalten.",
+      "rebuildAction": "Neu aufbauen",
+      "rebuildRow": "{{repository}} neu aufbauen",
+      "proOnly": "Pro",
+      "stages": {
+        "stats": {
+          "title": "Statistiken",
+          "what": "Repository-Größe und Archivanzahl auf der Repository-Karte und dem Dashboard.",
+          "cost": "Dauert Sekunden."
+        },
+        "archives": {
+          "title": "Archivliste",
+          "what": "Die Archivliste hinter der Archivseite, der Heatmap und dem Archiv-Browser.",
+          "cost": "Unter einer Minute für die meisten Repositorys."
+        },
+        "history": {
+          "title": "Dateiverlauf",
+          "what": "Was sich zwischen Archiven geändert hat, für den Änderungen-Tab, den Dateiverlauf und die Suche.",
+          "cost": "Der langsamste Schritt. Indiziert im Hintergrund ein Archiv nach dem anderen."
+        }
+      },
+      "stageWillRebuild": "Wird neu aufgebaut",
+      "stageKept": "Bleibt erhalten",
+      "stageStart": "Hier beginnen",
+      "rebuildSummary": "{{stages}} für {{repository}} neu aufbauen. Durchsuchen und Backups laufen währenddessen weiter; die neuen Daten ersetzen die alten, sobald ein Schritt fertig ist.",
+      "rebuildSummaryAll": "Alles für {{repository}} neu aufbauen. Durchsuchen und Backups laufen währenddessen weiter; die neuen Daten ersetzen die alten, sobald ein Schritt fertig ist.",
+      "stageJoin": " und "
     },
     "status": {
       "queued": "In Warteschlange",
@@ -3323,7 +3512,11 @@
       "stats": "Statistik",
       "archive_sync": "Archiv-Sync",
       "history_index": "Verlaufsindex",
-      "history_merge": "Verlauf zusammenführen"
+      "history_merge": "Verlauf zusammenführen",
+      "script_execution": "Skript",
+      "availability_check": "Verfügbarkeitsprüfung",
+      "rclone_hydrate": "Spiegel-Hydrierung",
+      "package": "Paketinstallation"
     },
     "strip": {
       "backup": "Sicherung",

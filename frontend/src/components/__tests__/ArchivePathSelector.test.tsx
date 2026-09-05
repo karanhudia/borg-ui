@@ -85,3 +85,29 @@ describe('ArchivePathSelector', () => {
     expect(onChange).not.toHaveBeenCalled()
   })
 })
+
+describe('ArchivePathSelector embedded variant', () => {
+  const repository = { id: 1, name: 'Repo', path: '/repo', borg_version: 1 }
+  const archive = { id: 'archive-1', name: 'archive-1' }
+
+  it('drops its own heading, selection bar, and helper caption', async () => {
+    vi.mocked(BorgApiClient).mockImplementation(function () {
+      return {
+        getArchiveContents: vi.fn().mockResolvedValue({ data: { items: [] } }),
+      } as unknown as BorgApiClient
+    })
+    renderWithProviders(
+      <ArchivePathSelector
+        repository={repository}
+        archive={archive}
+        data={{ selectedPaths: [] }}
+        onChange={vi.fn()}
+        variant="embedded"
+      />
+    )
+    expect(await screen.findByText(/no items found/i)).toBeInTheDocument()
+    expect(screen.queryByText('Select files to restore')).not.toBeInTheDocument()
+    expect(screen.queryByText('No items selected')).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading')).not.toBeInTheDocument()
+  })
+})

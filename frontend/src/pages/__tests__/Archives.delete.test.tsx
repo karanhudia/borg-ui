@@ -13,7 +13,6 @@ import Archives from '../Archives'
 import * as apiModule from '../../services/api'
 
 const deleteArchiveMock = vi.fn()
-const listArchivesMock = vi.fn()
 const getInfoMock = vi.fn()
 const getDeleteJobStatusMock = vi.fn()
 
@@ -45,9 +44,18 @@ vi.mock('../../components/ArchiveContentsDialog', () => ({ default: () => null }
 vi.mock('../../components/MountArchiveDialog', () => ({ default: () => null }))
 vi.mock('../../components/LockErrorDialog', () => ({ default: () => null }))
 vi.mock('../../components/RestoreWizard', () => ({ default: () => null }))
+vi.mock('../../components/archives/SyncStateChip', () => ({ default: () => null }))
+vi.mock('../../components/archives/ArchiveSearchField', () => ({ default: () => null }))
+vi.mock('../../components/archives/ArchiveSeriesHeatmap', () => ({ default: () => null }))
 
 vi.mock('../../services/api', () => ({
-  archivesAPI: { deleteArchive: vi.fn(), downloadFile: vi.fn() },
+  archivesAPI: {
+    deleteArchive: vi.fn(),
+    downloadFile: vi.fn(),
+    listStored: vi.fn(),
+    getHeatmap: vi.fn(),
+    rebuild: vi.fn(),
+  },
   repositoriesAPI: {
     getRepositories: vi.fn(),
     listRepositoryArchives: vi.fn(),
@@ -60,7 +68,6 @@ vi.mock('../../services/api', () => ({
 vi.mock('../../services/borgApi', () => ({
   BorgApiClient: vi.fn(function MockBorgApiClient() {
     return {
-      listArchives: listArchivesMock,
       getInfo: getInfoMock,
       deleteArchive: deleteArchiveMock,
       getDeleteJobStatus: getDeleteJobStatusMock,
@@ -108,6 +115,10 @@ describe('Archives page — delete cache invalidation (regression #352)', () => 
   let queryClient: QueryClient
 
   beforeEach(() => {
+    // The delete flow is exercised through the (mocked) list view; force it
+    // so the heatmap, which defaults on, doesn't hide the trigger button.
+    localStorage.setItem('archives-view-mode', 'list')
+
     queryClient = new QueryClient({
       defaultOptions: {
         queries: { retry: false, gcTime: Infinity },
@@ -117,7 +128,9 @@ describe('Archives page — delete cache invalidation (regression #352)', () => 
 
     // Seed query cache
     queryClient.setQueryData(['repositories'], { data: { repositories: [mockRepository] } })
-    queryClient.setQueryData(['repository-archives', 1], { data: { archives: [] } })
+    queryClient.setQueryData(['repository-archives-stored', 1], {
+      data: { archives: [], series: [], sync_state: 'never', last_synced_at: null },
+    })
     queryClient.setQueryData(['repository-info', 1], { data: { info: {} } })
     queryClient.setQueryData(['restore-jobs'], { data: { jobs: [] } })
 
@@ -133,9 +146,9 @@ describe('Archives page — delete cache invalidation (regression #352)', () => 
     vi.mocked(apiModule.restoreAPI.getRestoreJobs).mockResolvedValue({
       data: { jobs: [] },
     } as never)
-    listArchivesMock.mockResolvedValue({
-      data: { archives: [] },
-    })
+    vi.mocked(apiModule.archivesAPI.listStored).mockResolvedValue({
+      data: { archives: [], series: [], sync_state: 'never', last_synced_at: null },
+    } as never)
     getInfoMock.mockResolvedValue({
       data: { info: {} },
     })
@@ -150,6 +163,7 @@ describe('Archives page — delete cache invalidation (regression #352)', () => 
   })
 
   afterEach(() => {
+    localStorage.clear()
     vi.restoreAllMocks()
     vi.clearAllMocks()
   })
@@ -188,7 +202,7 @@ describe('Archives page — delete cache invalidation (regression #352)', () => 
       () => {
         expect(getDeleteJobStatusMock).toHaveBeenCalledWith(123)
         expect(invalidateSpy).toHaveBeenCalledWith(
-          expect.objectContaining({ queryKey: ['repository-archives', 1] })
+          expect.objectContaining({ queryKey: ['repository-archives-stored', 1] })
         )
         expect(invalidateSpy).toHaveBeenCalledWith(
           expect.objectContaining({ queryKey: ['repository-info', 1] })

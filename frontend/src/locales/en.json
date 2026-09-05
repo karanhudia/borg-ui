@@ -926,6 +926,7 @@
     "noRepositories": "No repositories found. Create a repository first.",
     "selectRepository": "Select a repository to view its archives",
     "deletionStarted": "Archive deletion started in background (Job ID: {{id}})",
+    "openFullPage": "Open full page",
     "mountTimeout": "Mount timeout: Large repositories may need more time to mount.",
     "mountFailed": "Failed to mount archive: {{error}}",
     "restoreStarted": "Restore job started! Check the Activity tab to monitor progress.",
@@ -934,6 +935,118 @@
       "deleteFailed": "Failed to delete archive",
       "restoreFailed": "Failed to start restore",
       "notSelected": "Repository or archive not selected"
+    },
+    "sync": {
+      "fresh": "Synced {{ago}}",
+      "syncing": "Syncing",
+      "stale": "Sync is out of date",
+      "never": "Not indexed yet",
+      "rebuild": "Rebuild index"
+    },
+    "view": {
+      "heatmap": "Heatmap",
+      "list": "List",
+      "scaleDays": "Days",
+      "scaleHours": "Hours",
+      "scaleLabel": "Scale"
+    },
+    "heatmap": {
+      "none": "No archives",
+      "archives_one": "{{count}} archive",
+      "archives_other": "{{count}} archives",
+      "missed": "Scheduled run did not happen",
+      "sizeOutlier": "Unusually small",
+      "durationOutlier": "Unusually slow",
+      "legendLess": "Less",
+      "legendMore": "More",
+      "tooltip": "{{count}} on {{date}} · {{size}} · {{duration}}",
+      "showSmaller": "Show {{count}} smaller series",
+      "hideSmaller": "Hide smaller series",
+      "smallerNote": "Series with fewer than {{count}} archives are folded here. Names that differ only by case or punctuation are the same backup under different names.",
+      "missedTotal_one": "{{count}} missed day",
+      "missedTotal_other": "{{count}} missed days",
+      "pickArchive": "{{count}} archives on {{date}}",
+      "legendMissed": "Missed run"
+    },
+    "search": {
+      "placeholder": "Search files in this repository",
+      "title": "Search results",
+      "columnPath": "Path",
+      "columnLastSeen": "Last seen",
+      "columnPresent": "Present",
+      "present": "In latest",
+      "absent": "Not in latest",
+      "empty": "No matching files",
+      "truncated": "Showing the first {{count}} matches"
+    },
+    "detail": {
+      "tabChanges": "Changes",
+      "tabChangesWithCounts": "Changes (+{{added}} −{{removed}} ~{{modified}})",
+      "tabFiles": "Files",
+      "tabInfo": "Info",
+      "series": "Series",
+      "started": "Started",
+      "duration": "Duration",
+      "originalSize": "Original size",
+      "compressedSize": "Compressed size",
+      "deduplicatedSize": "Deduplicated size",
+      "files": "Files",
+      "hostname": "Hostname",
+      "username": "Username",
+      "comment": "Comment",
+      "loadFailed": "This archive could not be loaded.",
+      "restore": "Restore",
+      "mount": "Mount",
+      "delete": "Delete",
+      "tabChangesLabel": "Changes"
+    },
+    "changes": {
+      "compareWith": "Compare with",
+      "previous": "previous",
+      "net": "Net",
+      "added": "Added",
+      "removed": "Removed",
+      "modified": "Modified",
+      "summaryRow": "{{count}} more in {{path}}",
+      "truncated": "This archive's index was truncated at the row cap, so some paths are summarised.",
+      "pending": "This archive has not been indexed yet.",
+      "skipped": "History indexing was skipped for this archive.",
+      "rebuildLink": "Rebuild the history index",
+      "empty": "No changes between these archives.",
+      "showMore": "Show more",
+      "filterLabel": "Change type",
+      "delta": "{{sign}}{{size}}",
+      "summaryFolder": "Folder"
+    },
+    "files": {
+      "size": "Size",
+      "modified": "Modified",
+      "owner": "Owner",
+      "permissions": "Permissions",
+      "restore": "Restore",
+      "download": "Download",
+      "history": "History",
+      "firstSeen": "First seen",
+      "unchanged": "Unchanged",
+      "changed": "Changed",
+      "restoreThis": "Restore this",
+      "notPresent": "Not present in {{count}} older archives",
+      "selected": "{{count}} selected ({{size}})",
+      "restoreSelection": "Restore selection",
+      "searchInArchive": "Search in this archive",
+      "folderMetadata": "Folder",
+      "noSelection": "Select a file or folder to see details.",
+      "path": "Path",
+      "historyEmpty": "No earlier archive contains this path.",
+      "type": "Type",
+      "typeFile": "File",
+      "typeDirectory": "Folder"
+    },
+    "toolbarOperations": "Operations",
+    "hourly": {
+      "window": "Last {{count}} weeks, one row per hour",
+      "tooltip": "{{count}} at {{time}} on {{date}}",
+      "none": "No archives in the last {{count}} weeks."
     }
   },
   "restore": {
@@ -1884,6 +1997,39 @@
     "empty": {
       "title": "No activity found",
       "message": "There are no operations matching your filters"
+    },
+    "filterCategory": "Category",
+    "filterTrigger": "Trigger",
+    "allTriggers": "All triggers",
+    "triggers": {
+      "manual": "Manual",
+      "schedule": "Schedule",
+      "plan": "Plan",
+      "import": "Import",
+      "followup": "Follow-up",
+      "reconcile": "Reconcile",
+      "retry": "Retry"
+    },
+    "followupsCollapsed": "{{count}} follow-ups",
+    "operations": "Operations",
+    "followupsCollapsed_one": "{{count}} follow-up",
+    "repositoryView": {
+      "back": "All activity",
+      "subtitle": "Runs on this repository, newest first",
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "empty": "No runs on this repository match these filters.",
+      "loadFailed": "The runs could not be loaded.",
+      "logs": "Logs",
+      "errorDetails": "Error details",
+      "triggerSource": {
+        "plan": "Plan: {{name}}",
+        "schedule": "Schedule: {{name}}"
+      }
+    },
+    "repositoryScope": {
+      "label": "Repository",
+      "all": "All repositories"
     }
   },
   "availabilitySchedule": {
@@ -2585,7 +2731,8 @@
       "delete": "Delete",
       "permanentDelete": "Permanently delete files",
       "createBackupPlan": "Create Backup Plan",
-      "createBackupPlanSourceRequired": "Add source paths before creating a Backup Plan"
+      "createBackupPlanSourceRequired": "Add source paths before creating a Backup Plan",
+      "operations": "Operations"
     },
     "legacySources": {
       "title": "Legacy source settings",
@@ -3263,33 +3410,26 @@
       "system": "System"
     },
     "background": {
-      "systemRow": "System",
       "retry": "Retry",
-      "waiting": "waiting",
-      "failed": "failed",
       "plan": "plan",
-      "holdsLane": "→ holds the lane",
-      "viewActivity": "Activity ▸",
       "stage": {
         "connect": "Connect",
         "stats": "Stats",
-        "archives": "Archives",
-        "history": "History index",
-        "ready": "Ready"
+        "archives": "Archive list",
+        "history": "File history"
       },
-      "workers": "workers: index {{count}}",
+      "workers": "{{count}} workers",
       "emptyTitle": "Nothing is running",
-      "emptyDescription": "Background work will appear here the next time an import, backup, or reconcile run starts.",
+      "emptyDescription": "Import, backup, and reconcile runs show their stages here while they happen.",
       "rebuildFrom": "Rebuild from",
       "rebuildStage": {
         "stats": "Stats",
-        "archives": "Archives",
-        "history": "History"
+        "archives": "Archive list",
+        "history": "File history"
       },
       "title": "Background work",
       "pause": "Pause",
       "resume": "Resume",
-      "rebuildNeedsRepository": "Choose a repository from its card to rebuild.",
       "never": "Never",
       "syncing": "Syncing",
       "rebuildMenu": "Rebuild…",
@@ -3297,7 +3437,56 @@
       "openTrack": "Open the run track for {{repository}}",
       "rebuildFailed": "The rebuild could not be started.",
       "queueFailed": "The background queue could not be loaded.",
-      "pauseAdminOnly": "Only administrators can pause background work."
+      "pauseAdminOnly": "Only administrators can pause background work.",
+      "reason": {
+        "paused": "Paused",
+        "lane_busy": "Waiting for the backup on this repository to finish",
+        "workers": "Waiting for an index worker",
+        "queued": "Next in line"
+      },
+      "foregroundRunning": "{{kind}} running for {{elapsed}}",
+      "viewRuns": "View runs",
+      "stageDone": "Done",
+      "stageFailed": "Failed",
+      "repositoryColumn": "Repository",
+      "workersLabel": "Index workers",
+      "workersDecrease": "Fewer index workers",
+      "workersIncrease": "More index workers",
+      "workersFailed": "The worker count could not be changed.",
+      "pausedBanner": "Background work is paused. Queued stages will not start until you resume.",
+      "lastReconcile": "The last reconcile ran {{ago}}.",
+      "lastReconcileNever": "No reconcile has run yet.",
+      "rebuildRepository": "Repository",
+      "rebuildStarted": "Rebuild started for {{repository}}.",
+      "subtitle": "What Borg UI is doing to your repositories right now.",
+      "rebuildTitle": "Rebuild derived data",
+      "rebuildDescription": "Borg UI keeps three kinds of derived data for each repository, built in this order. Pick the first stage that looks wrong; it and every stage after it are rebuilt, earlier stages are kept.",
+      "rebuildAction": "Rebuild",
+      "rebuildRow": "Rebuild {{repository}}",
+      "proOnly": "Pro",
+      "stages": {
+        "stats": {
+          "title": "Stats",
+          "what": "Repository size and archive count on the repository card and dashboard.",
+          "cost": "Takes seconds."
+        },
+        "archives": {
+          "title": "Archive list",
+          "what": "The list of archives behind the Archives page, the heatmap, and the archive browser.",
+          "cost": "Under a minute for most repositories."
+        },
+        "history": {
+          "title": "File history",
+          "what": "What changed between archives, for the Changes tab, file history, and search.",
+          "cost": "The slowest stage. Indexes one archive at a time in the background."
+        }
+      },
+      "stageWillRebuild": "Will rebuild",
+      "stageKept": "Kept",
+      "stageStart": "Start here",
+      "rebuildSummary": "Rebuild {{stages}} for {{repository}}. Browsing and backups keep working while it runs; the new data replaces the old when each stage finishes.",
+      "rebuildSummaryAll": "Rebuild everything for {{repository}}. Browsing and backups keep working while it runs; the new data replaces the old when each stage finishes.",
+      "stageJoin": " and "
     },
     "status": {
       "queued": "Queued",
@@ -3323,7 +3512,11 @@
       "stats": "stats",
       "archive_sync": "archive sync",
       "history_index": "history index",
-      "history_merge": "history merge"
+      "history_merge": "history merge",
+      "script_execution": "script",
+      "availability_check": "availability check",
+      "rclone_hydrate": "mirror hydrate",
+      "package": "package install"
     },
     "strip": {
       "backup": "Backup",

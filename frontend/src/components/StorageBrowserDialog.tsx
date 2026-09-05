@@ -13,7 +13,8 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
-import { Download, FileText, Folder, FolderOpen, Inbox, ShieldCheck } from 'lucide-react'
+import { Download, FolderOpen, Inbox, ShieldCheck } from 'lucide-react'
+import FileTypeIcon from './FileTypeIcon'
 import ResponsiveDialog from './shared/ResponsiveDialog'
 import { normalizeBrowserPath } from '../utils/storageBrowserPaths'
 
@@ -44,6 +45,7 @@ interface StorageBrowserDialogProps {
   emptyRootTitle?: string
   emptyRootDescription?: string
   banner?: ReactNode
+  titleAction?: ReactNode
   maxWidth?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'
   showModifiedColumn?: boolean
   onClose: () => void
@@ -154,6 +156,7 @@ export default function StorageBrowserDialog({
   emptyRootTitle,
   emptyRootDescription,
   banner,
+  titleAction,
   maxWidth = 'md',
   showModifiedColumn = false,
   onClose,
@@ -205,7 +208,7 @@ export default function StorageBrowserDialog({
           }}
         >
           <FolderOpen size={24} />
-          <Box sx={{ minWidth: 0 }}>
+          <Box sx={{ minWidth: 0, flexGrow: 1 }}>
             <Typography
               variant="h6"
               sx={{
@@ -226,6 +229,21 @@ export default function StorageBrowserDialog({
               </Typography>
             ) : null}
           </Box>
+          {titleAction ? (
+            // Centre the action against the whole title block, whether the
+            // title is one line or carries a subtitle.
+            <Box
+              sx={{
+                pl: 2,
+                flexShrink: 0,
+                display: 'flex',
+                alignItems: 'center',
+                alignSelf: 'center',
+              }}
+            >
+              {titleAction}
+            </Box>
+          ) : null}
         </Stack>
       </DialogTitle>
       <DialogContent
@@ -374,7 +392,11 @@ export default function StorageBrowserDialog({
                                   flex: 1,
                                 }}
                               >
-                                {highlighted ? <ShieldCheck size={20} /> : <Folder size={20} />}
+                                {highlighted ? (
+                                  <ShieldCheck size={20} />
+                                ) : (
+                                  <FileTypeIcon name={folder.name} type="directory" size={28} />
+                                )}
                                 <Typography
                                   variant="body2"
                                   noWrap
@@ -455,7 +477,11 @@ export default function StorageBrowserDialog({
                                   color: 'text.primary',
                                 }}
                               >
-                                {highlighted ? <ShieldCheck size={20} /> : <FileText size={20} />}
+                                {highlighted ? (
+                                  <ShieldCheck size={20} />
+                                ) : (
+                                  <FileTypeIcon name={file.name} type="file" size={28} />
+                                )}
                                 <Typography
                                   variant="body2"
                                   sx={{

@@ -21,7 +21,7 @@ export const Default: Story = {
     <QueryClientProvider client={new QueryClient()}>
       <MemoryRouter>
         <Box sx={{ p: 3 }}>
-          <PipelineBoard />
+          <PipelineBoard canManage />
         </Box>
       </MemoryRouter>
     </QueryClientProvider>

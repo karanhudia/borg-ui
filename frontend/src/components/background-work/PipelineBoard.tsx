@@ -1,44 +1,157 @@
 import { useCallback, useMemo, useState } from 'react'
-import { Alert, Box, Stack, Typography } from '@mui/material'
-import { ListChecks } from 'lucide-react'
+import { Alert, Box, IconButton, Stack, Tooltip, Typography, alpha, useTheme } from '@mui/material'
+import { ListChecks, Minus, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import PipelineStageColumn from './PipelineStageColumn'
-import ForegroundLaneRow from './ForegroundLaneRow'
+import { formatDistanceToNow } from 'date-fns'
+import RepositoryRow from './RepositoryRow'
 import RepositoryTrackDialog from './RepositoryTrackDialog'
 import EmptyStateCard from '../EmptyStateCard'
-import { retryStageFor } from './retryStage'
-import { archivesAPI, operationsAPI } from '../../services/api'
+import RebuildPanel from './RebuildPanel'
+import { usePlan } from '../../hooks/usePlan'
+import {
+  STAGE_ORDER,
+  TRACK_GRID_COLUMNS,
+  deriveTrack,
+  REBUILD_STAGE_FOR,
+  type StageState,
+} from './repositoryTrack'
+import { activityAPI, archivesAPI, operationsAPI, repositoriesAPI } from '../../services/api'
 import { useOperationEvents } from '../../hooks/useOperationEvents'
+import { parseBackendDate } from '../../utils/dateUtils'
 import type {
   OperationItem,
   OperationProgressEvent,
   QueueResponse,
   RebuildStage,
 } from '../../types/operations'
+import type { Repository } from '@/types'
 
 const QUEUE_KEY = ['operations-queue'] as const
+const MIN_WORKERS = 1
+const MAX_WORKERS = 32
 
-const STAGE_KINDS: Array<{ key: string; labelKey: string; kind: OperationItem['kind'] }> = [
-  { key: 'connect', labelKey: 'operations.background.stage.connect', kind: 'import_connect' },
-  { key: 'stats', labelKey: 'operations.background.stage.stats', kind: 'stats' },
-  { key: 'archives', labelKey: 'operations.background.stage.archives', kind: 'archive_sync' },
-  { key: 'history', labelKey: 'operations.background.stage.history', kind: 'history_index' },
-]
+interface PipelineBoardProps {
+  // Worker limits are admin-only on the API, like pause. Everyone else
+  // reads the count without a control that would 403.
+  canManage: boolean
+}
 
-const TERMINAL_STATUSES = new Set([
-  'completed',
-  'completed_with_warnings',
-  'failed',
-  'cancelled',
-  'skipped',
-])
-const FOREGROUND_CATEGORIES = new Set(['backup', 'restore', 'maintenance'])
-
-export default function PipelineBoard() {
+function WorkerStepper({
+  count,
+  canManage,
+  onChange,
+}: {
+  count: number
+  canManage: boolean
+  onChange: (next: number) => void
+}) {
   const { t } = useTranslation()
+  const label = t('operations.background.workers', { count })
+  if (!canManage) {
+    return (
+      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+        {label}
+      </Typography>
+    )
+  }
+  return (
+    <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25 }}>
+      <Tooltip title={t('operations.background.workersDecrease')}>
+        <span>
+          <IconButton
+            size="small"
+            aria-label={t('operations.background.workersDecrease')}
+            disabled={count <= MIN_WORKERS}
+            onClick={() => onChange(count - 1)}
+            sx={{ p: 0.25 }}
+          >
+            <Minus size={12} />
+          </IconButton>
+        </span>
+      </Tooltip>
+      <Typography
+        variant="caption"
+        sx={{ color: 'text.secondary', minWidth: 64, textAlign: 'center' }}
+      >
+        {label}
+      </Typography>
+      <Tooltip title={t('operations.background.workersIncrease')}>
+        <span>
+          <IconButton
+            size="small"
+            aria-label={t('operations.background.workersIncrease')}
+            disabled={count >= MAX_WORKERS}
+            onClick={() => onChange(count + 1)}
+            sx={{ p: 0.25 }}
+          >
+            <Plus size={12} />
+          </IconButton>
+        </span>
+      </Tooltip>
+    </Box>
+  )
+}
+
+function EmptyBoard({
+  onRebuild,
+}: {
+  onRebuild: (repositoryId: number, stage: RebuildStage) => void
+}) {
+  const { t } = useTranslation()
+  const { can } = usePlan()
+
+  const { data: lastReconcile, isFetched } = useQuery({
+    queryKey: ['operations-last-reconcile'],
+    queryFn: () =>
+      activityAPI
+        .list({ trigger: ['reconcile'], limit: 1 })
+        .then(
+          (r) =>
+            (r.data as Array<{ completed_at: string | null; started_at?: string | null }>)[0] ??
+            null
+        ),
+  })
+  const { data: repositoriesData } = useQuery({
+    queryKey: ['repositories'],
+    queryFn: repositoriesAPI.getRepositories,
+  })
+  const repositories: Repository[] = repositoriesData?.data?.repositories ?? []
+
+  const reconcileAt = lastReconcile?.completed_at ?? lastReconcile?.started_at ?? null
+  const reconcileText = !isFetched
+    ? null
+    : reconcileAt
+      ? t('operations.background.lastReconcile', {
+          ago: formatDistanceToNow(parseBackendDate(reconcileAt), { addSuffix: true }),
+        })
+      : t('operations.background.lastReconcileNever')
+
+  return (
+    <Stack spacing={2}>
+      <EmptyStateCard
+        icon={<ListChecks size={48} />}
+        title={t('operations.background.emptyTitle')}
+        description={t('operations.background.emptyDescription')}
+        secondaryDescription={reconcileText}
+      />
+      {repositories.length > 0 && (
+        <RebuildPanel
+          repositories={repositories}
+          historyLocked={!can('archive_history')}
+          onRebuild={onRebuild}
+        />
+      )}
+    </Stack>
+  )
+}
+
+export default function PipelineBoard({ canManage }: PipelineBoardProps) {
+  const { t } = useTranslation()
+  const theme = useTheme()
   const queryClient = useQueryClient()
   const [trackRepository, setTrackRepository] = useState<{ id: number; name: string } | null>(null)
+  const [rebuildFailed, setRebuildFailed] = useState(false)
   const { data, isLoading, isError } = useQuery({
     queryKey: QUEUE_KEY,
     queryFn: () => operationsAPI.getQueue().then((r) => r.data),
@@ -103,106 +216,137 @@ export default function PipelineBoard() {
 
   useOperationEvents(onUpdated, onProgress)
 
-  const allOperations = useMemo(
-    () => data?.repositories.flatMap((repo) => repo.operations) ?? [],
+  const tracks = useMemo(
+    () =>
+      data
+        ? data.repositories
+            .filter((repo) => repo.operations.length > 0)
+            .map((repo) => deriveTrack(repo, data.limits, data.paused))
+        : [],
     [data]
   )
 
-  const foreground = allOperations.find(
-    (op) => FOREGROUND_CATEGORIES.has(op.category) && op.status === 'running'
-  )
-
-  const readyOperations = allOperations.filter((op) => TERMINAL_STATUSES.has(op.status))
-
-  const retryMutation = useMutation({
+  const rebuildMutation = useMutation({
     mutationFn: ({ repositoryId, stage }: { repositoryId: number; stage: RebuildStage }) =>
       archivesAPI.rebuild(repositoryId, stage),
+    onMutate: () => setRebuildFailed(false),
+    onError: () => setRebuildFailed(true),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: QUEUE_KEY }),
+  })
+
+  const limitsMutation = useMutation({
+    mutationFn: (workers: number) => operationsAPI.updateLimits(workers),
     onSettled: () => queryClient.invalidateQueries({ queryKey: QUEUE_KEY }),
   })
 
   const handleRetry = useCallback(
-    (operation: OperationItem) => {
-      const stage = retryStageFor(operation)
-      if (!stage || operation.repository_id == null) return
-      retryMutation.mutate({ repositoryId: operation.repository_id, stage })
+    (repositoryId: number | null, stage: StageState) => {
+      const rebuildStage = REBUILD_STAGE_FOR[stage.key]
+      if (!rebuildStage || repositoryId == null) return
+      rebuildMutation.mutate({ repositoryId, stage: rebuildStage })
     },
-    [retryMutation]
+    [rebuildMutation]
   )
-
-  const handleOpen = useCallback((operation: OperationItem) => {
-    if (operation.repository_id == null) return
-    setTrackRepository({
-      id: operation.repository_id,
-      name: operation.repository ?? String(operation.repository_id),
-    })
-  }, [])
 
   if (isError) {
     return <Alert severity="error">{t('operations.background.queueFailed')}</Alert>
   }
 
-  if (!isLoading && data && allOperations.length === 0) {
+  if (!isLoading && data && tracks.length === 0) {
     return (
-      <EmptyStateCard
-        icon={<ListChecks size={48} />}
-        title={t('operations.background.emptyTitle')}
-        description={t('operations.background.emptyDescription')}
-      />
+      <Box>
+        {rebuildFailed && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {t('operations.background.rebuildFailed')}
+          </Alert>
+        )}
+        <EmptyBoard
+          onRebuild={(repositoryId, stage) => rebuildMutation.mutate({ repositoryId, stage })}
+        />
+      </Box>
     )
   }
 
   return (
     <Box>
-      {foreground && (
-        <Box sx={{ mb: 2 }}>
-          <ForegroundLaneRow operation={foreground} />
-        </Box>
+      {rebuildFailed && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {t('operations.background.rebuildFailed')}
+        </Alert>
       )}
-      <Stack direction="row" spacing={3} sx={{ overflowX: 'auto', pb: 1 }}>
-        {STAGE_KINDS.map((stage) => (
-          <PipelineStageColumn
-            key={stage.key}
-            stage={{
-              key: stage.key,
-              label: t(stage.labelKey),
-              operations: allOperations.filter(
-                (op) => op.kind === stage.kind && !TERMINAL_STATUSES.has(op.status)
-              ),
-            }}
-            workerControl={
-              stage.key === 'history' && data ? (
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ display: 'block', mt: 1 }}
-                >
-                  {t('operations.background.workers', { count: data.limits.index_workers })}
-                </Typography>
-              ) : undefined
+      {limitsMutation.isError && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {t('operations.background.workersFailed')}
+        </Alert>
+      )}
+      <Box
+        sx={{
+          border: `1px solid ${theme.palette.divider}`,
+          borderRadius: 2,
+          px: 2.5,
+          bgcolor: 'background.paper',
+        }}
+      >
+        <Box
+          sx={{
+            display: { xs: 'none', md: 'grid' },
+            gridTemplateColumns: TRACK_GRID_COLUMNS,
+            columnGap: 2,
+            alignItems: 'end',
+            py: 1.5,
+            borderBottom: `1px solid ${theme.palette.divider}`,
+            bgcolor: alpha(theme.palette.text.primary, 0.02),
+            mx: -2.5,
+            px: 2.5,
+            borderTopLeftRadius: 8,
+            borderTopRightRadius: 8,
+          }}
+        >
+          <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+            {t('operations.background.repositoryColumn')}
+          </Typography>
+          {STAGE_ORDER.map((key) => (
+            <Box key={key} sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+                {t(`operations.background.stage.${key}`)}
+              </Typography>
+              {key === 'history' && data && (
+                <WorkerStepper
+                  count={data.limits.index_workers}
+                  canManage={canManage}
+                  onChange={(next) => limitsMutation.mutate(next)}
+                />
+              )}
+            </Box>
+          ))}
+          <span />
+        </Box>
+        {tracks.map((track) => (
+          <RepositoryRow
+            key={track.repositoryId ?? track.repositoryName}
+            track={track}
+            onOpen={() =>
+              track.repositoryId != null &&
+              setTrackRepository({ id: track.repositoryId, name: track.repositoryName })
             }
-            onRetry={handleRetry}
-            onOpen={handleOpen}
+            onRetry={(stage) => handleRetry(track.repositoryId, stage)}
+            onRebuild={(stage) =>
+              track.repositoryId != null &&
+              rebuildMutation.mutate({ repositoryId: track.repositoryId, stage })
+            }
           />
         ))}
-        <PipelineStageColumn
-          stage={{
-            key: 'ready',
-            label: t('operations.background.stage.ready'),
-            operations: readyOperations,
-          }}
-          // Failed rows are terminal, so they land here rather than in a
-          // stage column - this is the only place the retry control renders.
-          onRetry={handleRetry}
-          onOpen={handleOpen}
-        />
-      </Stack>
+      </Box>
       {trackRepository && (
         <RepositoryTrackDialog
           open
           onClose={() => setTrackRepository(null)}
           repositoryId={trackRepository.id}
           repositoryName={trackRepository.name}
-          operations={allOperations.filter((op) => op.repository_id === trackRepository.id)}
+          operations={
+            data?.repositories.find((repo) => repo.repository_id === trackRepository.id)
+              ?.operations ?? []
+          }
         />
       )}
     </Box>

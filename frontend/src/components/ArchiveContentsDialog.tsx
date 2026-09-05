@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { alpha, Box, Typography } from '@mui/material'
+import { alpha, Box, Link as MuiLink, Typography } from '@mui/material'
 import { Hourglass, ShieldCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
+import { Link as RouterLink } from 'react-router-dom'
 import { BorgApiClient, type Repository } from '../services/borgApi/client'
 import { Archive } from '../types'
 import { formatDateCompact, formatBytes as formatBytesUtil } from '../utils/dateUtils'
 import { normalizeBrowserPath } from '../utils/storageBrowserPaths'
 import StorageBrowserDialog, { type StorageBrowserItem } from './StorageBrowserDialog'
+import type { ArchiveRow } from '../types/archives'
 
 interface ArchiveContentsDialogProps {
   open: boolean
@@ -19,6 +21,9 @@ interface ArchiveContentsDialogProps {
     filePath: string,
     size?: number | null
   ) => void | Promise<void>
+  /** Stored archive rows, used to find the numeric DB id for "Open full page".
+   *  The action is hidden when the archive has no matching row. */
+  storedArchives?: ArchiveRow[]
 }
 
 interface RawFileItem {
@@ -48,8 +53,12 @@ export default function ArchiveContentsDialog({
   repository,
   onClose,
   onDownloadFile,
+  storedArchives,
 }: ArchiveContentsDialogProps) {
   const { t } = useTranslation()
+  const storedRow = archive
+    ? (storedArchives || []).find((row) => row.borg_id === archive.id)
+    : undefined
   const [currentPath, setCurrentPath] = useState('')
   const [downloading, setDownloading] = useState(false)
   // Handle of an in-flight agent listing job (see getArchiveContents): a slow
@@ -157,6 +166,18 @@ export default function ArchiveContentsDialog({
       emptyRootDescription={t('archiveContents.emptyArchiveDesc')}
       noInfoLabel={t('archiveContents.noInfo')}
       showModifiedColumn
+      titleAction={
+        storedRow && repository ? (
+          <MuiLink
+            component={RouterLink}
+            to={`/archives/${repository.id}/${storedRow.id}`}
+            onClick={onClose}
+            variant="body2"
+          >
+            {t('archives.openFullPage')}
+          </MuiLink>
+        ) : undefined
+      }
       banner={
         isInsideCanaryPath ? (
           <Box

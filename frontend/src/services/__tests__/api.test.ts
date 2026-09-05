@@ -124,3 +124,83 @@ describe('archivesAPI status strip and rebuild', () => {
     mock.restore()
   })
 })
+
+describe('archivesAPI stored-archive methods', () => {
+  it('reads the database-backed archive list', async () => {
+    const mock = new MockAdapter(api)
+    mock.onGet('/repositories/7/archives').reply(200, {
+      archives: [],
+      series: [],
+      sync_state: 'fresh',
+      last_synced_at: null,
+      history_available: true,
+    })
+    await archivesApiClient.listStored(7, { series: 'nightly' })
+    expect(mock.history.get[0].params).toEqual({ series: 'nightly' })
+    mock.restore()
+  })
+
+  it('requests the heatmap for a repository', async () => {
+    const mock = new MockAdapter(api)
+    mock.onGet('/repositories/7/archives/heatmap').reply(200, {
+      since: null,
+      until: null,
+      series: [],
+      flags_available: { missed_run: true, size_outlier: true, duration_outlier: true },
+    })
+    await archivesApiClient.getHeatmap(7)
+    expect(mock.history.get[0].url).toBe('/repositories/7/archives/heatmap')
+    mock.restore()
+  })
+
+  it('reads a single archive', async () => {
+    const mock = new MockAdapter(api)
+    mock.onGet('/repositories/7/archives/12').reply(200, { id: 12 })
+    const response = await archivesApiClient.getArchive(7, 12)
+    expect(response.data.id).toBe(12)
+    mock.restore()
+  })
+
+  it('requests changes with a compare target and change filters, serialised without indexes', async () => {
+    const mock = new MockAdapter(api)
+    mock.onGet('/repositories/7/archives/12/changes').reply(200, {
+      archive_id: 12,
+      compare_to_id: 11,
+      changes: [],
+      totals: { added: 0, removed: 0, modified: 0, summary: 0 },
+      next_cursor: null,
+      incomplete: false,
+      unindexed_archive_ids: [],
+    })
+    await archivesApiClient.getChanges(7, 12, { compare_to: 11, change: ['added', 'removed'] })
+    expect(mock.history.get[0].url).toBe('/repositories/7/archives/12/changes')
+    expect(mock.history.get[0].params).toEqual({ compare_to: 11, change: ['added', 'removed'] })
+    expect(mock.history.get[0].paramsSerializer).toEqual({ indexes: null })
+    mock.restore()
+  })
+
+  it('reads history for one path', async () => {
+    const mock = new MockAdapter(api)
+    mock.onGet('/repositories/7/history').reply(200, {
+      path: 'home/karan/docs/invoices.xlsx',
+      entries: [],
+      present: [],
+      present_in_latest: false,
+    })
+    await archivesApiClient.getPathHistory(7, 'home/karan/docs/invoices.xlsx')
+    expect(mock.history.get[0].params).toEqual({ path: 'home/karan/docs/invoices.xlsx' })
+    mock.restore()
+  })
+
+  it('searches archived paths', async () => {
+    const mock = new MockAdapter(api)
+    mock.onGet('/repositories/7/search').reply(200, {
+      query: 'invoices',
+      results: [],
+      truncated: false,
+    })
+    await archivesApiClient.search(7, 'invoices', 25)
+    expect(mock.history.get[0].params).toEqual({ q: 'invoices', limit: 25 })
+    mock.restore()
+  })
+})

@@ -1,10 +1,18 @@
 import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useLocation, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams, Link as RouterLink } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Box, Typography, useTheme, alpha } from '@mui/material'
-import { Folder } from 'lucide-react'
-import { repositoriesAPI, mountsAPI, restoreAPI } from '../services/api'
+import {
+  Box,
+  Button,
+  Typography,
+  useTheme,
+  alpha,
+  ToggleButton,
+  ToggleButtonGroup,
+} from '@mui/material'
+import { Folder, History } from 'lucide-react'
+import { repositoriesAPI, mountsAPI, restoreAPI, archivesAPI } from '../services/api'
 import { useRepositoryStats } from '../hooks/useRepositoryStats'
 import { BorgApiClient } from '../services/borgApi'
 import { translateBackendKey } from '../utils/translateBackendKey'
@@ -17,6 +25,17 @@ import LastRestoreSection from '../components/LastRestoreSection'
 import DeleteArchiveDialog from '../components/DeleteArchiveDialog'
 import MountArchiveDialog from '../components/MountArchiveDialog'
 import ArchiveContentsDialog from '../components/ArchiveContentsDialog'
+import ArchiveHourlyHeatmap from '../components/archives/ArchiveHourlyHeatmap'
+import {
+  readStoredScale,
+  storeScale,
+  suggestScale,
+  type HeatmapScale,
+} from '../components/archives/heatmapScale'
+import SyncStateChip from '../components/archives/SyncStateChip'
+import ArchiveSearchField from '../components/archives/ArchiveSearchField'
+import ArchiveSeriesHeatmap from '../components/archives/ArchiveSeriesHeatmap'
+import type { ArchiveRow, HeatmapDay } from '../types/archives'
 import { toast } from 'react-hot-toast'
 import MountSuccessToast from '../components/MountSuccessToast'
 import { Archive, Repository } from '@/types'
@@ -29,6 +48,24 @@ import { usePermissions } from '../hooks/usePermissions'
 import { useLockBreakPermissions } from '../hooks/useLockBreakPermissions'
 import { useTrackedJobOutcomes } from '../hooks/useTrackedJobOutcomes'
 import { getArchiveAgeBucket, getJobDurationSeconds } from '../utils/analyticsProperties'
+
+type ArchivesViewMode = 'heatmap' | 'list'
+
+function getInitialViewMode(): ArchivesViewMode {
+  return localStorage.getItem('archives-view-mode') === 'list' ? 'list' : 'heatmap'
+}
+
+// Downstream actions (restore, mount, delete) key off the borg archive id,
+// not the DB row id, so the mapped shape carries `borg_id` as `id`.
+function archiveRowToArchive(row: ArchiveRow): Archive {
+  return {
+    id: row.borg_id,
+    archive: row.borg_id,
+    name: row.name,
+    start: row.start,
+    time: row.start,
+  }
+}
 
 interface RestoreJob {
   id: number
@@ -75,8 +112,12 @@ const Archives: React.FC = () => {
   const [restoreArchive, setRestoreArchive] = useState<Archive | null>(null)
   const [showRestoreWizard, setShowRestoreWizard] = useState<boolean>(false)
 
+  const [viewMode, setViewMode] = useState<ArchivesViewMode>(getInitialViewMode)
+  const [chosenScale, setChosenScale] = useState<HeatmapScale | null>(readStoredScale)
+
   const queryClient = useQueryClient()
   const location = useLocation()
+  const navigate = useNavigate()
   const { trackArchive, EventAction } = useAnalytics()
   const permissions = usePermissions()
 
@@ -115,15 +156,23 @@ const Archives: React.FC = () => {
     retry: false,
   })
 
-  // Get archives for selected repository after repo info settles
+  // Get archives for selected repository from the persisted index, after repo
+  // info settles
   const {
     data: archives,
     isLoading: loadingArchives,
     error: archivesError,
   } = useQuery({
-    queryKey: ['repository-archives', selectedRepositoryId],
-    queryFn: () => new BorgApiClient(selectedRepository!).listArchives(),
-    enabled: !!selectedRepository && !repoInfoPending,
+    queryKey: ['repository-archives-stored', selectedRepositoryId],
+    queryFn: () => archivesAPI.listStored(selectedRepositoryId!),
+    enabled: !!selectedRepositoryId && !repoInfoPending,
+    retry: false,
+  })
+
+  const { data: heatmapData } = useQuery({
+    queryKey: ['repository-archives-heatmap', selectedRepositoryId],
+    queryFn: () => archivesAPI.getHeatmap(selectedRepositoryId!),
+    enabled: !!selectedRepositoryId && !repoInfoPending && viewMode === 'heatmap',
     retry: false,
   })
 
@@ -179,7 +228,7 @@ const Archives: React.FC = () => {
       const terminal = new Set(['completed', 'completed_with_warnings', 'failed', 'cancelled'])
       const deadline = Date.now() + 5 * 60 * 1000
       const refresh = () => {
-        queryClient.invalidateQueries({ queryKey: ['repository-archives', repoId] })
+        queryClient.invalidateQueries({ queryKey: ['repository-archives-stored', repoId] })
         queryClient.invalidateQueries({ queryKey: ['repository-info', repoId] })
       }
       const poll = async () => {
@@ -430,10 +479,33 @@ const Archives: React.FC = () => {
     }
   }, [location.state, setSearchParams])
 
-  const archivesList = (archives?.data?.archives || []).sort((a: Archive, b: Archive) => {
-    // Sort by start date (borg1) or time (borg2), latest first
-    return new Date(b.start || b.time).getTime() - new Date(a.start || a.time).getTime()
-  })
+  const storedArchives = (archives?.data?.archives || [])
+    .slice()
+    .sort((a: ArchiveRow, b: ArchiveRow) => {
+      return new Date(b.start).getTime() - new Date(a.start).getTime()
+    })
+  const archivesList = storedArchives.map(archiveRowToArchive)
+  const syncState = archives?.data?.sync_state ?? 'never'
+  const lastSyncedAt = archives?.data?.last_synced_at ?? null
+  const newestArchiveId = storedArchives.length > 0 ? storedArchives[0].id : null
+  const heatmapScale: HeatmapScale = chosenScale ?? suggestScale(storedArchives)
+
+  const handleRebuildSync = () => {
+    if (!selectedRepositoryId) return
+    archivesAPI.rebuild(selectedRepositoryId, 'archives').then(() => {
+      queryClient.invalidateQueries({
+        queryKey: ['repository-archives-stored', selectedRepositoryId],
+      })
+      queryClient.invalidateQueries({
+        queryKey: ['repository-archives-heatmap', selectedRepositoryId],
+      })
+    })
+  }
+
+  const handleSelectHeatmapDay = (day: HeatmapDay) => {
+    if (!selectedRepositoryId || day.archive_ids.length === 0) return
+    navigate(`/archives/${selectedRepositoryId}/${day.archive_ids[0]}`)
+  }
 
   const repositoryStats = useRepositoryStats(repoInfo?.data?.info, selectedRepository?.borg_version)
 
@@ -564,57 +636,150 @@ const Archives: React.FC = () => {
       )}
 
       {/* ── Context panel: stats + last restore ── */}
-      {selectedRepositoryId &&
-        (loadingRepoInfo || repositoryStats || restoreJobsData?.data?.jobs) && (
-          <Box sx={{ ...panelSx, mb: 3 }}>
-            {/* Stats */}
-            <Box sx={{ p: 2.5 }}>
-              {loadingRepoInfo ? (
-                <RepositoryStatsGridSkeleton />
-              ) : repositoryStats ? (
-                <RepositoryStatsGrid
-                  stats={repositoryStats}
-                  archivesCount={archivesList.length}
-                  borgVersion={selectedRepository?.borg_version}
-                  archivesLoading={loadingArchives || repoInfoPending}
-                />
-              ) : null}
-            </Box>
-            {/* Last Restore */}
-            {restoreJobsData?.data?.jobs && (
-              <Box
-                sx={{
-                  px: 2.5,
-                  py: 2,
-                  borderTop: '1px solid',
-                  borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.06),
-                  bgcolor: isDark ? alpha('#fff', 0.012) : alpha('#000', 0.01),
-                }}
-              >
-                <LastRestoreSection restoreJob={lastRestoreJob} />
-              </Box>
-            )}
+      {selectedRepositoryId && (loadingRepoInfo || repositoryStats || lastRestoreJob) && (
+        <Box sx={{ ...panelSx, mb: 3 }}>
+          {/* Stats */}
+          <Box sx={{ p: 2.5 }}>
+            {loadingRepoInfo ? (
+              <RepositoryStatsGridSkeleton />
+            ) : repositoryStats ? (
+              <RepositoryStatsGrid
+                stats={repositoryStats}
+                archivesCount={archivesList.length}
+                borgVersion={selectedRepository?.borg_version}
+                archivesLoading={loadingArchives || repoInfoPending}
+              />
+            ) : null}
           </Box>
-        )}
+          {/* Last Restore, only when there is one to show */}
+          {lastRestoreJob && (
+            <Box
+              sx={{
+                px: 2.5,
+                py: 2,
+                borderTop: '1px solid',
+                borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.06),
+                bgcolor: isDark ? alpha('#fff', 0.012) : alpha('#000', 0.01),
+              }}
+            >
+              <LastRestoreSection restoreJob={lastRestoreJob} />
+            </Box>
+          )}
+        </Box>
+      )}
 
       {/* ── Archives list ── */}
       {selectedRepositoryId && (
-        <ArchivesList
-          archives={archivesList}
-          repositoryName={selectedRepository?.name || ''}
-          loading={loadingArchives || repoInfoPending}
-          onViewArchive={handleViewArchive}
-          onRestoreArchive={handleRestoreArchive}
-          onMountArchive={openMountDialog}
-          onDeleteArchive={(archive) => setShowDeleteConfirm(archive)}
-          mountDisabled={mountArchiveMutation.isPending}
-          canDelete={
-            getRepoCapabilities({ mode: selectedRepository?.mode }).canDeleteArchive &&
-            (selectedRepositoryId
-              ? permissions.canDo(selectedRepositoryId, 'delete_archive')
-              : false)
-          }
-        />
+        <>
+          <Box
+            sx={{
+              ...panelSx,
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              gap: 2,
+              px: 2,
+              py: 1.5,
+              mb: 2,
+            }}
+          >
+            <SyncStateChip
+              state={syncState}
+              lastSyncedAt={lastSyncedAt}
+              onRebuild={handleRebuildSync}
+            />
+            <Box sx={{ flex: '1 1 260px', minWidth: 0 }}>
+              <ArchiveSearchField
+                repositoryId={selectedRepositoryId}
+                newestArchiveId={newestArchiveId}
+              />
+            </Box>
+            <Button
+              component={RouterLink}
+              to={`/activity?repository_id=${selectedRepositoryId}`}
+              size="small"
+              variant="outlined"
+              startIcon={<History size={14} />}
+              sx={{ ml: { sm: 'auto' }, flexShrink: 0 }}
+            >
+              {t('archives.toolbarOperations')}
+            </Button>
+            <ToggleButtonGroup
+              value={viewMode}
+              exclusive
+              size="small"
+              onChange={(_event, value: ArchivesViewMode | null) => {
+                if (!value) return
+                setViewMode(value)
+                localStorage.setItem('archives-view-mode', value)
+              }}
+            >
+              <ToggleButton value="heatmap">{t('archives.view.heatmap')}</ToggleButton>
+              <ToggleButton value="list">{t('archives.view.list')}</ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+          {viewMode === 'heatmap' ? (
+            heatmapData?.data ? (
+              <Box sx={{ ...panelSx, p: 2.5 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+                  <ToggleButtonGroup
+                    value={heatmapScale}
+                    exclusive
+                    size="small"
+                    aria-label={t('archives.view.scaleLabel')}
+                    onChange={(_event, value: HeatmapScale | null) => {
+                      if (!value) return
+                      setChosenScale(value)
+                      storeScale(value)
+                    }}
+                  >
+                    <ToggleButton value="days">{t('archives.view.scaleDays')}</ToggleButton>
+                    <ToggleButton value="hours">{t('archives.view.scaleHours')}</ToggleButton>
+                  </ToggleButtonGroup>
+                </Box>
+                {heatmapScale === 'hours' ? (
+                  <ArchiveHourlyHeatmap
+                    archives={storedArchives}
+                    onSelectArchive={(archiveId) =>
+                      navigate(`/archives/${selectedRepositoryId}/${archiveId}`)
+                    }
+                  />
+                ) : (
+                  <ArchiveSeriesHeatmap
+                    data={heatmapData.data}
+                    onSelectDay={handleSelectHeatmapDay}
+                    onSelectArchive={(archiveId) =>
+                      navigate(`/archives/${selectedRepositoryId}/${archiveId}`)
+                    }
+                    archiveLookup={(archiveId) => {
+                      const row = storedArchives.find((a) => a.id === archiveId)
+                      return row
+                        ? { name: row.name, start: row.start, size: row.deduplicated_size }
+                        : undefined
+                    }}
+                  />
+                )}
+              </Box>
+            ) : null
+          ) : (
+            <ArchivesList
+              archives={archivesList}
+              repositoryName={selectedRepository?.name || ''}
+              loading={loadingArchives || repoInfoPending}
+              onViewArchive={handleViewArchive}
+              onRestoreArchive={handleRestoreArchive}
+              onMountArchive={openMountDialog}
+              onDeleteArchive={(archive) => setShowDeleteConfirm(archive)}
+              mountDisabled={mountArchiveMutation.isPending}
+              canDelete={
+                getRepoCapabilities({ mode: selectedRepository?.mode }).canDeleteArchive &&
+                (selectedRepositoryId
+                  ? permissions.canDo(selectedRepositoryId, 'delete_archive')
+                  : false)
+              }
+            />
+          )}
+        </>
       )}
 
       {/* View Contents Modal */}
@@ -622,6 +787,7 @@ const Archives: React.FC = () => {
         open={!!viewArchive}
         archive={viewArchive}
         repository={selectedRepository ?? null}
+        storedArchives={storedArchives}
         onClose={() => setViewArchive(null)}
         onDownloadFile={(archiveName, filePath, size) => {
           if (selectedRepository) {
@@ -673,7 +839,7 @@ const Archives: React.FC = () => {
           onLockBroken={() => {
             // Invalidate queries to retry
             queryClient.invalidateQueries({
-              queryKey: ['repository-archives', lockError.repositoryId],
+              queryKey: ['repository-archives-stored', lockError.repositoryId],
             })
             queryClient.invalidateQueries({ queryKey: ['repository-info', lockError.repositoryId] })
           }}

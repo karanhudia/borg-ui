@@ -16,23 +16,16 @@ import {
   ListItemText,
   Tooltip,
   Typography,
+  type Theme,
 } from '@mui/material'
-import {
-  CheckSquare,
-  ChevronRight,
-  File,
-  Folder,
-  Home,
-  MinusSquare,
-  ShieldCheck,
-  Square,
-} from 'lucide-react'
+import { CheckSquare, ChevronRight, Home, MinusSquare, ShieldCheck, Square } from 'lucide-react'
 import { BorgApiClient, type Repository } from '../services/borgApi/client'
 import type { Archive } from '../types'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import type { RestorePathMetadata } from '../utils/restorePaths'
+import FileTypeIcon from './FileTypeIcon'
 
-interface ArchiveItem {
+export interface ArchiveItem {
   name: string
   type: 'file' | 'directory'
   path: string
@@ -61,6 +54,13 @@ export interface ArchivePathSelectionData {
   selectedItems?: RestorePathMetadata[]
 }
 
+export interface ArchiveBrowseState {
+  currentPath: string
+  items: ArchiveItem[]
+  navigateTo: (path: string) => void
+  activateItem: (item: ArchiveItem) => void
+}
+
 interface ArchivePathSelectorProps {
   repository: Repository
   archive: Pick<Archive, 'id' | 'name'>
@@ -69,6 +69,13 @@ interface ArchivePathSelectorProps {
   title?: string
   subtitle?: string
   helpText?: string
+  /** `embedded` drops the heading, selection bar, and helper caption so a
+   *  page that owns those surfaces (the archive Files tab) shows them once. */
+  variant?: 'standalone' | 'embedded'
+  /** Optional escape hatch reporting the current browse state and imperative
+   *  navigation, so a wrapper (e.g. keyboard shortcuts) can drive this
+   *  component without it becoming a controlled component. */
+  onBrowseStateChange?: (state: ArchiveBrowseState) => void
 }
 
 export default function ArchivePathSelector({
@@ -79,7 +86,10 @@ export default function ArchivePathSelector({
   title,
   subtitle,
   helpText,
+  variant = 'standalone',
+  onBrowseStateChange,
 }: ArchivePathSelectorProps) {
+  const embedded = variant === 'embedded'
   const { t } = useTranslation()
   const [currentPath, setCurrentPath] = useState<string>('')
   const [items, setItems] = useState<ArchiveItem[]>([])
@@ -174,6 +184,16 @@ export default function ArchivePathSelector({
     setCurrentPath(targetPath)
   }
 
+  useEffect(() => {
+    onBrowseStateChange?.({
+      currentPath,
+      items,
+      navigateTo: navigateToPath,
+      activateItem: handleItemClick,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPath, items])
+
   const formatSize = (bytes?: number): string => {
     if (!bytes) return '0 B'
     const k = 1024
@@ -207,26 +227,39 @@ export default function ArchivePathSelector({
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <Box sx={{ mb: 2 }}>
-        <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-          {title || t('wizard.restoreFiles.title')}
-        </Typography>
-        <Typography
-          variant="body2"
-          sx={{
-            color: 'text.secondary',
-          }}
-        >
-          {subtitle || t('wizard.restoreFiles.subtitle')}
-        </Typography>
-      </Box>
+      {!embedded && (
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+            {title || t('wizard.restoreFiles.title')}
+          </Typography>
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
+            {subtitle || t('wizard.restoreFiles.subtitle')}
+          </Typography>
+        </Box>
+      )}
 
       <Box
         sx={{
           minHeight: 32,
           display: 'flex',
           alignItems: 'center',
-          mb: 2,
+          mb: embedded ? 0 : 2,
+          ...(embedded
+            ? {
+                px: 2,
+                py: 1.25,
+                borderBottom: '1px solid',
+                borderColor: 'divider',
+                bgcolor: (theme: Theme) => alpha(theme.palette.text.primary, 0.025),
+                borderTopLeftRadius: 'inherit',
+                borderTopRightRadius: 'inherit',
+              }
+            : {}),
         }}
       >
         <Breadcrumbs
@@ -319,36 +352,38 @@ export default function ArchivePathSelector({
           </Box>
         )}
 
-        <Box
-          sx={{
-            px: 2,
-            py: 1,
-            borderBottom: '1px solid',
-            borderColor: 'divider',
-            bgcolor: (theme) => alpha(theme.palette.primary.main, 0.05),
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1,
-            height: 40,
-            minHeight: 40,
-            maxHeight: 40,
-          }}
-        >
-          <CheckSquare size={16} />
-          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-            {selectedPaths.size > 0
-              ? t('wizard.restoreFiles.itemsSelected', { count: selectedPaths.size })
-              : t('wizard.restoreFiles.noItemsSelected')}
-          </Typography>
-          {selectedPaths.size > 0 && (
-            <Chip
-              label={t('wizard.restoreFiles.clearAll')}
-              size="small"
-              onClick={() => onChange({ selectedPaths: [], selectedItems: [] })}
-              sx={{ ml: 'auto', cursor: 'pointer', height: 24 }}
-            />
-          )}
-        </Box>
+        {!embedded && (
+          <Box
+            sx={{
+              px: 2,
+              py: 1,
+              borderBottom: '1px solid',
+              borderColor: 'divider',
+              bgcolor: (theme) => alpha(theme.palette.primary.main, 0.05),
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              height: 40,
+              minHeight: 40,
+              maxHeight: 40,
+            }}
+          >
+            <CheckSquare size={16} />
+            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+              {selectedPaths.size > 0
+                ? t('wizard.restoreFiles.itemsSelected', { count: selectedPaths.size })
+                : t('wizard.restoreFiles.noItemsSelected')}
+            </Typography>
+            {selectedPaths.size > 0 && (
+              <Chip
+                label={t('wizard.restoreFiles.clearAll')}
+                size="small"
+                onClick={() => onChange({ selectedPaths: [], selectedItems: [] })}
+                sx={{ ml: 'auto', cursor: 'pointer', height: 24 }}
+              />
+            )}
+          </Box>
+        )}
 
         <Box sx={{ flex: 1, overflow: 'auto' }}>
           {loading && (
@@ -445,9 +480,25 @@ export default function ArchivePathSelector({
                       <ListItemButton
                         onClick={() => handleItemClick(item)}
                         sx={{
-                          border: '1px solid',
-                          borderColor: (theme) =>
-                            managedCanary ? alpha(theme.palette.info.main, 0.25) : 'transparent',
+                          py: embedded ? 1 : undefined,
+                          px: embedded ? 2 : undefined,
+                          // Embedded rows are separated by a hairline and never
+                          // outlined; the panel around the list owns the frame.
+                          ...(embedded
+                            ? {
+                                border: 0,
+                                borderRadius: 0,
+                                borderBottom: '1px solid',
+                                borderBottomColor: 'divider',
+                                '.MuiListItem-root:last-of-type &': { borderBottom: 0 },
+                              }
+                            : {
+                                border: '1px solid',
+                                borderColor: (theme: Theme) =>
+                                  managedCanary
+                                    ? alpha(theme.palette.info.main, 0.25)
+                                    : 'transparent',
+                              }),
                           bgcolor: (theme) =>
                             managedCanary ? alpha(theme.palette.info.main, 0.05) : 'transparent',
                           cursor:
@@ -464,15 +515,26 @@ export default function ArchivePathSelector({
                           },
                         }}
                       >
-                        <ListItemIcon sx={{ minWidth: 36 }}>
+                        <ListItemIcon sx={{ minWidth: 44 }}>
                           {managedCanary ? (
                             <ShieldCheck size={20} />
-                          ) : item.type === 'directory' ? (
-                            <Folder size={20} />
-                          ) : isSelected(item.path) ? (
-                            <CheckSquare size={20} color="#1976d2" />
+                          ) : isSelected(item.path) && item.type !== 'directory' ? (
+                            <Box
+                              sx={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: '9px',
+                                bgcolor: 'primary.main',
+                                color: 'primary.contrastText',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              <CheckSquare size={18} />
+                            </Box>
                           ) : (
-                            <File size={20} />
+                            <FileTypeIcon name={item.name} type={item.type} />
                           )}
                         </ListItemIcon>
                         <ListItemText
@@ -519,15 +581,17 @@ export default function ArchivePathSelector({
         </Box>
       </Box>
 
-      <Typography
-        variant="caption"
-        sx={{
-          color: 'text.secondary',
-          mt: 1,
-        }}
-      >
-        {helpText || t('wizard.restoreFiles.helpText')}
-      </Typography>
+      {!embedded && (
+        <Typography
+          variant="caption"
+          sx={{
+            color: 'text.secondary',
+            mt: 1,
+          }}
+        >
+          {helpText || t('wizard.restoreFiles.helpText')}
+        </Typography>
+      )}
     </Box>
   )
 }
