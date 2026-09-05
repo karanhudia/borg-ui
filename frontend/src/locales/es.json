@@ -941,7 +941,7 @@
       "syncing": "Sincronizando",
       "stale": "La sincronización está desactualizada",
       "never": "Aún no indexado",
-      "rebuild": "Reconstruir"
+      "rebuild": "Reconstruir índice"
     },
     "view": {
       "heatmap": "Mapa de calor",

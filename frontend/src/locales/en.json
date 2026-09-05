@@ -941,7 +941,7 @@
       "syncing": "Syncing",
       "stale": "Sync is out of date",
       "never": "Not indexed yet",
-      "rebuild": "Rebuild"
+      "rebuild": "Rebuild index"
     },
     "view": {
       "heatmap": "Heatmap",

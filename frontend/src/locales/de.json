@@ -941,7 +941,7 @@
       "syncing": "Wird synchronisiert",
       "stale": "Synchronisierung ist veraltet",
       "never": "Noch nicht indiziert",
-      "rebuild": "Neu aufbauen"
+      "rebuild": "Index neu aufbauen"
     },
     "view": {
       "heatmap": "Heatmap",
