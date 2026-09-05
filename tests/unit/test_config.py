@@ -198,9 +198,22 @@ def test_resolve_secret_key_file_lives_under_data_dir():
 
 
 @pytest.mark.unit
-def test_module_settings_ssh_home_dir_derives_from_ssh_keys_dir():
-    """With no SSH_HOME_DIR in the test env the two settings are the same dir."""
-    from app.config import settings
+def test_module_settings_ssh_home_dir_derives_from_ssh_keys_dir(monkeypatch):
+    """With no SSH_HOME_DIR in the environment the two settings are the same dir."""
+    import importlib
 
-    assert settings.ssh_keys_dir == f"{settings.data_dir}/ssh_keys"
-    assert settings.ssh_home_dir == settings.ssh_keys_dir
+    monkeypatch.delenv("SSH_HOME_DIR", raising=False)
+
+    import app.config as config_module
+
+    importlib.reload(config_module)
+    try:
+        assert (
+            config_module.settings.ssh_keys_dir
+            == f"{config_module.settings.data_dir}/ssh_keys"
+        )
+        assert (
+            config_module.settings.ssh_home_dir == config_module.settings.ssh_keys_dir
+        )
+    finally:
+        importlib.reload(config_module)
