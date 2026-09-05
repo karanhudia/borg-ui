@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Button, Menu, MenuItem } from '@mui/material'
 import { ChevronDown } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import PlanGate from '../shared/PlanGate'
 import type { RebuildStage } from '../../types/operations'
 
 const STAGES: RebuildStage[] = ['stats', 'archives', 'history']
@@ -25,17 +26,31 @@ export default function RebuildMenu({ onSelect }: RebuildMenuProps) {
         {t('operations.background.rebuildMenu')}
       </Button>
       <Menu anchorEl={anchorEl} open={!!anchorEl} onClose={() => setAnchorEl(null)}>
-        {STAGES.map((stage) => (
-          <MenuItem
-            key={stage}
-            onClick={() => {
-              onSelect(stage)
-              setAnchorEl(null)
-            }}
-          >
-            {t(`operations.background.rebuildStage.${stage}`)}
-          </MenuItem>
-        ))}
+        {STAGES.map((stage) => {
+          const item = (
+            <MenuItem
+              key={stage}
+              onClick={() => {
+                onSelect(stage)
+                setAnchorEl(null)
+              }}
+            >
+              {t(`operations.background.rebuildStage.${stage}`)}
+            </MenuItem>
+          )
+          if (stage !== 'history') return item
+          return (
+            <PlanGate
+              key={stage}
+              feature="archive_history"
+              disabled
+              surface="background_work"
+              operation="rebuild_history"
+            >
+              {item}
+            </PlanGate>
+          )
+        })}
       </Menu>
     </>
   )
