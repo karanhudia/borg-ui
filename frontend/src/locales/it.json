@@ -3366,23 +3366,17 @@
       "system": "Sistema"
     },
     "background": {
-      "systemRow": "Sistema",
       "retry": "Riprova",
-      "waiting": "in attesa",
-      "failed": "non riuscito",
       "plan": "piano",
-      "holdsLane": "→ occupa la corsia",
-      "viewActivity": "Attività ▸",
       "stage": {
         "connect": "Connetti",
         "stats": "Statistiche",
         "archives": "Archivi",
-        "history": "Indice cronologia",
-        "ready": "Pronto"
+        "history": "Indice cronologia"
       },
-      "workers": "worker: indice {{count}}",
+      "workers": "{{count}} worker",
       "emptyTitle": "Nessuna attività in corso",
-      "emptyDescription": "Il lavoro in background apparirà qui alla prossima importazione, backup o esecuzione di riconciliazione.",
+      "emptyDescription": "Importazioni, backup e riconciliazioni mostrano qui i loro passaggi mentre sono in corso.",
       "rebuildFrom": "Ricostruisci da",
       "rebuildStage": {
         "stats": "Statistiche",
@@ -3392,7 +3386,6 @@
       "title": "Lavoro in background",
       "pause": "Pausa",
       "resume": "Riprendi",
-      "rebuildNeedsRepository": "Scegli un repository dalla sua scheda per ricostruirlo.",
       "never": "Mai",
       "syncing": "Sincronizzazione",
       "rebuildMenu": "Ricostruisci…",
@@ -3400,7 +3393,27 @@
       "openTrack": "Apri la traccia di esecuzione di {{repository}}",
       "rebuildFailed": "Non è stato possibile avviare la ricostruzione.",
       "queueFailed": "Impossibile caricare la coda in background.",
-      "pauseAdminOnly": "Solo gli amministratori possono mettere in pausa il lavoro in background."
+      "pauseAdminOnly": "Solo gli amministratori possono mettere in pausa il lavoro in background.",
+      "reason": {
+        "paused": "In pausa",
+        "lane_busy": "In attesa che il backup di questo repository finisca",
+        "workers": "In attesa di un worker di indicizzazione",
+        "queued": "Prossimo in coda"
+      },
+      "foregroundRunning": "{{kind}} in esecuzione da {{elapsed}}",
+      "viewRuns": "Vedi esecuzioni",
+      "stageDone": "Fatto",
+      "stageFailed": "Fallito",
+      "repositoryColumn": "Repository",
+      "workersLabel": "Worker di indicizzazione",
+      "workersDecrease": "Meno worker di indicizzazione",
+      "workersIncrease": "Più worker di indicizzazione",
+      "workersFailed": "Impossibile cambiare il numero di worker.",
+      "pausedBanner": "Il lavoro in background è in pausa. I passaggi in coda non partiranno finché non riprendi.",
+      "lastReconcile": "L'ultima riconciliazione è stata eseguita {{ago}}.",
+      "lastReconcileNever": "Nessuna riconciliazione è ancora stata eseguita.",
+      "rebuildRepository": "Repository",
+      "rebuildStarted": "Ricostruzione avviata per {{repository}}."
     },
     "status": {
       "queued": "In coda",

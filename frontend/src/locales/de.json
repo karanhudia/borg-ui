@@ -3366,23 +3366,17 @@
       "system": "System"
     },
     "background": {
-      "systemRow": "System",
       "retry": "Wiederholen",
-      "waiting": "wartet",
-      "failed": "fehlgeschlagen",
       "plan": "Plan",
-      "holdsLane": "→ blockiert die Warteschlange",
-      "viewActivity": "Aktivität ▸",
       "stage": {
         "connect": "Verbinden",
         "stats": "Statistik",
         "archives": "Archive",
-        "history": "Verlaufsindex",
-        "ready": "Fertig"
+        "history": "Verlaufsindex"
       },
-      "workers": "Worker: Index {{count}}",
+      "workers": "{{count}} Worker",
       "emptyTitle": "Nichts läuft gerade",
-      "emptyDescription": "Hintergrundarbeit erscheint hier, sobald ein Import, eine Sicherung oder ein Abgleichlauf startet.",
+      "emptyDescription": "Import-, Backup- und Abgleichläufe zeigen hier ihre Schritte, während sie laufen.",
       "rebuildFrom": "Neu aufbauen ab",
       "rebuildStage": {
         "stats": "Statistik",
@@ -3392,7 +3386,6 @@
       "title": "Hintergrundarbeit",
       "pause": "Pausieren",
       "resume": "Fortsetzen",
-      "rebuildNeedsRepository": "Wähle ein Repository aus seiner Karte, um es neu aufzubauen.",
       "never": "Nie",
       "syncing": "Synchronisiert",
       "rebuildMenu": "Neu aufbauen…",
@@ -3400,7 +3393,27 @@
       "openTrack": "Ablaufverfolgung für {{repository}} öffnen",
       "rebuildFailed": "Der Neuaufbau konnte nicht gestartet werden.",
       "queueFailed": "Die Hintergrundwarteschlange konnte nicht geladen werden.",
-      "pauseAdminOnly": "Nur Administratoren können Hintergrundarbeiten pausieren."
+      "pauseAdminOnly": "Nur Administratoren können Hintergrundarbeiten pausieren.",
+      "reason": {
+        "paused": "Pausiert",
+        "lane_busy": "Wartet, bis das Backup dieses Repositorys fertig ist",
+        "workers": "Wartet auf einen Index-Worker",
+        "queued": "Als Nächstes dran"
+      },
+      "foregroundRunning": "{{kind}} läuft seit {{elapsed}}",
+      "viewRuns": "Läufe anzeigen",
+      "stageDone": "Fertig",
+      "stageFailed": "Fehlgeschlagen",
+      "repositoryColumn": "Repository",
+      "workersLabel": "Index-Worker",
+      "workersDecrease": "Weniger Index-Worker",
+      "workersIncrease": "Mehr Index-Worker",
+      "workersFailed": "Die Anzahl der Worker konnte nicht geändert werden.",
+      "pausedBanner": "Hintergrundarbeit ist pausiert. Wartende Schritte starten erst nach dem Fortsetzen.",
+      "lastReconcile": "Der letzte Abgleich lief {{ago}}.",
+      "lastReconcileNever": "Es wurde noch kein Abgleich ausgeführt.",
+      "rebuildRepository": "Repository",
+      "rebuildStarted": "Neuaufbau für {{repository}} gestartet."
     },
     "status": {
       "queued": "In Warteschlange",

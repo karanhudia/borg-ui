@@ -25,6 +25,8 @@ vi.mock('../../services/api', () => ({
     updateLimits: vi.fn().mockResolvedValue({ data: {} }),
   },
   archivesAPI: { rebuild: vi.fn() },
+  activityAPI: { list: vi.fn().mockResolvedValue({ data: [] }) },
+  repositoriesAPI: { getRepositories: vi.fn().mockResolvedValue({ data: { repositories: [] } }) },
 }))
 
 vi.mock('../../hooks/useOperationEvents', () => ({ useOperationEvents: vi.fn() }))
@@ -58,8 +60,19 @@ describe('BackgroundWorkTab', () => {
     await waitFor(() => expect(operationsAPI.pause).toHaveBeenCalled())
   })
 
-  it('renders the rebuild menu', async () => {
+  it('shows a paused banner with a resume action when the queue is paused', async () => {
+    ;(operationsAPI.getQueue as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      data: { repositories: [], limits: { index_workers: 2, index_running: 0 }, paused: true },
+    })
     renderTab()
-    expect(await screen.findByRole('button', { name: /rebuild/i })).toBeInTheDocument()
+    expect(await screen.findByRole('alert')).toHaveTextContent(/background work is paused/i)
+    fireEvent.click(screen.getByRole('button', { name: /resume/i }))
+    await waitFor(() => expect(operationsAPI.resume).toHaveBeenCalled())
+  })
+
+  it('keeps no global rebuild menu in the header', async () => {
+    renderTab()
+    await screen.findByText(/nothing is running/i)
+    expect(screen.queryByRole('button', { name: /rebuild/i })).not.toBeInTheDocument()
   })
 })

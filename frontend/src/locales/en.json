@@ -3366,23 +3366,17 @@
       "system": "System"
     },
     "background": {
-      "systemRow": "System",
       "retry": "Retry",
-      "waiting": "waiting",
-      "failed": "failed",
       "plan": "plan",
-      "holdsLane": "→ holds the lane",
-      "viewActivity": "Activity ▸",
       "stage": {
         "connect": "Connect",
         "stats": "Stats",
         "archives": "Archives",
-        "history": "History index",
-        "ready": "Ready"
+        "history": "History index"
       },
-      "workers": "workers: index {{count}}",
+      "workers": "{{count}} workers",
       "emptyTitle": "Nothing is running",
-      "emptyDescription": "Background work will appear here the next time an import, backup, or reconcile run starts.",
+      "emptyDescription": "Import, backup, and reconcile runs show their stages here while they happen.",
       "rebuildFrom": "Rebuild from",
       "rebuildStage": {
         "stats": "Stats",
@@ -3392,7 +3386,6 @@
       "title": "Background work",
       "pause": "Pause",
       "resume": "Resume",
-      "rebuildNeedsRepository": "Choose a repository from its card to rebuild.",
       "never": "Never",
       "syncing": "Syncing",
       "rebuildMenu": "Rebuild…",
@@ -3400,7 +3393,27 @@
       "openTrack": "Open the run track for {{repository}}",
       "rebuildFailed": "The rebuild could not be started.",
       "queueFailed": "The background queue could not be loaded.",
-      "pauseAdminOnly": "Only administrators can pause background work."
+      "pauseAdminOnly": "Only administrators can pause background work.",
+      "reason": {
+        "paused": "Paused",
+        "lane_busy": "Waiting for the backup on this repository to finish",
+        "workers": "Waiting for an index worker",
+        "queued": "Next in line"
+      },
+      "foregroundRunning": "{{kind}} running for {{elapsed}}",
+      "viewRuns": "View runs",
+      "stageDone": "Done",
+      "stageFailed": "Failed",
+      "repositoryColumn": "Repository",
+      "workersLabel": "Index workers",
+      "workersDecrease": "Fewer index workers",
+      "workersIncrease": "More index workers",
+      "workersFailed": "The worker count could not be changed.",
+      "pausedBanner": "Background work is paused. Queued stages will not start until you resume.",
+      "lastReconcile": "The last reconcile ran {{ago}}.",
+      "lastReconcileNever": "No reconcile has run yet.",
+      "rebuildRepository": "Repository",
+      "rebuildStarted": "Rebuild started for {{repository}}."
     },
     "status": {
       "queued": "Queued",

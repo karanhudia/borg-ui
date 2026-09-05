@@ -3366,23 +3366,17 @@
       "system": "Sistema"
     },
     "background": {
-      "systemRow": "Sistema",
       "retry": "Reintentar",
-      "waiting": "esperando",
-      "failed": "fallido",
       "plan": "plan",
-      "holdsLane": "→ ocupa el carril",
-      "viewActivity": "Actividad ▸",
       "stage": {
         "connect": "Conectar",
         "stats": "Estadísticas",
         "archives": "Archivos",
-        "history": "Índice de historial",
-        "ready": "Listo"
+        "history": "Índice de historial"
       },
-      "workers": "trabajadores: índice {{count}}",
+      "workers": "{{count}} workers",
       "emptyTitle": "No hay nada en ejecución",
-      "emptyDescription": "El trabajo en segundo plano aparecerá aquí la próxima vez que se inicie una importación, copia de seguridad o reconciliación.",
+      "emptyDescription": "Las importaciones, copias y reconciliaciones muestran aquí sus pasos mientras se ejecutan.",
       "rebuildFrom": "Reconstruir desde",
       "rebuildStage": {
         "stats": "Estadísticas",
@@ -3392,7 +3386,6 @@
       "title": "Trabajo en segundo plano",
       "pause": "Pausar",
       "resume": "Reanudar",
-      "rebuildNeedsRepository": "Elige un repositorio desde su tarjeta para reconstruirlo.",
       "never": "Nunca",
       "syncing": "Sincronizando",
       "rebuildMenu": "Reconstruir…",
@@ -3400,7 +3393,27 @@
       "openTrack": "Abrir el seguimiento de ejecución de {{repository}}",
       "rebuildFailed": "No se pudo iniciar la reconstrucción.",
       "queueFailed": "No se pudo cargar la cola en segundo plano.",
-      "pauseAdminOnly": "Solo los administradores pueden pausar el trabajo en segundo plano."
+      "pauseAdminOnly": "Solo los administradores pueden pausar el trabajo en segundo plano.",
+      "reason": {
+        "paused": "En pausa",
+        "lane_busy": "Esperando a que termine la copia de este repositorio",
+        "workers": "Esperando un worker de índice",
+        "queued": "Siguiente en la cola"
+      },
+      "foregroundRunning": "{{kind}} en ejecución desde hace {{elapsed}}",
+      "viewRuns": "Ver ejecuciones",
+      "stageDone": "Listo",
+      "stageFailed": "Fallido",
+      "repositoryColumn": "Repositorio",
+      "workersLabel": "Workers de índice",
+      "workersDecrease": "Menos workers de índice",
+      "workersIncrease": "Más workers de índice",
+      "workersFailed": "No se pudo cambiar el número de workers.",
+      "pausedBanner": "El trabajo en segundo plano está en pausa. Los pasos en cola no empezarán hasta que lo reanudes.",
+      "lastReconcile": "La última reconciliación se ejecutó {{ago}}.",
+      "lastReconcileNever": "Todavía no se ha ejecutado ninguna reconciliación.",
+      "rebuildRepository": "Repositorio",
+      "rebuildStarted": "Reconstrucción iniciada para {{repository}}."
     },
     "status": {
       "queued": "En cola",
