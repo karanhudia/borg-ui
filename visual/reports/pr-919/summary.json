@@ -1,39 +1,21 @@
 {
-  "generatedAt": "2026-09-05T13:03:40.918Z",
+  "generatedAt": "2026-09-05T14:24:28.636Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #919 visual report",
-    "commitSha": "0d836fffb34e",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/33967262724"
+    "commitSha": "65c57c6d5745",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/33970851354"
   },
   "totals": {
     "baseline": 510,
     "actual": 546,
     "compared": 510,
-    "changed": 5,
+    "changed": 4,
     "added": 36,
     "removed": 0,
-    "unchanged": 505
+    "unchanged": 506
   },
   "changed": [
-    {
-      "fileName": "components-archivecontentsdialog--awaiting-agent-listing.png",
-      "baselinePath": "images/baseline/components-archivecontentsdialog--awaiting-agent-listing.png",
-      "actualPath": "images/actual/components-archivecontentsdialog--awaiting-agent-listing.png",
-      "diffPath": "images/diff/components-archivecontentsdialog--awaiting-agent-listing.png",
-      "diffPixels": 286811,
-      "totalPixels": 1024000,
-      "diffRatio": 0.2800888671875,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
     {
       "fileName": "remote-machines-remotemachinecard--with-run-diagnostics--mobile.png",
       "baselinePath": "images/baseline/remote-machines-remotemachinecard--with-run-diagnostics--mobile.png",
@@ -623,6 +605,9 @@
     },
     {
       "fileName": "components-archivecontentsdialog--awaiting-agent-listing--mobile.png"
+    },
+    {
+      "fileName": "components-archivecontentsdialog--awaiting-agent-listing.png"
     },
     {
       "fileName": "components-archivenametemplateinput--local-time-template--mobile.png"
