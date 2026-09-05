@@ -261,22 +261,25 @@ export default function RepositoryOperationsView({ repositoryId }: RepositoryOpe
       <Box
         sx={{
           display: 'flex',
-          alignItems: { xs: 'flex-start', sm: 'center' },
-          flexDirection: { xs: 'column', sm: 'row' },
+          alignItems: 'flex-start',
           justifyContent: 'space-between',
           gap: 2,
           mb: 3,
         }}
       >
-        <Box>
-          <Typography variant="h4" component="h1">
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="h4" component="h1" sx={{ wordBreak: 'break-word' }}>
             {repository?.name ?? String(repositoryId)}
           </Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
             {t('activity.repositoryView.subtitle')}
           </Typography>
         </Box>
-        <IconButton onClick={() => refetch()} aria-label={t('activity.actions.refresh')}>
+        <IconButton
+          onClick={() => refetch()}
+          aria-label={t('activity.actions.refresh')}
+          sx={{ flexShrink: 0 }}
+        >
           <RefreshCw size={20} />
         </IconButton>
       </Box>
