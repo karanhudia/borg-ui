@@ -17,7 +17,7 @@ import { licensingAPI } from '../services/api'
 import { usePlan } from '../hooks/usePlan'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { useAnalytics } from '../hooks/useAnalytics'
-import { BUY_URL } from '../utils/externalLinks'
+import { buildBuyUrl } from '../utils/externalLinks'
 import { PLAN_LABEL, nextPlanAbove } from '../core/features'
 import PlanInfoDrawer from './PlanInfoDrawer'
 
@@ -165,6 +165,7 @@ export default function LicensingTab() {
     trackPlan(EventAction.VIEW, {
       ...analyticsContext,
       operation: 'open_buy_link',
+      selected_plan: upgradePlan,
     })
   }
 
@@ -338,7 +339,7 @@ export default function LicensingTab() {
             </Typography>
             {upgradePlan && (
               <Link
-                href={BUY_URL}
+                href={buildBuyUrl({ plan: upgradePlan, src: 'app-licensing' })}
                 target="_blank"
                 rel="noreferrer"
                 underline="hover"
