@@ -85,7 +85,7 @@ describe('RepositoryOperationsView', () => {
     })
     await screen.findByRole('heading', { name: 'nas' })
     fireEvent.mouseDown(screen.getByRole('combobox', { name: /repository/i }))
-    await userEvent.click(await screen.findByRole('option', { name: /photos/ }))
+    fireEvent.click(await screen.findByRole('option', { name: /photos/ }))
     await waitFor(() => expect(window.location.search).toBe('?repository_id=2'))
   })
 

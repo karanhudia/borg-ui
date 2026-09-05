@@ -119,7 +119,7 @@ describe('PipelineBoard', () => {
     renderBoard()
     await waitFor(() => expect(screen.getAllByTestId('repository-row')).toHaveLength(2))
     expect(screen.getAllByText('Stats').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('History index').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('File history').length).toBeGreaterThan(0)
   })
 
   it('shows the foreground job on its repository row', async () => {

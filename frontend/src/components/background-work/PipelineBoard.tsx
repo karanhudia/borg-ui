@@ -1,23 +1,13 @@
 import { useCallback, useMemo, useState } from 'react'
-import {
-  Alert,
-  Box,
-  Button,
-  IconButton,
-  Stack,
-  Tooltip,
-  Typography,
-  alpha,
-  useTheme,
-} from '@mui/material'
-import { ListChecks, Minus, Plus, RotateCw } from 'lucide-react'
+import { Alert, Box, IconButton, Stack, Tooltip, Typography, alpha, useTheme } from '@mui/material'
+import { ListChecks, Minus, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
 import RepositoryRow from './RepositoryRow'
 import RepositoryTrackDialog from './RepositoryTrackDialog'
 import EmptyStateCard from '../EmptyStateCard'
-import RichSelect from '../shared/RichSelect'
+import RebuildPanel from './RebuildPanel'
 import { usePlan } from '../../hooks/usePlan'
 import {
   STAGE_ORDER,
@@ -103,18 +93,13 @@ function WorkerStepper({
   )
 }
 
-const REBUILD_STAGES: RebuildStage[] = ['stats', 'archives', 'history']
-
 function EmptyBoard({
   onRebuild,
 }: {
   onRebuild: (repositoryId: number, stage: RebuildStage) => void
 }) {
   const { t } = useTranslation()
-  const theme = useTheme()
   const { can } = usePlan()
-  const [repositoryId, setRepositoryId] = useState<string>('')
-  const [stage, setStage] = useState<RebuildStage>('stats')
 
   const { data: lastReconcile, isFetched } = useQuery({
     queryKey: ['operations-last-reconcile'],
@@ -132,7 +117,6 @@ function EmptyBoard({
     queryFn: repositoriesAPI.getRepositories,
   })
   const repositories: Repository[] = repositoriesData?.data?.repositories ?? []
-  const selectedId = repositoryId ? Number(repositoryId) : repositories[0]?.id
 
   const reconcileAt = lastReconcile?.completed_at ?? lastReconcile?.started_at ?? null
   const reconcileText = !isFetched
@@ -143,8 +127,6 @@ function EmptyBoard({
         })
       : t('operations.background.lastReconcileNever')
 
-  const historyLocked = !can('archive_history')
-
   return (
     <Stack spacing={2}>
       <EmptyStateCard
@@ -154,72 +136,11 @@ function EmptyBoard({
         secondaryDescription={reconcileText}
       />
       {repositories.length > 0 && (
-        <Box
-          sx={{
-            border: `1px solid ${theme.palette.divider}`,
-            borderRadius: 2,
-            bgcolor: 'background.paper',
-            p: 2.5,
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', md: 'minmax(220px, 1fr) 2fr' },
-            gap: 3,
-            alignItems: 'center',
-          }}
-        >
-          <Box>
-            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
-              <RotateCw size={16} />
-              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                {t('operations.background.rebuildTitle')}
-              </Typography>
-            </Stack>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              {t('operations.background.rebuildDescription')}
-            </Typography>
-          </Box>
-          <Stack
-            direction={{ xs: 'column', sm: 'row' }}
-            spacing={1.5}
-            sx={{ alignItems: { sm: 'center' } }}
-          >
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <RichSelect
-                value={String(selectedId ?? '')}
-                onChange={setRepositoryId}
-                label={t('operations.background.rebuildRepository')}
-                options={repositories.map((repo) => ({
-                  value: String(repo.id),
-                  primary: repo.name,
-                  secondary: repo.path,
-                }))}
-              />
-            </Box>
-            <Box sx={{ width: { sm: 200 } }}>
-              <RichSelect
-                value={stage}
-                onChange={(value) => setStage(value as RebuildStage)}
-                label={t('operations.background.rebuildStageLabel')}
-                options={REBUILD_STAGES.map((value) => ({
-                  value,
-                  primary: t(`operations.background.rebuildStage.${value}`),
-                  secondary:
-                    value === 'history' && historyLocked
-                      ? t('operations.background.proOnly')
-                      : undefined,
-                  disabled: value === 'history' && historyLocked,
-                }))}
-              />
-            </Box>
-            <Button
-              variant="contained"
-              disableElevation
-              sx={{ height: 56, px: 3, flexShrink: 0 }}
-              onClick={() => selectedId != null && onRebuild(selectedId, stage)}
-            >
-              {t('operations.background.rebuildAction')}
-            </Button>
-          </Stack>
-        </Box>
+        <RebuildPanel
+          repositories={repositories}
+          historyLocked={!can('archive_history')}
+          onRebuild={onRebuild}
+        />
       )}
     </Stack>
   )

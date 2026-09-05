@@ -3415,8 +3415,8 @@
       "stage": {
         "connect": "Verbinden",
         "stats": "Statistik",
-        "archives": "Archive",
-        "history": "Verlaufsindex"
+        "archives": "Archivliste",
+        "history": "Dateiverlauf"
       },
       "workers": "{{count}} Worker",
       "emptyTitle": "Nichts läuft gerade",
@@ -3424,8 +3424,8 @@
       "rebuildFrom": "Neu aufbauen ab",
       "rebuildStage": {
         "stats": "Statistik",
-        "archives": "Archive",
-        "history": "Verlauf"
+        "archives": "Archivliste",
+        "history": "Dateiverlauf"
       },
       "title": "Hintergrundarbeit",
       "pause": "Pausieren",
@@ -3460,11 +3460,33 @@
       "rebuildStarted": "Neuaufbau für {{repository}} gestartet.",
       "subtitle": "Was Borg UI gerade mit deinen Repositorys macht.",
       "rebuildTitle": "Abgeleitete Daten neu aufbauen",
-      "rebuildDescription": "Statistiken, Archivliste oder Verlaufsindex für ein Repository neu berechnen. Spätere Schritte laufen automatisch erneut.",
-      "rebuildStageLabel": "Beginnen bei",
+      "rebuildDescription": "Borg UI hält für jedes Repository drei Arten abgeleiteter Daten, die in dieser Reihenfolge aufgebaut werden. Wähle den ersten Schritt, der falsch aussieht; er und alle folgenden werden neu aufgebaut, frühere bleiben erhalten.",
       "rebuildAction": "Neu aufbauen",
       "rebuildRow": "{{repository}} neu aufbauen",
-      "proOnly": "Pro"
+      "proOnly": "Pro",
+      "stages": {
+        "stats": {
+          "title": "Statistiken",
+          "what": "Repository-Größe und Archivanzahl auf der Repository-Karte und dem Dashboard.",
+          "cost": "Dauert Sekunden."
+        },
+        "archives": {
+          "title": "Archivliste",
+          "what": "Die Archivliste hinter der Archivseite, der Heatmap und dem Archiv-Browser.",
+          "cost": "Unter einer Minute für die meisten Repositorys."
+        },
+        "history": {
+          "title": "Dateiverlauf",
+          "what": "Was sich zwischen Archiven geändert hat, für den Änderungen-Tab, den Dateiverlauf und die Suche.",
+          "cost": "Der langsamste Schritt. Indiziert im Hintergrund ein Archiv nach dem anderen."
+        }
+      },
+      "stageWillRebuild": "Wird neu aufgebaut",
+      "stageKept": "Bleibt erhalten",
+      "stageStart": "Hier beginnen",
+      "rebuildSummary": "{{stages}} für {{repository}} neu aufbauen. Durchsuchen und Backups laufen währenddessen weiter; die neuen Daten ersetzen die alten, sobald ein Schritt fertig ist.",
+      "rebuildSummaryAll": "Alles für {{repository}} neu aufbauen. Durchsuchen und Backups laufen währenddessen weiter; die neuen Daten ersetzen die alten, sobald ein Schritt fertig ist.",
+      "stageJoin": " und "
     },
     "status": {
       "queued": "In Warteschlange",

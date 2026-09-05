@@ -1,4 +1,4 @@
-import { Box, Typography, useTheme } from '@mui/material'
+import { Box, Tooltip, Typography, useTheme } from '@mui/material'
 import { Folder } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import ChangeBadge from './ChangeBadge'
@@ -48,31 +48,39 @@ export default function ChangeRowLine({ row }: ChangeRowLineProps) {
       ) : (
         <ChangeBadge change={row.change} />
       )}
-      <Typography
-        variant="body2"
-        noWrap
-        title={row.path}
-        sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '0.8125rem' }}
-      >
-        {row.change === 'summary' ? (
-          <>
-            <Box component="span" sx={{ color: 'text.secondary' }}>
-              {dir}
-            </Box>
-            {name}
-            <Box component="span" sx={{ color: 'text.secondary', ml: 1 }}>
-              {t('archives.changes.summaryRow', { count: row.summary_count ?? 0, path: '' }).trim()}
-            </Box>
-          </>
-        ) : (
-          <>
-            <Box component="span" sx={{ color: 'text.secondary' }}>
-              {dir}
-            </Box>
-            {name}
-          </>
-        )}
-      </Typography>
+      <Tooltip title={row.path} enterDelay={700} placement="top-start">
+        <Typography
+          variant="body2"
+          noWrap
+          data-path={row.path}
+          sx={{
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+            fontSize: '0.8125rem',
+          }}
+        >
+          {row.change === 'summary' ? (
+            <>
+              <Box component="span" sx={{ color: 'text.secondary' }}>
+                {dir}
+              </Box>
+              {name}
+              <Box component="span" sx={{ color: 'text.secondary', ml: 1 }}>
+                {t('archives.changes.summaryRow', {
+                  count: row.summary_count ?? 0,
+                  path: '',
+                }).trim()}
+              </Box>
+            </>
+          ) : (
+            <>
+              <Box component="span" sx={{ color: 'text.secondary' }}>
+                {dir}
+              </Box>
+              {name}
+            </>
+          )}
+        </Typography>
+      </Tooltip>
       {row.change !== 'summary' && (
         <Box
           sx={{

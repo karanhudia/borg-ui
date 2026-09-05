@@ -3415,8 +3415,8 @@
       "stage": {
         "connect": "Conectar",
         "stats": "Estadísticas",
-        "archives": "Archivos",
-        "history": "Índice de historial"
+        "archives": "Lista de archivos",
+        "history": "Historial de ficheros"
       },
       "workers": "{{count}} workers",
       "emptyTitle": "No hay nada en ejecución",
@@ -3424,8 +3424,8 @@
       "rebuildFrom": "Reconstruir desde",
       "rebuildStage": {
         "stats": "Estadísticas",
-        "archives": "Archivos",
-        "history": "Historial"
+        "archives": "Lista de archivos",
+        "history": "Historial de ficheros"
       },
       "title": "Trabajo en segundo plano",
       "pause": "Pausar",
@@ -3460,11 +3460,33 @@
       "rebuildStarted": "Reconstrucción iniciada para {{repository}}.",
       "subtitle": "Lo que Borg UI está haciendo ahora mismo con tus repositorios.",
       "rebuildTitle": "Reconstruir datos derivados",
-      "rebuildDescription": "Recalcula las estadísticas, la lista de archivos o el índice de historial de un repositorio. Los pasos posteriores se repiten automáticamente.",
-      "rebuildStageLabel": "Empezar desde",
+      "rebuildDescription": "Borg UI mantiene tres tipos de datos derivados por repositorio, construidos en este orden. Elige la primera etapa que parezca incorrecta; esa y todas las posteriores se reconstruyen, las anteriores se conservan.",
       "rebuildAction": "Reconstruir",
       "rebuildRow": "Reconstruir {{repository}}",
-      "proOnly": "Pro"
+      "proOnly": "Pro",
+      "stages": {
+        "stats": {
+          "title": "Estadísticas",
+          "what": "Tamaño del repositorio y número de archivos en la tarjeta del repositorio y el panel.",
+          "cost": "Tarda segundos."
+        },
+        "archives": {
+          "title": "Lista de archivos",
+          "what": "La lista de archivos detrás de la página Archivos, el mapa de calor y el navegador de archivos.",
+          "cost": "Menos de un minuto en la mayoría de repositorios."
+        },
+        "history": {
+          "title": "Historial de ficheros",
+          "what": "Qué cambió entre archivos, para la pestaña Cambios, el historial de ficheros y la búsqueda.",
+          "cost": "La etapa más lenta. Indexa un archivo cada vez en segundo plano."
+        }
+      },
+      "stageWillRebuild": "Se reconstruirá",
+      "stageKept": "Se conserva",
+      "stageStart": "Empezar aquí",
+      "rebuildSummary": "Reconstruir {{stages}} de {{repository}}. Navegar y las copias siguen funcionando mientras tanto; los datos nuevos sustituyen a los antiguos cuando termina cada etapa.",
+      "rebuildSummaryAll": "Reconstruir todo de {{repository}}. Navegar y las copias siguen funcionando mientras tanto; los datos nuevos sustituyen a los antiguos cuando termina cada etapa.",
+      "stageJoin": " y "
     },
     "status": {
       "queued": "En cola",

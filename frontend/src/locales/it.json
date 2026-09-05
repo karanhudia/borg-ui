@@ -3415,8 +3415,8 @@
       "stage": {
         "connect": "Connetti",
         "stats": "Statistiche",
-        "archives": "Archivi",
-        "history": "Indice cronologia"
+        "archives": "Elenco archivi",
+        "history": "Cronologia file"
       },
       "workers": "{{count}} worker",
       "emptyTitle": "Nessuna attività in corso",
@@ -3424,8 +3424,8 @@
       "rebuildFrom": "Ricostruisci da",
       "rebuildStage": {
         "stats": "Statistiche",
-        "archives": "Archivi",
-        "history": "Cronologia"
+        "archives": "Elenco archivi",
+        "history": "Cronologia file"
       },
       "title": "Lavoro in background",
       "pause": "Pausa",
@@ -3460,11 +3460,33 @@
       "rebuildStarted": "Ricostruzione avviata per {{repository}}.",
       "subtitle": "Cosa sta facendo Borg UI sui tuoi repository in questo momento.",
       "rebuildTitle": "Ricostruisci i dati derivati",
-      "rebuildDescription": "Ricalcola le statistiche, l'elenco degli archivi o l'indice della cronologia di un repository. I passaggi successivi vengono rieseguiti automaticamente.",
-      "rebuildStageLabel": "Inizia da",
+      "rebuildDescription": "Borg UI conserva tre tipi di dati derivati per ogni repository, costruiti in questo ordine. Scegli il primo passaggio che sembra sbagliato; quello e tutti i successivi vengono ricostruiti, i precedenti restano.",
       "rebuildAction": "Ricostruisci",
       "rebuildRow": "Ricostruisci {{repository}}",
-      "proOnly": "Pro"
+      "proOnly": "Pro",
+      "stages": {
+        "stats": {
+          "title": "Statistiche",
+          "what": "Dimensione del repository e numero di archivi sulla scheda del repository e nella dashboard.",
+          "cost": "Richiede secondi."
+        },
+        "archives": {
+          "title": "Elenco archivi",
+          "what": "L'elenco degli archivi dietro la pagina Archivi, la heatmap e il browser degli archivi.",
+          "cost": "Meno di un minuto per la maggior parte dei repository."
+        },
+        "history": {
+          "title": "Cronologia file",
+          "what": "Cosa è cambiato tra gli archivi, per la scheda Modifiche, la cronologia dei file e la ricerca.",
+          "cost": "Il passaggio più lento. Indicizza un archivio alla volta in background."
+        }
+      },
+      "stageWillRebuild": "Verrà ricostruito",
+      "stageKept": "Conservato",
+      "stageStart": "Inizia qui",
+      "rebuildSummary": "Ricostruisci {{stages}} per {{repository}}. Navigazione e backup continuano a funzionare nel frattempo; i nuovi dati sostituiscono i vecchi al termine di ogni passaggio.",
+      "rebuildSummaryAll": "Ricostruisci tutto per {{repository}}. Navigazione e backup continuano a funzionare nel frattempo; i nuovi dati sostituiscono i vecchi al termine di ogni passaggio.",
+      "stageJoin": " e "
     },
     "status": {
       "queued": "In coda",

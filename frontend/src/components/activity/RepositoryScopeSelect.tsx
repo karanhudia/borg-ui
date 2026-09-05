@@ -1,8 +1,9 @@
-import { Database, Layers } from 'lucide-react'
+import { MenuItem, Box, Typography } from '@mui/material'
+import { Layers } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import RichSelect from '../shared/RichSelect'
+import RepoSelect from '../RepoSelect'
 import { repositoriesAPI } from '../../services/api'
 import type { Repository } from '@/types'
 
@@ -10,39 +11,42 @@ interface RepositoryScopeSelectProps {
   value: number | null
 }
 
-// The way into (and between) repository-scoped activity views. "All
-// repositories" is the global ledger; any repository opens its own
-// Operations view at /activity?repository_id=.
+const ALL = 'all'
+
+// The way into (and between) repository-scoped activity views, built on
+// the shared repository select so it looks like every other repository
+// picker. "All repositories" is the global ledger; any repository opens
+// its own Operations view at /activity?repository_id=.
 export default function RepositoryScopeSelect({ value }: RepositoryScopeSelectProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['repositories'],
     queryFn: repositoriesAPI.getRepositories,
   })
   const repositories: Repository[] = data?.data?.repositories ?? []
+  const allLabel = t('activity.repositoryScope.all')
 
   return (
-    <RichSelect
+    <RepoSelect
+      repositories={repositories}
+      loading={isLoading}
+      valueKey="id"
+      value={value ?? ALL}
       label={t('activity.repositoryScope.label')}
-      value={value != null ? String(value) : 'all'}
-      onChange={(next) =>
-        navigate(next === 'all' ? '/activity' : `/activity?repository_id=${next}`)
+      fallbackDisplayValue={allLabel}
+      fullWidth
+      prefixItems={
+        <MenuItem value={ALL}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Layers size={16} />
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              {allLabel}
+            </Typography>
+          </Box>
+        </MenuItem>
       }
-      searchEnabled={repositories.length > 8}
-      options={[
-        {
-          value: 'all',
-          primary: t('activity.repositoryScope.all'),
-          icon: <Layers size={16} />,
-        },
-        ...repositories.map((repo) => ({
-          value: String(repo.id),
-          primary: repo.name,
-          secondary: repo.path,
-          icon: <Database size={16} />,
-        })),
-      ]}
+      onChange={(next) => navigate(next === ALL ? '/activity' : `/activity?repository_id=${next}`)}
     />
   )
 }

@@ -3415,8 +3415,8 @@
       "stage": {
         "connect": "Connect",
         "stats": "Stats",
-        "archives": "Archives",
-        "history": "History index"
+        "archives": "Archive list",
+        "history": "File history"
       },
       "workers": "{{count}} workers",
       "emptyTitle": "Nothing is running",
@@ -3424,8 +3424,8 @@
       "rebuildFrom": "Rebuild from",
       "rebuildStage": {
         "stats": "Stats",
-        "archives": "Archives",
-        "history": "History"
+        "archives": "Archive list",
+        "history": "File history"
       },
       "title": "Background work",
       "pause": "Pause",
@@ -3460,11 +3460,33 @@
       "rebuildStarted": "Rebuild started for {{repository}}.",
       "subtitle": "What Borg UI is doing to your repositories right now.",
       "rebuildTitle": "Rebuild derived data",
-      "rebuildDescription": "Recompute the stats, the archive list, or the history index for one repository. Later stages rerun automatically.",
-      "rebuildStageLabel": "Start from",
+      "rebuildDescription": "Borg UI keeps three kinds of derived data for each repository, built in this order. Pick the first stage that looks wrong; it and every stage after it are rebuilt, earlier stages are kept.",
       "rebuildAction": "Rebuild",
       "rebuildRow": "Rebuild {{repository}}",
-      "proOnly": "Pro"
+      "proOnly": "Pro",
+      "stages": {
+        "stats": {
+          "title": "Stats",
+          "what": "Repository size and archive count on the repository card and dashboard.",
+          "cost": "Takes seconds."
+        },
+        "archives": {
+          "title": "Archive list",
+          "what": "The list of archives behind the Archives page, the heatmap, and the archive browser.",
+          "cost": "Under a minute for most repositories."
+        },
+        "history": {
+          "title": "File history",
+          "what": "What changed between archives, for the Changes tab, file history, and search.",
+          "cost": "The slowest stage. Indexes one archive at a time in the background."
+        }
+      },
+      "stageWillRebuild": "Will rebuild",
+      "stageKept": "Kept",
+      "stageStart": "Start here",
+      "rebuildSummary": "Rebuild {{stages}} for {{repository}}. Browsing and backups keep working while it runs; the new data replaces the old when each stage finishes.",
+      "rebuildSummaryAll": "Rebuild everything for {{repository}}. Browsing and backups keep working while it runs; the new data replaces the old when each stage finishes.",
+      "stageJoin": " and "
     },
     "status": {
       "queued": "Queued",

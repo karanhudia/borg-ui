@@ -183,11 +183,10 @@ describe('Activity page', () => {
   })
 
   it('switches to the repository view when a repository is chosen', async () => {
-    const user = userEvent.setup()
     renderWithProviders(<Activity />, { initialRoute: '/activity' })
     await screen.findByText('Jobs Table')
     fireEvent.mouseDown(screen.getByRole('combobox', { name: /repository/i }))
-    await user.click(await screen.findByRole('option', { name: /nas/ }))
+    fireEvent.click(await screen.findByRole('option', { name: /nas/ }))
     expect(await screen.findByText('Repository View 1')).toBeInTheDocument()
   })
 
