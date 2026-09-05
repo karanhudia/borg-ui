@@ -514,6 +514,11 @@ class SSHConnection(Base):
         Boolean, default=False
     )  # Prepend sudo when running borg on remote host
 
+    # Pinned host key (known_hosts lines) used to verify the remote host on
+    # every SSH invocation. Null means nothing has been trusted yet; see
+    # app/utils/ssh_host_keys.py.
+    known_host_key = Column(Text, nullable=True)
+
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 

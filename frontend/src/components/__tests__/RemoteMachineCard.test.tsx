@@ -486,4 +486,72 @@ describe('RemoteMachineCard', () => {
       expect(mockOnEdit).toHaveBeenCalledWith(baseMachine)
     })
   })
+
+  describe('Host key', () => {
+    it('says the host key is not verified when nothing is pinned', () => {
+      render(
+        <RemoteMachineCard
+          machine={baseMachine}
+          onEdit={mockOnEdit}
+          onDelete={mockOnDelete}
+          onRefreshStorage={mockOnRefreshStorage}
+          onTestConnection={mockOnTestConnection}
+          onDeployKey={mockOnDeployKey}
+        />
+      )
+
+      expect(screen.getByText('Host key not verified')).toBeInTheDocument()
+    })
+
+    it('says the host key is verified once one is pinned', () => {
+      render(
+        <RemoteMachineCard
+          machine={{ ...baseMachine, host_key_verified: true, host_key_fingerprint: 'SHA256:abc' }}
+          onEdit={mockOnEdit}
+          onDelete={mockOnDelete}
+          onRefreshStorage={mockOnRefreshStorage}
+          onTestConnection={mockOnTestConnection}
+          onDeployKey={mockOnDeployKey}
+        />
+      )
+
+      expect(screen.getByText('Host key verified')).toBeInTheDocument()
+      expect(screen.getByTitle('SHA256:abc')).toBeInTheDocument()
+    })
+
+    it('offers no host key action when the page does not handle one', () => {
+      render(
+        <RemoteMachineCard
+          machine={baseMachine}
+          onEdit={mockOnEdit}
+          onDelete={mockOnDelete}
+          onRefreshStorage={mockOnRefreshStorage}
+          onTestConnection={mockOnTestConnection}
+          onDeployKey={mockOnDeployKey}
+        />
+      )
+
+      expect(screen.queryByRole('button', { name: 'Host key' })).not.toBeInTheDocument()
+    })
+
+    it('hands the machine to the host key handler', async () => {
+      const user = userEvent.setup()
+      const onVerifyHostKey = vi.fn()
+      render(
+        <RemoteMachineCard
+          machine={baseMachine}
+          onEdit={mockOnEdit}
+          onDelete={mockOnDelete}
+          onRefreshStorage={mockOnRefreshStorage}
+          onTestConnection={mockOnTestConnection}
+          onDeployKey={mockOnDeployKey}
+          onVerifyHostKey={onVerifyHostKey}
+        />
+      )
+
+      await user.click(screen.getByRole('button', { name: 'Host key' }))
+
+      expect(onVerifyHostKey).toHaveBeenCalledWith(baseMachine)
+    })
+  })
 })

@@ -469,6 +469,7 @@ class TestSourceDiscovery:
             username="backup",
             port=2222,
             is_backup_source=True,
+            known_host_key="docker-host.test ssh-ed25519 AAAATESTHOSTKEY",
         )
         test_db.add(connection)
         test_db.commit()
@@ -500,7 +501,7 @@ class TestSourceDiscovery:
         def fake_run(cmd, **kwargs):
             del kwargs
             assert cmd[0] == "ssh"
-            assert "StrictHostKeyChecking=accept-new" in cmd
+            assert "StrictHostKeyChecking=yes" in cmd
             assert "du -s -B1 /srv/nginx/html" in cmd[-1]
             return SimpleNamespace(
                 returncode=0,
@@ -552,16 +553,18 @@ class TestSourceDiscovery:
 
         source_discovery._run_remote_container_scan(
             connection=SimpleNamespace(
+                id=4242,
                 host="docker-host.test",
                 username="backup",
                 port=2222,
+                known_host_key="docker-host.test ssh-ed25519 AAAATESTHOSTKEY",
             ),
             key_file_path="/tmp/borg-ui-test-key",
             include_stopped=True,
             timeout_seconds=15,
         )
 
-        assert "StrictHostKeyChecking=accept-new" in captured["cmd"]
+        assert "StrictHostKeyChecking=yes" in captured["cmd"]
         assert "StrictHostKeyChecking=no" not in captured["cmd"]
         assert "UserKnownHostsFile=/dev/null" not in captured["cmd"]
 

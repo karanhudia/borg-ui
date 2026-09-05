@@ -47,6 +47,7 @@ import structlog
 
 from app.config import settings
 from app.core.borg_stream import CommandLineStream
+from app.utils.ssh_host_keys import host_key_ssh_opts
 from app.utils.ssh_utils import public_key_only_ssh_args
 
 logger = structlog.get_logger()
@@ -199,10 +200,7 @@ class Borg2Interface:
         env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
         ssh_opts = [
             *public_key_only_ssh_args(),
-            "-o",
-            "StrictHostKeyChecking=no",
-            "-o",
-            "UserKnownHostsFile=/dev/null",
+            *host_key_ssh_opts(None),
             "-o",
             "LogLevel=ERROR",
         ]

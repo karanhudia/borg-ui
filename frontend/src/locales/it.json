@@ -2472,7 +2472,26 @@
       "keyDeleteFailed": "Impossibile eliminare la chiave SSH",
       "publicKeyCopied": "Chiave pubblica copiata negli appunti!",
       "diagnosticsComplete": "Diagnostica completata",
-      "diagnosticsFailed": "Impossibile eseguire la diagnostica"
+      "diagnosticsFailed": "Impossibile eseguire la diagnostica",
+      "hostKeyTrusted": "Chiave host resa attendibile",
+      "hostKeyTrustFailed": "Impossibile rendere attendibile la chiave host",
+      "hostKeyForgotten": "Chiave host dimenticata. La prossima connessione dovrà verificarla di nuovo.",
+      "hostKeyForgetFailed": "Impossibile dimenticare la chiave host",
+      "hostKeyReadFailed": "Impossibile leggere la chiave host"
+    },
+    "hostKeyDialog": {
+      "title": "Chiave host",
+      "subtitle": "La chiave che {{host}}:{{port}} presenta durante la connessione.",
+      "trusted": "Questa chiave host è considerata attendibile. Le connessioni a questa macchina vengono verificate con essa.",
+      "unknown": "Nessuna chiave host è ancora attendibile per questa connessione, quindi la macchina che risponde a questo indirizzo non è autenticata.",
+      "changed": "La chiave presentata da questo host non è quella che Borg UI considera attendibile. Può trattarsi di una rotazione della chiave oppure di qualcuno che risponde al suo posto. Verificatela sull'host prima di fidarvi.",
+      "unreachable": "Non è stato possibile leggere la chiave host. La macchina potrebbe essere spenta o irraggiungibile.",
+      "trustedFingerprint": "Impronta attendibile",
+      "observedFingerprint": "Impronta presentata ora dall'host",
+      "compareHint": "Confrontatela con l'output di ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub sull'host stesso.",
+      "trust": "Considera attendibile questa chiave",
+      "trustNewKey": "Considera attendibile la nuova chiave",
+      "forget": "Dimentica questa chiave"
     }
   },
   "scripts": {
@@ -3798,6 +3817,11 @@
       "edit": "Modifica",
       "delete": "Elimina",
       "deploy": "Distribuisci Chiave"
+    },
+    "hostKey": {
+      "verified": "Chiave host verificata",
+      "unverified": "Chiave host non verificata",
+      "action": "Chiave host"
     }
   },
   "restoreJobCard": {
@@ -5447,7 +5471,9 @@
         "failedDeleteSshKey": "Impossibile eliminare la chiave SSH: {{error}}",
         "failedToggleBackupSource": "Impossibile cambiare lo stato della sorgente di backup: {{error}}",
         "failedListBackupSources": "Impossibile elencare le sorgenti di backup: {{error}}",
-        "failedVerifyBorgInstallation": "Impossibile verificare l'installazione di Borg: {{error}}"
+        "failedVerifyBorgInstallation": "Impossibile verificare l'installazione di Borg: {{error}}",
+        "failedReadHostKey": "Impossibile leggere la chiave host: {{error}}",
+        "hostKeyChangedWhileConfirming": "La chiave host è cambiata durante la conferma. Ricontrollatela prima di renderla attendibile."
       },
       "settings": {
         "adminAccessRequired": "Accesso amministratore richiesto",
@@ -5682,7 +5708,9 @@
         "sshKeyUpdated": "Chiave SSH aggiornata con successo",
         "storageRefreshed": "Informazioni archiviazione aggiornate con successo",
         "systemKeyGenerated": "Chiave SSH di sistema generata con successo",
-        "systemKeyImported": "Chiave SSH di sistema importata con successo"
+        "systemKeyImported": "Chiave SSH di sistema importata con successo",
+        "hostKeyTrusted": "Chiave host resa attendibile",
+        "hostKeyForgotten": "Chiave host dimenticata"
       },
       "packages": {
         "installationInProgress": "Installazione del pacchetto '{{name}}' già in corso",

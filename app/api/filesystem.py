@@ -16,6 +16,7 @@ from app.database.database import get_db
 from sqlalchemy.orm import Session
 from app.database.models import SSHConnection, SSHKey
 from app.config import settings
+from app.utils.ssh_host_keys import host_key_ssh_opts
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.ssh_utils import ssh_key_auth_args
 
@@ -120,10 +121,7 @@ def is_borg_repository_ssh(
             *ssh_key_auth_args(ssh_key_path),
             "-p",
             str(port),
-            "-o",
-            "StrictHostKeyChecking=no",
-            "-o",
-            "UserKnownHostsFile=/dev/null",
+            *host_key_ssh_opts(None),
             "-o",
             "ConnectTimeout=5",
             f"{username}@{host}",
@@ -418,10 +416,7 @@ async def browse_ssh_filesystem(
                     *ssh_key_auth_args(temp_key_file),
                     "-P",
                     str(port),
-                    "-o",
-                    "StrictHostKeyChecking=no",
-                    "-o",
-                    "UserKnownHostsFile=/dev/null",
+                    *host_key_ssh_opts(None),
                     "-o",
                     "ConnectTimeout=10",
                     f"{username}@{host}",
@@ -722,10 +717,7 @@ async def validate_path(
                         *ssh_key_auth_args(temp_key_file),
                         "-p",
                         str(port),
-                        "-o",
-                        "StrictHostKeyChecking=no",
-                        "-o",
-                        "UserKnownHostsFile=/dev/null",
+                        *host_key_ssh_opts(None),
                         "-o",
                         "ConnectTimeout=5",
                         f"{username}@{host}",
@@ -917,10 +909,7 @@ async def create_folder(
                             *ssh_key_auth_args(temp_key_file),
                             "-P",
                             str(port),
-                            "-o",
-                            "StrictHostKeyChecking=no",
-                            "-o",
-                            "UserKnownHostsFile=/dev/null",
+                            *host_key_ssh_opts(None),
                             "-o",
                             "ConnectTimeout=10",
                             f"{username}@{host}",

@@ -26,6 +26,8 @@ export interface SSHConnection {
   last_success?: string
   error_message?: string
   storage?: StorageInfo | null
+  host_key_verified?: boolean
+  host_key_fingerprint?: string | null
   created_at: string
 }
 

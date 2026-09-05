@@ -2472,7 +2472,26 @@
       "keyDeleteFailed": "Error al eliminar la clave SSH",
       "publicKeyCopied": "¡Clave pública copiada al portapapeles!",
       "diagnosticsComplete": "Diagnóstico completado",
-      "diagnosticsFailed": "Error al ejecutar el diagnóstico"
+      "diagnosticsFailed": "Error al ejecutar el diagnóstico",
+      "hostKeyTrusted": "Clave de host aceptada",
+      "hostKeyTrustFailed": "No se pudo confiar en la clave de host",
+      "hostKeyForgotten": "Clave de host olvidada. La próxima conexión tendrá que verificarla de nuevo.",
+      "hostKeyForgetFailed": "No se pudo olvidar la clave de host",
+      "hostKeyReadFailed": "No se pudo leer la clave de host"
+    },
+    "hostKeyDialog": {
+      "title": "Clave de host",
+      "subtitle": "La clave que presenta {{host}}:{{port}} al conectarse.",
+      "trusted": "Se confía en esta clave de host. Las conexiones a esta máquina se verifican con ella.",
+      "unknown": "Todavía no se confía en ninguna clave de host para esta conexión, por lo que la máquina que responde en esta dirección no está autenticada.",
+      "changed": "La clave que presenta este host no es la que Borg UI tiene guardada. Puede ser una rotación de clave o alguien respondiendo en su lugar. Verifíquela en el host antes de confiar en ella.",
+      "unreachable": "No se pudo leer la clave de host. La máquina puede estar apagada o inaccesible.",
+      "trustedFingerprint": "Huella de confianza",
+      "observedFingerprint": "Huella que presenta el host ahora",
+      "compareHint": "Compárela con la salida de ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub en el propio host.",
+      "trust": "Confiar en esta clave",
+      "trustNewKey": "Confiar en la nueva clave",
+      "forget": "Olvidar esta clave"
     }
   },
   "scripts": {
@@ -3798,6 +3817,11 @@
       "edit": "Editar",
       "delete": "Eliminar",
       "deploy": "Desplegar clave"
+    },
+    "hostKey": {
+      "verified": "Clave de host verificada",
+      "unverified": "Clave de host sin verificar",
+      "action": "Clave de host"
     }
   },
   "restoreJobCard": {
@@ -5447,7 +5471,9 @@
         "failedDeleteSshKey": "Error al eliminar la clave SSH: {{error}}",
         "failedToggleBackupSource": "Error al alternar la fuente de copia de seguridad: {{error}}",
         "failedListBackupSources": "Error al listar las fuentes de copia de seguridad: {{error}}",
-        "failedVerifyBorgInstallation": "Error al verificar la instalación de Borg: {{error}}"
+        "failedVerifyBorgInstallation": "Error al verificar la instalación de Borg: {{error}}",
+        "failedReadHostKey": "No se pudo leer la clave de host: {{error}}",
+        "hostKeyChangedWhileConfirming": "La clave de host cambió mientras la confirmaba. Vuelva a comprobarla antes de confiar en ella."
       },
       "settings": {
         "adminAccessRequired": "Se requiere acceso de administrador",
@@ -5682,7 +5708,9 @@
         "sshKeyUpdated": "Clave SSH actualizada correctamente",
         "storageRefreshed": "Información de almacenamiento actualizada correctamente",
         "systemKeyGenerated": "Clave SSH del sistema generada correctamente",
-        "systemKeyImported": "Clave SSH del sistema importada correctamente"
+        "systemKeyImported": "Clave SSH del sistema importada correctamente",
+        "hostKeyTrusted": "Clave de host aceptada",
+        "hostKeyForgotten": "Clave de host olvidada"
       },
       "packages": {
         "installationInProgress": "La instalación del paquete '{{name}}' ya está en curso",

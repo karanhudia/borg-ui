@@ -26,6 +26,16 @@ from app.database.models import (
 from app.core.authorization import authorize_request
 from app.core.security import get_current_user, encrypt_secret, decrypt_secret
 from app.config import settings
+from app.utils.ssh_host_keys import (
+    HOST_KEY_STATUS_UNKNOWN,
+    HostKeyScanError,
+    describe_host_key_status,
+    forget_known_hosts_file,
+    host_key_ssh_opts,
+    key_fingerprint,
+    pin_host_key,
+    scan_host_key_async,
+)
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.ssh_host_validation import normalize_ssh_host
 from app.utils.ssh_utils import ssh_key_auth_args, write_ssh_key_to_tempfile
@@ -86,10 +96,7 @@ async def _run_df_command(
     df_cmd = [
         "ssh",
         *ssh_key_auth_args(temp_key_file),
-        "-o",
-        "StrictHostKeyChecking=no",
-        "-o",
-        "UserKnownHostsFile=/dev/null",
+        *host_key_ssh_opts(connection),
         "-o",
         "LogLevel=ERROR",
         "-o",
@@ -1145,6 +1152,8 @@ async def get_ssh_connections(
                     "last_success": serialize_datetime(conn.last_success),
                     "error_message": conn.error_message,
                     "storage": storage,
+                    "host_key_verified": bool(conn.known_host_key),
+                    "host_key_fingerprint": key_fingerprint(conn.known_host_key),
                     "created_at": serialize_datetime(conn.created_at),
                 }
             )
@@ -1189,10 +1198,7 @@ def _ssh_command_base(
         "ssh",
         "-i",
         key_file_path,
-        "-o",
-        "StrictHostKeyChecking=no",
-        "-o",
-        "UserKnownHostsFile=/dev/null",
+        *host_key_ssh_opts(connection),
         "-o",
         "LogLevel=ERROR",
         "-o",
@@ -2042,6 +2048,141 @@ async def test_existing_connection(
         )
 
 
+def _host_key_response(connection, observed: str | None) -> Dict[str, Any]:
+    """Shape one connection's host-key state for the UI."""
+    return {
+        "connection_id": connection.id,
+        "host": connection.host,
+        "port": connection.port,
+        "status": describe_host_key_status(connection, observed),
+        "trusted_fingerprint": key_fingerprint(connection.known_host_key),
+        "observed_fingerprint": key_fingerprint(observed),
+        "observed_key": observed,
+    }
+
+
+@router.get("/connections/{connection_id}/host-key")
+async def get_connection_host_key(
+    connection_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Report what host key a connection trusts and what the host offers now."""
+    connection = (
+        db.query(SSHConnection).filter(SSHConnection.id == connection_id).first()
+    )
+    if not connection:
+        raise HTTPException(
+            status_code=404,
+            detail={"key": "backend.errors.ssh.sshConnectionNotFound"},
+        )
+
+    try:
+        observed = await scan_host_key_async(connection.host, connection.port or 22)
+    except HostKeyScanError as exc:
+        logger.warning(
+            "Could not read the host key of an SSH connection",
+            connection_id=connection_id,
+            host=connection.host,
+            error=str(exc),
+        )
+        observed = None
+
+    return _host_key_response(connection, observed)
+
+
+@router.post("/connections/{connection_id}/host-key/trust")
+async def trust_connection_host_key(
+    connection_id: int,
+    payload: Dict[str, Any] = Body(default_factory=dict),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Trust the host key the user just confirmed.
+
+    The key is always re-read from the host and the confirmed fingerprint must
+    still match, so a key that changed between showing the dialog and pressing
+    the button is refused rather than pinned.
+    """
+    connection = (
+        db.query(SSHConnection).filter(SSHConnection.id == connection_id).first()
+    )
+    if not connection:
+        raise HTTPException(
+            status_code=404,
+            detail={"key": "backend.errors.ssh.sshConnectionNotFound"},
+        )
+
+    try:
+        observed = await scan_host_key_async(connection.host, connection.port or 22)
+    except HostKeyScanError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "key": "backend.errors.ssh.failedReadHostKey",
+                "params": {"error": str(exc)},
+            },
+        )
+
+    confirmed = (payload or {}).get("key")
+    if confirmed and confirmed.strip() != observed.strip():
+        raise HTTPException(
+            status_code=409,
+            detail={"key": "backend.errors.ssh.hostKeyChangedWhileConfirming"},
+        )
+
+    pin_host_key(connection, db, observed)
+    db.refresh(connection)
+
+    logger.info(
+        "Trusted the host key of an SSH connection",
+        connection_id=connection_id,
+        host=connection.host,
+        fingerprint=key_fingerprint(observed),
+    )
+
+    return {
+        "success": True,
+        "message": "backend.success.ssh.hostKeyTrusted",
+        **_host_key_response(connection, observed),
+    }
+
+
+@router.delete("/connections/{connection_id}/host-key")
+async def forget_connection_host_key(
+    connection_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Forget a pinned host key so the next connection has to verify again."""
+    connection = (
+        db.query(SSHConnection).filter(SSHConnection.id == connection_id).first()
+    )
+    if not connection:
+        raise HTTPException(
+            status_code=404,
+            detail={"key": "backend.errors.ssh.sshConnectionNotFound"},
+        )
+
+    connection.known_host_key = None
+    connection.updated_at = datetime.utcnow()
+    db.commit()
+    forget_known_hosts_file(connection)
+
+    logger.info(
+        "Forgot the pinned host key of an SSH connection",
+        connection_id=connection_id,
+        host=connection.host,
+    )
+
+    return {
+        "success": True,
+        "message": "backend.success.ssh.hostKeyForgotten",
+        "connection_id": connection_id,
+        "status": HOST_KEY_STATUS_UNKNOWN,
+    }
+
+
 @router.post("/connections/{connection_id}/diagnostics")
 async def run_connection_diagnostics(
     connection_id: int,
@@ -2604,8 +2745,7 @@ async def deploy_ssh_key_with_copy_id(
             [
                 "-i",
                 key_file_path,
-                "-o",
-                "StrictHostKeyChecking=no",
+                *host_key_ssh_opts(None),
                 "-o",
                 "ConnectTimeout=10",
                 "-p",
@@ -2775,10 +2915,7 @@ async def test_ssh_key_connection(
             "ssh",
             "-i",
             key_file_path,
-            "-o",
-            "StrictHostKeyChecking=no",
-            "-o",
-            "UserKnownHostsFile=/dev/null",
+            *host_key_ssh_opts(None),
             "-o",
             "LogLevel=ERROR",
             "-o",

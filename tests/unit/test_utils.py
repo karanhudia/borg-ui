@@ -164,11 +164,12 @@ class TestProcessUtils:
             "-o PreferredAuthentications=publickey",
             "-o PasswordAuthentication=no",
             "-o NumberOfPasswordPrompts=0",
-            "-o StrictHostKeyChecking=no",
-            "-o UserKnownHostsFile=/dev/null",
+            "-o StrictHostKeyChecking=accept-new",
             "-o LogLevel=ERROR",
         ]:
             assert option in borg_rsh
+        assert "-o StrictHostKeyChecking=no" not in borg_rsh
+        assert "-o UserKnownHostsFile=/dev/null" not in borg_rsh
 
     def test_cleanup_orphaned_jobs(self):
         """Test cleanup of orphaned jobs"""

@@ -7,6 +7,7 @@ import re
 import structlog
 from typing import Optional
 
+from app.utils.ssh_host_keys import host_key_ssh_opts_for_path
 from app.utils.ssh_utils import public_key_only_ssh_args, ssh_key_auth_args
 
 logger = structlog.get_logger()
@@ -136,10 +137,7 @@ async def _du_ssh(
             cmd.extend(public_key_only_ssh_args())
         cmd.extend(
             [
-                "-o",
-                "StrictHostKeyChecking=no",
-                "-o",
-                "UserKnownHostsFile=/dev/null",
+                *host_key_ssh_opts_for_path(path),
                 "-o",
                 "LogLevel=ERROR",
                 "-o",

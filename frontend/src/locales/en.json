@@ -2472,7 +2472,26 @@
       "keyDeleteFailed": "Failed to delete SSH key",
       "publicKeyCopied": "Public key copied to clipboard!",
       "diagnosticsComplete": "Diagnostics complete",
-      "diagnosticsFailed": "Failed to run diagnostics"
+      "diagnosticsFailed": "Failed to run diagnostics",
+      "hostKeyTrusted": "Host key trusted",
+      "hostKeyTrustFailed": "Failed to trust the host key",
+      "hostKeyForgotten": "Host key forgotten. The next connection has to verify it again.",
+      "hostKeyForgetFailed": "Failed to forget the host key",
+      "hostKeyReadFailed": "Failed to read the host key"
+    },
+    "hostKeyDialog": {
+      "title": "Host key",
+      "subtitle": "The key {{host}}:{{port}} presents when Borg UI connects.",
+      "trusted": "This host key is trusted. Connections to this machine are verified against it.",
+      "unknown": "No host key is trusted for this connection yet, so the machine answering on this address is not authenticated.",
+      "changed": "The key this host presents is not the one Borg UI trusts. That is either a key rotation on the host or someone answering in its place. Verify it on the host before trusting it.",
+      "unreachable": "The host key could not be read. The machine may be offline or unreachable.",
+      "trustedFingerprint": "Trusted fingerprint",
+      "observedFingerprint": "Fingerprint the host presents now",
+      "compareHint": "Compare this with the output of ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub on the host itself.",
+      "trust": "Trust this key",
+      "trustNewKey": "Trust the new key",
+      "forget": "Forget this key"
     }
   },
   "scripts": {
@@ -3798,6 +3817,11 @@
       "edit": "Edit",
       "delete": "Delete",
       "deploy": "Deploy Key"
+    },
+    "hostKey": {
+      "verified": "Host key verified",
+      "unverified": "Host key not verified",
+      "action": "Host key"
     }
   },
   "restoreJobCard": {
@@ -5447,7 +5471,9 @@
         "failedDeleteSshKey": "Failed to delete SSH key: {{error}}",
         "failedToggleBackupSource": "Failed to toggle backup source: {{error}}",
         "failedListBackupSources": "Failed to list backup sources: {{error}}",
-        "failedVerifyBorgInstallation": "Failed to verify Borg installation: {{error}}"
+        "failedVerifyBorgInstallation": "Failed to verify Borg installation: {{error}}",
+        "failedReadHostKey": "Failed to read the host key: {{error}}",
+        "hostKeyChangedWhileConfirming": "The host key changed while you were confirming it. Check it again before trusting it."
       },
       "settings": {
         "adminAccessRequired": "Admin access required",
@@ -5682,7 +5708,9 @@
         "sshKeyUpdated": "SSH key updated successfully",
         "storageRefreshed": "Storage information refreshed successfully",
         "systemKeyGenerated": "System SSH key generated successfully",
-        "systemKeyImported": "System SSH key imported successfully"
+        "systemKeyImported": "System SSH key imported successfully",
+        "hostKeyTrusted": "Host key trusted",
+        "hostKeyForgotten": "Host key forgotten"
       },
       "packages": {
         "installationInProgress": "Package '{{name}}' installation already in progress",

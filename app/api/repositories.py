@@ -103,6 +103,7 @@ from app.services.rclone_repository_service import (
     normalize_rclone_relative_path,
     rclone_repository_service,
 )
+from app.utils.ssh_host_keys import host_key_ssh_opts
 from app.utils.datetime_utils import (
     parse_borg_archive_time,
     serialize_borg_archive_time,
@@ -5963,8 +5964,7 @@ async def check_remote_borg_installation(
         borg_cmd = [
             "ssh",
             *ssh_key_auth_args(temp_key_file),
-            "-o",
-            "StrictHostKeyChecking=no",
+            *host_key_ssh_opts(None),
             "-o",
             "ConnectTimeout=10",
             "-p",
