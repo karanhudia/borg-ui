@@ -191,6 +191,18 @@ def pinned_host_key(connection) -> Optional[str]:
     return host_key
 
 
+def trusts_on_first_use(connection) -> bool:
+    """Whether this connection may pin whatever key answers, without asking.
+
+    True only for connections that existed before host-key verification did.
+    Those were already running with no verification at all, so recording the
+    current key is strictly better than the status quo and does not break an
+    install on upgrade. A connection created since gets the confirm dialog
+    instead, which is the moment verification is actually worth something.
+    """
+    return getattr(connection, "host_key_trust_on_first_use", False) is True
+
+
 def write_known_hosts_file(connection) -> Optional[str]:
     """Materialise a connection's pinned key as a known_hosts file.
 
@@ -242,19 +254,25 @@ def _session_for(connection, db):
 
 
 def pin_host_key(connection, db, host_key: str) -> None:
-    """Store a host key on a connection and materialise its known_hosts file."""
+    """Store a host key on a connection and materialise its known_hosts file.
+
+    Raises whatever the commit raised if the key could not be persisted: a
+    caller that told the user their host is now verified must not say so when
+    the row still has no key.
+    """
     connection.known_host_key = host_key.strip()
     session = _session_for(connection, db)
     if session is not None:
         try:
             session.commit()
-        except Exception as exc:  # pragma: no cover - a pin is never worth a 500
+        except Exception as exc:
             logger.warning(
                 "Could not persist a pinned host key",
                 connection_id=getattr(connection, "id", None),
                 error=str(exc),
             )
             session.rollback()
+            raise
     write_known_hosts_file(connection)
 
 
@@ -305,7 +323,16 @@ def _auto_pin(connection, db) -> bool:
         return False
 
     _FAILED_SCANS.pop(getattr(connection, "id", None) or id(connection), None)
-    pin_host_key(connection, db, host_key)
+    try:
+        pin_host_key(connection, db, host_key)
+    except Exception as exc:  # a failed pin must not fail the SSH command
+        logger.warning(
+            "Could not store the host key pinned on first use",
+            connection_id=getattr(connection, "id", None),
+            host=host,
+            error=str(exc),
+        )
+        return False
     logger.info(
         "Pinned the host key of an existing SSH connection on first use",
         connection_id=getattr(connection, "id", None),
@@ -331,37 +358,80 @@ def host_key_ssh_opts(connection, db=None) -> list[str]:
             f"UserKnownHostsFile={_shared_known_hosts_path()}",
         ]
 
-    if not pinned_host_key(connection):
+    if not pinned_host_key(connection) and trusts_on_first_use(connection):
         _auto_pin(connection, db)
 
-    path = write_known_hosts_file(connection)
-    if not path:
-        # Nothing pinned and the scan failed: let OpenSSH record the key it
-        # sees in the per-connection file so the next command verifies against
-        # it, rather than reverting to trusting anything.
-        directory = known_hosts_dir()
-        try:
-            directory.mkdir(parents=True, exist_ok=True)
-        except OSError:
-            return [
-                "-o",
-                "StrictHostKeyChecking=accept-new",
-                "-o",
-                f"UserKnownHostsFile={_shared_known_hosts_path()}",
-            ]
+    if pinned_host_key(connection):
+        # A pinned connection always verifies strictly. If the file could not
+        # be written, OpenSSH finds no key for the host and refuses to connect,
+        # which is the right way to fail: never downgrade a connection the user
+        # has verified because of a full or read-only disk.
+        path = write_known_hosts_file(connection) or str(known_hosts_path(connection))
+        return [
+            "-o",
+            "StrictHostKeyChecking=yes",
+            "-o",
+            f"UserKnownHostsFile={path}",
+        ]
+
+    # Nothing pinned: either a connection awaiting the user's confirmation, or
+    # one whose host could not be scanned. Let OpenSSH record the key it sees
+    # in the per-connection file so a later change is still refused, rather
+    # than reverting to trusting anything.
+    directory = known_hosts_dir()
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+    except OSError:
         return [
             "-o",
             "StrictHostKeyChecking=accept-new",
             "-o",
-            f"UserKnownHostsFile={known_hosts_path(connection)}",
+            f"UserKnownHostsFile={_shared_known_hosts_path()}",
         ]
-
     return [
         "-o",
-        "StrictHostKeyChecking=yes",
+        "StrictHostKeyChecking=accept-new",
         "-o",
-        f"UserKnownHostsFile={path}",
+        f"UserKnownHostsFile={known_hosts_path(connection)}",
     ]
+
+
+def host_key_ssh_opts_for_host(
+    host: str, port: int = 22, username: Optional[str] = None
+) -> list[str]:
+    """Verify a bare host/port against the pinned key of its stored connection.
+
+    For the helpers that are handed connection details as loose strings rather
+    than a row. An endpoint that matches no single stored connection, or one
+    that matches several, records the key on first use instead: there is no
+    single pin to enforce, and refusing outright would break paths that run
+    before a connection exists at all, such as key deployment.
+    """
+    if not host:
+        return host_key_ssh_opts(None)
+
+    from app.database.database import SessionLocal
+    from app.database.models import SSHConnection
+
+    session = SessionLocal()
+    try:
+        query = session.query(SSHConnection).filter(
+            SSHConnection.host == host, SSHConnection.port == (port or 22)
+        )
+        if username:
+            query = query.filter(SSHConnection.username == username)
+        matches = query.all()
+        connection = matches[0] if len(matches) == 1 else None
+        return host_key_ssh_opts(connection, session)
+    except Exception as exc:  # pragma: no cover - a lookup failure is not fatal
+        logger.warning(
+            "Could not resolve the SSH connection for a host",
+            host=host,
+            error=str(exc),
+        )
+        return host_key_ssh_opts(None)
+    finally:
+        session.close()
 
 
 def host_key_ssh_opts_for_path(path: str) -> list[str]:

@@ -4,13 +4,13 @@ import {
   Box,
   Button,
   CircularProgress,
-  Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Stack,
   Typography,
 } from '@mui/material'
+import ResponsiveDialog from '../../../components/shared/ResponsiveDialog'
 import type { SSHHostKeyResponse } from '../../../services/api'
 import type { SSHConnection } from '../types'
 
@@ -52,7 +52,34 @@ export function HostKeyDialog({
   const canTrust = status === 'unknown' || status === 'changed'
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <ResponsiveDialog
+      open={open}
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+      footer={
+        <DialogActions>
+          <Button onClick={onClose}>{t('common.buttons.cancel')}</Button>
+          {status === 'trusted' && (
+            <Button color="warning" onClick={onForget} disabled={pending}>
+              {t('sshConnections.hostKeyDialog.forget')}
+            </Button>
+          )}
+          {canTrust && (
+            <Button
+              variant="contained"
+              color={status === 'changed' ? 'error' : 'primary'}
+              onClick={onTrust}
+              disabled={pending || !hostKey?.observed_key}
+            >
+              {status === 'changed'
+                ? t('sshConnections.hostKeyDialog.trustNewKey')
+                : t('sshConnections.hostKeyDialog.trust')}
+            </Button>
+          )}
+        </DialogActions>
+      }
+    >
       <DialogTitle>{t('sshConnections.hostKeyDialog.title')}</DialogTitle>
       <DialogContent>
         {connection && (
@@ -111,26 +138,6 @@ export function HostKeyDialog({
           </Stack>
         )}
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>{t('common.buttons.cancel')}</Button>
-        {status === 'trusted' && (
-          <Button color="warning" onClick={onForget} disabled={pending}>
-            {t('sshConnections.hostKeyDialog.forget')}
-          </Button>
-        )}
-        {canTrust && (
-          <Button
-            variant="contained"
-            color={status === 'changed' ? 'error' : 'primary'}
-            onClick={onTrust}
-            disabled={pending || !hostKey?.observed_key}
-          >
-            {status === 'changed'
-              ? t('sshConnections.hostKeyDialog.trustNewKey')
-              : t('sshConnections.hostKeyDialog.trust')}
-          </Button>
-        )}
-      </DialogActions>
-    </Dialog>
+    </ResponsiveDialog>
   )
 }

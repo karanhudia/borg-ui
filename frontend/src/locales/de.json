@@ -5473,7 +5473,8 @@
         "failedListBackupSources": "Fehler beim Auflisten der Sicherungsquellen: {{error}}",
         "failedVerifyBorgInstallation": "Fehler beim Überprüfen der Borg-Installation: {{error}}",
         "failedReadHostKey": "Hostschlüssel konnte nicht gelesen werden: {{error}}",
-        "hostKeyChangedWhileConfirming": "Der Hostschlüssel hat sich während der Bestätigung geändert. Prüfen Sie ihn erneut, bevor Sie ihm vertrauen."
+        "hostKeyChangedWhileConfirming": "Der Hostschlüssel hat sich während der Bestätigung geändert. Prüfen Sie ihn erneut, bevor Sie ihm vertrauen.",
+        "failedStoreHostKey": "Hostschlüssel konnte nicht gespeichert werden: {{error}}"
       },
       "settings": {
         "adminAccessRequired": "Administratorzugriff erforderlich",

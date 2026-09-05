@@ -2091,18 +2091,29 @@ async def get_connection_host_key(
     return _host_key_response(connection, observed)
 
 
+class HostKeyTrustRequest(BaseModel):
+    """The key the user confirmed in the dialog.
+
+    Required: without it there is nothing to compare a fresh scan against, and
+    "trust whatever answers right now" is the behaviour this feature exists to
+    remove.
+    """
+
+    key: str = Field(min_length=1)
+
+
 @router.post("/connections/{connection_id}/host-key/trust")
 async def trust_connection_host_key(
     connection_id: int,
-    payload: Dict[str, Any] = Body(default_factory=dict),
+    payload: HostKeyTrustRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Trust the host key the user just confirmed.
 
-    The key is always re-read from the host and the confirmed fingerprint must
-    still match, so a key that changed between showing the dialog and pressing
-    the button is refused rather than pinned.
+    The key is always re-read from the host and the confirmed key must still
+    match, so one that changed between showing the dialog and pressing the
+    button is refused rather than pinned.
     """
     connection = (
         db.query(SSHConnection).filter(SSHConnection.id == connection_id).first()
@@ -2124,14 +2135,27 @@ async def trust_connection_host_key(
             },
         )
 
-    confirmed = (payload or {}).get("key")
-    if confirmed and confirmed.strip() != observed.strip():
+    if payload.key.strip() != observed.strip():
         raise HTTPException(
             status_code=409,
             detail={"key": "backend.errors.ssh.hostKeyChangedWhileConfirming"},
         )
 
-    pin_host_key(connection, db, observed)
+    try:
+        pin_host_key(connection, db, observed)
+    except Exception as exc:
+        logger.error(
+            "Failed to store a trusted host key",
+            connection_id=connection_id,
+            error=str(exc),
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "key": "backend.errors.ssh.failedStoreHostKey",
+                "params": {"error": str(exc)},
+            },
+        )
     db.refresh(connection)
 
     logger.info(
@@ -2165,6 +2189,9 @@ async def forget_connection_host_key(
         )
 
     connection.known_host_key = None
+    # Forgetting means the user wants to verify again, so a connection old
+    # enough to pin silently must not do that on its next use either.
+    connection.host_key_trust_on_first_use = False
     connection.updated_at = datetime.utcnow()
     db.commit()
     forget_known_hosts_file(connection)

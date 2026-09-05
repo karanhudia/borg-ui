@@ -20,7 +20,14 @@ RSA = (
 
 @pytest.fixture
 def connection():
-    return SimpleNamespace(id=7, host="example.com", port=2222, known_host_key=None)
+    """A connection that predates host-key verification, so it may pin silently."""
+    return SimpleNamespace(
+        id=7,
+        host="example.com",
+        port=2222,
+        known_host_key=None,
+        host_key_trust_on_first_use=True,
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -229,6 +236,96 @@ class TestHostKeySshOpts:
         monkeypatch.setattr(ssh_host_keys, "scan_host_key", fail)
 
         ssh_host_keys.host_key_ssh_opts(connection, _Db())
+
+
+class TestFirstUseTrust:
+    def test_a_connection_predating_verification_pins_silently(
+        self, connection, monkeypatch
+    ):
+        connection.host_key_trust_on_first_use = True
+        monkeypatch.setattr(ssh_host_keys, "scan_host_key", lambda host, port: ED25519)
+
+        opts = ssh_host_keys.host_key_ssh_opts(connection, _Db())
+
+        assert connection.known_host_key == ED25519
+        assert "StrictHostKeyChecking=yes" in opts
+
+    def test_a_new_connection_waits_for_the_user_to_confirm(
+        self, connection, monkeypatch
+    ):
+        connection.host_key_trust_on_first_use = False
+
+        def fail(host, port):  # pragma: no cover - must not run
+            raise AssertionError("scanned a connection the user has not confirmed")
+
+        monkeypatch.setattr(ssh_host_keys, "scan_host_key", fail)
+
+        opts = ssh_host_keys.host_key_ssh_opts(connection, _Db())
+
+        assert connection.known_host_key is None
+        # Still recorded on first use by OpenSSH itself, so a later change is
+        # refused, but nothing is pinned to the row without confirmation.
+        assert "StrictHostKeyChecking=accept-new" in opts
+        assert (
+            f"UserKnownHostsFile={ssh_host_keys.known_hosts_path(connection)}" in opts
+        )
+
+    def test_a_connection_without_the_column_is_not_pinned_silently(self, monkeypatch):
+        bare = SimpleNamespace(id=9, host="example.com", port=22, known_host_key=None)
+
+        def fail(host, port):  # pragma: no cover - must not run
+            raise AssertionError("scanned a connection with no trust flag")
+
+        monkeypatch.setattr(ssh_host_keys, "scan_host_key", fail)
+
+        ssh_host_keys.host_key_ssh_opts(bare, _Db())
+
+        assert bare.known_host_key is None
+
+
+class TestFailClosed:
+    def test_a_pinned_connection_never_degrades_when_the_file_cannot_be_written(
+        self, connection, monkeypatch
+    ):
+        connection.known_host_key = ED25519
+        monkeypatch.setattr(ssh_host_keys, "write_known_hosts_file", lambda conn: None)
+
+        opts = ssh_host_keys.host_key_ssh_opts(connection)
+
+        assert "StrictHostKeyChecking=yes" in opts
+        assert "StrictHostKeyChecking=accept-new" not in opts
+
+    def test_a_failed_commit_is_reported_to_the_caller(self, connection):
+        class _Failing:
+            def commit(self):
+                raise RuntimeError("database is locked")
+
+            def rollback(self):
+                self.rolled_back = True
+
+        session = _Failing()
+
+        with pytest.raises(RuntimeError, match="database is locked"):
+            ssh_host_keys.pin_host_key(connection, session, ED25519)
+
+        assert session.rolled_back is True
+
+    def test_a_failed_commit_does_not_fail_the_ssh_command(
+        self, connection, monkeypatch
+    ):
+        class _Failing:
+            def commit(self):
+                raise RuntimeError("database is locked")
+
+            def rollback(self):
+                pass
+
+        connection.host_key_trust_on_first_use = True
+        monkeypatch.setattr(ssh_host_keys, "scan_host_key", lambda host, port: ED25519)
+
+        opts = ssh_host_keys.host_key_ssh_opts(connection, _Failing())
+
+        assert "StrictHostKeyChecking" in " ".join(opts)
 
 
 class TestStatus:

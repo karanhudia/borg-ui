@@ -5473,7 +5473,8 @@
         "failedListBackupSources": "Failed to list backup sources: {{error}}",
         "failedVerifyBorgInstallation": "Failed to verify Borg installation: {{error}}",
         "failedReadHostKey": "Failed to read the host key: {{error}}",
-        "hostKeyChangedWhileConfirming": "The host key changed while you were confirming it. Check it again before trusting it."
+        "hostKeyChangedWhileConfirming": "The host key changed while you were confirming it. Check it again before trusting it.",
+        "failedStoreHostKey": "Failed to store the host key: {{error}}"
       },
       "settings": {
         "adminAccessRequired": "Admin access required",

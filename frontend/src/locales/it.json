@@ -5473,7 +5473,8 @@
         "failedListBackupSources": "Impossibile elencare le sorgenti di backup: {{error}}",
         "failedVerifyBorgInstallation": "Impossibile verificare l'installazione di Borg: {{error}}",
         "failedReadHostKey": "Impossibile leggere la chiave host: {{error}}",
-        "hostKeyChangedWhileConfirming": "La chiave host è cambiata durante la conferma. Ricontrollatela prima di renderla attendibile."
+        "hostKeyChangedWhileConfirming": "La chiave host è cambiata durante la conferma. Ricontrollatela prima di renderla attendibile.",
+        "failedStoreHostKey": "Impossibile salvare la chiave host: {{error}}"
       },
       "settings": {
         "adminAccessRequired": "Accesso amministratore richiesto",

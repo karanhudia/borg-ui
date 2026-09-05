@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -59,6 +59,7 @@ export default function SSHConnectionsSingleKey() {
   const [hostKeyConnection, setHostKeyConnection] = useState<SSHConnection | null>(null)
   const [hostKey, setHostKey] = useState<SSHHostKeyResponse | null>(null)
   const [hostKeyLoading, setHostKeyLoading] = useState(false)
+  const hostKeyRequestRef = useRef<number | null>(null)
   const [diagnosticsResult, setDiagnosticsResult] =
     useState<SSHConnectionDiagnosticsResponse | null>(null)
   const [keyType, setKeyType] = useState('ed25519')
@@ -253,9 +254,11 @@ export default function SSHConnectionsSingleKey() {
   const trustHostKeyMutation = useMutation({
     mutationFn: ({ connectionId, key }: { connectionId: number; key: string }) =>
       sshKeysAPI.trustConnectionHostKey(connectionId, key),
-    onSuccess: (response) => {
+    onSuccess: (response, variables) => {
       toast.success(t('sshConnections.toasts.hostKeyTrusted'))
-      setHostKey(response.data)
+      if (hostKeyRequestRef.current === variables.connectionId) {
+        setHostKey(response.data)
+      }
       queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })
     },
     onError: (error: unknown) => {
@@ -475,26 +478,36 @@ export default function SSHConnectionsSingleKey() {
   }
 
   const handleVerifyHostKey = async (connection: SSHConnection) => {
+    // Scanning a host takes seconds, so the user can close this dialog or open
+    // another machine's before the answer arrives. Every update below is guarded
+    // on the dialog still showing the connection that was asked about, otherwise
+    // one machine's fingerprint could appear under another machine's name.
+    hostKeyRequestRef.current = connection.id
     setHostKeyConnection(connection)
     setHostKey(null)
     setHostKeyDialogOpen(true)
     setHostKeyLoading(true)
     try {
       const response = await sshKeysAPI.getConnectionHostKey(connection.id)
+      if (hostKeyRequestRef.current !== connection.id) return
       setHostKey(response.data)
     } catch (error) {
       console.error('Failed to read host key:', error)
+      if (hostKeyRequestRef.current !== connection.id) return
       toast.error(
         translateBackendKey(getApiErrorDetail(error)) ||
           t('sshConnections.toasts.hostKeyReadFailed')
       )
       setHostKeyDialogOpen(false)
     } finally {
-      setHostKeyLoading(false)
+      if (hostKeyRequestRef.current === connection.id) {
+        setHostKeyLoading(false)
+      }
     }
   }
 
   const closeHostKeyDialog = () => {
+    hostKeyRequestRef.current = null
     setHostKeyDialogOpen(false)
     setHostKeyConnection(null)
     setHostKey(null)

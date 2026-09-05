@@ -1567,13 +1567,79 @@ class TestSSHConnectionHostKeyEndpoints:
         response = test_client.post(
             f"/api/ssh-keys/connections/{connection.id}/host-key/trust",
             headers=admin_headers,
-            json={},
+            json={"key": self.ED25519},
         )
 
         assert response.status_code == 502
         assert response.json()["detail"]["key"] == (
             "backend.errors.ssh.failedReadHostKey"
         )
+
+    def test_refuses_to_trust_without_a_confirmed_key(
+        self, test_client: TestClient, admin_headers, test_db, monkeypatch
+    ):
+        """An empty body must not mean "pin whatever answers right now"."""
+        connection = self._connection(test_db)
+        scan = AsyncMock(return_value=self.ED25519)
+        monkeypatch.setattr(ssh_keys_api, "scan_host_key_async", scan)
+
+        for body in ({}, {"key": ""}, {"key": None}):
+            response = test_client.post(
+                f"/api/ssh-keys/connections/{connection.id}/host-key/trust",
+                headers=admin_headers,
+                json=body,
+            )
+            assert response.status_code == 422
+
+        scan.assert_not_awaited()
+        test_db.refresh(connection)
+        assert connection.known_host_key is None
+
+    def test_reports_a_key_that_could_not_be_stored(
+        self, test_client: TestClient, admin_headers, test_db, monkeypatch
+    ):
+        """A failed write must not be reported to the user as verified."""
+        connection = self._connection(test_db)
+        monkeypatch.setattr(
+            ssh_keys_api,
+            "scan_host_key_async",
+            AsyncMock(return_value=self.ED25519),
+        )
+
+        def fail(*args, **kwargs):
+            raise RuntimeError("database is locked")
+
+        monkeypatch.setattr(ssh_keys_api, "pin_host_key", fail)
+
+        response = test_client.post(
+            f"/api/ssh-keys/connections/{connection.id}/host-key/trust",
+            headers=admin_headers,
+            json={"key": self.ED25519},
+        )
+
+        assert response.status_code == 500
+        assert response.json()["detail"]["key"] == (
+            "backend.errors.ssh.failedStoreHostKey"
+        )
+
+    def test_forgetting_also_stops_silent_pinning(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """A connection old enough to pin silently must stop doing so."""
+        connection = self._connection(
+            test_db,
+            known_host_key=self.ED25519,
+            host_key_trust_on_first_use=True,
+        )
+
+        test_client.delete(
+            f"/api/ssh-keys/connections/{connection.id}/host-key",
+            headers=admin_headers,
+        )
+
+        test_db.refresh(connection)
+        assert connection.known_host_key is None
+        assert connection.host_key_trust_on_first_use is False
 
     def test_forgetting_clears_the_pin(
         self, test_client: TestClient, admin_headers, test_db

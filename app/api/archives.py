@@ -42,6 +42,7 @@ from app.utils.borg_env import (
 )
 from app.utils.ssh_utils import (
     resolve_repo_ssh_key_file,  # noqa: F401
+    resolve_repository_ssh_connection,
 )  # Backward-compatible patch target for tests
 from app.utils.datetime_utils import serialize_borg_archive_time, serialize_datetime
 
@@ -51,7 +52,11 @@ router = APIRouter()
 
 def _build_repo_env(repo: Repository, db: Session):
     temp_key_file = resolve_repo_ssh_key_file(repo, db)
-    ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
+    ssh_opts = get_standard_ssh_opts(
+        include_key_path=temp_key_file,
+        connection=resolve_repository_ssh_connection(repo, db),
+        db=db,
+    )
     env = setup_borg_env(passphrase=repo.passphrase, ssh_opts=ssh_opts)
     if remote_path := effective_repository_remote_path(repo):
         env["BORG_REMOTE_PATH"] = remote_path

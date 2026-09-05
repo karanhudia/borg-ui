@@ -171,6 +171,44 @@ class TestProcessUtils:
         assert "-o StrictHostKeyChecking=no" not in borg_rsh
         assert "-o UserKnownHostsFile=/dev/null" not in borg_rsh
 
+    @patch("subprocess.run")
+    def test_break_repository_lock_ssh_verifies_a_pinned_host_key(self, mock_run):
+        """A repository whose connection has a pinned key verifies against it."""
+        from app.database.models import SSHConnection
+        from app.utils import process_utils
+
+        connection = SSHConnection(
+            id=1,
+            host="host",
+            username="user",
+            port=22,
+            known_host_key="host ssh-ed25519 AAAA",
+        )
+        repo = Repository(
+            id=1,
+            path="ssh://user@host/repo",
+            connection_id=1,
+            remote_path="/usr/bin/borg",
+        )
+
+        mock_run.return_value.returncode = 0
+
+        with (
+            patch.object(process_utils, "object_session", return_value=MagicMock()),
+            patch.object(
+                process_utils,
+                "resolve_repository_ssh_connection",
+                return_value=connection,
+            ),
+            patch.object(process_utils, "resolve_repo_ssh_key_file", return_value=None),
+        ):
+            assert break_repository_lock(repo) is True
+
+        borg_rsh = mock_run.call_args[1]["env"]["BORG_RSH"]
+        assert "-o StrictHostKeyChecking=yes" in borg_rsh
+        assert "-o StrictHostKeyChecking=accept-new" not in borg_rsh
+        assert "-o UserKnownHostsFile=/dev/null" not in borg_rsh
+
     def test_cleanup_orphaned_jobs(self):
         """Test cleanup of orphaned jobs"""
         # Create mock session
