@@ -915,6 +915,7 @@ class MountService:
         repository_id: int,
         archive_name: Optional[str] = None,
         mount_point: Optional[str] = None,
+        archive_id: Optional[str] = None,
     ) -> Tuple[str, str]:
         """
         Mount a Borg repository or specific archive for browsing
@@ -923,6 +924,9 @@ class MountService:
             repository_id: Repository ID to mount
             archive_name: Optional specific archive name (None = mount entire repo)
             mount_point: Optional custom mount point (must be validated)
+            archive_id: Borg 2 archive id for series disambiguation - archives
+                in a series share one name and only the id addresses exactly
+                one of them
 
         Returns:
             Tuple of (mount_point, mount_id)
@@ -1030,9 +1034,21 @@ class MountService:
                 if repository.passphrase:
                     env["BORG_PASSPHRASE"] = repository.passphrase
 
+                # Borg 2 archives in a series share one name; `-a <name>`
+                # matches and mounts every archive of the series as its own
+                # subdirectory. Address by aid: whenever a Borg 2 id is
+                # present - the selector pattern extract and restore checks
+                # use - including an id-only request, which must still mount
+                # exactly that archive rather than falling back to the whole
+                # repository. The human-readable name stays on mount point,
+                # source label and logs.
+                archive_selector = archive_name
+                if archive_id and (repository.borg_version or 1) == 2:
+                    archive_selector = f"aid:{archive_id}"
+
                 cmd = BorgRouter(repository).build_mount_command(
                     repository_path=repository.path,
-                    archive_name=archive_name,
+                    archive_name=archive_selector,
                     mount_point=mount_point,
                     remote_path=effective_repository_remote_path(repository, db),
                     bypass_lock=repository.bypass_lock,

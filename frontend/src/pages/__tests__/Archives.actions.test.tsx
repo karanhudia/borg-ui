@@ -298,7 +298,11 @@ describe('Archives page actions', () => {
       expect(apiModule.mountsAPI.mountBorgArchive).toHaveBeenCalledWith({
         repository_id: 1,
         archive_name: 'archive-1',
-        mount_point: 'archive-1',
+        // Borg 2 series disambiguation: the id travels with the mount request,
+        // and the default mount point carries the start time so archives of
+        // one series never share a mount directory.
+        archive_id: 'a1',
+        mount_point: 'archive-1-2026-01-01T00_00_00',
       })
     })
   })
