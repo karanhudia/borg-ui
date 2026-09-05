@@ -1972,7 +1972,21 @@
     "empty": {
       "title": "Sin actividad",
       "message": "No hay operaciones que coincidan con tus filtros"
-    }
+    },
+    "filterCategory": "Categoría",
+    "filterTrigger": "Disparador",
+    "allTriggers": "Todos los disparadores",
+    "triggers": {
+      "manual": "Manual",
+      "schedule": "Programación",
+      "plan": "Plan",
+      "import": "Importación",
+      "followup": "Seguimiento",
+      "reconcile": "Reconciliación",
+      "retry": "Reintento"
+    },
+    "followupsCollapsed": "{{count}} seguimientos",
+    "operations": "Operaciones"
   },
   "availabilitySchedule": {
     "skipReasons": {
@@ -2673,7 +2687,8 @@
       "delete": "Eliminar",
       "permanentDelete": "Eliminar archivos permanentemente",
       "createBackupPlan": "Crear plan de copia",
-      "createBackupPlanSourceRequired": "Añade rutas de origen antes de crear un plan de copia"
+      "createBackupPlanSourceRequired": "Añade rutas de origen antes de crear un plan de copia",
+      "operations": "Operaciones"
     },
     "legacySources": {
       "title": "Configuración de origen heredada",

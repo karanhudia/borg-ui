@@ -1972,7 +1972,21 @@
     "empty": {
       "title": "No activity found",
       "message": "There are no operations matching your filters"
-    }
+    },
+    "filterCategory": "Category",
+    "filterTrigger": "Trigger",
+    "allTriggers": "All triggers",
+    "triggers": {
+      "manual": "Manual",
+      "schedule": "Schedule",
+      "plan": "Plan",
+      "import": "Import",
+      "followup": "Follow-up",
+      "reconcile": "Reconcile",
+      "retry": "Retry"
+    },
+    "followupsCollapsed": "{{count}} follow-ups",
+    "operations": "Operations"
   },
   "availabilitySchedule": {
     "skipReasons": {
@@ -2673,7 +2687,8 @@
       "delete": "Delete",
       "permanentDelete": "Permanently delete files",
       "createBackupPlan": "Create Backup Plan",
-      "createBackupPlanSourceRequired": "Add source paths before creating a Backup Plan"
+      "createBackupPlanSourceRequired": "Add source paths before creating a Backup Plan",
+      "operations": "Operations"
     },
     "legacySources": {
       "title": "Legacy source settings",

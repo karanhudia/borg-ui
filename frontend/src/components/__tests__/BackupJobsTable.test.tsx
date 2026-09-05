@@ -173,6 +173,28 @@ describe('BackupJobsTable', () => {
 
       expect(screen.getByText('Remote SSH')).toBeInTheDocument()
     })
+
+    it('renders a RunChainRow beneath a row whose operation has follow-ups', () => {
+      renderWithProviders(
+        <BackupJobsTable
+          jobs={[
+            {
+              ...mockJobs[0],
+              id: 46,
+              followups: [{ id: 461, type: 'archive_sync', status: 'completed' }],
+            } as MockBackupJob,
+          ]}
+        />
+      )
+
+      expect(screen.getByText('archive sync')).toBeInTheDocument()
+    })
+
+    it('renders no RunChainRow beneath a row with no follow-ups', () => {
+      renderWithProviders(<BackupJobsTable jobs={mockJobs} />)
+
+      expect(screen.queryByText('archive sync')).not.toBeInTheDocument()
+    })
   })
 
   describe('Empty State', () => {

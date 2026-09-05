@@ -1,11 +1,38 @@
 import { useTranslation } from 'react-i18next'
-import { Box, MenuItem, Select } from '@mui/material'
+import { Box, MenuItem, Select, Typography } from '@mui/material'
+import CategoryToken from '../../components/CategoryToken'
+import RichSelect from '../../components/shared/RichSelect'
+import type { OperationCategory, OperationTrigger } from '../../types/operations'
+
+const CATEGORIES: OperationCategory[] = [
+  'import',
+  'backup',
+  'restore',
+  'maintenance',
+  'index',
+  'mirror',
+  'system',
+]
+
+const TRIGGERS: OperationTrigger[] = [
+  'manual',
+  'schedule',
+  'plan',
+  'import',
+  'followup',
+  'reconcile',
+  'retry',
+]
 
 interface ActivityFiltersProps {
   typeFilter: string
   statusFilter: string
   onTypeFilterChange: (value: string) => void
   onStatusFilterChange: (value: string) => void
+  categoryFilter?: OperationCategory[]
+  onCategoryFilterChange?: (categories: OperationCategory[]) => void
+  triggerFilter?: string
+  onTriggerFilterChange?: (value: string) => void
 }
 
 export function ActivityFilters({
@@ -13,52 +40,117 @@ export function ActivityFilters({
   statusFilter,
   onTypeFilterChange,
   onStatusFilterChange,
+  categoryFilter = [],
+  onCategoryFilterChange,
+  triggerFilter = 'all',
+  onTriggerFilterChange,
 }: ActivityFiltersProps) {
   const { t } = useTranslation()
 
-  return (
-    <Box sx={{ mb: 3, display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center' }}>
-      <Select
-        size="small"
-        value={typeFilter}
-        onChange={(event) => onTypeFilterChange(event.target.value)}
-        inputProps={{ 'aria-label': t('activity.filters.type') }}
-        sx={{ minWidth: 160, fontSize: '0.8rem', fontWeight: 600, borderRadius: 1.5 }}
-      >
-        <MenuItem value="all">{t('activity.filters.allTypes')}</MenuItem>
-        <MenuItem value="backup">{t('activity.filters.types.backup')}</MenuItem>
-        <MenuItem value="restore">{t('activity.filters.types.restore')}</MenuItem>
-        <MenuItem value="restore_check">{t('activity.filters.types.restoreCheck')}</MenuItem>
-        <MenuItem value="check">{t('activity.filters.types.check')}</MenuItem>
-        <MenuItem value="compact">{t('activity.filters.types.compact')}</MenuItem>
-        <MenuItem value="prune">{t('activity.filters.types.prune')}</MenuItem>
-        <MenuItem value="package">{t('activity.filters.types.package')}</MenuItem>
-        <MenuItem value="rclone_sync">{t('activity.filters.types.rcloneSync')}</MenuItem>
-        <MenuItem value="rclone_hydrate">{t('activity.filters.types.rcloneHydrate')}</MenuItem>
-        <MenuItem value="script_execution">{t('activity.filters.types.scriptExecution')}</MenuItem>
-        <MenuItem value="availability_check">
-          {t('activity.filters.types.availabilityCheck')}
-        </MenuItem>
-      </Select>
+  const toggleCategory = (category: OperationCategory) => {
+    if (!onCategoryFilterChange) return
+    const next = categoryFilter.includes(category)
+      ? categoryFilter.filter((selected) => selected !== category)
+      : [...categoryFilter, category]
+    onCategoryFilterChange(next)
+  }
 
-      <Select
-        size="small"
-        value={statusFilter}
-        onChange={(event) => onStatusFilterChange(event.target.value)}
-        inputProps={{ 'aria-label': t('activity.filters.status') }}
-        sx={{ minWidth: 210, fontSize: '0.8rem', fontWeight: 600, borderRadius: 1.5 }}
-      >
-        <MenuItem value="all">{t('activity.filters.allStatus')}</MenuItem>
-        <MenuItem value="completed">{t('activity.filters.statuses.completed')}</MenuItem>
-        <MenuItem value="completed_with_warnings">
-          {t('activity.filters.statuses.completedWithWarnings')}
-        </MenuItem>
-        <MenuItem value="needs_backup">{t('activity.filters.statuses.needsBackup')}</MenuItem>
-        <MenuItem value="failed">{t('activity.filters.statuses.failed')}</MenuItem>
-        <MenuItem value="running">{t('activity.filters.statuses.running')}</MenuItem>
-        <MenuItem value="pending">{t('activity.filters.statuses.pending')}</MenuItem>
-        <MenuItem value="skipped">{t('activity.filters.statuses.skipped')}</MenuItem>
-      </Select>
+  const triggerOptions = [
+    { value: 'all', primary: t('activity.allTriggers') },
+    ...TRIGGERS.map((trigger) => ({
+      value: trigger,
+      primary: t(`activity.triggers.${trigger}`),
+    })),
+  ]
+
+  return (
+    <Box sx={{ mb: 3, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center' }}>
+        <Select
+          size="small"
+          value={typeFilter}
+          onChange={(event) => onTypeFilterChange(event.target.value)}
+          inputProps={{ 'aria-label': t('activity.filters.type') }}
+          sx={{ minWidth: 160, fontSize: '0.8rem', fontWeight: 600, borderRadius: 1.5 }}
+        >
+          <MenuItem value="all">{t('activity.filters.allTypes')}</MenuItem>
+          <MenuItem value="backup">{t('activity.filters.types.backup')}</MenuItem>
+          <MenuItem value="restore">{t('activity.filters.types.restore')}</MenuItem>
+          <MenuItem value="restore_check">{t('activity.filters.types.restoreCheck')}</MenuItem>
+          <MenuItem value="check">{t('activity.filters.types.check')}</MenuItem>
+          <MenuItem value="compact">{t('activity.filters.types.compact')}</MenuItem>
+          <MenuItem value="prune">{t('activity.filters.types.prune')}</MenuItem>
+          <MenuItem value="package">{t('activity.filters.types.package')}</MenuItem>
+          <MenuItem value="rclone_sync">{t('activity.filters.types.rcloneSync')}</MenuItem>
+          <MenuItem value="rclone_hydrate">{t('activity.filters.types.rcloneHydrate')}</MenuItem>
+          <MenuItem value="script_execution">
+            {t('activity.filters.types.scriptExecution')}
+          </MenuItem>
+          <MenuItem value="availability_check">
+            {t('activity.filters.types.availabilityCheck')}
+          </MenuItem>
+        </Select>
+
+        <Select
+          size="small"
+          value={statusFilter}
+          onChange={(event) => onStatusFilterChange(event.target.value)}
+          inputProps={{ 'aria-label': t('activity.filters.status') }}
+          sx={{ minWidth: 210, fontSize: '0.8rem', fontWeight: 600, borderRadius: 1.5 }}
+        >
+          <MenuItem value="all">{t('activity.filters.allStatus')}</MenuItem>
+          <MenuItem value="completed">{t('activity.filters.statuses.completed')}</MenuItem>
+          <MenuItem value="completed_with_warnings">
+            {t('activity.filters.statuses.completedWithWarnings')}
+          </MenuItem>
+          <MenuItem value="needs_backup">{t('activity.filters.statuses.needsBackup')}</MenuItem>
+          <MenuItem value="failed">{t('activity.filters.statuses.failed')}</MenuItem>
+          <MenuItem value="running">{t('activity.filters.statuses.running')}</MenuItem>
+          <MenuItem value="pending">{t('activity.filters.statuses.pending')}</MenuItem>
+          <MenuItem value="skipped">{t('activity.filters.statuses.skipped')}</MenuItem>
+        </Select>
+      </Box>
+
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+        <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mr: 0.5 }}>
+          {t('activity.filterCategory')}
+        </Typography>
+        {CATEGORIES.map((category) => {
+          const selected = categoryFilter.includes(category)
+          return (
+            <Box
+              key={category}
+              role="button"
+              tabIndex={0}
+              aria-pressed={selected}
+              aria-label={t(`operations.category.${category}`)}
+              onClick={() => toggleCategory(category)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  toggleCategory(category)
+                }
+              }}
+              sx={{
+                cursor: 'pointer',
+                opacity: selected ? 1 : 0.5,
+                transition: 'opacity 140ms ease',
+              }}
+            >
+              <CategoryToken category={category} />
+            </Box>
+          )
+        })}
+
+        <Box sx={{ minWidth: 180 }}>
+          <RichSelect
+            value={triggerFilter}
+            onChange={(value) => onTriggerFilterChange?.(value)}
+            options={triggerOptions}
+            label={t('activity.filterTrigger')}
+          />
+        </Box>
+      </Box>
     </Box>
   )
 }

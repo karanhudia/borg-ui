@@ -1385,7 +1385,13 @@ export const notificationsAPI = {
 }
 
 export const activityAPI = {
-  list: (params?: ApiData) => api.get('/activity/recent', { params }),
+  list: (params?: ApiData) =>
+    api.get('/activity/recent', {
+      params,
+      // FastAPI's `Query(list[str])` reads repeated keys (`category=a&category=b`);
+      // axios's default serializer would emit `category[]=a`, which the route ignores.
+      paramsSerializer: { indexes: null },
+    }),
   getLogs: (jobType: string, jobId: string | number, offset: number = 0) =>
     api.get(`/activity/${jobType}/${jobId}/logs`, { params: { offset } }),
   cancelJob: (jobType: string, jobId: string | number) =>

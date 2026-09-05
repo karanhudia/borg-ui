@@ -1972,7 +1972,21 @@
     "empty": {
       "title": "Keine Aktivität gefunden",
       "message": "Es gibt keine Vorgänge, die deinen Filtern entsprechen"
-    }
+    },
+    "filterCategory": "Kategorie",
+    "filterTrigger": "Auslöser",
+    "allTriggers": "Alle Auslöser",
+    "triggers": {
+      "manual": "Manuell",
+      "schedule": "Zeitplan",
+      "plan": "Plan",
+      "import": "Import",
+      "followup": "Folgeaktion",
+      "reconcile": "Abgleich",
+      "retry": "Wiederholung"
+    },
+    "followupsCollapsed": "{{count}} Folgeaktionen",
+    "operations": "Vorgänge"
   },
   "availabilitySchedule": {
     "skipReasons": {
@@ -2673,7 +2687,8 @@
       "delete": "Löschen",
       "permanentDelete": "Dateien dauerhaft löschen",
       "createBackupPlan": "Backup-Plan erstellen",
-      "createBackupPlanSourceRequired": "Quellpfade hinzufügen, bevor ein Backup-Plan erstellt wird"
+      "createBackupPlanSourceRequired": "Quellpfade hinzufügen, bevor ein Backup-Plan erstellt wird",
+      "operations": "Vorgänge"
     },
     "legacySources": {
       "title": "Legacy-Quelleinstellungen",

@@ -11,6 +11,7 @@ import BackupJobsTable from '../components/BackupJobsTable'
 import LogViewerDialog from '../components/LogViewerDialog'
 import RunningCloudStorageJobsSection from '../components/RunningCloudStorageJobsSection'
 import { ActivityFilters } from './activity/ActivityFilters'
+import type { OperationCategory, OperationTrigger } from '../types/operations'
 
 export interface ActivityItem {
   activity_key?: string | null
@@ -34,6 +35,12 @@ export interface ActivityItem {
   backup_plan_name?: string | null
   skip_reason?: 'minimum_interval_not_elapsed' | 'source_unavailable' | null
   has_logs?: boolean
+  kind?: string | null
+  category?: OperationCategory | null
+  trigger?: OperationTrigger | null
+  progress_current?: number | null
+  progress_total?: number | null
+  followups?: ActivityItem[]
 }
 
 interface ActivityContentProps {
@@ -43,6 +50,10 @@ interface ActivityContentProps {
   statusFilter: string
   onTypeFilterChange: (value: string) => void
   onStatusFilterChange: (value: string) => void
+  categoryFilter: OperationCategory[]
+  onCategoryFilterChange: (categories: OperationCategory[]) => void
+  triggerFilter: string
+  onTriggerFilterChange: (value: string) => void
   onRefresh: () => void
   canManageActivityJobs: boolean
   canBreakLockForActivity: (job: ActivityItem) => boolean
@@ -56,6 +67,10 @@ export function ActivityContent({
   statusFilter,
   onTypeFilterChange,
   onStatusFilterChange,
+  categoryFilter,
+  onCategoryFilterChange,
+  triggerFilter,
+  onTriggerFilterChange,
   onRefresh,
   canManageActivityJobs,
   canBreakLockForActivity,
@@ -121,6 +136,10 @@ export function ActivityContent({
         statusFilter={statusFilter}
         onTypeFilterChange={onTypeFilterChange}
         onStatusFilterChange={onStatusFilterChange}
+        categoryFilter={categoryFilter}
+        onCategoryFilterChange={onCategoryFilterChange}
+        triggerFilter={triggerFilter}
+        onTriggerFilterChange={onTriggerFilterChange}
       />
 
       <RunningCloudStorageJobsSection
@@ -188,6 +207,8 @@ const Activity: React.FC = () => {
   const canManageActivityJobs = hasGlobalPermission('repositories.manage_all')
   const [typeFilter, setTypeFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [categoryFilter, setCategoryFilter] = useState<OperationCategory[]>([])
+  const [triggerFilter, setTriggerFilter] = useState<string>('all')
 
   // Fetch activity data
   const {
@@ -195,11 +216,13 @@ const Activity: React.FC = () => {
     isLoading,
     refetch,
   } = useQuery({
-    queryKey: ['activity', typeFilter, statusFilter],
+    queryKey: ['activity', typeFilter, statusFilter, categoryFilter, triggerFilter],
     queryFn: async () => {
       const params: Record<string, unknown> = { limit: 200 }
       if (typeFilter !== 'all') params.job_type = typeFilter
       if (statusFilter !== 'all') params.status = statusFilter
+      if (categoryFilter.length > 0) params.category = categoryFilter
+      if (triggerFilter !== 'all') params.trigger = [triggerFilter]
 
       const response = await activityAPI.list(params)
       return response.data
@@ -235,6 +258,22 @@ const Activity: React.FC = () => {
     })
   }
 
+  const handleCategoryFilterChange = (categories: OperationCategory[]) => {
+    setCategoryFilter(categories)
+    track(EventCategory.NAVIGATION, EventAction.FILTER, {
+      filter_kind: 'category',
+      filter_value: categories.join(','),
+    })
+  }
+
+  const handleTriggerFilterChange = (value: string) => {
+    setTriggerFilter(value)
+    track(EventCategory.NAVIGATION, EventAction.FILTER, {
+      filter_kind: 'trigger',
+      filter_value: value,
+    })
+  }
+
   return (
     <ActivityContent
       activities={activities}
@@ -243,6 +282,10 @@ const Activity: React.FC = () => {
       statusFilter={statusFilter}
       onTypeFilterChange={handleTypeFilterChange}
       onStatusFilterChange={handleStatusFilterChange}
+      categoryFilter={categoryFilter}
+      onCategoryFilterChange={handleCategoryFilterChange}
+      triggerFilter={triggerFilter}
+      onTriggerFilterChange={handleTriggerFilterChange}
       onRefresh={() => refetch()}
       canManageActivityJobs={canManageActivityJobs}
       canBreakLockForActivity={canBreakLockForActivity}

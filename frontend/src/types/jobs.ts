@@ -43,6 +43,12 @@ export interface Job {
   retry_requested_by_user_id?: number | null
   retry_requested_at?: string | null
   progress_details?: unknown
+  kind?: string | null
+  category?: string | null
+  trigger?: string | null
+  progress_current?: number | null
+  progress_total?: number | null
+  followups?: Job[]
 }
 
 export interface Repository {
