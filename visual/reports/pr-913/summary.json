@@ -1,39 +1,21 @@
 {
-  "generatedAt": "2026-09-05T03:26:48.002Z",
+  "generatedAt": "2026-09-05T03:57:15.282Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #913 visual report",
-    "commitSha": "42bd788a9ecc",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/33941383070"
+    "commitSha": "ff947f3ca076",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/33942779841"
   },
   "totals": {
     "baseline": 510,
-    "actual": 558,
+    "actual": 560,
     "compared": 510,
-    "changed": 29,
-    "added": 48,
+    "changed": 28,
+    "added": 50,
     "removed": 0,
-    "unchanged": 481
+    "unchanged": 482
   },
   "changed": [
-    {
-      "fileName": "components-archivepathselector--awaiting-agent-listing--mobile.png",
-      "baselinePath": "images/baseline/components-archivepathselector--awaiting-agent-listing--mobile.png",
-      "actualPath": "images/actual/components-archivepathselector--awaiting-agent-listing--mobile.png",
-      "diffPath": "images/diff/components-archivepathselector--awaiting-agent-listing--mobile.png",
-      "diffPixels": 8,
-      "totalPixels": 329160,
-      "diffRatio": 0.00002430428970713331,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
     {
       "fileName": "components-repositorycard--default--mobile.png",
       "baselinePath": "images/baseline/components-repositorycard--default--mobile.png",
@@ -563,6 +545,14 @@
     {
       "fileName": "activity-runchainrow--with-running.png",
       "actualPath": "images/actual/activity-runchainrow--with-running.png"
+    },
+    {
+      "fileName": "backgroundwork-rebuildmenu--locked--mobile.png",
+      "actualPath": "images/actual/backgroundwork-rebuildmenu--locked--mobile.png"
+    },
+    {
+      "fileName": "backgroundwork-rebuildmenu--locked.png",
+      "actualPath": "images/actual/backgroundwork-rebuildmenu--locked.png"
     },
     {
       "fileName": "components-archives-archivechangestab--default--mobile.png",
@@ -1124,6 +1114,9 @@
     },
     {
       "fileName": "components-archivenametemplateinput--utc-template.png"
+    },
+    {
+      "fileName": "components-archivepathselector--awaiting-agent-listing--mobile.png"
     },
     {
       "fileName": "components-archivepathselector--awaiting-agent-listing.png"
