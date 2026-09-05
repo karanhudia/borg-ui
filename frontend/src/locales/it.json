@@ -945,7 +945,10 @@
     },
     "view": {
       "heatmap": "Mappa di calore",
-      "list": "Elenco"
+      "list": "Elenco",
+      "scaleDays": "Giorni",
+      "scaleHours": "Ore",
+      "scaleLabel": "Scala"
     },
     "heatmap": {
       "none": "Nessun archivio",
@@ -1039,7 +1042,12 @@
       "typeFile": "File",
       "typeDirectory": "Cartella"
     },
-    "toolbarOperations": "Operazioni"
+    "toolbarOperations": "Operazioni",
+    "hourly": {
+      "window": "Ultime {{count}} settimane, una riga per ora",
+      "tooltip": "{{count}} alle {{time}} il {{date}}",
+      "none": "Nessun archivio nelle ultime {{count}} settimane."
+    }
   },
   "restore": {
     "title": "Ripristina Archivi",

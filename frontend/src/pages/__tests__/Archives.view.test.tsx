@@ -42,6 +42,9 @@ vi.mock('../../components/archives/ArchiveSearchField', () => ({
 vi.mock('../../components/archives/ArchiveSeriesHeatmap', () => ({
   default: () => <div data-testid="archive-series-heatmap" />,
 }))
+vi.mock('../../components/archives/ArchiveHourlyHeatmap', () => ({
+  default: () => <div data-testid="archive-hourly-heatmap" />,
+}))
 
 vi.mock('../../services/api', () => ({
   archivesAPI: {
@@ -204,6 +207,17 @@ describe('Archives page, database-backed view (spec 10.3)', () => {
     await user.click(screen.getByText('Select Repo'))
     await waitFor(() => expect(screen.getByTestId('archive-series-heatmap')).toBeInTheDocument())
     expect(screen.queryByText(/no recent restores/i)).not.toBeInTheDocument()
+  })
+
+  it('switches the heatmap to hours and remembers it', async () => {
+    renderWithProviders(<Archives />, { queryClient })
+    const user = userEvent.setup()
+    await user.click(screen.getByText('Select Repo'))
+    await waitFor(() => expect(screen.getByTestId('archive-series-heatmap')).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: /^hours$/i }))
+    expect(screen.getByTestId('archive-hourly-heatmap')).toBeInTheDocument()
+    expect(localStorage.getItem('archives-heatmap-scale')).toBe('hours')
+    localStorage.removeItem('archives-heatmap-scale')
   })
 
   it('links to the repository operations view from the toolbar', async () => {

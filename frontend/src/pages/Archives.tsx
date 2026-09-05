@@ -25,6 +25,13 @@ import LastRestoreSection from '../components/LastRestoreSection'
 import DeleteArchiveDialog from '../components/DeleteArchiveDialog'
 import MountArchiveDialog from '../components/MountArchiveDialog'
 import ArchiveContentsDialog from '../components/ArchiveContentsDialog'
+import ArchiveHourlyHeatmap from '../components/archives/ArchiveHourlyHeatmap'
+import {
+  readStoredScale,
+  storeScale,
+  suggestScale,
+  type HeatmapScale,
+} from '../components/archives/heatmapScale'
 import SyncStateChip from '../components/archives/SyncStateChip'
 import ArchiveSearchField from '../components/archives/ArchiveSearchField'
 import ArchiveSeriesHeatmap from '../components/archives/ArchiveSeriesHeatmap'
@@ -106,6 +113,7 @@ const Archives: React.FC = () => {
   const [showRestoreWizard, setShowRestoreWizard] = useState<boolean>(false)
 
   const [viewMode, setViewMode] = useState<ArchivesViewMode>(getInitialViewMode)
+  const [chosenScale, setChosenScale] = useState<HeatmapScale | null>(readStoredScale)
 
   const queryClient = useQueryClient()
   const location = useLocation()
@@ -480,6 +488,7 @@ const Archives: React.FC = () => {
   const syncState = archives?.data?.sync_state ?? 'never'
   const lastSyncedAt = archives?.data?.last_synced_at ?? null
   const newestArchiveId = storedArchives.length > 0 ? storedArchives[0].id : null
+  const heatmapScale: HeatmapScale = chosenScale ?? suggestScale(storedArchives)
 
   const handleRebuildSync = () => {
     if (!selectedRepositoryId) return
@@ -712,10 +721,44 @@ const Archives: React.FC = () => {
           {viewMode === 'heatmap' ? (
             heatmapData?.data ? (
               <Box sx={{ ...panelSx, p: 2.5 }}>
-                <ArchiveSeriesHeatmap
-                  data={heatmapData.data}
-                  onSelectDay={handleSelectHeatmapDay}
-                />
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+                  <ToggleButtonGroup
+                    value={heatmapScale}
+                    exclusive
+                    size="small"
+                    aria-label={t('archives.view.scaleLabel')}
+                    onChange={(_event, value: HeatmapScale | null) => {
+                      if (!value) return
+                      setChosenScale(value)
+                      storeScale(value)
+                    }}
+                  >
+                    <ToggleButton value="days">{t('archives.view.scaleDays')}</ToggleButton>
+                    <ToggleButton value="hours">{t('archives.view.scaleHours')}</ToggleButton>
+                  </ToggleButtonGroup>
+                </Box>
+                {heatmapScale === 'hours' ? (
+                  <ArchiveHourlyHeatmap
+                    archives={storedArchives}
+                    onSelectArchive={(archiveId) =>
+                      navigate(`/archives/${selectedRepositoryId}/${archiveId}`)
+                    }
+                  />
+                ) : (
+                  <ArchiveSeriesHeatmap
+                    data={heatmapData.data}
+                    onSelectDay={handleSelectHeatmapDay}
+                    onSelectArchive={(archiveId) =>
+                      navigate(`/archives/${selectedRepositoryId}/${archiveId}`)
+                    }
+                    archiveLookup={(archiveId) => {
+                      const row = storedArchives.find((a) => a.id === archiveId)
+                      return row
+                        ? { name: row.name, start: row.start, size: row.deduplicated_size }
+                        : undefined
+                    }}
+                  />
+                )}
               </Box>
             ) : null
           ) : (

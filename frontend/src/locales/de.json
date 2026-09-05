@@ -945,7 +945,10 @@
     },
     "view": {
       "heatmap": "Heatmap",
-      "list": "Liste"
+      "list": "Liste",
+      "scaleDays": "Tage",
+      "scaleHours": "Stunden",
+      "scaleLabel": "Skala"
     },
     "heatmap": {
       "none": "Keine Archive",
@@ -1039,7 +1042,12 @@
       "typeFile": "Datei",
       "typeDirectory": "Ordner"
     },
-    "toolbarOperations": "Vorgänge"
+    "toolbarOperations": "Vorgänge",
+    "hourly": {
+      "window": "Letzte {{count}} Wochen, eine Zeile pro Stunde",
+      "tooltip": "{{count}} um {{time}} am {{date}}",
+      "none": "Keine Archive in den letzten {{count}} Wochen."
+    }
   },
   "restore": {
     "title": "Archive wiederherstellen",
