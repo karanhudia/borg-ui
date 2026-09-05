@@ -15,6 +15,20 @@ from app.database.models import LicensingState, SSHConnection, SSHKey
 from app.utils.script_params import parse_script_parameters
 
 
+def _scan_root(tmp_path):
+    """A directory holding only what the test puts in it.
+
+    The test_db fixture writes the harness's own SQLite database to
+    <tmp_path>/test.db, so a scan rooted at tmp_path detects that as a real
+    SQLite source. It only does so once the file carries the "SQLite format 3"
+    header, which is why scans rooted at tmp_path passed alone and failed in a
+    full-suite run.
+    """
+    root = tmp_path / "scan-root"
+    root.mkdir(exist_ok=True)
+    return root
+
+
 def _set_plan(test_db, plan: str) -> None:
     state = test_db.query(LicensingState).first()
     if state is None:
@@ -895,8 +909,9 @@ class TestSourceDiscovery:
         self, test_client, admin_headers, tmp_path, monkeypatch
     ):
         monkeypatch.setattr(source_discovery, "which", lambda command: None)
-        first_db = tmp_path / "app.sqlite3"
-        second_db = tmp_path / "cache.db"
+        scan_root = _scan_root(tmp_path)
+        first_db = scan_root / "app.sqlite3"
+        second_db = scan_root / "cache.db"
         first_db.write_bytes(b"SQLite format 3\x00")
         second_db.write_bytes(b"SQLite format 3\x00")
 
@@ -905,7 +920,7 @@ class TestSourceDiscovery:
             json={
                 "source_type": "local",
                 "source_ssh_connection_id": None,
-                "paths": [str(tmp_path)],
+                "paths": [str(scan_root)],
             },
             headers=admin_headers,
         )
@@ -1145,7 +1160,8 @@ class TestSourceDiscovery:
         # PG_VERSION lives 3 levels below the scan root. Default depth (6)
         # should discover it.
         monkeypatch.setattr(source_discovery, "which", lambda command: None)
-        nested_pg = tmp_path / "var" / "lib" / "postgresql" / "16" / "main"
+        scan_root = _scan_root(tmp_path)
+        nested_pg = scan_root / "var" / "lib" / "postgresql" / "16" / "main"
         nested_pg.mkdir(parents=True)
         (nested_pg / "PG_VERSION").write_text("16\n")
 
@@ -1154,7 +1170,7 @@ class TestSourceDiscovery:
             json={
                 "source_type": "local",
                 "source_ssh_connection_id": None,
-                "paths": [str(tmp_path)],
+                "paths": [str(scan_root)],
             },
             headers=admin_headers,
         )
@@ -1171,7 +1187,8 @@ class TestSourceDiscovery:
         # PG_VERSION sits 4 levels below the scan root. max_depth=2 means
         # the walk stops before reaching it, so nothing is detected.
         monkeypatch.setattr(source_discovery, "which", lambda command: None)
-        nested_pg = tmp_path / "a" / "b" / "c" / "d"
+        scan_root = _scan_root(tmp_path)
+        nested_pg = scan_root / "a" / "b" / "c" / "d"
         nested_pg.mkdir(parents=True)
         (nested_pg / "PG_VERSION").write_text("16\n")
 
@@ -1180,7 +1197,7 @@ class TestSourceDiscovery:
             json={
                 "source_type": "local",
                 "source_ssh_connection_id": None,
-                "paths": [str(tmp_path)],
+                "paths": [str(scan_root)],
                 "max_depth": 2,
             },
             headers=admin_headers,
@@ -1195,11 +1212,12 @@ class TestSourceDiscovery:
         # A PG signature inside an ignored dir should be missed. The same
         # signature outside it should be picked up.
         monkeypatch.setattr(source_discovery, "which", lambda command: None)
-        ignored_pg = tmp_path / "node_modules" / "fixture-pg"
+        scan_root = _scan_root(tmp_path)
+        ignored_pg = scan_root / "node_modules" / "fixture-pg"
         ignored_pg.mkdir(parents=True)
         (ignored_pg / "PG_VERSION").write_text("16\n")
 
-        kept_mysql = tmp_path / "data" / "mysql"
+        kept_mysql = scan_root / "data" / "mysql"
         kept_mysql.mkdir(parents=True)
 
         response = test_client.post(
@@ -1207,7 +1225,7 @@ class TestSourceDiscovery:
             json={
                 "source_type": "local",
                 "source_ssh_connection_id": None,
-                "paths": [str(tmp_path)],
+                "paths": [str(scan_root)],
                 "ignore_patterns": ["node_modules"],
             },
             headers=admin_headers,
@@ -1222,10 +1240,11 @@ class TestSourceDiscovery:
         self, test_client, admin_headers, tmp_path, monkeypatch
     ):
         monkeypatch.setattr(source_discovery, "which", lambda command: None)
-        noisy_sqlite = tmp_path / "usr" / "bin" / "tool.db"
+        scan_root = _scan_root(tmp_path)
+        noisy_sqlite = scan_root / "usr" / "bin" / "tool.db"
         noisy_sqlite.parent.mkdir(parents=True)
         noisy_sqlite.write_bytes(b"SQLite format 3\x00")
-        app_sqlite = tmp_path / "etc" / "pihole" / "gravity.db"
+        app_sqlite = scan_root / "etc" / "pihole" / "gravity.db"
         app_sqlite.parent.mkdir(parents=True)
         app_sqlite.write_bytes(b"SQLite format 3\x00")
 
@@ -1234,7 +1253,7 @@ class TestSourceDiscovery:
             json={
                 "source_type": "local",
                 "source_ssh_connection_id": None,
-                "paths": [str(tmp_path)],
+                "paths": [str(scan_root)],
             },
             headers=admin_headers,
         )
