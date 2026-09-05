@@ -490,7 +490,9 @@ def break_repository_lock(repository: Repository) -> bool:
         # remote command and SSH identity, including legacy ssh:// URLs.
         if connection:
             temp_key_file = resolve_repo_ssh_key_file(repository, db)
-            ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
+            ssh_opts = get_standard_ssh_opts(
+                include_key_path=temp_key_file, connection=connection, db=db
+            )
             env["BORG_RSH"] = f"ssh {' '.join(ssh_opts)}"
         elif repository.connection_id:
             ssh_opts = get_standard_ssh_opts()

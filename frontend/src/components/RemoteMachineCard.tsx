@@ -19,6 +19,8 @@ import {
   HardDrive,
   Network,
   Key,
+  ShieldCheck,
+  ShieldAlert,
 } from 'lucide-react'
 
 interface StorageInfo {
@@ -48,6 +50,8 @@ interface RemoteMachine {
   last_success?: string
   error_message?: string
   storage?: StorageInfo | null
+  host_key_verified?: boolean
+  host_key_fingerprint?: string | null
   created_at: string
 }
 
@@ -59,6 +63,7 @@ interface RemoteMachineCardProps {
   onTestConnection: (machine: RemoteMachine) => void
   onDeployKey: (machine: RemoteMachine) => void
   onRunDiagnostics?: (machine: RemoteMachine) => void
+  onVerifyHostKey?: (machine: RemoteMachine) => void
   canManageConnections?: boolean
 }
 
@@ -96,6 +101,7 @@ export default function RemoteMachineCard({
   onTestConnection,
   onDeployKey,
   onRunDiagnostics,
+  onVerifyHostKey,
   canManageConnections = true,
 }: RemoteMachineCardProps) {
   const { t } = useTranslation()
@@ -226,6 +232,31 @@ export default function RemoteMachineCard({
           >
             {machine.username}@{machine.host}:{machine.port}
           </Typography>
+
+          {/* Host-key trust. The remote host is only authenticated once its key
+              is pinned, so a connection without one says so plainly. */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                color: machine.host_key_verified
+                  ? theme.palette.success.main
+                  : theme.palette.warning.main,
+              }}
+            >
+              {machine.host_key_verified ? <ShieldCheck size={12} /> : <ShieldAlert size={12} />}
+            </Box>
+            <Typography
+              noWrap
+              title={machine.host_key_fingerprint || undefined}
+              sx={{ fontSize: '0.62rem', color: 'text.disabled', minWidth: 0 }}
+            >
+              {machine.host_key_verified
+                ? t('remoteMachineCard.hostKey.verified')
+                : t('remoteMachineCard.hostKey.unverified')}
+            </Typography>
+          </Box>
         </Box>
 
         {/* ── Storage Stats Band ── */}
@@ -498,6 +529,22 @@ export default function RemoteMachineCard({
                 <RefreshCw size={16} />
               </IconButton>
             </Tooltip>
+            {onVerifyHostKey && (
+              <Tooltip title={t('remoteMachineCard.hostKey.action')} arrow>
+                <IconButton
+                  size="small"
+                  aria-label={t('remoteMachineCard.hostKey.action')}
+                  onClick={() => onVerifyHostKey(machine)}
+                  sx={coloredIconBtnSx(machine.host_key_verified ? 'success' : 'warning')}
+                >
+                  {machine.host_key_verified ? (
+                    <ShieldCheck size={16} />
+                  ) : (
+                    <ShieldAlert size={16} />
+                  )}
+                </IconButton>
+              </Tooltip>
+            )}
             {onRunDiagnostics && (
               <Tooltip title={t('remoteMachine.actions.runDiagnostics')} arrow>
                 <IconButton

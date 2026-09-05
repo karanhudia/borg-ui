@@ -2472,7 +2472,26 @@
       "keyDeleteFailed": "SSH-Schlüssel konnte nicht gelöscht werden",
       "publicKeyCopied": "Öffentlicher Schlüssel in Zwischenablage kopiert!",
       "diagnosticsComplete": "Diagnose abgeschlossen",
-      "diagnosticsFailed": "Diagnose konnte nicht ausgeführt werden"
+      "diagnosticsFailed": "Diagnose konnte nicht ausgeführt werden",
+      "hostKeyTrusted": "Hostschlüssel wird vertraut",
+      "hostKeyTrustFailed": "Dem Hostschlüssel konnte nicht vertraut werden",
+      "hostKeyForgotten": "Hostschlüssel vergessen. Die nächste Verbindung muss ihn erneut prüfen.",
+      "hostKeyForgetFailed": "Hostschlüssel konnte nicht vergessen werden",
+      "hostKeyReadFailed": "Hostschlüssel konnte nicht gelesen werden"
+    },
+    "hostKeyDialog": {
+      "title": "Hostschlüssel",
+      "subtitle": "Der Schlüssel, den {{host}}:{{port}} beim Verbinden präsentiert.",
+      "trusted": "Diesem Hostschlüssel wird vertraut. Verbindungen zu dieser Maschine werden dagegen geprüft.",
+      "unknown": "Für diese Verbindung wird noch keinem Hostschlüssel vertraut. Die Maschine unter dieser Adresse ist damit nicht authentifiziert.",
+      "changed": "Der präsentierte Schlüssel ist nicht der, dem Borg UI vertraut. Entweder wurde der Schlüssel auf dem Host gewechselt oder jemand antwortet an seiner Stelle. Prüfen Sie ihn auf dem Host, bevor Sie ihm vertrauen.",
+      "unreachable": "Der Hostschlüssel konnte nicht gelesen werden. Die Maschine ist möglicherweise offline oder nicht erreichbar.",
+      "trustedFingerprint": "Vertrauter Fingerabdruck",
+      "observedFingerprint": "Aktuell präsentierter Fingerabdruck",
+      "compareHint": "Vergleichen Sie ihn mit der Ausgabe von ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub auf dem Host selbst.",
+      "trust": "Diesem Schlüssel vertrauen",
+      "trustNewKey": "Dem neuen Schlüssel vertrauen",
+      "forget": "Schlüssel vergessen"
     }
   },
   "scripts": {
@@ -3798,6 +3817,11 @@
       "edit": "Bearbeiten",
       "delete": "Löschen",
       "deploy": "Schlüssel bereitstellen"
+    },
+    "hostKey": {
+      "verified": "Hostschlüssel verifiziert",
+      "unverified": "Hostschlüssel nicht verifiziert",
+      "action": "Hostschlüssel"
     }
   },
   "restoreJobCard": {
@@ -5447,7 +5471,10 @@
         "failedDeleteSshKey": "Fehler beim Löschen des SSH-Schlüssels: {{error}}",
         "failedToggleBackupSource": "Fehler beim Umschalten der Sicherungsquelle: {{error}}",
         "failedListBackupSources": "Fehler beim Auflisten der Sicherungsquellen: {{error}}",
-        "failedVerifyBorgInstallation": "Fehler beim Überprüfen der Borg-Installation: {{error}}"
+        "failedVerifyBorgInstallation": "Fehler beim Überprüfen der Borg-Installation: {{error}}",
+        "failedReadHostKey": "Hostschlüssel konnte nicht gelesen werden: {{error}}",
+        "hostKeyChangedWhileConfirming": "Der Hostschlüssel hat sich während der Bestätigung geändert. Prüfen Sie ihn erneut, bevor Sie ihm vertrauen.",
+        "failedStoreHostKey": "Hostschlüssel konnte nicht gespeichert werden: {{error}}"
       },
       "settings": {
         "adminAccessRequired": "Administratorzugriff erforderlich",
@@ -5682,7 +5709,9 @@
         "sshKeyUpdated": "SSH-Schlüssel erfolgreich aktualisiert",
         "storageRefreshed": "Speicherinformationen erfolgreich aktualisiert",
         "systemKeyGenerated": "System-SSH-Schlüssel erfolgreich generiert",
-        "systemKeyImported": "System-SSH-Schlüssel erfolgreich importiert"
+        "systemKeyImported": "System-SSH-Schlüssel erfolgreich importiert",
+        "hostKeyTrusted": "Hostschlüssel wird vertraut",
+        "hostKeyForgotten": "Hostschlüssel vergessen"
       },
       "packages": {
         "installationInProgress": "Installation von Paket '{{name}}' ist bereits im Gange",
