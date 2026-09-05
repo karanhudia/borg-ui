@@ -24,7 +24,7 @@ describe('RebuildMenu', () => {
     const onSelect = vi.fn()
     render(<RebuildMenu onSelect={onSelect} />)
     fireEvent.click(screen.getByRole('button', { name: /rebuild/i }))
-    fireEvent.click(screen.getByRole('menuitem', { name: /archives/i }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /archive list/i }))
     expect(onSelect).toHaveBeenCalledWith('archives')
   })
 
