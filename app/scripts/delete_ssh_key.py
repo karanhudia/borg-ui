@@ -154,7 +154,7 @@ def delete_ssh_key(key_id=None, key_name=None, is_system=False, force=False):
         print(f"✓ Deleted SSH key: {found_name} (ID: {found_id})")
 
         # Remove key files from filesystem
-        ssh_dir = Path("/home/borg/.ssh")
+        ssh_dir = Path(settings.ssh_home_dir)
         private_key_file = ssh_dir / f"id_{key_type}"
         public_key_file = ssh_dir / f"id_{key_type}.pub"
 
