@@ -68,6 +68,12 @@ vi.mock('@tanstack/react-query', async () => {
   }
 })
 
+vi.mock('../activity/RepositoryOperationsView', () => ({
+  default: ({ repositoryId }: { repositoryId: number }) => (
+    <div>Repository View {repositoryId}</div>
+  ),
+}))
+
 vi.mock('../../components/BackupJobsTable', () => ({
   default: (props: unknown) => {
     jobsTablePropsSpy(props)
@@ -167,6 +173,12 @@ describe('Activity page', () => {
 
     await user.click(refreshButton)
     expect(refetchSpy).toHaveBeenCalled()
+  })
+
+  it('renders the repository view when the URL carries repository_id', async () => {
+    renderWithProviders(<Activity />, { initialRoute: '/activity?repository_id=4' })
+    expect(await screen.findByText('Repository View 4')).toBeInTheDocument()
+    expect(screen.queryByText('Jobs Table')).not.toBeInTheDocument()
   })
 
   it('offers cloud storage activity filters and summarizes active rclone jobs', async () => {

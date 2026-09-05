@@ -1986,7 +1986,22 @@
       "retry": "Retry"
     },
     "followupsCollapsed": "{{count}} follow-ups",
-    "operations": "Operations"
+    "operations": "Operations",
+    "followupsCollapsed_one": "{{count}} follow-up",
+    "repositoryView": {
+      "back": "All activity",
+      "subtitle": "Runs on this repository, newest first",
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "empty": "No runs on this repository match these filters.",
+      "loadFailed": "The runs could not be loaded.",
+      "logs": "Logs",
+      "errorDetails": "Error details",
+      "triggerSource": {
+        "plan": "plan: {{name}}",
+        "schedule": "schedule: {{name}}"
+      }
+    }
   },
   "availabilitySchedule": {
     "skipReasons": {

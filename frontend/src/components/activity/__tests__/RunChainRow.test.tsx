@@ -87,3 +87,50 @@ describe('RunChainRow', () => {
     expect(screen.queryAllByRole('button')).toHaveLength(0)
   })
 })
+
+describe('RunChainRow stacked layout', () => {
+  it('collapses a chain whose follow-ups all succeeded', () => {
+    render(
+      <RunChainRow
+        layout="stacked"
+        operation={{
+          kind: 'backup',
+          status: 'completed',
+          followups: [followup('archive_sync', 'completed'), followup('stats', 'completed')],
+        }}
+      />
+    )
+    expect(screen.getByText('2 follow-ups')).toBeInTheDocument()
+    expect(screen.queryAllByTestId('run-chain-followup')).toHaveLength(0)
+    fireEvent.click(screen.getByText('2 follow-ups'))
+    expect(screen.getAllByTestId('run-chain-followup')).toHaveLength(2)
+  })
+
+  it('expands a chain with a running or failed follow-up', () => {
+    render(
+      <RunChainRow
+        layout="stacked"
+        operation={{
+          kind: 'backup',
+          status: 'completed',
+          followups: [followup('archive_sync', 'completed'), followup('stats', 'failed')],
+        }}
+      />
+    )
+    expect(screen.getAllByTestId('run-chain-followup')).toHaveLength(2)
+  })
+
+  it('uses the singular for one collapsed follow-up', () => {
+    render(
+      <RunChainRow
+        layout="stacked"
+        operation={{
+          kind: 'backup',
+          status: 'completed',
+          followups: [followup('archive_sync', 'completed')],
+        }}
+      />
+    )
+    expect(screen.getByText('1 follow-up')).toBeInTheDocument()
+  })
+})

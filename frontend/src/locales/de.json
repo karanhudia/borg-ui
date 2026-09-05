@@ -1986,7 +1986,22 @@
       "retry": "Wiederholung"
     },
     "followupsCollapsed": "{{count}} Folgeaktionen",
-    "operations": "Vorgänge"
+    "operations": "Vorgänge",
+    "followupsCollapsed_one": "{{count}} Folgeaktion",
+    "repositoryView": {
+      "back": "Gesamte Aktivität",
+      "subtitle": "Läufe in diesem Repository, neueste zuerst",
+      "today": "Heute",
+      "yesterday": "Gestern",
+      "empty": "Keine Läufe in diesem Repository passen zu diesen Filtern.",
+      "loadFailed": "Die Läufe konnten nicht geladen werden.",
+      "logs": "Protokoll",
+      "errorDetails": "Fehlerdetails",
+      "triggerSource": {
+        "plan": "Plan: {{name}}",
+        "schedule": "Zeitplan: {{name}}"
+      }
+    }
   },
   "availabilitySchedule": {
     "skipReasons": {

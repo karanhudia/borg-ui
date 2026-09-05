@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Box, Stack, Typography } from '@mui/material'
-import { Check, XCircle, Loader2, AlertTriangle, Circle, MinusCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import RunStatusIcon from './RunStatusIcon'
 
 export interface RunChainOperation {
   id?: number | string
@@ -16,28 +16,22 @@ export interface RunChainOperation {
 interface RunChainRowProps {
   operation: RunChainOperation
   maxVisible?: number
+  // `inline` wraps the chain on one line under a table row; `stacked` lists
+  // it vertically under a run and collapses it when every step succeeded.
+  layout?: 'inline' | 'stacked'
 }
 
-const STATUS_ICON: Record<string, typeof Check> = {
-  completed: Check,
-  completed_with_warnings: Check,
-  running: Loader2,
-  queued: Circle,
-  failed: XCircle,
-  cancelled: XCircle,
-  skipped: MinusCircle,
-}
+const SUCCEEDED = new Set(['completed', 'completed_with_warnings', 'skipped'])
 
 function FollowupEntry({ followup }: { followup: RunChainOperation }) {
   const { t } = useTranslation()
-  const Icon = STATUS_ICON[followup.status] ?? AlertTriangle
   return (
     <Box
       data-testid="run-chain-followup"
       data-status={followup.status}
-      sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+      sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}
     >
-      <Icon size={12} className={followup.status === 'running' ? 'animate-spin' : undefined} />
+      <RunStatusIcon status={followup.status} size={12} />
       <Typography variant="caption">{t(`operations.kind.${followup.kind}`)}</Typography>
       {followup.status === 'running' &&
         followup.progress_current != null &&
@@ -50,17 +44,22 @@ function FollowupEntry({ followup }: { followup: RunChainOperation }) {
   )
 }
 
-export default function RunChainRow({ operation, maxVisible = 3 }: RunChainRowProps) {
+export default function RunChainRow({
+  operation,
+  maxVisible = 3,
+  layout = 'inline',
+}: RunChainRowProps) {
   const { t } = useTranslation()
-  const [expanded, setExpanded] = useState(false)
   const followups = operation.followups ?? []
+  const allSucceeded = followups.every((followup) => SUCCEEDED.has(followup.status))
+  const collapsible =
+    layout === 'stacked' ? allSucceeded && followups.length > 0 : followups.length > maxVisible
+  const [expanded, setExpanded] = useState(false)
 
   if (followups.length === 0) return null
 
-  const collapsible = followups.length > maxVisible
-
   return (
-    <Box sx={{ pl: 3, mt: 0.5 }}>
+    <Box sx={{ pl: layout === 'stacked' ? 0 : 3, mt: 0.5 }}>
       {collapsible && !expanded ? (
         <Typography
           variant="caption"
@@ -71,7 +70,12 @@ export default function RunChainRow({ operation, maxVisible = 3 }: RunChainRowPr
           {t('activity.followupsCollapsed', { count: followups.length })}
         </Typography>
       ) : (
-        <Stack direction="row" spacing={2} useFlexGap sx={{ flexWrap: 'wrap' }}>
+        <Stack
+          direction={layout === 'stacked' ? 'column' : 'row'}
+          spacing={layout === 'stacked' ? 0.5 : 2}
+          useFlexGap
+          sx={{ flexWrap: 'wrap' }}
+        >
           {followups.map((followup, index) => (
             <FollowupEntry key={followup.id ?? index} followup={followup} />
           ))}

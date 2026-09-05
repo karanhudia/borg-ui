@@ -49,3 +49,33 @@ export const WithRunning: Story = {
     },
   },
 }
+
+export const StackedSucceeded: Story = {
+  args: {
+    layout: 'stacked',
+    operation: {
+      kind: 'backup',
+      status: 'completed',
+      followups: [
+        followup('archive_sync', 'completed'),
+        followup('history_index', 'completed'),
+        followup('stats', 'completed'),
+      ],
+    },
+  },
+}
+
+export const StackedRunning: Story = {
+  args: {
+    layout: 'stacked',
+    operation: {
+      kind: 'backup',
+      status: 'completed',
+      followups: [
+        followup('archive_sync', 'completed'),
+        { kind: 'history_index', status: 'running', progress_current: 14, progress_total: 38 },
+        followup('stats', 'queued'),
+      ],
+    },
+  },
+}

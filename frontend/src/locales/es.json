@@ -1986,7 +1986,22 @@
       "retry": "Reintento"
     },
     "followupsCollapsed": "{{count}} seguimientos",
-    "operations": "Operaciones"
+    "operations": "Operaciones",
+    "followupsCollapsed_one": "{{count}} seguimiento",
+    "repositoryView": {
+      "back": "Toda la actividad",
+      "subtitle": "Ejecuciones en este repositorio, las más recientes primero",
+      "today": "Hoy",
+      "yesterday": "Ayer",
+      "empty": "Ninguna ejecución de este repositorio coincide con estos filtros.",
+      "loadFailed": "No se pudieron cargar las ejecuciones.",
+      "logs": "Registros",
+      "errorDetails": "Detalles del error",
+      "triggerSource": {
+        "plan": "plan: {{name}}",
+        "schedule": "programación: {{name}}"
+      }
+    }
   },
   "availabilitySchedule": {
     "skipReasons": {

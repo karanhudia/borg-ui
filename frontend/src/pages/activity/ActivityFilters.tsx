@@ -1,18 +1,8 @@
 import { useTranslation } from 'react-i18next'
-import { Box, MenuItem, Select, Typography } from '@mui/material'
-import CategoryToken from '../../components/CategoryToken'
+import { Box, MenuItem, Select } from '@mui/material'
+import CategoryFilter from '../../components/activity/CategoryFilter'
 import RichSelect from '../../components/shared/RichSelect'
 import type { OperationCategory, OperationTrigger } from '../../types/operations'
-
-const CATEGORIES: OperationCategory[] = [
-  'import',
-  'backup',
-  'restore',
-  'maintenance',
-  'index',
-  'mirror',
-  'system',
-]
 
 const TRIGGERS: OperationTrigger[] = [
   'manual',
@@ -46,14 +36,6 @@ export function ActivityFilters({
   onTriggerFilterChange,
 }: ActivityFiltersProps) {
   const { t } = useTranslation()
-
-  const toggleCategory = (category: OperationCategory) => {
-    if (!onCategoryFilterChange) return
-    const next = categoryFilter.includes(category)
-      ? categoryFilter.filter((selected) => selected !== category)
-      : [...categoryFilter, category]
-    onCategoryFilterChange(next)
-  }
 
   const triggerOptions = [
     { value: 'all', primary: t('activity.allTriggers') },
@@ -111,37 +93,11 @@ export function ActivityFilters({
         </Select>
       </Box>
 
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
-        <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mr: 0.5 }}>
-          {t('activity.filterCategory')}
-        </Typography>
-        {CATEGORIES.map((category) => {
-          const selected = categoryFilter.includes(category)
-          return (
-            <Box
-              key={category}
-              role="button"
-              tabIndex={0}
-              aria-pressed={selected}
-              aria-label={t(`operations.category.${category}`)}
-              onClick={() => toggleCategory(category)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault()
-                  toggleCategory(category)
-                }
-              }}
-              sx={{
-                cursor: 'pointer',
-                opacity: selected ? 1 : 0.5,
-                transition: 'opacity 140ms ease',
-              }}
-            >
-              <CategoryToken category={category} />
-            </Box>
-          )
-        })}
-
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'flex-end' }}>
+        <CategoryFilter
+          value={categoryFilter}
+          onChange={(categories) => onCategoryFilterChange?.(categories)}
+        />
         <Box sx={{ minWidth: 180 }}>
           <RichSelect
             value={triggerFilter}

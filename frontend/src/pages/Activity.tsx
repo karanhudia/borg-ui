@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import { Box, IconButton, Typography } from '@mui/material'
 import { History, Info, RefreshCw } from 'lucide-react'
 import { activityAPI, repositoriesAPI } from '../services/api'
@@ -11,6 +12,7 @@ import BackupJobsTable from '../components/BackupJobsTable'
 import LogViewerDialog from '../components/LogViewerDialog'
 import RunningCloudStorageJobsSection from '../components/RunningCloudStorageJobsSection'
 import { ActivityFilters } from './activity/ActivityFilters'
+import RepositoryOperationsView from './activity/RepositoryOperationsView'
 import type { OperationCategory, OperationTrigger } from '../types/operations'
 
 export interface ActivityItem {
@@ -202,6 +204,17 @@ export function ActivityContent({
 }
 
 const Activity: React.FC = () => {
+  const [searchParams] = useSearchParams()
+  const repositoryIdParam = Number(searchParams.get('repository_id'))
+  const pinnedRepositoryId =
+    Number.isInteger(repositoryIdParam) && repositoryIdParam > 0 ? repositoryIdParam : null
+  if (pinnedRepositoryId !== null) {
+    return <RepositoryOperationsView repositoryId={pinnedRepositoryId} />
+  }
+  return <GlobalActivity />
+}
+
+const GlobalActivity: React.FC = () => {
   const { track, EventCategory, EventAction } = useAnalytics()
   const { hasGlobalPermission } = useAuth()
   const canManageActivityJobs = hasGlobalPermission('repositories.manage_all')
