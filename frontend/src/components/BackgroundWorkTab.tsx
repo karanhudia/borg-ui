@@ -37,10 +37,17 @@ export default function BackgroundWorkTab() {
 
   return (
     <Box>
-      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 2 }}>
-        <Typography variant="h6" sx={{ mr: 'auto' }}>
-          {t('operations.background.title')}
-        </Typography>
+      <Stack
+        direction="row"
+        spacing={2}
+        sx={{ alignItems: 'flex-start', justifyContent: 'space-between', mb: 3 }}
+      >
+        <Box>
+          <Typography variant="h6">{t('operations.background.title')}</Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            {t('operations.background.subtitle')}
+          </Typography>
+        </Box>
         {!paused && (
           <Tooltip title={canManage ? '' : t('operations.background.pauseAdminOnly')}>
             <span>

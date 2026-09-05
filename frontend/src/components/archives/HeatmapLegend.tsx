@@ -30,7 +30,7 @@ export default function HeatmapLegend({ flagsAvailable }: HeatmapLegendProps) {
       available: flagsAvailable.missed_run,
       sample: {
         bgcolor: alpha(theme.palette.text.primary, 0.06),
-        border: `1px dashed ${theme.palette.error.main}`,
+        border: `1px dashed ${alpha(theme.palette.error.main, 0.55)}`,
       },
     },
     {

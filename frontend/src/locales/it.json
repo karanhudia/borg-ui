@@ -990,7 +990,8 @@
       "loadFailed": "Questo archivio non può essere caricato.",
       "restore": "Ripristina",
       "mount": "Monta",
-      "delete": "Elimina"
+      "delete": "Elimina",
+      "tabChangesLabel": "Modifiche"
     },
     "changes": {
       "compareWith": "Confronta con",
@@ -1005,7 +1006,10 @@
       "skipped": "L'indicizzazione della cronologia è stata saltata per questo archivio.",
       "rebuildLink": "Ricostruisci l'indice della cronologia",
       "empty": "Nessuna modifica tra questi archivi.",
-      "showMore": "Mostra altro"
+      "showMore": "Mostra altro",
+      "filterLabel": "Tipo di modifica",
+      "delta": "{{sign}}{{size}}",
+      "summaryFolder": "Cartella"
     },
     "files": {
       "size": "Dimensione",
@@ -1025,7 +1029,11 @@
       "searchInArchive": "Cerca in questo archivio",
       "folderMetadata": "Cartella",
       "noSelection": "Seleziona un file o una cartella per vedere i dettagli.",
-      "path": "Percorso"
+      "path": "Percorso",
+      "historyEmpty": "Nessun archivio precedente contiene questo percorso.",
+      "type": "Tipo",
+      "typeFile": "File",
+      "typeDirectory": "Cartella"
     }
   },
   "restore": {
@@ -2002,8 +2010,8 @@
       "logs": "Log",
       "errorDetails": "Dettagli errore",
       "triggerSource": {
-        "plan": "piano: {{name}}",
-        "schedule": "pianificazione: {{name}}"
+        "plan": "Piano: {{name}}",
+        "schedule": "Pianificazione: {{name}}"
       }
     }
   },
@@ -3432,7 +3440,14 @@
       "lastReconcile": "L'ultima riconciliazione è stata eseguita {{ago}}.",
       "lastReconcileNever": "Nessuna riconciliazione è ancora stata eseguita.",
       "rebuildRepository": "Repository",
-      "rebuildStarted": "Ricostruzione avviata per {{repository}}."
+      "rebuildStarted": "Ricostruzione avviata per {{repository}}.",
+      "subtitle": "Cosa sta facendo Borg UI sui tuoi repository in questo momento.",
+      "rebuildTitle": "Ricostruisci i dati derivati",
+      "rebuildDescription": "Ricalcola le statistiche, l'elenco degli archivi o l'indice della cronologia di un repository. I passaggi successivi vengono rieseguiti automaticamente.",
+      "rebuildStageLabel": "Inizia da",
+      "rebuildAction": "Ricostruisci",
+      "rebuildRow": "Ricostruisci {{repository}}",
+      "proOnly": "Pro"
     },
     "status": {
       "queued": "In coda",
@@ -3458,7 +3473,11 @@
       "stats": "statistiche",
       "archive_sync": "sincronizzazione archivio",
       "history_index": "indice cronologia",
-      "history_merge": "unione cronologia"
+      "history_merge": "unione cronologia",
+      "script_execution": "script",
+      "availability_check": "controllo disponibilità",
+      "rclone_hydrate": "idratazione mirror",
+      "package": "installazione pacchetto"
     },
     "strip": {
       "backup": "Backup",

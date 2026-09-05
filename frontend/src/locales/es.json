@@ -990,7 +990,8 @@
       "loadFailed": "Este archivo no se pudo cargar.",
       "restore": "Restaurar",
       "mount": "Montar",
-      "delete": "Eliminar"
+      "delete": "Eliminar",
+      "tabChangesLabel": "Cambios"
     },
     "changes": {
       "compareWith": "Comparar con",
@@ -1005,7 +1006,10 @@
       "skipped": "La indexación del historial se omitió para este archivo.",
       "rebuildLink": "Reconstruir el índice de historial",
       "empty": "No hay cambios entre estos archivos.",
-      "showMore": "Mostrar más"
+      "showMore": "Mostrar más",
+      "filterLabel": "Tipo de cambio",
+      "delta": "{{sign}}{{size}}",
+      "summaryFolder": "Carpeta"
     },
     "files": {
       "size": "Tamaño",
@@ -1025,7 +1029,11 @@
       "searchInArchive": "Buscar en este archivo",
       "folderMetadata": "Carpeta",
       "noSelection": "Selecciona un archivo o carpeta para ver los detalles.",
-      "path": "Ruta"
+      "path": "Ruta",
+      "historyEmpty": "Ningún archivo anterior contiene esta ruta.",
+      "type": "Tipo",
+      "typeFile": "Fichero",
+      "typeDirectory": "Carpeta"
     }
   },
   "restore": {
@@ -2002,8 +2010,8 @@
       "logs": "Registros",
       "errorDetails": "Detalles del error",
       "triggerSource": {
-        "plan": "plan: {{name}}",
-        "schedule": "programación: {{name}}"
+        "plan": "Plan: {{name}}",
+        "schedule": "Programación: {{name}}"
       }
     }
   },
@@ -3432,7 +3440,14 @@
       "lastReconcile": "La última reconciliación se ejecutó {{ago}}.",
       "lastReconcileNever": "Todavía no se ha ejecutado ninguna reconciliación.",
       "rebuildRepository": "Repositorio",
-      "rebuildStarted": "Reconstrucción iniciada para {{repository}}."
+      "rebuildStarted": "Reconstrucción iniciada para {{repository}}.",
+      "subtitle": "Lo que Borg UI está haciendo ahora mismo con tus repositorios.",
+      "rebuildTitle": "Reconstruir datos derivados",
+      "rebuildDescription": "Recalcula las estadísticas, la lista de archivos o el índice de historial de un repositorio. Los pasos posteriores se repiten automáticamente.",
+      "rebuildStageLabel": "Empezar desde",
+      "rebuildAction": "Reconstruir",
+      "rebuildRow": "Reconstruir {{repository}}",
+      "proOnly": "Pro"
     },
     "status": {
       "queued": "En cola",
@@ -3458,7 +3473,11 @@
       "stats": "estadísticas",
       "archive_sync": "sincronización de archivo",
       "history_index": "índice de historial",
-      "history_merge": "fusión de historial"
+      "history_merge": "fusión de historial",
+      "script_execution": "script",
+      "availability_check": "comprobación de disponibilidad",
+      "rclone_hydrate": "hidratación de réplica",
+      "package": "instalación de paquete"
     },
     "strip": {
       "backup": "Copia de seguridad",

@@ -3,7 +3,20 @@ import { useParams, useSearchParams, Link as RouterLink } from 'react-router-dom
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'react-hot-toast'
-import { Alert, Box, Breadcrumbs, Button, Link, Stack, Tab, Tabs, Typography } from '@mui/material'
+import {
+  Alert,
+  Box,
+  Breadcrumbs,
+  Button,
+  Link,
+  Stack,
+  Tab,
+  Tabs,
+  Typography,
+  useTheme,
+} from '@mui/material'
+import { HardDrive, RotateCcw, Trash2 } from 'lucide-react'
+import { changeColor } from '../components/archives/changeStyle'
 import { archivesAPI, repositoriesAPI, mountsAPI, restoreAPI } from '../services/api'
 import { BorgApiClient } from '../services/borgApi'
 import { getBorgVersion } from '../utils/repoCapabilities'
@@ -27,6 +40,7 @@ function getDefaultMountPoint(archiveName: string): string {
 
 export default function ArchiveDetail() {
   const { t } = useTranslation()
+  const theme = useTheme()
   const { repositoryId: repositoryIdParam, archiveId: archiveIdParam } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const queryClient = useQueryClient()
@@ -189,11 +203,52 @@ export default function ArchiveDetail() {
     return <Box sx={{ p: 3 }} />
   }
 
-  const tabLabel = t('archives.detail.tabChangesWithCounts', {
-    added: changesForLabel?.totals.added ?? 0,
-    removed: changesForLabel?.totals.removed ?? 0,
-    modified: changesForLabel?.totals.modified ?? 0,
-  })
+  const totals = changesForLabel?.totals
+  const tabLabel = (
+    <Box
+      component="span"
+      sx={{ display: 'inline-flex', alignItems: 'center', gap: 1 }}
+      aria-label={t('archives.detail.tabChangesWithCounts', {
+        added: totals?.added ?? 0,
+        removed: totals?.removed ?? 0,
+        modified: totals?.modified ?? 0,
+      })}
+    >
+      {t('archives.detail.tabChangesLabel')}
+      {totals && (
+        <Box
+          component="span"
+          sx={{
+            display: 'inline-flex',
+            gap: 0.75,
+            fontSize: '0.75rem',
+            fontWeight: 600,
+            fontVariantNumeric: 'tabular-nums',
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+          }}
+        >
+          <Box
+            component="span"
+            sx={{ color: totals.added ? changeColor(theme, 'added') : 'text.disabled' }}
+          >
+            +{totals.added}
+          </Box>
+          <Box
+            component="span"
+            sx={{ color: totals.removed ? changeColor(theme, 'removed') : 'text.disabled' }}
+          >
+            −{totals.removed}
+          </Box>
+          <Box
+            component="span"
+            sx={{ color: totals.modified ? changeColor(theme, 'modified') : 'text.disabled' }}
+          >
+            ~{totals.modified}
+          </Box>
+        </Box>
+      )}
+    </Box>
+  )
 
   return (
     <Box sx={{ p: 3 }}>
@@ -205,22 +260,33 @@ export default function ArchiveDetail() {
       </Breadcrumbs>
 
       <Stack
-        direction={{ xs: 'column', sm: 'row' }}
+        direction={{ xs: 'column', md: 'row' }}
         spacing={2}
-        sx={{ mb: 2, alignItems: { sm: 'center' } }}
+        sx={{ mb: 3, alignItems: { md: 'flex-start' }, justifyContent: 'space-between' }}
       >
-        <Box sx={{ flexGrow: 1 }}>
-          <Typography variant="h5">{archive.name}</Typography>
-          <Typography variant="body2" color="text.secondary">
+        <Box sx={{ minWidth: 0 }}>
+          <Typography
+            variant="h5"
+            sx={{ fontWeight: 700, wordBreak: 'break-word', lineHeight: 1.3 }}
+          >
+            {archive.name}
+          </Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
             {parseBackendDate(archive.start).toLocaleString()}
           </Typography>
         </Box>
-        <Stack direction="row" spacing={1}>
-          <Button variant="outlined" onClick={() => openRestore()}>
+        <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
+          <Button
+            variant="contained"
+            disableElevation
+            startIcon={<RotateCcw size={16} />}
+            onClick={() => openRestore()}
+          >
             {t('archives.detail.restore')}
           </Button>
           <Button
             variant="outlined"
+            startIcon={<HardDrive size={16} />}
             onClick={() => {
               setCustomMountPoint(getDefaultMountPoint(archive.name))
               setShowMountDialog(true)
@@ -228,13 +294,22 @@ export default function ArchiveDetail() {
           >
             {t('archives.detail.mount')}
           </Button>
-          <Button variant="outlined" color="error" onClick={() => setShowDeleteConfirm(true)}>
+          <Button
+            variant="outlined"
+            color="error"
+            startIcon={<Trash2 size={16} />}
+            onClick={() => setShowDeleteConfirm(true)}
+          >
             {t('archives.detail.delete')}
           </Button>
         </Stack>
       </Stack>
 
-      <Tabs value={activeTab} onChange={(_e, value) => setActiveTab(value)} sx={{ mb: 2 }}>
+      <Tabs
+        value={activeTab}
+        onChange={(_e, value) => setActiveTab(value)}
+        sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}
+      >
         <Tab label={tabLabel} value="changes" />
         <Tab label={t('archives.detail.tabFiles')} value="files" />
         <Tab label={t('archives.detail.tabInfo')} value="info" />

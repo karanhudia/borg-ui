@@ -990,7 +990,8 @@
       "loadFailed": "Dieses Archiv konnte nicht geladen werden.",
       "restore": "Wiederherstellen",
       "mount": "Einhängen",
-      "delete": "Löschen"
+      "delete": "Löschen",
+      "tabChangesLabel": "Änderungen"
     },
     "changes": {
       "compareWith": "Vergleichen mit",
@@ -1005,7 +1006,10 @@
       "skipped": "Die Verlaufsindizierung wurde für dieses Archiv übersprungen.",
       "rebuildLink": "Verlaufsindex neu aufbauen",
       "empty": "Keine Änderungen zwischen diesen Archiven.",
-      "showMore": "Mehr anzeigen"
+      "showMore": "Mehr anzeigen",
+      "filterLabel": "Änderungstyp",
+      "delta": "{{sign}}{{size}}",
+      "summaryFolder": "Ordner"
     },
     "files": {
       "size": "Größe",
@@ -1025,7 +1029,11 @@
       "searchInArchive": "In diesem Archiv suchen",
       "folderMetadata": "Ordner",
       "noSelection": "Wähle eine Datei oder einen Ordner, um Details zu sehen.",
-      "path": "Pfad"
+      "path": "Pfad",
+      "historyEmpty": "Kein früheres Archiv enthält diesen Pfad.",
+      "type": "Typ",
+      "typeFile": "Datei",
+      "typeDirectory": "Ordner"
     }
   },
   "restore": {
@@ -3432,7 +3440,14 @@
       "lastReconcile": "Der letzte Abgleich lief {{ago}}.",
       "lastReconcileNever": "Es wurde noch kein Abgleich ausgeführt.",
       "rebuildRepository": "Repository",
-      "rebuildStarted": "Neuaufbau für {{repository}} gestartet."
+      "rebuildStarted": "Neuaufbau für {{repository}} gestartet.",
+      "subtitle": "Was Borg UI gerade mit deinen Repositorys macht.",
+      "rebuildTitle": "Abgeleitete Daten neu aufbauen",
+      "rebuildDescription": "Statistiken, Archivliste oder Verlaufsindex für ein Repository neu berechnen. Spätere Schritte laufen automatisch erneut.",
+      "rebuildStageLabel": "Beginnen bei",
+      "rebuildAction": "Neu aufbauen",
+      "rebuildRow": "{{repository}} neu aufbauen",
+      "proOnly": "Pro"
     },
     "status": {
       "queued": "In Warteschlange",
@@ -3458,7 +3473,11 @@
       "stats": "Statistik",
       "archive_sync": "Archiv-Sync",
       "history_index": "Verlaufsindex",
-      "history_merge": "Verlauf zusammenführen"
+      "history_merge": "Verlauf zusammenführen",
+      "script_execution": "Skript",
+      "availability_check": "Verfügbarkeitsprüfung",
+      "rclone_hydrate": "Spiegel-Hydrierung",
+      "package": "Paketinstallation"
     },
     "strip": {
       "backup": "Sicherung",

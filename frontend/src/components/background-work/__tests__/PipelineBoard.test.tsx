@@ -25,6 +25,10 @@ vi.mock('../../../hooks/useOperationEvents', () => ({
   useOperationEvents: vi.fn(),
 }))
 
+vi.mock('../../../hooks/usePlan', () => ({
+  usePlan: () => ({ plan: 'pro', isLoading: false, isPro: true, isFree: false, can: () => true }),
+}))
+
 vi.mock('../../shared/PlanGate', () => ({
   default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
@@ -152,8 +156,7 @@ describe('PipelineBoard', () => {
       expect.objectContaining({ trigger: ['reconcile'], limit: 1 })
     )
 
-    fireEvent.click(await screen.findByRole('button', { name: /rebuild/i }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: /^stats$/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /^rebuild$/i }))
     await waitFor(() => expect(archivesAPI.rebuild).toHaveBeenCalledWith(1, 'stats'))
   })
 

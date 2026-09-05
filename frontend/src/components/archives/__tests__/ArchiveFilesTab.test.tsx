@@ -147,7 +147,7 @@ describe('ArchiveFilesTab', () => {
       const root = renderTab()
       fireEvent.keyDown(root, { key: 'ArrowDown' })
       fireEvent.keyDown(root, { key: 'Enter' })
-      expect(screen.getByText('9.18 KB')).toBeInTheDocument()
+      expect(screen.getAllByText(/9\.18 KB/).length).toBeGreaterThanOrEqual(2)
       expect(screen.getByText('1 selected (9.18 KB)')).toBeInTheDocument()
     })
 

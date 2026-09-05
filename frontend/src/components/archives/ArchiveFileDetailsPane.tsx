@@ -1,5 +1,5 @@
-import { Box, Button, Divider, Stack, Typography } from '@mui/material'
-import { Download } from 'lucide-react'
+import { Box, Button, Stack, Typography } from '@mui/material'
+import { Download, File, Folder } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatBytes } from '../../utils/dateUtils'
 import FileHistoryPanel from './FileHistoryPanel'
@@ -18,8 +18,8 @@ interface ArchiveFileDetailsPaneProps {
 
 function Field({ label, value }: { label: string; value: string }) {
   return (
-    <Box sx={{ display: 'flex', gap: 1.5, minWidth: 0 }}>
-      <Typography variant="body2" sx={{ color: 'text.secondary', flexShrink: 0, width: 48 }}>
+    <Box sx={{ display: 'grid', gridTemplateColumns: '64px minmax(0, 1fr)', columnGap: 1.5 }}>
+      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
         {label}
       </Typography>
       <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
@@ -50,36 +50,53 @@ export default function ArchiveFileDetailsPane({
   }
 
   const isFile = selectedEntry.type === 'file'
+  const Icon = isFile ? File : Folder
 
   return (
     <Box>
-      <Stack
-        direction="row"
-        spacing={1}
-        sx={{ alignItems: 'flex-start', justifyContent: 'space-between', mb: 1.5 }}
-      >
-        <Typography variant="subtitle1" sx={{ fontWeight: 600, wordBreak: 'break-all' }}>
-          {selectedEntry.name}
-        </Typography>
-        {isFile && (
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<Download size={14} />}
-            onClick={onDownload}
-            sx={{ flexShrink: 0 }}
+      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'flex-start', mb: 2 }}>
+        <Box
+          sx={{
+            width: 36,
+            height: 36,
+            borderRadius: 1.5,
+            bgcolor: 'action.hover',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            color: 'text.secondary',
+          }}
+        >
+          <Icon size={18} />
+        </Box>
+        <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Typography
+            variant="subtitle1"
+            sx={{ fontWeight: 600, wordBreak: 'break-all', lineHeight: 1.35 }}
           >
-            {t('archives.files.download')}
-          </Button>
-        )}
+            {selectedEntry.name}
+          </Typography>
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+            {isFile ? t('archives.files.typeFile') : t('archives.files.typeDirectory')}
+            {isFile && selectedEntry.size != null ? ` · ${formatBytes(selectedEntry.size)}` : ''}
+          </Typography>
+        </Box>
       </Stack>
-      <Stack spacing={0.5} sx={{ mb: 2 }}>
+      <Stack spacing={0.75} sx={{ mb: 2 }}>
         <Field label={t('archives.files.path')} value={selectedPath} />
-        {isFile && selectedEntry.size != null && (
-          <Field label={t('archives.files.size')} value={formatBytes(selectedEntry.size)} />
-        )}
       </Stack>
-      <Divider sx={{ mb: 2 }} />
+      {isFile && (
+        <Button
+          variant="outlined"
+          size="small"
+          startIcon={<Download size={14} />}
+          onClick={onDownload}
+          sx={{ mb: 3 }}
+        >
+          {t('archives.files.download')}
+        </Button>
+      )}
       <Typography variant="subtitle2" sx={{ mb: 1 }}>
         {t('archives.files.history')}
       </Typography>

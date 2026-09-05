@@ -1,5 +1,7 @@
 import { useMemo } from 'react'
-import { Box, Button, List, ListItem, ListItemText, Typography } from '@mui/material'
+import { Box, Button, Typography, useTheme } from '@mui/material'
+import ChangeBadge from './ChangeBadge'
+import { changeColor } from './changeStyle'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import PlanGate from '../shared/PlanGate'
@@ -48,41 +50,72 @@ function FileHistoryPanelContent({ repositoryId, path, onRestoreEntry }: FileHis
     .filter((e) => e.change === 'added')
     .sort((a, b) => (a.start < b.start ? -1 : 1))[0]?.archive_id
 
+  const theme = useTheme()
+
   return (
     <Box>
+      {data && sortedEntries.length === 0 && (
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+          {t('archives.files.historyEmpty')}
+        </Typography>
+      )}
+      <Box>
+        {sortedEntries.map((entry) => {
+          const isFirst = entry.archive_id === firstAddedId
+          const change = isFirst ? 'added' : entry.change === 'summary' ? 'modified' : entry.change
+          const detail = isFirst
+            ? t('archives.files.firstSeen')
+            : entry.change === 'modified'
+              ? `${formatBytes(entry.size_before)} → ${formatBytes(entry.size_after)}`
+              : t(`archives.changes.${entry.change === 'summary' ? 'modified' : entry.change}`)
+          return (
+            <Box
+              key={entry.archive_id}
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: '20px minmax(0, 1fr) auto',
+                columnGap: 1.5,
+                alignItems: 'start',
+                py: 1.25,
+                borderTop: 1,
+                borderColor: 'divider',
+                '&:first-of-type': { borderTop: 0 },
+              }}
+            >
+              <Box sx={{ pt: 0.25 }}>
+                <ChangeBadge change={change} size={18} />
+              </Box>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography
+                  variant="body2"
+                  noWrap
+                  title={entry.archive_name}
+                  sx={{ fontWeight: 600 }}
+                >
+                  {entry.archive_name}
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                  {parseBackendDate(entry.start).toLocaleString()}
+                  <Box
+                    component="span"
+                    sx={{ color: changeColor(theme, change), ml: 1, fontWeight: 600 }}
+                  >
+                    {detail}
+                  </Box>
+                </Typography>
+              </Box>
+              <Button size="small" onClick={() => onRestoreEntry(entry)} sx={{ mt: -0.5 }}>
+                {t('archives.files.restoreThis')}
+              </Button>
+            </Box>
+          )
+        })}
+      </Box>
       {notPresentOlderCount > 0 && (
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1 }}>
           {t('archives.files.notPresent', { count: notPresentOlderCount })}
         </Typography>
       )}
-      <List dense>
-        {sortedEntries.map((entry) => (
-          <ListItem
-            key={entry.archive_id}
-            secondaryAction={
-              <Button size="small" onClick={() => onRestoreEntry(entry)}>
-                {t('archives.files.restoreThis')}
-              </Button>
-            }
-          >
-            <ListItemText
-              primary={entry.archive_name}
-              secondary={
-                <>
-                  {parseBackendDate(entry.start).toLocaleString()} ·{' '}
-                  {entry.archive_id === firstAddedId
-                    ? t('archives.files.firstSeen')
-                    : entry.change === 'modified'
-                      ? `${formatBytes(entry.size_before)} → ${formatBytes(entry.size_after)}`
-                      : t(
-                          `archives.changes.${entry.change === 'summary' ? 'modified' : entry.change}`
-                        )}
-                </>
-              }
-            />
-          </ListItem>
-        ))}
-      </List>
     </Box>
   )
 }

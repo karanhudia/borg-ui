@@ -214,8 +214,14 @@ export default function RepositoryRow({ track, onOpen, onRetry, onRebuild }: Rep
       {track.stages.map((stage) => (
         <StageSegment key={stage.key} stage={stage} now={now} onRetry={onRetry} />
       ))}
-      <Box sx={{ justifySelf: { xs: 'start', md: 'end' } }}>
-        {track.repositoryId != null && <RebuildMenu onSelect={onRebuild} />}
+      <Box sx={{ justifySelf: { xs: 'start', md: 'end' }, mt: -0.5 }}>
+        {track.repositoryId != null && (
+          <RebuildMenu
+            variant="icon"
+            label={t('operations.background.rebuildRow', { repository: track.repositoryName })}
+            onSelect={onRebuild}
+          />
+        )}
       </Box>
     </Box>
   )

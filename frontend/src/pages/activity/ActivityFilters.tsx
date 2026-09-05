@@ -1,18 +1,9 @@
 import { useTranslation } from 'react-i18next'
 import { Box, MenuItem, Select } from '@mui/material'
 import CategoryFilter from '../../components/activity/CategoryFilter'
-import RichSelect from '../../components/shared/RichSelect'
-import type { OperationCategory, OperationTrigger } from '../../types/operations'
-
-const TRIGGERS: OperationTrigger[] = [
-  'manual',
-  'schedule',
-  'plan',
-  'import',
-  'followup',
-  'reconcile',
-  'retry',
-]
+import TriggerSelect from '../../components/activity/TriggerSelect'
+import { FILTER_SELECT_SX } from '../../components/activity/filterSelectSx'
+import type { OperationCategory } from '../../types/operations'
 
 interface ActivityFiltersProps {
   typeFilter: string
@@ -37,14 +28,6 @@ export function ActivityFilters({
 }: ActivityFiltersProps) {
   const { t } = useTranslation()
 
-  const triggerOptions = [
-    { value: 'all', primary: t('activity.allTriggers') },
-    ...TRIGGERS.map((trigger) => ({
-      value: trigger,
-      primary: t(`activity.triggers.${trigger}`),
-    })),
-  ]
-
   return (
     <Box sx={{ mb: 3, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center' }}>
@@ -53,7 +36,7 @@ export function ActivityFilters({
           value={typeFilter}
           onChange={(event) => onTypeFilterChange(event.target.value)}
           inputProps={{ 'aria-label': t('activity.filters.type') }}
-          sx={{ minWidth: 160, fontSize: '0.8rem', fontWeight: 600, borderRadius: 1.5 }}
+          sx={FILTER_SELECT_SX}
         >
           <MenuItem value="all">{t('activity.filters.allTypes')}</MenuItem>
           <MenuItem value="backup">{t('activity.filters.types.backup')}</MenuItem>
@@ -78,7 +61,7 @@ export function ActivityFilters({
           value={statusFilter}
           onChange={(event) => onStatusFilterChange(event.target.value)}
           inputProps={{ 'aria-label': t('activity.filters.status') }}
-          sx={{ minWidth: 210, fontSize: '0.8rem', fontWeight: 600, borderRadius: 1.5 }}
+          sx={{ ...FILTER_SELECT_SX, minWidth: 200 }}
         >
           <MenuItem value="all">{t('activity.filters.allStatus')}</MenuItem>
           <MenuItem value="completed">{t('activity.filters.statuses.completed')}</MenuItem>
@@ -91,22 +74,14 @@ export function ActivityFilters({
           <MenuItem value="pending">{t('activity.filters.statuses.pending')}</MenuItem>
           <MenuItem value="skipped">{t('activity.filters.statuses.skipped')}</MenuItem>
         </Select>
+
+        <TriggerSelect value={triggerFilter} onChange={(value) => onTriggerFilterChange?.(value)} />
       </Box>
 
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'flex-end' }}>
-        <CategoryFilter
-          value={categoryFilter}
-          onChange={(categories) => onCategoryFilterChange?.(categories)}
-        />
-        <Box sx={{ minWidth: 180 }}>
-          <RichSelect
-            value={triggerFilter}
-            onChange={(value) => onTriggerFilterChange?.(value)}
-            options={triggerOptions}
-            label={t('activity.filterTrigger')}
-          />
-        </Box>
-      </Box>
+      <CategoryFilter
+        value={categoryFilter}
+        onChange={(categories) => onCategoryFilterChange?.(categories)}
+      />
     </Box>
   )
 }

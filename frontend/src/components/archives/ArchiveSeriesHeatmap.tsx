@@ -17,7 +17,7 @@ interface ArchiveSeriesHeatmapProps {
 export const CELL = 10
 export const GAP = 2
 const WEEK_WIDTH = CELL + GAP
-const LABEL_WIDTH = 150
+const LABEL_WIDTH = 200
 const WEEKDAY_WIDTH = 18
 const WEEKS_BY_DEFAULT = 52
 const MAX_COUNT_STEP = 4
@@ -132,15 +132,19 @@ function SeriesBand({
     <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
       <Typography
         variant="body2"
-        noWrap
         title={series.series}
         sx={{
           width: LABEL_WIDTH,
           flexShrink: 0,
-          pr: 1.5,
+          pr: 2,
           fontWeight: 600,
           lineHeight: 1.3,
           mt: '-2px',
+          display: '-webkit-box',
+          WebkitLineClamp: 3,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden',
+          wordBreak: 'break-word',
           position: 'sticky',
           left: 0,
           bgcolor: 'background.paper',
@@ -206,7 +210,7 @@ function SeriesBand({
                 bgcolor: hasArchives
                   ? alpha(theme.palette.primary.main, countScale(count))
                   : alpha(theme.palette.text.primary, 0.06),
-                border: isMissed ? `1px dashed ${theme.palette.error.main}` : 'none',
+                border: isMissed ? `1px dashed ${alpha(theme.palette.error.main, 0.55)}` : 'none',
                 boxShadow: hasAnomalies ? `inset 0 0 0 2px ${theme.palette.warning.main}` : 'none',
                 '&:focus-visible': {
                   outline: `2px solid ${theme.palette.primary.main}`,

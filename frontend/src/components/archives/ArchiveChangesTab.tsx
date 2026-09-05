@@ -3,13 +3,12 @@ import {
   Alert,
   Box,
   Button,
-  Chip,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableRow,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
+  alpha,
+  useTheme,
 } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
@@ -17,9 +16,10 @@ import RichSelect from '../shared/RichSelect'
 import PlanGate from '../shared/PlanGate'
 import { usePlan } from '../../hooks/usePlan'
 import { archivesAPI } from '../../services/api'
-import { formatBytes } from '../../utils/dateUtils'
-import type { ArchiveDetailResponse, ChangeType } from '../../types/archives'
+import { CHANGE_GLYPH, changeColor } from './changeStyle'
+import ChangeRowLine from './ChangeRowLine'
 import ArchiveChangesPreview from './ArchiveChangesPreview'
+import type { ArchiveDetailResponse, ChangeType } from '../../types/archives'
 
 interface ArchiveChangesTabProps {
   repositoryId: number
@@ -31,6 +31,7 @@ const PAGE_SIZE = 200
 
 function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabProps) {
   const { t } = useTranslation()
+  const theme = useTheme()
   const [compareTo, setCompareTo] = useState<number | null>(archive.predecessor_id)
   const [activeFilters, setActiveFilters] = useState<ChangeType[]>([])
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
@@ -61,20 +62,19 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
         .then((res) => res.data),
   })
 
-  const toggleFilter = (type: ChangeType) => {
-    setActiveFilters((prev) =>
-      prev.includes(type) ? prev.filter((f) => f !== type) : [...prev, type]
-    )
-  }
-
   const historyState = changes?.history_state ?? archive.history_state
   const rows = changes?.changes ?? []
   const visibleRows = rows.slice(0, visibleCount)
+  const totals = changes?.totals
 
   return (
     <Box>
-      <Stack direction="row" spacing={2} sx={{ mb: 2, alignItems: 'center', flexWrap: 'wrap' }}>
-        <Box sx={{ minWidth: 240 }}>
+      <Stack
+        direction={{ xs: 'column', md: 'row' }}
+        spacing={2}
+        sx={{ mb: 2, alignItems: { md: 'center' } }}
+      >
+        <Box sx={{ width: { xs: '100%', md: 420 } }}>
           <RichSelect
             label={t('archives.changes.compareWith')}
             value={compareTo !== null ? String(compareTo) : ''}
@@ -82,16 +82,49 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
             options={compareOptions}
           />
         </Box>
-        <Stack direction="row" spacing={1}>
-          {CHANGE_TYPES.map((type) => (
-            <Chip
-              key={type}
-              label={t(`archives.changes.${type}`)}
-              color={activeFilters.includes(type) ? 'primary' : 'default'}
-              onClick={() => toggleFilter(type)}
-            />
-          ))}
-        </Stack>
+        <ToggleButtonGroup
+          size="small"
+          value={activeFilters}
+          onChange={(_event, next: ChangeType[]) => setActiveFilters(next)}
+          aria-label={t('archives.changes.filterLabel')}
+          sx={{ bgcolor: 'background.paper', height: 40, alignSelf: { md: 'center' } }}
+        >
+          {CHANGE_TYPES.map((type) => {
+            const color = changeColor(theme, type)
+            const count = totals?.[type]
+            return (
+              <ToggleButton
+                key={type}
+                value={type}
+                aria-label={t(`archives.changes.${type}`)}
+                sx={{
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  fontSize: '0.8125rem',
+                  px: 1.5,
+                  gap: 0.75,
+                  color: 'text.secondary',
+                  '&:hover': { bgcolor: alpha(color, 0.06), color },
+                  '&.Mui-selected': {
+                    color,
+                    bgcolor: alpha(color, 0.12),
+                    '&:hover': { bgcolor: alpha(color, 0.18) },
+                  },
+                }}
+              >
+                <Box component="span" sx={{ color, fontFamily: 'ui-monospace, monospace' }}>
+                  {CHANGE_GLYPH[type]}
+                </Box>
+                {t(`archives.changes.${type}`)}
+                {count != null && (
+                  <Box component="span" sx={{ color: 'text.secondary', fontWeight: 500 }}>
+                    {count}
+                  </Box>
+                )}
+              </ToggleButton>
+            )
+          })}
+        </ToggleButtonGroup>
       </Stack>
 
       {changes?.history_truncated && (
@@ -116,42 +149,30 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
       )}
 
       {!isLoading && historyState === 'indexed' && rows.length === 0 && (
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" color="text.secondary" sx={{ px: 1.5, py: 2 }}>
           {t('archives.changes.empty')}
         </Typography>
       )}
 
       {!isLoading && historyState === 'indexed' && rows.length > 0 && (
-        <>
-          <Table size="small">
-            <TableBody>
-              {visibleRows.map((row) => (
-                <TableRow key={row.path}>
-                  <TableCell>{row.path}</TableCell>
-                  <TableCell>
-                    {t(`archives.changes.${row.change === 'summary' ? 'modified' : row.change}`)}
-                  </TableCell>
-                  <TableCell>
-                    {row.change === 'summary' ? (
-                      t('archives.changes.summaryRow', { count: row.summary_count, path: row.path })
-                    ) : row.change === 'modified' ? (
-                      <>
-                        {formatBytes(row.size_before)} → {formatBytes(row.size_after)}
-                      </>
-                    ) : (
-                      formatBytes(row.size_after ?? row.size_before)
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+        <Box
+          sx={{
+            border: 1,
+            borderColor: 'divider',
+            borderRadius: 2,
+            bgcolor: 'background.paper',
+            py: 0.5,
+          }}
+        >
+          {visibleRows.map((row) => (
+            <ChangeRowLine key={row.path} row={row} />
+          ))}
           {rows.length > visibleCount && (
-            <Button onClick={() => setVisibleCount((c) => c + PAGE_SIZE)} sx={{ mt: 1 }}>
+            <Button onClick={() => setVisibleCount((c) => c + PAGE_SIZE)} sx={{ m: 1 }}>
               {t('archives.changes.showMore')}
             </Button>
           )}
-        </>
+        </Box>
       )}
     </Box>
   )

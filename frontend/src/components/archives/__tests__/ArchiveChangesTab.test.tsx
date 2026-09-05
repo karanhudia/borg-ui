@@ -110,13 +110,13 @@ describe('ArchiveChangesTab', () => {
 
   it('lists changes with their size transition', async () => {
     renderTab()
-    expect(await screen.findByText('home/karan/docs/invoices.xlsx')).toBeInTheDocument()
+    expect(await screen.findByTitle('home/karan/docs/invoices.xlsx')).toBeInTheDocument()
     expect(screen.getByText(/365\.\d+ KB.*→.*402\.\d+ KB/)).toBeInTheDocument()
   })
 
   it('filters to a single change type when its chip is toggled', async () => {
     renderTab()
-    await screen.findByText('home/karan/docs/invoices.xlsx')
+    await screen.findByTitle('home/karan/docs/invoices.xlsx')
     fireEvent.click(screen.getByRole('button', { name: /^added$/i }))
     await vi.waitFor(() => {
       expect(archivesAPI.getChanges).toHaveBeenCalledWith(
@@ -129,7 +129,7 @@ describe('ArchiveChangesTab', () => {
 
   it('re-requests changes against the chosen compare target', async () => {
     renderTab()
-    await screen.findByText('home/karan/docs/invoices.xlsx')
+    await screen.findByTitle('home/karan/docs/invoices.xlsx')
     const combo = screen.getByRole('combobox')
     fireEvent.mouseDown(combo)
     const listbox = await screen.findByRole('listbox')

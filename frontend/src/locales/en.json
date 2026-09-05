@@ -990,7 +990,8 @@
       "loadFailed": "This archive could not be loaded.",
       "restore": "Restore",
       "mount": "Mount",
-      "delete": "Delete"
+      "delete": "Delete",
+      "tabChangesLabel": "Changes"
     },
     "changes": {
       "compareWith": "Compare with",
@@ -1005,7 +1006,10 @@
       "skipped": "History indexing was skipped for this archive.",
       "rebuildLink": "Rebuild the history index",
       "empty": "No changes between these archives.",
-      "showMore": "Show more"
+      "showMore": "Show more",
+      "filterLabel": "Change type",
+      "delta": "{{sign}}{{size}}",
+      "summaryFolder": "Folder"
     },
     "files": {
       "size": "Size",
@@ -1025,7 +1029,11 @@
       "searchInArchive": "Search in this archive",
       "folderMetadata": "Folder",
       "noSelection": "Select a file or folder to see details.",
-      "path": "Path"
+      "path": "Path",
+      "historyEmpty": "No earlier archive contains this path.",
+      "type": "Type",
+      "typeFile": "File",
+      "typeDirectory": "Folder"
     }
   },
   "restore": {
@@ -2002,8 +2010,8 @@
       "logs": "Logs",
       "errorDetails": "Error details",
       "triggerSource": {
-        "plan": "plan: {{name}}",
-        "schedule": "schedule: {{name}}"
+        "plan": "Plan: {{name}}",
+        "schedule": "Schedule: {{name}}"
       }
     }
   },
@@ -3432,7 +3440,14 @@
       "lastReconcile": "The last reconcile ran {{ago}}.",
       "lastReconcileNever": "No reconcile has run yet.",
       "rebuildRepository": "Repository",
-      "rebuildStarted": "Rebuild started for {{repository}}."
+      "rebuildStarted": "Rebuild started for {{repository}}.",
+      "subtitle": "What Borg UI is doing to your repositories right now.",
+      "rebuildTitle": "Rebuild derived data",
+      "rebuildDescription": "Recompute the stats, the archive list, or the history index for one repository. Later stages rerun automatically.",
+      "rebuildStageLabel": "Start from",
+      "rebuildAction": "Rebuild",
+      "rebuildRow": "Rebuild {{repository}}",
+      "proOnly": "Pro"
     },
     "status": {
       "queued": "Queued",
@@ -3458,7 +3473,11 @@
       "stats": "stats",
       "archive_sync": "archive sync",
       "history_index": "history index",
-      "history_merge": "history merge"
+      "history_merge": "history merge",
+      "script_execution": "script",
+      "availability_check": "availability check",
+      "rclone_hydrate": "mirror hydrate",
+      "package": "package install"
     },
     "strip": {
       "backup": "Backup",

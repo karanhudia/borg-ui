@@ -31,7 +31,7 @@ export const REBUILD_STAGE_FOR: Partial<Record<StageKey, RebuildStage>> = {
 // labels sit over the segments they describe.
 export const TRACK_GRID_COLUMNS = {
   xs: '1fr',
-  md: 'minmax(180px, 1.3fr) repeat(4, minmax(110px, 1fr)) 120px',
+  md: 'minmax(180px, 1.3fr) repeat(4, minmax(110px, 1fr)) 40px',
 }
 
 export type StageStatus = 'idle' | 'done' | 'running' | 'waiting' | 'failed'

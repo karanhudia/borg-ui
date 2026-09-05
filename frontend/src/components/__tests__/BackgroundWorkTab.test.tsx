@@ -29,6 +29,10 @@ vi.mock('../../services/api', () => ({
   repositoriesAPI: { getRepositories: vi.fn().mockResolvedValue({ data: { repositories: [] } }) },
 }))
 
+vi.mock('../../hooks/usePlan', () => ({
+  usePlan: () => ({ plan: 'pro', isLoading: false, isPro: true, isFree: false, can: () => true }),
+}))
+
 vi.mock('../../hooks/useOperationEvents', () => ({ useOperationEvents: vi.fn() }))
 
 vi.mock('../../hooks/useAuthorization', () => ({
@@ -73,6 +77,6 @@ describe('BackgroundWorkTab', () => {
   it('keeps no global rebuild menu in the header', async () => {
     renderTab()
     await screen.findByText(/nothing is running/i)
-    expect(screen.queryByRole('button', { name: /rebuild/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /rebuild…/i })).not.toBeInTheDocument()
   })
 })

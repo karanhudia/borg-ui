@@ -1,5 +1,5 @@
-import { Box, Chip, Stack, Table, TableBody, TableCell, TableRow, Typography } from '@mui/material'
-import { formatBytes } from '../../utils/dateUtils'
+import { Box } from '@mui/material'
+import ChangeRowLine from './ChangeRowLine'
 import type { ChangeRow } from '../../types/archives'
 
 const FIXTURE_ROWS: ChangeRow[] = [
@@ -61,29 +61,10 @@ const FIXTURE_ROWS: ChangeRow[] = [
 
 export default function ArchiveChangesPreview() {
   return (
-    <Box>
-      <Stack direction="row" spacing={1} sx={{ mb: 1.5 }}>
-        <Chip size="small" label="Added" />
-        <Chip size="small" label="Removed" />
-        <Chip size="small" label="Modified" />
-      </Stack>
-      <Table size="small">
-        <TableBody>
-          {FIXTURE_ROWS.map((row) => (
-            <TableRow key={row.path}>
-              <TableCell>{row.path}</TableCell>
-              <TableCell>{row.change}</TableCell>
-              <TableCell>
-                {row.change === 'modified' && (
-                  <Typography variant="body2">
-                    {formatBytes(row.size_before)} → {formatBytes(row.size_after)}
-                  </Typography>
-                )}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+    <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 2, py: 0.5 }}>
+      {FIXTURE_ROWS.map((row) => (
+        <ChangeRowLine key={row.path} row={row} />
+      ))}
     </Box>
   )
 }

@@ -21,24 +21,14 @@ import CategoryFilter from '../../components/activity/CategoryFilter'
 import RunChainRow from '../../components/activity/RunChainRow'
 import RunStatusIcon from '../../components/activity/RunStatusIcon'
 import CategoryToken from '../../components/CategoryToken'
-import RichSelect from '../../components/shared/RichSelect'
+import TriggerSelect from '../../components/activity/TriggerSelect'
 import LogViewerDialog from '../../components/LogViewerDialog'
 import ErrorDetailsDialog from '../../components/ErrorDetailsDialog'
 import EmptyStateCard from '../../components/EmptyStateCard'
 import { formatDurationSeconds, parseBackendDate } from '../../utils/dateUtils'
 import type { ActivityItem } from '../Activity'
-import type { OperationCategory, OperationTrigger } from '../../types/operations'
+import type { OperationCategory } from '../../types/operations'
 import type { Repository } from '@/types'
-
-const TRIGGERS: OperationTrigger[] = [
-  'manual',
-  'schedule',
-  'plan',
-  'import',
-  'followup',
-  'reconcile',
-  'retry',
-]
 
 interface RepositoryOperationsViewProps {
   repositoryId: number
@@ -96,7 +86,7 @@ function RunRow({
         display: 'grid',
         gridTemplateColumns: {
           xs: 'auto auto minmax(0, 1fr) auto',
-          md: '52px 20px minmax(180px, 1fr) minmax(0, 1.2fr) 90px 72px',
+          md: '76px 20px minmax(180px, 1fr) minmax(0, 1.2fr) 90px 72px',
         },
         columnGap: 1.5,
         alignItems: 'start',
@@ -108,6 +98,7 @@ function RunRow({
     >
       <Typography
         variant="body2"
+        noWrap
         sx={{ color: 'text.secondary', fontVariantNumeric: 'tabular-nums', pt: 0.25 }}
       >
         {time ? time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
@@ -218,14 +209,28 @@ export default function RepositoryOperationsView({ repositoryId }: RepositoryOpe
       if (categoryFilter.length > 0) params.category = categoryFilter
       if (triggerFilter !== 'all') params.trigger = [triggerFilter]
       const response = await activityAPI.list(params)
-      return (response.data as ActivityItem[]).filter((item) => item.repository_id === repositoryId)
+      return response.data as ActivityItem[]
     },
     refetchInterval: 3000,
   })
 
+  // Legacy job rows (backup, check, prune) carry the repository path and
+  // name but no id, so match on any of the three.
+  const runs = useMemo(
+    () =>
+      (activities ?? []).filter(
+        (item) =>
+          item.repository_id === repositoryId ||
+          (repository != null &&
+            ((item.repository_path != null && item.repository_path === repository.path) ||
+              item.repository === repository.name))
+      ),
+    [activities, repository, repositoryId]
+  )
+
   const groups = useMemo(() => {
     const byDay = new Map<string, { date: Date | null; items: ActivityItem[] }>()
-    for (const item of activities ?? []) {
+    for (const item of runs) {
       const date = runTime(item)
       const key = dayKey(date)
       const group = byDay.get(key) ?? { date, items: [] }
@@ -233,7 +238,7 @@ export default function RepositoryOperationsView({ repositoryId }: RepositoryOpe
       byDay.set(key, group)
     }
     return [...byDay.values()].sort((a, b) => (b.date?.getTime() ?? 0) - (a.date?.getTime() ?? 0))
-  }, [activities])
+  }, [runs])
 
   const dayLabel = (date: Date | null) => {
     if (!date) return ''
@@ -241,11 +246,6 @@ export default function RepositoryOperationsView({ repositoryId }: RepositoryOpe
     if (isYesterday(date)) return t('activity.repositoryView.yesterday')
     return date.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' })
   }
-
-  const triggerOptions = [
-    { value: 'all', primary: t('activity.allTriggers') },
-    ...TRIGGERS.map((trigger) => ({ value: trigger, primary: t(`activity.triggers.${trigger}`) })),
-  ]
 
   return (
     <Box>
@@ -283,19 +283,12 @@ export default function RepositoryOperationsView({ repositoryId }: RepositoryOpe
 
       <Stack
         direction="row"
-        spacing={2}
+        spacing={1.5}
         useFlexGap
-        sx={{ flexWrap: 'wrap', alignItems: 'flex-end', mb: 3 }}
+        sx={{ flexWrap: 'wrap', alignItems: 'center', mb: 3 }}
       >
         <CategoryFilter value={categoryFilter} onChange={setCategoryFilter} />
-        <Box sx={{ minWidth: 180 }}>
-          <RichSelect
-            value={triggerFilter}
-            onChange={setTriggerFilter}
-            options={triggerOptions}
-            label={t('activity.filterTrigger')}
-          />
-        </Box>
+        <TriggerSelect value={triggerFilter} onChange={setTriggerFilter} />
       </Stack>
 
       {isError ? (
