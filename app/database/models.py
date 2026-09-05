@@ -15,14 +15,12 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.orm import relationship
-from datetime import datetime, timezone
 from app.database.database import Base
 from app.utils.schedule_time import get_container_timezone
 
 
-# Helper function for timezone-aware UTC timestamps
-def utc_now():
-    return datetime.now(timezone.utc)
+# Canonical naive-UTC "now" for column defaults (see its docstring).
+from app.utils.datetime_utils import utc_now  # noqa: E402,F401
 
 
 class User(Base):
