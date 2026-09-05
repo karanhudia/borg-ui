@@ -1,22 +1,38 @@
 {
-  "generatedAt": "2026-09-05T03:09:14.084Z",
+  "generatedAt": "2026-09-05T03:33:50.793Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #905 visual report",
-    "commitSha": "8ae9156eeb05",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/33940816318"
+    "commitSha": "01f3425888a7",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/33941533392"
   },
   "totals": {
     "baseline": 510,
-    "actual": 528,
+    "actual": 532,
     "compared": 510,
     "changed": 0,
-    "added": 18,
+    "added": 22,
     "removed": 0,
     "unchanged": 510
   },
   "changed": [],
   "added": [
+    {
+      "fileName": "components-licensingtab--enterprise-no-upgrade-link--mobile.png",
+      "actualPath": "images/actual/components-licensingtab--enterprise-no-upgrade-link--mobile.png"
+    },
+    {
+      "fileName": "components-licensingtab--enterprise-no-upgrade-link.png",
+      "actualPath": "images/actual/components-licensingtab--enterprise-no-upgrade-link.png"
+    },
+    {
+      "fileName": "components-licensingtab--pro-with-upgrade-link--mobile.png",
+      "actualPath": "images/actual/components-licensingtab--pro-with-upgrade-link--mobile.png"
+    },
+    {
+      "fileName": "components-licensingtab--pro-with-upgrade-link.png",
+      "actualPath": "images/actual/components-licensingtab--pro-with-upgrade-link.png"
+    },
     {
       "fileName": "components-planbadge--all-states--mobile.png",
       "actualPath": "images/actual/components-planbadge--all-states--mobile.png"
