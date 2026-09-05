@@ -482,12 +482,23 @@ export default function ArchivePathSelector({
                         sx={{
                           py: embedded ? 1 : undefined,
                           px: embedded ? 2 : undefined,
-                          borderBottom: embedded ? '1px solid' : undefined,
-                          borderBottomColor: embedded ? 'divider' : undefined,
-                          '.MuiListItem-root:last-of-type &': { borderBottom: 0 },
-                          border: '1px solid',
-                          borderColor: (theme) =>
-                            managedCanary ? alpha(theme.palette.info.main, 0.25) : 'transparent',
+                          // Embedded rows are separated by a hairline and never
+                          // outlined; the panel around the list owns the frame.
+                          ...(embedded
+                            ? {
+                                border: 0,
+                                borderRadius: 0,
+                                borderBottom: '1px solid',
+                                borderBottomColor: 'divider',
+                                '.MuiListItem-root:last-of-type &': { borderBottom: 0 },
+                              }
+                            : {
+                                border: '1px solid',
+                                borderColor: (theme: Theme) =>
+                                  managedCanary
+                                    ? alpha(theme.palette.info.main, 0.25)
+                                    : 'transparent',
+                              }),
                           bgcolor: (theme) =>
                             managedCanary ? alpha(theme.palette.info.main, 0.05) : 'transparent',
                           cursor:
