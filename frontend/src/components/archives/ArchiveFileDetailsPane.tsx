@@ -1,7 +1,8 @@
-import { Box, Button, Stack, Typography } from '@mui/material'
-import { Download, File, Folder } from 'lucide-react'
+import { Box, Button, Stack, Typography, alpha, useTheme } from '@mui/material'
+import { Download, MousePointerClick } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatBytes } from '../../utils/dateUtils'
+import FileTypeIcon from '../FileTypeIcon'
 import FileHistoryPanel from './FileHistoryPanel'
 import type { ArchiveItem } from '../ArchivePathSelector'
 import type { HistoryEntry } from '../../types/archives'
@@ -16,16 +17,14 @@ interface ArchiveFileDetailsPaneProps {
   onDownload: () => void
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+function SectionTitle({ children }: { children: string }) {
   return (
-    <Box sx={{ display: 'grid', gridTemplateColumns: '64px minmax(0, 1fr)', columnGap: 1.5 }}>
-      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-        {label}
-      </Typography>
-      <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
-        {value}
-      </Typography>
-    </Box>
+    <Typography
+      variant="caption"
+      sx={{ display: 'block', fontWeight: 600, color: 'text.secondary', mb: 1 }}
+    >
+      {children}
+    </Typography>
   )
 }
 
@@ -37,12 +36,41 @@ export default function ArchiveFileDetailsPane({
   onDownload,
 }: ArchiveFileDetailsPaneProps) {
   const { t } = useTranslation()
+  const theme = useTheme()
 
   if (!selectedPath || !selectedEntry) {
     return (
-      <Box sx={{ py: 1 }}>
-        <Typography variant="subtitle2">{t('archives.files.folderMetadata')}</Typography>
-        <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          textAlign: 'center',
+          minHeight: 260,
+          p: 3,
+          color: 'text.secondary',
+        }}
+      >
+        <Box
+          sx={{
+            width: 44,
+            height: 44,
+            borderRadius: '12px',
+            bgcolor: alpha(theme.palette.primary.main, 0.08),
+            color: 'primary.main',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            mb: 1.5,
+          }}
+        >
+          <MousePointerClick size={22} />
+        </Box>
+        <Typography variant="subtitle2" sx={{ color: 'text.primary' }}>
+          {t('archives.files.folderMetadata')}
+        </Typography>
+        <Typography variant="body2" sx={{ mt: 0.5, maxWidth: 260 }}>
           {t('archives.files.noSelection')}
         </Typography>
       </Box>
@@ -50,26 +78,24 @@ export default function ArchiveFileDetailsPane({
   }
 
   const isFile = selectedEntry.type === 'file'
-  const Icon = isFile ? File : Folder
 
   return (
     <Box>
-      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'flex-start', mb: 2 }}>
-        <Box
-          sx={{
-            width: 36,
-            height: 36,
-            borderRadius: 1.5,
-            bgcolor: 'action.hover',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-            color: 'text.secondary',
-          }}
-        >
-          <Icon size={18} />
-        </Box>
+      <Box
+        sx={{
+          display: 'flex',
+          gap: 1.5,
+          alignItems: 'flex-start',
+          px: 2.5,
+          py: 2,
+          borderBottom: 1,
+          borderColor: 'divider',
+          bgcolor: alpha(theme.palette.text.primary, 0.025),
+          borderTopLeftRadius: 'inherit',
+          borderTopRightRadius: 'inherit',
+        }}
+      >
+        <FileTypeIcon name={selectedEntry.name} type={selectedEntry.type} size={40} />
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Typography
             variant="subtitle1"
@@ -82,29 +108,46 @@ export default function ArchiveFileDetailsPane({
             {isFile && selectedEntry.size != null ? ` · ${formatBytes(selectedEntry.size)}` : ''}
           </Typography>
         </Box>
-      </Stack>
-      <Stack spacing={0.75} sx={{ mb: 2 }}>
-        <Field label={t('archives.files.path')} value={selectedPath} />
-      </Stack>
-      {isFile && (
-        <Button
-          variant="outlined"
-          size="small"
-          startIcon={<Download size={14} />}
-          onClick={onDownload}
-          sx={{ mb: 3 }}
+      </Box>
+
+      <Box sx={{ px: 2.5, py: 2 }}>
+        <SectionTitle>{t('archives.files.path')}</SectionTitle>
+        <Typography
+          variant="body2"
+          sx={{
+            wordBreak: 'break-all',
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+            fontSize: '0.8rem',
+            px: 1.25,
+            py: 1,
+            borderRadius: 1.5,
+            bgcolor: alpha(theme.palette.text.primary, 0.04),
+          }}
         >
-          {t('archives.files.download')}
-        </Button>
-      )}
-      <Typography variant="subtitle2" sx={{ mb: 1 }}>
-        {t('archives.files.history')}
-      </Typography>
-      <FileHistoryPanel
-        repositoryId={repositoryId}
-        path={selectedPath}
-        onRestoreEntry={onRestore}
-      />
+          {selectedPath}
+        </Typography>
+        {isFile && (
+          <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<Download size={14} />}
+              onClick={onDownload}
+            >
+              {t('archives.files.download')}
+            </Button>
+          </Stack>
+        )}
+      </Box>
+
+      <Box sx={{ px: 2.5, pb: 2, pt: 1, borderTop: 1, borderColor: 'divider' }}>
+        <SectionTitle>{t('archives.files.history')}</SectionTitle>
+        <FileHistoryPanel
+          repositoryId={repositoryId}
+          path={selectedPath}
+          onRestoreEntry={onRestore}
+        />
+      </Box>
     </Box>
   )
 }

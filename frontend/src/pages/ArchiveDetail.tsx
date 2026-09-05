@@ -8,14 +8,17 @@ import {
   Box,
   Breadcrumbs,
   Button,
+  Chip,
   Link,
   Stack,
   Tab,
   Tabs,
   Typography,
+  alpha,
   useTheme,
 } from '@mui/material'
-import { HardDrive, RotateCcw, Trash2 } from 'lucide-react'
+import { Archive as ArchiveIcon, HardDrive, RotateCcw, Trash2 } from 'lucide-react'
+import { formatBytes, formatDurationSeconds } from '../utils/dateUtils'
 import { changeColor } from '../components/archives/changeStyle'
 import { archivesAPI, repositoriesAPI, mountsAPI, restoreAPI } from '../services/api'
 import { BorgApiClient } from '../services/borgApi'
@@ -259,22 +262,105 @@ export default function ArchiveDetail() {
         <Typography color="text.primary">{repository?.name || repositoryId}</Typography>
       </Breadcrumbs>
 
-      <Stack
-        direction={{ xs: 'column', md: 'row' }}
-        spacing={2}
-        sx={{ mb: 3, alignItems: { md: 'flex-start' }, justifyContent: 'space-between' }}
+      <Box
+        sx={{
+          border: 1,
+          borderColor: 'divider',
+          borderRadius: 2,
+          bgcolor: 'background.paper',
+          p: 2.5,
+          mb: 3,
+          display: 'flex',
+          flexDirection: { xs: 'column', md: 'row' },
+          gap: 2,
+          alignItems: { md: 'flex-start' },
+          justifyContent: 'space-between',
+        }}
       >
-        <Box sx={{ minWidth: 0 }}>
-          <Typography
-            variant="h5"
-            sx={{ fontWeight: 700, wordBreak: 'break-word', lineHeight: 1.3 }}
+        <Stack direction="row" spacing={2} sx={{ minWidth: 0, alignItems: 'flex-start' }}>
+          <Box
+            sx={{
+              width: 48,
+              height: 48,
+              borderRadius: '14px',
+              bgcolor: alpha(theme.palette.primary.main, 0.1),
+              color: 'primary.main',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
           >
-            {archive.name}
-          </Typography>
-          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-            {parseBackendDate(archive.start).toLocaleString()}
-          </Typography>
-        </Box>
+            <ArchiveIcon size={24} />
+          </Box>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography
+              variant="h5"
+              sx={{ fontWeight: 700, wordBreak: 'break-word', lineHeight: 1.3 }}
+            >
+              {archive.name}
+            </Typography>
+            <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.25 }}>
+              {parseBackendDate(archive.start).toLocaleString()}
+            </Typography>
+            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', mt: 1.5 }}>
+              {[
+                { label: t('archives.detail.series'), value: archive.series, key: 'secondary' },
+                {
+                  label: t('archives.detail.files'),
+                  value: archive.nfiles?.toLocaleString() ?? null,
+                  key: 'primary',
+                },
+                {
+                  label: t('archives.detail.originalSize'),
+                  value: archive.original_size != null ? formatBytes(archive.original_size) : null,
+                  key: 'success',
+                },
+                {
+                  label: t('archives.detail.deduplicatedSize'),
+                  value:
+                    archive.deduplicated_size != null
+                      ? formatBytes(archive.deduplicated_size)
+                      : null,
+                  key: 'info',
+                },
+                {
+                  label: t('archives.detail.duration'),
+                  value:
+                    archive.duration_seconds != null
+                      ? formatDurationSeconds(archive.duration_seconds)
+                      : null,
+                  key: 'warning',
+                },
+              ]
+                .filter((pill) => pill.value)
+                .map((pill) => {
+                  const color = theme.palette[pill.key as 'primary'].main
+                  return (
+                    <Chip
+                      key={pill.label}
+                      size="small"
+                      label={
+                        <Box component="span" sx={{ display: 'inline-flex', gap: 0.75 }}>
+                          <Box component="span" sx={{ color: alpha(color, 0.85), fontWeight: 500 }}>
+                            {pill.label}
+                          </Box>
+                          <Box component="span" sx={{ fontWeight: 700, color }}>
+                            {pill.value}
+                          </Box>
+                        </Box>
+                      }
+                      sx={{
+                        bgcolor: alpha(color, theme.palette.mode === 'dark' ? 0.16 : 0.09),
+                        height: 26,
+                        '& .MuiChip-label': { px: 1.25 },
+                      }}
+                    />
+                  )
+                })}
+            </Stack>
+          </Box>
+        </Stack>
         <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
           <Button
             variant="contained"
@@ -303,7 +389,7 @@ export default function ArchiveDetail() {
             {t('archives.detail.delete')}
           </Button>
         </Stack>
-      </Stack>
+      </Box>
 
       <Tabs
         value={activeTab}

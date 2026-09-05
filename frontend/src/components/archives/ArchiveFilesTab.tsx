@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import { Box, Button, Stack, Typography, useMediaQuery, useTheme } from '@mui/material'
+import { Box, Button, Stack, Typography, alpha, useMediaQuery, useTheme } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import ArchivePathSelector, {
   type ArchiveBrowseState,
@@ -143,17 +143,25 @@ export default function ArchiveFilesTab({
     />
   )
 
+  const panelSx = {
+    border: 1,
+    borderColor: 'divider',
+    borderRadius: 2,
+    bgcolor: 'background.paper',
+    overflow: 'hidden',
+  } as const
+
   return (
     <Box onKeyDown={handleKeyDown}>
       <Box
         sx={{
-          display: 'flex',
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 3fr) minmax(300px, 2fr)' },
           gap: 3,
-          flexDirection: { xs: 'column', md: 'row' },
-          alignItems: 'stretch',
+          alignItems: 'start',
         }}
       >
-        <Box sx={{ flex: '1 1 60%', minWidth: 0 }}>
+        <Box sx={panelSx}>
           <ArchivePathSelector
             variant="embedded"
             repository={repository}
@@ -163,24 +171,12 @@ export default function ArchiveFilesTab({
             onBrowseStateChange={handleBrowseStateChange}
           />
         </Box>
-        {!isMobile && (
-          <Box
-            sx={{
-              flex: '1 1 40%',
-              minWidth: 0,
-              pl: 3,
-              borderLeft: 1,
-              borderColor: 'divider',
-            }}
-          >
-            {detailsPane}
-          </Box>
-        )}
+        {!isMobile && <Box sx={{ ...panelSx, position: 'sticky', top: 16 }}>{detailsPane}</Box>}
       </Box>
 
       {isMobile && (
         <ResponsiveDialog open={detailsOpenMobile} onClose={() => setDetailsOpenMobile(false)}>
-          <Box sx={{ p: 2 }}>{detailsPane}</Box>
+          <Box>{detailsPane}</Box>
         </ResponsiveDialog>
       )}
 
@@ -189,21 +185,24 @@ export default function ArchiveFilesTab({
           direction="row"
           spacing={2}
           sx={{
-            mt: 2,
-            pt: 2,
+            mt: 3,
+            px: 2.5,
+            py: 1.5,
             alignItems: 'center',
             justifyContent: 'space-between',
-            borderTop: 1,
-            borderColor: 'divider',
+            borderRadius: 2,
+            border: 1,
+            borderColor: (theme) => alpha(theme.palette.primary.main, 0.3),
+            bgcolor: (theme) => alpha(theme.palette.primary.main, 0.06),
           }}
         >
-          <Typography variant="body2">
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>
             {t('archives.files.selected', {
               count: selectedCount,
               size: formatBytes(selectedSize),
             })}
           </Typography>
-          <Button variant="contained" size="small" onClick={restoreSelection}>
+          <Button variant="contained" disableElevation onClick={restoreSelection}>
             {t('archives.files.restoreSelection')}
           </Button>
         </Stack>

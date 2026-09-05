@@ -16,21 +16,14 @@ import {
   ListItemText,
   Tooltip,
   Typography,
+  type Theme,
 } from '@mui/material'
-import {
-  CheckSquare,
-  ChevronRight,
-  File,
-  Folder,
-  Home,
-  MinusSquare,
-  ShieldCheck,
-  Square,
-} from 'lucide-react'
+import { CheckSquare, ChevronRight, Home, MinusSquare, ShieldCheck, Square } from 'lucide-react'
 import { BorgApiClient, type Repository } from '../services/borgApi/client'
 import type { Archive } from '../types'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import type { RestorePathMetadata } from '../utils/restorePaths'
+import FileTypeIcon from './FileTypeIcon'
 
 export interface ArchiveItem {
   name: string
@@ -255,7 +248,18 @@ export default function ArchivePathSelector({
           minHeight: 32,
           display: 'flex',
           alignItems: 'center',
-          mb: 2,
+          mb: embedded ? 0 : 2,
+          ...(embedded
+            ? {
+                px: 2,
+                py: 1.25,
+                borderBottom: '1px solid',
+                borderColor: 'divider',
+                bgcolor: (theme: Theme) => alpha(theme.palette.text.primary, 0.025),
+                borderTopLeftRadius: 'inherit',
+                borderTopRightRadius: 'inherit',
+              }
+            : {}),
         }}
       >
         <Breadcrumbs
@@ -476,6 +480,11 @@ export default function ArchivePathSelector({
                       <ListItemButton
                         onClick={() => handleItemClick(item)}
                         sx={{
+                          py: embedded ? 1 : undefined,
+                          px: embedded ? 2 : undefined,
+                          borderBottom: embedded ? '1px solid' : undefined,
+                          borderBottomColor: embedded ? 'divider' : undefined,
+                          '.MuiListItem-root:last-of-type &': { borderBottom: 0 },
                           border: '1px solid',
                           borderColor: (theme) =>
                             managedCanary ? alpha(theme.palette.info.main, 0.25) : 'transparent',
@@ -495,15 +504,26 @@ export default function ArchivePathSelector({
                           },
                         }}
                       >
-                        <ListItemIcon sx={{ minWidth: 36 }}>
+                        <ListItemIcon sx={{ minWidth: 44 }}>
                           {managedCanary ? (
                             <ShieldCheck size={20} />
-                          ) : item.type === 'directory' ? (
-                            <Folder size={20} />
-                          ) : isSelected(item.path) ? (
-                            <CheckSquare size={20} color="#1976d2" />
+                          ) : isSelected(item.path) && item.type !== 'directory' ? (
+                            <Box
+                              sx={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: '9px',
+                                bgcolor: 'primary.main',
+                                color: 'primary.contrastText',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              <CheckSquare size={18} />
+                            </Box>
                           ) : (
-                            <File size={20} />
+                            <FileTypeIcon name={item.name} type={item.type} />
                           )}
                         </ListItemIcon>
                         <ListItemText
