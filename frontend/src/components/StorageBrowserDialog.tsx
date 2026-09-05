@@ -44,6 +44,7 @@ interface StorageBrowserDialogProps {
   emptyRootTitle?: string
   emptyRootDescription?: string
   banner?: ReactNode
+  titleAction?: ReactNode
   maxWidth?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'
   showModifiedColumn?: boolean
   onClose: () => void
@@ -154,6 +155,7 @@ export default function StorageBrowserDialog({
   emptyRootTitle,
   emptyRootDescription,
   banner,
+  titleAction,
   maxWidth = 'md',
   showModifiedColumn = false,
   onClose,
@@ -226,6 +228,7 @@ export default function StorageBrowserDialog({
               </Typography>
             ) : null}
           </Box>
+          {titleAction ? <Box sx={{ ml: 'auto' }}>{titleAction}</Box> : null}
         </Stack>
       </DialogTitle>
       <DialogContent

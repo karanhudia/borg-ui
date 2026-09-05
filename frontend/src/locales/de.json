@@ -926,6 +926,7 @@
     "noRepositories": "Keine Repositories gefunden. Erstelle zuerst ein Repository.",
     "selectRepository": "Wähle ein Repository aus, um seine Archive anzuzeigen",
     "deletionStarted": "Archivlöschung im Hintergrund gestartet (Aufgaben-ID: {{id}})",
+    "openFullPage": "Volle Seite öffnen",
     "mountTimeout": "Einhänge-Timeout: Große Repositories benötigen möglicherweise mehr Zeit zum Einhängen.",
     "mountFailed": "Fehler beim Einhängen des Archivs: {{error}}",
     "restoreStarted": "Wiederherstellungsaufgabe gestartet! Überprüfe den Aktivitäts-Tab, um den Fortschritt zu überwachen.",
@@ -941,6 +942,10 @@
       "stale": "Synchronisierung ist veraltet",
       "never": "Noch nicht indiziert",
       "rebuild": "Neu aufbauen"
+    },
+    "view": {
+      "heatmap": "Heatmap",
+      "list": "Liste"
     },
     "heatmap": {
       "none": "Keine Archive",

@@ -926,6 +926,7 @@
     "noRepositories": "No repositories found. Create a repository first.",
     "selectRepository": "Select a repository to view its archives",
     "deletionStarted": "Archive deletion started in background (Job ID: {{id}})",
+    "openFullPage": "Open full page",
     "mountTimeout": "Mount timeout: Large repositories may need more time to mount.",
     "mountFailed": "Failed to mount archive: {{error}}",
     "restoreStarted": "Restore job started! Check the Activity tab to monitor progress.",
@@ -941,6 +942,10 @@
       "stale": "Sync is out of date",
       "never": "Not indexed yet",
       "rebuild": "Rebuild"
+    },
+    "view": {
+      "heatmap": "Heatmap",
+      "list": "List"
     },
     "heatmap": {
       "none": "No archives",

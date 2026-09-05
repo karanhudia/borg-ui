@@ -926,6 +926,7 @@
     "noRepositories": "Nessun repository trovato. Crea prima un repository.",
     "selectRepository": "Seleziona un repository per visualizzare i suoi archivi",
     "deletionStarted": "Eliminazione archivio avviata in background (ID Job: {{id}})",
+    "openFullPage": "Apri pagina completa",
     "mountTimeout": "Timeout mount: I repository di grandi dimensioni potrebbero richiedere più tempo per il mount.",
     "mountFailed": "Impossibile montare l'archivio: {{error}}",
     "restoreStarted": "Job di ripristino avviato! Controlla la scheda Attività per monitorare i progressi.",
@@ -941,6 +942,10 @@
       "stale": "La sincronizzazione non è aggiornata",
       "never": "Non ancora indicizzato",
       "rebuild": "Ricostruisci"
+    },
+    "view": {
+      "heatmap": "Mappa di calore",
+      "list": "Elenco"
     },
     "heatmap": {
       "none": "Nessun archivio",

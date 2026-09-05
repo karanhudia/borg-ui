@@ -926,6 +926,7 @@
     "noRepositories": "No se encontraron repositorios. Crea un repositorio primero.",
     "selectRepository": "Selecciona un repositorio para ver sus archivos",
     "deletionStarted": "Eliminación de archivo iniciada en segundo plano (ID de trabajo: {{id}})",
+    "openFullPage": "Abrir página completa",
     "mountTimeout": "Tiempo de espera de montaje: Los repositorios grandes pueden necesitar más tiempo para montarse.",
     "mountFailed": "Error al montar el archivo: {{error}}",
     "restoreStarted": "¡Trabajo de restauración iniciado! Comprueba la pestaña de Actividad para monitorizar el progreso.",
@@ -941,6 +942,10 @@
       "stale": "La sincronización está desactualizada",
       "never": "Aún no indexado",
       "rebuild": "Reconstruir"
+    },
+    "view": {
+      "heatmap": "Mapa de calor",
+      "list": "Lista"
     },
     "heatmap": {
       "none": "Sin archivos",
