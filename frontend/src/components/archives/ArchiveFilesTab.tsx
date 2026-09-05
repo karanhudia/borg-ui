@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { Box, Button, Stack, Typography, useMediaQuery, useTheme } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import ArchivePathSelector, {
@@ -12,13 +12,14 @@ import { downloadArchiveFile } from '../../utils/downloadArchiveFile'
 import { formatBytes } from '../../utils/dateUtils'
 import { getBorgVersion } from '../../utils/repoCapabilities'
 import type { ArchiveDetailResponse } from '../../types/archives'
+import type { RestorePathMetadata } from '../../utils/restorePaths'
 import type { Repository } from '@/types'
 
 interface ArchiveFilesTabProps {
   repositoryId: number
   repository: Repository
   archive: ArchiveDetailResponse
-  onRestorePaths?: (paths: string[]) => void
+  onRestorePaths?: (paths: string[], items: RestorePathMetadata[]) => void
 }
 
 export default function ArchiveFilesTab({
@@ -38,25 +39,61 @@ export default function ArchiveFilesTab({
   const [detailsOpenMobile, setDetailsOpenMobile] = useState(false)
   const [browseState, setBrowseState] = useState<ArchiveBrowseState | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
+  // Every item the browser has listed, by path. The selection callback only
+  // carries paths and types, so this is where a selected file's size and
+  // name come from once the user has moved to another folder.
+  const seenItems = useRef(new Map<string, ArchiveItem>())
+  // The subset of seen items that is currently selected, kept in state so
+  // the footer total and restore metadata render from it.
+  const [selectedEntries, setSelectedEntries] = useState<Map<string, ArchiveItem>>(new Map())
+
+  const handleBrowseStateChange = useCallback((state: ArchiveBrowseState) => {
+    for (const item of state.items) seenItems.current.set(item.path, item)
+    setBrowseState(state)
+  }, [])
 
   const handleSelectionChange = (partial: Partial<ArchivePathSelectionData>) => {
     const nextPaths = partial.selectedPaths ?? selection.selectedPaths
     const addedPath = nextPaths.find((p) => !selection.selectedPaths.includes(p))
     if (addedPath) {
       const meta = (partial.selectedItems ?? []).find((item) => item.path === addedPath)
-      setLastClicked({
-        name: addedPath.split('/').pop() ?? addedPath,
-        type: meta?.type ?? 'file',
-        path: addedPath,
-      })
+      const seen = seenItems.current.get(addedPath)
+      setLastClicked(
+        seen ?? {
+          name: addedPath.split('/').pop() ?? addedPath,
+          type: meta?.type ?? 'file',
+          path: addedPath,
+        }
+      )
       if (isMobile) setDetailsOpenMobile(true)
     }
+    const known = seenItems.current
+    setSelectedEntries(
+      new Map(
+        nextPaths.flatMap((path) => {
+          const item = known.get(path)
+          return item ? [[path, item] as const] : []
+        })
+      )
+    )
     setSelection((prev) => ({ ...prev, ...partial }))
   }
 
   const selectedCount = selection.selectedPaths.length
+  const selectedSize = selection.selectedPaths.reduce(
+    (sum, path) => sum + (selectedEntries.get(path)?.size ?? 0),
+    0
+  )
+  const selectedItems: RestorePathMetadata[] =
+    selection.selectedItems ??
+    selection.selectedPaths.map((path) => ({
+      path,
+      type: selectedEntries.get(path)?.type ?? 'file',
+    }))
 
   const archiveRef = getBorgVersion(repository) === 2 ? `aid:${archive.borg_id}` : archive.name
+
+  const restoreSelection = () => onRestorePaths?.(selection.selectedPaths, selectedItems)
 
   const isTypingTarget = (target: EventTarget | null) => {
     const el = target as HTMLElement | null
@@ -87,7 +124,7 @@ export default function ArchiveFilesTab({
       navigateTo(parts.join('/'))
       setActiveIndex(0)
     } else if (event.key === 'r' && selectedCount > 0) {
-      onRestorePaths?.(selection.selectedPaths)
+      restoreSelection()
     }
   }
 
@@ -96,7 +133,10 @@ export default function ArchiveFilesTab({
       repositoryId={repositoryId}
       selectedPath={lastClicked?.path ?? null}
       selectedEntry={lastClicked}
-      onRestore={() => onRestorePaths?.(lastClicked ? [lastClicked.path] : selection.selectedPaths)}
+      onRestore={() =>
+        lastClicked &&
+        onRestorePaths?.([lastClicked.path], [{ path: lastClicked.path, type: lastClicked.type }])
+      }
       onDownload={() =>
         lastClicked && downloadArchiveFile(repository, archiveRef, lastClicked.path)
       }
@@ -105,22 +145,42 @@ export default function ArchiveFilesTab({
 
   return (
     <Box onKeyDown={handleKeyDown}>
-      <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', md: 'row' } }}>
-        <Box sx={{ flex: '1 1 60%' }}>
+      <Box
+        sx={{
+          display: 'flex',
+          gap: 3,
+          flexDirection: { xs: 'column', md: 'row' },
+          alignItems: 'stretch',
+        }}
+      >
+        <Box sx={{ flex: '1 1 60%', minWidth: 0 }}>
           <ArchivePathSelector
+            variant="embedded"
             repository={repository}
             archive={{ id: archive.borg_id, name: archive.name }}
             data={selection}
             onChange={handleSelectionChange}
-            onBrowseStateChange={setBrowseState}
+            onBrowseStateChange={handleBrowseStateChange}
           />
         </Box>
-        {!isMobile && <Box sx={{ flex: '1 1 40%' }}>{detailsPane}</Box>}
+        {!isMobile && (
+          <Box
+            sx={{
+              flex: '1 1 40%',
+              minWidth: 0,
+              pl: 3,
+              borderLeft: 1,
+              borderColor: 'divider',
+            }}
+          >
+            {detailsPane}
+          </Box>
+        )}
       </Box>
 
       {isMobile && (
         <ResponsiveDialog open={detailsOpenMobile} onClose={() => setDetailsOpenMobile(false)}>
-          {detailsPane}
+          <Box sx={{ p: 2 }}>{detailsPane}</Box>
         </ResponsiveDialog>
       )}
 
@@ -130,20 +190,20 @@ export default function ArchiveFilesTab({
           spacing={2}
           sx={{
             mt: 2,
-            p: 2,
+            pt: 2,
             alignItems: 'center',
+            justifyContent: 'space-between',
             borderTop: 1,
             borderColor: 'divider',
           }}
         >
           <Typography variant="body2">
-            {t('archives.files.selected', { count: selectedCount, size: formatBytes(0) })}
+            {t('archives.files.selected', {
+              count: selectedCount,
+              size: formatBytes(selectedSize),
+            })}
           </Typography>
-          <Button
-            variant="contained"
-            size="small"
-            onClick={() => onRestorePaths?.(selection.selectedPaths)}
-          >
+          <Button variant="contained" size="small" onClick={restoreSelection}>
             {t('archives.files.restoreSelection')}
           </Button>
         </Stack>

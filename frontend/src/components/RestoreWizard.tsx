@@ -43,6 +43,10 @@ interface RestoreWizardProps {
   repository: Repository
   repositoryType: string
   onRestore: (data: RestoreData) => void
+  /** Paths chosen elsewhere (the archive Files tab). When given, the wizard
+   *  opens on the destination step with these already selected. */
+  initialSelectedPaths?: string[]
+  initialSelectedItems?: RestorePathMetadata[]
 }
 
 export interface RestoreData {
@@ -87,6 +91,8 @@ const RestoreWizard = ({
   repository,
   repositoryType,
   onRestore,
+  initialSelectedPaths,
+  initialSelectedItems,
 }: RestoreWizardProps) => {
   const { t } = useTranslation()
   const [activeStep, setActiveStep] = useState(0)
@@ -127,14 +133,21 @@ const RestoreWizard = ({
   useEffect(() => {
     if (open && !wasOpenRef.current) {
       // Dialog just opened (was closed before)
-      setActiveStep(0)
-      setWizardState(initialState)
+      const preselected = initialSelectedPaths ?? []
+      setActiveStep(preselected.length > 0 ? 1 : 0)
+      setWizardState({
+        ...initialState,
+        selectedPaths: preselected,
+        selectedItems:
+          initialSelectedItems ?? preselected.map((path) => ({ path, type: 'file' as const })),
+      })
       loadSshConnections()
       wasOpenRef.current = true
     } else if (!open && wasOpenRef.current) {
       // Dialog just closed
       wasOpenRef.current = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   // Force destinationType to 'local' for SSH repositories (SSH-to-SSH not supported)

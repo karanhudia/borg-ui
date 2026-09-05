@@ -14,6 +14,17 @@ vi.mock('react-router-dom', async (importOriginal) => {
   }
 })
 
+vi.mock('../../components/archives/ArchiveFilesTab', () => ({
+  default: ({ onRestorePaths }: { onRestorePaths?: (paths: string[]) => void }) => (
+    <button onClick={() => onRestorePaths?.(['home/karan/docs'])}>Restore selection</button>
+  ),
+}))
+
+vi.mock('../../components/RestoreWizard', () => ({
+  default: ({ open, initialSelectedPaths }: { open: boolean; initialSelectedPaths?: string[] }) =>
+    open ? <div>Wizard: {(initialSelectedPaths ?? []).join(',')}</div> : null,
+}))
+
 vi.mock('../../services/api', () => ({
   archivesAPI: {
     getArchive: vi.fn(),
@@ -52,7 +63,7 @@ const archive = {
 }
 
 function renderRoute(path: string) {
-  const parts = path.split('/').filter(Boolean)
+  const parts = path.split('?')[0].split('/').filter(Boolean)
   mockParams = { repositoryId: parts[1], archiveId: parts[2] }
   renderWithProviders(<ArchiveDetail />, { initialRoute: path })
 }
@@ -78,6 +89,13 @@ describe('ArchiveDetail', () => {
     renderRoute('/archives/7/12')
     fireEvent.click(await screen.findByRole('tab', { name: /info/i }))
     expect(await screen.findByText(/nightly/)).toBeInTheDocument()
+  })
+
+  it('opens the restore wizard with the Files tab selection', async () => {
+    vi.mocked(archivesAPI.getArchive).mockResolvedValue({ data: archive } as never)
+    renderRoute('/archives/7/12?tab=files')
+    fireEvent.click(await screen.findByRole('button', { name: /restore selection/i }))
+    expect(await screen.findByText('Wizard: home/karan/docs')).toBeInTheDocument()
   })
 
   it('reports an archive that cannot be loaded', async () => {

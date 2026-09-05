@@ -228,7 +228,22 @@ export default function StorageBrowserDialog({
               </Typography>
             ) : null}
           </Box>
-          {titleAction ? <Box sx={{ ml: 'auto' }}>{titleAction}</Box> : null}
+          {titleAction ? (
+            // Centre the action against the whole title block, whether the
+            // title is one line or carries a subtitle.
+            <Box
+              sx={{
+                ml: 'auto',
+                pl: 2,
+                flexShrink: 0,
+                display: 'flex',
+                alignItems: 'center',
+                alignSelf: 'center',
+              }}
+            >
+              {titleAction}
+            </Box>
+          ) : null}
         </Stack>
       </DialogTitle>
       <DialogContent

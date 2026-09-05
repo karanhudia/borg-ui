@@ -31,7 +31,7 @@ describe('ArchiveFileDetailsPane', () => {
         onDownload={vi.fn()}
       />
     )
-    expect(screen.getByText(/folder/i)).toBeInTheDocument()
+    expect(screen.getByText('Folder')).toBeInTheDocument()
   })
 
   it('shows file metadata when a file is selected', () => {
@@ -52,7 +52,24 @@ describe('ArchiveFileDetailsPane', () => {
     expect(screen.getByText('invoices.xlsx')).toBeInTheDocument()
   })
 
-  it('calls onRestore and onDownload', () => {
+  it('leaves the size line out when the size is unknown', () => {
+    renderWithProviders(
+      <ArchiveFileDetailsPane
+        repositoryId={7}
+        selectedPath="home/karan/docs/invoices.xlsx"
+        selectedEntry={{
+          name: 'invoices.xlsx',
+          type: 'file',
+          path: 'home/karan/docs/invoices.xlsx',
+        }}
+        onRestore={vi.fn()}
+        onDownload={vi.fn()}
+      />
+    )
+    expect(screen.queryByText(/0 B/)).not.toBeInTheDocument()
+  })
+
+  it('offers download but no duplicate restore', () => {
     const onRestore = vi.fn()
     const onDownload = vi.fn()
     renderWithProviders(
@@ -69,9 +86,9 @@ describe('ArchiveFileDetailsPane', () => {
         onDownload={onDownload}
       />
     )
-    fireEvent.click(screen.getByRole('button', { name: /^restore$/i }))
-    expect(onRestore).toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: /^restore$/i })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /^download$/i }))
     expect(onDownload).toHaveBeenCalled()
+    expect(onRestore).not.toHaveBeenCalled()
   })
 })

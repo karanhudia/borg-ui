@@ -16,6 +16,7 @@ import DeleteArchiveDialog from '../components/DeleteArchiveDialog'
 import MountArchiveDialog from '../components/MountArchiveDialog'
 import MountSuccessToast from '../components/MountSuccessToast'
 import RestoreWizard, { type RestoreData } from '../components/RestoreWizard'
+import type { RestorePathMetadata } from '../utils/restorePaths'
 import type { Archive, Repository } from '@/types'
 
 type DetailTab = 'changes' | 'files' | 'info'
@@ -47,6 +48,15 @@ export default function ArchiveDetail() {
   const [showMountDialog, setShowMountDialog] = useState(false)
   const [customMountPoint, setCustomMountPoint] = useState('')
   const [showRestoreWizard, setShowRestoreWizard] = useState(false)
+  const [restorePreselection, setRestorePreselection] = useState<{
+    paths: string[]
+    items: RestorePathMetadata[]
+  } | null>(null)
+
+  const openRestore = (paths?: string[], items?: RestorePathMetadata[]) => {
+    setRestorePreselection(paths && paths.length > 0 ? { paths, items: items ?? [] } : null)
+    setShowRestoreWizard(true)
+  }
 
   const {
     data: archive,
@@ -206,7 +216,7 @@ export default function ArchiveDetail() {
           </Typography>
         </Box>
         <Stack direction="row" spacing={1}>
-          <Button variant="outlined" onClick={() => setShowRestoreWizard(true)}>
+          <Button variant="outlined" onClick={() => openRestore()}>
             {t('archives.detail.restore')}
           </Button>
           <Button
@@ -230,13 +240,20 @@ export default function ArchiveDetail() {
         <Tab label={t('archives.detail.tabInfo')} value="info" />
       </Tabs>
 
-      {activeTab === 'changes' && (
-        <ArchiveChangesTab repositoryId={repositoryId} archive={archive} />
-      )}
-      {activeTab === 'files' && repository && (
-        <ArchiveFilesTab repositoryId={repositoryId} repository={repository} archive={archive} />
-      )}
-      {activeTab === 'info' && <ArchiveInfoTab archive={archive} />}
+      <Box sx={{ pt: 1 }}>
+        {activeTab === 'changes' && (
+          <ArchiveChangesTab repositoryId={repositoryId} archive={archive} />
+        )}
+        {activeTab === 'files' && repository && (
+          <ArchiveFilesTab
+            repositoryId={repositoryId}
+            repository={repository}
+            archive={archive}
+            onRestorePaths={(paths, items) => openRestore(paths, items)}
+          />
+        )}
+        {activeTab === 'info' && <ArchiveInfoTab archive={archive} />}
+      </Box>
 
       {repository && legacyArchive && (
         <>
@@ -263,6 +280,8 @@ export default function ArchiveDetail() {
             repository={repository}
             repositoryType={repository.repository_type || 'local'}
             onRestore={(data) => restoreMutation.mutate(data)}
+            initialSelectedPaths={restorePreselection?.paths}
+            initialSelectedItems={restorePreselection?.items}
           />
         </>
       )}

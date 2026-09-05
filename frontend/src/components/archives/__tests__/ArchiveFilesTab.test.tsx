@@ -26,7 +26,7 @@ vi.mock('../../../services/api', () => ({
 
 const browseItems = [
   { name: 'docs', type: 'directory' as const, path: 'home/karan/docs' },
-  { name: 'invoices.xlsx', type: 'file' as const, path: 'home/karan/invoices.xlsx' },
+  { name: 'invoices.xlsx', type: 'file' as const, path: 'home/karan/invoices.xlsx', size: 9400 },
 ]
 
 function MockArchivePathSelector({
@@ -117,7 +117,7 @@ describe('ArchiveFilesTab', () => {
       <ArchiveFilesTab repositoryId={7} repository={repository} archive={archive} />
     )
     expect(screen.getByTestId('archive-path-selector')).toBeInTheDocument()
-    expect(screen.getByText(/folder/i)).toBeInTheDocument()
+    expect(screen.getByText('Folder')).toBeInTheDocument()
   })
 
   it('shows the footer with the selection count once a file is selected', () => {
@@ -143,6 +143,33 @@ describe('ArchiveFilesTab', () => {
       expect(screen.getByText(/1 selected/i)).toBeInTheDocument()
     })
 
+    it('shows the real size of the selected file in the pane and the footer', () => {
+      const root = renderTab()
+      fireEvent.keyDown(root, { key: 'ArrowDown' })
+      fireEvent.keyDown(root, { key: 'Enter' })
+      expect(screen.getByText('9.18 KB')).toBeInTheDocument()
+      expect(screen.getByText('1 selected (9.18 KB)')).toBeInTheDocument()
+    })
+
+    it('opens restore from the footer for the whole selection', () => {
+      const onRestorePaths = vi.fn()
+      renderWithProviders(
+        <ArchiveFilesTab
+          repositoryId={7}
+          repository={repository}
+          archive={archive}
+          onRestorePaths={onRestorePaths}
+        />
+      )
+      fireEvent.click(screen.getByTestId('archive-path-selector'))
+      fireEvent.click(screen.getByRole('button', { name: /restore selection/i }))
+      expect(onRestorePaths).toHaveBeenCalledWith(
+        ['home/karan/docs/invoices.xlsx'],
+        expect.any(Array)
+      )
+      expect(screen.queryByRole('button', { name: /^restore$/i })).not.toBeInTheDocument()
+    })
+
     it('does not intercept Enter while focus is inside a text input', () => {
       renderTab()
       const input = document.createElement('input')
@@ -166,7 +193,10 @@ describe('ArchiveFilesTab', () => {
       const root = container.firstChild as HTMLElement
       fireEvent.click(screen.getByTestId('archive-path-selector'))
       fireEvent.keyDown(root, { key: 'r' })
-      expect(onRestorePaths).toHaveBeenCalledWith(['home/karan/docs/invoices.xlsx'])
+      expect(onRestorePaths).toHaveBeenCalledWith(
+        ['home/karan/docs/invoices.xlsx'],
+        expect.any(Array)
+      )
     })
   })
 })

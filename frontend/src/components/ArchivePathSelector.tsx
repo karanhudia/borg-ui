@@ -76,6 +76,9 @@ interface ArchivePathSelectorProps {
   title?: string
   subtitle?: string
   helpText?: string
+  /** `embedded` drops the heading, selection bar, and helper caption so a
+   *  page that owns those surfaces (the archive Files tab) shows them once. */
+  variant?: 'standalone' | 'embedded'
   /** Optional escape hatch reporting the current browse state and imperative
    *  navigation, so a wrapper (e.g. keyboard shortcuts) can drive this
    *  component without it becoming a controlled component. */
@@ -90,8 +93,10 @@ export default function ArchivePathSelector({
   title,
   subtitle,
   helpText,
+  variant = 'standalone',
   onBrowseStateChange,
 }: ArchivePathSelectorProps) {
+  const embedded = variant === 'embedded'
   const { t } = useTranslation()
   const [currentPath, setCurrentPath] = useState<string>('')
   const [items, setItems] = useState<ArchiveItem[]>([])
@@ -229,19 +234,21 @@ export default function ArchivePathSelector({
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <Box sx={{ mb: 2 }}>
-        <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-          {title || t('wizard.restoreFiles.title')}
-        </Typography>
-        <Typography
-          variant="body2"
-          sx={{
-            color: 'text.secondary',
-          }}
-        >
-          {subtitle || t('wizard.restoreFiles.subtitle')}
-        </Typography>
-      </Box>
+      {!embedded && (
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+            {title || t('wizard.restoreFiles.title')}
+          </Typography>
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
+            {subtitle || t('wizard.restoreFiles.subtitle')}
+          </Typography>
+        </Box>
+      )}
 
       <Box
         sx={{
@@ -341,36 +348,38 @@ export default function ArchivePathSelector({
           </Box>
         )}
 
-        <Box
-          sx={{
-            px: 2,
-            py: 1,
-            borderBottom: '1px solid',
-            borderColor: 'divider',
-            bgcolor: (theme) => alpha(theme.palette.primary.main, 0.05),
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1,
-            height: 40,
-            minHeight: 40,
-            maxHeight: 40,
-          }}
-        >
-          <CheckSquare size={16} />
-          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-            {selectedPaths.size > 0
-              ? t('wizard.restoreFiles.itemsSelected', { count: selectedPaths.size })
-              : t('wizard.restoreFiles.noItemsSelected')}
-          </Typography>
-          {selectedPaths.size > 0 && (
-            <Chip
-              label={t('wizard.restoreFiles.clearAll')}
-              size="small"
-              onClick={() => onChange({ selectedPaths: [], selectedItems: [] })}
-              sx={{ ml: 'auto', cursor: 'pointer', height: 24 }}
-            />
-          )}
-        </Box>
+        {!embedded && (
+          <Box
+            sx={{
+              px: 2,
+              py: 1,
+              borderBottom: '1px solid',
+              borderColor: 'divider',
+              bgcolor: (theme) => alpha(theme.palette.primary.main, 0.05),
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              height: 40,
+              minHeight: 40,
+              maxHeight: 40,
+            }}
+          >
+            <CheckSquare size={16} />
+            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+              {selectedPaths.size > 0
+                ? t('wizard.restoreFiles.itemsSelected', { count: selectedPaths.size })
+                : t('wizard.restoreFiles.noItemsSelected')}
+            </Typography>
+            {selectedPaths.size > 0 && (
+              <Chip
+                label={t('wizard.restoreFiles.clearAll')}
+                size="small"
+                onClick={() => onChange({ selectedPaths: [], selectedItems: [] })}
+                sx={{ ml: 'auto', cursor: 'pointer', height: 24 }}
+              />
+            )}
+          </Box>
+        )}
 
         <Box sx={{ flex: 1, overflow: 'auto' }}>
           {loading && (
@@ -541,15 +550,17 @@ export default function ArchivePathSelector({
         </Box>
       </Box>
 
-      <Typography
-        variant="caption"
-        sx={{
-          color: 'text.secondary',
-          mt: 1,
-        }}
-      >
-        {helpText || t('wizard.restoreFiles.helpText')}
-      </Typography>
+      {!embedded && (
+        <Typography
+          variant="caption"
+          sx={{
+            color: 'text.secondary',
+            mt: 1,
+          }}
+        >
+          {helpText || t('wizard.restoreFiles.helpText')}
+        </Typography>
+      )}
     </Box>
   )
 }

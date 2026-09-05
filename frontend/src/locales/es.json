@@ -1024,7 +1024,8 @@
       "restoreSelection": "Restaurar selección",
       "searchInArchive": "Buscar en este archivo",
       "folderMetadata": "Carpeta",
-      "noSelection": "Selecciona un archivo o carpeta para ver los detalles."
+      "noSelection": "Selecciona un archivo o carpeta para ver los detalles.",
+      "path": "Ruta"
     }
   },
   "restore": {

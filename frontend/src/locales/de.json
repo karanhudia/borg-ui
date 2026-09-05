@@ -1024,7 +1024,8 @@
       "restoreSelection": "Auswahl wiederherstellen",
       "searchInArchive": "In diesem Archiv suchen",
       "folderMetadata": "Ordner",
-      "noSelection": "Wähle eine Datei oder einen Ordner, um Details zu sehen."
+      "noSelection": "Wähle eine Datei oder einen Ordner, um Details zu sehen.",
+      "path": "Pfad"
     }
   },
   "restore": {

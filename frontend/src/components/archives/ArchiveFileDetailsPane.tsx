@@ -1,4 +1,5 @@
 import { Box, Button, Divider, Stack, Typography } from '@mui/material'
+import { Download } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatBytes } from '../../utils/dateUtils'
 import FileHistoryPanel from './FileHistoryPanel'
@@ -9,8 +10,23 @@ interface ArchiveFileDetailsPaneProps {
   repositoryId: number
   selectedPath: string | null
   selectedEntry: ArchiveItem | null
-  onRestore: (entry?: HistoryEntry) => void
+  // Restoring the current selection belongs to the Files tab footer. This
+  // callback only serves "Restore this" on a specific history entry.
+  onRestore: (entry: HistoryEntry) => void
   onDownload: () => void
+}
+
+function Field({ label, value }: { label: string; value: string }) {
+  return (
+    <Box sx={{ display: 'flex', gap: 1.5, minWidth: 0 }}>
+      <Typography variant="body2" sx={{ color: 'text.secondary', flexShrink: 0, width: 48 }}>
+        {label}
+      </Typography>
+      <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
+        {value}
+      </Typography>
+    </Box>
+  )
 }
 
 export default function ArchiveFileDetailsPane({
@@ -22,39 +38,56 @@ export default function ArchiveFileDetailsPane({
 }: ArchiveFileDetailsPaneProps) {
   const { t } = useTranslation()
 
+  if (!selectedPath || !selectedEntry) {
+    return (
+      <Box sx={{ py: 1 }}>
+        <Typography variant="subtitle2">{t('archives.files.folderMetadata')}</Typography>
+        <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
+          {t('archives.files.noSelection')}
+        </Typography>
+      </Box>
+    )
+  }
+
+  const isFile = selectedEntry.type === 'file'
+
   return (
     <Box>
-      {!selectedPath || !selectedEntry ? (
-        <Typography variant="subtitle2">{t('archives.files.folderMetadata')}</Typography>
-      ) : (
-        <>
-          <Typography variant="subtitle1">{selectedEntry.name}</Typography>
-          <Stack spacing={0.5} sx={{ mt: 1, mb: 2 }}>
-            {selectedEntry.type === 'file' && (
-              <Typography variant="body2" color="text.secondary">
-                {t('archives.files.size')}: {formatBytes(selectedEntry.size)}
-              </Typography>
-            )}
-          </Stack>
-          <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
-            <Button variant="outlined" size="small" onClick={() => onRestore()}>
-              {t('archives.files.restore')}
-            </Button>
-            <Button variant="outlined" size="small" onClick={onDownload}>
-              {t('archives.files.download')}
-            </Button>
-          </Stack>
-          <Divider sx={{ mb: 2 }} />
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>
-            {t('archives.files.history')}
-          </Typography>
-          <FileHistoryPanel
-            repositoryId={repositoryId}
-            path={selectedPath}
-            onRestoreEntry={(entry) => onRestore(entry)}
-          />
-        </>
-      )}
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{ alignItems: 'flex-start', justifyContent: 'space-between', mb: 1.5 }}
+      >
+        <Typography variant="subtitle1" sx={{ fontWeight: 600, wordBreak: 'break-all' }}>
+          {selectedEntry.name}
+        </Typography>
+        {isFile && (
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<Download size={14} />}
+            onClick={onDownload}
+            sx={{ flexShrink: 0 }}
+          >
+            {t('archives.files.download')}
+          </Button>
+        )}
+      </Stack>
+      <Stack spacing={0.5} sx={{ mb: 2 }}>
+        <Field label={t('archives.files.path')} value={selectedPath} />
+        {isFile && selectedEntry.size != null && (
+          <Field label={t('archives.files.size')} value={formatBytes(selectedEntry.size)} />
+        )}
+      </Stack>
+      <Divider sx={{ mb: 2 }} />
+      <Typography variant="subtitle2" sx={{ mb: 1 }}>
+        {t('archives.files.history')}
+      </Typography>
+      <FileHistoryPanel
+        repositoryId={repositoryId}
+        path={selectedPath}
+        onRestoreEntry={onRestore}
+      />
     </Box>
   )
 }
