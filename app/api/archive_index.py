@@ -103,19 +103,28 @@ def sync_state_for(
         .first()
     )
     last_at = last.completed_at if last else None
-    if active:
-        return "syncing", last_at
-    if last_at is None:
-        return "never", None
     settings = db.query(SystemSettings).first()
     interval = (settings.stats_refresh_interval_minutes if settings else None) or 60
+    return sync_state_from(active is not None, last_at, interval), last_at
+
+
+def sync_state_from(
+    active: bool, last_at: Optional[datetime], interval_minutes: int
+) -> str:
+    """The archive index freshness rule on its own, so callers that already
+    hold the per-repository facts (the Background work hub reads them for
+    every repository in two queries) do not repeat the lookups."""
+    if active:
+        return "syncing"
+    if last_at is None:
+        return "never"
     # DB timestamps round-trip as naive UTC (spec 6.1); compare against a
     # naive "now" rather than utc_now()'s tz-aware value.
     if utc_now().replace(tzinfo=None) - last_at > timedelta(
-        minutes=interval * STALE_AFTER_INTERVALS
+        minutes=interval_minutes * STALE_AFTER_INTERVALS
     ):
-        return "stale", last_at
-    return "fresh", last_at
+        return "stale"
+    return "fresh"
 
 
 def _naive_utc(value: Optional[datetime]) -> Optional[datetime]:

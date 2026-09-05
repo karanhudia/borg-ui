@@ -274,3 +274,143 @@ class TestLogs:
             f"/api/operations/{op.id}/logs/download", headers=admin_headers
         )
         assert r.status_code == 404
+
+
+def _archive(test_db, repo, name, **kw):
+    from datetime import datetime
+
+    from app.database.models import Archive
+
+    a = Archive(
+        repository_id=repo.id,
+        borg_id=f"id-{name}",
+        name=name,
+        series="s",
+        start=datetime(2026, 9, 1, 2),
+        **kw,
+    )
+    test_db.add(a)
+    test_db.commit()
+    return a
+
+
+@pytest.mark.unit
+class TestOperationsRepositories:
+    """GET /api/operations/repositories: the derived-data hub, one row per
+    repository whether or not anything is running."""
+
+    def test_rows_cover_every_repository_with_index_totals(
+        self, test_client, test_db, admin_headers
+    ):
+        nas = _repo(test_db, "nas")
+        _repo(test_db, "empty")
+        _archive(test_db, nas, "a1", history_state="indexed", history_rows=10)
+        _archive(
+            test_db,
+            nas,
+            "a2",
+            history_state="indexed",
+            history_rows=5,
+            history_truncated=True,
+        )
+        _archive(test_db, nas, "a3", history_state="failed", history_attempts=3)
+        _archive(test_db, nas, "a4", history_state="pending")
+        sync = enqueue(test_db, "archive_sync", repository_id=nas.id)
+        sync.status = "completed"
+        sync.completed_at = utc_now() - timedelta(minutes=10)
+        stats = enqueue(test_db, "stats", repository_id=nas.id, trigger="reconcile")
+        stats.status = "completed"
+        stats.completed_at = utc_now() - timedelta(minutes=9)
+        test_db.commit()
+
+        r = test_client.get("/api/operations/repositories", headers=admin_headers)
+        assert r.status_code == 200
+        body = r.json()
+        rows = {row["repository_name"]: row for row in body["repositories"]}
+        assert list(rows) == ["empty", "nas"]
+
+        row = rows["nas"]
+        assert row["repository_id"] == nas.id
+        assert row["sync_state"] == "fresh"
+        assert row["last_synced_at"] is not None
+        assert row["last_stats_at"] is not None
+        assert row["archives"] == 4
+        assert row["history"] == {
+            "indexed": 2,
+            "pending": 1,
+            "failed": 1,
+            "skipped": 0,
+            "truncated": 1,
+            "rows": 15,
+        }
+
+        assert rows["empty"]["sync_state"] == "never"
+        assert rows["empty"]["archives"] == 0
+        assert rows["empty"]["history"]["rows"] == 0
+        assert rows["empty"]["last_stats_at"] is None
+
+        assert body["totals"]["repositories"] == 2
+        assert body["totals"]["archives"] == 4
+        assert body["totals"]["history_rows"] == 15
+        # Bytes come from the database engine and may be unknown, but the
+        # key is always present so the client can render "approx." or nothing.
+        assert "history_bytes" in body["totals"]
+        assert body["last_reconcile_at"] is not None
+        assert body["reconcile_interval_minutes"] == 60
+        assert body["history_available"] is False
+
+    def test_rows_are_scoped_to_accessible_repositories(
+        self, test_client, test_db, auth_headers
+    ):
+        _repo(test_db, "hidden")
+        r = test_client.get("/api/operations/repositories", headers=auth_headers)
+        assert r.status_code == 200
+        assert r.json()["repositories"] == []
+        assert r.json()["totals"]["repositories"] == 0
+
+    def test_detail_lists_failed_and_truncated_archives(
+        self, test_client, test_db, admin_headers
+    ):
+        nas = _repo(test_db, "nas")
+        _archive(test_db, nas, "ok", history_state="indexed", history_rows=1)
+        _archive(test_db, nas, "big", history_state="indexed", history_truncated=True)
+        _archive(test_db, nas, "bad", history_state="failed", history_attempts=2)
+        r = test_client.get(
+            f"/api/operations/repositories/{nas.id}", headers=admin_headers
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert body["repository_id"] == nas.id
+        assert [a["name"] for a in body["failed_archives"]] == ["bad"]
+        assert body["failed_archives"][0]["history_attempts"] == 2
+        assert [a["name"] for a in body["truncated_archives"]] == ["big"]
+
+    def test_detail_requires_repository_access(
+        self, test_client, test_db, auth_headers
+    ):
+        repo = _repo(test_db, "hidden")
+        r = test_client.get(
+            f"/api/operations/repositories/{repo.id}", headers=auth_headers
+        )
+        assert r.status_code == 403
+
+    def test_reconcile_now_enqueues_a_run_per_repository(
+        self, test_client, test_db, admin_headers, auth_headers
+    ):
+        _repo(test_db, "a")
+        _repo(test_db, "b")
+        assert (
+            test_client.post(
+                "/api/operations/reconcile", headers=auth_headers
+            ).status_code
+            == 403
+        )
+        r = test_client.post("/api/operations/reconcile", headers=admin_headers)
+        assert r.status_code == 200
+        assert r.json()["repositories"] == 2
+        reconcile_ops = (
+            test_db.query(Operation).filter(Operation.trigger == "reconcile").all()
+        )
+        assert {o.repository_id for o in reconcile_ops} == {
+            r.id for r in test_db.query(Repository).all()
+        }
