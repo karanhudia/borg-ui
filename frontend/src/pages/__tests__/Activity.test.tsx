@@ -57,8 +57,15 @@ vi.mock('@tanstack/react-query', async () => {
     await vi.importActual<typeof import('@tanstack/react-query')>('@tanstack/react-query')
   return {
     ...actual,
-    useQuery: ({ queryFn }: { queryFn: () => Promise<unknown> }) => {
+    useQuery: ({ queryKey, queryFn }: { queryKey: unknown[]; queryFn: () => Promise<unknown> }) => {
       void queryFn()
+      if (queryKey[0] === 'repositories') {
+        return {
+          data: { data: { repositories: [{ id: 1, name: 'nas', path: '/mnt/nas' }] } },
+          isLoading: false,
+          refetch: refetchSpy,
+        }
+      }
       return {
         data: activityData.current,
         isLoading: false,
@@ -173,6 +180,15 @@ describe('Activity page', () => {
 
     await user.click(refreshButton)
     expect(refetchSpy).toHaveBeenCalled()
+  })
+
+  it('switches to the repository view when a repository is chosen', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<Activity />, { initialRoute: '/activity' })
+    await screen.findByText('Jobs Table')
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /repository/i }))
+    await user.click(await screen.findByRole('option', { name: /nas/ }))
+    expect(await screen.findByText('Repository View 1')).toBeInTheDocument()
   })
 
   it('renders the repository view when the URL carries repository_id', async () => {

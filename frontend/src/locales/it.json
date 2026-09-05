@@ -1034,7 +1034,8 @@
       "type": "Tipo",
       "typeFile": "File",
       "typeDirectory": "Cartella"
-    }
+    },
+    "toolbarOperations": "Operazioni"
   },
   "restore": {
     "title": "Ripristina Archivi",
@@ -2013,6 +2014,10 @@
         "plan": "Piano: {{name}}",
         "schedule": "Pianificazione: {{name}}"
       }
+    },
+    "repositoryScope": {
+      "label": "Repository",
+      "all": "Tutti i repository"
     }
   },
   "availabilitySchedule": {

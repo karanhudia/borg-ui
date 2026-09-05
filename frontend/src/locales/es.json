@@ -1034,7 +1034,8 @@
       "type": "Tipo",
       "typeFile": "Fichero",
       "typeDirectory": "Carpeta"
-    }
+    },
+    "toolbarOperations": "Operaciones"
   },
   "restore": {
     "title": "Restaurar archivos",
@@ -2013,6 +2014,10 @@
         "plan": "Plan: {{name}}",
         "schedule": "Programación: {{name}}"
       }
+    },
+    "repositoryScope": {
+      "label": "Repositorio",
+      "all": "Todos los repositorios"
     }
   },
   "availabilitySchedule": {

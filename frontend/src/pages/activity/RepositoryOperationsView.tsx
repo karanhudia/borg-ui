@@ -22,6 +22,7 @@ import RunChainRow from '../../components/activity/RunChainRow'
 import RunStatusIcon from '../../components/activity/RunStatusIcon'
 import CategoryToken from '../../components/CategoryToken'
 import TriggerSelect from '../../components/activity/TriggerSelect'
+import RepositoryScopeSelect from '../../components/activity/RepositoryScopeSelect'
 import LogViewerDialog from '../../components/LogViewerDialog'
 import ErrorDetailsDialog from '../../components/ErrorDetailsDialog'
 import EmptyStateCard from '../../components/EmptyStateCard'
@@ -275,13 +276,14 @@ export default function RepositoryOperationsView({ repositoryId }: RepositoryOpe
             {t('activity.repositoryView.subtitle')}
           </Typography>
         </Box>
-        <IconButton
-          onClick={() => refetch()}
-          aria-label={t('activity.actions.refresh')}
-          sx={{ flexShrink: 0 }}
-        >
-          <RefreshCw size={20} />
-        </IconButton>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
+          <Box sx={{ width: { xs: 220, sm: 320 } }}>
+            <RepositoryScopeSelect value={repositoryId} />
+          </Box>
+          <IconButton onClick={() => refetch()} aria-label={t('activity.actions.refresh')}>
+            <RefreshCw size={20} />
+          </IconButton>
+        </Box>
       </Box>
 
       <Stack

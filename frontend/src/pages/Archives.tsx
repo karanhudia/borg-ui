@@ -1,9 +1,17 @@
 import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams, Link as RouterLink } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Box, Typography, useTheme, alpha, ToggleButton, ToggleButtonGroup } from '@mui/material'
-import { Folder } from 'lucide-react'
+import {
+  Box,
+  Button,
+  Typography,
+  useTheme,
+  alpha,
+  ToggleButton,
+  ToggleButtonGroup,
+} from '@mui/material'
+import { Folder, History } from 'lucide-react'
 import { repositoriesAPI, mountsAPI, restoreAPI, archivesAPI } from '../services/api'
 import { useRepositoryStats } from '../hooks/useRepositoryStats'
 import { BorgApiClient } from '../services/borgApi'
@@ -677,6 +685,16 @@ const Archives: React.FC = () => {
                 newestArchiveId={newestArchiveId}
               />
             </Box>
+            <Button
+              component={RouterLink}
+              to={`/activity?repository_id=${selectedRepositoryId}`}
+              size="small"
+              variant="outlined"
+              startIcon={<History size={14} />}
+              sx={{ ml: { sm: 'auto' }, flexShrink: 0 }}
+            >
+              {t('archives.toolbarOperations')}
+            </Button>
             <ToggleButtonGroup
               value={viewMode}
               exclusive
@@ -686,7 +704,6 @@ const Archives: React.FC = () => {
                 setViewMode(value)
                 localStorage.setItem('archives-view-mode', value)
               }}
-              sx={{ ml: { sm: 'auto' } }}
             >
               <ToggleButton value="heatmap">{t('archives.view.heatmap')}</ToggleButton>
               <ToggleButton value="list">{t('archives.view.list')}</ToggleButton>

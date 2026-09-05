@@ -1034,7 +1034,8 @@
       "type": "Type",
       "typeFile": "File",
       "typeDirectory": "Folder"
-    }
+    },
+    "toolbarOperations": "Operations"
   },
   "restore": {
     "title": "Restore Archives",
@@ -2013,6 +2014,10 @@
         "plan": "Plan: {{name}}",
         "schedule": "Schedule: {{name}}"
       }
+    },
+    "repositoryScope": {
+      "label": "Repository",
+      "all": "All repositories"
     }
   },
   "availabilitySchedule": {

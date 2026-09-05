@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { fireEvent } from '@testing-library/react'
 import { screen, waitFor, within, renderWithProviders, userEvent } from '../../../test/test-utils'
 import RepositoryOperationsView from '../RepositoryOperationsView'
 import { activityAPI, repositoriesAPI } from '../../../services/api'
@@ -40,7 +41,12 @@ describe('RepositoryOperationsView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     ;(repositoriesAPI.getRepositories as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: { repositories: [{ id: 1, name: 'nas' }] },
+      data: {
+        repositories: [
+          { id: 1, name: 'nas', path: '/mnt/nas' },
+          { id: 2, name: 'photos', path: '/mnt/photos' },
+        ],
+      },
     })
     ;(activityAPI.list as ReturnType<typeof vi.fn>).mockResolvedValue({
       data: [
@@ -57,7 +63,7 @@ describe('RepositoryOperationsView', () => {
           completed_at: null,
           followups: [{ id: 21, kind: 'history_merge', status: 'running' }],
         }),
-        run({ id: 3, repository_id: 2, repository: 'photos' }),
+        run({ id: 3, repository_id: 2, repository: 'photos', repository_path: '/mnt/photos' }),
       ],
     })
   })
@@ -68,7 +74,19 @@ describe('RepositoryOperationsView', () => {
     expect(screen.getByText('Today')).toBeInTheDocument()
     expect(screen.getByText('Yesterday')).toBeInTheDocument()
     expect(screen.getAllByTestId('run-row')).toHaveLength(2)
-    expect(screen.queryByText('photos')).not.toBeInTheDocument()
+    expect(
+      screen.queryAllByTestId('run-row').some((row) => row.textContent?.includes('photos'))
+    ).toBe(false)
+  })
+
+  it('switches repositories from the header selector', async () => {
+    renderWithProviders(<RepositoryOperationsView repositoryId={1} />, {
+      initialRoute: '/activity?repository_id=1',
+    })
+    await screen.findByRole('heading', { name: 'nas' })
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /repository/i }))
+    await userEvent.click(await screen.findByRole('option', { name: /photos/ }))
+    await waitFor(() => expect(window.location.search).toBe('?repository_id=2'))
   })
 
   it('shows the trigger source and archive for a run', async () => {

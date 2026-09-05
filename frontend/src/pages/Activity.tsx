@@ -13,6 +13,7 @@ import LogViewerDialog from '../components/LogViewerDialog'
 import RunningCloudStorageJobsSection from '../components/RunningCloudStorageJobsSection'
 import { ActivityFilters } from './activity/ActivityFilters'
 import RepositoryOperationsView from './activity/RepositoryOperationsView'
+import RepositoryScopeSelect from '../components/activity/RepositoryScopeSelect'
 import type { OperationCategory, OperationTrigger } from '../types/operations'
 
 export interface ActivityItem {
@@ -123,14 +124,21 @@ export function ActivityContent({
             </Typography>
           </Box>
         </Box>
-        <IconButton
-          onClick={onRefresh}
-          aria-label={refreshLabel}
-          title={refreshLabel}
-          sx={{ alignSelf: { xs: 'flex-end', sm: 'auto' } }}
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            width: { xs: '100%', sm: 'auto' },
+          }}
         >
-          <RefreshCw size={20} />
-        </IconButton>
+          <Box sx={{ width: { xs: '100%', sm: 320 } }}>
+            <RepositoryScopeSelect value={null} />
+          </Box>
+          <IconButton onClick={onRefresh} aria-label={refreshLabel} title={refreshLabel}>
+            <RefreshCw size={20} />
+          </IconButton>
+        </Box>
       </Box>
 
       <ActivityFilters

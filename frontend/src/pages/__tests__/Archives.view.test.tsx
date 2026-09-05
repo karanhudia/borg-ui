@@ -206,6 +206,16 @@ describe('Archives page, database-backed view (spec 10.3)', () => {
     expect(screen.queryByText(/no recent restores/i)).not.toBeInTheDocument()
   })
 
+  it('links to the repository operations view from the toolbar', async () => {
+    renderWithProviders(<Archives />, { queryClient })
+    const user = userEvent.setup()
+    await user.click(screen.getByText('Select Repo'))
+    expect(await screen.findByRole('link', { name: /operations/i })).toHaveAttribute(
+      'href',
+      '/activity?repository_id=1'
+    )
+  })
+
   it('switches to the list view and persists the choice', async () => {
     renderWithProviders(<Archives />, { queryClient })
     const user = userEvent.setup()
