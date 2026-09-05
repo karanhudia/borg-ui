@@ -17,7 +17,8 @@ import { licensingAPI } from '../services/api'
 import { usePlan } from '../hooks/usePlan'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { useAnalytics } from '../hooks/useAnalytics'
-import { BUY_URL } from '../utils/externalLinks'
+import { buildBuyUrl } from '../utils/externalLinks'
+import { PLAN_LABEL, nextPlanAbove } from '../core/features'
 import PlanInfoDrawer from './PlanInfoDrawer'
 
 export default function LicensingTab() {
@@ -122,6 +123,8 @@ export default function LicensingTab() {
     refreshMutation.isPending || activateMutation.isPending || deactivateMutation.isPending
   const isFullAccess = entitlement?.is_full_access && entitlement.status === 'active'
   const activePaidLicense = entitlement?.ui_state === 'paid_active'
+  // The buy link sells the tier above the current plan; Enterprise has none.
+  const upgradePlan = nextPlanAbove(plan)
   const statusLabel = isFullAccess
     ? t('plan.fullAccessLabel')
     : plan === 'community'
@@ -162,6 +165,7 @@ export default function LicensingTab() {
     trackPlan(EventAction.VIEW, {
       ...analyticsContext,
       operation: 'open_buy_link',
+      selected_plan: upgradePlan,
     })
   }
 
@@ -333,21 +337,23 @@ export default function LicensingTab() {
             >
               {t('plan.licenseManagementHelp')}
             </Typography>
-            <Link
-              href={BUY_URL}
-              target="_blank"
-              rel="noreferrer"
-              underline="hover"
-              sx={{
-                alignSelf: 'flex-start',
-                fontSize: '0.95rem',
-                fontWeight: 600,
-                lineHeight: 1.4,
-              }}
-              onClick={handleBuyClick}
-            >
-              {t('plan.buyLink', { plan: statusLabel })}
-            </Link>
+            {upgradePlan && (
+              <Link
+                href={buildBuyUrl({ plan: upgradePlan, src: 'app-licensing' })}
+                target="_blank"
+                rel="noreferrer"
+                underline="hover"
+                sx={{
+                  alignSelf: 'flex-start',
+                  fontSize: '0.95rem',
+                  fontWeight: 600,
+                  lineHeight: 1.4,
+                }}
+                onClick={handleBuyClick}
+              >
+                {t('plan.buyLink', { plan: PLAN_LABEL[upgradePlan] })}
+              </Link>
+            )}
             <Link
               component="button"
               underline="hover"
