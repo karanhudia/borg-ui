@@ -356,7 +356,13 @@ async def get_archive_info(
                                             "user": file_obj.get("user"),
                                             "group": file_obj.get("group"),
                                             "size": file_obj.get("size"),
-                                            "mtime": file_obj.get("mtime"),
+                                            # Contents listing ran under
+                                            # TZ=UTC (server wrapper); re-render
+                                            # the mtime with an explicit offset.
+                                            "mtime": serialize_borg_archive_time(
+                                                file_obj.get("mtime"),
+                                                timezone_name="UTC",
+                                            ),
                                             "healthy": file_obj.get("healthy", True),
                                         }
                                     )

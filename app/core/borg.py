@@ -607,10 +607,12 @@ class BorgInterface:
         exec_env = env.copy() if env else {}
         if passphrase:
             exec_env["BORG_PASSPHRASE"] = passphrase
+        # Machine-parsed output: render file mtimes in UTC (see list_archives).
+        exec_env["TZ"] = "UTC"
 
         # Use streaming execution to prevent OOM on large archives
         return await self._execute_command_streaming(
-            cmd, max_lines=max_lines, env=exec_env if exec_env else None
+            cmd, max_lines=max_lines, env=exec_env
         )
 
     def diff_archives(

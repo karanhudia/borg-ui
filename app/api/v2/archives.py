@@ -33,13 +33,14 @@ from app.services.archive_browse_service import (
 from app.services.cache_service import archive_cache
 from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.services.repository_executor import (
+    agent_timezone_for_repository,
     is_agent_executor,
     queue_agent_repository_operation_job,
     wait_for_agent_repository_operation_job,
 )
 from app.services.v2.archive_browse import get_browse_depth, is_fast_browse_enabled
 from app.utils.borg_env import effective_repository_remote_path, repository_borg_env
-from app.utils.datetime_utils import serialize_datetime
+from app.utils.datetime_utils import serialize_borg_archive_time, serialize_datetime
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["Archives v2"], dependencies=[require_feature("borg_v2")])
@@ -227,16 +228,25 @@ def _get_archive_selector(archive_ref: str) -> str:
     return archive_ref
 
 
+# Bump when the shape or semantics of cached archive items change, so entries
+# written by an older build are never served (e.g. the mtime timezone change:
+# a cache hit bypasses parse_archive_items).
+_ARCHIVE_CONTENTS_CACHE_VERSION = "v2-utc-mtime"
+
+
 def _get_browse_cache_key(archive_ref: str, path: str) -> str:
     archive_key = _get_archive_selector(archive_ref)
     normalized_path = path.strip("/")
+    version = _ARCHIVE_CONTENTS_CACHE_VERSION
     if not normalized_path:
-        return f"{archive_key}::managed-root"
-    return f"{archive_key}::managed-path::{normalized_path}"
+        return f"{version}::{archive_key}::managed-root"
+    return f"{version}::{archive_key}::managed-path::{normalized_path}"
 
 
 def _get_browse_raw_cache_key(archive_ref: str) -> str:
-    return f"{_get_archive_selector(archive_ref)}::raw"
+    return (
+        f"{_ARCHIVE_CONTENTS_CACHE_VERSION}::{_get_archive_selector(archive_ref)}::raw"
+    )
 
 
 # ── List archives ──────────────────────────────────────────────────────────────
@@ -374,6 +384,13 @@ async def get_archive_info(
                     remote_path=effective_repository_remote_path(repo),
                     bypass_lock=repo.bypass_lock,
                 )
+            # An agent listing renders mtimes in the agent's zone; a
+            # server-side listing runs under TZ=UTC (the wrapper pins it).
+            mtime_zone = (
+                agent_timezone_for_repository(db, repo)
+                if is_agent_executor(repo)
+                else "UTC"
+            )
             if list_result.get("success", bool(list_result.get("stdout"))):
                 files = []
                 for line in (list_result.get("stdout") or "").strip().split("\n"):
@@ -388,7 +405,9 @@ async def get_archive_info(
                                     "user": f.get("user"),
                                     "group": f.get("group"),
                                     "size": f.get("size"),
-                                    "mtime": f.get("mtime"),
+                                    "mtime": serialize_borg_archive_time(
+                                        f.get("mtime"), timezone_name=mtime_zone
+                                    ),
                                     "healthy": f.get("healthy", True),
                                 }
                             )
@@ -500,7 +519,14 @@ async def get_archive_contents(
                 detail=f"Failed to get archive contents: {result.get('stderr', 'unknown error')}",
             )
 
-        all_items = parse_archive_items(stdout)
+        # An agent listing renders mtimes in the agent's zone; a server-side
+        # listing runs under TZ=UTC (the wrapper pins it).
+        mtime_zone = (
+            agent_timezone_for_repository(db, repo)
+            if is_agent_executor(repo)
+            else "UTC"
+        )
+        all_items = parse_archive_items(stdout, timezone_name=mtime_zone)
         if not fast_browse:
             await archive_cache.set(repo.id, raw_cache_key, all_items)
 
