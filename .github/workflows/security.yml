@@ -36,7 +36,22 @@ jobs:
 
       - name: Install dependencies
         working-directory: frontend
-        run: npm ci
+        # --no-audit: the bundled npm 10 would otherwise submit its own audit
+        # request here; redundant, the dedicated step below audits with npm 11.
+        run: npm ci --no-audit
+
+      - name: Update npm for the bulk advisory endpoint
+        # npm tries the bulk advisory endpoint first and falls back to the
+        # quick-audit endpoint when the bulk request fails or returns data it
+        # cannot use. Node 22's bundled npm 10 ends up on that fallback, which
+        # the registry retired on 2026-09-04 (audit runs failed with "audit
+        # endpoint returned an error") and later restored. npm >= 11 completes
+        # on the bulk advisory endpoint, so the audit no longer depends on the
+        # legacy path; pinned to the exact release validated against this
+        # lockfile so the security gate's own tooling cannot drift between runs.
+        run: |
+          npm install -g npm@11.19.0
+          test "$(npm --version)" = "11.19.0"
 
       - name: Run npm audit
         working-directory: frontend
