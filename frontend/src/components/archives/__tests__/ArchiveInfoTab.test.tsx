@@ -40,10 +40,10 @@ describe('ArchiveInfoTab', () => {
     expect(screen.getByText('250.00 KB')).toBeInTheDocument()
   })
 
-  it('says what share of the original is actually stored and how much was saved', () => {
+  it('says what share of the original is unique to this archive and what deleting it frees', () => {
     render(<ArchiveInfoTab archive={archive()} />)
-    expect(screen.getByText(/25% of the original/i)).toBeInTheDocument()
-    expect(screen.getByText(/saved 750\.00 KB/i)).toBeInTheDocument()
+    expect(screen.getByText(/250\.00 KB of this archive is unique to it, 25%/i)).toBeInTheDocument()
+    expect(screen.getByText(/would free about 250\.00 KB/i)).toBeInTheDocument()
     expect(screen.getByRole('meter')).toHaveAttribute('aria-valuenow', '25')
   })
 

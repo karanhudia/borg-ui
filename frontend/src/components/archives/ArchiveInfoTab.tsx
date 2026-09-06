@@ -119,9 +119,11 @@ function Fact({
   )
 }
 
-// What the archive cost to store, then the facts about the run. The one
-// figure people actually want is how much of the original ended up on
-// disk, so it gets a bar and a sentence rather than a fourth tile.
+// What the archive cost to store, then the facts about the run. Borg's
+// "deduplicated size" is the chunks no other archive has, so for a daily
+// backup it is tiny and for an old archive whose data later ones share it
+// is zero. That is what deleting the archive would free, which is the
+// figure people actually want, so it gets a bar and a sentence.
 export default function ArchiveInfoTab({ archive }: ArchiveInfoTabProps) {
   const { t } = useTranslation()
   const theme = useTheme()
@@ -170,7 +172,7 @@ export default function ArchiveInfoTab({ archive }: ArchiveInfoTabProps) {
           <SizeTile
             icon={<Layers size={18} />}
             tone="info"
-            label={t('archives.detail.deduplicatedSize')}
+            label={t('archives.detail.uniqueSize')}
             value={archive.deduplicated_size}
           />
         </Box>
@@ -202,7 +204,7 @@ export default function ArchiveInfoTab({ archive }: ArchiveInfoTabProps) {
             <Typography variant="body2" sx={{ mt: 1 }}>
               {t('archives.detail.storedShare', { stored: formatBytes(stored), percent })}{' '}
               <Typography component="span" variant="body2" sx={{ color: 'text.secondary' }}>
-                {t('archives.detail.storedSaved', { size: formatBytes(original - stored) })}
+                {t('archives.detail.storedSaved', { size: formatBytes(stored) })}
               </Typography>
             </Typography>
           </Box>

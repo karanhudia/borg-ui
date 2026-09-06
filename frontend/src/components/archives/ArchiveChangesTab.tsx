@@ -225,7 +225,7 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
             borderColor: 'divider',
             borderRadius: 2,
             bgcolor: 'background.paper',
-            py: 0.5,
+            overflow: 'hidden',
           }}
         >
           {rows.map((row) => (
