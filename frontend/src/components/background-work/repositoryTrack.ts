@@ -6,11 +6,14 @@ import type {
 } from '../../types/operations'
 
 // The four derivation stages a repository moves through (spec 10.1), in
-// the order the runner executes them. Every stage maps to one or two
-// operation kinds; the board never shows kinds directly.
-export type StageKey = 'connect' | 'stats' | 'archives' | 'history'
+// the order the runner executes them: the archive list, then the file
+// history built from it, then stats, which totals up whatever the other
+// stages produced. An import is the one run that starts with stats,
+// because there it doubles as the connection check. Every stage maps to
+// one or two operation kinds; the board never shows kinds directly.
+export type StageKey = 'connect' | 'archives' | 'history' | 'stats'
 
-export const STAGE_ORDER: StageKey[] = ['connect', 'stats', 'archives', 'history']
+export const STAGE_ORDER: StageKey[] = ['connect', 'archives', 'history', 'stats']
 
 const STAGE_FOR_KIND: Partial<Record<OperationItem['kind'], StageKey>> = {
   import_connect: 'connect',
@@ -20,15 +23,16 @@ const STAGE_FOR_KIND: Partial<Record<OperationItem['kind'], StageKey>> = {
   history_merge: 'history',
 }
 
-// The stages a rebuild can start from, in invalidation order: starting
-// at one rebuilds it and every stage after it.
-export const REBUILD_STAGES: RebuildStage[] = ['stats', 'archives', 'history']
+// The stages a rebuild can start from, in run order: starting at one
+// rebuilds it and every stage after it, so the archive list means
+// everything and stats means the totals alone.
+export const REBUILD_STAGES: RebuildStage[] = ['archives', 'history', 'stats']
 
 // `connect` is the synchronous import request and has no rebuild stage.
 export const REBUILD_STAGE_FOR: Partial<Record<StageKey, RebuildStage>> = {
-  stats: 'stats',
   archives: 'archives',
   history: 'history',
+  stats: 'stats',
 }
 
 // Width of each stage's column in the hub table. The rebuild stages are
@@ -36,9 +40,9 @@ export const REBUILD_STAGE_FOR: Partial<Record<StageKey, RebuildStage>> = {
 // show, so it has no column. Adding a stage means adding a width here and
 // a cell in the row; the header and grid follow from this table.
 const HUB_STAGE_COLUMN_WIDTH: Record<RebuildStage, string> = {
-  stats: 'minmax(130px, 1fr)',
   archives: 'minmax(170px, 1.2fr)',
   history: 'minmax(190px, 1.4fr)',
+  stats: 'minmax(130px, 1fr)',
 }
 
 // One grid shared by the hub header and every repository row: name, then

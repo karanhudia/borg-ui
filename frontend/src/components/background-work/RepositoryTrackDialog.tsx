@@ -103,7 +103,7 @@ export default function RepositoryTrackDialog({
 }: RepositoryTrackDialogProps) {
   const { t } = useTranslation()
   const theme = useTheme()
-  const [stage, setStage] = useState<RebuildStage>('stats')
+  const [stage, setStage] = useState<RebuildStage>('archives')
   const [submitting, setSubmitting] = useState(false)
   const [failed, setFailed] = useState(false)
   const { can } = usePlan()
@@ -138,8 +138,10 @@ export default function RepositoryTrackDialog({
   const rebuilt = REBUILD_STAGES.slice(startIndex).filter(
     (s) => !(s === 'history' && historyLocked)
   )
+  // "Everything" only when every stage really runs; on Community the
+  // history stage is locked, so the list is spelled out instead.
   const summary =
-    startIndex === 0
+    rebuilt.length === REBUILD_STAGES.length
       ? t('operations.background.rebuildSummaryAll', { repository: repositoryName })
       : t('operations.background.rebuildSummary', {
           repository: repositoryName,

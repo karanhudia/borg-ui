@@ -123,7 +123,7 @@ interface StageTrackProps {
 
 // One run's stages laid out on the hub grid, so every stage sits under
 // the table column that describes it: connect under the repository name,
-// then stats, archive list, and file history. A stage the run never had
+// then archive list, file history, and stats. A stage the run never had
 // leaves its column empty rather than shifting the others.
 export default function StageTrack({ stages, now, onRetry }: StageTrackProps) {
   return (

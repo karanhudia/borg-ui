@@ -268,16 +268,6 @@ export default function RepositoryHubRow({
 
         {repository ? (
           <>
-            <Cell
-              muted={repository.last_stats_at == null}
-              primary={
-                repository.last_stats_at
-                  ? t('operations.background.hub.statsRefreshed', {
-                      ago: ago(repository.last_stats_at),
-                    })
-                  : t('operations.background.hub.statsNever')
-              }
-            />
             <Box sx={{ minWidth: 0, gridColumn: { xs: '1 / -1', md: 'auto' } }}>
               <SyncStateChip
                 state={repository.sync_state}
@@ -300,6 +290,16 @@ export default function RepositoryHubRow({
               repository={repository}
               historyAvailable={historyAvailable}
               totalHistoryRows={totalHistoryRows}
+            />
+            <Cell
+              muted={repository.last_stats_at == null}
+              primary={
+                repository.last_stats_at
+                  ? t('operations.background.hub.statsRefreshed', {
+                      ago: ago(repository.last_stats_at),
+                    })
+                  : t('operations.background.hub.statsNever')
+              }
             />
           </>
         ) : (

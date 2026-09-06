@@ -3455,7 +3455,7 @@
       "stages": {
         "stats": {
           "title": "Estadísticas",
-          "what": "Tamaño del repositorio y número de archivos en la tarjeta del repositorio y el panel.",
+          "what": "Tamaño del repositorio y número de archivos en la tarjeta del repositorio y el panel. Se actualizan al final de cada ejecución.",
           "cost": "Tarda segundos."
         },
         "archives": {
@@ -3545,7 +3545,7 @@
         "detailHint": "Reconstruye desde Historial de ficheros para indexar estos archivos de nuevo.",
         "viewIndexRuns": "Ver ejecuciones de índice"
       },
-      "rebuildMenuHint": "Cada etapa posterior a la elegida también se reconstruye. Las etapas anteriores se conservan.",
+      "rebuildMenuHint": "Cada etapa posterior a la elegida también se reconstruye. Las anteriores se conservan. Las estadísticas siempre van al final, porque suman lo que produjeron las demás etapas.",
       "rebuildTitle": "Reconstruir datos derivados",
       "rebuildAction": "Reconstruir",
       "stageWillRebuild": "Se reconstruirá",

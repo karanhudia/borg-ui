@@ -143,9 +143,9 @@ describe('RepositoryHubRow', () => {
     const cells = screen.getAllByTestId(/^stage-cell-/)
     expect(cells.map((cell) => cell.dataset.stage)).toEqual([
       'connect',
-      'stats',
       'archives',
       'history',
+      'stats',
     ])
     expect(screen.getByTestId('stage-cell-stats')).toHaveAttribute('data-empty', 'true')
     expect(screen.getByTestId('stage-cell-history')).toHaveAttribute('data-empty', 'false')

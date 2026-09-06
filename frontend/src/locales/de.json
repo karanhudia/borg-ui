@@ -3455,7 +3455,7 @@
       "stages": {
         "stats": {
           "title": "Statistiken",
-          "what": "Repository-Größe und Archivanzahl auf der Repository-Karte und dem Dashboard.",
+          "what": "Repository-Größe und Archivanzahl auf der Repository-Karte und dem Dashboard. Wird am Ende jedes Laufs aktualisiert.",
           "cost": "Dauert Sekunden."
         },
         "archives": {
@@ -3545,7 +3545,7 @@
         "detailHint": "Baue ab Dateiverlauf neu auf, um diese Archive erneut zu indizieren.",
         "viewIndexRuns": "Indexläufe anzeigen"
       },
-      "rebuildMenuHint": "Jede Phase nach der gewählten wird ebenfalls neu aufgebaut. Frühere Phasen bleiben erhalten.",
+      "rebuildMenuHint": "Jede Stufe nach der gewählten wird ebenfalls neu aufgebaut. Frühere Stufen bleiben erhalten. Statistiken laufen immer zuletzt, weil sie zusammenzählen, was die anderen Stufen erzeugt haben.",
       "rebuildTitle": "Abgeleitete Daten neu aufbauen",
       "rebuildAction": "Neu aufbauen",
       "stageWillRebuild": "Wird neu aufgebaut",

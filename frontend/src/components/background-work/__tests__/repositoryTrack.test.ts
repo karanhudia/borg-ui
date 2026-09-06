@@ -71,21 +71,21 @@ describe('deriveTrack', () => {
     )
     expect(track.stages.map((s) => [s.key, s.status])).toEqual([
       ['connect', 'idle'],
-      ['stats', 'done'],
       ['archives', 'running'],
       ['history', 'waiting'],
+      ['stats', 'done'],
     ])
-    expect(track.stages[3].reason).toBe('queued')
+    expect(track.stages[2].reason).toBe('queued')
   })
 
   it('explains a queued stage with the paused state first', () => {
     const track = deriveTrack(repo([op({ kind: 'stats', status: 'queued' })], true), limits, true)
-    expect(track.stages[1].reason).toBe('paused')
+    expect(track.stages[3].reason).toBe('paused')
   })
 
   it('explains a queued stage with the busy lane', () => {
     const track = deriveTrack(repo([op({ kind: 'stats', status: 'queued' })], true), limits, false)
-    expect(track.stages[1].reason).toBe('lane_busy')
+    expect(track.stages[3].reason).toBe('lane_busy')
   })
 
   it('explains a queued history stage with the worker limit', () => {
@@ -94,7 +94,7 @@ describe('deriveTrack', () => {
       { ...limits, index_running: 2 },
       false
     )
-    expect(track.stages[3].reason).toBe('workers')
+    expect(track.stages[2].reason).toBe('workers')
   })
 
   it('treats history_merge as the history stage and failed as retryable', () => {
@@ -103,8 +103,8 @@ describe('deriveTrack', () => {
       limits,
       false
     )
-    expect(track.stages[3].status).toBe('failed')
-    expect(track.stages[3].operation?.id).toBe(4)
+    expect(track.stages[2].status).toBe('failed')
+    expect(track.stages[2].operation?.id).toBe(4)
   })
 
   it('prefers the newest operation when a stage ran twice', () => {
@@ -116,7 +116,7 @@ describe('deriveTrack', () => {
       limits,
       false
     )
-    expect(track.stages[1].status).toBe('done')
+    expect(track.stages[3].status).toBe('done')
   })
 
   it('describes only the newest run when an older one is still in the queue window', () => {
@@ -132,9 +132,9 @@ describe('deriveTrack', () => {
     )
     expect(track.stages.map((s) => [s.key, s.status])).toEqual([
       ['connect', 'idle'],
-      ['stats', 'waiting'],
       ['archives', 'idle'],
       ['history', 'idle'],
+      ['stats', 'waiting'],
     ])
   })
 
@@ -150,9 +150,9 @@ describe('deriveTrack', () => {
     )
     expect(track.stages.map((s) => [s.key, s.status])).toEqual([
       ['connect', 'idle'],
-      ['stats', 'idle'],
       ['archives', 'done'],
       ['history', 'running'],
+      ['stats', 'idle'],
     ])
   })
 
@@ -165,8 +165,8 @@ describe('deriveTrack', () => {
       limits,
       false
     )
-    expect(track.stages[2].status).toBe('failed')
-    expect(track.stages[3].status).toBe('skipped')
+    expect(track.stages[1].status).toBe('failed')
+    expect(track.stages[2].status).toBe('skipped')
   })
 
   it('surfaces a running foreground operation separately from the stages', () => {

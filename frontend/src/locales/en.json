@@ -3455,7 +3455,7 @@
       "stages": {
         "stats": {
           "title": "Stats",
-          "what": "Repository size and archive count on the repository card and dashboard.",
+          "what": "Repository size and archive count on the repository card and dashboard. Refreshed at the end of every run.",
           "cost": "Takes seconds."
         },
         "archives": {
@@ -3545,7 +3545,7 @@
         "detailHint": "Rebuild from File history to index these archives again.",
         "viewIndexRuns": "View index runs"
       },
-      "rebuildMenuHint": "Every stage after the one you pick is rebuilt too. Earlier stages are kept.",
+      "rebuildMenuHint": "Every stage after the one you pick is rebuilt too. Earlier stages are kept. Stats always run last, because they total up what the other stages produced.",
       "rebuildTitle": "Rebuild derived data",
       "rebuildAction": "Rebuild",
       "stageWillRebuild": "Will rebuild",

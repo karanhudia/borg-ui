@@ -3455,7 +3455,7 @@
       "stages": {
         "stats": {
           "title": "Statistiche",
-          "what": "Dimensione del repository e numero di archivi sulla scheda del repository e nella dashboard.",
+          "what": "Dimensione del repository e numero di archivi nella scheda del repository e nella dashboard. Aggiornate alla fine di ogni esecuzione.",
           "cost": "Richiede secondi."
         },
         "archives": {
@@ -3545,7 +3545,7 @@
         "detailHint": "Ricostruisci da Cronologia dei file per indicizzare di nuovo questi archivi.",
         "viewIndexRuns": "Vedi esecuzioni di indicizzazione"
       },
-      "rebuildMenuHint": "Ogni fase successiva a quella scelta viene ricostruita anch'essa. Le fasi precedenti vengono conservate.",
+      "rebuildMenuHint": "Ogni fase successiva a quella scelta viene ricostruita a sua volta. Le fasi precedenti restano. Le statistiche vengono sempre per ultime, perché sommano ciò che le altre fasi hanno prodotto.",
       "rebuildTitle": "Ricostruisci i dati derivati",
       "rebuildAction": "Ricostruisci",
       "stageWillRebuild": "Verrà ricostruito",

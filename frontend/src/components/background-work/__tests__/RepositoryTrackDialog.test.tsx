@@ -102,18 +102,35 @@ describe('RepositoryTrackDialog', () => {
     expect(screen.getByText('nas')).toBeInTheDocument()
   })
 
-  it('rebuilds from stats by default', async () => {
+  it('rebuilds everything from the archive list by default', async () => {
     renderDialog()
-    fireEvent.click(screen.getByRole('button', { name: /^rebuild$/i }))
-    await waitFor(() => expect(archivesAPI.rebuild).toHaveBeenCalledWith(3, 'stats'))
-  })
-
-  it('rebuilds from the stage card the person picks', async () => {
-    renderDialog()
-    fireEvent.click(screen.getByRole('radio', { name: /archive list/i }))
-    expect(screen.getByText(/rebuild archive list and file history for nas/i)).toBeInTheDocument()
+    expect(screen.getByText(/rebuild everything for nas/i)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /^rebuild$/i }))
     await waitFor(() => expect(archivesAPI.rebuild).toHaveBeenCalledWith(3, 'archives'))
+  })
+
+  it('lists the stage cards in the order the runner executes them', () => {
+    renderDialog()
+    const names = screen.getAllByRole('radio').map((r) => r.textContent)
+    expect(names[0]).toMatch(/1\. archive list/i)
+    expect(names[1]).toMatch(/2\. file history/i)
+    expect(names[2]).toMatch(/3\. stats/i)
+  })
+
+  it('rebuilds from the stage card the person picks and the stages after it', async () => {
+    renderDialog()
+    fireEvent.click(screen.getByRole('radio', { name: /file history/i }))
+    expect(screen.getByText(/rebuild file history and stats for nas/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /^rebuild$/i }))
+    await waitFor(() => expect(archivesAPI.rebuild).toHaveBeenCalledWith(3, 'history'))
+  })
+
+  it('rebuilds only the totals when stats is picked', async () => {
+    renderDialog()
+    fireEvent.click(screen.getByRole('radio', { name: /stats/i }))
+    expect(screen.getByText(/rebuild stats for nas/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /^rebuild$/i }))
+    await waitFor(() => expect(archivesAPI.rebuild).toHaveBeenCalledWith(3, 'stats'))
   })
 
   it('locks the file history card on Community', () => {
@@ -122,7 +139,7 @@ describe('RepositoryTrackDialog', () => {
     const history = screen.getByRole('radio', { name: /file history/i })
     expect(history).toHaveAttribute('aria-disabled', 'true')
     fireEvent.click(screen.getByRole('radio', { name: /archive list/i }))
-    expect(screen.getByText(/rebuild archive list for nas/i)).toBeInTheDocument()
+    expect(screen.getByText(/rebuild archive list and stats for nas/i)).toBeInTheDocument()
   })
 
   it('lists the archives whose file history failed or was truncated', async () => {
