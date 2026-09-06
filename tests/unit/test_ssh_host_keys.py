@@ -104,6 +104,38 @@ class TestScanHostKey:
             ssh_host_keys.scan_host_key("example.com")
 
 
+class TestScanOrderIsStable:
+    """ssh-keyscan queries the key types concurrently and prints whichever
+    answers first, so its output order changes between runs against the same
+    unchanged host. Everything downstream has to be immune to that."""
+
+    ECDSA = (
+        "example.com ecdsa-sha2-nistp256 "
+        "AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBBERERERERERERE="
+    )
+
+    def _scan_returning(self, monkeypatch, stdout):
+        monkeypatch.setattr(subprocess, "run", _fake_run(stdout=stdout))
+        return ssh_host_keys.scan_host_key("example.com")
+
+    def test_two_scans_of_one_host_agree_whatever_the_order(self, monkeypatch):
+        first = self._scan_returning(monkeypatch, f"{RSA}\n{self.ECDSA}\n{ED25519}\n")
+        second = self._scan_returning(monkeypatch, f"{ED25519}\n{RSA}\n{self.ECDSA}\n")
+
+        assert first == second
+
+    def test_the_strongest_key_comes_first(self, monkeypatch):
+        scanned = self._scan_returning(monkeypatch, f"{RSA}\n{ED25519}\n")
+
+        assert scanned.splitlines()[0] == ED25519
+
+    def test_the_fingerprint_does_not_depend_on_scan_order(self):
+        one = ssh_host_keys.key_fingerprint(f"{RSA}\n{ED25519}")
+        other = ssh_host_keys.key_fingerprint(f"{ED25519}\n{RSA}")
+
+        assert one == other == ssh_host_keys.key_fingerprint(ED25519)
+
+
 class TestHostKeysMatch:
     def test_matches_when_every_pinned_key_is_still_offered(self):
         assert ssh_host_keys.host_keys_match(ED25519, f"{ED25519}\n{RSA}")

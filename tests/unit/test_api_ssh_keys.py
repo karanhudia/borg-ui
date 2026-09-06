@@ -1534,6 +1534,36 @@ class TestSSHConnectionHostKeyEndpoints:
         test_db.refresh(connection)
         assert connection.known_host_key == self.ED25519
 
+    def test_trusting_survives_a_rescan_in_a_different_order(
+        self, test_client: TestClient, admin_headers, test_db, monkeypatch
+    ):
+        """A host offering several key types is the normal case.
+
+        ssh-keyscan prints them in whatever order they answer, so the confirmed
+        blob and the fresh scan describe the same keys in a different order.
+        Refusing that made trusting impossible against every real multi-key
+        host, which is nearly all of them.
+        """
+        connection = self._connection(test_db)
+        rsa = "keys.example.com ssh-rsa AAAAB3NzaC1yc2EiIiIiIiIiIiIiIiIiIiIi"
+        monkeypatch.setattr(
+            ssh_keys_api,
+            "scan_host_key_async",
+            AsyncMock(return_value=f"{rsa}\n{self.ED25519}"),
+        )
+
+        response = test_client.post(
+            f"/api/ssh-keys/connections/{connection.id}/host-key/trust",
+            headers=admin_headers,
+            json={"key": f"{self.ED25519}\n{rsa}"},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "trusted"
+        test_db.refresh(connection)
+        assert self.ED25519 in connection.known_host_key
+        assert rsa in connection.known_host_key
+
     def test_refuses_to_pin_a_key_that_changed_while_confirming(
         self, test_client: TestClient, admin_headers, test_db, monkeypatch
     ):

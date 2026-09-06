@@ -35,6 +35,7 @@ from app.utils.ssh_host_keys import (
     key_fingerprint,
     pin_host_key,
     scan_host_key_async,
+    sort_host_key_lines,
 )
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.ssh_host_validation import normalize_ssh_host
@@ -2135,7 +2136,12 @@ async def trust_connection_host_key(
             },
         )
 
-    if payload.key.strip() != observed.strip():
+    # Compare the keys as a set, not as text. A host offering several key
+    # types is the normal case, and the confirmed blob and the fresh scan only
+    # have to describe the same keys, not the same string.
+    if set(sort_host_key_lines(payload.key.splitlines())) != set(
+        sort_host_key_lines(observed.splitlines())
+    ):
         raise HTTPException(
             status_code=409,
             detail={"key": "backend.errors.ssh.hostKeyChangedWhileConfirming"},

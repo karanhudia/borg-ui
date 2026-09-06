@@ -49,6 +49,14 @@ logger = structlog.get_logger()
 # small and avoids pinning a type OpenSSH would not have negotiated anyway.
 SCAN_KEY_TYPES = "ed25519,rsa,ecdsa"
 
+# Preference order for the keys a host offers, strongest first. ssh-keyscan
+# queries the types concurrently and prints whichever answers first, so its
+# output order changes from run to run; every scan is sorted by this before it
+# is stored or compared. Without that, two scans of the same unchanged host
+# produce different strings, and the fingerprint shown to the user changes
+# every time the dialog is opened.
+KEY_TYPE_PREFERENCE = ("ssh-ed25519", "ssh-rsa", "ecdsa-sha2")
+
 SCAN_TIMEOUT_SECONDS = 10
 
 # How long to leave a connection unscanned after its host key could not be read.
@@ -127,7 +135,22 @@ def scan_host_key(host: str, port: int = 22) -> str:
             detail[-1] if detail else f"No host key returned by {host}"
         )
 
-    return "\n".join(lines)
+    return "\n".join(sort_host_key_lines(lines))
+
+
+def _key_type_rank(line: str) -> tuple[int, str]:
+    """Sort key: preferred type first, then the line itself for ties."""
+    fields = line.split()
+    key_type = fields[1] if len(fields) > 1 else ""
+    for rank, prefix in enumerate(KEY_TYPE_PREFERENCE):
+        if key_type.startswith(prefix):
+            return (rank, line)
+    return (len(KEY_TYPE_PREFERENCE), line)
+
+
+def sort_host_key_lines(lines) -> list[str]:
+    """Order known_hosts lines so the same host always yields the same blob."""
+    return sorted((line.strip() for line in lines if line.strip()), key=_key_type_rank)
 
 
 async def scan_host_key_async(host: str, port: int = 22) -> str:
@@ -136,18 +159,21 @@ async def scan_host_key_async(host: str, port: int = 22) -> str:
 
 
 def key_fingerprint(host_key: Optional[str]) -> Optional[str]:
-    """Return the ``SHA256:`` fingerprint of the first key in a known_hosts blob.
+    """Return the ``SHA256:`` fingerprint of a blob's strongest key.
 
     Computed here rather than shelled out to ``ssh-keygen``: the connection
     list renders one of these per row. The format matches what OpenSSH prints,
     so a user can compare it against ``ssh-keygen -lf`` on the host itself.
-    ``ssh-keyscan`` lists key types in SCAN_KEY_TYPES order, so the first line
-    is the strongest key the host offered.
+
+    The lines are ordered by KEY_TYPE_PREFERENCE first, so the same host always
+    shows the same fingerprint. Reading whichever line came first would show a
+    different one on each scan, which is useless for the one thing a
+    fingerprint is for: comparing it against the host.
     """
     if not host_key or not host_key.strip():
         return None
 
-    for line in host_key.splitlines():
+    for line in sort_host_key_lines(host_key.splitlines()):
         fields = line.strip().split()
         if len(fields) < 3:
             continue
