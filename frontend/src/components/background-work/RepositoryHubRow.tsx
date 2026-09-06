@@ -39,7 +39,7 @@ function Cell({
   muted?: boolean
 }) {
   return (
-    <Box sx={{ minWidth: 0 }}>
+    <Box sx={{ minWidth: 0, gridColumn: { xs: '1 / -1', md: 'auto' } }}>
       <Typography
         variant="body2"
         sx={{
@@ -272,7 +272,7 @@ export default function RepositoryHubRow({
                   : t('operations.background.hub.statsNever')
               }
             />
-            <Box sx={{ minWidth: 0 }}>
+            <Box sx={{ minWidth: 0, gridColumn: { xs: '1 / -1', md: 'auto' } }}>
               <SyncStateChip
                 state={repository.sync_state}
                 lastSyncedAt={repository.last_synced_at}
@@ -297,10 +297,17 @@ export default function RepositoryHubRow({
             />
           </>
         ) : (
-          <Box sx={{ gridColumn: { md: 'span 3' } }} />
+          <Box sx={{ display: { xs: 'none', md: 'block' }, gridColumn: { md: 'span 3' } }} />
         )}
 
-        <Box sx={{ justifySelf: { xs: 'start', md: 'end' }, mt: -0.5 }}>
+        <Box
+          sx={{
+            justifySelf: 'end',
+            mt: -0.5,
+            gridColumn: { xs: '2', md: 'auto' },
+            gridRow: { xs: '1', md: 'auto' },
+          }}
+        >
           {repositoryId != null && (
             <RebuildMenu
               variant="icon"

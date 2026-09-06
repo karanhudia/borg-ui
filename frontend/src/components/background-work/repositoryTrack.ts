@@ -30,8 +30,10 @@ export const REBUILD_STAGE_FOR: Partial<Record<StageKey, RebuildStage>> = {
 // One grid shared by the hub header and every repository row: name, then
 // the three derived-data stages in the order the runner builds them
 // (stats, archive list, file history), then the row menu.
+// On small screens the name and the row menu share the first line and
+// every data cell spans the full width beneath them.
 export const HUB_GRID_COLUMNS = {
-  xs: '1fr',
+  xs: 'minmax(0, 1fr) auto',
   md: 'minmax(180px, 1.4fr) minmax(130px, 1fr) minmax(170px, 1.2fr) minmax(190px, 1.4fr) 40px',
 }
 
