@@ -17,6 +17,8 @@ import { useRepositoryStats } from '../hooks/useRepositoryStats'
 import { BorgApiClient } from '../services/borgApi'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { downloadArchiveFile } from '../utils/downloadArchiveFile'
+import { invalidateStoredArchives, resyncStoredArchives } from '../utils/archiveResync'
+import { useOperationEvents } from '../hooks/useOperationEvents'
 import RepositorySelectorCard from '../components/RepositorySelectorCard'
 import RepositoryStatsGrid from '../components/RepositoryStatsGrid'
 import RepositoryStatsGridSkeleton from '../components/RepositoryStatsGridSkeleton'
@@ -36,6 +38,7 @@ import SyncStateChip from '../components/archives/SyncStateChip'
 import ArchiveSearchField from '../components/archives/ArchiveSearchField'
 import ArchiveSeriesHeatmap from '../components/archives/ArchiveSeriesHeatmap'
 import type { ArchiveRow, HeatmapDay } from '../types/archives'
+import type { OperationItem } from '../types/operations'
 import { toast } from 'react-hot-toast'
 import MountSuccessToast from '../components/MountSuccessToast'
 import { Archive, Repository } from '@/types'
@@ -176,6 +179,21 @@ const Archives: React.FC = () => {
     retry: false,
   })
 
+  // The stored list only changes when archive_sync writes it, so the page
+  // refreshes on that operation rather than on a timer: a delete, a prune,
+  // a backup's follow-up, and the reconcile tick all land the same way.
+  const onOperationUpdated = React.useCallback(
+    (operation: OperationItem) => {
+      if (operation.kind !== 'archive_sync') return
+      if (operation.repository_id !== selectedRepositoryId) return
+      if (operation.status !== 'completed' && operation.status !== 'completed_with_warnings') return
+      invalidateStoredArchives(queryClient, selectedRepositoryId as number)
+    },
+    [queryClient, selectedRepositoryId]
+  )
+  const onOperationProgress = React.useCallback(() => {}, [])
+  useOperationEvents(onOperationUpdated, onOperationProgress)
+
   // Handle archives error
   React.useEffect(() => {
     const responseStatus = (archivesError as { response?: { status?: number } } | null)?.response
@@ -227,9 +245,11 @@ const Archives: React.FC = () => {
       const statusClient = new BorgApiClient(selectedRepository!)
       const terminal = new Set(['completed', 'completed_with_warnings', 'failed', 'cancelled'])
       const deadline = Date.now() + 5 * 60 * 1000
+      // The list is the stored one now, so a refetch alone would return the
+      // deleted archive again: ask for a reconcile run and let the event
+      // stream refresh the page when archive_sync has caught up.
       const refresh = () => {
-        queryClient.invalidateQueries({ queryKey: ['repository-archives-stored', repoId] })
-        queryClient.invalidateQueries({ queryKey: ['repository-info', repoId] })
+        void resyncStoredArchives(queryClient, repoId)
       }
       const poll = async () => {
         let status: string | undefined
@@ -487,7 +507,15 @@ const Archives: React.FC = () => {
   const archivesList = storedArchives.map(archiveRowToArchive)
   const syncState = archives?.data?.sync_state ?? 'never'
   const lastSyncedAt = archives?.data?.last_synced_at ?? null
-  const newestArchiveId = storedArchives.length > 0 ? storedArchives[0].id : null
+  // The list arrives newest first, so the first row of each series is that
+  // series' head. "Present in latest" is per series, not per repository.
+  const newestArchiveIdBySeries = React.useMemo(() => {
+    const heads: Record<string, number> = {}
+    for (const row of storedArchives) {
+      if (!(row.series in heads)) heads[row.series] = row.id
+    }
+    return heads
+  }, [storedArchives])
   const heatmapScale: HeatmapScale = chosenScale ?? suggestScale(storedArchives)
 
   const handleRebuildSync = () => {
@@ -691,7 +719,7 @@ const Archives: React.FC = () => {
             <Box sx={{ flex: '1 1 260px', minWidth: 0 }}>
               <ArchiveSearchField
                 repositoryId={selectedRepositoryId}
-                newestArchiveId={newestArchiveId}
+                newestArchiveIdBySeries={newestArchiveIdBySeries}
               />
             </Box>
             <Button

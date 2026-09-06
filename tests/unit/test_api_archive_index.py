@@ -305,6 +305,38 @@ class TestRebuild:
         test_db.refresh(a)
         assert a.original_size is None
 
+    def test_resync_enqueues_the_reconcile_chain_once(
+        self, test_client, test_db, admin_headers
+    ):
+        """Deleting, pruning, or wiping leaves the stored archive list ahead
+        of the repository, and the list is what the Archives page reads, so
+        the client asks for a resync instead of waiting for the interval."""
+        repo = _repo(test_db)
+        r = test_client.post(
+            f"/api/repositories/{repo.id}/resync", headers=admin_headers
+        )
+        assert r.status_code == 200, r.text
+        kinds = [test_db.get(Operation, i).kind for i in r.json()["operations"]]
+        assert kinds == ["archive_sync", "history_merge", "stats"]
+        ops = test_db.query(Operation).all()
+        assert all(o.trigger == "reconcile" and o.priority == 20 for o in ops)
+
+        # A second call while the first run is still queued adds nothing, so
+        # a burst of deletes does not build a queue of identical runs.
+        again = test_client.post(
+            f"/api/repositories/{repo.id}/resync", headers=admin_headers
+        )
+        assert again.status_code == 200
+        assert again.json()["operations"] == []
+        assert test_db.query(Operation).count() == len(kinds)
+
+    def test_resync_requires_operator(self, test_client, test_db, auth_headers):
+        repo = _repo(test_db)
+        r = test_client.post(
+            f"/api/repositories/{repo.id}/resync", headers=auth_headers
+        )
+        assert r.status_code == 403
+
     def test_rebuild_from_history_is_pro_and_resets_archives(
         self, test_client, test_db, admin_headers
     ):
