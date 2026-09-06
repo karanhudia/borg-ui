@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Alert,
@@ -14,11 +14,20 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  TextField,
   Tooltip,
   Typography,
   type Theme,
 } from '@mui/material'
-import { CheckSquare, ChevronRight, Home, MinusSquare, ShieldCheck, Square } from 'lucide-react'
+import {
+  CheckSquare,
+  ChevronRight,
+  Home,
+  MinusSquare,
+  Search,
+  ShieldCheck,
+  Square,
+} from 'lucide-react'
 import { BorgApiClient, type Repository } from '../services/borgApi/client'
 import type { Archive } from '../types'
 import { translateBackendKey } from '../utils/translateBackendKey'
@@ -56,9 +65,12 @@ export interface ArchivePathSelectionData {
 
 export interface ArchiveBrowseState {
   currentPath: string
+  /** The rows actually on screen, filter applied, so a wrapper's keyboard
+   *  cursor and the list agree on what index means. */
   items: ArchiveItem[]
   navigateTo: (path: string) => void
   activateItem: (item: ArchiveItem) => void
+  focusFilter: () => void
 }
 
 interface ArchivePathSelectorProps {
@@ -76,6 +88,9 @@ interface ArchivePathSelectorProps {
    *  navigation, so a wrapper (e.g. keyboard shortcuts) can drive this
    *  component without it becoming a controlled component. */
   onBrowseStateChange?: (state: ArchiveBrowseState) => void
+  /** Row the wrapper's keyboard cursor sits on, so arrow keys have something
+   *  visible to move. Undefined leaves the list unhighlighted. */
+  activeIndex?: number
 }
 
 export default function ArchivePathSelector({
@@ -88,9 +103,12 @@ export default function ArchivePathSelector({
   helpText,
   variant = 'standalone',
   onBrowseStateChange,
+  activeIndex,
 }: ArchivePathSelectorProps) {
   const embedded = variant === 'embedded'
   const { t } = useTranslation()
+  const [filter, setFilter] = useState('')
+  const filterRef = useRef<HTMLInputElement>(null)
   const [currentPath, setCurrentPath] = useState<string>('')
   const [items, setItems] = useState<ArchiveItem[]>([])
   const [loading, setLoading] = useState<boolean>(false)
@@ -153,6 +171,12 @@ export default function ArchivePathSelector({
 
   const pathParts = currentPath ? currentPath.split('/').filter(Boolean) : []
 
+  const visibleItems = useMemo(() => {
+    const needle = filter.trim().toLowerCase()
+    if (!needle) return items
+    return items.filter((item) => item.name.toLowerCase().includes(needle))
+  }, [items, filter])
+
   const handleItemClick = (item: ArchiveItem) => {
     if (item.type === 'directory') {
       setCurrentPath(item.path)
@@ -181,18 +205,28 @@ export default function ArchivePathSelector({
   }
 
   const navigateToPath = (targetPath: string) => {
+    setFilter('')
     setCurrentPath(targetPath)
   }
+
+  // The published callbacks are read through refs rather than captured, so a
+  // wrapper that holds one from an earlier render still toggles against the
+  // current selection instead of the one this effect last saw.
+  const activateRef = useRef(handleItemClick)
+  activateRef.current = handleItemClick
+  const navigateRef = useRef(navigateToPath)
+  navigateRef.current = navigateToPath
 
   useEffect(() => {
     onBrowseStateChange?.({
       currentPath,
-      items,
-      navigateTo: navigateToPath,
-      activateItem: handleItemClick,
+      items: visibleItems,
+      navigateTo: (path: string) => navigateRef.current(path),
+      activateItem: (item: ArchiveItem) => activateRef.current(item),
+      focusFilter: () => filterRef.current?.focus(),
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPath, items])
+  }, [currentPath, visibleItems])
 
   const formatSize = (bytes?: number): string => {
     if (!bytes) return '0 B'
@@ -312,6 +346,27 @@ export default function ArchivePathSelector({
             )
           })}
         </Breadcrumbs>
+        {embedded && (
+          <TextField
+            inputRef={filterRef}
+            size="small"
+            variant="outlined"
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            placeholder={t('wizard.restoreFiles.filterPlaceholder')}
+            sx={{ ml: 'auto', width: { xs: 140, sm: 220 }, flexShrink: 0 }}
+            slotProps={{
+              // The label belongs on the input, not on the wrapper MUI would
+              // otherwise put it on.
+              htmlInput: { 'aria-label': t('wizard.restoreFiles.filterLabel') },
+              input: {
+                startAdornment: (
+                  <Search size={14} style={{ marginRight: 6, opacity: 0.6 }} aria-hidden />
+                ),
+              },
+            }}
+          />
+        )}
       </Box>
 
       <Box
@@ -418,7 +473,7 @@ export default function ArchivePathSelector({
             </Box>
           )}
 
-          {!loading && !error && items.length === 0 && (
+          {!loading && !error && visibleItems.length === 0 && (
             <Box sx={{ p: 4, textAlign: 'center' }}>
               <Typography
                 variant="body2"
@@ -431,10 +486,11 @@ export default function ArchivePathSelector({
             </Box>
           )}
 
-          {!loading && !error && items.length > 0 && (
+          {!loading && !error && visibleItems.length > 0 && (
             <List dense disablePadding>
-              {items.map((item) => {
+              {visibleItems.map((item, index) => {
                 const managedCanary = isRestoreCanaryItem(item)
+                const isActive = activeIndex === index
                 const managedTooltip =
                   item.type === 'directory'
                     ? canaryDescription
@@ -479,9 +535,19 @@ export default function ArchivePathSelector({
                     >
                       <ListItemButton
                         onClick={() => handleItemClick(item)}
+                        data-active={isActive || undefined}
+                        ref={(node: HTMLDivElement | null) => {
+                          if (isActive) node?.scrollIntoView({ block: 'nearest' })
+                        }}
                         sx={{
                           py: embedded ? 1 : undefined,
                           px: embedded ? 2 : undefined,
+                          ...(isActive && {
+                            bgcolor: (theme: Theme) => alpha(theme.palette.primary.main, 0.12),
+                            outline: (theme: Theme) =>
+                              `2px solid ${alpha(theme.palette.primary.main, 0.5)}`,
+                            outlineOffset: '-2px',
+                          }),
                           // Embedded rows are separated by a hairline and never
                           // outlined; the panel around the list owns the frame.
                           ...(embedded
