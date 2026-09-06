@@ -37,6 +37,7 @@ import {
 import SyncStateChip from '../components/archives/SyncStateChip'
 import ArchiveSearchField from '../components/archives/ArchiveSearchField'
 import ArchiveSeriesHeatmap from '../components/archives/ArchiveSeriesHeatmap'
+import { parseBackendDate } from '../utils/dateUtils'
 import type { ArchiveRow, HeatmapDay } from '../types/archives'
 import type { OperationItem } from '../types/operations'
 import { toast } from 'react-hot-toast'
@@ -502,7 +503,7 @@ const Archives: React.FC = () => {
   const storedArchives = (archives?.data?.archives || [])
     .slice()
     .sort((a: ArchiveRow, b: ArchiveRow) => {
-      return new Date(b.start).getTime() - new Date(a.start).getTime()
+      return parseBackendDate(b.start).getTime() - parseBackendDate(a.start).getTime()
     })
   const archivesList = storedArchives.map(archiveRowToArchive)
   const syncState = archives?.data?.sync_state ?? 'never'
