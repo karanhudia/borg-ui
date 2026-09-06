@@ -1041,6 +1041,8 @@
       "notPresent": "Not present in {{count}} older archives",
       "selected": "{{count}} selected ({{size}})",
       "restoreSelection": "Restore selection",
+      "selectionBar": "Selection",
+      "clearSelection": "Clear selection",
       "searchInArchive": "Search in this archive",
       "folderMetadata": "Folder",
       "noSelection": "Select a file or folder to see details.",

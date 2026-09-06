@@ -1,5 +1,16 @@
 import { useCallback, useRef, useState } from 'react'
-import { Box, Button, Stack, Typography, alpha, useMediaQuery, useTheme } from '@mui/material'
+import {
+  Box,
+  Button,
+  IconButton,
+  Stack,
+  Tooltip,
+  Typography,
+  alpha,
+  useMediaQuery,
+  useTheme,
+} from '@mui/material'
+import { CheckSquare, RotateCcw, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import ArchivePathSelector, {
   type ArchiveBrowseState,
@@ -105,6 +116,10 @@ export default function ArchiveFilesTab({
   const archiveRef = getBorgVersion(repository) === 2 ? `aid:${archive.borg_id}` : archive.name
 
   const restoreSelection = () => onRestorePaths?.(selection.selectedPaths, selectedItems)
+  const clearSelection = () => {
+    setSelection({ selectedPaths: [], selectedItems: [] })
+    setSelectedEntries(new Map())
+  }
 
   const isTypingTarget = (target: EventTarget | null) => {
     const el = target as HTMLElement | null
@@ -202,31 +217,80 @@ export default function ArchiveFilesTab({
       )}
 
       {selectedCount > 0 && (
-        <Stack
-          direction="row"
-          spacing={2}
+        // Floats over the page instead of sitting under the list, so picking
+        // a file never shifts the panels and the action stays in reach while
+        // a long folder scrolls. Offset past the sidebar so it centres on
+        // the content, not the window.
+        <Box
           sx={{
-            mt: 3,
-            px: 2.5,
-            py: 1.5,
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            borderRadius: 2,
-            border: 1,
-            borderColor: (theme) => alpha(theme.palette.primary.main, 0.3),
-            bgcolor: (theme) => alpha(theme.palette.primary.main, 0.06),
+            position: 'fixed',
+            left: { xs: 0, sm: 240 },
+            right: 0,
+            bottom: { xs: 12, sm: 24 },
+            display: 'flex',
+            justifyContent: 'center',
+            px: 2,
+            pointerEvents: 'none',
+            zIndex: (theme) => theme.zIndex.appBar,
           }}
         >
-          <Typography variant="body2" sx={{ fontWeight: 600 }}>
-            {t('archives.files.selected', {
-              count: selectedCount,
-              size: formatBytes(selectedSize),
-            })}
-          </Typography>
-          <Button variant="contained" disableElevation onClick={restoreSelection}>
-            {t('archives.files.restoreSelection')}
-          </Button>
-        </Stack>
+          <Stack
+            role="toolbar"
+            aria-label={t('archives.files.selectionBar')}
+            direction="row"
+            spacing={1.5}
+            sx={{
+              pointerEvents: 'auto',
+              alignItems: 'center',
+              pl: 2,
+              pr: 1,
+              py: 1,
+              borderRadius: 999,
+              maxWidth: '100%',
+              color: 'common.white',
+              bgcolor: (theme) =>
+                theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[900],
+              boxShadow: (theme) =>
+                `0 12px 32px ${alpha(theme.palette.common.black, 0.28)}, 0 0 0 1px ${alpha(theme.palette.common.white, 0.08)}`,
+              '@keyframes selection-bar-in': {
+                from: { opacity: 0, transform: 'translateY(12px)' },
+                to: { opacity: 1, transform: 'translateY(0)' },
+              },
+              animation: 'selection-bar-in 180ms ease-out',
+            }}
+          >
+            <CheckSquare size={16} aria-hidden />
+            <Typography
+              variant="body2"
+              sx={{ fontWeight: 600, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}
+            >
+              {t('archives.files.selected', {
+                count: selectedCount,
+                size: formatBytes(selectedSize),
+              })}
+            </Typography>
+            <Button
+              size="small"
+              variant="contained"
+              disableElevation
+              startIcon={<RotateCcw size={14} />}
+              onClick={restoreSelection}
+              sx={{ borderRadius: 999, whiteSpace: 'nowrap', ml: 0.5 }}
+            >
+              {t('archives.files.restoreSelection')}
+            </Button>
+            <Tooltip title={t('archives.files.clearSelection')}>
+              <IconButton
+                size="small"
+                aria-label={t('archives.files.clearSelection')}
+                onClick={clearSelection}
+                sx={{ color: 'inherit', opacity: 0.8, '&:hover': { opacity: 1 } }}
+              >
+                <X size={16} />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        </Box>
       )}
     </Box>
   )

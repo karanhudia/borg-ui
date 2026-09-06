@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { useEffect, useRef } from 'react'
-import { screen, fireEvent } from '@testing-library/react'
+import { screen, fireEvent, within } from '@testing-library/react'
 import { renderWithProviders } from '../../../test/test-utils'
 import ArchiveFilesTab from '../ArchiveFilesTab'
 import type { ArchiveDetailResponse } from '../../../types/archives'
@@ -133,12 +133,23 @@ describe('ArchiveFilesTab', () => {
     expect(screen.getByText('Folder')).toBeInTheDocument()
   })
 
-  it('shows the footer with the selection count once a file is selected', () => {
+  it('floats a selection bar with the count once a file is selected', () => {
     renderWithProviders(
       <ArchiveFilesTab repositoryId={7} repository={repository} archive={archive} />
     )
     fireEvent.click(screen.getByTestId('archive-path-selector'))
-    expect(screen.getByText(/1 selected/i)).toBeInTheDocument()
+    const bar = screen.getByRole('toolbar', { name: /selection/i })
+    expect(within(bar).getByText(/1 selected/i)).toBeInTheDocument()
+    expect(within(bar).getByRole('button', { name: /restore selection/i })).toBeInTheDocument()
+  })
+
+  it('clears the selection from the bar', () => {
+    renderWithProviders(
+      <ArchiveFilesTab repositoryId={7} repository={repository} archive={archive} />
+    )
+    fireEvent.click(screen.getByTestId('archive-path-selector'))
+    fireEvent.click(screen.getByRole('button', { name: /clear selection/i }))
+    expect(screen.queryByRole('toolbar', { name: /selection/i })).not.toBeInTheDocument()
   })
 
   describe('keyboard navigation', () => {
