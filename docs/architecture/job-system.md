@@ -188,8 +188,16 @@ Rules:
   run alongside.
 - Lower priority number runs first: manual and plan work at 0, scheduled at
   5, follow-ups at 10, reconcile at 20.
-- A failed, cancelled, or skipped operation skips everything that depends on
-  it with `skip_reason = dependency_failed`.
+- A failed or cancelled operation skips everything that depends on it with
+  `skip_reason = dependency_failed`, including every subsequent dependant
+  of that skip. An intentional skip means the stage had nothing to do, so
+  dependants (`stats` after an unsupported `history_index`) still run.
+- An operation the repository admission refuses (409, another job holds
+  the repository) goes back to the queue instead of failing, with
+  `params.deferrals` counting the attempts and `params.deferred_until`
+  holding the next attempt's not-before time as epoch seconds (5 s,
+  doubling to 5 min).
+  After 20 deferrals it fails with "repository still busy".
 - Follow-ups are created automatically when an operation succeeds. An
   import enqueues stats and archive listing.
 - `stats` measures the repository read-only through the best source Borg

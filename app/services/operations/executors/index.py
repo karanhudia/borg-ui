@@ -3,9 +3,11 @@ Series inference follows spec 6.6 through `app.services.operations.series`.
 """
 
 import json
+import re
 from typing import Iterable, Optional, Sequence
 
 import structlog
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.repositories import (
@@ -21,7 +23,7 @@ from app.config import settings
 from app.core.borg_router import BorgRouter
 from app.database.models import Archive, Repository, SystemSettings, utc_now
 from app.services.operations import executors
-from app.services.operations.runner import Outcome
+from app.services.operations.runner import Outcome, repository_busy
 from app.services.operations.series import infer_series, series_prefixes_for_repository
 from app.services.repository_command_lock import run_serialized_repository_command
 from app.services.repository_executor import is_agent_executor
@@ -119,6 +121,11 @@ def apply_listing(
         else:
             for key, value in fields.items():
                 if key == "borg_id":
+                    continue
+                if key == "end" and value is None:
+                    # listings carry no end (`borg info` does): keep the
+                    # value fill_archive_info stored instead of wiping it
+                    # on every sync
                     continue
                 if key == "series" and value != row.series:
                     row.history_state = "pending"
@@ -229,26 +236,147 @@ def _info_stats(payload: str) -> Optional[dict]:
     }
 
 
+_UTC_OFFSET_SUFFIX = re.compile(r"(Z|[+-]\d{2}:?\d{2})$")
+
+
+def _carries_utc_offset(value: object) -> bool:
+    """True for ISO timestamps with an explicit offset (Borg 2 output)."""
+    return isinstance(value, str) and _UTC_OFFSET_SUFFIX.search(value) is not None
+
+
+def archive_end_resolvable(db: Session, repository: Repository) -> bool:
+    """False while a naive Borg 1 time from this repository has no zone to
+    be read in: an agent repository whose agent never reported one. Server
+    listings run under TZ=UTC and Borg 2 renders an offset, so only that
+    case is unresolvable."""
+    if not is_agent_executor(repository):
+        return True
+    return bool(agent_timezone_for_repository(db, repository))
+
+
 def archives_needing_info(
-    db: Session, repository: Repository, *, limit: int
+    db: Session,
+    repository: Repository,
+    *,
+    limit: int,
+    include_missing_end: bool = False,
 ) -> list[Archive]:
     """Archives still missing their `borg info` stats, oldest first.
 
     Not just the rows this run created: a repository imported with more
     archives than `INDEX_ARCHIVE_INFO_PER_RUN` fills the oldest few now and
     the rest on later runs, which is what the per-run cap is for (spec 6.4).
+
+    `include_missing_end` also picks rows whose sizes are set but whose
+    `end` is not (fill_archive_info withheld a naive end while the agent's
+    zone was unknown), but only into the slots the rows without sizes leave
+    free: a row whose end can never be parsed costs at most a spare slot per
+    run and never displaces an archive that has no stats at all.
     """
     if limit <= 0:
         return []
-    return (
-        db.query(Archive)
-        .filter(
-            Archive.repository_id == repository.id,
-            Archive.original_size.is_(None),
+
+    def _select(predicate, exclude_ids: set[int], n: int) -> list[Archive]:
+        q = db.query(Archive).filter(Archive.repository_id == repository.id, predicate)
+        if exclude_ids:
+            q = q.filter(Archive.id.notin_(exclude_ids))
+        return q.order_by(Archive.start.asc()).limit(n).all()
+
+    rows = _select(Archive.original_size.is_(None), set(), limit)
+    spare = limit - len(rows)
+    if include_missing_end and spare > 0:
+        rows += _select(Archive.end.is_(None), {a.id for a in rows}, spare)
+    return rows
+
+
+class AgentUnavailable(RuntimeError):
+    """The agent did not answer a per-archive job within the timeout."""
+
+
+async def _agent_archive_info(
+    db: Session, repository: Repository, archive: Archive, *, timeout_seconds: int
+) -> Optional[dict]:
+    """Run `repository.archive_info` on the agent for one archive.
+
+    Borg 2 archives are addressed by `aid:<id>` so a series name never
+    resolves to a different archive; Borg 1 has no id selector.
+    """
+    from app.services.agent_job_dispatcher import (
+        dispatch_agent_cancel_if_connected,
+        dispatch_agent_job_best_effort,
+    )
+    from app.services.repository_executor import (
+        abandon_agent_repository_operation_job,
+        queue_agent_repository_operation_job,
+        wait_for_agent_repository_operation_job,
+    )
+
+    ref = (
+        f"aid:{archive.borg_id}"
+        if (repository.borg_version or 1) == 2
+        else archive.name
+    )
+    job = queue_agent_repository_operation_job(
+        db, repository, job_kind="repository.archive_info", operation={"archive": ref}
+    )
+    await dispatch_agent_job_best_effort(
+        db, job, repository_id=repository.id, archive_name=ref
+    )
+    try:
+        result = await wait_for_agent_repository_operation_job(
+            db, job.id, timeout_seconds=timeout_seconds
         )
-        .order_by(Archive.start.asc())
-        .limit(limit)
-        .all()
+    except HTTPException as exc:
+        if exc.status_code != status.HTTP_504_GATEWAY_TIMEOUT:
+            raise
+        # Left behind, the job counts as active repository work for every
+        # later archive_info and stats request (the reaper never reaps a
+        # queued job). Cancel it, and tell the caller the agent is gone.
+        abandoned = abandon_agent_repository_operation_job(db, job.id)
+        if abandoned is not None and abandoned.status == "cancel_requested":
+            await dispatch_agent_cancel_if_connected(abandoned)
+        raise AgentUnavailable(
+            f"no answer from the agent within {timeout_seconds}s"
+        ) from exc
+    if not _agent_listing_ok(result):
+        return None
+    return {"success": True, "stdout": result.get("stdout") or ""}
+
+
+async def _server_archive_info(
+    repository: Repository, archive: Archive, env: dict
+) -> Optional[dict]:
+    remote_path = effective_repository_remote_path(repository)
+    # TZ=UTC so borg renders the archive end time in UTC (see stats env).
+    info_env = _repository_stats_borg_env(env or {})
+    if (repository.borg_version or 1) == 2:
+        from app.core.borg2 import borg2
+
+        return await run_serialized_repository_command(
+            repository.id,
+            lambda: borg2.info_archive(
+                repository.path,
+                f"aid:{archive.borg_id}",
+                passphrase=repository.passphrase,
+                remote_path=remote_path,
+                bypass_lock=repository.bypass_lock,
+                env=info_env,
+            ),
+            scope="metadata",
+        )
+    from app.core.borg import borg
+
+    return await run_serialized_repository_command(
+        repository.id,
+        lambda: borg.info_archive(
+            repository.path,
+            archive.name,
+            passphrase=repository.passphrase,
+            remote_path=remote_path,
+            bypass_lock=repository.bypass_lock,
+            env=info_env,
+        ),
+        scope="metadata",
     )
 
 
@@ -260,46 +388,39 @@ async def fill_archive_info(
     *,
     limit: int,
 ) -> int:
-    """Run per-archive `borg info` for up to `limit` archives, oldest first."""
-    if is_agent_executor(repository) or limit <= 0:
+    """Run per-archive `borg info` for up to `limit` archives, oldest first.
+
+    Agent repositories go through the agent's `repository.archive_info` job;
+    the agent renders naive Borg 1 timestamps in its reported zone.
+    """
+    if limit <= 0:
         return 0
+    agent = is_agent_executor(repository)
+    timezone_name = agent_timezone_for_repository(db, repository) if agent else "UTC"
+    timeout_seconds = get_operation_timeouts(db)["info_timeout"] if agent else None
     filled = 0
-    remote_path = effective_repository_remote_path(repository)
-    # TZ=UTC so borg renders the archive end time in UTC (see stats env).
-    info_env = _repository_stats_borg_env(env or {})
     for archive in sorted(archives, key=lambda a: a.start)[:limit]:
         try:
-            if (repository.borg_version or 1) == 2:
-                from app.core.borg2 import borg2
-
-                result = await run_serialized_repository_command(
-                    repository.id,
-                    lambda archive=archive: borg2.info_archive(
-                        repository.path,
-                        f"aid:{archive.borg_id}",
-                        passphrase=repository.passphrase,
-                        remote_path=remote_path,
-                        bypass_lock=repository.bypass_lock,
-                        env=info_env,
-                    ),
-                    scope="metadata",
+            if agent:
+                result = await _agent_archive_info(
+                    db, repository, archive, timeout_seconds=timeout_seconds
                 )
             else:
-                from app.core.borg import borg
-
-                result = await run_serialized_repository_command(
-                    repository.id,
-                    lambda archive=archive: borg.info_archive(
-                        repository.path,
-                        archive.name,
-                        passphrase=repository.passphrase,
-                        remote_path=remote_path,
-                        bypass_lock=repository.bypass_lock,
-                        env=info_env,
-                    ),
-                    scope="metadata",
-                )
+                result = await _server_archive_info(repository, archive, env)
+        except AgentUnavailable as exc:
+            # every further archive would wait out the same timeout
+            logger.warning(
+                "archive info abandoned, agent not answering",
+                archive=archive.name,
+                error=str(exc),
+            )
+            break
         except Exception as exc:
+            if repository_busy(exc):
+                # another job took the repository between two archives: the
+                # runner defers the whole operation and retries later, which
+                # beats one refused job per remaining archive
+                raise
             logger.warning("archive info failed", archive=archive.name, error=str(exc))
             continue
         if not result or not result.get("success"):
@@ -311,9 +432,13 @@ async def fill_archive_info(
         archive.original_size = info["original_size"]
         archive.compressed_size = info["compressed_size"]
         archive.deduplicated_size = info["deduplicated_size"]
-        if info["end"]:
+        if info["end"] and (timezone_name or _carries_utc_offset(info["end"])):
+            # A naive end time from an agent that never reported its zone
+            # would be read in the server's zone; leave it unset instead.
             try:
-                archive.end = _parse_borg_archive_time(info["end"], timezone_name="UTC")
+                archive.end = _parse_borg_archive_time(
+                    info["end"], timezone_name=timezone_name
+                )
             except ValueError:
                 pass
         if info["duration"] is not None:
@@ -419,6 +544,21 @@ async def run_archive_sync(ctx) -> Outcome:
     if repository is None:
         return Outcome(status="skipped", skip_reason="repository_missing")
     db = ctx.db
+    if (repository.borg_version or 1) != 2 and not archive_end_resolvable(
+        db, repository
+    ):
+        # A Borg 1 listing is naive wall clock in the zone the agent ran it
+        # in. Without that zone the times would be stored in the server's
+        # zone, and `start` is NOT NULL, so there is no row to withhold it
+        # from. The agent reports its zone on hello; the next reconcile
+        # retries.
+        return Outcome(
+            status="failed",
+            error_message=(
+                "agent has not reported its timezone; Borg 1 archive times "
+                "cannot be placed until it does"
+            ),
+        )
     env, temp_key_file = _prepare_repository_borg_env(repository, db)
     try:
         ok, entries, timezone_name = await list_archives_for_repository(
@@ -437,7 +577,10 @@ async def run_archive_sync(ctx) -> Outcome:
             db,
             repository,
             archives_needing_info(
-                db, repository, limit=settings.index_archive_info_per_run
+                db,
+                repository,
+                limit=settings.index_archive_info_per_run,
+                include_missing_end=True,
             ),
             env,
             limit=settings.index_archive_info_per_run,

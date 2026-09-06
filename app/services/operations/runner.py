@@ -2,6 +2,7 @@
 cancellation, and crash recovery. One instance per process."""
 
 import asyncio
+import math
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,7 +11,7 @@ from typing import Optional
 import structlog
 from sqlalchemy.orm import Session
 
-from app.config import settings as app_settings
+import app.config as app_config
 from app.database.models import Operation, Repository, SystemSettings, utc_now
 from app.services.operations import executors as executor_registry
 from app.services.operations.enqueue import enqueue_chain
@@ -25,8 +26,67 @@ from app.utils.process_utils import is_process_alive
 
 logger = structlog.get_logger()
 
-_FAILED_DEPENDENCY_STATUSES = ("failed", "cancelled", "skipped")
-_OUTCOME_STATUSES = ("completed", "completed_with_warnings", "skipped", "failed")
+# An intentional skip lets dependants run, but a skip caused by a failed
+# dependency must propagate the failure through the remaining chain.
+# Executors that need a predecessor's result read it defensively.
+_FAILED_DEPENDENCY_STATUSES = ("failed", "cancelled")
+_SATISFIED_DEPENDENCY_STATUSES = SUCCESS_STATUSES | {"skipped"}
+# What an executor may return. A deferral is not among them: it is the
+# runner's own reaction to the admission's 409 and never an executor's
+# choice, so an executor cannot requeue itself by accident.
+_OUTCOME_STATUSES = (
+    "completed",
+    "completed_with_warnings",
+    "skipped",
+    "failed",
+)
+# An operation refused by the repository admission (another job holds the
+# repository) goes back to the queue instead of failing: the backup
+# follow-up listing is enqueued the instant the backup completes, while the
+# plan is still creating its prune job, so the lane check can run before the
+# prune row exists and admission then refuses the listing. Bounded, so a
+# repository that never frees up still ends in a visible failure.
+MAX_DEFERRALS = 20
+# Each deferral waits before the next attempt, doubling from 5 s to 5 min.
+# The runner is woken by every completion anywhere in the system, so without
+# the delay a busy install would spend the whole deferral budget in seconds
+# while a pending prune sits on the repository. 20 attempts give a
+# repository about 75 minutes to free up.
+DEFERRAL_DELAY_SECONDS = 5.0
+DEFERRAL_MAX_DELAY_SECONDS = 300.0
+REPOSITORY_BUSY_KEY = "backend.errors.jobs.repositoryOperationActive"
+
+
+def deferred_until(op: Operation) -> Optional[float]:
+    """The not-before time (epoch seconds) of a deferred operation, if any."""
+    raw = (op.params or {}).get("deferred_until")
+    if raw is None:
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    # inf would park the operation forever, nan would skip the backoff
+    return value if math.isfinite(value) else None
+
+
+def deferral_count(op: Operation) -> int:
+    """How often the operation has been deferred; unreadable bookkeeping
+    counts as none rather than crashing the runner."""
+    try:
+        count = int((op.params or {}).get("deferrals", 0))
+    except (TypeError, ValueError, OverflowError):
+        # inf overflows int(), nan and text are ValueErrors
+        return 0
+    return max(count, 0)
+
+
+def repository_busy(exc: BaseException) -> bool:
+    """True for the admission's 409 (repositoryOperationActive)."""
+    if getattr(exc, "status_code", None) != 409:
+        return False
+    detail = getattr(exc, "detail", None)
+    return isinstance(detail, dict) and detail.get("key") == REPOSITORY_BUSY_KEY
 
 
 @dataclass
@@ -42,7 +102,7 @@ class Outcome:
 
 
 def operation_log_path(operation_id: int) -> Path:
-    return Path(app_settings.data_dir) / "logs" / f"operation_{operation_id}.log"
+    return Path(app_config.settings.data_dir) / "logs" / f"operation_{operation_id}.log"
 
 
 class OperationContext:
@@ -107,13 +167,19 @@ class OperationContext:
 
 class OperationRunner:
     def __init__(
-        self, *, session_factory=None, registry=None, poll_interval: float = 5.0
+        self,
+        *,
+        session_factory=None,
+        registry=None,
+        poll_interval: float = 5.0,
+        deferral_delay: float = DEFERRAL_DELAY_SECONDS,
     ):
         self._session_factory = session_factory
         self._registry = (
             registry if registry is not None else executor_registry.REGISTRY
         )
         self._poll_interval = poll_interval
+        self._deferral_delay = deferral_delay
         self._wake: Optional[asyncio.Event] = None
         self._stopped = False
         self.running_tasks: dict[int, asyncio.Task] = {}
@@ -135,6 +201,13 @@ class OperationRunner:
 
     def _registered_kinds(self) -> set[str]:
         return set(self._registry)
+
+    def deferral_delay_for(self, deferrals: int) -> float:
+        """Seconds to wait before the attempt after the n-th deferral."""
+        return min(
+            self._deferral_delay * 2 ** max(deferrals - 1, 0),
+            DEFERRAL_MAX_DELAY_SECONDS,
+        )
 
     # -- loop ------------------------------------------------------------------
 
@@ -237,18 +310,26 @@ class OperationRunner:
                 )
                 .all()
             )
+            now = time.time()
             for op in queued:
                 if op.id in self.running_tasks:
+                    continue
+                not_before = deferred_until(op)
+                if not_before is not None and not_before > now:
                     continue
                 if op.depends_on_id is not None:
                     dependency = db.get(Operation, op.depends_on_id)
                     if (
                         dependency is None
                         or dependency.status in _FAILED_DEPENDENCY_STATUSES
+                        or (
+                            dependency.status == "skipped"
+                            and dependency.skip_reason == "dependency_failed"
+                        )
                     ):
                         await self._skip(db, op, "dependency_failed")
                         continue
-                    if dependency.status not in SUCCESS_STATUSES:
+                    if dependency.status not in _SATISFIED_DEPENDENCY_STATUSES:
                         continue
                 if self._get_executor(op.kind) is None:
                     await self._skip(db, op, "executor_unavailable")
@@ -279,6 +360,7 @@ class OperationRunner:
     async def run_operation(self, operation_id: int) -> None:
         db: Session = self._session()
         ctx: Optional[OperationContext] = None
+        deferred = False
         try:
             op = db.get(Operation, operation_id)
             if op is None or op.status != "running":
@@ -286,6 +368,7 @@ class OperationRunner:
             executor = self._get_executor(op.kind)
             ctx = OperationContext(self, db, op)
             outcome: Optional[Outcome]
+            busy_error: Optional[str] = None
             try:
                 outcome = await executor(ctx)
             except asyncio.CancelledError:
@@ -295,13 +378,73 @@ class OperationRunner:
                 await broadcast_operation_updated(op, db)
                 raise
             except Exception as exc:
-                logger.exception("Operation failed", operation_id=op.id, kind=op.kind)
-                outcome = Outcome(
-                    status="failed",
-                    error_message=str(exc) or exc.__class__.__name__,
-                )
+                if repository_busy(exc):
+                    busy_error = str(exc)
+                    # a cancel that arrived while the operation was being
+                    # refused wins: requeueing would drop the request in
+                    # `finally`, so the refusal falls through to the
+                    # cancelled path below with the admission's message
+                    outcome = Outcome(error_message=busy_error)
+                else:
+                    logger.exception(
+                        "Operation failed", operation_id=op.id, kind=op.kind
+                    )
+                    outcome = Outcome(
+                        status="failed",
+                        error_message=str(exc) or exc.__class__.__name__,
+                    )
             if outcome is None:
                 outcome = Outcome()
+            if busy_error is not None and operation_id not in self.cancel_requested:
+                deferrals = deferral_count(op) + 1
+                if deferrals > MAX_DEFERRALS:
+                    outcome = Outcome(
+                        status="failed",
+                        error_message=(
+                            f"repository still busy after {MAX_DEFERRALS} attempts: "
+                            f"{busy_error}"
+                        ),
+                    )
+                else:
+                    logger.info(
+                        "Operation deferred, repository busy",
+                        operation_id=op.id,
+                        kind=op.kind,
+                        deferrals=deferrals,
+                    )
+                    delay = self.deferral_delay_for(deferrals)
+                    op.status = "queued"
+                    op.started_at = None
+                    op.error_message = None
+                    op.params = {
+                        **(op.params or {}),
+                        "deferrals": deferrals,
+                        "deferred_until": time.time() + delay,
+                    }
+                    try:
+                        db.commit()
+                    except Exception as exc:
+                        # the row would otherwise stay `running` with no task
+                        # behind it until the next restart: fail it instead
+                        db.rollback()
+                        logger.exception(
+                            "Operation requeue failed",
+                            operation_id=op.id,
+                            kind=op.kind,
+                        )
+                        outcome = Outcome(
+                            status="failed",
+                            error_message=(
+                                f"could not requeue the deferred operation: {exc}"
+                            ),
+                        )
+                    else:
+                        await broadcast_operation_updated(op, db)
+                        # no wake, and the tick skips the operation until
+                        # deferred_until: wakes from other completions must
+                        # not burn the deferrals
+                        deferred = True
+                        return
             if op.status == "cancelled" or (
                 operation_id in self.cancel_requested and outcome.status != "failed"
             ):
@@ -338,7 +481,8 @@ class OperationRunner:
             db.close()
             self.running_tasks.pop(operation_id, None)
             self.cancel_requested.discard(operation_id)
-            self.wake()
+            if not deferred:
+                self.wake()
 
     # -- cancellation ----------------------------------------------------------
 
