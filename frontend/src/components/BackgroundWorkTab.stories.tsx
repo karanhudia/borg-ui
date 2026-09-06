@@ -35,7 +35,16 @@ const authorizationModel = {
   assignable_repository_roles_by_global_role: {},
 }
 
-function installApiMocks(queue: QueueResponse): MockAdapter {
+const operatorUser = {
+  ...adminUser,
+  id: 2,
+  username: 'operator',
+  full_name: 'Operator User',
+  role: 'operator',
+  global_permissions: [],
+}
+
+function installApiMocks(queue: QueueResponse, user = adminUser): MockAdapter {
   const mock = new MockAdapter(api)
   mock.onGet('/auth/config').reply(200, {
     proxy_auth_enabled: true,
@@ -47,7 +56,7 @@ function installApiMocks(queue: QueueResponse): MockAdapter {
     proxy_auth_header: 'x-auth-user',
     proxy_auth_health: { enabled: true, warnings: [] },
   })
-  mock.onGet('/auth/me').reply(200, adminUser)
+  mock.onGet('/auth/me').reply(200, user)
   mock.onGet('/auth/authorization-model').reply(200, authorizationModel)
   mock.onGet('/operations/queue').reply(200, queue)
   mock.onGet('/operations/repositories').reply(200, hubResponse)
@@ -70,16 +79,24 @@ function installApiMocks(queue: QueueResponse): MockAdapter {
   return mock
 }
 
-function StoryProviders({ children, queue }: { children: ReactNode; queue: QueueResponse }) {
+function StoryProviders({
+  children,
+  queue,
+  user = adminUser,
+}: {
+  children: ReactNode
+  queue: QueueResponse
+  user?: typeof adminUser
+}) {
   const [isReady, setIsReady] = useState(false)
 
   useEffect(() => {
-    const mock = installApiMocks(queue)
+    const mock = installApiMocks(queue, user)
     setIsReady(true)
     return () => {
       mock.restore()
     }
-  }, [queue])
+  }, [queue, user])
 
   if (!isReady) return null
 
@@ -96,9 +113,9 @@ function StoryProviders({ children, queue }: { children: ReactNode; queue: Queue
   )
 }
 
-function renderTab(queue: QueueResponse) {
+function renderTab(queue: QueueResponse, user = adminUser) {
   return (
-    <StoryProviders queue={queue}>
+    <StoryProviders queue={queue} user={user}>
       <Box sx={{ p: 3 }}>
         <BackgroundWorkTab />
       </Box>
@@ -125,4 +142,10 @@ export const Idle: Story = {
 
 export const Paused: Story = {
   render: () => renderTab({ ...emptyQueue, paused: true }),
+}
+
+// Pause, resume, and the limits are admin-only routes, so an operator reads
+// the board with those controls out of reach.
+export const PausedAsOperator: Story = {
+  render: () => renderTab({ ...emptyQueue, paused: true }, operatorUser),
 }
