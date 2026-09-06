@@ -514,6 +514,16 @@ class SSHConnection(Base):
         Boolean, default=False
     )  # Prepend sudo when running borg on remote host
 
+    # Pinned host key (known_hosts lines) used to verify the remote host on
+    # every SSH invocation. Null means nothing has been trusted yet; see
+    # app/utils/ssh_host_keys.py.
+    known_host_key = Column(Text, nullable=True)
+    # True only for connections that predate host-key verification: they pin
+    # whatever key answers on their next use, because they were already running
+    # with no verification at all. Connections created since default to False
+    # and need the user to confirm the fingerprint.
+    host_key_trust_on_first_use = Column(Boolean, default=False, nullable=True)
+
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 

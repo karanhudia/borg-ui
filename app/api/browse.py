@@ -31,6 +31,7 @@ from app.utils.borg_env import (
 )
 from app.utils.ssh_utils import (
     resolve_repo_ssh_key_file,
+    resolve_repository_ssh_connection,
 )  # Backward-compatible patch target for tests
 
 logger = structlog.get_logger(__name__)
@@ -68,7 +69,11 @@ ITEM_SIZE_ESTIMATE = 200  # Average bytes per item in memory (conservative estim
 
 def _build_repo_env(repo: Repository, db: Session):
     temp_key_file = resolve_repo_ssh_key_file(repo, db)
-    ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
+    ssh_opts = get_standard_ssh_opts(
+        include_key_path=temp_key_file,
+        connection=resolve_repository_ssh_connection(repo, db),
+        db=db,
+    )
     env = setup_borg_env(passphrase=repo.passphrase, ssh_opts=ssh_opts)
     return env, temp_key_file
 

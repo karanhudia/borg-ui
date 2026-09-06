@@ -198,22 +198,18 @@ def test_resolve_secret_key_file_lives_under_data_dir():
 
 
 @pytest.mark.unit
-def test_module_settings_ssh_home_dir_derives_from_ssh_keys_dir(monkeypatch):
-    """With no SSH_HOME_DIR in the environment the two settings are the same dir."""
-    import importlib
+def test_module_settings_ssh_home_dir_derives_from_ssh_keys_dir():
+    """With no SSH_HOME_DIR in the environment the two settings are the same dir.
 
-    monkeypatch.delenv("SSH_HOME_DIR", raising=False)
+    Exercised through derive_ssh_dirs on a fresh Settings. Reloading app.config
+    instead would rebuild the module-level `settings` object and re-run its
+    side effects underneath every module that already imported it.
+    """
+    from app.config import derive_ssh_dirs
 
-    import app.config as config_module
+    settings = Settings()
+    settings.data_dir = "/opt/borg-ui/data"
+    derive_ssh_dirs(settings, {})
 
-    importlib.reload(config_module)
-    try:
-        assert (
-            config_module.settings.ssh_keys_dir
-            == f"{config_module.settings.data_dir}/ssh_keys"
-        )
-        assert (
-            config_module.settings.ssh_home_dir == config_module.settings.ssh_keys_dir
-        )
-    finally:
-        importlib.reload(config_module)
+    assert settings.ssh_keys_dir == "/opt/borg-ui/data/ssh_keys"
+    assert settings.ssh_home_dir == settings.ssh_keys_dir

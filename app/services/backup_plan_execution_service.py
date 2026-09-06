@@ -58,6 +58,7 @@ from app.services.script_executor import execute_script
 from app.services.template_service import get_system_variables
 from app.utils.archive_names import build_archive_name
 from app.utils.script_params import SYSTEM_VARIABLE_PREFIX
+from app.utils.ssh_host_keys import host_key_ssh_opts
 from app.utils.ssh_utils import ssh_key_auth_args, write_ssh_key_to_tempfile
 from app.utils.schedule_time import calculate_next_cron_run, to_utc_naive
 from app.utils.source_locations import decode_source_locations
@@ -1854,10 +1855,7 @@ class BackupPlanExecutionService:
             ssh_cmd = [
                 "ssh",
                 *ssh_key_auth_args(key_file_path),
-                "-o",
-                "StrictHostKeyChecking=no",
-                "-o",
-                "UserKnownHostsFile=/dev/null",
+                *host_key_ssh_opts(source_connection, db),
                 "-o",
                 "ServerAliveInterval=60",
                 "-o",

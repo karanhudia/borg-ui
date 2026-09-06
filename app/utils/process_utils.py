@@ -490,10 +490,16 @@ def break_repository_lock(repository: Repository) -> bool:
         # remote command and SSH identity, including legacy ssh:// URLs.
         if connection:
             temp_key_file = resolve_repo_ssh_key_file(repository, db)
-            ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
+            ssh_opts = get_standard_ssh_opts(
+                include_key_path=temp_key_file, connection=connection, db=db
+            )
             env["BORG_RSH"] = f"ssh {' '.join(ssh_opts)}"
         elif repository.connection_id:
-            ssh_opts = get_standard_ssh_opts()
+            # The connection could not be resolved here, usually because the
+            # repository arrived without a session. Its id is enough to load
+            # the row and honour its pinned host key, which beats connecting
+            # to a pinned host with verification turned down.
+            ssh_opts = get_standard_ssh_opts(connection_id=repository.connection_id)
             env["BORG_RSH"] = f"ssh {' '.join(ssh_opts)}"
 
         # Execute break-lock command

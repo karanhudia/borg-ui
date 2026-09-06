@@ -6,6 +6,7 @@ import structlog
 from typing import Dict, List
 from app.config import settings
 from app.core.borg_stream import CommandLineStream
+from app.utils.ssh_host_keys import host_key_ssh_opts
 from app.utils.ssh_utils import public_key_only_ssh_args
 
 logger = structlog.get_logger()
@@ -85,10 +86,7 @@ class BorgInterface:
         # This allows automatic connection to new hosts without manual intervention
         ssh_opts = [
             *public_key_only_ssh_args(),
-            "-o",
-            "StrictHostKeyChecking=no",  # Don't check host keys
-            "-o",
-            "UserKnownHostsFile=/dev/null",  # Don't save host keys
+            *host_key_ssh_opts(None),
             "-o",
             "LogLevel=ERROR",  # Reduce SSH verbosity
         ]
@@ -191,10 +189,7 @@ class BorgInterface:
 
         ssh_opts = [
             *public_key_only_ssh_args(),
-            "-o",
-            "StrictHostKeyChecking=no",
-            "-o",
-            "UserKnownHostsFile=/dev/null",
+            *host_key_ssh_opts(None),
             "-o",
             "LogLevel=ERROR",
         ]

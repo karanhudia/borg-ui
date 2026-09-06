@@ -103,6 +103,7 @@ from app.services.rclone_repository_service import (
     normalize_rclone_relative_path,
     rclone_repository_service,
 )
+from app.utils.ssh_host_keys import host_key_ssh_opts
 from app.utils.datetime_utils import (
     parse_borg_archive_time,
     serialize_borg_archive_time,
@@ -2469,6 +2470,11 @@ async def _create_agent_repository_record(
 
             record_import_connect(db, repository, user_id=current_user.id)
         except Exception as e:
+            # A failed flush/chain build leaves the session unusable and may
+            # leave a half-flushed import_connect row that a later commit on
+            # this same session would persist without its follow-ups. Roll the
+            # session back before continuing best-effort.
+            db.rollback()
             logger.warning(
                 "Failed to enqueue post-import operations",
                 repository=repository.name,
@@ -3862,6 +3868,11 @@ async def import_repository(
 
             record_import_connect(db, repository, user_id=current_user.id)
         except Exception as e:
+            # A failed flush/chain build leaves the session unusable and may
+            # leave a half-flushed import_connect row that a later commit on
+            # this same session would persist without its follow-ups. Roll the
+            # session back before continuing best-effort.
+            db.rollback()
             logger.warning(
                 "Failed to enqueue post-import operations",
                 repository=repository.name,
@@ -5963,8 +5974,7 @@ async def check_remote_borg_installation(
         borg_cmd = [
             "ssh",
             *ssh_key_auth_args(temp_key_file),
-            "-o",
-            "StrictHostKeyChecking=no",
+            *host_key_ssh_opts(None),
             "-o",
             "ConnectTimeout=10",
             "-p",

@@ -407,8 +407,8 @@ This does not include Redis. Use Compose for normal deployments.
 > 2.0.0b22 changed the repository format (packs) and cannot read a repository
 > written by any earlier Borg 2 beta — opening one fails with
 > `repository version 3 is not supported by this borg version`. There is no
-> in-place conversion. 2.0.0b23 kept that format, so repositories created
-> with 2.0.0b22 or later stay readable. Coming from a pre-b22 image:
+> in-place conversion. 2.0.0b23 and 2.0.0b24 kept that format, so repositories
+> created with 2.0.0b22 or later stay readable. Coming from a pre-b22 image:
 >
 > 1. Keep the image you are upgrading from available — it is the only thing
 >    that can still read the old repositories.
