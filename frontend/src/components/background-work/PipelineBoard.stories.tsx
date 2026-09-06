@@ -24,7 +24,15 @@ function StoryProviders({
     mock.onGet('/operations/queue').reply(200, queue)
     mock.onGet('/operations/repositories').reply(200, hub)
     mock.onGet(/\/operations\/repositories\/\d+/).reply(200, hubDetail)
-    mock.onGet('/repositories').reply(200, {
+    mock.onGet('/system/info').reply(200, {
+      app_version: '2.3.0',
+      borg_version: '1.4.0',
+      borg2_version: null,
+      plan: 'pro',
+      features: {},
+      feature_access: { archive_history: true },
+    })
+    mock.onGet('/repositories/').reply(200, {
       repositories: hub.repositories.map((r) => ({ id: r.repository_id, name: r.repository_name })),
     })
     mock.onAny().reply(200, {})
