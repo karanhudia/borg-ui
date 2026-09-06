@@ -1,6 +1,9 @@
 // Mirrors the response shapes in app/api/archive_index.py (spec 9.2).
 
-export type HistoryState = 'pending' | 'indexed' | 'skipped'
+// Mirrors what the history executor writes: an archive starts `pending`,
+// becomes `indexed`, is `skipped` when its repository cannot be diffed,
+// and turns `failed` once its attempts run out.
+export type HistoryState = 'pending' | 'indexed' | 'skipped' | 'failed'
 export type SyncState = 'fresh' | 'syncing' | 'stale' | 'never'
 export type ChangeType = 'added' | 'removed' | 'modified' | 'summary'
 
