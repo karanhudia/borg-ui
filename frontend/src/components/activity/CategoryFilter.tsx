@@ -1,17 +1,8 @@
 import { ToggleButton, ToggleButtonGroup, alpha, useTheme } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import { CATEGORY_ICONS, categoryColor } from '../categoryStyle'
+import { CATEGORIES } from './categories'
 import type { OperationCategory } from '../../types/operations'
-
-const CATEGORIES: OperationCategory[] = [
-  'import',
-  'backup',
-  'restore',
-  'maintenance',
-  'index',
-  'mirror',
-  'system',
-]
 
 interface CategoryFilterProps {
   value: OperationCategory[]

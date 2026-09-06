@@ -33,6 +33,9 @@ import type { Repository } from '@/types'
 
 interface RepositoryOperationsViewProps {
   repositoryId: number
+  // Category filter the view opens with, for links such as "View index
+  // runs" from the Background work tab.
+  initialCategory?: OperationCategory[]
 }
 
 function runTime(item: ActivityItem): Date | null {
@@ -181,9 +184,12 @@ function RunRow({
   )
 }
 
-export default function RepositoryOperationsView({ repositoryId }: RepositoryOperationsViewProps) {
+export default function RepositoryOperationsView({
+  repositoryId,
+  initialCategory = [],
+}: RepositoryOperationsViewProps) {
   const { t } = useTranslation()
-  const [categoryFilter, setCategoryFilter] = useState<OperationCategory[]>([])
+  const [categoryFilter, setCategoryFilter] = useState<OperationCategory[]>(initialCategory)
   const [triggerFilter, setTriggerFilter] = useState<string>('all')
   const [logJob, setLogJob] = useState<ActivityItem | null>(null)
   const [errorJob, setErrorJob] = useState<ActivityItem | null>(null)

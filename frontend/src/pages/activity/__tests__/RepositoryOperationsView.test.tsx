@@ -104,6 +104,16 @@ describe('RepositoryOperationsView', () => {
     expect(within(rows[1]).getByText('history merge')).toBeInTheDocument()
   })
 
+  it('starts with the category filter it was opened with', async () => {
+    renderWithProviders(<RepositoryOperationsView repositoryId={1} initialCategory={['index']} />)
+    await waitFor(() =>
+      expect(activityAPI.list).toHaveBeenLastCalledWith(
+        expect.objectContaining({ category: ['index'] })
+      )
+    )
+    expect(screen.getByRole('button', { name: /index/i })).toHaveAttribute('aria-pressed', 'true')
+  })
+
   it('passes category and trigger filters to the activity API', async () => {
     renderWithProviders(<RepositoryOperationsView repositoryId={1} />)
     await screen.findAllByTestId('run-row')

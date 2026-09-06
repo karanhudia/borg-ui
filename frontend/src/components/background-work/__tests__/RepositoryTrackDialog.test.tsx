@@ -1,11 +1,14 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MemoryRouter } from 'react-router-dom'
 import RepositoryTrackDialog from '../RepositoryTrackDialog'
-import { archivesAPI } from '../../../services/api'
+import { archivesAPI, operationsAPI } from '../../../services/api'
 import type { OperationItem } from '../../../types/operations'
 
 vi.mock('../../../services/api', () => ({
   archivesAPI: { rebuild: vi.fn().mockResolvedValue({ data: { run_id: 'r1', operations: [1] } }) },
+  operationsAPI: { getRepositoryDetail: vi.fn() },
 }))
 
 const op = (overrides: Partial<OperationItem>): OperationItem => ({
@@ -48,31 +51,92 @@ const op = (overrides: Partial<OperationItem>): OperationItem => ({
   ...overrides,
 })
 
+const detail = (overrides = {}) => ({
+  repository_id: 3,
+  failed_archives: [],
+  truncated_archives: [],
+  ...overrides,
+})
+
+function renderDialog(props: Partial<React.ComponentProps<typeof RepositoryTrackDialog>> = {}) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>
+        <RepositoryTrackDialog
+          open
+          onClose={vi.fn()}
+          repositoryId={3}
+          repositoryName="nas"
+          operations={[op({})]}
+          {...props}
+        />
+      </MemoryRouter>
+    </QueryClientProvider>
+  )
+}
+
 describe('RepositoryTrackDialog', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    ;(operationsAPI.getRepositoryDetail as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: detail(),
+    })
+  })
+
   it('renders one row per operation with its stage timing', () => {
-    render(
-      <RepositoryTrackDialog
-        open
-        onClose={vi.fn()}
-        repositoryId={3}
-        repositoryName="nas"
-        operations={[op({ kind: 'stats' }), op({ id: 2, kind: 'archive_sync' })]}
-      />
-    )
+    renderDialog({ operations: [op({ kind: 'stats' }), op({ id: 2, kind: 'archive_sync' })] })
     expect(screen.getByText('nas')).toBeInTheDocument()
   })
 
   it('triggers a rebuild for the selected stage', async () => {
-    render(
-      <RepositoryTrackDialog
-        open
-        onClose={vi.fn()}
-        repositoryId={3}
-        repositoryName="nas"
-        operations={[op({})]}
-      />
-    )
+    renderDialog()
     fireEvent.click(screen.getByRole('button', { name: /rebuild from/i }))
     await waitFor(() => expect(archivesAPI.rebuild).toHaveBeenCalledWith(3, 'stats'))
+  })
+
+  it('lists the archives whose file history failed or was truncated', async () => {
+    ;(operationsAPI.getRepositoryDetail as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: detail({
+        failed_archives: [
+          {
+            id: 7,
+            name: 'nas-2026-09-01',
+            start: '2026-09-01T02:00:00',
+            history_attempts: 3,
+            history_rows: null,
+          },
+        ],
+        truncated_archives: [
+          {
+            id: 8,
+            name: 'nas-2026-08-30',
+            start: '2026-08-30T02:00:00',
+            history_attempts: 0,
+            history_rows: 200000,
+          },
+        ],
+      }),
+    })
+    renderDialog()
+    expect(await screen.findByText(/archives whose file history failed/i)).toBeInTheDocument()
+    expect(screen.getByText('nas-2026-09-01')).toBeInTheDocument()
+    expect(screen.getByText(/3 attempts/i)).toBeInTheDocument()
+    expect(screen.getByText(/archives with truncated file history/i)).toBeInTheDocument()
+    expect(screen.getByText('nas-2026-08-30')).toBeInTheDocument()
+    expect(operationsAPI.getRepositoryDetail).toHaveBeenCalledWith(3)
+  })
+
+  it('says so when every archive has its file history', async () => {
+    renderDialog()
+    expect(await screen.findByText(/every archive has its file history/i)).toBeInTheDocument()
+  })
+
+  it('links to the index runs of the repository', () => {
+    renderDialog()
+    expect(screen.getByRole('link', { name: /view index runs/i })).toHaveAttribute(
+      'href',
+      '/activity?repository_id=3&category=index'
+    )
   })
 })

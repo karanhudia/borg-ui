@@ -26,6 +26,8 @@ import type {
   SourceLocation,
 } from '../types'
 import type {
+  HubRepositoryDetail,
+  HubResponse,
   OperationItem,
   QueueResponse,
   QueueLimits,
@@ -744,6 +746,10 @@ export const archivesAPI = {
 
 export const operationsAPI = {
   getQueue: () => api.get<QueueResponse>('/operations/queue'),
+  getRepositories: () => api.get<HubResponse>('/operations/repositories'),
+  getRepositoryDetail: (repositoryId: number) =>
+    api.get<HubRepositoryDetail>(`/operations/repositories/${repositoryId}`),
+  reconcileNow: () => api.post<{ repositories: number }>('/operations/reconcile'),
   list: (params?: {
     repository_id?: number
     category?: string[]

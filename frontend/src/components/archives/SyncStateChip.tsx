@@ -8,12 +8,20 @@ import type { SyncState } from '../../types/archives'
 interface SyncStateChipProps {
   state: SyncState
   lastSyncedAt: string | null
-  onRebuild: () => void
+  onRebuild?: () => void
+  // The Background work hub shows the chip beside its own rebuild menu, so
+  // it turns the button off.
+  showRebuild?: boolean
 }
 
 // The archive index's freshness, coloured by state: green when fresh,
 // amber when stale, neutral when never built, blue while syncing.
-export default function SyncStateChip({ state, lastSyncedAt, onRebuild }: SyncStateChipProps) {
+export default function SyncStateChip({
+  state,
+  lastSyncedAt,
+  onRebuild,
+  showRebuild = true,
+}: SyncStateChipProps) {
   const { t } = useTranslation()
   const theme = useTheme()
   const label =
@@ -49,7 +57,7 @@ export default function SyncStateChip({ state, lastSyncedAt, onRebuild }: SyncSt
           '& .MuiChip-icon': { color },
         }}
       />
-      {state !== 'syncing' && (
+      {showRebuild && state !== 'syncing' && (
         <Button
           size="small"
           variant="outlined"

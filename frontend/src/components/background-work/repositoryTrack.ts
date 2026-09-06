@@ -27,11 +27,12 @@ export const REBUILD_STAGE_FOR: Partial<Record<StageKey, RebuildStage>> = {
   history: 'history',
 }
 
-// One grid shared by the header row and every repository row, so stage
-// labels sit over the segments they describe.
-export const TRACK_GRID_COLUMNS = {
+// One grid shared by the hub header and every repository row: name, then
+// the three derived-data stages in the order the runner builds them
+// (stats, archive list, file history), then the row menu.
+export const HUB_GRID_COLUMNS = {
   xs: '1fr',
-  md: 'minmax(180px, 1.3fr) repeat(4, minmax(110px, 1fr)) 40px',
+  md: 'minmax(180px, 1.4fr) minmax(130px, 1fr) minmax(170px, 1.2fr) minmax(190px, 1.4fr) 40px',
 }
 
 export type StageStatus = 'idle' | 'done' | 'running' | 'waiting' | 'failed'
