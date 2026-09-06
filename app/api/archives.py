@@ -28,6 +28,7 @@ from app.database.database import get_db
 from app.database.models import AgentMachine, DeleteArchiveJob, Repository, User
 from app.services.agent_artifact_relay import agent_artifact_relay
 from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
+from app.services.delete_archive_service import delete_archive_service
 from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.services.repository_executor import (
     is_agent_executor,
@@ -689,6 +690,8 @@ async def cancel_delete_job(
             check_repo_access(db, current_user, repo, "operator")
         await delete_archive_service.cancel_delete(job_id, db)
         return {"message": "backend.success.archives.deletionCancelled"}
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
