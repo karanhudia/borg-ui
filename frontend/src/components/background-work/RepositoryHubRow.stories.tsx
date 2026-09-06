@@ -1,5 +1,4 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { MemoryRouter } from 'react-router-dom'
 import { Box } from '@mui/material'
 import RepositoryHubRow from './RepositoryHubRow'
 import { deriveTrack } from './repositoryTrack'
@@ -16,11 +15,9 @@ const meta = {
   parameters: { layout: 'fullscreen' },
   decorators: [
     (Story) => (
-      <MemoryRouter>
-        <Box sx={{ p: 3, maxWidth: 1100 }}>
-          <Story />
-        </Box>
-      </MemoryRouter>
+      <Box sx={{ p: 3, maxWidth: 1100 }}>
+        <Story />
+      </Box>
     ),
   ],
   args: {

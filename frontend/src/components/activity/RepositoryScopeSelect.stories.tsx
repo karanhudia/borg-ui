@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter } from 'react-router-dom'
 import { Box } from '@mui/material'
 import RepositoryScopeSelect from './RepositoryScopeSelect'
 
@@ -14,11 +13,9 @@ const meta: Meta<typeof RepositoryScopeSelect> = {
       <QueryClientProvider
         client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
       >
-        <MemoryRouter>
-          <Box sx={{ width: 320 }}>
-            <Story />
-          </Box>
-        </MemoryRouter>
+        <Box sx={{ width: 320 }}>
+          <Story />
+        </Box>
       </QueryClientProvider>
     ),
   ],
