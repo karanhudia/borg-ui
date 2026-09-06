@@ -1011,7 +1011,10 @@
       "truncated": "This archive's index was truncated at the row cap, so some paths are summarised.",
       "pending": "This archive has not been indexed yet.",
       "skipped": "History indexing was skipped for this archive.",
+      "failed": "This archive could not be indexed. Rebuilding the history index tries it again.",
       "rebuildLink": "Rebuild the history index",
+      "rebuildFailed": "The history rebuild could not be started.",
+      "rebuildStarted": "The history rebuild has been queued.",
       "empty": "No changes between these archives.",
       "showMore": "Show more",
       "filterLabel": "Change type",
@@ -4591,7 +4594,9 @@
       "selectDirTooltip": "Select directory and all contents",
       "helpText": "Click files to select them, or click folders to navigate. Use the checkbox next to folders to select entire directories.",
       "failedToLoadContents": "Failed to load archive contents",
-      "loadContentsTimeout": "Still loading — this archive is taking longer than expected. Try again in a moment."
+      "loadContentsTimeout": "Still loading — this archive is taking longer than expected. Try again in a moment.",
+      "filterPlaceholder": "Filter this folder",
+      "filterLabel": "Filter files in this folder"
     },
     "restorePath": {
       "title": "Choose restore location",

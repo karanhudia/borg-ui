@@ -2,7 +2,13 @@ from datetime import timedelta
 
 import pytest
 
-from app.database.models import Operation, Repository, SystemSettings, utc_now
+from app.database.models import (
+    Operation,
+    Repository,
+    SystemSettings,
+    UserRepositoryPermission,
+    utc_now,
+)
 from app.services.operations.enqueue import enqueue
 
 
@@ -367,6 +373,59 @@ class TestOperationsRepositories:
         assert r.status_code == 200
         assert r.json()["repositories"] == []
         assert r.json()["totals"]["repositories"] == 0
+
+    def test_totals_count_only_accessible_repositories(
+        self, test_client, test_db, admin_headers, auth_headers, test_user
+    ):
+        """A viewer with one grant must not learn how much everyone else has
+        stored, so the aggregates run over the accessible rows only."""
+        mine = _repo(test_db, "mine")
+        hidden = _repo(test_db, "hidden")
+        _archive(test_db, mine, "a1", history_state="indexed", history_rows=10)
+        _archive(test_db, hidden, "b1", history_state="indexed", history_rows=999)
+        test_db.add(
+            UserRepositoryPermission(
+                user_id=test_user.id, repository_id=mine.id, role="viewer"
+            )
+        )
+        test_db.commit()
+
+        body = test_client.get(
+            "/api/operations/repositories", headers=auth_headers
+        ).json()
+        assert [row["repository_name"] for row in body["repositories"]] == ["mine"]
+        assert body["totals"]["repositories"] == 1
+        assert body["totals"]["archives"] == 1
+        assert body["totals"]["history_rows"] == 10
+        # The on-disk figure covers the whole table, so it is admin-only.
+        assert body["totals"]["history_bytes"] is None
+
+        admin = test_client.get(
+            "/api/operations/repositories", headers=admin_headers
+        ).json()
+        assert admin["totals"]["history_rows"] == 1009
+
+    def test_history_bytes_is_measured_once_per_interval(
+        self, test_client, test_db, admin_headers, monkeypatch
+    ):
+        """The size scan walks the whole archive_changes b-tree, and the board
+        polls every 30 seconds, so it is cached rather than re-measured."""
+        from app.api import operations as operations_api
+
+        _repo(test_db, "nas")
+        calls = []
+        operations_api._history_bytes_cache = None
+        monkeypatch.setattr(
+            operations_api,
+            "_measure_history_table_bytes",
+            lambda db: (calls.append(1), 4096)[1],
+        )
+        for _ in range(3):
+            body = test_client.get(
+                "/api/operations/repositories", headers=admin_headers
+            ).json()
+            assert body["totals"]["history_bytes"] == 4096
+        assert len(calls) == 1
 
     def test_detail_lists_failed_and_truncated_archives(
         self, test_client, test_db, admin_headers

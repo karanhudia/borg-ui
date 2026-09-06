@@ -12,7 +12,8 @@ interface ArchiveFileDetailsPaneProps {
   selectedPath: string | null
   selectedEntry: ArchiveItem | null
   // Restoring the current selection belongs to the Files tab footer. This
-  // callback only serves "Restore this" on a specific history entry.
+  // callback only serves "Restore this" on a specific history entry, and the
+  // entry says which archive that version lives in.
   onRestore: (entry: HistoryEntry) => void
   onDownload: () => void
 }

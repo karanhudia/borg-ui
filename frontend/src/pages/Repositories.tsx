@@ -8,6 +8,7 @@ import { Box } from '@mui/material'
 import { backupPlansAPI, repositoriesAPI, RepositoryData } from '../services/api'
 import { BorgApiClient } from '../services/borgApi'
 import { translateBackendKey } from '../utils/translateBackendKey'
+import { resyncStoredArchives } from '../utils/archiveResync'
 import { useAuth } from '../hooks/useAuth'
 import { useLockBreakPermissions } from '../hooks/useLockBreakPermissions'
 import { usePlan } from '../hooks/usePlan'
@@ -410,7 +411,7 @@ export default function Repositories() {
           setRepositoriesWithJobs((prev) => new Set(prev).add(pruningRepository.id))
           queryClient.invalidateQueries({ queryKey: ['running-jobs', pruningRepository.id] })
           queryClient.invalidateQueries({ queryKey: ['repositories'] })
-          queryClient.invalidateQueries({ queryKey: ['repository-archives', pruningRepository.id] })
+          void resyncStoredArchives(queryClient, pruningRepository.id)
         }
         setPruningRepository(null)
       } else {
@@ -423,7 +424,7 @@ export default function Repositories() {
           })
         }
         queryClient.invalidateQueries({ queryKey: ['repositories'] })
-        queryClient.invalidateQueries({ queryKey: ['repository-archives', pruningRepository?.id] })
+        void resyncStoredArchives(queryClient, pruningRepository?.id)
       }
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -921,7 +922,7 @@ export default function Repositories() {
     })
     queryClient.invalidateQueries({ queryKey: ['repositories'] })
     queryClient.invalidateQueries({ queryKey: ['app-repositories'] })
-    queryClient.invalidateQueries({ queryKey: ['repository-archives', wipingRepository.id] })
+    void resyncStoredArchives(queryClient, wipingRepository.id)
     queryClient.invalidateQueries({ queryKey: ['running-jobs', wipingRepository.id] })
     appState.refetch()
 

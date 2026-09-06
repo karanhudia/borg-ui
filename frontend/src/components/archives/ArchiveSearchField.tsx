@@ -25,12 +25,17 @@ import { parseBackendDate } from '../../utils/dateUtils'
 
 interface ArchiveSearchFieldProps {
   repositoryId: number
-  newestArchiveId: number | null
+  /** The newest archive id of each series, keyed by series name. "Present in
+   *  latest" is derived here rather than served (Appendix B), and a result's
+   *  `last_seen_archive_id` belongs to its own series: a repository whose
+   *  series run at different times would otherwise report every file outside
+   *  the last series to run as gone. */
+  newestArchiveIdBySeries: Record<string, number>
 }
 
 export default function ArchiveSearchField({
   repositoryId,
-  newestArchiveId,
+  newestArchiveIdBySeries,
 }: ArchiveSearchFieldProps) {
   const { t } = useTranslation()
   const { can } = usePlan()
@@ -106,7 +111,7 @@ export default function ArchiveSearchField({
                       <TableCell>{result.path}</TableCell>
                       <TableCell>{parseBackendDate(result.last_seen).toLocaleString()}</TableCell>
                       <TableCell>
-                        {result.last_seen_archive_id === newestArchiveId
+                        {result.last_seen_archive_id === newestArchiveIdBySeries[result.series]
                           ? t('archives.search.present')
                           : t('archives.search.absent')}
                       </TableCell>

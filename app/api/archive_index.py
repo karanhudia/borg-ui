@@ -32,6 +32,7 @@ from app.services.operations.executors.history import (
 from app.services.operations.followups import PLAN_GATED_KINDS, history_enabled
 from app.services.operations.history_fold import Change, fold_sequence, rows_to_changes
 from app.services.operations.legacy_status import latest_legacy_terminal
+from app.services.operations.reconcile import enqueue_reconcile_run
 from app.services.operations.series import cron_for_repository
 from app.services.operations.vocab import PRIORITY_RECONCILE
 
@@ -386,6 +387,25 @@ async def rebuild(
         triggered_by_user_id=current_user.id,
     )
     return {"run_id": ops[0].run_id if ops else None, "operations": [o.id for o in ops]}
+
+
+@router.post("/{repo_id}/resync")
+async def resync(
+    repo_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Bring the stored archive list back in line with the repository after
+    work that removed archives (delete, prune, wipe). Unlike /rebuild this
+    invalidates nothing: archive_sync reconciles the list, history_merge
+    folds the rows of archives that have gone, and stats refreshes the
+    totals. A run already in flight is reused rather than duplicated."""
+    repository = _repo(db, current_user, repo_id, role="operator")
+    ops = enqueue_reconcile_run(db, repository.id)
+    return {
+        "run_id": ops[0].run_id if ops else None,
+        "operations": [o.id for o in ops],
+    }
 
 
 # -- Pro routes (spec 11.2) -------------------------------------------------------

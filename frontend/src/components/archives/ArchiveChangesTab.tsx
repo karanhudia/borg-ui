@@ -11,7 +11,7 @@ import {
   useTheme,
 } from '@mui/material'
 import { useTranslation } from 'react-i18next'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import RichSelect from '../shared/RichSelect'
 import PlanGate from '../shared/PlanGate'
 import { usePlan } from '../../hooks/usePlan'
@@ -19,7 +19,7 @@ import { archivesAPI } from '../../services/api'
 import { CHANGE_GLYPH, changeColor } from './changeStyle'
 import ChangeRowLine from './ChangeRowLine'
 import ArchiveChangesPreview from './ArchiveChangesPreview'
-import type { ArchiveDetailResponse, ChangeType } from '../../types/archives'
+import type { ArchiveDetailResponse, ChangeRow, ChangeType } from '../../types/archives'
 
 interface ArchiveChangesTabProps {
   repositoryId: number
@@ -32,9 +32,14 @@ const PAGE_SIZE = 200
 function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabProps) {
   const { t } = useTranslation()
   const theme = useTheme()
+  const queryClient = useQueryClient()
   const [compareTo, setCompareTo] = useState<number | null>(archive.predecessor_id)
   const [activeFilters, setActiveFilters] = useState<ChangeType[]>([])
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  // Pages fetched after the first one, which the query owns. The route caps
+  // a response and hands back a cursor, so "Show more" has to ask for the
+  // next page rather than reveal rows the client never received.
+  const [extraPages, setExtraPages] = useState<ChangeRow[]>([])
+  const [cursor, setCursor] = useState<string | null>(null)
 
   const { data: olderArchives } = useQuery({
     queryKey: ['archive-series-older', repositoryId, archive.series, archive.id],
@@ -58,13 +63,42 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
         .getChanges(repositoryId, archive.id, {
           compare_to: compareTo ?? undefined,
           change: activeFilters.length > 0 ? activeFilters : undefined,
+          limit: PAGE_SIZE,
+        })
+        .then((res) => {
+          setExtraPages([])
+          setCursor(res.data.next_cursor)
+          return res.data
+        }),
+  })
+
+  const morePages = useMutation({
+    mutationFn: (from: string) =>
+      archivesAPI
+        .getChanges(repositoryId, archive.id, {
+          compare_to: compareTo ?? undefined,
+          change: activeFilters.length > 0 ? activeFilters : undefined,
+          limit: PAGE_SIZE,
+          cursor: from,
         })
         .then((res) => res.data),
+    onSuccess: (page) => {
+      setExtraPages((current) => [...current, ...page.changes])
+      setCursor(page.next_cursor)
+    },
+  })
+
+  const rebuildMutation = useMutation({
+    mutationFn: () => archivesAPI.rebuild(repositoryId, 'history'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['archive', repositoryId, archive.id] })
+      queryClient.invalidateQueries({ queryKey: ['archive-changes', repositoryId, archive.id] })
+      queryClient.invalidateQueries({ queryKey: ['operations-queue'] })
+    },
   })
 
   const historyState = changes?.history_state ?? archive.history_state
-  const rows = changes?.changes ?? []
-  const visibleRows = rows.slice(0, visibleCount)
+  const rows = [...(changes?.changes ?? []), ...extraPages]
   const totals = changes?.totals
 
   return (
@@ -133,18 +167,35 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
         </Alert>
       )}
 
+      {rebuildMutation.isError && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => rebuildMutation.reset()}>
+          {t('archives.changes.rebuildFailed')}
+        </Alert>
+      )}
+      {rebuildMutation.isSuccess && (
+        <Alert severity="success" sx={{ mb: 2 }} onClose={() => rebuildMutation.reset()}>
+          {t('archives.changes.rebuildStarted')}
+        </Alert>
+      )}
+
       {!isLoading && historyState !== 'indexed' && (
         <Alert
-          severity="info"
+          severity={historyState === 'failed' ? 'warning' : 'info'}
           action={
-            <Button size="small" onClick={() => archivesAPI.rebuild(repositoryId, 'history')}>
+            <Button
+              size="small"
+              disabled={rebuildMutation.isPending}
+              onClick={() => rebuildMutation.mutate()}
+            >
               {t('archives.changes.rebuildLink')}
             </Button>
           }
         >
           {historyState === 'skipped'
             ? t('archives.changes.skipped')
-            : t('archives.changes.pending')}
+            : historyState === 'failed'
+              ? t('archives.changes.failed')
+              : t('archives.changes.pending')}
         </Alert>
       )}
 
@@ -164,11 +215,15 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
             py: 0.5,
           }}
         >
-          {visibleRows.map((row) => (
+          {rows.map((row) => (
             <ChangeRowLine key={row.path} row={row} />
           ))}
-          {rows.length > visibleCount && (
-            <Button onClick={() => setVisibleCount((c) => c + PAGE_SIZE)} sx={{ m: 1 }}>
+          {cursor != null && (
+            <Button
+              disabled={morePages.isPending}
+              onClick={() => morePages.mutate(cursor)}
+              sx={{ m: 1 }}
+            >
               {t('archives.changes.showMore')}
             </Button>
           )}

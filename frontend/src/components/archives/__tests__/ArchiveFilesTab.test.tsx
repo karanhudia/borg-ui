@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { screen, fireEvent } from '@testing-library/react'
 import { renderWithProviders } from '../../../test/test-utils'
 import ArchiveFilesTab from '../ArchiveFilesTab'
@@ -29,25 +29,38 @@ const browseItems = [
   { name: 'invoices.xlsx', type: 'file' as const, path: 'home/karan/invoices.xlsx', size: 9400 },
 ]
 
+const focusFilterSpy = vi.fn()
+let lastActiveIndex: number | undefined
+
 function MockArchivePathSelector({
   data,
   onChange,
   onBrowseStateChange,
+  activeIndex,
 }: {
   data: ArchivePathSelectionData
   onChange: (data: Partial<ArchivePathSelectionData>) => void
   onBrowseStateChange?: (state: ArchiveBrowseState) => void
+  activeIndex?: number
 }) {
+  lastActiveIndex = activeIndex
+  // The real selector publishes callbacks that read the current selection
+  // through refs, so a state published once still toggles against what is
+  // selected now. The mock reads `data` at call time for the same reason.
+  const dataRef = useRef(data)
+  dataRef.current = data
   useEffect(() => {
     onBrowseStateChange?.({
       currentPath: 'home/karan',
       items: browseItems,
       navigateTo: vi.fn(),
+      focusFilter: focusFilterSpy,
       activateItem: (item) => {
         if (item.type === 'file') {
+          const current = dataRef.current
           onChange({
-            selectedPaths: [...data.selectedPaths, item.path],
-            selectedItems: [...(data.selectedItems || []), { path: item.path, type: item.type }],
+            selectedPaths: [...current.selectedPaths, item.path],
+            selectedItems: [...(current.selectedItems || []), { path: item.path, type: item.type }],
           })
         }
       },
@@ -178,6 +191,32 @@ describe('ArchiveFilesTab', () => {
       fireEvent.keyDown(input, { key: 'ArrowDown' })
       expect(screen.queryByText(/selected/i)).not.toBeInTheDocument()
       document.body.removeChild(input)
+    })
+
+    it('keeps an earlier mouse selection when a later row is opened by keyboard', () => {
+      const root = renderTab()
+      // A file picked with the mouse, then a second one with the keyboard:
+      // the selector's published callback must see the first selection.
+      fireEvent.click(screen.getByTestId('archive-path-selector'))
+      fireEvent.keyDown(root, { key: 'ArrowDown' })
+      fireEvent.keyDown(root, { key: 'Enter' })
+      expect(screen.getByText(/2 selected/i)).toBeInTheDocument()
+    })
+
+    it('drives the visible cursor so arrow keys have something to move', () => {
+      const root = renderTab()
+      expect(lastActiveIndex).toBe(0)
+      fireEvent.keyDown(root, { key: 'ArrowDown' })
+      expect(lastActiveIndex).toBe(1)
+      fireEvent.keyDown(root, { key: 'ArrowUp' })
+      expect(lastActiveIndex).toBe(0)
+    })
+
+    it('focuses the folder filter on "/"', () => {
+      const root = renderTab()
+      focusFilterSpy.mockClear()
+      fireEvent.keyDown(root, { key: '/' })
+      expect(focusFilterSpy).toHaveBeenCalled()
     })
 
     it('opens restore for the selection on "r"', () => {

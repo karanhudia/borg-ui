@@ -1011,7 +1011,10 @@
       "truncated": "El índice de este archivo se truncó en el límite de filas, por lo que algunas rutas están resumidas.",
       "pending": "Este archivo aún no ha sido indexado.",
       "skipped": "La indexación del historial se omitió para este archivo.",
+      "failed": "Este archivo no se pudo indexar. Reconstruir el índice del historial vuelve a intentarlo.",
       "rebuildLink": "Reconstruir el índice de historial",
+      "rebuildFailed": "No se pudo iniciar la reconstrucción del historial.",
+      "rebuildStarted": "La reconstrucción del historial se ha puesto en cola.",
       "empty": "No hay cambios entre estos archivos.",
       "showMore": "Mostrar más",
       "filterLabel": "Tipo de cambio",
@@ -4591,7 +4594,9 @@
       "selectDirTooltip": "Seleccionar directorio y todo su contenido",
       "helpText": "Haz clic en los archivos para seleccionarlos, o en las carpetas para navegar. Usa la casilla junto a las carpetas para seleccionar directorios completos.",
       "failedToLoadContents": "Error al cargar el contenido del archivo",
-      "loadContentsTimeout": "Aún cargando — este archivo está tardando más de lo esperado. Inténtalo de nuevo en un momento."
+      "loadContentsTimeout": "Aún cargando — este archivo está tardando más de lo esperado. Inténtalo de nuevo en un momento.",
+      "filterPlaceholder": "Filtrar esta carpeta",
+      "filterLabel": "Filtrar archivos de esta carpeta"
     },
     "restorePath": {
       "title": "Elegir ubicación de restauración",

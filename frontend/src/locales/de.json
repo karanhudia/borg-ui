@@ -1011,7 +1011,10 @@
       "truncated": "Der Index dieses Archivs wurde bei der Zeilenobergrenze abgeschnitten, sodass einige Pfade zusammengefasst sind.",
       "pending": "Dieses Archiv wurde noch nicht indiziert.",
       "skipped": "Die Verlaufsindizierung wurde für dieses Archiv übersprungen.",
+      "failed": "Dieses Archiv konnte nicht indiziert werden. Ein Neuaufbau des Verlaufsindex versucht es erneut.",
       "rebuildLink": "Verlaufsindex neu aufbauen",
+      "rebuildFailed": "Der Neuaufbau des Verlaufs konnte nicht gestartet werden.",
+      "rebuildStarted": "Der Neuaufbau des Verlaufs wurde eingereiht.",
       "empty": "Keine Änderungen zwischen diesen Archiven.",
       "showMore": "Mehr anzeigen",
       "filterLabel": "Änderungstyp",
@@ -4591,7 +4594,9 @@
       "selectDirTooltip": "Verzeichnis und alle Inhalte auswählen",
       "helpText": "Klicke auf Dateien, um sie auszuwählen, oder auf Ordner, um zu navigieren. Verwende das Kontrollkästchen neben Ordnern, um ganze Verzeichnisse auszuwählen.",
       "failedToLoadContents": "Archivinhalt konnte nicht geladen werden",
-      "loadContentsTimeout": "Lädt noch — dieses Archiv dauert länger als erwartet. Bitte in einem Moment erneut versuchen."
+      "loadContentsTimeout": "Lädt noch — dieses Archiv dauert länger als erwartet. Bitte in einem Moment erneut versuchen.",
+      "filterPlaceholder": "Diesen Ordner filtern",
+      "filterLabel": "Dateien in diesem Ordner filtern"
     },
     "restorePath": {
       "title": "Wiederherstellungsort wählen",

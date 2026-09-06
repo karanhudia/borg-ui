@@ -210,9 +210,10 @@ export default function RepositoryOperationsView({
   } = useQuery({
     queryKey: ['activity', 'repository', repositoryId, categoryFilter, triggerFilter],
     queryFn: async () => {
-      // The activity union has no repository parameter yet (spec 16), so the
-      // page filters the newest 200 runs by repository on the client.
-      const params: Record<string, unknown> = { limit: 200 }
+      // The route filters by repository in SQL, per source, before each
+      // source's own limit. Filtering here instead would hide a quiet
+      // repository behind whatever the rest of the install did lately.
+      const params: Record<string, unknown> = { limit: 200, repository_id: repositoryId }
       if (categoryFilter.length > 0) params.category = categoryFilter
       if (triggerFilter !== 'all') params.trigger = [triggerFilter]
       const response = await activityAPI.list(params)
@@ -221,19 +222,7 @@ export default function RepositoryOperationsView({
     refetchInterval: 3000,
   })
 
-  // Legacy job rows (backup, check, prune) carry the repository path and
-  // name but no id, so match on any of the three.
-  const runs = useMemo(
-    () =>
-      (activities ?? []).filter(
-        (item) =>
-          item.repository_id === repositoryId ||
-          (repository != null &&
-            ((item.repository_path != null && item.repository_path === repository.path) ||
-              item.repository === repository.name))
-      ),
-    [activities, repository, repositoryId]
-  )
+  const runs = useMemo(() => activities ?? [], [activities])
 
   const groups = useMemo(() => {
     const byDay = new Map<string, { date: Date | null; items: ActivityItem[] }>()

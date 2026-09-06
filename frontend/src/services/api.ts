@@ -715,6 +715,10 @@ export const archivesAPI = {
     api.get<StatusStripResponse>(`/repositories/${repositoryId}/status-strip`),
   rebuild: (repositoryId: number, from: RebuildStage) =>
     api.post<RebuildResponse>(`/repositories/${repositoryId}/rebuild`, { from }),
+  // After work that removed archives (delete, prune, wipe): reconcile the
+  // stored list the Archives page reads, without invalidating anything.
+  resync: (repositoryId: number) =>
+    api.post<RebuildResponse>(`/repositories/${repositoryId}/resync`),
   listStored: (
     repositoryId: number,
     params?: { series?: string; since?: string; until?: string }

@@ -19,7 +19,11 @@ interface ArchiveFilesTabProps {
   repositoryId: number
   repository: Repository
   archive: ArchiveDetailResponse
-  onRestorePaths?: (paths: string[], items: RestorePathMetadata[]) => void
+  /** `fromArchiveId` names the archive to restore from when it is not the
+   *  one on screen: "Restore this" in file history points at an older
+   *  version, and restoring the current one instead would hand back the
+   *  wrong bytes without saying so (spec 10.4). */
+  onRestorePaths?: (paths: string[], items: RestorePathMetadata[], fromArchiveId?: number) => void
 }
 
 export default function ArchiveFilesTab({
@@ -50,6 +54,9 @@ export default function ArchiveFilesTab({
   const handleBrowseStateChange = useCallback((state: ArchiveBrowseState) => {
     for (const item of state.items) seenItems.current.set(item.path, item)
     setBrowseState(state)
+    // A new listing (folder change, filter typed) shortens the rows under
+    // the cursor, so pull it back inside them.
+    setActiveIndex((current) => Math.min(current, Math.max(state.items.length - 1, 0)))
   }, [])
 
   const handleSelectionChange = (partial: Partial<ArchivePathSelectionData>) => {
@@ -117,6 +124,9 @@ export default function ArchiveFilesTab({
         activateItem(item)
         if (item.type === 'directory') setActiveIndex(0)
       }
+    } else if (event.key === '/') {
+      event.preventDefault()
+      browseState.focusFilter()
     } else if (event.key === 'Backspace') {
       event.preventDefault()
       const parts = currentPath.split('/').filter(Boolean)
@@ -133,9 +143,13 @@ export default function ArchiveFilesTab({
       repositoryId={repositoryId}
       selectedPath={lastClicked?.path ?? null}
       selectedEntry={lastClicked}
-      onRestore={() =>
+      onRestore={(entry) =>
         lastClicked &&
-        onRestorePaths?.([lastClicked.path], [{ path: lastClicked.path, type: lastClicked.type }])
+        onRestorePaths?.(
+          [lastClicked.path],
+          [{ path: lastClicked.path, type: lastClicked.type }],
+          entry.archive_id
+        )
       }
       onDownload={() =>
         lastClicked && downloadArchiveFile(repository, archiveRef, lastClicked.path)
@@ -169,6 +183,7 @@ export default function ArchiveFilesTab({
             data={selection}
             onChange={handleSelectionChange}
             onBrowseStateChange={handleBrowseStateChange}
+            activeIndex={activeIndex}
           />
         </Box>
         {!isMobile && <Box sx={{ ...panelSx, position: 'sticky', top: 16 }}>{detailsPane}</Box>}

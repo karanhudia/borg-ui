@@ -38,30 +38,51 @@ def has_active_index_work(db: Session, repository_id: int) -> bool:
     )
 
 
-def enqueue_reconcile_runs(db: Session, *, history: Optional[bool] = None) -> int:
+def reconcile_kinds(db: Session, *, history: Optional[bool] = None) -> list:
+    """The reconcile chain, minus kinds this install has no executor for and
+    kinds the plan does not include."""
     available = registered_kinds()
     if history is None:
         history = history_enabled(db)
-    kinds = [
+    return [
         k
         for k in RECONCILE_CHAIN
         if k in available and (history or k not in PLAN_GATED_KINDS)
     ]
+
+
+def enqueue_reconcile_run(
+    db: Session,
+    repository_id: int,
+    *,
+    history: Optional[bool] = None,
+    commit: bool = True,
+) -> list:
+    """One repository's reconcile run. Returns the operations enqueued, or an
+    empty list when index work for the repository is already in flight, so a
+    burst of callers (a run of archive deletes, say) queues one run rather
+    than one per call."""
+    kinds = reconcile_kinds(db, history=history)
+    if not kinds or has_active_index_work(db, repository_id):
+        return []
+    return enqueue_chain(
+        db,
+        kinds,
+        repository_id=repository_id,
+        trigger="reconcile",
+        priority=PRIORITY_RECONCILE,
+        commit=commit,
+    )
+
+
+def enqueue_reconcile_runs(db: Session, *, history: Optional[bool] = None) -> int:
+    kinds = reconcile_kinds(db, history=history)
     if not kinds:
         return 0
     count = 0
     for repo in db.query(Repository).all():
-        if has_active_index_work(db, repo.id):
-            continue
-        enqueue_chain(
-            db,
-            kinds,
-            repository_id=repo.id,
-            trigger="reconcile",
-            priority=PRIORITY_RECONCILE,
-            commit=False,
-        )
-        count += 1
+        if enqueue_reconcile_run(db, repo.id, history=history, commit=False):
+            count += 1
     db.commit()
     logger.info("Reconcile runs enqueued", repositories=count, kinds=kinds)
     return count
