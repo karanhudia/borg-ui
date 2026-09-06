@@ -121,8 +121,11 @@ class TestSSHKeyDeployment:
         assert captured_cmd[4] == "-s", "Should include -s flag when use_sftp_mode=True"
         assert "-i" in captured_cmd, "Should include identity file flag"
         assert "-o" in captured_cmd, "Should include SSH options"
-        assert "StrictHostKeyChecking=no" in captured_cmd, (
-            "Should disable strict host key checking"
+        assert "StrictHostKeyChecking=no" not in captured_cmd, (
+            "Should never disable strict host key checking"
+        )
+        assert "StrictHostKeyChecking=accept-new" in captured_cmd, (
+            "Should record the host key on first use"
         )
         assert "testuser@test.example.com" in captured_cmd, "Should include user@host"
 
@@ -236,8 +239,11 @@ class TestSSHKeyDeployment:
             "Should NOT include -s flag when use_sftp_mode=False"
         )
         assert "-o" in captured_cmd, "Should include SSH options"
-        assert "StrictHostKeyChecking=no" in captured_cmd, (
-            "Should disable strict host key checking"
+        assert "StrictHostKeyChecking=no" not in captured_cmd, (
+            "Should never disable strict host key checking"
+        )
+        assert "StrictHostKeyChecking=accept-new" in captured_cmd, (
+            "Should record the host key on first use"
         )
         assert "admin@synology.local" in captured_cmd, "Should include user@host"
 

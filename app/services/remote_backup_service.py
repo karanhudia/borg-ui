@@ -24,6 +24,7 @@ from app.config import settings
 from app.core.borg_errors import is_borg_warning_exit_code
 from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.services.notification_service import notification_service
+from app.utils.ssh_host_keys import host_key_ssh_opts
 from app.utils.ssh_utils import (
     resolve_repository_ssh_connection,
     ssh_key_auth_args,
@@ -554,10 +555,7 @@ class RemoteBackupService:
                 ssh_cmd = [
                     "ssh",
                     *ssh_key_auth_args(key_file_path),
-                    "-o",
-                    "StrictHostKeyChecking=no",
-                    "-o",
-                    "UserKnownHostsFile=/dev/null",
+                    *host_key_ssh_opts(ssh_connection, db),
                     "-o",
                     "ServerAliveInterval=60",
                     "-o",
@@ -771,10 +769,7 @@ class RemoteBackupService:
                 ssh_cmd = [
                     "ssh",
                     *ssh_key_auth_args(key_file_path),
-                    "-o",
-                    "StrictHostKeyChecking=no",
-                    "-o",
-                    "UserKnownHostsFile=/dev/null",
+                    *host_key_ssh_opts(ssh_connection, db),
                     "-p",
                     str(ssh_connection.port),
                     f"{ssh_connection.username}@{ssh_connection.host}",

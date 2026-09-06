@@ -30,6 +30,7 @@ from app.utils.borg_env import effective_repository_remote_path, get_standard_ss
 from app.core.security import decrypt_secret
 from app.database.database import SessionLocal
 from app.database.models import SSHConnection, SSHKey, Repository, SystemSettings
+from app.utils.ssh_host_keys import host_key_ssh_opts
 from app.utils.ssh_utils import (
     resolve_repo_ssh_key_file,
     resolve_repository_ssh_connection,
@@ -1014,7 +1015,11 @@ class MountService:
                 connection = resolve_repository_ssh_connection(repository, db)
                 if connection:
                     temp_key_file = resolve_repo_ssh_key_file(repository, db)
-                    ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
+                    ssh_opts = get_standard_ssh_opts(
+                        include_key_path=temp_key_file,
+                        connection=connection,
+                        db=db,
+                    )
                     env["BORG_RSH"] = f"ssh {' '.join(ssh_opts)}"
                     logger.info(
                         "Set BORG_RSH for repository connection",
@@ -1390,10 +1395,7 @@ class MountService:
             cmd = [
                 "ssh",
                 *ssh_key_auth_args(temp_key_file),
-                "-o",
-                "StrictHostKeyChecking=no",
-                "-o",
-                "UserKnownHostsFile=/dev/null",
+                *host_key_ssh_opts(connection),
                 "-o",
                 "ConnectTimeout=10",
                 "-p",
@@ -1471,10 +1473,7 @@ class MountService:
         cmd = [
             "sftp",
             *ssh_key_auth_args(temp_key_file),
-            "-o",
-            "StrictHostKeyChecking=no",
-            "-o",
-            "UserKnownHostsFile=/dev/null",
+            *host_key_ssh_opts(connection),
             "-o",
             "ConnectTimeout=10",
             "-P",
@@ -1585,10 +1584,7 @@ class MountService:
                 diag_ssh = [
                     "ssh",
                     *ssh_key_auth_args(temp_key_file),
-                    "-o",
-                    "StrictHostKeyChecking=no",
-                    "-o",
-                    "UserKnownHostsFile=/dev/null",
+                    *host_key_ssh_opts(connection),
                     "-o",
                     "ConnectTimeout=10",
                     "-p",
@@ -1647,10 +1643,7 @@ class MountService:
                 "-p",
                 str(connection.port),
                 *sshfs_key_auth_options(temp_key_file),
-                "-o",
-                "StrictHostKeyChecking=no",
-                "-o",
-                "UserKnownHostsFile=/dev/null",
+                *host_key_ssh_opts(connection),
                 "-o",
                 "ConnectTimeout=30",
                 "-o",
