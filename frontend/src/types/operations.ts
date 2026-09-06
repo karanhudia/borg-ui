@@ -93,24 +93,6 @@ export interface QueueResponse {
   paused: boolean
 }
 
-export type StatusStripCellKey = 'backup' | 'check' | 'prune' | 'compact' | 'index' | 'mirror'
-
-export interface StatusStripCell {
-  cell: StatusStripCellKey
-  status: OperationStatus | null
-  completed_at: string | null
-  age_seconds: number | null
-  threshold_days: number
-  overdue: boolean | null
-  running: boolean
-  source: 'operations' | 'legacy' | null
-}
-
-export interface StatusStripResponse {
-  cells: StatusStripCell[]
-  overdue_available: boolean
-}
-
 export type RebuildStage = 'stats' | 'archives' | 'history'
 
 export interface RebuildResponse {

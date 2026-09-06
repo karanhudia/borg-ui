@@ -5,7 +5,6 @@ import pytest
 from app.database.models import (
     Archive,
     ArchiveChange,
-    BackupJob,
     LicensingState,
     Operation,
     Repository,
@@ -222,57 +221,6 @@ class TestHeatmap:
         days = {d["date"]: d for d in series["days"]}
         assert days["2026-09-08"]["anomalies"] == ["size_outlier"]
         assert r.json()["flags_available"]["size_outlier"] is True
-
-
-@pytest.mark.unit
-class TestStatusStrip:
-    def test_cells_from_operations_and_legacy(
-        self, test_client, test_db, admin_headers
-    ):
-        repo = _repo(test_db)
-        now = utc_now()
-        _op(test_db, repo, "prune", completed_at=now - timedelta(days=20))
-        _op(test_db, repo, "archive_sync", completed_at=now - timedelta(hours=1))
-        _op(test_db, repo, "check", status="running")
-        test_db.add(
-            BackupJob(
-                repository_id=repo.id,
-                status="completed",
-                completed_at=now - timedelta(days=3),
-            )
-        )
-        test_db.commit()
-        r = test_client.get(
-            f"/api/repositories/{repo.id}/status-strip", headers=admin_headers
-        )
-        assert r.status_code == 200
-        cells = {c["cell"]: c for c in r.json()["cells"]}
-        assert set(cells) == {"backup", "check", "prune", "compact", "index"}
-        assert (
-            cells["backup"]["source"] == "legacy"
-            and cells["backup"]["status"] == "completed"
-        )
-        assert cells["prune"]["threshold_days"] == 14
-        assert cells["prune"]["overdue"] is None
-        assert (
-            cells["check"]["running"] is True and cells["check"]["completed_at"] is None
-        )
-        assert cells["index"]["age_seconds"] < 4000
-        assert r.json()["overdue_available"] is False
-
-    def test_overdue_flags_for_pro_and_mirror_cell(
-        self, test_client, test_db, admin_headers
-    ):
-        repo = _repo(test_db, repository_type="rclone")
-        _pro(test_db)
-        _op(test_db, repo, "prune", completed_at=utc_now() - timedelta(days=20))
-        r = test_client.get(
-            f"/api/repositories/{repo.id}/status-strip", headers=admin_headers
-        )
-        cells = {c["cell"]: c for c in r.json()["cells"]}
-        assert "mirror" in cells
-        assert cells["prune"]["overdue"] is True and cells["compact"]["overdue"] is True
-        assert r.json()["overdue_available"] is True
 
 
 @pytest.mark.unit

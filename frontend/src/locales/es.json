@@ -3290,8 +3290,6 @@
       "pause": "Pausar",
       "resume": "Reanudar",
       "rebuildNeedsRepository": "Elige un repositorio desde su tarjeta para reconstruirlo.",
-      "never": "Nunca",
-      "syncing": "Sincronizando",
       "rebuildMenu": "Reconstruir…",
       "pauseFailed": "No se pudo cambiar el estado de la cola en segundo plano.",
       "openTrack": "Abrir el seguimiento de ejecución de {{repository}}",
@@ -3324,14 +3322,6 @@
       "archive_sync": "sincronización de archivo",
       "history_index": "índice de historial",
       "history_merge": "fusión de historial"
-    },
-    "strip": {
-      "backup": "Copia de seguridad",
-      "check": "Verificación",
-      "prune": "Poda",
-      "compact": "Compactación",
-      "index": "Índice",
-      "mirror": "Espejo"
     }
   },
   "notifications": {

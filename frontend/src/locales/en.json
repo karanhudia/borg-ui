@@ -3290,8 +3290,6 @@
       "pause": "Pause",
       "resume": "Resume",
       "rebuildNeedsRepository": "Choose a repository from its card to rebuild.",
-      "never": "Never",
-      "syncing": "Syncing",
       "rebuildMenu": "Rebuild…",
       "pauseFailed": "Could not change the background queue state.",
       "openTrack": "Open the run track for {{repository}}",
@@ -3324,14 +3322,6 @@
       "archive_sync": "archive sync",
       "history_index": "history index",
       "history_merge": "history merge"
-    },
-    "strip": {
-      "backup": "Backup",
-      "check": "Check",
-      "prune": "Prune",
-      "compact": "Compact",
-      "index": "Index",
-      "mirror": "Mirror"
     }
   },
   "notifications": {

@@ -7241,25 +7241,6 @@
           }
         },
         {
-          "name": "Status strip",
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{base_url}}/api/repositories/1/status-strip",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "api",
-                "repositories",
-                "1",
-                "status-strip"
-              ]
-            },
-            "description": "Backend route: `GET /api/repositories/{repo_id}/status-strip`\n\nSource: `app/api/archive_index.py`"
-          }
-        },
-        {
           "name": "Rebuild derived data",
           "request": {
             "method": "POST",

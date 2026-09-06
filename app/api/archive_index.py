@@ -1,5 +1,5 @@
 """Database-backed archive routes (spec section 9.2): list, detail,
-heatmap, status strip, rebuild, and (Pro) changes, history, search."""
+heatmap, rebuild, and (Pro) changes, history, search."""
 
 from datetime import datetime, timedelta, timezone
 from typing import Literal, Optional
@@ -31,7 +31,6 @@ from app.services.operations.executors.history import (
 )
 from app.services.operations.followups import PLAN_GATED_KINDS, history_enabled
 from app.services.operations.history_fold import Change, fold_sequence, rows_to_changes
-from app.services.operations.legacy_status import latest_legacy_terminal
 from app.services.operations.series import cron_for_repository
 from app.services.operations.vocab import PRIORITY_RECONCILE
 
@@ -39,14 +38,6 @@ router = APIRouter()
 
 NOT_FOUND = {"key": "backend.errors.archives.notFound"}
 STALE_AFTER_INTERVALS = 2
-STRIP_CELLS: tuple[tuple[str, dict], ...] = (
-    ("backup", {"kinds": ("backup",)}),
-    ("check", {"kinds": ("check",)}),
-    ("prune", {"kinds": ("prune",)}),
-    ("compact", {"kinds": ("compact",)}),
-    ("index", {"category": "index"}),
-    ("mirror", {"category": "mirror"}),
-)
 
 
 def _repo(db: Session, user: User, repo_id: int, role: str = "viewer") -> Repository:
@@ -268,63 +259,6 @@ async def get_archive(
         "successor_id": successor.id if successor else None,
         "history_available": history_enabled(db),
     }
-
-
-@router.get("/{repo_id}/status-strip")
-async def status_strip(
-    repo_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    repository = _repo(db, current_user, repo_id)
-    pro = history_enabled(db)
-    now = utc_now().replace(tzinfo=None)
-    # `repository_type` is the persisted rclone/mirror marker (spec 6.4);
-    # `cloud_mirror_enabled` is only a create-time request field, not a
-    # Repository column.
-    mirror_applies = repository.repository_type == "rclone"
-    cells = []
-    for cell, spec in STRIP_CELLS:
-        if cell == "mirror" and not mirror_applies:
-            continue
-        q = db.query(Operation).filter(Operation.repository_id == repository.id)
-        if "kinds" in spec:
-            q = q.filter(Operation.kind.in_(spec["kinds"]))
-        else:
-            q = q.filter(Operation.category == spec["category"])
-        running = q.filter(Operation.status == "running").first() is not None
-        latest = (
-            q.filter(
-                Operation.status.in_(
-                    ("completed", "completed_with_warnings", "failed", "cancelled")
-                )
-            )
-            .order_by(Operation.completed_at.desc())
-            .first()
-        )
-        status, completed_at, source = (
-            (latest.status, latest.completed_at, "operations")
-            if latest
-            else (None, None, None)
-        )
-        legacy = latest_legacy_terminal(db, repository.id, cell)
-        if legacy and (completed_at is None or legacy[1] > completed_at):
-            status, completed_at, source = legacy[0], legacy[1], "legacy"
-        cells.append(
-            {
-                "cell": cell,
-                "status": status,
-                "completed_at": completed_at,
-                "age_seconds": (now - completed_at).total_seconds()
-                if completed_at
-                else None,
-                "threshold_days": anomalies.OVERDUE_THRESHOLD_DAYS[cell],
-                "overdue": anomalies.overdue(cell, completed_at, now) if pro else None,
-                "running": running,
-                "source": source,
-            }
-        )
-    return {"cells": cells, "overdue_available": pro}
 
 
 class RebuildRequest(BaseModel):

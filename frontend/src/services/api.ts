@@ -29,7 +29,6 @@ import type {
   OperationItem,
   QueueResponse,
   QueueLimits,
-  StatusStripResponse,
   RebuildStage,
   RebuildResponse,
 } from '../types/operations'
@@ -700,8 +699,6 @@ export const archivesAPI = {
         file_path: filePath,
       })
     ),
-  getStatusStrip: (repositoryId: number) =>
-    api.get<StatusStripResponse>(`/repositories/${repositoryId}/status-strip`),
   rebuild: (repositoryId: number, from: RebuildStage) =>
     api.post<RebuildResponse>(`/repositories/${repositoryId}/rebuild`, { from }),
 }

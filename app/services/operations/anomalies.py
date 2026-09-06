@@ -1,5 +1,5 @@
-"""Anomaly rules (spec section 9.5). Pure functions; the heatmap and
-status-strip routes call them and decide which flags the plan may show."""
+"""Anomaly rules (spec section 9.5). Pure functions; the heatmap route
+calls them and decides which flags the plan may show."""
 
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional, Sequence
@@ -7,14 +7,6 @@ from zoneinfo import ZoneInfo
 
 from croniter import croniter
 
-OVERDUE_THRESHOLD_DAYS: dict[str, int] = {
-    "backup": 2,
-    "check": 30,
-    "prune": 14,
-    "compact": 30,
-    "index": 2,
-    "mirror": 1,
-}
 SIZE_OUTLIER_RATIO = 0.6
 DURATION_OUTLIER_RATIO = 2.5
 OUTLIER_WINDOW = 7
@@ -133,15 +125,6 @@ def missed_run_days(
         # before it, so subtracting a gap would hide a run that is already due.
         expected = expected_days_from_gap(first, max(starts), until, gap)
     return {d for d in expected if d not in present and d >= first.date()}
-
-
-def overdue(cell: str, last_completed_at: Optional[datetime], now: datetime) -> bool:
-    threshold = OVERDUE_THRESHOLD_DAYS.get(cell)
-    if threshold is None:
-        return False
-    if last_completed_at is None:
-        return True
-    return now - last_completed_at > timedelta(days=threshold)
 
 
 def series_flags(archives: Sequence) -> dict[int, list[str]]:

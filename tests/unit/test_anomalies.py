@@ -91,23 +91,6 @@ def test_missed_run_days_from_cron_and_from_gap():
 
 
 @pytest.mark.unit
-def test_overdue_thresholds():
-    now = datetime(2026, 9, 10)
-    assert an.OVERDUE_THRESHOLD_DAYS == {
-        "backup": 2,
-        "check": 30,
-        "prune": 14,
-        "compact": 30,
-        "index": 2,
-        "mirror": 1,
-    }
-    assert an.overdue("backup", now - timedelta(days=2, seconds=1), now) is True
-    assert an.overdue("backup", now - timedelta(days=2), now) is False
-    assert an.overdue("check", None, now) is True
-    assert an.overdue("unknown", now, now) is False
-
-
-@pytest.mark.unit
 def test_series_flags_per_archive():
     mk = lambda i, size, dur: SimpleNamespace(
         id=i,

@@ -3290,8 +3290,6 @@
       "pause": "Pausieren",
       "resume": "Fortsetzen",
       "rebuildNeedsRepository": "Wähle ein Repository aus seiner Karte, um es neu aufzubauen.",
-      "never": "Nie",
-      "syncing": "Synchronisiert",
       "rebuildMenu": "Neu aufbauen…",
       "pauseFailed": "Der Zustand der Hintergrundwarteschlange konnte nicht geändert werden.",
       "openTrack": "Ablaufverfolgung für {{repository}} öffnen",
@@ -3324,14 +3322,6 @@
       "archive_sync": "Archiv-Sync",
       "history_index": "Verlaufsindex",
       "history_merge": "Verlauf zusammenführen"
-    },
-    "strip": {
-      "backup": "Sicherung",
-      "check": "Prüfung",
-      "prune": "Bereinigung",
-      "compact": "Verdichtung",
-      "index": "Index",
-      "mirror": "Spiegelung"
     }
   },
   "notifications": {
