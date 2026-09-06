@@ -1110,6 +1110,14 @@ Not in scope, listed so nobody re-derives them.
 - `GET /activity/recent` gaining a `repository_id` parameter. The
   repository Operations view filters the newest 200 rows on the client,
   which can hide older runs of a quiet repository on a busy install.
+- Chaining the resync behind a destructive job instead of enqueuing it when
+  the job is accepted. Delete, prune and wipe call `/resync` as soon as the
+  job is created; the lane rules hold index work off only while the legacy
+  job reads `running`, so a reconcile that lands in the gap before that can
+  sync the archive list while the archive is still there, and the stale row
+  waits for the next reconcile tick. Phases 6 to 8 migrate these kinds into
+  the operation chain, where the follow-up runs after the work, which is
+  where this belongs. Raised by review on PR #913, 2026-09-06.
 
 ## 17. Open questions
 
