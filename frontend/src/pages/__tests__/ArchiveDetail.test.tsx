@@ -15,14 +15,35 @@ vi.mock('react-router-dom', async (importOriginal) => {
 })
 
 vi.mock('../../components/archives/ArchiveFilesTab', () => ({
-  default: ({ onRestorePaths }: { onRestorePaths?: (paths: string[]) => void }) => (
-    <button onClick={() => onRestorePaths?.(['home/karan/docs'])}>Restore selection</button>
+  default: ({
+    onRestorePaths,
+  }: {
+    onRestorePaths?: (paths: string[], items: unknown[], fromArchiveId?: number) => void
+  }) => (
+    <>
+      <button onClick={() => onRestorePaths?.(['home/karan/docs'], [])}>Restore selection</button>
+      <button onClick={() => onRestorePaths?.(['home/karan/docs/invoices.xlsx'], [], 9)}>
+        Restore this version
+      </button>
+    </>
   ),
 }))
 
 vi.mock('../../components/RestoreWizard', () => ({
-  default: ({ open, initialSelectedPaths }: { open: boolean; initialSelectedPaths?: string[] }) =>
-    open ? <div>Wizard: {(initialSelectedPaths ?? []).join(',')}</div> : null,
+  default: ({
+    open,
+    initialSelectedPaths,
+    archive,
+  }: {
+    open: boolean
+    initialSelectedPaths?: string[]
+    archive?: { name?: string } | null
+  }) =>
+    open ? (
+      <div>
+        Wizard: {(initialSelectedPaths ?? []).join(',')} from {archive?.name}
+      </div>
+    ) : null,
 }))
 
 vi.mock('../../services/api', () => ({
@@ -95,7 +116,28 @@ describe('ArchiveDetail', () => {
     vi.mocked(archivesAPI.getArchive).mockResolvedValue({ data: archive } as never)
     renderRoute('/archives/7/12?tab=files')
     fireEvent.click(await screen.findByRole('button', { name: /restore selection/i }))
-    expect(await screen.findByText('Wizard: home/karan/docs')).toBeInTheDocument()
+    expect(
+      await screen.findByText(/Wizard: home\/karan\/docs from nas-2026-09-02T02:00/)
+    ).toBeInTheDocument()
+  })
+
+  it('restores an older version from the archive that version lives in', async () => {
+    const older = {
+      ...archive,
+      id: 9,
+      borg_id: 'older-borg-id',
+      name: 'nas-2026-08-24T02:00',
+      start: '2026-08-24T02:00:00Z',
+    }
+    vi.mocked(archivesAPI.getArchive).mockImplementation(
+      (_repositoryId: number, archiveId: number) =>
+        Promise.resolve({ data: archiveId === 9 ? older : archive }) as never
+    )
+    renderRoute('/archives/7/12?tab=files')
+    fireEvent.click(await screen.findByRole('button', { name: /restore this version/i }))
+    expect(
+      await screen.findByText(/Wizard: home\/karan\/docs\/invoices.xlsx from nas-2026-08-24T02:00/)
+    ).toBeInTheDocument()
   })
 
   it('reports an archive that cannot be loaded', async () => {
