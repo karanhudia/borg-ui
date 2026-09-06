@@ -4,7 +4,7 @@ Borg UI has optional product analytics.
 
 It is used to understand broad product usage and error patterns. It should not include backup contents, Borg repository contents, passphrases, SSH keys, private hostnames, private IP addresses, or raw repository paths.
 
-Analytics is controlled by the consent banner after login. Users can change the setting later in Settings > Preferences.
+Analytics starts on. A banner after first login asks whether to keep it, and declining stops it from that point, though page views from before the answer are counted. Users can change the setting later in Settings > Preferences.
 
 ## Disable
 

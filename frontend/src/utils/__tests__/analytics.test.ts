@@ -15,6 +15,7 @@ import {
   trackConsentResponse,
   trackLanguageChange,
   getOrCreateInstallId,
+  initAnalyticsIfEnabled,
   resetOptOutCache,
   anonymizeEntityName,
   EventCategory,
@@ -159,6 +160,32 @@ describe('analytics (umami)', () => {
       )
       expect(arePreferencesLoaded()).toBe(true)
       expect(hasConsentBeenGiven()).toBe(true)
+    })
+  })
+
+  describe('initAnalyticsIfEnabled', () => {
+    it('loads the Umami script with no referrer so the origin never leaves', async () => {
+      Storage.prototype.getItem = vi.fn().mockReturnValue(null)
+      getAuthConfigMock.mockResolvedValueOnce({
+        data: { proxy_auth_enabled: false, insecure_no_auth_enabled: true },
+      })
+      fetchJsonForAuthModeMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          preferences: { analytics_enabled: true, analytics_consent_given: true },
+        }),
+      } as Response)
+
+      await loadUserPreference()
+      initAnalyticsIfEnabled()
+
+      const script = document.head.querySelector<HTMLScriptElement>(
+        'script[src="https://cloud.umami.is/script.js"]'
+      )
+      expect(script).not.toBeNull()
+      // Without this the browser attaches the instance's own origin to the
+      // request, which is exactly what the payload masking exists to prevent.
+      expect(script?.referrerPolicy).toBe('no-referrer')
     })
   })
 
