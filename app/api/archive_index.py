@@ -31,8 +31,8 @@ from app.services.operations.executors.history import (
 )
 from app.services.operations.followups import PLAN_GATED_KINDS, history_enabled
 from app.services.operations.history_fold import Change, fold_sequence, rows_to_changes
-from app.services.operations.legacy_status import latest_legacy_terminal
 from app.services.operations.reconcile import enqueue_reconcile_run
+from app.services.operations.repository_status import repository_status
 from app.services.operations.series import cron_for_repository
 from app.services.operations.vocab import PRIORITY_RECONCILE
 
@@ -42,14 +42,6 @@ NOT_FOUND = {"key": "backend.errors.archives.notFound"}
 # Three intervals, so one missed reconcile (a backend restart sleeps a
 # full interval before its first run) does not flip every chip to stale.
 STALE_AFTER_INTERVALS = 3
-STRIP_CELLS: tuple[tuple[str, dict], ...] = (
-    ("backup", {"kinds": ("backup",)}),
-    ("check", {"kinds": ("check",)}),
-    ("prune", {"kinds": ("prune",)}),
-    ("compact", {"kinds": ("compact",)}),
-    ("index", {"category": "index"}),
-    ("mirror", {"category": "mirror"}),
-)
 
 
 def _repo(db: Session, user: User, repo_id: int, role: str = "viewer") -> Repository:
@@ -282,61 +274,33 @@ async def get_archive(
     }
 
 
+@router.get("/{repo_id}/status")
+async def repository_status_route(
+    repo_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Per-category status from the best evidence available (#935): the
+    archive list for backups, detected removals for prune, job rows for
+    check and compact, with expectations from the series cadence and the
+    repository's own plans and schedules."""
+    repository = _repo(db, current_user, repo_id)
+    return repository_status(
+        db,
+        repository,
+        now=utc_now().replace(tzinfo=None),
+        pro=history_enabled(db),
+    )
+
+
 @router.get("/{repo_id}/status-strip")
 async def status_strip(
     repo_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    repository = _repo(db, current_user, repo_id)
-    pro = history_enabled(db)
-    now = utc_now().replace(tzinfo=None)
-    # `repository_type` is the persisted rclone/mirror marker (spec 6.4);
-    # `cloud_mirror_enabled` is only a create-time request field, not a
-    # Repository column.
-    mirror_applies = repository.repository_type == "rclone"
-    cells = []
-    for cell, spec in STRIP_CELLS:
-        if cell == "mirror" and not mirror_applies:
-            continue
-        q = db.query(Operation).filter(Operation.repository_id == repository.id)
-        if "kinds" in spec:
-            q = q.filter(Operation.kind.in_(spec["kinds"]))
-        else:
-            q = q.filter(Operation.category == spec["category"])
-        running = q.filter(Operation.status == "running").first() is not None
-        latest = (
-            q.filter(
-                Operation.status.in_(
-                    ("completed", "completed_with_warnings", "failed", "cancelled")
-                )
-            )
-            .order_by(Operation.completed_at.desc())
-            .first()
-        )
-        status, completed_at, source = (
-            (latest.status, latest.completed_at, "operations")
-            if latest
-            else (None, None, None)
-        )
-        legacy = latest_legacy_terminal(db, repository.id, cell)
-        if legacy and (completed_at is None or legacy[1] > completed_at):
-            status, completed_at, source = legacy[0], legacy[1], "legacy"
-        cells.append(
-            {
-                "cell": cell,
-                "status": status,
-                "completed_at": completed_at,
-                "age_seconds": (now - completed_at).total_seconds()
-                if completed_at
-                else None,
-                "threshold_days": anomalies.OVERDUE_THRESHOLD_DAYS[cell],
-                "overdue": anomalies.overdue(cell, completed_at, now) if pro else None,
-                "running": running,
-                "source": source,
-            }
-        )
-    return {"cells": cells, "overdue_available": pro}
+    """Same payload as /status; kept for the strip until it moves."""
+    return await repository_status_route(repo_id, current_user, db)
 
 
 class RebuildRequest(BaseModel):

@@ -207,6 +207,20 @@ Rules:
   indexed repository. An unknown size leaves the stored value alone,
   never `0`. Both versions' `repository.last_modified` (the last manifest
   write) lands in `repositories.borg_last_modified`.
+- The repository status (`GET /repositories/{id}/status`, also served as
+  `/status-strip`) reads repository evidence first: backup is the newest
+  archive, whatever created it, unless a failed or cancelled Borg UI
+  attempt is newer, and with no archives at all the newest job row; prune
+  is the newest successful `archive_sync` that reported removed archives
+  unless a prune run through Borg UI is newer; check and compact keep
+  their job rows. Overdue is judged per series against its own cadence (the
+  repository is overdue when one series is), against the check schedule
+  or a scheduled plan that checks after backups, and against the plans or
+  scheduled jobs that run prune or compact (a plan counts only when
+  enabled, scheduled, dispatchable and linked through an enabled
+  association); it is
+  null where nothing is expected. Details and the `source` field: spec
+  section 10.2.
 - The reconcile scheduler replaces the old stats refresh loop. Every
   `stats_refresh_interval_minutes` it enqueues an index run for each
   repository that has none queued or running. `0` disables it.

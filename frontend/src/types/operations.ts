@@ -103,7 +103,7 @@ export interface StatusStripCell {
   threshold_days: number
   overdue: boolean | null
   running: boolean
-  source: 'operations' | 'legacy' | null
+  source: 'archive' | 'removal' | 'operations' | 'legacy' | null
 }
 
 export interface StatusStripResponse {
