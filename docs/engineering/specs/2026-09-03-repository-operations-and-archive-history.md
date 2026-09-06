@@ -506,7 +506,7 @@ Existing settings keep their meaning and move behind one function,
 | after | chain (in order, each depends on the previous) |
 | --- | --- |
 | `import_connect` | `stats`, `archive_sync`, `history_index` |
-| `backup` | `archive_sync`, `history_index`, `stats` |
+| `backup` | `archive_sync`, `history_merge`, `history_index`, `stats` |
 | `prune` | `archive_sync`, `history_merge`, `stats` |
 | `delete_archive` | `archive_sync`, `history_merge`, `stats` |
 | `compact` | `stats` |
@@ -516,7 +516,14 @@ Existing settings keep their meaning and move behind one function,
 
 Follow-ups are created by the runner when the parent reaches a terminal
 success state, with the parent's `run_id`, `trigger = followup`,
-`priority = 10`. They are not created when the parent fails.
+`priority = 10`. They are not created when the parent fails. Until phase 8
+moves backups into the runner, the legacy backup completion paths call
+`followups.enqueue_backup_followups` themselves (#933), which enqueues the
+`backup` chain unless an `archive_sync` is queued with no dependency or an
+already satisfied dependency. Other queued index stages and running listings
+do not suppress it. `history_merge` immediately follows the listing on every
+plan to delete removed archive rows. `archive_sync` then derives `archive_count` and `last_backup` from the
+listing instead of the completion path writing them.
 
 `archive_sync` runs before `history_merge` so the merge knows which archives
 disappeared. `history_index` skips pairs whose predecessor is not yet
@@ -1332,7 +1339,7 @@ All of these are replaced by `enqueue()` calls in phase 1 or phase 5.
 | `app/api/repositories.py:914` `update_repository_stats` | `borg list` for count and last backup, `borg info` for size; not wrapped in the repository command lock | `stats` and `archive_sync` executors (phase 1) |
 | `app/api/repositories.py:813` `_update_agent_repository_stats` | Agent variant of the above | Same executors, routed through `BorgRouter` |
 | `app/services/stats_refresh_scheduler.py:26-160` | Hourly sequential loop over all repositories calling `update_stats` | Reconcile trigger, section 7.5 (phase 1) |
-| `app/services/backup_service.py:2643` and `:2759` | Stats after a backup | `backup` follow-up chain (phase 8; until then, a one-line `enqueue` replaces the call in phase 5) |
+| `app/services/backup_service.py:2643` and `:2759` | Stats after a backup | `backup` follow-up chain via `enqueue_backup_followups` (#933, done ahead of phase 5); phase 8 moves it into the runner |
 | `app/services/repository_wipe_service.py:465` | Stats after a wipe | `wipe` follow-up chain (phase 6) |
 | `app/services/repository_info_sync.py:47` `sync_archive_stats_from_info` | Writes archive stats when the info dialog opens; called from `app/api/repositories.py:6089`, `:6139`, `app/api/v2/repositories.py:569`, `:634` | Keeps running, writes into `archives` (phase 2) |
 | `app/core/borg_router.py:434` `BorgRouter.update_stats` | Router entry for the above | Kept as a thin call into the executors, then removed in phase 9 |

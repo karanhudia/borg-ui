@@ -8,7 +8,7 @@ from app.services.operations.vocab import validate_kind
 
 FOLLOWUPS: dict[str, tuple[str, ...]] = {
     "import_connect": ("stats", "archive_sync", "history_index"),
-    "backup": ("archive_sync", "history_index", "stats"),
+    "backup": ("archive_sync", "history_merge", "history_index", "stats"),
     "prune": ("archive_sync", "history_merge", "stats"),
     "delete_archive": ("archive_sync", "history_merge", "stats"),
     "compact": ("stats",),
@@ -59,3 +59,78 @@ def history_enabled(db) -> bool:
     from app.core.features import Plan, get_current_plan, plan_includes
 
     return plan_includes(get_current_plan(db), Plan.PRO)
+
+
+def enqueue_backup_followups(
+    db,
+    repository_id: int,
+    *,
+    scheduled_job_id: Optional[int] = None,
+    backup_plan_run_id: Optional[int] = None,
+    commit: bool = True,
+    history: Optional[bool] = None,
+) -> list:
+    """Enqueue the `backup` chain for a backup that completed outside the
+    runner (the legacy backup paths, until phase 8 moves them in).
+
+    `history` is the plan gate; left None it is read here, which goes
+    through the licensing service and commits the session. A caller that
+    wraps this call in a savepoint reads it beforehand and passes it in.
+
+    Skipped only when an archive listing is queued and its dependency is
+    already satisfied (or absent). Other queued index work cannot replace
+    a listing. A running listing may predate this backup and does not count.
+
+    The check is best-effort, like the reconcile scheduler's: a second chain
+    from a lost race is one extra listing, serialized per repository by the
+    executors and idempotent (archives upsert by id), not a correctness
+    problem, so it is not worth a lock or a uniqueness constraint.
+    """
+    from sqlalchemy import and_, or_
+    from sqlalchemy.orm import aliased
+
+    from app.database.models import Operation
+    from app.services.operations.enqueue import enqueue_chain
+    from app.services.operations.executors import registered_kinds
+    from app.services.operations.vocab import SUCCESS_STATUSES
+
+    dependency = aliased(Operation)
+    queued = (
+        db.query(Operation.id)
+        .outerjoin(dependency, Operation.depends_on_id == dependency.id)
+        .filter(
+            Operation.repository_id == repository_id,
+            Operation.kind == "archive_sync",
+            Operation.status == "queued",
+            # Match the runner's corrected skip semantics (#917): an
+            # intentional skip satisfies; dependency_failed propagates.
+            or_(
+                Operation.depends_on_id.is_(None),
+                dependency.status.in_(SUCCESS_STATUSES),
+                and_(
+                    dependency.status == "skipped",
+                    or_(
+                        dependency.skip_reason.is_(None),
+                        dependency.skip_reason != "dependency_failed",
+                    ),
+                ),
+            ),
+        )
+        .first()
+    )
+    if queued is not None:
+        return []
+    if history is None:
+        history = history_enabled(db)
+    kinds = chain_for("backup", available=registered_kinds(), history=history)
+    if not kinds:
+        return []
+    return enqueue_chain(
+        db,
+        kinds,
+        repository_id=repository_id,
+        trigger="followup",
+        scheduled_job_id=scheduled_job_id,
+        backup_plan_run_id=backup_plan_run_id,
+        commit=commit,
+    )
