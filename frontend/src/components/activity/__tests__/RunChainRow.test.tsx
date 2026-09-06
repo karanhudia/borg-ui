@@ -24,8 +24,8 @@ describe('RunChainRow', () => {
         }}
       />
     )
-    expect(screen.getByText('archive sync')).toBeInTheDocument()
-    expect(screen.getByText('stats')).toBeInTheDocument()
+    expect(screen.getByText('Sync archive list')).toBeInTheDocument()
+    expect(screen.getByText('Refresh stats')).toBeInTheDocument()
     const entries = screen.getAllByTestId('run-chain-followup')
     expect(entries).toHaveLength(2)
     expect(entries[0]).toHaveAttribute('data-status', 'completed')
@@ -52,7 +52,7 @@ describe('RunChainRow', () => {
     expect(screen.getByText('14/38')).toBeInTheDocument()
   })
 
-  it('collapses to "N follow-ups" past three and expands on click', () => {
+  it('collapses to "N steps" past three and expands on click', () => {
     render(
       <RunChainRow
         operation={{
@@ -67,10 +67,10 @@ describe('RunChainRow', () => {
         }}
       />
     )
-    expect(screen.getByText('4 follow-ups')).toBeInTheDocument()
+    expect(screen.getByText('4 steps')).toBeInTheDocument()
     expect(screen.queryAllByTestId('run-chain-followup')).toHaveLength(0)
 
-    fireEvent.click(screen.getByText('4 follow-ups'))
+    fireEvent.click(screen.getByText('4 steps'))
     expect(screen.getAllByTestId('run-chain-followup')).toHaveLength(4)
   })
 
@@ -100,9 +100,9 @@ describe('RunChainRow stacked layout', () => {
         }}
       />
     )
-    expect(screen.getByText('2 follow-ups')).toBeInTheDocument()
+    expect(screen.getByText('2 steps')).toBeInTheDocument()
     expect(screen.queryAllByTestId('run-chain-followup')).toHaveLength(0)
-    fireEvent.click(screen.getByText('2 follow-ups'))
+    fireEvent.click(screen.getByText('2 steps'))
     expect(screen.getAllByTestId('run-chain-followup')).toHaveLength(2)
   })
 
@@ -131,6 +131,6 @@ describe('RunChainRow stacked layout', () => {
         }}
       />
     )
-    expect(screen.getByText('1 follow-up')).toBeInTheDocument()
+    expect(screen.getByText('1 step')).toBeInTheDocument()
   })
 })

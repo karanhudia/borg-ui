@@ -18,7 +18,7 @@ import { AlertCircle, ArrowLeft, FileText, RefreshCw } from 'lucide-react'
 import { isToday, isYesterday } from 'date-fns'
 import { activityAPI, repositoriesAPI } from '../../services/api'
 import CategoryFilter from '../../components/activity/CategoryFilter'
-import RunChainRow from '../../components/activity/RunChainRow'
+import RunChainRow, { type RunChainOperation } from '../../components/activity/RunChainRow'
 import RunStatusIcon from '../../components/activity/RunStatusIcon'
 import CategoryToken from '../../components/CategoryToken'
 import TriggerSelect from '../../components/activity/TriggerSelect'
@@ -79,6 +79,25 @@ function RunRow({
   const theme = useTheme()
   const time = runTime(item)
   const kind = item.kind ?? item.type
+  const followups = item.followups ?? []
+  // A reconcile or rebuild is one row with its steps under it. Naming the
+  // row after its first step ("Sync archive list") undersold it, so index
+  // runs take their name from what started them and list every step.
+  const isIndexRun = item.category === 'index' && followups.length > 0
+  const runTitle = isIndexRun
+    ? t(`activity.runTitle.${item.trigger ?? 'manual'}`, {
+        defaultValue: t(`operations.kind.${kind}`, { defaultValue: kind }),
+      })
+    : t(`operations.kind.${kind}`, { defaultValue: kind })
+  const steps: RunChainOperation[] = (isIndexRun ? [item, ...followups] : followups).map(
+    (step) => ({
+      id: step.id,
+      kind: step.kind ?? step.type,
+      status: step.status,
+      progress_current: step.progress_current,
+      progress_total: step.progress_total,
+    })
+  )
   const hasLogs = item.has_logs === true || !!item.log_file_path || item.status === 'running'
   const hasError = item.status === 'failed' && !!item.error_message
   const elapsed = duration(item)
@@ -114,11 +133,13 @@ function RunRow({
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
           {item.category && <CategoryToken category={item.category} />}
           <Typography variant="body2" sx={{ fontWeight: 600 }}>
-            {t(`operations.kind.${kind}`, { defaultValue: kind })}
+            {runTitle}
           </Typography>
-          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            {triggerSource(item, t)}
-          </Typography>
+          {!isIndexRun && (
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              {triggerSource(item, t)}
+            </Typography>
+          )}
         </Stack>
         <RunChainRow
           layout="stacked"
@@ -126,13 +147,7 @@ function RunRow({
             id: item.id,
             kind: kind ?? '',
             status: item.status,
-            followups: (item.followups ?? []).map((followup) => ({
-              id: followup.id,
-              kind: followup.kind ?? followup.type,
-              status: followup.status,
-              progress_current: followup.progress_current,
-              progress_total: followup.progress_total,
-            })),
+            followups: steps,
           }}
         />
       </Box>
@@ -285,7 +300,7 @@ export default function RepositoryOperationsView({
         direction="row"
         spacing={1.5}
         useFlexGap
-        sx={{ flexWrap: 'wrap', alignItems: 'center', mb: 3 }}
+        sx={{ flexWrap: 'wrap', alignItems: 'flex-start', mb: 3 }}
       >
         <CategoryFilter value={categoryFilter} onChange={setCategoryFilter} />
         <TriggerSelect value={triggerFilter} onChange={setTriggerFilter} />

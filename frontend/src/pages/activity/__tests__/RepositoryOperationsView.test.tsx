@@ -104,8 +104,36 @@ describe('RepositoryOperationsView', () => {
   it('collapses a succeeded chain and expands a running one', async () => {
     renderWithProviders(<RepositoryOperationsView repositoryId={1} />)
     const rows = await screen.findAllByTestId('run-row')
-    expect(within(rows[0]).getByText('1 follow-up')).toBeInTheDocument()
-    expect(within(rows[1]).getByText('history merge')).toBeInTheDocument()
+    expect(within(rows[0]).getByText('1 step')).toBeInTheDocument()
+    expect(within(rows[1]).getByText('Fold removed history')).toBeInTheDocument()
+  })
+
+  it('names an index run after what started it and lists every step under it', async () => {
+    ;(activityAPI.list as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: [
+        run({
+          id: 3,
+          type: 'archive_sync',
+          kind: 'archive_sync',
+          category: 'index',
+          trigger: 'reconcile',
+          backup_plan_name: null,
+          archive_name: null,
+          followups: [
+            { id: 31, kind: 'history_merge', status: 'completed' },
+            { id: 32, kind: 'history_index', status: 'completed' },
+            { id: 33, kind: 'stats', status: 'completed' },
+          ],
+        }),
+      ],
+    })
+    renderWithProviders(<RepositoryOperationsView repositoryId={1} initialCategory={['index']} />)
+    const row = (await screen.findAllByTestId('run-row'))[0]
+    expect(within(row).getByText('Reconcile run')).toBeInTheDocument()
+    expect(within(row).queryByText('Sync archive list')).not.toBeInTheDocument()
+    fireEvent.click(within(row).getByText('4 steps'))
+    expect(within(row).getByText('Sync archive list')).toBeInTheDocument()
+    expect(within(row).getByText('Refresh stats')).toBeInTheDocument()
   })
 
   it('starts with the category filter it was opened with', async () => {

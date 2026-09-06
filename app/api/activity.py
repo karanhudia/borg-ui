@@ -461,6 +461,7 @@ def _operation_activity_items(
         item["_sort_at"] = op.started_at or op.created_at
         item["_depends_on_id"] = op.depends_on_id
         item["_trigger"] = op.trigger
+        item["_run_id"] = op.run_id
         by_id[op.id] = item
 
     def _visible(item: dict) -> bool:
@@ -473,26 +474,39 @@ def _operation_activity_items(
             return False
         return True
 
+    def _root_id(item: dict) -> int:
+        """The row an operation rides under: follow-ups ride under whatever
+        they depend on, and the later steps of one run (a reconcile's
+        history and stats steps after its archive sync) ride under the
+        run's first step. Anything else is a row of its own."""
+        seen: set[int] = set()
+        while True:
+            parent = by_id.get(item["_depends_on_id"])
+            if parent is None or item["id"] in seen:
+                return item["id"]
+            if item["_trigger"] != "followup" and parent["_run_id"] != item["_run_id"]:
+                return item["id"]
+            seen.add(item["id"])
+            item = parent
+
     top_level: List[dict] = []
     if collapse_runs:
+        roots = {item["id"]: _root_id(item) for item in by_id.values()}
         top_ids: set[int] = set()
         for item in by_id.values():
-            if item["_trigger"] != "followup" and _visible(item):
+            if roots[item["id"]] == item["id"] and _visible(item):
                 top_level.append(item)
                 top_ids.add(item["id"])
         for item in sorted(by_id.values(), key=lambda i: i["id"]):
-            if item["_trigger"] != "followup":
-                continue
-            parent_id = item["_depends_on_id"]
-            while parent_id in by_id and by_id[parent_id]["_trigger"] == "followup":
-                parent_id = by_id[parent_id]["_depends_on_id"]
-            if parent_id in top_ids:
-                by_id[parent_id]["followups"].append(item)
+            root_id = roots[item["id"]]
+            if root_id != item["id"] and root_id in top_ids:
+                by_id[root_id]["followups"].append(item)
     else:
         top_level = [item for item in by_id.values() if _visible(item)]
     for item in by_id.values():
         item.pop("_depends_on_id", None)
         item.pop("_trigger", None)
+        item.pop("_run_id", None)
         for followup in item["followups"]:
             followup.pop("_sort_at", None)
     return top_level

@@ -2012,6 +2012,7 @@
       "message": "There are no operations matching your filters"
     },
     "filterCategory": "Category",
+    "indexHiddenHint": "Showing everything except index runs. Select Index to include them.",
     "filterTrigger": "Trigger",
     "allTriggers": "All triggers",
     "triggers": {
@@ -2023,9 +2024,15 @@
       "reconcile": "Reconcile",
       "retry": "Retry"
     },
-    "followupsCollapsed": "{{count}} follow-ups",
+    "runTitle": {
+      "reconcile": "Reconcile run",
+      "manual": "Rebuild",
+      "retry": "Retry",
+      "import": "Import"
+    },
+    "followupsCollapsed": "{{count}} steps",
     "operations": "Operations",
-    "followupsCollapsed_one": "{{count}} follow-up",
+    "followupsCollapsed_one": "{{count}} step",
     "repositoryView": {
       "back": "All activity",
       "subtitle": "Runs on this repository, newest first",
@@ -3573,7 +3580,7 @@
       "skipped": "Skipped"
     },
     "kind": {
-      "import_connect": "connect",
+      "import_connect": "Connect repository",
       "backup": "backup",
       "restore": "restore",
       "restore_check": "restore check",

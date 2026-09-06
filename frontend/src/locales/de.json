@@ -2012,6 +2012,7 @@
       "message": "Es gibt keine Vorgänge, die deinen Filtern entsprechen"
     },
     "filterCategory": "Kategorie",
+    "indexHiddenHint": "Alles außer Index-Läufen wird angezeigt. Wähle Index, um sie einzublenden.",
     "filterTrigger": "Auslöser",
     "allTriggers": "Alle Auslöser",
     "triggers": {
@@ -2023,9 +2024,15 @@
       "reconcile": "Abgleich",
       "retry": "Wiederholung"
     },
-    "followupsCollapsed": "{{count}} Folgeaktionen",
+    "runTitle": {
+      "reconcile": "Abgleichlauf",
+      "manual": "Neuaufbau",
+      "retry": "Wiederholung",
+      "import": "Import"
+    },
+    "followupsCollapsed": "{{count}} Schritte",
     "operations": "Vorgänge",
-    "followupsCollapsed_one": "{{count}} Folgeaktion",
+    "followupsCollapsed_one": "{{count}} Schritt",
     "repositoryView": {
       "back": "Gesamte Aktivität",
       "subtitle": "Läufe in diesem Repository, neueste zuerst",
@@ -3573,7 +3580,7 @@
       "skipped": "Übersprungen"
     },
     "kind": {
-      "import_connect": "Verbinden",
+      "import_connect": "Repository verbinden",
       "backup": "Sicherung",
       "restore": "Wiederherstellung",
       "restore_check": "Wiederherstellungsprüfung",

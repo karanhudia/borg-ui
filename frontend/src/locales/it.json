@@ -2012,6 +2012,7 @@
       "message": "Non ci sono operazioni corrispondenti ai tuoi filtri"
     },
     "filterCategory": "Categoria",
+    "indexHiddenHint": "Viene mostrato tutto tranne le esecuzioni di indicizzazione. Seleziona Indice per includerle.",
     "filterTrigger": "Trigger",
     "allTriggers": "Tutti i trigger",
     "triggers": {
@@ -2023,9 +2024,15 @@
       "reconcile": "Riconciliazione",
       "retry": "Nuovo tentativo"
     },
-    "followupsCollapsed": "{{count}} follow-up",
+    "runTitle": {
+      "reconcile": "Riconciliazione",
+      "manual": "Ricostruzione",
+      "retry": "Nuovo tentativo",
+      "import": "Importazione"
+    },
+    "followupsCollapsed": "{{count}} passaggi",
     "operations": "Operazioni",
-    "followupsCollapsed_one": "{{count}} follow-up",
+    "followupsCollapsed_one": "{{count}} passaggio",
     "repositoryView": {
       "back": "Tutta l'attività",
       "subtitle": "Esecuzioni su questo repository, dalla più recente",
@@ -3573,7 +3580,7 @@
       "skipped": "Saltato"
     },
     "kind": {
-      "import_connect": "connetti",
+      "import_connect": "Connetti repository",
       "backup": "backup",
       "restore": "ripristina",
       "restore_check": "verifica ripristino",
