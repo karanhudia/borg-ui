@@ -30,7 +30,6 @@ const meta = {
     totalHistoryRows: 27393,
     onOpen: () => {},
     onRetry: () => {},
-    onRebuild: () => {},
   },
 } satisfies Meta<typeof RepositoryHubRow>
 

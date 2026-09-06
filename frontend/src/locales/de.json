@@ -3427,7 +3427,6 @@
       "resume": "Fortsetzen",
       "never": "Nie",
       "syncing": "Synchronisiert",
-      "rebuildMenu": "Neu aufbauen…",
       "pauseFailed": "Der Zustand der Hintergrundwarteschlange konnte nicht geändert werden.",
       "openTrack": "Ablaufverfolgung für {{repository}} öffnen",
       "rebuildFailed": "Der Neuaufbau konnte nicht gestartet werden.",

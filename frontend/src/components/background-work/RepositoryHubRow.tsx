@@ -1,17 +1,25 @@
-import { Box, Chip, Link as MuiLink, Typography, alpha, useTheme } from '@mui/material'
-import { AlertTriangle, Scissors } from 'lucide-react'
+import {
+  Box,
+  Chip,
+  IconButton,
+  Link as MuiLink,
+  Tooltip,
+  Typography,
+  alpha,
+  useTheme,
+} from '@mui/material'
+import { AlertTriangle, RotateCw, Scissors } from 'lucide-react'
 import { Link as RouterLink } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { formatDistanceToNow } from 'date-fns'
 import CategoryToken from '../CategoryToken'
 import SyncStateChip from '../archives/SyncStateChip'
-import RebuildMenu from './RebuildMenu'
 import StageTrack from './StageTrack'
 import { elapsedSince, useNow } from './elapsed'
 import { PLAN_COLOR, PLAN_LABEL } from '../../core/features'
 import { parseBackendDate } from '../../utils/dateUtils'
 import { HUB_GRID_COLUMNS, type RepositoryTrack, type StageState } from './repositoryTrack'
-import type { HubRepository, RebuildStage } from '../../types/operations'
+import type { HubRepository } from '../../types/operations'
 
 interface RepositoryHubRowProps {
   // Null for the system lane (package installs and other work with no
@@ -22,7 +30,6 @@ interface RepositoryHubRowProps {
   totalHistoryRows: number
   onOpen: () => void
   onRetry: (stage: StageState) => void
-  onRebuild: (stage: RebuildStage) => void
 }
 
 function ago(value: string): string {
@@ -180,7 +187,6 @@ export default function RepositoryHubRow({
   totalHistoryRows,
   onOpen,
   onRetry,
-  onRebuild,
 }: RepositoryHubRowProps) {
   const { t } = useTranslation()
   const theme = useTheme()
@@ -309,11 +315,18 @@ export default function RepositoryHubRow({
           }}
         >
           {repositoryId != null && (
-            <RebuildMenu
-              variant="icon"
-              label={t('operations.background.rebuildRow', { repository: name })}
-              onSelect={onRebuild}
-            />
+            // The stages are chosen in the dialog, next to the run and the
+            // archives that need a look, so the icon opens that rather
+            // than a second menu with its own explanation.
+            <Tooltip title={t('operations.background.rebuildRow', { repository: name })}>
+              <IconButton
+                size="small"
+                aria-label={t('operations.background.rebuildRow', { repository: name })}
+                onClick={onOpen}
+              >
+                <RotateCw size={16} />
+              </IconButton>
+            </Tooltip>
           )}
         </Box>
       </Box>

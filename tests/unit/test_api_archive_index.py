@@ -144,6 +144,15 @@ class TestArchiveList:
             == "stale"
         )
 
+    def test_sync_state_tolerates_two_missed_reconciles(self, test_db):
+        """One missed hourly reconcile must not flip the chip to stale; the
+        threshold is three intervals."""
+        from app.api.archive_index import sync_state_from
+
+        now = utc_now().replace(tzinfo=None)
+        assert sync_state_from(False, now - timedelta(minutes=170), 60) == "fresh"
+        assert sync_state_from(False, now - timedelta(minutes=190), 60) == "stale"
+
     def test_detail_has_neighbours_and_history_state(
         self, test_client, test_db, admin_headers
     ):

@@ -3427,7 +3427,6 @@
       "resume": "Resume",
       "never": "Never",
       "syncing": "Syncing",
-      "rebuildMenu": "Rebuild…",
       "pauseFailed": "Could not change the background queue state.",
       "openTrack": "Open the run track for {{repository}}",
       "rebuildFailed": "The rebuild could not be started.",

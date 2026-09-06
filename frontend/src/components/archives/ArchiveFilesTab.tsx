@@ -43,6 +43,10 @@ export default function ArchiveFilesTab({
   const [detailsOpenMobile, setDetailsOpenMobile] = useState(false)
   const [browseState, setBrowseState] = useState<ArchiveBrowseState | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
+  // The cursor outline is a keyboard affordance. It stays hidden until an
+  // arrow key moves it and goes away again as soon as the mouse takes over,
+  // so a mouse user never sees the first row outlined for no reason.
+  const [cursorVisible, setCursorVisible] = useState(false)
   // Every item the browser has listed, by path. The selection callback only
   // carries paths and types, so this is where a selected file's size and
   // name come from once the user has moved to another folder.
@@ -114,9 +118,11 @@ export default function ArchiveFilesTab({
 
     if (event.key === 'ArrowDown') {
       event.preventDefault()
+      setCursorVisible(true)
       setActiveIndex((i) => Math.min(i + 1, Math.max(items.length - 1, 0)))
     } else if (event.key === 'ArrowUp') {
       event.preventDefault()
+      setCursorVisible(true)
       setActiveIndex((i) => Math.max(i - 1, 0))
     } else if (event.key === 'Enter') {
       const item = items[activeIndex]
@@ -166,7 +172,7 @@ export default function ArchiveFilesTab({
   } as const
 
   return (
-    <Box onKeyDown={handleKeyDown}>
+    <Box onKeyDown={handleKeyDown} onMouseDownCapture={() => setCursorVisible(false)}>
       <Box
         sx={{
           display: 'grid',
@@ -183,7 +189,7 @@ export default function ArchiveFilesTab({
             data={selection}
             onChange={handleSelectionChange}
             onBrowseStateChange={handleBrowseStateChange}
-            activeIndex={activeIndex}
+            activeIndex={cursorVisible ? activeIndex : undefined}
           />
         </Box>
         {!isMobile && <Box sx={{ ...panelSx, position: 'sticky', top: 16 }}>{detailsPane}</Box>}

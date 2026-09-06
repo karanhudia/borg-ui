@@ -39,7 +39,9 @@ from app.services.operations.vocab import PRIORITY_RECONCILE
 router = APIRouter()
 
 NOT_FOUND = {"key": "backend.errors.archives.notFound"}
-STALE_AFTER_INTERVALS = 2
+# Three intervals, so one missed reconcile (a backend restart sleeps a
+# full interval before its first run) does not flip every chip to stale.
+STALE_AFTER_INTERVALS = 3
 STRIP_CELLS: tuple[tuple[str, dict], ...] = (
     ("backup", {"kinds": ("backup",)}),
     ("check", {"kinds": ("check",)}),

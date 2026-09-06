@@ -392,10 +392,6 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
               onRetry={(stage) =>
                 handleRetry(row.repository?.repository_id ?? row.track?.repositoryId ?? null, stage)
               }
-              onRebuild={(stage) => {
-                const id = row.repository?.repository_id ?? row.track?.repositoryId ?? null
-                if (id != null) rebuildMutation.mutate({ repositoryId: id, stage })
-              }}
             />
           ))}
           {matched.length > visible.length && (

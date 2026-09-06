@@ -67,6 +67,51 @@ def test_enqueue_reconcile_runs_skips_repos_with_active_index_work(
 
 
 @pytest.mark.unit
+def test_enqueue_reconcile_runs_despite_a_running_history_index(db, repos, monkeypatch):
+    """A history index can run for hours. It must not block the hourly
+    archive sync, or the repository reads as stale while nothing is wrong."""
+    monkeypatch.setattr(
+        reconcile,
+        "registered_kinds",
+        lambda: {"stats", "archive_sync", "history_merge", "history_index"},
+    )
+    a, b = repos
+    op = enqueue(db, "history_index", repository_id=a.id)
+    op.status = "running"
+    db.commit()
+    count = reconcile.enqueue_reconcile_runs(db, history=True)
+    assert count == 2
+    kinds = [
+        r.kind
+        for r in db.query(Operation)
+        .filter(Operation.repository_id == a.id, Operation.trigger == "reconcile")
+        .order_by(Operation.id)
+        .all()
+    ]
+    assert kinds == ["archive_sync", "history_merge", "history_index", "stats"]
+
+
+@pytest.mark.unit
+def test_enqueue_reconcile_runs_skips_repos_with_a_running_archive_sync(
+    db, repos, monkeypatch
+):
+    monkeypatch.setattr(
+        reconcile, "registered_kinds", lambda: {"stats", "archive_sync"}
+    )
+    a, b = repos
+    op = enqueue(db, "archive_sync", repository_id=a.id)
+    op.status = "running"
+    db.commit()
+    assert reconcile.enqueue_reconcile_runs(db) == 1
+    assert (
+        db.query(Operation)
+        .filter(Operation.repository_id == a.id, Operation.trigger == "reconcile")
+        .count()
+        == 0
+    )
+
+
+@pytest.mark.unit
 def test_enqueue_reconcile_runs_includes_history_kinds_when_registered(
     db, repos, monkeypatch
 ):

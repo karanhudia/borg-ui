@@ -3427,7 +3427,6 @@
       "resume": "Reanudar",
       "never": "Nunca",
       "syncing": "Sincronizando",
-      "rebuildMenu": "Reconstruir…",
       "pauseFailed": "No se pudo cambiar el estado de la cola en segundo plano.",
       "openTrack": "Abrir el seguimiento de ejecución de {{repository}}",
       "rebuildFailed": "No se pudo iniciar la reconstrucción.",

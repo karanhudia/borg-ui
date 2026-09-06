@@ -3427,7 +3427,6 @@
       "resume": "Riprendi",
       "never": "Mai",
       "syncing": "Sincronizzazione",
-      "rebuildMenu": "Ricostruisci…",
       "pauseFailed": "Impossibile modificare lo stato della coda in background.",
       "openTrack": "Apri la traccia di esecuzione di {{repository}}",
       "rebuildFailed": "Non è stato possibile avviare la ricostruzione.",

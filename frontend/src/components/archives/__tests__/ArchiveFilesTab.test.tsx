@@ -205,11 +205,19 @@ describe('ArchiveFilesTab', () => {
 
     it('drives the visible cursor so arrow keys have something to move', () => {
       const root = renderTab()
-      expect(lastActiveIndex).toBe(0)
       fireEvent.keyDown(root, { key: 'ArrowDown' })
       expect(lastActiveIndex).toBe(1)
       fireEvent.keyDown(root, { key: 'ArrowUp' })
       expect(lastActiveIndex).toBe(0)
+    })
+
+    it('keeps the cursor hidden until the keyboard is used and hides it again on a click', () => {
+      const root = renderTab()
+      expect(lastActiveIndex).toBeUndefined()
+      fireEvent.keyDown(root, { key: 'ArrowDown' })
+      expect(lastActiveIndex).toBe(1)
+      fireEvent.mouseDown(screen.getByTestId('archive-path-selector'))
+      expect(lastActiveIndex).toBeUndefined()
     })
 
     it('focuses the folder filter on "/"', () => {

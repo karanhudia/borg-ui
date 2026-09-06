@@ -54,7 +54,7 @@ const repository = (overrides: Partial<HubRepository> = {}): HubRepository => ({
 })
 
 function renderRow(props: Partial<React.ComponentProps<typeof RepositoryHubRow>> = {}) {
-  const handlers = { onOpen: vi.fn(), onRetry: vi.fn(), onRebuild: vi.fn() }
+  const handlers = { onOpen: vi.fn(), onRetry: vi.fn() }
   render(
     <MemoryRouter>
       <RepositoryHubRow
@@ -222,11 +222,11 @@ describe('RepositoryHubRow', () => {
     expect(onOpen).toHaveBeenCalled()
   })
 
-  it('starts a rebuild from the row menu', () => {
-    const { onRebuild } = renderRow()
+  it('opens the details from the row rebuild icon, where the stages are chosen', () => {
+    const { onOpen } = renderRow()
     fireEvent.click(screen.getByRole('button', { name: /rebuild nas/i }))
-    fireEvent.click(screen.getByRole('menuitem', { name: /^1\. stats/i }))
-    expect(onRebuild).toHaveBeenCalledWith('stats')
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    expect(onOpen).toHaveBeenCalled()
   })
 
   it('renders a system lane with only its track and no repository controls', () => {

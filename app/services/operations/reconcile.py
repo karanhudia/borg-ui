@@ -26,16 +26,22 @@ POLL_INTERVAL_WHEN_DISABLED_MINUTES = 5
 
 
 def has_active_index_work(db: Session, repository_id: int) -> bool:
-    return (
-        db.query(Operation.id)
-        .filter(
-            Operation.repository_id == repository_id,
-            Operation.category == "index",
-            Operation.status.in_(("queued", "running")),
-        )
-        .first()
-        is not None
+    """True when a reconcile run for the repository would only pile up: index
+    work is already waiting to start, or an archive sync is in flight. A
+    running history index or stats refresh does not count. History can take
+    hours, and holding the hourly sync behind it would leave the archive
+    list stale while nothing is wrong."""
+    waiting = db.query(Operation.id).filter(
+        Operation.repository_id == repository_id,
+        Operation.category == "index",
+        Operation.status == "queued",
     )
+    syncing = db.query(Operation.id).filter(
+        Operation.repository_id == repository_id,
+        Operation.kind == "archive_sync",
+        Operation.status == "running",
+    )
+    return waiting.first() is not None or syncing.first() is not None
 
 
 def reconcile_kinds(db: Session, *, history: Optional[bool] = None) -> list:
