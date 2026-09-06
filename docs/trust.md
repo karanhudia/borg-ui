@@ -107,9 +107,14 @@ To stop the contact entirely, set:
 ENABLE_STARTUP_LICENSE_SYNC=false
 ```
 
-That covers both the call at startup and the hourly refresh, so an instance
-with it set never reaches the license service. Plan upgrades and full-access
-activation then cannot refresh on their own.
+That covers both the call at startup and the hourly refresh, so the instance
+stops contacting the service on its own. Plan upgrades and full-access
+activation then cannot refresh automatically.
+
+What remains is only contact you start yourself: entering a license key,
+refreshing it, or removing it from Settings, all admin-only actions that do
+nothing until you take them. If you want an instance that cannot reach the
+service at all, block it at your firewall.
 
 ### Usage analytics
 

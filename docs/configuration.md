@@ -319,7 +319,7 @@ requirements.
 | `ACTIVATION_TIMEOUT_SECONDS` | `10` | Activation request timeout |
 | `ENABLE_STARTUP_LICENSE_SYNC` | `true` in production | Sync license/full-access state at startup and hourly |
 
-Set `ENABLE_STARTUP_LICENSE_SYNC=false` to prevent all contact with the activation service, both at startup and on the hourly refresh.
+Set `ENABLE_STARTUP_LICENSE_SYNC=false` to stop all automatic contact with the activation service, both at startup and on the hourly refresh. Admin-initiated activation, deactivation, and refresh from Settings still contact it.
 
 ## Reverse Proxy Sub-Path
 

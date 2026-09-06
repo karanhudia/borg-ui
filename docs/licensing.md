@@ -34,7 +34,7 @@ disable both:
 ENABLE_STARTUP_LICENSE_SYNC=false
 ```
 
-With it set, the instance never reaches the activation service.
+With it set, the instance makes no automatic contact. Entering, refreshing, or removing a license key from Settings still reaches the service, since those actions cannot work otherwise.
 
 ## Enter a License
 
