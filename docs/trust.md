@@ -119,7 +119,10 @@ service at all, block it at your firewall.
 ### Usage analytics
 
 The web UI loads [Umami](https://umami.is) to count page views and feature
-usage. It is on by default and you can turn it off in Settings > Preferences.
+usage. It starts on, and a banner on first login asks whether to keep it.
+Declining stops it from that point, and you can change the answer whenever you
+like in Settings > Preferences. Page views from that first session, before you
+answer the banner, are counted.
 
 Before anything is sent, your real hostname and URL are replaced with
 `app.borgui`, so your private DNS names and IP addresses do not leave the
