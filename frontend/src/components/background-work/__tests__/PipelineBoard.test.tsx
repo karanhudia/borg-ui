@@ -278,6 +278,118 @@ describe('PipelineBoard', () => {
     expect(screen.getAllByRole('button', { name: /^rebuild /i })).toHaveLength(2)
   })
 
+  it('filters rows by repository name', async () => {
+    mockQueue([])
+    renderBoard()
+    await screen.findAllByTestId('repository-row')
+    fireEvent.change(screen.getByRole('textbox', { name: /filter by name/i }), {
+      target: { value: 'PHO' },
+    })
+    const rows = screen.getAllByTestId('repository-row')
+    expect(rows).toHaveLength(1)
+    expect(within(rows[0]).getByText('photos')).toBeInTheDocument()
+  })
+
+  it('narrows to rows that need attention from the toolbar', async () => {
+    mockQueue([])
+    mockHub([
+      hubRepository(),
+      hubRepository({ repository_id: 2, repository_name: 'photos', sync_state: 'stale' }),
+    ])
+    renderBoard()
+    await screen.findAllByTestId('repository-row')
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /show/i }))
+    fireEvent.click(await screen.findByRole('option', { name: /^stale$/i }))
+    const rows = await screen.findAllByTestId('repository-row')
+    expect(rows).toHaveLength(1)
+    expect(within(rows[0]).getByText('photos')).toBeInTheDocument()
+  })
+
+  it('narrows to a reason by clicking its count in the summary', async () => {
+    mockQueue([])
+    mockHub([
+      hubRepository(),
+      hubRepository({ repository_id: 2, repository_name: 'photos', sync_state: 'never' }),
+    ])
+    renderBoard()
+    await screen.findAllByTestId('repository-row')
+    fireEvent.click(screen.getByRole('button', { name: /1 never indexed/i }))
+    const rows = await screen.findAllByTestId('repository-row')
+    expect(rows).toHaveLength(1)
+    expect(within(rows[0]).getByText('photos')).toBeInTheDocument()
+  })
+
+  it('says when the filter matches nothing without dropping the toolbar', async () => {
+    mockQueue([])
+    renderBoard()
+    await screen.findAllByTestId('repository-row')
+    fireEvent.change(screen.getByRole('textbox', { name: /filter by name/i }), {
+      target: { value: 'zzz' },
+    })
+    expect(screen.getByText(/no repositories match/i)).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: /filter by name/i })).toHaveValue('zzz')
+  })
+
+  it('sorts by history rows from the toolbar', async () => {
+    mockQueue([])
+    mockHub([
+      hubRepository({ history: { ...hubRepository().history, rows: 10 } }),
+      hubRepository({
+        repository_id: 2,
+        repository_name: 'photos',
+        history: { ...hubRepository().history, rows: 999 },
+      }),
+    ])
+    renderBoard()
+    await screen.findAllByTestId('repository-row')
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /sort by/i }))
+    fireEvent.click(await screen.findByRole('option', { name: /history rows/i }))
+    await waitFor(() =>
+      expect(
+        within(screen.getAllByTestId('repository-row')[0]).getByText('photos')
+      ).toBeInTheDocument()
+    )
+  })
+
+  it('windows long lists and reveals more on request', async () => {
+    mockQueue([])
+    mockHub(
+      Array.from({ length: 120 }, (_, i) =>
+        hubRepository({
+          repository_id: i + 1,
+          repository_name: `repo-${String(i).padStart(3, '0')}`,
+        })
+      )
+    )
+    renderBoard()
+    await waitFor(() => expect(screen.getAllByTestId('repository-row')).toHaveLength(50))
+    fireEvent.click(screen.getByRole('button', { name: /show 50 more/i }))
+    expect(screen.getAllByTestId('repository-row')).toHaveLength(100)
+    fireEvent.click(screen.getByRole('button', { name: /show 20 more/i }))
+    expect(screen.getAllByTestId('repository-row')).toHaveLength(120)
+    expect(screen.queryByRole('button', { name: /show .* more/i })).not.toBeInTheDocument()
+  })
+
+  it('resets the window when the filter changes', async () => {
+    mockQueue([])
+    mockHub(
+      Array.from({ length: 120 }, (_, i) =>
+        hubRepository({
+          repository_id: i + 1,
+          repository_name: `repo-${String(i).padStart(3, '0')}`,
+        })
+      )
+    )
+    renderBoard()
+    await waitFor(() => expect(screen.getAllByTestId('repository-row')).toHaveLength(50))
+    fireEvent.click(screen.getByRole('button', { name: /show 50 more/i }))
+    fireEvent.change(screen.getByRole('textbox', { name: /filter by name/i }), {
+      target: { value: 'repo-0' },
+    })
+    expect(screen.getAllByTestId('repository-row')).toHaveLength(50)
+    expect(screen.getByRole('button', { name: /show 50 more/i })).toBeInTheDocument()
+  })
+
   it('shows an empty state when there are no repositories at all', async () => {
     mockQueue([])
     mockHub([])

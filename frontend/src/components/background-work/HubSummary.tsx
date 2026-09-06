@@ -1,12 +1,15 @@
-import { Box, Button, Stack, Tooltip, Typography, alpha, useTheme } from '@mui/material'
-import { Database, HardDrive, Layers, RefreshCw } from 'lucide-react'
+import { Box, Button, Chip, Stack, Tooltip, Typography, alpha, useTheme } from '@mui/material'
+import { AlertTriangle, Database, HardDrive, Layers, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatDistanceToNow } from 'date-fns'
 import { formatBytes, parseBackendDate } from '../../utils/dateUtils'
 import type { HubTotals } from '../../types/operations'
+import type { AttentionCounts, AttentionReason } from './hubRows'
 
 interface HubSummaryProps {
   totals: HubTotals
+  attention: AttentionCounts
+  onAttention: (reason: AttentionReason) => void
   lastReconcileAt: string | null
   reconcileIntervalMinutes: number
   canManage: boolean
@@ -14,16 +17,27 @@ interface HubSummaryProps {
   onReconcile: () => void
 }
 
+const ATTENTION_ORDER: AttentionReason[] = ['stale', 'never', 'history', 'running']
+const ATTENTION_KEY: Record<AttentionReason, string> = {
+  stale: 'operations.background.hub.attentionStale',
+  never: 'operations.background.hub.attentionNever',
+  history: 'operations.background.hub.attentionHistory',
+  running: 'operations.background.hub.attentionRunning',
+}
+
 function Stat({
   icon,
   primary,
   secondary,
+  tone = 'primary',
 }: {
   icon: React.ReactNode
   primary: string
-  secondary?: string
+  secondary?: React.ReactNode
+  tone?: 'primary' | 'warning'
 }) {
   const theme = useTheme()
+  const color = theme.palette[tone].main
   return (
     <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', minWidth: 0 }}>
       <Box
@@ -36,8 +50,8 @@ function Stat({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: theme.palette.primary.main,
-          bgcolor: alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.16 : 0.08),
+          color,
+          bgcolor: alpha(color, theme.palette.mode === 'dark' ? 0.16 : 0.08),
         }}
       >
         {icon}
@@ -49,10 +63,12 @@ function Stat({
         >
           {primary}
         </Typography>
-        {secondary && (
+        {typeof secondary === 'string' ? (
           <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
             {secondary}
           </Typography>
+        ) : (
+          secondary
         )}
       </Box>
     </Stack>
@@ -64,6 +80,8 @@ function Stat({
 // table so the totals and the per-row numbers read as one thing.
 export default function HubSummary({
   totals,
+  attention,
+  onAttention,
   lastReconcileAt,
   reconcileIntervalMinutes,
   canManage,
@@ -96,7 +114,11 @@ export default function HubSummary({
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))' },
+          gridTemplateColumns: {
+            xs: '1fr',
+            sm: 'repeat(2, minmax(0, 1fr))',
+            lg: 'repeat(4, minmax(0, 1fr))',
+          },
           gap: 2,
         }}
       >
@@ -115,6 +137,28 @@ export default function HubSummary({
             totals.history_bytes != null
               ? t('operations.background.hub.bytes', { size: formatBytes(totals.history_bytes) })
               : undefined
+          }
+        />
+        <Stat
+          icon={<AlertTriangle size={18} />}
+          tone={attention.total > 0 ? 'warning' : 'primary'}
+          primary={t('operations.background.hub.attention', { count: attention.total })}
+          secondary={
+            attention.total > 0 ? (
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                {ATTENTION_ORDER.filter((reason) => attention[reason] > 0).map((reason) => (
+                  <Chip
+                    key={reason}
+                    size="small"
+                    variant="outlined"
+                    clickable
+                    onClick={() => onAttention(reason)}
+                    label={t(ATTENTION_KEY[reason], { count: attention[reason] })}
+                    sx={{ height: 22, fontSize: '0.7rem' }}
+                  />
+                ))}
+              </Box>
+            ) : undefined
           }
         />
       </Box>

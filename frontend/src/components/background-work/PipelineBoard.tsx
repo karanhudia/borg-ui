@@ -1,24 +1,40 @@
 import { useCallback, useMemo, useState } from 'react'
-import { Alert, Box, IconButton, Stack, Tooltip, Typography, alpha, useTheme } from '@mui/material'
-import { HardDrive, Minus, Plus } from 'lucide-react'
+import {
+  Alert,
+  Box,
+  Button,
+  IconButton,
+  Stack,
+  Tooltip,
+  Typography,
+  alpha,
+  useTheme,
+} from '@mui/material'
+import { HardDrive, Minus, Plus, SearchX } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import RepositoryHubRow from './RepositoryHubRow'
 import RepositoryTrackDialog from './RepositoryTrackDialog'
 import EmptyStateCard from '../EmptyStateCard'
 import HubSummary from './HubSummary'
+import HubToolbar from './HubToolbar'
+import {
+  DEFAULT_TOOLBAR,
+  applyToolbar,
+  attentionCounts,
+  mergeRows,
+  type HubToolbarState,
+} from './hubRows'
 import { usePlan } from '../../hooks/usePlan'
 import {
   HUB_GRID_COLUMNS,
   deriveTrack,
   REBUILD_STAGE_FOR,
-  type RepositoryTrack,
   type StageState,
 } from './repositoryTrack'
 import { archivesAPI, operationsAPI } from '../../services/api'
 import { useOperationEvents } from '../../hooks/useOperationEvents'
 import type {
-  HubRepository,
   OperationItem,
   OperationProgressEvent,
   QueueResponse,
@@ -29,6 +45,9 @@ const QUEUE_KEY = ['operations-queue'] as const
 const HUB_KEY = ['operations-repositories'] as const
 const MIN_WORKERS = 1
 const MAX_WORKERS = 32
+// Rows rendered before a "show more" step in. Each row carries a stage
+// track and a menu, so a few hundred at once would make the tab sluggish.
+const WINDOW_SIZE = 50
 
 interface PipelineBoardProps {
   // Worker limits, pause, and reconcile are admin-only on the API. Everyone
@@ -92,47 +111,6 @@ function WorkerStepper({
   )
 }
 
-interface HubRow {
-  key: string
-  repository: HubRepository | null
-  track: RepositoryTrack | null
-}
-
-function trackIsActive(track: RepositoryTrack | null): boolean {
-  return (
-    track != null && (track.foreground != null || track.stages.some((s) => s.status !== 'idle'))
-  )
-}
-
-// One row per repository from the hub, merged with its queue track when it
-// has one. Rows with work in progress come first so the live part of the
-// board is at the top; the rest keep the hub's name order. Work with no
-// repository (the system lane) goes last.
-function mergeRows(repositories: HubRepository[], tracks: RepositoryTrack[]): HubRow[] {
-  const byRepository = new Map<number, RepositoryTrack>()
-  const system: RepositoryTrack[] = []
-  for (const track of tracks) {
-    if (track.repositoryId == null) system.push(track)
-    else byRepository.set(track.repositoryId, track)
-  }
-  const rows = repositories.map<HubRow>((repository) => ({
-    key: `repo-${repository.repository_id}`,
-    repository,
-    track: byRepository.get(repository.repository_id) ?? null,
-  }))
-  const active = rows.filter((row) => trackIsActive(row.track))
-  const rest = rows.filter((row) => !trackIsActive(row.track))
-  return [
-    ...active,
-    ...rest,
-    ...system.map<HubRow>((track) => ({
-      key: `system-${track.repositoryName}`,
-      repository: null,
-      track,
-    })),
-  ]
-}
-
 export default function PipelineBoard({ canManage }: PipelineBoardProps) {
   const { t } = useTranslation()
   const theme = useTheme()
@@ -141,6 +119,14 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
   const [trackRepository, setTrackRepository] = useState<{ id: number; name: string } | null>(null)
   const [rebuildFailed, setRebuildFailed] = useState(false)
   const [reconcileResult, setReconcileResult] = useState<number | null>(null)
+  const [toolbar, setToolbarState] = useState<HubToolbarState>(DEFAULT_TOOLBAR)
+  const [windowSize, setWindowSize] = useState(WINDOW_SIZE)
+  // Any toolbar change starts the window over: the rows it revealed were
+  // for a different list.
+  const setToolbar = (next: HubToolbarState) => {
+    setToolbarState(next)
+    setWindowSize(WINDOW_SIZE)
+  }
 
   const queue = useQuery({
     queryKey: QUEUE_KEY,
@@ -227,6 +213,9 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
     [queue.data]
   )
   const rows = useMemo(() => mergeRows(hub.data?.repositories ?? [], tracks), [hub.data, tracks])
+  const attention = useMemo(() => attentionCounts(rows), [rows])
+  const matched = useMemo(() => applyToolbar(rows, toolbar), [rows, toolbar])
+  const visible = matched.slice(0, windowSize)
 
   const invalidateBoard = () => {
     queryClient.invalidateQueries({ queryKey: QUEUE_KEY })
@@ -325,6 +314,8 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
     <Stack spacing={2}>
       <HubSummary
         totals={hub.data.totals}
+        attention={attention}
+        onAttention={(reason) => setToolbar({ ...toolbar, attention: reason })}
         lastReconcileAt={hub.data.last_reconcile_at}
         reconcileIntervalMinutes={hub.data.reconcile_interval_minutes}
         canManage={canManage}
@@ -332,64 +323,91 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
         onReconcile={() => reconcileMutation.mutate()}
       />
       {messages}
-      <Box
-        sx={{
-          border: `1px solid ${theme.palette.divider}`,
-          borderRadius: 2,
-          px: 2.5,
-          bgcolor: 'background.paper',
-        }}
-      >
+      <HubToolbar
+        state={toolbar}
+        onChange={setToolbar}
+        shown={visible.length}
+        total={matched.length}
+      />
+      {matched.length === 0 ? (
+        <EmptyStateCard
+          icon={<SearchX size={48} />}
+          title={t('operations.background.hub.noMatchTitle')}
+          description={t('operations.background.hub.noMatchDescription')}
+        />
+      ) : (
         <Box
           sx={{
-            display: { xs: 'none', md: 'grid' },
-            gridTemplateColumns: HUB_GRID_COLUMNS,
-            columnGap: 2,
-            alignItems: 'end',
-            py: 1.5,
-            borderBottom: `1px solid ${theme.palette.divider}`,
-            bgcolor: alpha(theme.palette.text.primary, 0.02),
-            mx: -2.5,
+            border: `1px solid ${theme.palette.divider}`,
+            borderRadius: 2,
             px: 2.5,
-            borderTopLeftRadius: 8,
-            borderTopRightRadius: 8,
+            bgcolor: 'background.paper',
           }}
         >
-          {columnHeader(t('operations.background.repositoryColumn'))}
-          {columnHeader(t('operations.background.stage.stats'))}
-          {columnHeader(t('operations.background.stage.archives'))}
-          {columnHeader(
-            t('operations.background.stage.history'),
-            <WorkerStepper
-              count={queue.data.limits.index_workers}
-              canManage={canManage}
-              onChange={(next) => limitsMutation.mutate(next)}
+          <Box
+            sx={{
+              display: { xs: 'none', md: 'grid' },
+              gridTemplateColumns: HUB_GRID_COLUMNS,
+              columnGap: 2,
+              alignItems: 'end',
+              py: 1.5,
+              borderBottom: `1px solid ${theme.palette.divider}`,
+              bgcolor: alpha(theme.palette.text.primary, 0.02),
+              mx: -2.5,
+              px: 2.5,
+              borderTopLeftRadius: 8,
+              borderTopRightRadius: 8,
+            }}
+          >
+            {columnHeader(t('operations.background.repositoryColumn'))}
+            {columnHeader(t('operations.background.stage.stats'))}
+            {columnHeader(t('operations.background.stage.archives'))}
+            {columnHeader(
+              t('operations.background.stage.history'),
+              <WorkerStepper
+                count={queue.data.limits.index_workers}
+                canManage={canManage}
+                onChange={(next) => limitsMutation.mutate(next)}
+              />
+            )}
+            <span />
+          </Box>
+          {visible.map((row) => (
+            <RepositoryHubRow
+              key={row.key}
+              repository={row.repository}
+              track={row.track}
+              historyAvailable={historyAvailable}
+              totalHistoryRows={hub.data.totals.history_rows}
+              onOpen={() => {
+                const id = row.repository?.repository_id ?? row.track?.repositoryId ?? null
+                const name = row.repository?.repository_name ?? row.track?.repositoryName ?? ''
+                if (id != null) setTrackRepository({ id, name })
+              }}
+              onRetry={(stage) =>
+                handleRetry(row.repository?.repository_id ?? row.track?.repositoryId ?? null, stage)
+              }
+              onRebuild={(stage) => {
+                const id = row.repository?.repository_id ?? row.track?.repositoryId ?? null
+                if (id != null) rebuildMutation.mutate({ repositoryId: id, stage })
+              }}
             />
+          ))}
+          {matched.length > visible.length && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 1.5 }}>
+              <Button
+                size="small"
+                variant="text"
+                onClick={() => setWindowSize((size) => size + WINDOW_SIZE)}
+              >
+                {t('operations.background.hub.showMore', {
+                  count: Math.min(WINDOW_SIZE, matched.length - visible.length),
+                })}
+              </Button>
+            </Box>
           )}
-          <span />
         </Box>
-        {rows.map((row) => (
-          <RepositoryHubRow
-            key={row.key}
-            repository={row.repository}
-            track={row.track}
-            historyAvailable={historyAvailable}
-            totalHistoryRows={hub.data.totals.history_rows}
-            onOpen={() => {
-              const id = row.repository?.repository_id ?? row.track?.repositoryId ?? null
-              const name = row.repository?.repository_name ?? row.track?.repositoryName ?? ''
-              if (id != null) setTrackRepository({ id, name })
-            }}
-            onRetry={(stage) =>
-              handleRetry(row.repository?.repository_id ?? row.track?.repositoryId ?? null, stage)
-            }
-            onRebuild={(stage) => {
-              const id = row.repository?.repository_id ?? row.track?.repositoryId ?? null
-              if (id != null) rebuildMutation.mutate({ repositoryId: id, stage })
-            }}
-          />
-        ))}
-      </Box>
+      )}
       {trackRepository && (
         <RepositoryTrackDialog
           open

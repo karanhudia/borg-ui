@@ -19,6 +19,8 @@ const meta = {
     lastReconcileAt: hubResponse.last_reconcile_at,
     reconcileIntervalMinutes: 60,
     canManage: true,
+    attention: { stale: 3, never: 1, history: 2, running: 1, total: 6 },
+    onAttention: () => {},
     onReconcile: () => {},
   },
 } satisfies Meta<typeof HubSummary>
@@ -28,6 +30,10 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const Default: Story = {}
+
+export const NothingNeedsAttention: Story = {
+  args: { attention: { stale: 0, never: 0, history: 0, running: 0, total: 0 } },
+}
 
 export const SizeUnknown: Story = {
   args: { totals: { ...hubResponse.totals, history_bytes: null } },

@@ -4,17 +4,20 @@ import HubSummary from '../HubSummary'
 
 function renderSummary(props: Partial<React.ComponentProps<typeof HubSummary>> = {}) {
   const onReconcile = vi.fn()
+  const onAttention = vi.fn()
   render(
     <HubSummary
       totals={{ repositories: 19, archives: 143, history_rows: 27576, history_bytes: 4300000 }}
       lastReconcileAt={new Date(Date.now() - 12 * 60 * 1000).toISOString()}
       reconcileIntervalMinutes={60}
       canManage
+      attention={{ stale: 0, never: 0, history: 0, running: 0, total: 0 }}
+      onAttention={onAttention}
       onReconcile={onReconcile}
       {...props}
     />
   )
-  return { onReconcile }
+  return { onReconcile, onAttention }
 }
 
 describe('HubSummary', () => {
@@ -48,6 +51,29 @@ describe('HubSummary', () => {
   it('says when automatic reconcile is turned off', () => {
     renderSummary({ reconcileIntervalMinutes: 0 })
     expect(screen.getByText(/automatic reconcile is turned off/i)).toBeInTheDocument()
+  })
+
+  it('says when nothing needs attention', () => {
+    renderSummary()
+    expect(screen.getByText(/nothing needs attention/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /stale/i })).not.toBeInTheDocument()
+  })
+
+  it('counts the repositories that need attention and lists each reason', () => {
+    renderSummary({ attention: { stale: 3, never: 1, history: 2, running: 0, total: 5 } })
+    expect(screen.getByText(/5 need attention/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /3 stale/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /1 never indexed/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /2 with failed or truncated/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /running/i })).not.toBeInTheDocument()
+  })
+
+  it('narrows the table to a reason when its count is clicked', () => {
+    const { onAttention } = renderSummary({
+      attention: { stale: 3, never: 0, history: 0, running: 0, total: 3 },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /3 stale/i }))
+    expect(onAttention).toHaveBeenCalledWith('stale')
   })
 
   it('starts a reconcile for administrators', () => {
