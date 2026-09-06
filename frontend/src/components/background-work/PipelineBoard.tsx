@@ -1,15 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import {
-  Alert,
-  Box,
-  Button,
-  IconButton,
-  Stack,
-  Tooltip,
-  Typography,
-  alpha,
-  useTheme,
-} from '@mui/material'
+import { Alert, Box, Button, IconButton, Stack, Tooltip, Typography, useTheme } from '@mui/material'
 import { HardDrive, Minus, Plus, SearchX } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -302,9 +292,21 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
     )
   }
 
+  // Header cells match DataTable's, so the hub reads as one of the
+  // product's tables rather than a page of its own.
   const columnHeader = (label: string, extra?: React.ReactNode, key?: string) => (
     <Box key={key} sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
-      <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+      <Typography
+        component="span"
+        sx={{
+          color: 'text.disabled',
+          fontWeight: 700,
+          fontSize: '0.7rem',
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em',
+          lineHeight: 1.6,
+        }}
+      >
         {label}
       </Typography>
       {extra}
@@ -351,9 +353,9 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
               gridTemplateColumns: HUB_GRID_COLUMNS,
               columnGap: 2,
               alignItems: 'end',
-              py: 1.5,
+              py: 1.25,
               borderBottom: `1px solid ${theme.palette.divider}`,
-              bgcolor: alpha(theme.palette.text.primary, 0.02),
+              bgcolor: 'background.default',
               mx: -2.5,
               px: 2.5,
               borderTopLeftRadius: 8,

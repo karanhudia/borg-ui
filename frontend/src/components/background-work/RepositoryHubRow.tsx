@@ -50,7 +50,7 @@ function Cell({
       <Typography
         variant="body2"
         sx={{
-          fontWeight: muted ? 400 : 600,
+          fontWeight: muted ? 400 : 500,
           color: muted ? 'text.secondary' : 'text.primary',
           fontVariantNumeric: 'tabular-nums',
         }}
@@ -201,9 +201,13 @@ export default function RepositoryHubRow({
     <Box
       data-testid="repository-row"
       sx={{
-        py: 2,
+        py: 1.5,
+        mx: -2.5,
+        px: 2.5,
         borderBottom: `1px solid ${theme.palette.divider}`,
         '&:last-of-type': { borderBottom: 'none' },
+        transition: 'background-color 120ms ease',
+        '&:hover': { bgcolor: alpha(theme.palette.text.primary, 0.02) },
       }}
     >
       <Box
@@ -226,6 +230,7 @@ export default function RepositoryHubRow({
                 all: 'unset',
                 cursor: 'pointer',
                 font: 'inherit',
+                fontSize: theme.typography.body2.fontSize,
                 fontWeight: 600,
                 color: 'text.primary',
                 '&:hover': { textDecoration: 'underline' },
@@ -239,7 +244,9 @@ export default function RepositoryHubRow({
               {name}
             </Typography>
           ) : (
-            <Typography sx={{ fontWeight: 600 }}>{name}</Typography>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              {name}
+            </Typography>
           )}
           {track?.foreground && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.75, flexWrap: 'wrap' }}>
