@@ -3453,12 +3453,7 @@
       "workersIncrease": "More index workers",
       "workersFailed": "The worker count could not be changed.",
       "pausedBanner": "Background work is paused. Queued stages will not start until you resume.",
-      "rebuildRepository": "Repository",
-      "rebuildStarted": "Rebuild started for {{repository}}.",
       "subtitle": "What Borg UI is doing to your repositories, and what it keeps for each of them.",
-      "rebuildTitle": "Rebuild derived data",
-      "rebuildDescription": "Borg UI keeps three kinds of derived data for each repository, built in this order. Pick the first stage that looks wrong; it and every stage after it are rebuilt, earlier stages are kept.",
-      "rebuildAction": "Rebuild",
       "rebuildRow": "Rebuild {{repository}}",
       "proOnly": "Pro",
       "stages": {
@@ -3478,9 +3473,6 @@
           "cost": "The slowest stage. Indexes one archive at a time in the background."
         }
       },
-      "stageWillRebuild": "Will rebuild",
-      "stageKept": "Kept",
-      "stageStart": "Start here",
       "rebuildSummary": "Rebuild {{stages}} for {{repository}}. Browsing and backups keep working while it runs; the new data replaces the old when each stage finishes.",
       "rebuildSummaryAll": "Rebuild everything for {{repository}}. Browsing and backups keep working while it runs; the new data replaces the old when each stage finishes.",
       "stageJoin": " and ",
@@ -3528,7 +3520,8 @@
         "detailAllIndexed": "Every archive has its file history.",
         "detailHint": "Rebuild from File history to index these archives again.",
         "viewIndexRuns": "View index runs"
-      }
+      },
+      "rebuildMenuHint": "Every stage after the one you pick is rebuilt too. Earlier stages are kept."
     },
     "status": {
       "queued": "Queued",

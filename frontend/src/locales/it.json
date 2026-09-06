@@ -3453,12 +3453,7 @@
       "workersIncrease": "Più worker di indicizzazione",
       "workersFailed": "Impossibile cambiare il numero di worker.",
       "pausedBanner": "Il lavoro in background è in pausa. I passaggi in coda non partiranno finché non riprendi.",
-      "rebuildRepository": "Repository",
-      "rebuildStarted": "Ricostruzione avviata per {{repository}}.",
       "subtitle": "Cosa sta facendo Borg UI sui tuoi repository e cosa conserva per ciascuno di essi.",
-      "rebuildTitle": "Ricostruisci i dati derivati",
-      "rebuildDescription": "Borg UI conserva tre tipi di dati derivati per ogni repository, costruiti in questo ordine. Scegli il primo passaggio che sembra sbagliato; quello e tutti i successivi vengono ricostruiti, i precedenti restano.",
-      "rebuildAction": "Ricostruisci",
       "rebuildRow": "Ricostruisci {{repository}}",
       "proOnly": "Pro",
       "stages": {
@@ -3478,9 +3473,6 @@
           "cost": "Il passaggio più lento. Indicizza un archivio alla volta in background."
         }
       },
-      "stageWillRebuild": "Verrà ricostruito",
-      "stageKept": "Conservato",
-      "stageStart": "Inizia qui",
       "rebuildSummary": "Ricostruisci {{stages}} per {{repository}}. Navigazione e backup continuano a funzionare nel frattempo; i nuovi dati sostituiscono i vecchi al termine di ogni passaggio.",
       "rebuildSummaryAll": "Ricostruisci tutto per {{repository}}. Navigazione e backup continuano a funzionare nel frattempo; i nuovi dati sostituiscono i vecchi al termine di ogni passaggio.",
       "stageJoin": " e ",
@@ -3528,7 +3520,8 @@
         "detailAllIndexed": "Ogni archivio ha la sua cronologia dei file.",
         "detailHint": "Ricostruisci da Cronologia dei file per indicizzare di nuovo questi archivi.",
         "viewIndexRuns": "Vedi esecuzioni di indicizzazione"
-      }
+      },
+      "rebuildMenuHint": "Ogni fase successiva a quella scelta viene ricostruita anch'essa. Le fasi precedenti vengono conservate."
     },
     "status": {
       "queued": "In coda",

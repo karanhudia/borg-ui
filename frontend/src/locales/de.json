@@ -3453,12 +3453,7 @@
       "workersIncrease": "Mehr Index-Worker",
       "workersFailed": "Die Anzahl der Worker konnte nicht geändert werden.",
       "pausedBanner": "Hintergrundarbeit ist pausiert. Wartende Schritte starten erst nach dem Fortsetzen.",
-      "rebuildRepository": "Repository",
-      "rebuildStarted": "Neuaufbau für {{repository}} gestartet.",
       "subtitle": "Was Borg UI mit deinen Repositorys macht und was es für jedes davon vorhält.",
-      "rebuildTitle": "Abgeleitete Daten neu aufbauen",
-      "rebuildDescription": "Borg UI hält für jedes Repository drei Arten abgeleiteter Daten, die in dieser Reihenfolge aufgebaut werden. Wähle den ersten Schritt, der falsch aussieht; er und alle folgenden werden neu aufgebaut, frühere bleiben erhalten.",
-      "rebuildAction": "Neu aufbauen",
       "rebuildRow": "{{repository}} neu aufbauen",
       "proOnly": "Pro",
       "stages": {
@@ -3478,9 +3473,6 @@
           "cost": "Der langsamste Schritt. Indiziert im Hintergrund ein Archiv nach dem anderen."
         }
       },
-      "stageWillRebuild": "Wird neu aufgebaut",
-      "stageKept": "Bleibt erhalten",
-      "stageStart": "Hier beginnen",
       "rebuildSummary": "{{stages}} für {{repository}} neu aufbauen. Durchsuchen und Backups laufen währenddessen weiter; die neuen Daten ersetzen die alten, sobald ein Schritt fertig ist.",
       "rebuildSummaryAll": "Alles für {{repository}} neu aufbauen. Durchsuchen und Backups laufen währenddessen weiter; die neuen Daten ersetzen die alten, sobald ein Schritt fertig ist.",
       "stageJoin": " und ",
@@ -3528,7 +3520,8 @@
         "detailAllIndexed": "Jedes Archiv hat seinen Dateiverlauf.",
         "detailHint": "Baue ab Dateiverlauf neu auf, um diese Archive erneut zu indizieren.",
         "viewIndexRuns": "Indexläufe anzeigen"
-      }
+      },
+      "rebuildMenuHint": "Jede Phase nach der gewählten wird ebenfalls neu aufgebaut. Frühere Phasen bleiben erhalten."
     },
     "status": {
       "queued": "In Warteschlange",

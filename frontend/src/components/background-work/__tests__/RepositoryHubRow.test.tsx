@@ -203,7 +203,7 @@ describe('RepositoryHubRow', () => {
   it('starts a rebuild from the row menu', () => {
     const { onRebuild } = renderRow()
     fireEvent.click(screen.getByRole('button', { name: /rebuild nas/i }))
-    fireEvent.click(screen.getByRole('menuitem', { name: /^stats$/i }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /^1\. stats/i }))
     expect(onRebuild).toHaveBeenCalledWith('stats')
   })
 

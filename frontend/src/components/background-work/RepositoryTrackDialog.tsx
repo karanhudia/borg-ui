@@ -19,6 +19,7 @@ import ResponsiveDialog from '../shared/ResponsiveDialog'
 import RichSelect from '../shared/RichSelect'
 import CategoryToken from '../CategoryToken'
 import { archivesAPI, operationsAPI } from '../../services/api'
+import { usePlan } from '../../hooks/usePlan'
 import { parseBackendDate } from '../../utils/dateUtils'
 import type { HubArchive, OperationItem, RebuildStage } from '../../types/operations'
 
@@ -91,6 +92,8 @@ export default function RepositoryTrackDialog({
   const [stage, setStage] = useState<RebuildStage>('stats')
   const [submitting, setSubmitting] = useState(false)
   const [failed, setFailed] = useState(false)
+  const { can } = usePlan()
+  const historyLocked = !can('archive_history')
 
   const { data: detail } = useQuery({
     queryKey: ['operations-repository-detail', repositoryId],
@@ -116,6 +119,20 @@ export default function RepositoryTrackDialog({
 
   const problems =
     detail != null && (detail.failed_archives.length > 0 || detail.truncated_archives.length > 0)
+
+  const startIndex = REBUILD_STAGES.indexOf(stage)
+  const rebuilt = REBUILD_STAGES.slice(startIndex).filter(
+    (s) => !(s === 'history' && historyLocked)
+  )
+  const summary =
+    startIndex === 0
+      ? t('operations.background.rebuildSummaryAll', { repository: repositoryName })
+      : t('operations.background.rebuildSummary', {
+          repository: repositoryName,
+          stages: rebuilt
+            .map((s) => t(`operations.background.stages.${s}.title`).toLowerCase())
+            .join(t('operations.background.stageJoin')),
+        })
 
   return (
     <ResponsiveDialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -206,16 +223,20 @@ export default function RepositoryTrackDialog({
             {t('operations.background.rebuildFailed')}
           </Alert>
         )}
-        <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 1, pt: 2 }}>
+        <Box sx={{ pt: 2 }}>
           <RichSelect
             value={stage}
             onChange={(value) => setStage(value as RebuildStage)}
             label={t('operations.background.rebuildFrom')}
-            options={REBUILD_STAGES.map((s) => ({
+            options={REBUILD_STAGES.map((s, index) => ({
               value: s,
-              primary: t(`operations.background.rebuildStage.${s}`),
+              primary: `${index + 1}. ${t(`operations.background.stages.${s}.title`)}`,
+              secondary: t(`operations.background.stages.${s}.what`),
             }))}
           />
+          <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'text.secondary' }}>
+            {summary}
+          </Typography>
         </Box>
       </DialogContent>
       <DialogActions>

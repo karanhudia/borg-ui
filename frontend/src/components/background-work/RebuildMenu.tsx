@@ -1,5 +1,14 @@
 import { useState } from 'react'
-import { Button, IconButton, Menu, MenuItem, Tooltip } from '@mui/material'
+import {
+  Button,
+  IconButton,
+  ListItemText,
+  ListSubheader,
+  Menu,
+  MenuItem,
+  Tooltip,
+  Typography,
+} from '@mui/material'
 import { ChevronDown, RotateCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import PlanGate from '../shared/PlanGate'
@@ -14,6 +23,9 @@ interface RebuildMenuProps {
   label?: string
 }
 
+// The three derived-data stages in the order the runner builds them, each
+// with what it feeds and what it costs, so the choice explains itself
+// where it is made.
 export default function RebuildMenu({ onSelect, variant = 'button', label }: RebuildMenuProps) {
   const { t } = useTranslation()
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
@@ -37,8 +49,18 @@ export default function RebuildMenu({ onSelect, variant = 'button', label }: Reb
           {title}
         </Button>
       )}
-      <Menu anchorEl={anchorEl} open={!!anchorEl} onClose={() => setAnchorEl(null)}>
-        {STAGES.map((stage) => {
+      <Menu
+        anchorEl={anchorEl}
+        open={!!anchorEl}
+        onClose={() => setAnchorEl(null)}
+        slotProps={{ paper: { sx: { maxWidth: 360 } } }}
+      >
+        <ListSubheader disableSticky sx={{ lineHeight: 1.4, py: 1, whiteSpace: 'normal' }}>
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+            {t('operations.background.rebuildMenuHint')}
+          </Typography>
+        </ListSubheader>
+        {STAGES.map((stage, index) => {
           const item = (
             <MenuItem
               key={stage}
@@ -46,8 +68,16 @@ export default function RebuildMenu({ onSelect, variant = 'button', label }: Reb
                 onSelect(stage)
                 setAnchorEl(null)
               }}
+              sx={{ alignItems: 'flex-start', whiteSpace: 'normal' }}
             >
-              {t(`operations.background.rebuildStage.${stage}`)}
+              <ListItemText
+                primary={`${index + 1}. ${t(`operations.background.stages.${stage}.title`)}`}
+                secondary={`${t(`operations.background.stages.${stage}.what`)} ${t(`operations.background.stages.${stage}.cost`)}`}
+                slotProps={{
+                  primary: { sx: { fontWeight: 600 } },
+                  secondary: { sx: { fontSize: '0.75rem' } },
+                }}
+              />
             </MenuItem>
           )
           if (stage !== 'history') return item

@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import PipelineBoard from '../PipelineBoard'
-import { archivesAPI, operationsAPI, repositoriesAPI } from '../../../services/api'
+import { archivesAPI, operationsAPI } from '../../../services/api'
 import type { HubRepository } from '../../../types/operations'
 
 vi.mock('../../../services/api', () => ({
@@ -16,9 +16,6 @@ vi.mock('../../../services/api', () => ({
   },
   archivesAPI: {
     rebuild: vi.fn(),
-  },
-  repositoriesAPI: {
-    getRepositories: vi.fn(),
   },
 }))
 
@@ -131,9 +128,6 @@ const mockHub = (repositories: HubRepository[], overrides = {}) =>
 describe('PipelineBoard', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    ;(repositoriesAPI.getRepositories as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: { repositories: [{ id: 1, name: 'nas' }] },
-    })
     mockHub([
       hubRepository(),
       hubRepository({ repository_id: 2, repository_name: 'photos', archives: 3 }),
@@ -213,14 +207,6 @@ describe('PipelineBoard', () => {
     expect(within(rows[2]).getByText('System')).toBeInTheDocument()
   })
 
-  it('keeps the inline rebuild form below the table', async () => {
-    mockQueue([])
-    ;(archivesAPI.rebuild as ReturnType<typeof vi.fn>).mockResolvedValue({ data: {} })
-    renderBoard()
-    fireEvent.click(await screen.findByRole('button', { name: /^rebuild$/i }))
-    await waitFor(() => expect(archivesAPI.rebuild).toHaveBeenCalledWith(1, 'stats'))
-  })
-
   it('starts a reconcile from the summary and reports how many repositories were queued', async () => {
     mockQueue([])
     ;(operationsAPI.reconcileNow as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -282,6 +268,14 @@ describe('PipelineBoard', () => {
     await screen.findAllByTestId('repository-row')
     expect(screen.queryByRole('button', { name: /more index workers/i })).not.toBeInTheDocument()
     expect(screen.getByText(/2 workers/i)).toBeInTheDocument()
+  })
+
+  it('has no rebuild form below the table, only the per-row menus', async () => {
+    mockQueue([])
+    renderBoard()
+    await screen.findAllByTestId('repository-row')
+    expect(screen.queryByText(/rebuild derived data/i)).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /^rebuild /i })).toHaveLength(2)
   })
 
   it('shows an empty state when there are no repositories at all', async () => {

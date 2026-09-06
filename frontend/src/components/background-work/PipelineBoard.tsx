@@ -7,7 +7,6 @@ import RepositoryHubRow from './RepositoryHubRow'
 import RepositoryTrackDialog from './RepositoryTrackDialog'
 import EmptyStateCard from '../EmptyStateCard'
 import HubSummary from './HubSummary'
-import RebuildPanel from './RebuildPanel'
 import { usePlan } from '../../hooks/usePlan'
 import {
   HUB_GRID_COLUMNS,
@@ -16,7 +15,7 @@ import {
   type RepositoryTrack,
   type StageState,
 } from './repositoryTrack'
-import { archivesAPI, operationsAPI, repositoriesAPI } from '../../services/api'
+import { archivesAPI, operationsAPI } from '../../services/api'
 import { useOperationEvents } from '../../hooks/useOperationEvents'
 import type {
   HubRepository,
@@ -25,7 +24,6 @@ import type {
   QueueResponse,
   RebuildStage,
 } from '../../types/operations'
-import type { Repository } from '@/types'
 
 const QUEUE_KEY = ['operations-queue'] as const
 const HUB_KEY = ['operations-repositories'] as const
@@ -154,11 +152,6 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
     queryFn: () => operationsAPI.getRepositories().then((r) => r.data),
     refetchInterval: 30000,
   })
-  const { data: repositoriesData } = useQuery({
-    queryKey: ['repositories'],
-    queryFn: repositoriesAPI.getRepositories,
-  })
-  const repositories: Repository[] = repositoriesData?.data?.repositories ?? []
 
   const onUpdated = useCallback(
     (updated: OperationItem) => {
@@ -397,14 +390,6 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
           />
         ))}
       </Box>
-      {repositories.length > 0 && (
-        <RebuildPanel
-          repositories={repositories}
-          historyLocked={!can('archive_history')}
-          submitting={rebuildMutation.isPending}
-          onRebuild={(repositoryId, stage) => rebuildMutation.mutate({ repositoryId, stage })}
-        />
-      )}
       {trackRepository && (
         <RepositoryTrackDialog
           open

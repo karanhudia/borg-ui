@@ -28,13 +28,22 @@ describe('RebuildMenu', () => {
     expect(onSelect).toHaveBeenCalledWith('archives')
   })
 
+  it('explains what each stage feeds and what it costs', () => {
+    render(<RebuildMenu onSelect={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: /rebuild/i }))
+    const stats = screen.getByRole('menuitem', { name: /^1\. stats/i })
+    expect(stats).toHaveTextContent(/repository size and archive count/i)
+    expect(stats).toHaveTextContent(/takes seconds/i)
+    expect(screen.getByText(/is rebuilt too/i)).toBeInTheDocument()
+  })
+
   it('leaves stats and archives selectable without the feature', async () => {
     mockPlanCan.mockReturnValue(false)
     const onSelect = vi.fn()
     const user = userEvent.setup()
     render(<RebuildMenu onSelect={onSelect} />)
     await user.click(screen.getByRole('button', { name: /rebuild/i }))
-    await user.click(screen.getByRole('menuitem', { name: /^stats/i }))
+    await user.click(screen.getByRole('menuitem', { name: /^1\. stats/i }))
     expect(onSelect).toHaveBeenCalledWith('stats')
   })
 

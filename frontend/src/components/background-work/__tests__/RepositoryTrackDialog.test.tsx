@@ -132,6 +132,11 @@ describe('RepositoryTrackDialog', () => {
     expect(await screen.findByText(/every archive has its file history/i)).toBeInTheDocument()
   })
 
+  it('says what a rebuild from the chosen stage covers', () => {
+    renderDialog()
+    expect(screen.getByText(/rebuild everything for nas/i)).toBeInTheDocument()
+  })
+
   it('links to the index runs of the repository', () => {
     renderDialog()
     expect(screen.getByRole('link', { name: /view index runs/i })).toHaveAttribute(
