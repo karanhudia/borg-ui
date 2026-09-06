@@ -4912,6 +4912,7 @@
     "managedCanaryDescription": "Archivos canarios administrados para comprobaciones de restauración. Borg UI los añade a las copias mientras el modo canario está activado.",
     "managedCanaryBanner": "Esta carpeta la administra Borg UI para comprobaciones canarias de restauración. Es seguro dejarla intacta.",
     "managedCanaryProbeDisabled": "Las rutas canarias se verifican automáticamente mediante el modo canario.",
+    "includedByParent": "Incluido con {{parent}}. Anula la selección de {{parent}} para elegir elementos dentro.",
     "failedToDownloadFile": "No se pudo descargar el archivo",
     "downloadPreparing": "Preparando la descarga de {{name}}…",
     "downloadingBytes": "Descargando… {{size}}",

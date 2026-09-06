@@ -185,8 +185,18 @@ export default function ArchivePathSelector({
     }
   }
 
+  // The selected ancestor that already covers a path, if any. Borg extracts
+  // whole trees and the restore has no exclude list, so a path under a
+  // selected folder is included whatever happens to its own checkbox.
+  const coveredBy = (path: string): string | null => {
+    for (const selected of selectedPaths) {
+      if (path.startsWith(selected + '/')) return selected
+    }
+    return null
+  }
+
   const toggleSelection = (item: ArchiveItem) => {
-    if (isRestoreCanaryItem(item)) {
+    if (isRestoreCanaryItem(item) || coveredBy(item.path)) {
       return
     }
 
@@ -197,6 +207,14 @@ export default function ArchivePathSelector({
     if (newPaths.has(path)) {
       newPaths.delete(path)
     } else {
+      // Selecting a folder makes every selection inside it redundant, and
+      // keeping them would double count the size and clutter the list.
+      if (item.type === 'directory') {
+        for (const selected of selectedPaths) {
+          if (selected.startsWith(path + '/')) newPaths.delete(selected)
+        }
+        newItems = newItems.filter((selectedItem) => !selectedItem.path.startsWith(path + '/'))
+      }
       newPaths.add(path)
       newItems = [...newItems, { path, type: item.type }]
     }
@@ -237,7 +255,7 @@ export default function ArchivePathSelector({
   }
 
   const isSelected = (path: string): boolean => {
-    return selectedPaths.has(path)
+    return selectedPaths.has(path) || coveredBy(path) != null
   }
 
   const hasSelectedChildren = (dirPath: string): boolean => {
@@ -247,6 +265,9 @@ export default function ArchivePathSelector({
   const getDirectoryIcon = (item: ArchiveItem) => {
     if (isRestoreCanaryItem(item)) {
       return <Square size={20} color="rgba(0, 0, 0, 0.35)" />
+    }
+    if (coveredBy(item.path)) {
+      return <CheckSquare size={20} color="rgba(25, 118, 210, 0.5)" />
     }
     if (isSelected(item.path)) {
       return <CheckSquare size={20} color="#1976d2" />
@@ -374,9 +395,11 @@ export default function ArchivePathSelector({
           flex: 1,
           display: 'flex',
           flexDirection: 'column',
-          border: '1px solid',
+          // Embedded in the Files tab the panel around the list owns the
+          // frame; a second border here read as a box inside a box.
+          border: embedded ? 0 : '1px solid',
           borderColor: 'divider',
-          borderRadius: 1,
+          borderRadius: embedded ? 0 : 1,
           bgcolor: 'background.paper',
           overflow: 'hidden',
         }}
@@ -500,9 +523,15 @@ export default function ArchivePathSelector({
                 return (
                   <Tooltip
                     key={item.path}
-                    title={managedCanary ? managedTooltip : ''}
+                    title={
+                      managedCanary
+                        ? managedTooltip
+                        : coveredBy(item.path) && item.type !== 'directory'
+                          ? t('archiveContents.includedByParent', { parent: coveredBy(item.path) })
+                          : ''
+                    }
                     arrow
-                    disableHoverListener={!managedCanary}
+                    disableHoverListener={!managedCanary && !coveredBy(item.path)}
                   >
                     <ListItem
                       disablePadding
@@ -512,7 +541,11 @@ export default function ArchivePathSelector({
                             title={
                               managedCanary
                                 ? t('archiveContents.managedCanaryProbeDisabled')
-                                : t('wizard.restoreFiles.selectDirTooltip')
+                                : coveredBy(item.path)
+                                  ? t('archiveContents.includedByParent', {
+                                      parent: coveredBy(item.path),
+                                    })
+                                  : t('wizard.restoreFiles.selectDirTooltip')
                             }
                             describeChild
                           >
@@ -523,9 +556,13 @@ export default function ArchivePathSelector({
                                 aria-label={
                                   managedCanary
                                     ? t('archiveContents.managedCanaryProbeDisabled')
-                                    : t('wizard.restoreFiles.selectDirTooltip')
+                                    : coveredBy(item.path)
+                                      ? t('archiveContents.includedByParent', {
+                                          parent: coveredBy(item.path),
+                                        })
+                                      : t('wizard.restoreFiles.selectDirTooltip')
                                 }
-                                disabled={managedCanary}
+                                disabled={managedCanary || coveredBy(item.path) != null}
                                 onClick={() => toggleSelection(item)}
                               >
                                 {getDirectoryIcon(item)}

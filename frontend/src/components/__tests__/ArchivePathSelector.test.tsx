@@ -171,6 +171,47 @@ describe('ArchivePathSelector embedded variant', () => {
     expect(emitted[emitted.length - 1]).toEqual(['a.txt', 'b.txt'])
   })
 
+  it('selecting a folder covers everything inside it and prunes selected children', async () => {
+    getArchiveContents.mockImplementation((_id: string, _name: string, path: string) =>
+      Promise.resolve({
+        data: {
+          items:
+            path === 'docs'
+              ? [{ name: 'a.txt', path: 'docs/a.txt', type: 'file', size: 10 }]
+              : [{ name: 'docs', path: 'docs', type: 'directory', size: 10 }],
+        },
+      } as AxiosResponse)
+    )
+    const emitted: string[][] = []
+    const Harness = () => {
+      const [data, setData] = useState<ArchivePathSelectionData>({
+        selectedPaths: ['docs/a.txt'],
+        selectedItems: [{ path: 'docs/a.txt', type: 'file' }],
+      })
+      return (
+        <ArchivePathSelector
+          repository={repository}
+          archive={archive}
+          data={data}
+          onChange={(partial) => {
+            emitted.push(partial.selectedPaths ?? [])
+            setData((current) => ({ ...current, ...partial }))
+          }}
+        />
+      )
+    }
+    renderWithProviders(<Harness />)
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: /select directory/i }))
+    expect(emitted[emitted.length - 1]).toEqual(['docs'])
+
+    await user.click(screen.getByText('docs'))
+    const child = await screen.findByText('a.txt')
+    expect(screen.getByLabelText(/included with docs/i)).toBeInTheDocument()
+    await user.click(child)
+    expect(emitted[emitted.length - 1]).toEqual(['docs'])
+  })
+
   it('filters the current folder and reports the filtered rows', async () => {
     getArchiveContents.mockResolvedValue({
       data: {
