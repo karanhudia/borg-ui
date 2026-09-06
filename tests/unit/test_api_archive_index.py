@@ -144,6 +144,15 @@ class TestArchiveList:
             == "stale"
         )
 
+    def test_sync_state_tolerates_two_missed_reconciles(self, test_db):
+        """One missed hourly reconcile must not flip the chip to stale; the
+        threshold is three intervals."""
+        from app.api.archive_index import sync_state_from
+
+        now = utc_now().replace(tzinfo=None)
+        assert sync_state_from(False, now - timedelta(minutes=170), 60) == "fresh"
+        assert sync_state_from(False, now - timedelta(minutes=190), 60) == "stale"
+
     def test_detail_has_neighbours_and_history_state(
         self, test_client, test_db, admin_headers
     ):
@@ -304,6 +313,38 @@ class TestRebuild:
         assert all(o.trigger == "manual" and o.priority == 20 for o in ops)
         test_db.refresh(a)
         assert a.original_size is None
+
+    def test_resync_enqueues_the_reconcile_chain_once(
+        self, test_client, test_db, admin_headers
+    ):
+        """Deleting, pruning, or wiping leaves the stored archive list ahead
+        of the repository, and the list is what the Archives page reads, so
+        the client asks for a resync instead of waiting for the interval."""
+        repo = _repo(test_db)
+        r = test_client.post(
+            f"/api/repositories/{repo.id}/resync", headers=admin_headers
+        )
+        assert r.status_code == 200, r.text
+        kinds = [test_db.get(Operation, i).kind for i in r.json()["operations"]]
+        assert kinds == ["archive_sync", "history_merge", "stats"]
+        ops = test_db.query(Operation).all()
+        assert all(o.trigger == "reconcile" and o.priority == 20 for o in ops)
+
+        # A second call while the first run is still queued adds nothing, so
+        # a burst of deletes does not build a queue of identical runs.
+        again = test_client.post(
+            f"/api/repositories/{repo.id}/resync", headers=admin_headers
+        )
+        assert again.status_code == 200
+        assert again.json()["operations"] == []
+        assert test_db.query(Operation).count() == len(kinds)
+
+    def test_resync_requires_operator(self, test_client, test_db, auth_headers):
+        repo = _repo(test_db)
+        r = test_client.post(
+            f"/api/repositories/{repo.id}/resync", headers=auth_headers
+        )
+        assert r.status_code == 403
 
     def test_rebuild_from_history_is_pro_and_resets_archives(
         self, test_client, test_db, admin_headers
@@ -504,6 +545,14 @@ class TestChanges:
             headers=admin_headers,
         )
         assert sorted(c["path"] for c in r.json()["changes"]) == ["b", "d"]
+        # The totals are the filter chips' counts, so they describe the whole
+        # comparison, not the slice the chips currently show.
+        assert r.json()["totals"] == {
+            "added": 1,
+            "removed": 1,
+            "modified": 1,
+            "summary": 1,
+        }
         r = test_client.get(
             f"/api/repositories/{repo.id}/archives/{a3.id}/changes?path_prefix=lib/",
             headers=admin_headers,

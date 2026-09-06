@@ -15,6 +15,7 @@ import { ActivityFilters } from './activity/ActivityFilters'
 import RepositoryOperationsView from './activity/RepositoryOperationsView'
 import RepositoryScopeSelect from '../components/activity/RepositoryScopeSelect'
 import type { OperationCategory, OperationTrigger } from '../types/operations'
+import { CATEGORIES } from '../components/activity/categories'
 
 export interface ActivityItem {
   activity_key?: string | null
@@ -216,8 +217,16 @@ const Activity: React.FC = () => {
   const repositoryIdParam = Number(searchParams.get('repository_id'))
   const pinnedRepositoryId =
     Number.isInteger(repositoryIdParam) && repositoryIdParam > 0 ? repositoryIdParam : null
+  const initialCategory = searchParams
+    .getAll('category')
+    .filter((value): value is OperationCategory => CATEGORIES.includes(value as OperationCategory))
   if (pinnedRepositoryId !== null) {
-    return <RepositoryOperationsView repositoryId={pinnedRepositoryId} />
+    return (
+      <RepositoryOperationsView
+        repositoryId={pinnedRepositoryId}
+        initialCategory={initialCategory}
+      />
+    )
   }
   return <GlobalActivity />
 }

@@ -71,21 +71,21 @@ describe('deriveTrack', () => {
     )
     expect(track.stages.map((s) => [s.key, s.status])).toEqual([
       ['connect', 'idle'],
-      ['stats', 'done'],
       ['archives', 'running'],
       ['history', 'waiting'],
+      ['stats', 'done'],
     ])
-    expect(track.stages[3].reason).toBe('queued')
+    expect(track.stages[2].reason).toBe('queued')
   })
 
   it('explains a queued stage with the paused state first', () => {
     const track = deriveTrack(repo([op({ kind: 'stats', status: 'queued' })], true), limits, true)
-    expect(track.stages[1].reason).toBe('paused')
+    expect(track.stages[3].reason).toBe('paused')
   })
 
   it('explains a queued stage with the busy lane', () => {
     const track = deriveTrack(repo([op({ kind: 'stats', status: 'queued' })], true), limits, false)
-    expect(track.stages[1].reason).toBe('lane_busy')
+    expect(track.stages[3].reason).toBe('lane_busy')
   })
 
   it('explains a queued history stage with the worker limit', () => {
@@ -94,7 +94,7 @@ describe('deriveTrack', () => {
       { ...limits, index_running: 2 },
       false
     )
-    expect(track.stages[3].reason).toBe('workers')
+    expect(track.stages[2].reason).toBe('workers')
   })
 
   it('treats history_merge as the history stage and failed as retryable', () => {
@@ -103,8 +103,8 @@ describe('deriveTrack', () => {
       limits,
       false
     )
-    expect(track.stages[3].status).toBe('failed')
-    expect(track.stages[3].operation?.id).toBe(4)
+    expect(track.stages[2].status).toBe('failed')
+    expect(track.stages[2].operation?.id).toBe(4)
   })
 
   it('prefers the newest operation when a stage ran twice', () => {
@@ -116,7 +116,57 @@ describe('deriveTrack', () => {
       limits,
       false
     )
-    expect(track.stages[1].status).toBe('done')
+    expect(track.stages[3].status).toBe('done')
+  })
+
+  it('describes only the newest run when an older one is still in the queue window', () => {
+    const track = deriveTrack(
+      repo([
+        op({ id: 1, kind: 'archive_sync', status: 'completed', run_id: 'reconcile' }),
+        op({ id: 2, kind: 'history_index', status: 'completed', run_id: 'reconcile' }),
+        op({ id: 3, kind: 'stats', status: 'completed', run_id: 'reconcile' }),
+        op({ id: 4, kind: 'stats', status: 'queued', run_id: 'rebuild', trigger: 'manual' }),
+      ]),
+      limits,
+      false
+    )
+    expect(track.stages.map((s) => [s.key, s.status])).toEqual([
+      ['connect', 'idle'],
+      ['archives', 'idle'],
+      ['history', 'idle'],
+      ['stats', 'waiting'],
+    ])
+  })
+
+  it('prefers the run with work in progress over a newer finished one', () => {
+    const track = deriveTrack(
+      repo([
+        op({ id: 1, kind: 'archive_sync', status: 'completed', run_id: 'reconcile' }),
+        op({ id: 2, kind: 'history_index', status: 'running', run_id: 'reconcile' }),
+        op({ id: 5, kind: 'stats', status: 'completed', run_id: 'rebuild', trigger: 'manual' }),
+      ]),
+      limits,
+      false
+    )
+    expect(track.stages.map((s) => [s.key, s.status])).toEqual([
+      ['connect', 'idle'],
+      ['archives', 'done'],
+      ['history', 'running'],
+      ['stats', 'idle'],
+    ])
+  })
+
+  it('marks a stage skipped after its dependency failed instead of done', () => {
+    const track = deriveTrack(
+      repo([
+        op({ id: 1, kind: 'archive_sync', status: 'failed' }),
+        op({ id: 2, kind: 'history_index', status: 'skipped', skip_reason: 'dependency_failed' }),
+      ]),
+      limits,
+      false
+    )
+    expect(track.stages[1].status).toBe('failed')
+    expect(track.stages[2].status).toBe('skipped')
   })
 
   it('surfaces a running foreground operation separately from the stages', () => {

@@ -127,6 +127,17 @@ describe('ArchiveChangesTab', () => {
     })
   })
 
+  it('keeps the counts on the chips while a filtered request is in flight', async () => {
+    renderTab()
+    await screen.findByText('invoices.xlsx')
+    expect(screen.getByRole('button', { name: /^modified$/i })).toHaveTextContent('1')
+    ;(archivesAPI.getChanges as ReturnType<typeof vi.fn>).mockReturnValue(new Promise(() => {}))
+    fireEvent.click(screen.getByRole('button', { name: /^added$/i }))
+    await vi.waitFor(() => expect(archivesAPI.getChanges).toHaveBeenCalledTimes(2))
+    expect(screen.getByRole('button', { name: /^modified$/i })).toHaveTextContent('1')
+    expect(screen.getByRole('button', { name: /^added$/i })).toHaveTextContent('0')
+  })
+
   it('re-requests changes against the chosen compare target', async () => {
     renderTab()
     await screen.findByText('invoices.xlsx')
@@ -158,6 +169,49 @@ describe('ArchiveChangesTab', () => {
     } as never)
     renderTab()
     expect(await screen.findByText(/truncated at the row cap/i)).toBeInTheDocument()
+  })
+
+  it('explains a failed index rather than calling it pending', async () => {
+    vi.mocked(archivesAPI.getChanges).mockResolvedValue({
+      data: baseChangesResponse({ changes: [], history_state: 'failed' }),
+    } as never)
+    renderTab()
+    expect(await screen.findByText(/could not be indexed/i)).toBeInTheDocument()
+    expect(screen.queryByText(/has not been indexed yet/i)).not.toBeInTheDocument()
+  })
+
+  it('reports a failed rebuild instead of swallowing it', async () => {
+    vi.mocked(archivesAPI.getChanges).mockResolvedValue({
+      data: baseChangesResponse({ changes: [], history_state: 'pending' }),
+    } as never)
+    vi.mocked(archivesAPI.rebuild).mockRejectedValue(new Error('locked'))
+    renderTab()
+    fireEvent.click(await screen.findByRole('button', { name: /rebuild/i }))
+    expect(await screen.findByText(/could not be started/i)).toBeInTheDocument()
+  })
+
+  it('fetches the next page from the cursor instead of stopping at the cap', async () => {
+    const page = Array.from({ length: 200 }, (_, i) => ({
+      ...changeRows[0],
+      path: `home/karan/docs/file-${i}.txt`,
+    }))
+    vi.mocked(archivesAPI.getChanges).mockResolvedValueOnce({
+      data: baseChangesResponse({ changes: page, next_cursor: '200' }),
+    } as never)
+    vi.mocked(archivesAPI.getChanges).mockResolvedValueOnce({
+      data: baseChangesResponse({
+        changes: [{ ...changeRows[0], path: 'home/karan/docs/last.txt' }],
+        next_cursor: null,
+      }),
+    } as never)
+    renderTab()
+    fireEvent.click(await screen.findByRole('button', { name: /show more/i }))
+    expect(await screen.findByText('last.txt')).toBeInTheDocument()
+    expect(archivesAPI.getChanges).toHaveBeenLastCalledWith(
+      7,
+      12,
+      expect.objectContaining({ cursor: '200' })
+    )
   })
 
   it('shows the inert preview to a plan without the feature', () => {

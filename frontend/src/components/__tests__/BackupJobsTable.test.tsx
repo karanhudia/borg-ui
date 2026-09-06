@@ -187,13 +187,13 @@ describe('BackupJobsTable', () => {
         />
       )
 
-      expect(screen.getByText('archive sync')).toBeInTheDocument()
+      expect(screen.getByText('Sync archive list')).toBeInTheDocument()
     })
 
     it('renders no RunChainRow beneath a row with no follow-ups', () => {
       renderWithProviders(<BackupJobsTable jobs={mockJobs} />)
 
-      expect(screen.queryByText('archive sync')).not.toBeInTheDocument()
+      expect(screen.queryByText('Sync archive list')).not.toBeInTheDocument()
     })
   })
 

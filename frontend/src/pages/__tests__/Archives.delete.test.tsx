@@ -55,6 +55,7 @@ vi.mock('../../services/api', () => ({
     listStored: vi.fn(),
     getHeatmap: vi.fn(),
     rebuild: vi.fn(),
+    resync: vi.fn(),
   },
   repositoriesAPI: {
     getRepositories: vi.fn(),
@@ -160,6 +161,7 @@ describe('Archives page — delete cache invalidation (regression #352)', () => 
     getDeleteJobStatusMock.mockResolvedValue({
       data: { status: 'completed' },
     })
+    vi.mocked(apiModule.archivesAPI.resync).mockResolvedValue({ data: {} } as never)
   })
 
   afterEach(() => {
@@ -207,6 +209,28 @@ describe('Archives page — delete cache invalidation (regression #352)', () => 
         expect(invalidateSpy).toHaveBeenCalledWith(
           expect.objectContaining({ queryKey: ['repository-info', 1] })
         )
+      },
+      { timeout: 4000 }
+    )
+  })
+
+  it('asks the backend to resync the stored list, which a refetch alone cannot fix', async () => {
+    const user = userEvent.setup()
+
+    renderWithProviders(<Archives />, { queryClient })
+    await user.click(screen.getByText('Select Repo'))
+    await waitFor(() => {
+      expect(screen.getByTestId('delete-archive-btn')).toBeInTheDocument()
+    })
+    await user.click(screen.getByTestId('delete-archive-btn'))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /^Delete Archive$/i })).toBeInTheDocument()
+    })
+    await user.click(screen.getByRole('button', { name: /^Delete Archive$/i }))
+
+    await waitFor(
+      () => {
+        expect(apiModule.archivesAPI.resync).toHaveBeenCalledWith(1)
       },
       { timeout: 4000 }
     )

@@ -26,6 +26,8 @@ import type {
   SourceLocation,
 } from '../types'
 import type {
+  HubRepositoryDetail,
+  HubResponse,
   OperationItem,
   QueueResponse,
   QueueLimits,
@@ -713,6 +715,10 @@ export const archivesAPI = {
     api.get<StatusStripResponse>(`/repositories/${repositoryId}/status-strip`),
   rebuild: (repositoryId: number, from: RebuildStage) =>
     api.post<RebuildResponse>(`/repositories/${repositoryId}/rebuild`, { from }),
+  // After work that removed archives (delete, prune, wipe): reconcile the
+  // stored list the Archives page reads, without invalidating anything.
+  resync: (repositoryId: number) =>
+    api.post<RebuildResponse>(`/repositories/${repositoryId}/resync`),
   listStored: (
     repositoryId: number,
     params?: { series?: string; since?: string; until?: string }
@@ -744,6 +750,10 @@ export const archivesAPI = {
 
 export const operationsAPI = {
   getQueue: () => api.get<QueueResponse>('/operations/queue'),
+  getRepositories: () => api.get<HubResponse>('/operations/repositories'),
+  getRepositoryDetail: (repositoryId: number) =>
+    api.get<HubRepositoryDetail>(`/operations/repositories/${repositoryId}`),
+  reconcileNow: () => api.post<{ repositories: number }>('/operations/reconcile'),
   list: (params?: {
     repository_id?: number
     category?: string[]

@@ -39,7 +39,8 @@ export default function ChangeRowLine({ row }: ChangeRowLineProps) {
         alignItems: 'center',
         py: 1,
         px: 1.5,
-        borderRadius: 1.5,
+        // Square and flush: the list around the rows owns the frame, so a
+        // rounded hover left a gap above the first row and below the last.
         '&:hover': { bgcolor: 'action.hover' },
       }}
     >

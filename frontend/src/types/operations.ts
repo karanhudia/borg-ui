@@ -111,6 +111,57 @@ export interface StatusStripResponse {
   overdue_available: boolean
 }
 
+// GET /operations/repositories: derived data at rest, one row per repository.
+export interface HubHistorySummary {
+  indexed: number
+  pending: number
+  failed: number
+  skipped: number
+  truncated: number
+  rows: number
+}
+
+export interface HubRepository {
+  repository_id: number
+  repository_name: string
+  repository_type: string | null
+  sync_state: 'fresh' | 'syncing' | 'stale' | 'never'
+  last_synced_at: string | null
+  last_stats_at: string | null
+  last_history_at: string | null
+  archives: number
+  history: HubHistorySummary
+}
+
+export interface HubTotals {
+  repositories: number
+  archives: number
+  history_rows: number
+  history_bytes: number | null
+}
+
+export interface HubResponse {
+  repositories: HubRepository[]
+  totals: HubTotals
+  last_reconcile_at: string | null
+  reconcile_interval_minutes: number
+  history_available: boolean
+}
+
+export interface HubArchive {
+  id: number
+  name: string
+  start: string
+  history_attempts: number
+  history_rows: number | null
+}
+
+export interface HubRepositoryDetail {
+  repository_id: number
+  failed_archives: HubArchive[]
+  truncated_archives: HubArchive[]
+}
+
 export type RebuildStage = 'stats' | 'archives' | 'history'
 
 export interface RebuildResponse {

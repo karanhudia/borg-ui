@@ -41,3 +41,20 @@ export const Default: Story = {
     },
   },
 }
+
+export const WithComment: Story = {
+  args: {
+    archive: { ...Default.args.archive, comment: 'Taken before the Postgres 16 migration.' },
+  },
+}
+
+export const SizesUnknown: Story = {
+  args: {
+    archive: {
+      ...Default.args.archive,
+      original_size: null,
+      compressed_size: null,
+      deduplicated_size: null,
+    },
+  },
+}

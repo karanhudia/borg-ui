@@ -76,8 +76,17 @@ vi.mock('@tanstack/react-query', async () => {
 })
 
 vi.mock('../activity/RepositoryOperationsView', () => ({
-  default: ({ repositoryId }: { repositoryId: number }) => (
-    <div>Repository View {repositoryId}</div>
+  default: ({
+    repositoryId,
+    initialCategory,
+  }: {
+    repositoryId: number
+    initialCategory?: string[]
+  }) => (
+    <div>
+      Repository View {repositoryId}
+      {initialCategory?.length ? ` (${initialCategory.join(',')})` : ''}
+    </div>
   ),
 }))
 
@@ -194,6 +203,13 @@ describe('Activity page', () => {
     renderWithProviders(<Activity />, { initialRoute: '/activity?repository_id=4' })
     expect(await screen.findByText('Repository View 4')).toBeInTheDocument()
     expect(screen.queryByText('Jobs Table')).not.toBeInTheDocument()
+  })
+
+  it('hands a valid category from the URL to the repository view and drops unknown ones', async () => {
+    renderWithProviders(<Activity />, {
+      initialRoute: '/activity?repository_id=4&category=index&category=bogus',
+    })
+    expect(await screen.findByText('Repository View 4 (index)')).toBeInTheDocument()
   })
 
   it('offers cloud storage activity filters and summarizes active rclone jobs', async () => {

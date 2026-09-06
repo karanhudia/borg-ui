@@ -3,21 +3,19 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import PipelineBoard from '../PipelineBoard'
-import { activityAPI, archivesAPI, operationsAPI, repositoriesAPI } from '../../../services/api'
+import { archivesAPI, operationsAPI } from '../../../services/api'
+import type { HubRepository } from '../../../types/operations'
 
 vi.mock('../../../services/api', () => ({
   operationsAPI: {
     getQueue: vi.fn(),
+    getRepositories: vi.fn(),
+    getRepositoryDetail: vi.fn(),
+    reconcileNow: vi.fn(),
     updateLimits: vi.fn(),
   },
   archivesAPI: {
     rebuild: vi.fn(),
-  },
-  activityAPI: {
-    list: vi.fn(),
-  },
-  repositoriesAPI: {
-    getRepositories: vi.fn(),
   },
 }))
 
@@ -97,29 +95,72 @@ const mockQueue = (repositories: unknown[], paused = false, overrides = {}) =>
     data: { repositories, limits: { ...limits, ...overrides }, paused },
   })
 
+const hubRepository = (overrides: Partial<HubRepository> = {}): HubRepository => ({
+  repository_id: 1,
+  repository_name: 'nas',
+  repository_type: 'local',
+  sync_state: 'fresh',
+  last_synced_at: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+  last_stats_at: new Date(Date.now() - 4 * 60 * 1000).toISOString(),
+  last_history_at: null,
+  archives: 18,
+  history: { indexed: 18, pending: 0, failed: 0, skipped: 0, truncated: 0, rows: 16219 },
+  ...overrides,
+})
+
+const mockHub = (repositories: HubRepository[], overrides = {}) =>
+  (operationsAPI.getRepositories as ReturnType<typeof vi.fn>).mockResolvedValue({
+    data: {
+      repositories,
+      totals: {
+        repositories: repositories.length,
+        archives: repositories.reduce((sum, r) => sum + r.archives, 0),
+        history_rows: repositories.reduce((sum, r) => sum + r.history.rows, 0),
+        history_bytes: 4300000,
+      },
+      last_reconcile_at: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
+      reconcile_interval_minutes: 60,
+      history_available: true,
+      ...overrides,
+    },
+  })
+
 describe('PipelineBoard', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    ;(activityAPI.list as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [] })
-    ;(repositoriesAPI.getRepositories as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: { repositories: [{ id: 1, name: 'nas' }] },
-    })
+    mockHub([
+      hubRepository(),
+      hubRepository({ repository_id: 2, repository_name: 'photos', archives: 3 }),
+    ])
   })
 
-  it('renders one row per repository under the stage headers', async () => {
+  it('lists every repository with its derived data even when nothing is running', async () => {
+    mockQueue([])
+    renderBoard()
+    await waitFor(() => expect(screen.getAllByTestId('repository-row')).toHaveLength(2))
+    expect(screen.getByText(/2 repositories/i)).toBeInTheDocument()
+    expect(screen.getByText(/21 archives indexed/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/18 of 18 indexed/i).length).toBeGreaterThan(0)
+    expect(screen.getByText(/reconcile runs every 60 minutes/i)).toBeInTheDocument()
+    expect(screen.queryByTestId('stage-track')).not.toBeInTheDocument()
+  })
+
+  it('keeps a repository with work in progress in its place and shows its track', async () => {
     mockQueue([
-      { repository_id: 1, repository_name: 'nas', lane_busy: false, operations: [queueOp({})] },
       {
         repository_id: 2,
         repository_name: 'photos',
         lane_busy: false,
-        operations: [queueOp({ id: 2, repository_id: 2, repository: 'photos' })],
+        operations: [queueOp({ id: 2, repository_id: 2, repository: 'photos', status: 'running' })],
       },
     ])
     renderBoard()
     await waitFor(() => expect(screen.getAllByTestId('repository-row')).toHaveLength(2))
-    expect(screen.getAllByText('Stats').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('File history').length).toBeGreaterThan(0)
+    const rows = screen.getAllByTestId('repository-row')
+    expect(within(rows[0]).getByText('nas')).toBeInTheDocument()
+    expect(within(rows[0]).queryByTestId('stage-track')).not.toBeInTheDocument()
+    expect(within(rows[1]).getByText('photos')).toBeInTheDocument()
+    expect(within(rows[1]).getByTestId('stage-stats')).toHaveAttribute('data-status', 'running')
   })
 
   it('shows the foreground job on its repository row', async () => {
@@ -139,60 +180,83 @@ describe('PipelineBoard', () => {
       },
     ])
     renderBoard()
-    const row = await screen.findByTestId('repository-row')
+    const row = (await screen.findAllByTestId('repository-row'))[0]
     expect(within(row).getByRole('link', { name: /view runs/i })).toBeInTheDocument()
   })
 
-  it('shows the last reconcile time and an inline rebuild when nothing is running', async () => {
-    mockQueue([])
-    ;(activityAPI.list as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: [{ id: 3, completed_at: new Date(Date.now() - 5 * 60 * 1000).toISOString() }],
-    })
-    ;(archivesAPI.rebuild as ReturnType<typeof vi.fn>).mockResolvedValue({ data: {} })
+  it('adds a system lane below the repositories for work with no repository', async () => {
+    mockQueue([
+      {
+        repository_id: null,
+        repository_name: 'System',
+        lane_busy: false,
+        operations: [
+          queueOp({
+            id: 9,
+            repository_id: null,
+            repository: null,
+            kind: 'package_install',
+            category: 'system',
+            status: 'running',
+          }),
+        ],
+      },
+    ])
     renderBoard()
-    expect(await screen.findByText(/nothing is running/i)).toBeInTheDocument()
-    expect(await screen.findByText(/last reconcile ran 5 minutes ago/i)).toBeInTheDocument()
-    expect(activityAPI.list).toHaveBeenCalledWith(
-      expect.objectContaining({ trigger: ['reconcile'], limit: 1 })
-    )
+    await waitFor(() => expect(screen.getAllByTestId('repository-row')).toHaveLength(3))
+    const rows = screen.getAllByTestId('repository-row')
+    expect(within(rows[2]).getByText('System')).toBeInTheDocument()
+  })
 
-    fireEvent.click(await screen.findByRole('button', { name: /^rebuild$/i }))
-    await waitFor(() => expect(archivesAPI.rebuild).toHaveBeenCalledWith(1, 'stats'))
+  it('starts a reconcile from the summary and reports how many repositories were queued', async () => {
+    mockQueue([])
+    ;(operationsAPI.reconcileNow as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { repositories: 2 },
+    })
+    renderBoard()
+    fireEvent.click(await screen.findByRole('button', { name: /reconcile now/i }))
+    await waitFor(() => expect(operationsAPI.reconcileNow).toHaveBeenCalled())
+    expect(await screen.findByText(/reconcile queued for 2 repositories/i)).toBeInTheDocument()
+  })
+
+  it('says when a reconcile queued nothing because every repository was busy', async () => {
+    mockQueue([])
+    ;(operationsAPI.reconcileNow as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { repositories: 0 },
+    })
+    renderBoard()
+    fireEvent.click(await screen.findByRole('button', { name: /reconcile now/i }))
+    expect(await screen.findByText(/already has index work queued/i)).toBeInTheDocument()
   })
 
   it('retries a failed stage through the rebuild route', async () => {
     mockQueue([
       {
-        repository_id: 5,
+        repository_id: 1,
         repository_name: 'nas',
         lane_busy: false,
-        operations: [queueOp({ id: 9, repository_id: 5, kind: 'archive_sync', status: 'failed' })],
+        operations: [queueOp({ id: 9, repository_id: 1, kind: 'archive_sync', status: 'failed' })],
       },
     ])
     ;(archivesAPI.rebuild as ReturnType<typeof vi.fn>).mockResolvedValue({ data: {} })
     renderBoard()
     fireEvent.click(await screen.findByRole('button', { name: /retry/i }))
-    await waitFor(() => expect(archivesAPI.rebuild).toHaveBeenCalledWith(5, 'archives'))
+    await waitFor(() => expect(archivesAPI.rebuild).toHaveBeenCalledWith(1, 'archives'))
   })
 
-  it('opens the repository track dialog from the repository name', async () => {
-    mockQueue([
-      {
-        repository_id: 5,
-        repository_name: 'nas',
-        lane_busy: false,
-        operations: [queueOp({ id: 11, repository_id: 5 })],
-      },
-    ])
+  it('opens the repository detail dialog from the repository name', async () => {
+    mockQueue([])
+    ;(operationsAPI.getRepositoryDetail as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { repository_id: 1, failed_archives: [], truncated_archives: [] },
+    })
     renderBoard()
-    fireEvent.click(await screen.findByRole('button', { name: /open the run track for nas/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /open the details for nas/i }))
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(await screen.findByText(/every archive has its file history/i)).toBeInTheDocument()
   })
 
-  it('changes the index worker count from the history stage header', async () => {
-    mockQueue([
-      { repository_id: 1, repository_name: 'nas', lane_busy: false, operations: [queueOp({})] },
-    ])
+  it('changes the index worker count from the file history column header', async () => {
+    mockQueue([])
     ;(operationsAPI.updateLimits as ReturnType<typeof vi.fn>).mockResolvedValue({ data: {} })
     renderBoard()
     fireEvent.click(await screen.findByRole('button', { name: /more index workers/i }))
@@ -200,18 +264,152 @@ describe('PipelineBoard', () => {
   })
 
   it('hides the worker control for people who cannot manage the queue', async () => {
-    mockQueue([
-      { repository_id: 1, repository_name: 'nas', lane_busy: false, operations: [queueOp({})] },
-    ])
+    mockQueue([])
     renderBoard({ canManage: false })
-    await screen.findByTestId('repository-row')
+    await screen.findAllByTestId('repository-row')
     expect(screen.queryByRole('button', { name: /more index workers/i })).not.toBeInTheDocument()
     expect(screen.getByText(/2 workers/i)).toBeInTheDocument()
+  })
+
+  it('has no rebuild form below the table, only the per-row menus', async () => {
+    mockQueue([])
+    renderBoard()
+    await screen.findAllByTestId('repository-row')
+    expect(screen.queryByText(/rebuild derived data/i)).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /^rebuild /i })).toHaveLength(2)
+  })
+
+  it('filters rows by repository name', async () => {
+    mockQueue([])
+    renderBoard()
+    await screen.findAllByTestId('repository-row')
+    fireEvent.change(screen.getByRole('textbox', { name: /filter by name/i }), {
+      target: { value: 'PHO' },
+    })
+    const rows = screen.getAllByTestId('repository-row')
+    expect(rows).toHaveLength(1)
+    expect(within(rows[0]).getByText('photos')).toBeInTheDocument()
+  })
+
+  it('narrows to rows that need attention from the toolbar', async () => {
+    mockQueue([])
+    mockHub([
+      hubRepository(),
+      hubRepository({ repository_id: 2, repository_name: 'photos', sync_state: 'stale' }),
+    ])
+    renderBoard()
+    await screen.findAllByTestId('repository-row')
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /show/i }))
+    fireEvent.click(await screen.findByRole('option', { name: /^stale$/i }))
+    const rows = await screen.findAllByTestId('repository-row')
+    expect(rows).toHaveLength(1)
+    expect(within(rows[0]).getByText('photos')).toBeInTheDocument()
+  })
+
+  it('narrows to a reason by clicking its count in the summary', async () => {
+    mockQueue([])
+    mockHub([
+      hubRepository(),
+      hubRepository({ repository_id: 2, repository_name: 'photos', sync_state: 'never' }),
+    ])
+    renderBoard()
+    await screen.findAllByTestId('repository-row')
+    fireEvent.click(screen.getByRole('button', { name: /1 never indexed/i }))
+    const rows = await screen.findAllByTestId('repository-row')
+    expect(rows).toHaveLength(1)
+    expect(within(rows[0]).getByText('photos')).toBeInTheDocument()
+  })
+
+  it('says when the filter matches nothing without dropping the toolbar', async () => {
+    mockQueue([])
+    renderBoard()
+    await screen.findAllByTestId('repository-row')
+    fireEvent.change(screen.getByRole('textbox', { name: /filter by name/i }), {
+      target: { value: 'zzz' },
+    })
+    expect(screen.getByText(/no repositories match/i)).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: /filter by name/i })).toHaveValue('zzz')
+  })
+
+  it('sorts by history rows from the toolbar', async () => {
+    mockQueue([])
+    mockHub([
+      hubRepository({ history: { ...hubRepository().history, rows: 10 } }),
+      hubRepository({
+        repository_id: 2,
+        repository_name: 'photos',
+        history: { ...hubRepository().history, rows: 999 },
+      }),
+    ])
+    renderBoard()
+    await screen.findAllByTestId('repository-row')
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /sort by/i }))
+    fireEvent.click(await screen.findByRole('option', { name: /history rows/i }))
+    await waitFor(() =>
+      expect(
+        within(screen.getAllByTestId('repository-row')[0]).getByText('photos')
+      ).toBeInTheDocument()
+    )
+  })
+
+  it('windows long lists and reveals more on request', async () => {
+    mockQueue([])
+    mockHub(
+      Array.from({ length: 120 }, (_, i) =>
+        hubRepository({
+          repository_id: i + 1,
+          repository_name: `repo-${String(i).padStart(3, '0')}`,
+        })
+      )
+    )
+    renderBoard()
+    await waitFor(() => expect(screen.getAllByTestId('repository-row')).toHaveLength(50))
+    fireEvent.click(screen.getByRole('button', { name: /show 50 more/i }))
+    expect(screen.getAllByTestId('repository-row')).toHaveLength(100)
+    fireEvent.click(screen.getByRole('button', { name: /show 20 more/i }))
+    expect(screen.getAllByTestId('repository-row')).toHaveLength(120)
+    expect(screen.queryByRole('button', { name: /show .* more/i })).not.toBeInTheDocument()
+  })
+
+  it('resets the window when the filter changes', async () => {
+    mockQueue([])
+    mockHub(
+      Array.from({ length: 120 }, (_, i) =>
+        hubRepository({
+          repository_id: i + 1,
+          repository_name: `repo-${String(i).padStart(3, '0')}`,
+        })
+      )
+    )
+    renderBoard()
+    await waitFor(() => expect(screen.getAllByTestId('repository-row')).toHaveLength(50))
+    fireEvent.click(screen.getByRole('button', { name: /show 50 more/i }))
+    fireEvent.change(screen.getByRole('textbox', { name: /filter by name/i }), {
+      target: { value: 'repo-0' },
+    })
+    expect(screen.getAllByTestId('repository-row')).toHaveLength(50)
+    expect(screen.getByRole('button', { name: /show 50 more/i })).toBeInTheDocument()
+  })
+
+  it('shows an empty state when there are no repositories at all', async () => {
+    mockQueue([])
+    mockHub([])
+    renderBoard()
+    expect(await screen.findByText(/no repositories yet/i)).toBeInTheDocument()
   })
 
   it('reports a failed queue fetch instead of showing an empty board', async () => {
     ;(operationsAPI.getQueue as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('boom'))
     renderBoard()
-    expect(await screen.findByText(/could not be loaded/i)).toBeInTheDocument()
+    expect(await screen.findByText(/queue could not be loaded/i)).toBeInTheDocument()
+  })
+
+  it('reports a failed summary fetch', async () => {
+    mockQueue([])
+    ;(operationsAPI.getRepositories as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error('boom')
+    )
+    renderBoard()
+    expect(await screen.findByText(/summary could not be loaded/i)).toBeInTheDocument()
   })
 })

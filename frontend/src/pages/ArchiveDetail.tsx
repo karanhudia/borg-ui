@@ -32,7 +32,10 @@ import DeleteArchiveDialog from '../components/DeleteArchiveDialog'
 import MountArchiveDialog from '../components/MountArchiveDialog'
 import MountSuccessToast from '../components/MountSuccessToast'
 import RestoreWizard, { type RestoreData } from '../components/RestoreWizard'
+import { resyncStoredArchives } from '../utils/archiveResync'
+import { usePlan } from '../hooks/usePlan'
 import type { RestorePathMetadata } from '../utils/restorePaths'
+import type { ArchiveDetailResponse } from '../types/archives'
 import type { Archive, Repository } from '@/types'
 
 type DetailTab = 'changes' | 'files' | 'info'
@@ -44,6 +47,7 @@ function getDefaultMountPoint(archiveName: string): string {
 export default function ArchiveDetail() {
   const { t } = useTranslation()
   const theme = useTheme()
+  const { can } = usePlan()
   const { repositoryId: repositoryIdParam, archiveId: archiveIdParam } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const queryClient = useQueryClient()
@@ -69,9 +73,15 @@ export default function ArchiveDetail() {
     paths: string[]
     items: RestorePathMetadata[]
   } | null>(null)
+  // "Restore this" in a file's history points at an older archive of the
+  // series. Null means the archive on screen.
+  const [restoreFromArchiveId, setRestoreFromArchiveId] = useState<number | null>(null)
 
-  const openRestore = (paths?: string[], items?: RestorePathMetadata[]) => {
+  const openRestore = (paths?: string[], items?: RestorePathMetadata[], fromArchiveId?: number) => {
     setRestorePreselection(paths && paths.length > 0 ? { paths, items: items ?? [] } : null)
+    setRestoreFromArchiveId(
+      fromArchiveId != null && fromArchiveId !== archiveId ? fromArchiveId : null
+    )
     setShowRestoreWizard(true)
   }
 
@@ -96,20 +106,40 @@ export default function ArchiveDetail() {
     return repositories.find((r: Repository) => r.id === repositoryId) || null
   }, [repositoriesData, repositoryId])
 
+  // The archive a restore reads from: the one on screen, unless file history
+  // asked for an older one, whose borg id has to be resolved before Borg can
+  // be dialled.
+  const { data: restoreSourceArchive } = useQuery({
+    queryKey: ['archive', repositoryId, restoreFromArchiveId],
+    queryFn: () =>
+      archivesAPI.getArchive(repositoryId, restoreFromArchiveId as number).then((res) => res.data),
+    enabled: validParams && restoreFromArchiveId != null,
+  })
+  const restoreArchive = restoreFromArchiveId != null ? (restoreSourceArchive ?? null) : archive
+
   const archiveRef = useMemo(() => {
     if (!archive || !repository) return null
     return getBorgVersion(repository) === 2 ? `aid:${archive.borg_id}` : archive.name
   }, [archive, repository])
 
-  const legacyArchive: Archive | null = archive
-    ? {
-        id: archive.borg_id,
-        archive: archive.name,
-        name: archive.name,
-        start: archive.start,
-        time: archive.start,
-      }
-    : null
+  const restoreArchiveRef = useMemo(() => {
+    if (!restoreArchive || !repository) return null
+    return getBorgVersion(repository) === 2 ? `aid:${restoreArchive.borg_id}` : restoreArchive.name
+  }, [restoreArchive, repository])
+
+  const toLegacyArchive = (row: ArchiveDetailResponse | null): Archive | null =>
+    row
+      ? {
+          id: row.borg_id,
+          archive: row.name,
+          name: row.name,
+          start: row.start,
+          time: row.start,
+        }
+      : null
+
+  const legacyArchive: Archive | null = toLegacyArchive(archive ?? null)
+  const legacyRestoreArchive: Archive | null = toLegacyArchive(restoreArchive ?? null)
 
   const deleteMutation = useMutation({
     mutationFn: () => {
@@ -120,7 +150,9 @@ export default function ArchiveDetail() {
       const jobId = data.data.job_id
       toast.success(t('archives.deletionStarted', { id: jobId }))
       setShowDeleteConfirm(false)
-      queryClient.invalidateQueries({ queryKey: ['repository-archives', repositoryId] })
+      // The Archives page reads the stored list, so the deleted archive stays
+      // in it until archive_sync runs again.
+      void resyncStoredArchives(queryClient, repositoryId)
     },
     onError: (error: unknown) => {
       const err = error as { response?: { data?: { detail?: BackendDetail } } }
@@ -155,12 +187,12 @@ export default function ArchiveDetail() {
 
   const restoreMutation = useMutation({
     mutationFn: (data: RestoreData) => {
-      if (!repository || !archiveRef) throw new Error('not ready')
+      if (!repository || !restoreArchiveRef) throw new Error('not ready')
       const destinationPath =
         data.restore_strategy === 'custom' && data.custom_path ? data.custom_path : '/'
       return restoreAPI.startRestore(
         repository.path,
-        archiveRef,
+        restoreArchiveRef,
         data.selected_paths,
         destinationPath,
         repository.id,
@@ -191,7 +223,9 @@ export default function ArchiveDetail() {
           compare_to: archive?.predecessor_id ?? undefined,
         })
         .then((res) => res.data),
-    enabled: validParams && !!archive,
+    // The counts come from a Pro route, so a Community install would take a
+    // 403 on every archive it opens.
+    enabled: validParams && !!archive && can('archive_history'),
   })
 
   if (!validParams || archiveErrored) {
@@ -410,7 +444,9 @@ export default function ArchiveDetail() {
             repositoryId={repositoryId}
             repository={repository}
             archive={archive}
-            onRestorePaths={(paths, items) => openRestore(paths, items)}
+            onRestorePaths={(paths, items, fromArchiveId) =>
+              openRestore(paths, items, fromArchiveId)
+            }
           />
         )}
         {activeTab === 'info' && <ArchiveInfoTab archive={archive} />}
@@ -435,9 +471,9 @@ export default function ArchiveDetail() {
             mounting={mountMutation.isPending}
           />
           <RestoreWizard
-            open={showRestoreWizard}
+            open={showRestoreWizard && legacyRestoreArchive != null}
             onClose={() => setShowRestoreWizard(false)}
-            archive={legacyArchive}
+            archive={legacyRestoreArchive ?? legacyArchive}
             repository={repository}
             repositoryType={repository.repository_type || 'local'}
             onRestore={(data) => restoreMutation.mutate(data)}

@@ -6,11 +6,14 @@ import type {
 } from '../../types/operations'
 
 // The four derivation stages a repository moves through (spec 10.1), in
-// the order the runner executes them. Every stage maps to one or two
-// operation kinds; the board never shows kinds directly.
-export type StageKey = 'connect' | 'stats' | 'archives' | 'history'
+// the order the runner executes them: the archive list, then the file
+// history built from it, then stats, which totals up whatever the other
+// stages produced. An import is the one run that starts with stats,
+// because there it doubles as the connection check. Every stage maps to
+// one or two operation kinds; the board never shows kinds directly.
+export type StageKey = 'connect' | 'archives' | 'history' | 'stats'
 
-export const STAGE_ORDER: StageKey[] = ['connect', 'stats', 'archives', 'history']
+export const STAGE_ORDER: StageKey[] = ['connect', 'archives', 'history', 'stats']
 
 const STAGE_FOR_KIND: Partial<Record<OperationItem['kind'], StageKey>> = {
   import_connect: 'connect',
@@ -20,21 +23,38 @@ const STAGE_FOR_KIND: Partial<Record<OperationItem['kind'], StageKey>> = {
   history_merge: 'history',
 }
 
+// The stages a rebuild can start from, in run order: starting at one
+// rebuilds it and every stage after it, so the archive list means
+// everything and stats means the totals alone.
+export const REBUILD_STAGES: RebuildStage[] = ['archives', 'history', 'stats']
+
 // `connect` is the synchronous import request and has no rebuild stage.
 export const REBUILD_STAGE_FOR: Partial<Record<StageKey, RebuildStage>> = {
-  stats: 'stats',
   archives: 'archives',
   history: 'history',
+  stats: 'stats',
 }
 
-// One grid shared by the header row and every repository row, so stage
-// labels sit over the segments they describe.
-export const TRACK_GRID_COLUMNS = {
-  xs: '1fr',
-  md: 'minmax(180px, 1.3fr) repeat(4, minmax(110px, 1fr)) 40px',
+// Width of each stage's column in the hub table. The rebuild stages are
+// the columns; `connect` is a one-off import step with nothing at rest to
+// show, so it has no column. Adding a stage means adding a width here and
+// a cell in the row; the header and grid follow from this table.
+const HUB_STAGE_COLUMN_WIDTH: Record<RebuildStage, string> = {
+  archives: 'minmax(170px, 1.2fr)',
+  history: 'minmax(190px, 1.4fr)',
+  stats: 'minmax(130px, 1fr)',
 }
 
-export type StageStatus = 'idle' | 'done' | 'running' | 'waiting' | 'failed'
+// One grid shared by the hub header and every repository row: name, then
+// one column per stage in the order the runner builds them, then the row
+// menu. On small screens the name and the row menu share the first line
+// and every data cell spans the full width beneath them.
+export const HUB_GRID_COLUMNS = {
+  xs: 'minmax(0, 1fr) auto',
+  md: `minmax(180px, 1.4fr) ${REBUILD_STAGES.map((s) => HUB_STAGE_COLUMN_WIDTH[s]).join(' ')} 40px`,
+}
+
+export type StageStatus = 'idle' | 'done' | 'running' | 'waiting' | 'failed' | 'skipped'
 
 // Why a queued stage has not started, in the order a person would want to
 // hear it: the whole queue is paused, a foreground job owns this
@@ -70,6 +90,8 @@ function stageStatus(status: OperationItem['status']): StageStatus {
     case 'failed':
     case 'cancelled':
       return 'failed'
+    case 'skipped':
+      return 'skipped'
     default:
       return 'done'
   }
@@ -80,8 +102,24 @@ export function deriveTrack(
   limits: QueueLimits,
   paused: boolean
 ): RepositoryTrack {
-  const latest = new Map<StageKey, OperationItem>()
+  // The queue keeps every operation from the last minute, so a repository
+  // can carry a finished reconcile next to the rebuild that was just
+  // queued. The track describes one run: the one still working, or else
+  // the newest.
+  const runs = new Map<string, OperationItem[]>()
   for (const operation of repository.operations) {
+    if (!STAGE_FOR_KIND[operation.kind]) continue
+    runs.set(operation.run_id, [...(runs.get(operation.run_id) ?? []), operation])
+  }
+  const newestId = (ops: OperationItem[]) => Math.max(...ops.map((o) => o.id))
+  const active = (ops: OperationItem[]) =>
+    ops.some((o) => o.status === 'queued' || o.status === 'running')
+  const byNewest = (a: OperationItem[], b: OperationItem[]) => newestId(b) - newestId(a)
+  const candidates = [...runs.values()]
+  const chosen = candidates.filter(active).sort(byNewest)[0] ?? candidates.sort(byNewest)[0] ?? []
+
+  const latest = new Map<StageKey, OperationItem>()
+  for (const operation of chosen) {
     const stage = STAGE_FOR_KIND[operation.kind]
     if (!stage) continue
     const current = latest.get(stage)

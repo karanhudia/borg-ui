@@ -85,6 +85,55 @@ class TestActivityUnion:
         assert {i["id"] for i in flat} == {parent.id, chain[0].id, chain[1].id}
         assert all(i["followups"] == [] for i in flat)
 
+    def test_collapse_runs_folds_a_reconcile_chain_into_one_row(
+        self, test_client, test_db, admin_headers
+    ):
+        """A reconcile enqueues four index operations in one run. They are
+        one row with three steps under it, not four rows an hour."""
+        repo = _repo(test_db)
+        chain = enqueue_chain(
+            test_db,
+            ["archive_sync", "history_merge", "history_index", "stats"],
+            repository_id=repo.id,
+            trigger="reconcile",
+        )
+        for op in chain:
+            op.status = "completed"
+            op.started_at = utc_now()
+        test_db.commit()
+        body = test_client.get(
+            "/api/activity/recent?category=index", headers=admin_headers
+        ).json()
+        assert [i["id"] for i in body] == [chain[0].id]
+        assert body[0]["type"] == "archive_sync"
+        assert [f["kind"] for f in body[0]["followups"]] == [
+            "history_merge",
+            "history_index",
+            "stats",
+        ]
+
+    def test_collapse_runs_keeps_separate_runs_apart(
+        self, test_client, test_db, admin_headers
+    ):
+        repo = _repo(test_db)
+        first = enqueue_chain(
+            test_db,
+            ["archive_sync", "stats"],
+            repository_id=repo.id,
+            trigger="reconcile",
+        )
+        second = enqueue_chain(
+            test_db,
+            ["archive_sync", "stats"],
+            repository_id=repo.id,
+            trigger="reconcile",
+        )
+        body = test_client.get(
+            "/api/activity/recent?category=index", headers=admin_headers
+        ).json()
+        assert {i["id"] for i in body} == {first[0].id, second[0].id}
+        assert all(len(i["followups"]) == 1 for i in body)
+
     def test_category_filter_keeps_followups_of_visible_parent(
         self, test_client, test_db, admin_headers
     ):
@@ -267,3 +316,68 @@ class TestActivityUnion:
             f"/api/activity/archive_sync/{op.id}", headers=admin_headers
         )
         assert r.status_code == 400
+
+    def test_repository_id_filters_every_source(
+        self, test_client, test_db, admin_headers
+    ):
+        """A repository's own Activity must not depend on how much other work
+        the install did meanwhile: the filter runs in SQL, per source, before
+        each source's limit."""
+        mine = _repo(test_db)
+        other = Repository(
+            name="other", path="/tmp/other", encryption="none", compression="lz4"
+        )
+        test_db.add(other)
+        test_db.commit()
+        test_db.refresh(other)
+
+        old = PruneJob(
+            repository_id=mine.id,
+            repository_path=mine.path,
+            status="completed",
+            started_at=utc_now() - timedelta(hours=5),
+        )
+        test_db.add(old)
+        test_db.commit()
+        mine_op = enqueue(test_db, "import_connect", repository_id=mine.id)
+        mine_op.status = "completed"
+        mine_op.started_at = utc_now() - timedelta(hours=4)
+        test_db.commit()
+
+        # Newer work on another repository, which would crowd the shared
+        # window out on a busy install.
+        for _ in range(5):
+            noise = enqueue(test_db, "import_connect", repository_id=other.id)
+            noise.status = "completed"
+            noise.started_at = utc_now()
+            test_db.commit()
+
+        body = test_client.get(
+            f"/api/activity/recent?repository_id={mine.id}&limit=3",
+            headers=admin_headers,
+        ).json()
+        assert [i["type"] for i in body] == ["import_connect", "prune"]
+        assert {i["repository"] for i in body} == {"r"}
+
+    def test_repository_id_drops_rows_with_no_repository(
+        self, test_client, test_db, admin_headers
+    ):
+        repo = _repo(test_db)
+        enqueue(test_db, "package_install")
+        op = enqueue(test_db, "import_connect", repository_id=repo.id)
+        op.status = "completed"
+        test_db.commit()
+        body = test_client.get(
+            f"/api/activity/recent?repository_id={repo.id}", headers=admin_headers
+        ).json()
+        assert [i["type"] for i in body] == ["import_connect"]
+
+    def test_repository_id_unknown_repository_is_empty(
+        self, test_client, test_db, admin_headers
+    ):
+        repo = _repo(test_db)
+        enqueue(test_db, "import_connect", repository_id=repo.id)
+        body = test_client.get(
+            "/api/activity/recent?repository_id=99999", headers=admin_headers
+        ).json()
+        assert body == []

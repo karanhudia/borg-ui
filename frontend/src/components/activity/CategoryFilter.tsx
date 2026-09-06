@@ -1,17 +1,8 @@
-import { ToggleButton, ToggleButtonGroup, alpha, useTheme } from '@mui/material'
+import { Box, ToggleButton, ToggleButtonGroup, Typography, alpha, useTheme } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import { CATEGORY_ICONS, categoryColor } from '../categoryStyle'
+import { CATEGORIES } from './categories'
 import type { OperationCategory } from '../../types/operations'
-
-const CATEGORIES: OperationCategory[] = [
-  'import',
-  'backup',
-  'restore',
-  'maintenance',
-  'index',
-  'mirror',
-  'system',
-]
 
 interface CategoryFilterProps {
   value: OperationCategory[]
@@ -27,43 +18,53 @@ export default function CategoryFilter({ value, onChange }: CategoryFilterProps)
   const { t } = useTranslation()
   const theme = useTheme()
   return (
-    <ToggleButtonGroup
-      size="small"
-      value={value}
-      onChange={(_event, next: OperationCategory[]) => onChange(next)}
-      aria-label={t('activity.filterCategory')}
-      sx={{ flexWrap: 'wrap', bgcolor: 'background.paper', width: 'fit-content' }}
-    >
-      {CATEGORIES.map((category) => {
-        const Icon = CATEGORY_ICONS[category]
-        const color = categoryColor(theme, category)
-        return (
-          <ToggleButton
-            key={category}
-            value={category}
-            aria-label={t(`operations.category.${category}`)}
-            sx={{
-              textTransform: 'none',
-              fontWeight: 600,
-              fontSize: '0.8125rem',
-              height: 40,
-              px: 1.5,
-              gap: 0.75,
-              color: 'text.secondary',
-              borderColor: 'divider',
-              '&:hover': { bgcolor: alpha(color, 0.06), color },
-              '&.Mui-selected': {
-                color,
-                bgcolor: alpha(color, 0.12),
-                '&:hover': { bgcolor: alpha(color, 0.18) },
-              },
-            }}
-          >
-            <Icon size={14} />
-            {t(`operations.category.${category}`)}
-          </ToggleButton>
-        )
-      })}
-    </ToggleButtonGroup>
+    <Box>
+      <ToggleButtonGroup
+        size="small"
+        value={value}
+        onChange={(_event, next: OperationCategory[]) => onChange(next)}
+        aria-label={t('activity.filterCategory')}
+        sx={{ flexWrap: 'wrap', bgcolor: 'background.paper', width: 'fit-content' }}
+      >
+        {CATEGORIES.map((category) => {
+          const Icon = CATEGORY_ICONS[category]
+          const color = categoryColor(theme, category)
+          return (
+            <ToggleButton
+              key={category}
+              value={category}
+              aria-label={t(`operations.category.${category}`)}
+              sx={{
+                textTransform: 'none',
+                fontWeight: 600,
+                fontSize: '0.8125rem',
+                height: 40,
+                px: 1.5,
+                gap: 0.75,
+                color: 'text.secondary',
+                borderColor: 'divider',
+                '&:hover': { bgcolor: alpha(color, 0.06), color },
+                '&.Mui-selected': {
+                  color,
+                  bgcolor: alpha(color, 0.12),
+                  '&:hover': { bgcolor: alpha(color, 0.18) },
+                },
+              }}
+            >
+              <Icon size={14} />
+              {t(`operations.category.${category}`)}
+            </ToggleButton>
+          )
+        })}
+      </ToggleButtonGroup>
+      {value.length === 0 && (
+        // The empty filter is "everything but index", since a reconcile
+        // writes four index rows an hour per repository. Say so, or the
+        // missing rows look like a bug.
+        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.75 }}>
+          {t('activity.indexHiddenHint')}
+        </Typography>
+      )}
+    </Box>
   )
 }

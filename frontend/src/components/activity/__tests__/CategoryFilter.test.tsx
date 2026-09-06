@@ -24,4 +24,11 @@ describe('CategoryFilter', () => {
     const group = screen.getByRole('group', { name: /category/i })
     expect(group.querySelectorAll('button')).toHaveLength(7)
   })
+
+  it('says that index runs are hidden while nothing is selected', () => {
+    const { rerender } = render(<CategoryFilter value={[]} onChange={() => {}} />)
+    expect(screen.getByText(/except index runs/i)).toBeInTheDocument()
+    rerender(<CategoryFilter value={['backup']} onChange={() => {}} />)
+    expect(screen.queryByText(/except index runs/i)).not.toBeInTheDocument()
+  })
 })
