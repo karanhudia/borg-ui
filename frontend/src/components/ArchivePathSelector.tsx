@@ -468,9 +468,11 @@ export default function ArchivePathSelector({
           )}
 
           {error && (
-            <Box sx={{ p: 2 }}>
-              <Alert severity="error">{error}</Alert>
-            </Box>
+            // Flush with the panel: the panel already owns the frame, so a
+            // second rounded box inside it reads as a mistake.
+            <Alert severity="error" sx={{ borderRadius: 0, px: 2.5, py: 1.5 }}>
+              {error}
+            </Alert>
           )}
 
           {!loading && !error && visibleItems.length === 0 && (

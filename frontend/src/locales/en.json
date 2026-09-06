@@ -5763,6 +5763,7 @@
         "deleteAlreadyRunning": "Delete operation is already running for this archive (Job ID: {{jobId}})",
         "deleteJobNotFound": "Delete job not found",
         "failedGetArchiveContents": "Failed to get archive contents",
+        "unsupportedRepositoryVersion": "This repository uses format version {{version}}, which the Borg 2 build on this server cannot read. Borg 2 is still in beta and its repository format has changed between betas. Recreate the repository with the current build, or install the Borg 2 build that created it.",
         "failedGetArchiveInfo": "Failed to get archive info",
         "failedListArchives": "Failed to list archives",
         "repositoryNotFound": "Repository not found",

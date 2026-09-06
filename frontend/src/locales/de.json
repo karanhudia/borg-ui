@@ -5763,6 +5763,7 @@
         "deleteAlreadyRunning": "Für dieses Archiv wird bereits ein Löschvorgang ausgeführt (Auftrags-ID: {{jobId}})",
         "deleteJobNotFound": "Löschauftrag nicht gefunden",
         "failedGetArchiveContents": "Archivinhalt konnte nicht abgerufen werden",
+        "unsupportedRepositoryVersion": "Dieses Repository verwendet Formatversion {{version}}, die die Borg-2-Version auf diesem Server nicht lesen kann. Borg 2 ist noch in der Beta und das Repository-Format hat sich zwischen Betas geändert. Lege das Repository mit der aktuellen Version neu an oder installiere die Borg-2-Version, mit der es erstellt wurde.",
         "failedGetArchiveInfo": "Archivinformationen konnten nicht abgerufen werden",
         "failedListArchives": "Archive konnten nicht aufgelistet werden",
         "repositoryNotFound": "Repository nicht gefunden",

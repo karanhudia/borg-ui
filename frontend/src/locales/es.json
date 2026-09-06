@@ -5763,6 +5763,7 @@
         "deleteAlreadyRunning": "La operación de eliminación ya está en curso para este archivo (ID de trabajo: {{jobId}})",
         "deleteJobNotFound": "Trabajo de eliminación no encontrado",
         "failedGetArchiveContents": "Error al obtener el contenido del archivo",
+        "unsupportedRepositoryVersion": "Este repositorio usa la versión de formato {{version}}, que la versión de Borg 2 de este servidor no puede leer. Borg 2 sigue en beta y su formato de repositorio ha cambiado entre betas. Vuelve a crear el repositorio con la versión actual o instala la versión de Borg 2 que lo creó.",
         "failedGetArchiveInfo": "Error al obtener información del archivo",
         "failedListArchives": "Error al listar los archivos",
         "repositoryNotFound": "Repositorio no encontrado",
