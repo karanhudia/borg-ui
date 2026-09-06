@@ -993,8 +993,14 @@ async def list_recent_activity(
             )
 
     # Fetch script executions
-    if (not job_type or job_type == "script_execution") and not repository_scoped:
+    # Script executions name their repository, so a repository-scoped view
+    # keeps the ones that ran against it instead of dropping the source.
+    if not job_type or job_type == "script_execution":
         script_query = db.query(ScriptExecution)
+        if repository_scoped:
+            script_query = script_query.filter(
+                ScriptExecution.repository_id == repository_id
+            )
         if status:
             script_query = script_query.filter(ScriptExecution.status == status)
         script_executions = (
