@@ -8,7 +8,7 @@ import {
   alpha,
   useTheme,
 } from '@mui/material'
-import { AlertTriangle, RotateCw, Scissors } from 'lucide-react'
+import { AlertTriangle, ChevronRight, RotateCw, Scissors } from 'lucide-react'
 import { Link as RouterLink } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { formatDistanceToNow } from 'date-fns'
@@ -226,14 +226,22 @@ export default function RepositoryHubRow({
               type="button"
               aria-label={t('operations.background.hub.openDetails', { repository: name })}
               onClick={onOpen}
+              // Reads as a link, the way "View index runs" and the
+              // breadcrumbs do: primary colour, underline on hover, and a
+              // small chevron that says there is somewhere to go.
               sx={{
                 all: 'unset',
                 cursor: 'pointer',
                 font: 'inherit',
                 fontSize: theme.typography.body2.fontSize,
                 fontWeight: 600,
-                color: 'text.primary',
+                color: 'primary.main',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 0.25,
+                '& svg': { opacity: 0.55, transition: 'opacity 120ms ease, transform 120ms ease' },
                 '&:hover': { textDecoration: 'underline' },
+                '&:hover svg': { opacity: 1, transform: 'translateX(2px)' },
                 '&:focus-visible': {
                   outline: `2px solid ${theme.palette.primary.main}`,
                   outlineOffset: 2,
@@ -242,6 +250,7 @@ export default function RepositoryHubRow({
               }}
             >
               {name}
+              <ChevronRight size={14} aria-hidden />
             </Typography>
           ) : (
             <Typography variant="body2" sx={{ fontWeight: 600 }}>

@@ -345,6 +345,9 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
             borderRadius: 2,
             px: 2.5,
             bgcolor: 'background.paper',
+            // The header and the rows bleed past the padding with their own
+            // backgrounds; clipping keeps the rounded corners visible.
+            overflow: 'hidden',
           }}
         >
           <Box
@@ -358,8 +361,6 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
               bgcolor: 'background.default',
               mx: -2.5,
               px: 2.5,
-              borderTopLeftRadius: 8,
-              borderTopRightRadius: 8,
             }}
           >
             {columnHeader(t('operations.background.repositoryColumn'))}
