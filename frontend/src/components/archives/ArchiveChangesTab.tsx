@@ -56,7 +56,11 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
     }))
   }, [olderArchives, archive.start, archive.predecessor_id, t])
 
-  const { data: changes, isLoading } = useQuery({
+  const {
+    data: changes,
+    isLoading,
+    isError,
+  } = useQuery({
     queryKey: ['archive-changes', repositoryId, archive.id, compareTo, activeFilters],
     queryFn: () =>
       archivesAPI
@@ -101,6 +105,9 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
     },
   })
 
+  // A refresh that fails behind rows already on screen keeps the rows; with
+  // nothing to show, the empty state would claim the archive has no changes.
+  const loadFailed = isError && !changes
   const historyState = changes?.history_state ?? archive.history_state
   const rows = [...(changes?.changes ?? []), ...extraPages]
   const totals = changes?.totals
@@ -212,7 +219,13 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
         </Alert>
       )}
 
-      {!isLoading && historyState === 'indexed' && rows.length === 0 && (
+      {!isLoading && loadFailed && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {t('archives.changes.loadFailed')}
+        </Alert>
+      )}
+
+      {!isLoading && !loadFailed && historyState === 'indexed' && rows.length === 0 && (
         <Typography variant="body2" color="text.secondary" sx={{ px: 1.5, py: 2 }}>
           {t('archives.changes.empty')}
         </Typography>

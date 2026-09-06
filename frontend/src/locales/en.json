@@ -1022,6 +1022,7 @@
       "rebuildFailed": "The history rebuild could not be started.",
       "rebuildStarted": "The history rebuild has been queued.",
       "empty": "No changes between these archives.",
+      "loadFailed": "The changes for this archive could not be loaded.",
       "showMore": "Show more",
       "filterLabel": "Change type",
       "delta": "{{sign}}{{size}}",

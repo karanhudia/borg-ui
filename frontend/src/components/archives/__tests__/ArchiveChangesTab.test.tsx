@@ -114,6 +114,15 @@ describe('ArchiveChangesTab', () => {
     expect(screen.getByText(/365\.\d+ KB.*→.*402\.\d+ KB/)).toBeInTheDocument()
   })
 
+  it('says the changes could not be loaded instead of showing an empty archive', async () => {
+    vi.mocked(archivesAPI.getChanges).mockRejectedValue(new Error('boom'))
+    renderTab()
+    expect(
+      await screen.findByText('The changes for this archive could not be loaded.')
+    ).toBeInTheDocument()
+    expect(screen.queryByText('No changes between these archives.')).not.toBeInTheDocument()
+  })
+
   it('filters to a single change type when its chip is toggled', async () => {
     renderTab()
     await screen.findByText('invoices.xlsx')
