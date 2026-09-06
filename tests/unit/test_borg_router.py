@@ -365,7 +365,7 @@ async def test_compact_delegates_to_v1_service():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_prune_delegates_to_v2_service():
+async def test_prune_delegates_to_v2_service_positional_args():
     repo = SimpleNamespace(borg_version=2, id=41)
 
     with patch(
