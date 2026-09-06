@@ -328,6 +328,116 @@ class TestFailClosed:
         assert "StrictHostKeyChecking" in " ".join(opts)
 
 
+class TestLookupFailuresFailClosed:
+    """A lookup that failed says nothing about whether a pin exists.
+
+    Falling back to accept-new on a database error would let one downgrade
+    verification for a host that is in fact pinned.
+    """
+
+    def test_a_failed_host_lookup_is_not_silently_downgraded(self, monkeypatch):
+        class _Session:
+            def query(self, *args, **kwargs):
+                raise RuntimeError("database is gone")
+
+            def close(self):
+                self.closed = True
+
+        session = _Session()
+        monkeypatch.setattr(
+            "app.database.database.SessionLocal", lambda: session, raising=False
+        )
+
+        with pytest.raises(RuntimeError, match="database is gone"):
+            ssh_host_keys.host_key_ssh_opts_for_host("example.com", 22, "borg")
+
+        assert session.closed is True
+
+    def test_a_failed_path_lookup_is_not_silently_downgraded(self, monkeypatch):
+        class _Session:
+            def close(self):
+                self.closed = True
+
+        session = _Session()
+        monkeypatch.setattr(
+            "app.database.database.SessionLocal", lambda: session, raising=False
+        )
+
+        def fail(path, db):
+            raise RuntimeError("database is gone")
+
+        monkeypatch.setattr(
+            "app.utils.ssh_utils.find_ssh_connection_for_path", fail, raising=False
+        )
+
+        with pytest.raises(RuntimeError, match="database is gone"):
+            ssh_host_keys.host_key_ssh_opts_for_path("ssh://borg@example.com/repo")
+
+    def test_a_host_with_no_stored_connection_still_records_on_first_use(
+        self, monkeypatch
+    ):
+        """Finding nothing is not the same as failing, and must keep working."""
+
+        class _Query:
+            def filter(self, *args, **kwargs):
+                return self
+
+            def all(self):
+                return []
+
+        class _Session:
+            def query(self, *args, **kwargs):
+                return _Query()
+
+            def close(self):
+                pass
+
+        monkeypatch.setattr(
+            "app.database.database.SessionLocal", lambda: _Session(), raising=False
+        )
+
+        opts = ssh_host_keys.host_key_ssh_opts_for_host("example.com", 22, "borg")
+
+        assert "StrictHostKeyChecking=accept-new" in opts
+        assert "StrictHostKeyChecking=no" not in opts
+
+
+class TestOptsForConnectionId:
+    def test_verifies_against_the_pin_of_a_connection_it_only_has_the_id_of(
+        self, monkeypatch
+    ):
+        pinned = SimpleNamespace(
+            id=11, host="example.com", port=22, known_host_key=ED25519
+        )
+
+        class _Query:
+            def filter(self, *args, **kwargs):
+                return self
+
+            def first(self):
+                return pinned
+
+        class _Session:
+            def query(self, *args, **kwargs):
+                return _Query()
+
+            def close(self):
+                pass
+
+        monkeypatch.setattr(
+            "app.database.database.SessionLocal", lambda: _Session(), raising=False
+        )
+
+        opts = ssh_host_keys.host_key_ssh_opts_for_connection_id(11)
+
+        assert "StrictHostKeyChecking=yes" in opts
+
+    def test_without_an_id_there_is_nothing_to_verify_against(self):
+        opts = ssh_host_keys.host_key_ssh_opts_for_connection_id(None)
+
+        assert "StrictHostKeyChecking=accept-new" in opts
+
+
 class TestStatus:
     def test_unknown_without_a_pin(self, connection):
         assert (

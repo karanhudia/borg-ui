@@ -495,7 +495,11 @@ def break_repository_lock(repository: Repository) -> bool:
             )
             env["BORG_RSH"] = f"ssh {' '.join(ssh_opts)}"
         elif repository.connection_id:
-            ssh_opts = get_standard_ssh_opts()
+            # The connection could not be resolved here, usually because the
+            # repository arrived without a session. Its id is enough to load
+            # the row and honour its pinned host key, which beats connecting
+            # to a pinned host with verification turned down.
+            ssh_opts = get_standard_ssh_opts(connection_id=repository.connection_id)
             env["BORG_RSH"] = f"ssh {' '.join(ssh_opts)}"
 
         # Execute break-lock command

@@ -9,7 +9,10 @@ from typing import Iterator, Optional
 from sqlalchemy.orm import object_session
 
 from app.config import settings
-from app.utils.ssh_host_keys import host_key_ssh_opts
+from app.utils.ssh_host_keys import (
+    host_key_ssh_opts,
+    host_key_ssh_opts_for_connection_id,
+)
 from app.utils.ssh_utils import (
     find_ssh_connection_for_path,
     public_key_only_ssh_args,
@@ -25,12 +28,16 @@ def get_standard_ssh_opts(
     keepalive: bool = False,
     connection=None,
     db=None,
+    connection_id=None,
 ) -> list[str]:
     """Return standard SSH options for Borg operations.
 
     ``connection`` is the SSH connection the command runs against; its pinned
-    host key verifies the remote host. Without one there is no row to pin
-    against, so the key is recorded on first use in a shared known_hosts file.
+    host key verifies the remote host. A caller that knows only the id passes
+    ``connection_id`` and the row is loaded here, so a repository attached to a
+    pinned connection is never reduced to recording the key on first use just
+    because the caller had no session. With neither there is no row to verify
+    against, and the key is recorded on first use in a shared known_hosts file.
     """
     opts: list[str] = []
 
@@ -39,7 +46,10 @@ def get_standard_ssh_opts(
 
     opts.extend(public_key_only_ssh_args(identities_only=bool(include_key_path)))
 
-    opts.extend(host_key_ssh_opts(connection, db))
+    if connection is None and connection_id is not None:
+        opts.extend(host_key_ssh_opts_for_connection_id(connection_id))
+    else:
+        opts.extend(host_key_ssh_opts(connection, db))
     opts.extend(["-o", "LogLevel=ERROR"])
 
     if keepalive:

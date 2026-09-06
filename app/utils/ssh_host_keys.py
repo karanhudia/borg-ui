@@ -423,13 +423,49 @@ def host_key_ssh_opts_for_host(
         matches = query.all()
         connection = matches[0] if len(matches) == 1 else None
         return host_key_ssh_opts(connection, session)
-    except Exception as exc:  # pragma: no cover - a lookup failure is not fatal
-        logger.warning(
+    except Exception as exc:
+        # A lookup that failed is not a lookup that found nothing: the host may
+        # well have a pinned key we simply could not read. Falling back to
+        # accept-new here would let a database error downgrade verification,
+        # so the caller fails instead.
+        logger.error(
             "Could not resolve the SSH connection for a host",
             host=host,
             error=str(exc),
         )
+        raise
+    finally:
+        session.close()
+
+
+def host_key_ssh_opts_for_connection_id(connection_id) -> list[str]:
+    """Verify against the pin of a connection we only hold the id of.
+
+    For callers that know a repository is attached to a connection but have no
+    session to resolve it with. Looking it up is what keeps a repository whose
+    connection is pinned from falling back to recording on first use.
+    """
+    if connection_id is None:
         return host_key_ssh_opts(None)
+
+    from app.database.database import SessionLocal
+    from app.database.models import SSHConnection
+
+    session = SessionLocal()
+    try:
+        connection = (
+            session.query(SSHConnection)
+            .filter(SSHConnection.id == connection_id)
+            .first()
+        )
+        return host_key_ssh_opts(connection, session)
+    except Exception as exc:
+        logger.error(
+            "Could not load the SSH connection of a repository",
+            connection_id=connection_id,
+            error=str(exc),
+        )
+        raise
     finally:
         session.close()
 
@@ -450,13 +486,15 @@ def host_key_ssh_opts_for_path(path: str) -> list[str]:
     session = SessionLocal()
     try:
         return host_key_ssh_opts(find_ssh_connection_for_path(path, session), session)
-    except Exception as exc:  # pragma: no cover - a lookup failure is not fatal
-        logger.warning(
+    except Exception as exc:
+        # As in host_key_ssh_opts_for_host: a failed lookup says nothing about
+        # whether a pin exists, so it must not downgrade to accept-new.
+        logger.error(
             "Could not resolve the SSH connection for a path",
             path=path,
             error=str(exc),
         )
-        return host_key_ssh_opts(None)
+        raise
     finally:
         session.close()
 
