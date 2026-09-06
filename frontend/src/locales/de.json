@@ -3419,12 +3419,6 @@
         "history": "Dateiverlauf"
       },
       "workers": "{{count}} Worker",
-      "rebuildFrom": "Neu aufbauen ab",
-      "rebuildStage": {
-        "stats": "Statistik",
-        "archives": "Archivliste",
-        "history": "Dateiverlauf"
-      },
       "title": "Hintergrundarbeit",
       "pause": "Pausieren",
       "resume": "Fortsetzen",
@@ -3521,7 +3515,13 @@
         "detailHint": "Baue ab Dateiverlauf neu auf, um diese Archive erneut zu indizieren.",
         "viewIndexRuns": "Indexläufe anzeigen"
       },
-      "rebuildMenuHint": "Jede Phase nach der gewählten wird ebenfalls neu aufgebaut. Frühere Phasen bleiben erhalten."
+      "rebuildMenuHint": "Jede Phase nach der gewählten wird ebenfalls neu aufgebaut. Frühere Phasen bleiben erhalten.",
+      "rebuildTitle": "Abgeleitete Daten neu aufbauen",
+      "rebuildAction": "Neu aufbauen",
+      "stageWillRebuild": "Wird neu aufgebaut",
+      "stageKept": "Bleibt erhalten",
+      "stageStart": "Hier beginnen",
+      "currentRun": "Aktueller Lauf"
     },
     "status": {
       "queued": "In Warteschlange",

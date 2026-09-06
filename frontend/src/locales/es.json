@@ -3419,12 +3419,6 @@
         "history": "Historial de ficheros"
       },
       "workers": "{{count}} workers",
-      "rebuildFrom": "Reconstruir desde",
-      "rebuildStage": {
-        "stats": "Estadísticas",
-        "archives": "Lista de archivos",
-        "history": "Historial de ficheros"
-      },
       "title": "Trabajo en segundo plano",
       "pause": "Pausar",
       "resume": "Reanudar",
@@ -3521,7 +3515,13 @@
         "detailHint": "Reconstruye desde Historial de ficheros para indexar estos archivos de nuevo.",
         "viewIndexRuns": "Ver ejecuciones de índice"
       },
-      "rebuildMenuHint": "Cada etapa posterior a la elegida también se reconstruye. Las etapas anteriores se conservan."
+      "rebuildMenuHint": "Cada etapa posterior a la elegida también se reconstruye. Las etapas anteriores se conservan.",
+      "rebuildTitle": "Reconstruir datos derivados",
+      "rebuildAction": "Reconstruir",
+      "stageWillRebuild": "Se reconstruirá",
+      "stageKept": "Se conserva",
+      "stageStart": "Empezar aquí",
+      "currentRun": "Ejecución actual"
     },
     "status": {
       "queued": "En cola",

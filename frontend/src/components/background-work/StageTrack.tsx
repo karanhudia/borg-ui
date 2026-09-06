@@ -1,7 +1,12 @@
 import { Box, Button, LinearProgress, Typography, alpha, useTheme } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import { elapsedSince } from './elapsed'
-import { REBUILD_STAGE_FOR, type StageState } from './repositoryTrack'
+import {
+  HUB_GRID_COLUMNS,
+  REBUILD_STAGE_FOR,
+  STAGE_ORDER,
+  type StageState,
+} from './repositoryTrack'
 
 function StageSegment({
   stage,
@@ -47,12 +52,15 @@ function StageSegment({
 
   return (
     <Box data-testid={`stage-${stage.key}`} data-status={stage.status} sx={{ minWidth: 0 }}>
+      {/* On desktop the table header above the track names the column;
+          on small screens the columns stack, so each segment says which
+          stage it is. */}
       <Typography
         variant="caption"
         sx={{
-          display: 'block',
-          color: stage.status === 'idle' ? 'text.disabled' : 'text.secondary',
-          fontWeight: stage.status === 'running' ? 600 : 500,
+          display: { xs: 'block', md: 'none' },
+          color: 'text.secondary',
+          fontWeight: 500,
           mb: 0.5,
         }}
       >
@@ -113,30 +121,42 @@ interface StageTrackProps {
   onRetry: (stage: StageState) => void
 }
 
-// The four derivation stages of one run, side by side and self-labelled,
-// so the track reads on its own wherever it is placed.
+// One run's stages laid out on the hub grid, so every stage sits under
+// the table column that describes it: connect under the repository name,
+// then stats, archive list, and file history. A stage the run never had
+// leaves its column empty rather than shifting the others.
 export default function StageTrack({ stages, now, onRetry }: StageTrackProps) {
-  // Only the stages that belong to this run. A rebuild from stats has one
-  // segment; a reconcile has three; an import has four. An empty segment
-  // for a stage the run never had would only raise the question of what
-  // it is waiting for.
-  const shown = stages.filter((stage) => stage.status !== 'idle')
   return (
     <Box
       data-testid="stage-track"
       sx={{
         display: 'grid',
-        gridTemplateColumns: {
-          xs: 'repeat(2, minmax(0, 1fr))',
-          sm: `repeat(${shown.length}, minmax(0, 1fr))`,
-        },
+        gridTemplateColumns: HUB_GRID_COLUMNS,
         columnGap: 2,
-        rowGap: 1,
+        rowGap: 1.5,
+        alignItems: 'start',
       }}
     >
-      {shown.map((stage) => (
-        <StageSegment key={stage.key} stage={stage} now={now} onRetry={onRetry} />
-      ))}
+      {STAGE_ORDER.map((key) => {
+        const stage = stages.find((s) => s.key === key)
+        const present = stage != null && stage.status !== 'idle'
+        return (
+          <Box
+            key={key}
+            data-testid={`stage-cell-${key}`}
+            data-stage={key}
+            data-empty={present ? 'false' : 'true'}
+            sx={{
+              minWidth: 0,
+              display: { xs: present ? 'block' : 'none', md: 'block' },
+              gridColumn: { xs: '1 / -1', md: 'auto' },
+            }}
+          >
+            {present && stage && <StageSegment stage={stage} now={now} onRetry={onRetry} />}
+          </Box>
+        )
+      })}
+      <Box sx={{ display: { xs: 'none', md: 'block' } }} />
     </Box>
   )
 }

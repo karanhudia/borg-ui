@@ -20,6 +20,10 @@ const STAGE_FOR_KIND: Partial<Record<OperationItem['kind'], StageKey>> = {
   history_merge: 'history',
 }
 
+// The stages a rebuild can start from, in invalidation order: starting
+// at one rebuilds it and every stage after it.
+export const REBUILD_STAGES: RebuildStage[] = ['stats', 'archives', 'history']
+
 // `connect` is the synchronous import request and has no rebuild stage.
 export const REBUILD_STAGE_FOR: Partial<Record<StageKey, RebuildStage>> = {
   stats: 'stats',

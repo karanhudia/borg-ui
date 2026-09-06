@@ -10,14 +10,15 @@ import {
   Link as MuiLink,
   useTheme,
 } from '@mui/material'
-import { AlertTriangle, CheckCircle2, Scissors } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, RotateCw, Scissors } from 'lucide-react'
 import { Link as RouterLink } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import ResponsiveDialog from '../shared/ResponsiveDialog'
-import RichSelect from '../shared/RichSelect'
 import CategoryToken from '../CategoryToken'
+import RebuildStagePicker from './RebuildStagePicker'
+import { REBUILD_STAGES } from './repositoryTrack'
 import { archivesAPI, operationsAPI } from '../../services/api'
 import { usePlan } from '../../hooks/usePlan'
 import { parseBackendDate } from '../../utils/dateUtils'
@@ -31,7 +32,16 @@ interface RepositoryTrackDialogProps {
   operations: OperationItem[]
 }
 
-const REBUILD_STAGES: RebuildStage[] = ['stats', 'archives', 'history']
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <Typography
+      variant="overline"
+      sx={{ display: 'block', color: 'text.secondary', letterSpacing: 0.6, mb: 1 }}
+    >
+      {children}
+    </Typography>
+  )
+}
 
 function ArchiveList({
   title,
@@ -80,6 +90,10 @@ function ArchiveList({
   )
 }
 
+// One repository's derived data up close: the run in progress, the
+// archives whose file history needs attention, and the rebuild choice as
+// the three stage cards. A bottom sheet under the md breakpoint, a wide
+// dialog above it.
 export default function RepositoryTrackDialog({
   open,
   onClose,
@@ -134,10 +148,25 @@ export default function RepositoryTrackDialog({
             .join(t('operations.background.stageJoin')),
         })
 
+  const footer = (
+    <DialogActions sx={{ px: 3, py: 2 }}>
+      <Button onClick={onClose}>{t('common.buttons.cancel')}</Button>
+      <Button
+        variant="contained"
+        disableElevation
+        disabled={submitting}
+        startIcon={<RotateCw size={16} />}
+        onClick={handleRebuild}
+      >
+        {t('operations.background.rebuildAction')}
+      </Button>
+    </DialogActions>
+  )
+
   return (
-    <ResponsiveDialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <ResponsiveDialog open={open} onClose={onClose} maxWidth="md" fullWidth footer={footer}>
       <DialogContent sx={{ pt: 3 }}>
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'baseline', mb: 1 }}>
+        <Stack direction="row" spacing={2} sx={{ alignItems: 'baseline', mb: 2 }}>
           <Typography variant="h6" sx={{ flex: 1, minWidth: 0 }} noWrap>
             {repositoryName}
           </Typography>
@@ -150,101 +179,96 @@ export default function RepositoryTrackDialog({
             {t('operations.background.hub.viewIndexRuns')}
           </MuiLink>
         </Stack>
-        {operations.length > 0 && (
-          <Stack spacing={1.5} sx={{ py: 1 }}>
-            {operations.map((op) => (
-              <Box key={op.id} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <CategoryToken category={op.category} />
-                <Typography variant="body2">{t(`operations.kind.${op.kind}`)}</Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }}>
-                  {t(`operations.status.${op.status}`)}
-                </Typography>
-              </Box>
-            ))}
-          </Stack>
-        )}
 
-        {detail && (
-          <Box
-            sx={{
-              mt: 1.5,
-              p: 2,
-              borderRadius: 2,
-              border: `1px solid ${theme.palette.divider}`,
-            }}
-          >
-            {problems ? (
-              <Stack spacing={2}>
-                {detail.failed_archives.length > 0 && (
-                  <ArchiveList
-                    title={t('operations.background.hub.detailFailedTitle')}
-                    icon={<AlertTriangle size={14} />}
-                    color={theme.palette.error.main}
-                    archives={detail.failed_archives}
-                    detail={(a) =>
-                      t('operations.background.hub.detailAttempts', { count: a.history_attempts })
-                    }
-                  />
-                )}
-                {detail.truncated_archives.length > 0 && (
-                  <ArchiveList
-                    title={t('operations.background.hub.detailTruncatedTitle')}
-                    icon={<Scissors size={14} />}
-                    color={theme.palette.warning.main}
-                    archives={detail.truncated_archives}
-                    detail={(a) =>
-                      t('operations.background.hub.historyRows', { count: a.history_rows ?? 0 })
-                    }
-                  />
-                )}
-                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                  {t('operations.background.hub.detailHint')}
-                </Typography>
+        <Stack spacing={3}>
+          {operations.length > 0 && (
+            <Box>
+              <SectionTitle>{t('operations.background.currentRun')}</SectionTitle>
+              <Stack spacing={1}>
+                {operations.map((op) => (
+                  <Box key={op.id} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <CategoryToken category={op.category} />
+                    <Typography variant="body2">{t(`operations.kind.${op.kind}`)}</Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }}>
+                      {t(`operations.status.${op.status}`)}
+                    </Typography>
+                  </Box>
+                ))}
               </Stack>
-            ) : (
-              <Typography
-                variant="body2"
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 0.75,
-                  color: theme.palette.success.main,
-                }}
-              >
-                <CheckCircle2 size={14} />
-                {t('operations.background.hub.detailAllIndexed')}
-              </Typography>
+            </Box>
+          )}
+
+          {detail && (
+            <Box>
+              <SectionTitle>{t('operations.background.stage.history')}</SectionTitle>
+              <Box sx={{ p: 2, borderRadius: 2, border: `1px solid ${theme.palette.divider}` }}>
+                {problems ? (
+                  <Stack spacing={2}>
+                    {detail.failed_archives.length > 0 && (
+                      <ArchiveList
+                        title={t('operations.background.hub.detailFailedTitle')}
+                        icon={<AlertTriangle size={14} />}
+                        color={theme.palette.error.main}
+                        archives={detail.failed_archives}
+                        detail={(a) =>
+                          t('operations.background.hub.detailAttempts', {
+                            count: a.history_attempts,
+                          })
+                        }
+                      />
+                    )}
+                    {detail.truncated_archives.length > 0 && (
+                      <ArchiveList
+                        title={t('operations.background.hub.detailTruncatedTitle')}
+                        icon={<Scissors size={14} />}
+                        color={theme.palette.warning.main}
+                        archives={detail.truncated_archives}
+                        detail={(a) =>
+                          t('operations.background.hub.historyRows', {
+                            count: a.history_rows ?? 0,
+                          })
+                        }
+                      />
+                    )}
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                      {t('operations.background.hub.detailHint')}
+                    </Typography>
+                  </Stack>
+                ) : (
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0.75,
+                      color: theme.palette.success.main,
+                    }}
+                  >
+                    <CheckCircle2 size={14} />
+                    {t('operations.background.hub.detailAllIndexed')}
+                  </Typography>
+                )}
+              </Box>
+            </Box>
+          )}
+
+          <Box>
+            <SectionTitle>{t('operations.background.rebuildTitle')}</SectionTitle>
+            <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1.5 }}>
+              {t('operations.background.rebuildMenuHint')}
+            </Typography>
+            <RebuildStagePicker value={stage} onChange={setStage} historyLocked={historyLocked} />
+            <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1.5 }}>
+              {summary}
+            </Typography>
+            {failed && (
+              <Alert severity="error" sx={{ mt: 1.5 }}>
+                {t('operations.background.rebuildFailed')}
+              </Alert>
             )}
           </Box>
-        )}
-
-        {failed && (
-          <Alert severity="error" sx={{ mt: 1 }}>
-            {t('operations.background.rebuildFailed')}
-          </Alert>
-        )}
-        <Box sx={{ pt: 2 }}>
-          <RichSelect
-            value={stage}
-            onChange={(value) => setStage(value as RebuildStage)}
-            label={t('operations.background.rebuildFrom')}
-            options={REBUILD_STAGES.map((s, index) => ({
-              value: s,
-              primary: `${index + 1}. ${t(`operations.background.stages.${s}.title`)}`,
-              secondary: t(`operations.background.stages.${s}.what`),
-            }))}
-          />
-          <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'text.secondary' }}>
-            {summary}
-          </Typography>
-        </Box>
+        </Stack>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>{t('common.buttons.cancel')}</Button>
-        <Button variant="outlined" disabled={submitting} onClick={handleRebuild}>
-          {t('operations.background.rebuildFrom')}
-        </Button>
-      </DialogActions>
     </ResponsiveDialog>
   )
 }

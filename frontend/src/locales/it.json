@@ -3419,12 +3419,6 @@
         "history": "Cronologia file"
       },
       "workers": "{{count}} worker",
-      "rebuildFrom": "Ricostruisci da",
-      "rebuildStage": {
-        "stats": "Statistiche",
-        "archives": "Elenco archivi",
-        "history": "Cronologia file"
-      },
       "title": "Lavoro in background",
       "pause": "Pausa",
       "resume": "Riprendi",
@@ -3521,7 +3515,13 @@
         "detailHint": "Ricostruisci da Cronologia dei file per indicizzare di nuovo questi archivi.",
         "viewIndexRuns": "Vedi esecuzioni di indicizzazione"
       },
-      "rebuildMenuHint": "Ogni fase successiva a quella scelta viene ricostruita anch'essa. Le fasi precedenti vengono conservate."
+      "rebuildMenuHint": "Ogni fase successiva a quella scelta viene ricostruita anch'essa. Le fasi precedenti vengono conservate.",
+      "rebuildTitle": "Ricostruisci i dati derivati",
+      "rebuildAction": "Ricostruisci",
+      "stageWillRebuild": "Verrà ricostruito",
+      "stageKept": "Conservato",
+      "stageStart": "Inizia qui",
+      "currentRun": "Esecuzione corrente"
     },
     "status": {
       "queued": "In coda",

@@ -322,8 +322,9 @@ export default function RepositoryHubRow({
         <Box
           sx={{
             mt: 1.5,
-            p: 1.5,
-            borderRadius: 2,
+            mx: -2.5,
+            px: 2.5,
+            py: 1.5,
             bgcolor: alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.08 : 0.04),
           }}
         >

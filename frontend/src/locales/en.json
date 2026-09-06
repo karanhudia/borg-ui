@@ -3419,12 +3419,6 @@
         "history": "File history"
       },
       "workers": "{{count}} workers",
-      "rebuildFrom": "Rebuild from",
-      "rebuildStage": {
-        "stats": "Stats",
-        "archives": "Archive list",
-        "history": "File history"
-      },
       "title": "Background work",
       "pause": "Pause",
       "resume": "Resume",
@@ -3521,7 +3515,13 @@
         "detailHint": "Rebuild from File history to index these archives again.",
         "viewIndexRuns": "View index runs"
       },
-      "rebuildMenuHint": "Every stage after the one you pick is rebuilt too. Earlier stages are kept."
+      "rebuildMenuHint": "Every stage after the one you pick is rebuilt too. Earlier stages are kept.",
+      "rebuildTitle": "Rebuild derived data",
+      "rebuildAction": "Rebuild",
+      "stageWillRebuild": "Will rebuild",
+      "stageKept": "Kept",
+      "stageStart": "Start here",
+      "currentRun": "Current run"
     },
     "status": {
       "queued": "Queued",

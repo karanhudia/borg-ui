@@ -129,6 +129,28 @@ describe('RepositoryHubRow', () => {
     expect(screen.getByTestId('stage-stats')).toHaveAttribute('data-status', 'running')
   })
 
+  it('keeps every stage in its own column so bars never move between runs', () => {
+    renderRow({
+      track: track({
+        stages: [
+          stage('connect'),
+          stage('stats'),
+          stage('archives'),
+          stage('history', { status: 'running', operation: op({ status: 'running' }) }),
+        ],
+      }),
+    })
+    const cells = screen.getAllByTestId(/^stage-cell-/)
+    expect(cells.map((cell) => cell.dataset.stage)).toEqual([
+      'connect',
+      'stats',
+      'archives',
+      'history',
+    ])
+    expect(screen.getByTestId('stage-cell-stats')).toHaveAttribute('data-empty', 'true')
+    expect(screen.getByTestId('stage-cell-history')).toHaveAttribute('data-empty', 'false')
+  })
+
   it('says a stage was skipped rather than done', () => {
     renderRow({
       track: track({

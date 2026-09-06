@@ -6,6 +6,18 @@ import RepositoryTrackDialog from '../RepositoryTrackDialog'
 import { archivesAPI, operationsAPI } from '../../../services/api'
 import type { OperationItem } from '../../../types/operations'
 
+const mockCan = vi.fn(() => true)
+
+vi.mock('../../../hooks/usePlan', () => ({
+  usePlan: () => ({
+    plan: 'pro',
+    isLoading: false,
+    isPro: true,
+    isFree: false,
+    can: mockCan,
+  }),
+}))
+
 vi.mock('../../../services/api', () => ({
   archivesAPI: { rebuild: vi.fn().mockResolvedValue({ data: { run_id: 'r1', operations: [1] } }) },
   operationsAPI: { getRepositoryDetail: vi.fn() },
@@ -79,6 +91,7 @@ function renderDialog(props: Partial<React.ComponentProps<typeof RepositoryTrack
 describe('RepositoryTrackDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockCan.mockReturnValue(true)
     ;(operationsAPI.getRepositoryDetail as ReturnType<typeof vi.fn>).mockResolvedValue({
       data: detail(),
     })
@@ -89,10 +102,27 @@ describe('RepositoryTrackDialog', () => {
     expect(screen.getByText('nas')).toBeInTheDocument()
   })
 
-  it('triggers a rebuild for the selected stage', async () => {
+  it('rebuilds from stats by default', async () => {
     renderDialog()
-    fireEvent.click(screen.getByRole('button', { name: /rebuild from/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^rebuild$/i }))
     await waitFor(() => expect(archivesAPI.rebuild).toHaveBeenCalledWith(3, 'stats'))
+  })
+
+  it('rebuilds from the stage card the person picks', async () => {
+    renderDialog()
+    fireEvent.click(screen.getByRole('radio', { name: /archive list/i }))
+    expect(screen.getByText(/rebuild archive list and file history for nas/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /^rebuild$/i }))
+    await waitFor(() => expect(archivesAPI.rebuild).toHaveBeenCalledWith(3, 'archives'))
+  })
+
+  it('locks the file history card on Community', () => {
+    mockCan.mockReturnValue(false)
+    renderDialog()
+    const history = screen.getByRole('radio', { name: /file history/i })
+    expect(history).toHaveAttribute('aria-disabled', 'true')
+    fireEvent.click(screen.getByRole('radio', { name: /archive list/i }))
+    expect(screen.getByText(/rebuild archive list for nas/i)).toBeInTheDocument()
   })
 
   it('lists the archives whose file history failed or was truncated', async () => {
