@@ -37,6 +37,7 @@ REPOSITORY_OPERATION_CAPABILITIES = {
     "repository.compact",
     "repository.rclone_sync",
     "repository.disk_usage",
+    "repository.storage_usage",
 }
 
 

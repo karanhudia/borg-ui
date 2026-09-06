@@ -11,7 +11,10 @@ from agent.borg_ui_agent.borg import detect_borg_binaries, detect_platform
 from agent.borg_ui_agent.client import AgentClient
 from agent.borg_ui_agent.config import AgentConfig
 from agent.borg_ui_agent.filesystem import execute_filesystem_browse_job
-from agent.borg_ui_agent.repository_ops import execute_repository_operation_job
+from agent.borg_ui_agent.repository_ops import (
+    execute_repository_operation_job,
+    execute_storage_usage_job,
+)
 from agent.borg_ui_agent.scripts import execute_script_run_job
 
 DEFAULT_REPOSITORY_OPERATION_HANDLER = execute_repository_operation_job
@@ -42,6 +45,7 @@ DEFAULT_CAPABILITIES = [
     "repository.compact",
     "repository.rclone_sync",
     "repository.disk_usage",
+    "repository.storage_usage",
     "agent.list_scripts",
     "script.run",
 ]
@@ -65,6 +69,7 @@ JOB_HANDLERS = {
     "repository.compact": execute_repository_operation_job,
     "repository.rclone_sync": execute_repository_operation_job,
     "repository.disk_usage": execute_repository_operation_job,
+    "repository.storage_usage": execute_storage_usage_job,
 }
 
 

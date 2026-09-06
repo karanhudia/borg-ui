@@ -37,6 +37,7 @@ OPERATION_REPOSITORY_LIST_ARCHIVE_CONTENTS = "repository.list_archive_contents"
 OPERATION_REPOSITORY_EXTRACT_ARCHIVE_FILE = "repository.extract_archive_file"
 OPERATION_BREAK_LOCK = "break_lock"
 OPERATION_DISK_USAGE = "repository.disk_usage"
+OPERATION_STORAGE_USAGE = "repository.storage_usage"
 OPERATION_RCLONE_SYNC = "repository.rclone_sync"
 # Sentinel for an active repository agent job whose kind we don't recognize.
 # Classed WRITE so admission fails closed -- an unknown job might hold a borg
@@ -104,6 +105,9 @@ READ_OPERATIONS = {
 # neither takes a borg lock nor needs to wait for one.
 OBSERVE_OPERATIONS = {
     OPERATION_DISK_USAGE,
+    # The chunk-index read takes no lock (lock=False) and the store tools
+    # never open the repository.
+    OPERATION_STORAGE_USAGE,
 }
 
 AGENT_JOB_KIND_OPERATIONS = {
@@ -121,6 +125,7 @@ AGENT_JOB_KIND_OPERATIONS = {
     "repository.extract_archive_file": OPERATION_REPOSITORY_EXTRACT_ARCHIVE_FILE,
     "repository.restore": OPERATION_RESTORE,
     "repository.disk_usage": OPERATION_DISK_USAGE,
+    "repository.storage_usage": OPERATION_STORAGE_USAGE,
     "repository.rclone_sync": OPERATION_RCLONE_SYNC,
 }
 
