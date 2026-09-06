@@ -19,6 +19,7 @@ interface RemoteConnectionsSectionProps {
   onTestConnection: (connection: SSHConnection) => void
   onDeployKeyToConnection: (connection: SSHConnection) => void
   onRunDiagnostics: (connection: SSHConnection) => void
+  onVerifyHostKey: (connection: SSHConnection) => void
 }
 
 export function RemoteConnectionsSection({
@@ -35,6 +36,7 @@ export function RemoteConnectionsSection({
   onTestConnection,
   onDeployKeyToConnection,
   onRunDiagnostics,
+  onVerifyHostKey,
 }: RemoteConnectionsSectionProps) {
   return (
     <Box>
@@ -173,6 +175,7 @@ export function RemoteConnectionsSection({
                 onTestConnection={onTestConnection}
                 onDeployKey={onDeployKeyToConnection}
                 onRunDiagnostics={onRunDiagnostics}
+                onVerifyHostKey={onVerifyHostKey}
                 canManageConnections={canManageSsh}
               />
             </Box>

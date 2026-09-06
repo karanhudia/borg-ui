@@ -383,10 +383,10 @@ class TestBrowseArchiveBehavior:
         first_call = mock_set.await_args_list[0].args
         second_call = mock_set.await_args_list[1].args
         assert first_call[0] == repo.id
-        assert first_call[1] == "parsed-archive"
+        assert first_call[1] == "v2-utc-mtime::parsed-archive"
         assert len(first_call[2]) == 3
         assert second_call[0] == repo.id
-        assert second_call[1] == "parsed-archive::browse-managed-root"
+        assert second_call[1] == "v2-utc-mtime::parsed-archive::browse-managed-root"
         assert [item["name"] for item in second_call[2]] == ["docs", "notes.txt"]
 
     @pytest.mark.asyncio
@@ -416,7 +416,7 @@ class TestBrowseArchiveBehavior:
                         "path": "home/karan/test-backup-source/file.txt",
                         "type": "f",
                         "size": 842,
-                        "mtime": "2026-05-30T15:16:14",
+                        "mtime": "2026-05-30T15:16:14+00:00",
                     }
                 )
             ]
@@ -429,6 +429,7 @@ class TestBrowseArchiveBehavior:
             patch.object(
                 browse_api.archive_cache, "set", new=AsyncMock(return_value=True)
             ),
+            patch("app.api.browse.agent_timezone_for_repository", return_value="UTC"),
             patch(
                 "app.api.browse.dispatch_agent_job_best_effort",
                 new=AsyncMock(return_value=True),
@@ -455,7 +456,7 @@ class TestBrowseArchiveBehavior:
                 "name": "file.txt",
                 "type": "file",
                 "size": 842,
-                "mtime": "2026-05-30T15:16:14",
+                "mtime": "2026-05-30T15:16:14+00:00",
                 "path": "home/karan/test-backup-source/file.txt",
             }
         ]
@@ -508,6 +509,7 @@ class TestBrowseArchiveBehavior:
             patch.object(
                 browse_api.archive_cache, "set", new=AsyncMock(return_value=True)
             ),
+            patch("app.api.browse.agent_timezone_for_repository", return_value="UTC"),
             patch(
                 "app.api.browse.dispatch_agent_job_best_effort",
                 new=AsyncMock(return_value=True),
@@ -579,7 +581,7 @@ class TestBrowseArchiveBehavior:
                 "path": "home/file.txt",
                 "type": "f",
                 "size": 12,
-                "mtime": "2026-05-30T15:16:14",
+                "mtime": "2026-05-30T15:16:14+00:00",
             }
         )
 
@@ -590,6 +592,7 @@ class TestBrowseArchiveBehavior:
             patch.object(
                 browse_api.archive_cache, "set", new=AsyncMock(return_value=True)
             ),
+            patch("app.api.browse.agent_timezone_for_repository", return_value="UTC"),
             patch(
                 "app.api.browse.dispatch_agent_job_best_effort",
                 new=AsyncMock(return_value=True),
@@ -613,7 +616,7 @@ class TestBrowseArchiveBehavior:
                 "name": "file.txt",
                 "type": "file",
                 "size": 12,
-                "mtime": "2026-05-30T15:16:14",
+                "mtime": "2026-05-30T15:16:14+00:00",
                 "path": "home/file.txt",
             }
         ]

@@ -3,6 +3,7 @@ import { ChevronRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Plan, PLAN_COLOR, PLAN_LABEL } from '../core/features'
 import type { EntitlementInfo } from '../hooks/useSystemInfo'
+import { FULL_ACCESS_COUNTDOWN_THRESHOLD_DAYS, fullAccessDaysLeft } from '../utils/fullAccess'
 
 interface PlanBadgeProps {
   plan: Plan
@@ -14,7 +15,12 @@ export default function PlanBadge({ plan, entitlement, onClick }: PlanBadgeProps
   const { t } = useTranslation()
   const isFullAccess = entitlement?.is_full_access && entitlement.status === 'active'
   const color = isFullAccess ? PLAN_COLOR.enterprise : PLAN_COLOR[plan]
-  const label = isFullAccess ? t('plan.fullAccessLabel') : PLAN_LABEL[plan]
+  const daysLeft = fullAccessDaysLeft(isFullAccess ? entitlement?.expires_at : null)
+  const label = isFullAccess
+    ? daysLeft !== null && daysLeft < FULL_ACCESS_COUNTDOWN_THRESHOLD_DAYS
+      ? `${t('plan.fullAccessLabel')} · ${t('plan.daysShort', { count: daysLeft })}`
+      : t('plan.fullAccessLabel')
+    : PLAN_LABEL[plan]
 
   return (
     <Box

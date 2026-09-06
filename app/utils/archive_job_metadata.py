@@ -8,6 +8,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.database.models import BackupJob, BackupPlanRun, Repository
+from app.utils.datetime_utils import parse_borg_archive_time
 
 
 def _archive_name(archive: Any) -> Optional[str]:
@@ -25,17 +26,18 @@ def _coerce_naive_utc(value: datetime) -> datetime:
 
 
 def _parse_archive_time(archive: dict) -> Optional[datetime]:
-    value = archive.get("start") or archive.get("time")
+    # Select on None, not truthiness - the epoch 0 is a valid time.
+    value = archive.get("start")
+    if value is None:
+        value = archive.get("time")
     if isinstance(value, datetime):
         return _coerce_naive_utc(value)
-    if not isinstance(value, str) or not value:
-        return None
-
-    try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    return _coerce_naive_utc(parsed)
+    # The shared parser is the single choke point for borg-rendered
+    # timestamps. The listing endpoints normalize these values to
+    # offset-carrying strings before enrichment; "UTC" names the render zone
+    # of any raw machine-parsed listing (TZ=UTC is pinned at the source), so
+    # a naive value that does slip through still parses correctly.
+    return parse_borg_archive_time(value, timezone_name="UTC")
 
 
 def _job_times(job: BackupJob) -> list[datetime]:

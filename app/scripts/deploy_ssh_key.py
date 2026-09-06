@@ -2,35 +2,36 @@
 """
 Deploy SSH keys from database to filesystem on container startup.
 This ensures SSH keys are always available for borg operations.
+
+All paths come from app.config: the key pair is written to
+settings.ssh_home_dir and decrypted with settings.secret_key, so the same
+script works in Docker (DATA_DIR=/data, SSH_HOME_DIR=/home/borg/.ssh) and in a
+native install where the data directory lives elsewhere.
 """
 
 import os
-import base64
-import hashlib
 import sys
 import pwd
 import grp
 from pathlib import Path
-from cryptography.fernet import Fernet
+
+# Run as a file (`python3 deploy_ssh_key.py`), so the repository root is not on
+# sys.path by itself.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from app.config import settings  # noqa: E402
+from app.core.security import decrypt_secret  # noqa: E402
 
 
 def deploy_ssh_keys():
-    """Deploy SSH keys from database to /home/borg/.ssh/"""
+    """Deploy SSH keys from database to settings.ssh_home_dir."""
     try:
-        # Create .ssh directory for borg user
-        ssh_dir = Path("/home/borg/.ssh")
+        # Create the SSH directory the keys are deployed to. In Docker this is
+        # /home/borg/.ssh, which the entrypoint symlinks to $DATA_DIR/ssh_keys;
+        # elsewhere it defaults to $DATA_DIR/ssh_keys directly.
+        ssh_dir = Path(settings.ssh_home_dir)
         ssh_dir.mkdir(parents=True, exist_ok=True)
         ssh_dir.chmod(0o700)
-
-        # Read SECRET_KEY
-        secret_key_file = Path("/data/.secret_key")
-        if not secret_key_file.exists():
-            print("⚠️  No SECRET_KEY file found, skipping SSH key deployment")
-            return
-
-        secret_key = secret_key_file.read_text().strip()
-        digest = hashlib.sha256(secret_key.encode("utf-8")).digest()
-        fernet = Fernet(base64.urlsafe_b64encode(digest))
 
         # Read the system SSH key from whichever database the app is configured
         # for. Going through the ORM (not a hardcoded sqlite3 path) means this
@@ -54,14 +55,8 @@ def deploy_ssh_keys():
             key.key_type,
             key.public_key,
         )
-        try:
-            private_key = fernet.decrypt(encrypted_key.encode()).decode()
-        except Exception:
-            legacy_key = secret_key.encode("utf-8")[:32]
-            if len(legacy_key) != 32:
-                raise
-            legacy_fernet = Fernet(base64.urlsafe_b64encode(legacy_key))
-            private_key = legacy_fernet.decrypt(encrypted_key.encode()).decode()
+        # Same SECRET_KEY derivation (and legacy fallback) the app encrypts with.
+        private_key = decrypt_secret(encrypted_key)
 
         # Write private key
         key_file = ssh_dir / f"id_{key_type}"

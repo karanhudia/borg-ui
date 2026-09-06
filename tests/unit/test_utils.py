@@ -138,6 +138,8 @@ class TestProcessUtils:
     @patch("subprocess.run")
     def test_break_repository_lock_ssh_success(self, mock_run):
         """Test breaking lock for SSH repo"""
+        from app.utils import borg_env
+
         repo = Repository(
             id=1,
             path="ssh://user@host/repo",
@@ -147,7 +149,14 @@ class TestProcessUtils:
 
         mock_run.return_value.returncode = 0
 
-        assert break_repository_lock(repo) is True
+        # The repository carries no session here, so its connection is looked
+        # up by id; this test is about the command shape, not that lookup.
+        with patch.object(
+            borg_env,
+            "host_key_ssh_opts_for_connection_id",
+            return_value=["-o", "StrictHostKeyChecking=accept-new"],
+        ):
+            assert break_repository_lock(repo) is True
 
         # Verify command includes remote-path
         args = mock_run.call_args[0][0]
@@ -164,11 +173,78 @@ class TestProcessUtils:
             "-o PreferredAuthentications=publickey",
             "-o PasswordAuthentication=no",
             "-o NumberOfPasswordPrompts=0",
-            "-o StrictHostKeyChecking=no",
-            "-o UserKnownHostsFile=/dev/null",
+            "-o StrictHostKeyChecking=accept-new",
             "-o LogLevel=ERROR",
         ]:
             assert option in borg_rsh
+        assert "-o StrictHostKeyChecking=no" not in borg_rsh
+        assert "-o UserKnownHostsFile=/dev/null" not in borg_rsh
+
+    @patch("subprocess.run")
+    def test_break_repository_lock_fails_rather_than_skipping_verification(
+        self, mock_run
+    ):
+        """A connection that cannot be loaded must not mean "connect anyway".
+
+        The repository is attached to a connection, so a pinned host key may
+        well exist. Running borg against that host without checking it is worse
+        than failing the lock recovery and saying so.
+        """
+        from app.utils import borg_env
+
+        repo = Repository(
+            id=1,
+            path="ssh://user@host/repo",
+            connection_id=1,
+            remote_path="/usr/bin/borg",
+        )
+
+        with patch.object(
+            borg_env,
+            "host_key_ssh_opts_for_connection_id",
+            side_effect=RuntimeError("database is gone"),
+        ):
+            assert break_repository_lock(repo) is False
+
+        mock_run.assert_not_called()
+
+    @patch("subprocess.run")
+    def test_break_repository_lock_ssh_verifies_a_pinned_host_key(self, mock_run):
+        """A repository whose connection has a pinned key verifies against it."""
+        from app.database.models import SSHConnection
+        from app.utils import process_utils
+
+        connection = SSHConnection(
+            id=1,
+            host="host",
+            username="user",
+            port=22,
+            known_host_key="host ssh-ed25519 AAAA",
+        )
+        repo = Repository(
+            id=1,
+            path="ssh://user@host/repo",
+            connection_id=1,
+            remote_path="/usr/bin/borg",
+        )
+
+        mock_run.return_value.returncode = 0
+
+        with (
+            patch.object(process_utils, "object_session", return_value=MagicMock()),
+            patch.object(
+                process_utils,
+                "resolve_repository_ssh_connection",
+                return_value=connection,
+            ),
+            patch.object(process_utils, "resolve_repo_ssh_key_file", return_value=None),
+        ):
+            assert break_repository_lock(repo) is True
+
+        borg_rsh = mock_run.call_args[1]["env"]["BORG_RSH"]
+        assert "-o StrictHostKeyChecking=yes" in borg_rsh
+        assert "-o StrictHostKeyChecking=accept-new" not in borg_rsh
+        assert "-o UserKnownHostsFile=/dev/null" not in borg_rsh
 
     def test_cleanup_orphaned_jobs(self):
         """Test cleanup of orphaned jobs"""

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders, screen, userEvent, waitFor } from '../../test/test-utils'
 import LicensingTab from '../LicensingTab'
-import { BUY_URL } from '../../utils/externalLinks'
+import { buildBuyUrl } from '../../utils/externalLinks'
 
 const { refreshMock, activateMock, deactivateMock, trackPlanMock, invalidateQueriesMock } =
   vi.hoisted(() => ({
@@ -162,15 +162,20 @@ describe('LicensingTab', () => {
 
     renderWithProviders(<LicensingTab />)
 
-    const buyLink = screen.getByRole('link', { name: /upgrade to pro/i })
-    expect(buyLink).toHaveAttribute('href', BUY_URL)
+    // The mocked plan is Pro, so the link must sell Enterprise, not Pro again.
+    const buyLink = screen.getByRole('link', { name: /upgrade to enterprise/i })
+    expect(screen.queryByRole('link', { name: /upgrade to pro/i })).not.toBeInTheDocument()
+    expect(buyLink).toHaveAttribute(
+      'href',
+      buildBuyUrl({ plan: 'enterprise', src: 'app-licensing' })
+    )
     buyLink.addEventListener('click', (event) => event.preventDefault())
 
     await user.click(buyLink)
 
     expect(trackPlanMock).toHaveBeenCalledWith(
       'View',
-      expect.objectContaining({ operation: 'open_buy_link' })
+      expect.objectContaining({ operation: 'open_buy_link', selected_plan: 'enterprise' })
     )
   })
 })

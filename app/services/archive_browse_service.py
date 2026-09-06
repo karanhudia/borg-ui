@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
-from typing import Dict, List
+from typing import Dict, List, Optional
+
+from app.utils.datetime_utils import serialize_borg_archive_time
 
 
 MANAGED_RESTORE_CANARY_PATH_PREFIXES = (".borg-ui/",)
@@ -38,8 +40,18 @@ def add_managed_archive_metadata_to_items(items: List[Dict]) -> List[Dict]:
     return [add_managed_archive_metadata(item) for item in items]
 
 
-def parse_archive_items(stdout: str) -> List[Dict]:
-    """Parse borg --json-lines output into normalized archive items."""
+def parse_archive_items(stdout: str, timezone_name: Optional[str] = None) -> List[Dict]:
+    """Parse borg --json-lines output into normalized archive items.
+
+    Borg renders file mtimes in the zone of the listing process, with no
+    offset - which the frontend's Date parsing then reads as browser-local.
+    ``timezone_name`` names that render zone ("UTC" for server-side listings
+    pinned to TZ=UTC, the agent's reported zone for agent listings); the
+    mtime is re-serialized with an explicit offset so it is self-describing.
+    ``None`` (an agent that predates timezone reporting) falls back to the
+    server's local zone - the same provenance #871 uses for last_backup -
+    never left as a naive string the browser would read in its own zone.
+    """
     items: List[Dict] = []
     for line in stdout.splitlines():
         line = line.strip()
@@ -54,12 +66,16 @@ def parse_archive_items(stdout: str) -> List[Dict]:
         if not item_path:
             continue
 
+        mtime = item_data.get("mtime")
+        if mtime is not None:
+            mtime = serialize_borg_archive_time(mtime, timezone_name=timezone_name)
+
         items.append(
             {
                 "path": item_path,
                 "type": item_data.get("type", ""),
                 "size": item_data.get("size"),
-                "mtime": item_data.get("mtime"),
+                "mtime": mtime,
             }
         )
 

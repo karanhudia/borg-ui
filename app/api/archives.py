@@ -28,6 +28,7 @@ from app.database.database import get_db
 from app.database.models import AgentMachine, DeleteArchiveJob, Repository, User
 from app.services.agent_artifact_relay import agent_artifact_relay
 from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
+from app.services.delete_archive_service import delete_archive_service
 from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.services.repository_executor import (
     is_agent_executor,
@@ -42,6 +43,7 @@ from app.utils.borg_env import (
 )
 from app.utils.ssh_utils import (
     resolve_repo_ssh_key_file,  # noqa: F401
+    resolve_repository_ssh_connection,
 )  # Backward-compatible patch target for tests
 from app.utils.datetime_utils import serialize_borg_archive_time, serialize_datetime
 
@@ -51,7 +53,11 @@ router = APIRouter()
 
 def _build_repo_env(repo: Repository, db: Session):
     temp_key_file = resolve_repo_ssh_key_file(repo, db)
-    ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
+    ssh_opts = get_standard_ssh_opts(
+        include_key_path=temp_key_file,
+        connection=resolve_repository_ssh_connection(repo, db),
+        db=db,
+    )
     env = setup_borg_env(passphrase=repo.passphrase, ssh_opts=ssh_opts)
     if remote_path := effective_repository_remote_path(repo):
         env["BORG_REMOTE_PATH"] = remote_path
@@ -356,7 +362,13 @@ async def get_archive_info(
                                             "user": file_obj.get("user"),
                                             "group": file_obj.get("group"),
                                             "size": file_obj.get("size"),
-                                            "mtime": file_obj.get("mtime"),
+                                            # Contents listing ran under
+                                            # TZ=UTC (server wrapper); re-render
+                                            # the mtime with an explicit offset.
+                                            "mtime": serialize_borg_archive_time(
+                                                file_obj.get("mtime"),
+                                                timezone_name="UTC",
+                                            ),
                                             "healthy": file_obj.get("healthy", True),
                                         }
                                     )
@@ -683,6 +695,8 @@ async def cancel_delete_job(
             check_repo_access(db, current_user, repo, "operator")
         await delete_archive_service.cancel_delete(job_id, db)
         return {"message": "backend.success.archives.deletionCancelled"}
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

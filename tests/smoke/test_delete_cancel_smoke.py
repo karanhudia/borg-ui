@@ -100,12 +100,10 @@ def main() -> int:
                     flush=True,
                 )
                 return 0
-            print(
-                f"Delete cancel smoke skipped: cancel endpoint returned {cancel_response.status_code} "
-                f"while delete state was {payload.get('status')}",
-                flush=True,
+            raise SmokeFailure(
+                f"Cancel endpoint returned {cancel_response.status_code} "
+                f"while delete state was {payload.get('status')}: {cancel_response.text}"
             )
-            return 0
         if "cancel" not in str(cancel_response.json()).lower():
             raise SmokeFailure(
                 f"Unexpected delete cancel response: {cancel_response.text}"

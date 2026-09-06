@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -14,10 +13,6 @@ from app.services.agent_connection_manager import (
     AgentConnectionUnavailable,
     agent_connection_manager,
 )
-
-
-def _now_utc() -> datetime:
-    return datetime.now(timezone.utc)
 
 
 def _require_browse_agent(db: Session, agent_machine_id: int) -> AgentMachine:

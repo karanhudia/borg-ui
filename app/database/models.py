@@ -15,14 +15,38 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.orm import relationship
-from datetime import datetime, timezone
+from sqlalchemy.types import TypeDecorator
 from app.database.database import Base
 from app.utils.schedule_time import get_container_timezone
 
 
-# Helper function for timezone-aware UTC timestamps
-def utc_now():
-    return datetime.now(timezone.utc)
+# Canonical naive-UTC "now" for column defaults (see its docstring).
+from app.utils.datetime_utils import utc_now  # noqa: E402,F401
+
+
+class EncryptedString(TypeDecorator):
+    """Transparently Fernet-encrypts a string column at rest.
+
+    Imports app.core.security lazily: that module imports models from here,
+    so a module-level import would be circular.
+    """
+
+    impl = String
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if not value:
+            return value
+        from app.core.security import encrypt_secret
+
+        return encrypt_secret(value)
+
+    def process_result_value(self, value, dialect):
+        if not value:
+            return value
+        from app.core.security import decrypt_secret
+
+        return decrypt_secret(value)
 
 
 class User(Base):
@@ -242,8 +266,8 @@ class Repository(Base):
     encryption = Column(String, default="repokey")
     compression = Column(String, default="lz4")
     passphrase = Column(
-        String, nullable=True
-    )  # Borg repository passphrase (for encrypted repos)
+        EncryptedString, nullable=True
+    )  # Borg repository passphrase (for encrypted repos), encrypted at rest
     has_keyfile = Column(
         Boolean, default=False
     )  # Whether repository has a keyfile (keyfile/keyfile-blake2 encryption)
@@ -489,6 +513,16 @@ class SSHConnection(Base):
     use_sudo = Column(
         Boolean, default=False
     )  # Prepend sudo when running borg on remote host
+
+    # Pinned host key (known_hosts lines) used to verify the remote host on
+    # every SSH invocation. Null means nothing has been trusted yet; see
+    # app/utils/ssh_host_keys.py.
+    known_host_key = Column(Text, nullable=True)
+    # True only for connections that predate host-key verification: they pin
+    # whatever key answers on their next use, because they were already running
+    # with no verification at all. Connections created since default to False
+    # and need the user to confirm the fingerprint.
+    host_key_trust_on_first_use = Column(Boolean, default=False, nullable=True)
 
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
@@ -1525,10 +1559,13 @@ class ArchiveChange(Base):
     owner_changed = Column(Boolean, nullable=False, default=False)
     summary_count = Column(Integer, nullable=True)
 
-    __table_args__ = (
-        Index("ix_archive_changes_archive_path", "archive_id", "path"),
-        Index("ix_archive_changes_path", "path"),
-    )
+    # No B-tree index on the unbounded `path` Text column: PostgreSQL caps a
+    # B-tree entry at ~1/3 of a page (~2.7 KB, after compressing the value), so
+    # a long archived path that does not compress well makes the INSERT of its
+    # own change row fail. archive_id keeps its own index
+    # (Column index=True) for the per-archive reads; the repository-wide
+    # "which archives touched this exact path" lookup drives off that FK index
+    # and filters path, which stays correct without a dedicated path index.
 
 
 class SystemSettings(Base):

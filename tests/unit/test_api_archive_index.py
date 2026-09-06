@@ -806,3 +806,32 @@ class TestWideCompareWindow:
 
         assert r.status_code == 200
         assert {c["path"] for c in r.json()["changes"]} == {"a"}
+
+
+@pytest.mark.unit
+def test_archive_changes_has_no_btree_index_on_the_unbounded_path():
+    """`path` is unbounded Text; a B-tree index over it makes the INSERT of a
+    change row for a long archived path fail (PostgreSQL entry-size limit).
+    No index may reference the raw path column at all - alone, inside a
+    composite, or within an expression such as lower(path) - while archive_id
+    keeps its own index for per-archive reads."""
+    from sqlalchemy import Column
+    from sqlalchemy.sql import visitors
+
+    table = ArchiveChange.__table__
+    path = table.c.path
+
+    def referenced_columns(index):
+        return {
+            element
+            for expression in index.expressions
+            for element in visitors.iterate(expression)
+            if isinstance(element, Column)
+        }
+
+    for index in table.indexes:
+        assert path not in referenced_columns(index), (
+            f"index {index.name} references the unbounded path column"
+        )
+    assert not path.index
+    assert any({c.name for c in idx.columns} == {"archive_id"} for idx in table.indexes)

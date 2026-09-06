@@ -18,7 +18,7 @@ ARG PYTHON_VERSION=3.12
 FROM python:${PYTHON_VERSION}-slim AS builder
 
 ARG BORG1_VERSION=1.4.5
-ARG BORG2_VERSION=2.0.0b23
+ARG BORG2_VERSION=2.0.0b24
 ARG BORGSTORE_VERSION=0.6.1
 
 # Build-time only. OS packages track the base image's Debian release rather than
@@ -52,7 +52,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # share deps (rclone+rest both only need requests), so it is obvious at a glance
 # that no scheme is missing. NB: posixfs is NOT a pip extra — it is always
 # available — so it must not appear in the brackets. blake3 is not a backend
-# but Borg 2.0.0b23's id-hash dependency, required by its pyproject.
+# but Borg 2's id-hash dependency (since 2.0.0b23), required by its pyproject.
 # hadolint ignore=DL3013,DL3059
 RUN pip install --no-cache-dir pyfuse3 "borgbackup==${BORG1_VERSION}" && \
     python3 -m venv /opt/borg2-venv && \
@@ -94,7 +94,7 @@ FROM python:${PYTHON_VERSION}-slim AS runtime-base
 
 ARG PYTHON_VERSION
 ARG BORG1_VERSION=1.4.5
-ARG BORG2_VERSION=2.0.0b23
+ARG BORG2_VERSION=2.0.0b24
 ENV BORG1_VERSION=${BORG1_VERSION}
 ENV BORG2_VERSION=${BORG2_VERSION}
 

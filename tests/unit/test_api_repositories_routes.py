@@ -427,6 +427,11 @@ class TestRepositoryHelperContracts:
         assert repositories_api._parse_borg_archive_time(1e18) is None
         assert repositories_api._parse_borg_archive_time(-1e18) is None
 
+    def test_parse_borg_archive_time_rejects_booleans(self):
+        # bool is an int subclass - True must not parse as epoch 1.
+        assert repositories_api._parse_borg_archive_time(True) is None
+        assert repositories_api._parse_borg_archive_time(False) is None
+
     def test_parse_borg_archive_time_converts_offset_values_to_utc(self):
         parsed = repositories_api._parse_borg_archive_time("2026-04-27T03:00:06-04:00")
 

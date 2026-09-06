@@ -11,7 +11,6 @@ is no /data/borg.db, and the old raw-sqlite3 access crashed on every boot.
 
 import os
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 # Run as a file by entrypoint.sh (`python3 /app/app/scripts/startup_packages.py`),
@@ -22,12 +21,9 @@ from sqlalchemy import create_engine, text  # noqa: E402
 
 from app.config import settings  # noqa: E402
 from app.database.url_utils import sqlite_database_missing  # noqa: E402
+from app.utils.datetime_utils import utc_now  # noqa: E402
 
 engine = create_engine(settings.database_url)
-
-
-def _now():
-    return datetime.now(timezone.utc)
 
 
 def _database_absent():
@@ -156,9 +152,9 @@ def trigger_package_installations(packages):
                 _update_package(
                     package_id,
                     status="installed",
-                    installed_at=_now(),
+                    installed_at=utc_now(),
                     install_log=f"STDOUT:\n{result.stdout}\n\nSTDERR:\n{result.stderr}",
-                    last_check=_now(),
+                    last_check=utc_now(),
                 )
                 print(f"✓ Successfully installed {package_name} in {duration:.1f}s")
             else:

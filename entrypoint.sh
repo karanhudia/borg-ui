@@ -66,7 +66,11 @@ echo "[$(date)] Borg cache directory setup complete"
 
 # Setup SSH home directory to persist across container updates.
 # Plain ssh commands in pre/post-backup hooks use ~/.ssh/known_hosts by default.
-SSH_HOME_DIR=/home/borg/.ssh
+# Exported: app.config reads SSH_HOME_DIR as the directory the system key is
+# deployed to (deploy_ssh_key.py, key deletion cleanup). Without it the app
+# falls back to $DATA_DIR/ssh_keys, which is the same directory here unless
+# the user bind-mounted /home/borg/.ssh.
+export SSH_HOME_DIR=/home/borg/.ssh
 PERSISTENT_SSH_DIR=/data/ssh_keys
 
 is_mountpoint() {

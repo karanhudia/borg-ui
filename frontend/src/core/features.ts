@@ -38,6 +38,13 @@ export const PLAN_COLOR: Record<Plan, string> = {
   enterprise: '#f59e0b',
 }
 
+/** The tier directly above the current plan, or null on the top tier. */
+export function nextPlanAbove(plan: Plan): 'pro' | 'enterprise' | null {
+  if (plan === 'community') return 'pro'
+  if (plan === 'pro') return 'enterprise'
+  return null
+}
+
 export function planIncludes(current: Plan, required: Plan): boolean {
   return PLAN_RANK[current] >= PLAN_RANK[required]
 }

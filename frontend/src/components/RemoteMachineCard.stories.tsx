@@ -69,3 +69,23 @@ export const WithoutRunDiagnostics: Story = {
     ...handlers,
   },
 }
+
+export const HostKeyVerified: Story = {
+  args: {
+    machine: {
+      ...machine,
+      host_key_verified: true,
+      host_key_fingerprint: 'SHA256:Zx9Q3n1sKk2Yy8bV0pRfT4uJ6mE7cD1aS5gH2wN0qLk',
+    },
+    ...handlers,
+    onVerifyHostKey: fn(),
+  },
+}
+
+export const HostKeyNotVerified: Story = {
+  args: {
+    machine: { ...machine, host_key_verified: false },
+    ...handlers,
+    onVerifyHostKey: fn(),
+  },
+}
