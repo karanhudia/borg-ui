@@ -91,7 +91,8 @@ Borg install options:
   --borg-source distro  Use distribution packages instead. The version is then
                         whatever the distribution ships, which may differ from
                         the server's. Required on platforms with no published
-                        static binary, such as 32-bit ARM.
+                        static binary, such as 32-bit ARM. Borg 1 only: no
+                        distribution ships Borg 2 yet.
 
 Agent install options:
   --agent-source server Install the agent package the enrolling server offers
@@ -418,6 +419,54 @@ select_borg_binary() {
   [[ -n "${BINARY_URL}" ]]
 }
 
+# The lowest glibc the pinned Borg $1 asks of this architecture — the floor a
+# machine has to clear — or nothing when no binary exists for the architecture
+# at all. Borg raises the floor whenever it moves its build runner, so the
+# number comes from the manifest, never from this script.
+lowest_glibc_offered() {
+  local major="$1"
+  local row_major row_arch row_glibc row_sha row_url lowest=""
+
+  while read -r row_major row_arch row_glibc row_sha row_url; do
+    [[ -n "${row_major:-}" ]] || continue
+    [[ "${row_major}" == "${major}" ]] || continue
+    [[ "${row_arch}" == "${MACHINE_ARCH}" ]] || continue
+    if [[ -z "${lowest}" ]] ||
+      printf '%s\n%s\n' "${row_glibc}" "${lowest}" | sort -V -C; then
+      lowest="${row_glibc}"
+    fi
+  done <<<"${PINNED_BORG_BINARIES}"
+
+  printf '%s' "${lowest}"
+}
+
+# What to do when the pinned Borg $1 (version $2) cannot come from the server.
+# Borg 1 has distribution packages; Borg 2 has none, so the only way past is a
+# self-managed install exposed under the name the agent resolves: 'borg2' at
+# the link $3, the same contract the forwarder written by
+# install_borg_from_server fulfils. A pip install alone provides only 'borg'.
+# The suggested commands are pinned to the server's version, so agent and
+# server keep speaking the same Borg; without a reported version there is
+# nothing to pin and no command is printed.
+borg_fallback_advice() {
+  local major="$1" version="$2" link="$3"
+
+  if [[ "${major}" == "1" ]]; then
+    echo "Re-run with --borg-source distro to use the distribution package," >&2
+    echo "or with --skip-borg-install to manage Borg yourself." >&2
+    return
+  fi
+
+  echo "No distribution ships Borg 2 yet. Install the version this server runs" >&2
+  echo "yourself and expose it as 'borg2' on PATH, then re-run with --skip-borg-install." >&2
+  if [[ -n "${version}" ]]; then
+    echo "For example (needs a C toolchain, Borg's build dependencies and OpenSSL 3.2 or newer):" >&2
+    echo "  python3 -m venv /opt/borg2" >&2
+    printf '  /opt/borg2/bin/pip install --pre "borgbackup==%s" "borgstore[rclone,sftp,rest,s3,blake3]"\n' "${version}" >&2
+    echo "  ln -sfn /opt/borg2/bin/borg ${link}" >&2
+  fi
+}
+
 install_borg_binary() {
   local major="$1" version="$2" dest_dir dest tmp
 
@@ -482,15 +531,20 @@ install_borg_from_server() {
 
   if [[ -z "${version}" ]]; then
     echo "This Borg UI server did not report a Borg ${major} version." >&2
-    echo "Re-run with --borg-source distro to use the distribution package." >&2
+    borg_fallback_advice "${major}" "" "${link}"
     exit 1
   fi
 
   if ! select_borg_binary "${major}"; then
-    echo "No published Borg ${version} binary for ${MACHINE_ARCH} with glibc ${MACHINE_GLIBC:-unknown}." >&2
-    echo "Borg publishes no static binary for 32-bit ARM or musl systems." >&2
-    echo "Re-run with --borg-source distro to use the distribution package," >&2
-    echo "or with --skip-borg-install to manage Borg yourself." >&2
+    local floor
+    floor="$(lowest_glibc_offered "${major}")"
+    if [[ -n "${floor}" ]]; then
+      echo "Borg ${version} for ${MACHINE_ARCH} needs glibc ${floor} or newer; this machine has glibc ${MACHINE_GLIBC:-unknown}." >&2
+    else
+      echo "No published Borg ${version} binary for ${MACHINE_ARCH}." >&2
+      echo "Borg publishes no static binary for 32-bit ARM or musl systems." >&2
+    fi
+    borg_fallback_advice "${major}" "${version}" "${link}"
     exit 1
   fi
 

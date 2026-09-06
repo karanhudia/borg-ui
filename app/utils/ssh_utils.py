@@ -91,6 +91,11 @@ def _find_matching_ssh_connection(path: str, db) -> Optional[SSHConnection]:
     return matches[0] if len(matches) == 1 else None
 
 
+def find_ssh_connection_for_path(path: str, db) -> Optional[SSHConnection]:
+    """Return the stored SSH connection an ``ssh://`` URL points at, if any."""
+    return _find_matching_ssh_connection(path, db)
+
+
 def resolve_repository_ssh_connection(repository, db) -> Optional[SSHConnection]:
     """Resolve a repository's configured or legacy URL-matched SSH connection."""
     connection_id = getattr(repository, "connection_id", None)

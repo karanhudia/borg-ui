@@ -202,3 +202,32 @@ async def test_execute_inline_script_injects_repository_parameter_values(db_sess
     assert captured["env"]["TARGET_DIR"] == "/srv/data"
     assert captured["env"]["RETRIES"] == "3"
     assert "RESULT_PATH" not in captured["env"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_execute_inline_script_returns_failure_result_when_runner_raises(
+    db_session,
+):
+    repository = Repository(id=7, name="Repo", path="/backups/repo")
+    executor = ScriptLibraryExecutor(db_session)
+
+    async def failing_execute_script(script, timeout, env, context):
+        raise RuntimeError("interpreter missing")
+
+    with patch(
+        "app.services.script_library_executor.execute_script",
+        new=failing_execute_script,
+    ):
+        result = await executor.execute_inline_script(
+            script_content="echo test",
+            script_type="post-backup",
+            timeout=30,
+            repository=repository,
+        )
+
+    assert result["success"] is False
+    assert result["exit_code"] is None
+    assert result["stderr"] == "interpreter missing"
+    assert "STATUS: FAILED (Exception)" in result["logs"]
+    assert "ERROR: interpreter missing" in result["logs"]

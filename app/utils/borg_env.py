@@ -9,7 +9,12 @@ from typing import Iterator, Optional
 from sqlalchemy.orm import object_session
 
 from app.config import settings
+from app.utils.ssh_host_keys import (
+    host_key_ssh_opts,
+    host_key_ssh_opts_for_connection_id,
+)
 from app.utils.ssh_utils import (
+    find_ssh_connection_for_path,
     public_key_only_ssh_args,
     resolve_repo_ssh_key_file,
     resolve_repository_ssh_connection,
@@ -21,8 +26,19 @@ def get_standard_ssh_opts(
     include_key_path: Optional[str] = None,
     *,
     keepalive: bool = False,
+    connection=None,
+    db=None,
+    connection_id=None,
 ) -> list[str]:
-    """Return standard SSH options for Borg operations."""
+    """Return standard SSH options for Borg operations.
+
+    ``connection`` is the SSH connection the command runs against; its pinned
+    host key verifies the remote host. A caller that knows only the id passes
+    ``connection_id`` and the row is loaded here, so a repository attached to a
+    pinned connection is never reduced to recording the key on first use just
+    because the caller had no session. With neither there is no row to verify
+    against, and the key is recorded on first use in a shared known_hosts file.
+    """
     opts: list[str] = []
 
     if include_key_path:
@@ -30,16 +46,11 @@ def get_standard_ssh_opts(
 
     opts.extend(public_key_only_ssh_args(identities_only=bool(include_key_path)))
 
-    opts.extend(
-        [
-            "-o",
-            "StrictHostKeyChecking=no",
-            "-o",
-            "UserKnownHostsFile=/dev/null",
-            "-o",
-            "LogLevel=ERROR",
-        ]
-    )
+    if connection is None and connection_id is not None:
+        opts.extend(host_key_ssh_opts_for_connection_id(connection_id))
+    else:
+        opts.extend(host_key_ssh_opts(connection, db))
+    opts.extend(["-o", "LogLevel=ERROR"])
 
     if keepalive:
         opts.extend(
@@ -151,8 +162,12 @@ def build_repository_borg_env(
 ):
     """Build Borg env for a stored repository and return env + temp key path."""
     temp_key_file = resolve_repo_ssh_key_file(repository, db)
+    connection = resolve_repository_ssh_connection(repository, db) if db else None
     ssh_opts = get_standard_ssh_opts(
-        include_key_path=temp_key_file, keepalive=keepalive
+        include_key_path=temp_key_file,
+        keepalive=keepalive,
+        connection=connection,
+        db=db,
     )
     env = setup_borg_env(
         base_env=base_env,
@@ -180,11 +195,17 @@ def build_ssh_key_borg_env(
 ):
     """Build Borg env for an arbitrary Borg path plus optional SSH key ID."""
     temp_key_file = None
+    connection = None
     if ssh_key_id and path.startswith("ssh://"):
         temp_key_file = resolve_ssh_key_file_by_id(ssh_key_id, db=db)
+    if db is not None and path.startswith("ssh://"):
+        connection = find_ssh_connection_for_path(path, db)
 
     ssh_opts = get_standard_ssh_opts(
-        include_key_path=temp_key_file, keepalive=keepalive
+        include_key_path=temp_key_file,
+        keepalive=keepalive,
+        connection=connection,
+        db=db,
     )
     env = setup_borg_env(
         base_env=base_env,

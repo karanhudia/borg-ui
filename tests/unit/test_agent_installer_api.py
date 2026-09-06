@@ -1,3 +1,4 @@
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -193,6 +194,137 @@ def test_agent_installer_script_names_the_fallback_for_unsupported_platforms(
         response.text
     )
     assert "Re-run with --borg-source distro" in response.text
+
+
+_INSTALLER_FUNCTIONS = (
+    "glibc_at_least",
+    "select_borg_binary",
+    "lowest_glibc_offered",
+    "borg_fallback_advice",
+    "install_borg_from_server",
+)
+
+
+def _run_install_borg_from_server(
+    script: str, *, major: str, version: str, glibc: str, binaries: str
+) -> subprocess.CompletedProcess:
+    """Run the installer's server-source path in isolation: only the functions
+    it needs, with the machine facts and the pinned manifest table injected."""
+    functions = "\n".join(
+        re.search(rf"^{name}\(\) \{{\n.*?^\}}\n", script, re.M | re.S).group(0)
+        for name in _INSTALLER_FUNCTIONS
+    )
+    link = "/usr/local/bin/borg2" if major == "2" else "/usr/local/bin/borg"
+    harness = "\n".join(
+        [
+            functions,
+            'MACHINE_ARCH="x86_64"',
+            f'MACHINE_GLIBC="{glibc}"',
+            f'PINNED_BORG_BINARIES="{binaries}"',
+            f'install_borg_from_server "{major}" "{version}" {link}',
+        ]
+    )
+    return subprocess.run(
+        ["bash", "-c", harness], capture_output=True, text=True, check=False
+    )
+
+
+_MANIFEST_TABLE = "\n".join(
+    [
+        "1 x86_64 2.31 aa https://example.invalid/borg1-glibc231",
+        "1 x86_64 2.35 bb https://example.invalid/borg1-glibc235",
+        "2 x86_64 2.43 cc https://example.invalid/borg2-glibc243",
+    ]
+)
+
+
+def test_agent_installer_names_the_glibc_floor_for_borg2(test_client: TestClient):
+    """A machine below the floor learns the number it misses, and is not sent to
+    --borg-source distro, which install_borg2 rejects: Borg 2 has no
+    distribution package, so the only way past is a self-managed install."""
+    script = test_client.get("/agent/install.sh").text
+
+    result = _run_install_borg_from_server(
+        script, major="2", version="2.0.0b24", glibc="2.39", binaries=_MANIFEST_TABLE
+    )
+
+    assert result.returncode == 1
+    assert (
+        "Borg 2.0.0b24 for x86_64 needs glibc 2.43 or newer; "
+        "this machine has glibc 2.39."
+    ) in result.stderr
+    # The agent resolves Borg 2 as `borg2`; a bare pip install provides only
+    # `borg`, so the suggested commands pin the server's version and expose it
+    # under the name the installer's own forwarder would have used.
+    assert "expose it as 'borg2' on PATH" in result.stderr
+    # The pip route builds from source: say what the build needs.
+    assert "OpenSSL 3.2 or newer" in result.stderr
+    assert (
+        '/opt/borg2/bin/pip install --pre "borgbackup==2.0.0b24" '
+        '"borgstore[rclone,sftp,rest,s3,blake3]"'
+    ) in result.stderr
+    assert "ln -sfn /opt/borg2/bin/borg /usr/local/bin/borg2" in result.stderr
+    assert "--skip-borg-install" in result.stderr
+    assert "--borg-source distro" not in result.stderr
+    assert "32-bit ARM" not in result.stderr
+
+
+def test_agent_installer_prints_no_unpinned_borg2_install(test_client: TestClient):
+    """Without a version reported by the server there is nothing to pin, and an
+    unpinned `pip install borgbackup` would install whatever is newest — a
+    different Borg than the server. Say what to do, print no command."""
+    script = test_client.get("/agent/install.sh").text
+
+    result = _run_install_borg_from_server(
+        script, major="2", version="", glibc="2.39", binaries=_MANIFEST_TABLE
+    )
+
+    assert result.returncode == 1
+    assert "This Borg UI server did not report a Borg 2 version." in result.stderr
+    assert "expose it as 'borg2' on PATH" in result.stderr
+    assert "--skip-borg-install" in result.stderr
+    assert "pip install" not in result.stderr
+    assert "--borg-source distro" not in result.stderr
+
+
+def test_agent_installer_keeps_the_distro_fallback_for_borg1(
+    test_client: TestClient,
+):
+    """Borg 1 below its floor is pointed at the distribution package."""
+    script = test_client.get("/agent/install.sh").text
+
+    result = _run_install_borg_from_server(
+        script, major="1", version="1.4.5", glibc="2.28", binaries=_MANIFEST_TABLE
+    )
+
+    assert result.returncode == 1
+    assert "needs glibc 2.31 or newer; this machine has glibc 2.28." in result.stderr
+    assert "Re-run with --borg-source distro" in result.stderr
+    assert "pip install" not in result.stderr
+
+
+def test_agent_installer_explains_an_architecture_without_binaries(
+    test_client: TestClient,
+):
+    """No row for the architecture at all: the reason is the platform, not the
+    glibc version, so no floor is quoted."""
+    script = test_client.get("/agent/install.sh").text
+
+    result = _run_install_borg_from_server(
+        script,
+        major="2",
+        version="2.0.0b24",
+        glibc="2.43",
+        binaries="2 aarch64 2.43 cc https://example.invalid/borg2-arm64",
+    )
+
+    assert result.returncode == 1
+    assert "No published Borg 2.0.0b24 binary for x86_64." in result.stderr
+    assert "Borg publishes no static binary for 32-bit ARM or musl systems." in (
+        result.stderr
+    )
+    assert "needs glibc" not in result.stderr
+    assert "--skip-borg-install" in result.stderr
 
 
 def test_agent_installer_installs_rclone_with_borg2(test_client: TestClient):
