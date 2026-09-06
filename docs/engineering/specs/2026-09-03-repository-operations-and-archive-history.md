@@ -612,9 +612,6 @@ route. Pure functions with unit tests.
   median of the previous 7 archives in the series.
 - `duration_outlier`: `duration_seconds` above 250 percent of the median of
   the previous 7.
-- `overdue_<category>`: last terminal operation in a category older than
-  the category's threshold. Defaults: backup 2 days, check 30 days, prune
-  14 days, compact 30 days, index 2 days, mirror 1 day.
 
 ## 10. Frontend
 
@@ -883,7 +880,7 @@ tracked like other Pro features.
   the details pane. `surface="archive_files"`, `operation="view_history"`.
 - Search field on the Archives page: `PlanGate` with `disabled`, tooltip
   from the gate message. `surface="archives"`, `operation="search"`.
-- Heatmap outlier and overdue flags: not gated in the UI; the API omits them
+- Heatmap outlier flags: not gated in the UI; the API omits them
   and the legend shows a small "Pro" chip next to the outlier entries using
   `PLAN_LABEL` and `PLAN_COLOR`.
 - Rebuild menu: the `history` option is rendered through `PlanGate` with
@@ -900,7 +897,7 @@ state, following `PlanGate.stories.tsx`.
   backend; the frontend features test asserts the same key and plan.
 - `test_operations_followups.py`: chain with and without the feature.
 - Route tests: 403 for Community on each gated route, 200 for Pro.
-- Heatmap tests: flags present only for Pro.
+- Heatmap tests: `missed_run` on every plan, outlier flags only for Pro.
 - Vitest for each `PlanGate` usage: locked renders the prompt or disabled
   state, unlocked renders the feature.
 
