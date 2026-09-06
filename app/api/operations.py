@@ -2,6 +2,7 @@
 
 import os
 from datetime import datetime, timedelta
+from time import monotonic
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -292,7 +293,14 @@ def _reconcile_interval(settings: SystemSettings) -> int:
     return value if value is not None else DEFAULT_INTERVAL_MINUTES
 
 
-def _history_table_bytes(db: Session) -> Optional[int]:
+# The scan below walks the whole archive_changes b-tree on SQLite, and the
+# Background work board polls this route every 30 seconds, so the answer is
+# measured at most once per interval and shared by every caller.
+HISTORY_BYTES_TTL_SECONDS = 300
+_history_bytes_cache: Optional[tuple[float, Optional[int]]] = None
+
+
+def _measure_history_table_bytes(db: Session) -> Optional[int]:
     """Best-effort on-disk size of archive_changes. Returns None when the
     engine cannot say, so the client never renders a made-up number."""
     dialect = db.get_bind().dialect.name
@@ -313,39 +321,52 @@ def _history_table_bytes(db: Session) -> Optional[int]:
     return int(row) if row is not None else None
 
 
-def _latest_completed_by_repository(db: Session, kind: str) -> dict[int, datetime]:
-    rows = (
-        db.query(Operation.repository_id, func.max(Operation.completed_at))
-        .filter(
-            Operation.kind == kind,
-            Operation.status.in_(SUCCESS_STATUSES),
-            Operation.repository_id.isnot(None),
-        )
-        .group_by(Operation.repository_id)
-        .all()
+def _history_table_bytes(db: Session) -> Optional[int]:
+    global _history_bytes_cache
+    now = monotonic()
+    if _history_bytes_cache is not None:
+        measured_at, value = _history_bytes_cache
+        if now - measured_at < HISTORY_BYTES_TTL_SECONDS:
+            return value
+    value = _measure_history_table_bytes(db)
+    _history_bytes_cache = (now, value)
+    return value
+
+
+def _latest_completed_by_repository(
+    db: Session, kind: str, repository_ids: Optional[set]
+) -> dict[int, datetime]:
+    q = db.query(Operation.repository_id, func.max(Operation.completed_at)).filter(
+        Operation.kind == kind,
+        Operation.status.in_(SUCCESS_STATUSES),
+        Operation.repository_id.isnot(None),
     )
+    if repository_ids is not None:
+        q = q.filter(Operation.repository_id.in_(repository_ids))
+    rows = q.group_by(Operation.repository_id).all()
     return {repo_id: at for repo_id, at in rows if at is not None}
 
 
-def _history_by_repository(db: Session) -> dict[int, dict]:
+def _history_by_repository(
+    db: Session, repository_ids: Optional[set]
+) -> dict[int, dict]:
     def count_state(state: str):
         return func.sum(case((Archive.history_state == state, 1), else_=0))
 
-    rows = (
-        db.query(
-            Archive.repository_id,
-            func.count(Archive.id),
-            count_state("indexed"),
-            count_state("pending"),
-            count_state("failed"),
-            count_state("skipped"),
-            func.sum(case((Archive.history_truncated.is_(True), 1), else_=0)),
-            func.coalesce(func.sum(Archive.history_rows), 0),
-            func.max(Archive.history_indexed_at),
-        )
-        .group_by(Archive.repository_id)
-        .all()
+    q = db.query(
+        Archive.repository_id,
+        func.count(Archive.id),
+        count_state("indexed"),
+        count_state("pending"),
+        count_state("failed"),
+        count_state("skipped"),
+        func.sum(case((Archive.history_truncated.is_(True), 1), else_=0)),
+        func.coalesce(func.sum(Archive.history_rows), 0),
+        func.max(Archive.history_indexed_at),
     )
+    if repository_ids is not None:
+        q = q.filter(Archive.repository_id.in_(repository_ids))
+    rows = q.group_by(Archive.repository_id).all()
     return {
         repo_id: {
             "archives": archives,
@@ -481,18 +502,16 @@ async def get_repositories_hub(
 
     settings = _settings_row(db)
     interval = _reconcile_interval(settings)
-    history = _history_by_repository(db)
-    last_sync = _latest_completed_by_repository(db, "archive_sync")
-    last_stats = _latest_completed_by_repository(db, "stats")
-    syncing = {
-        repo_id
-        for (repo_id,) in db.query(Operation.repository_id)
-        .filter(
-            Operation.kind == "archive_sync",
-            Operation.status.in_(("queued", "running")),
-        )
-        .distinct()
-    }
+    history = _history_by_repository(db, accessible)
+    last_sync = _latest_completed_by_repository(db, "archive_sync", accessible)
+    last_stats = _latest_completed_by_repository(db, "stats", accessible)
+    syncing_q = db.query(Operation.repository_id).filter(
+        Operation.kind == "archive_sync",
+        Operation.status.in_(("queued", "running")),
+    )
+    if accessible is not None:
+        syncing_q = syncing_q.filter(Operation.repository_id.in_(accessible))
+    syncing = {repo_id for (repo_id,) in syncing_q.distinct()}
 
     rows = []
     for repo in repositories:
@@ -512,18 +531,23 @@ async def get_repositories_hub(
             )
         )
 
-    last_reconcile = (
-        db.query(func.max(Operation.created_at))
-        .filter(Operation.trigger == "reconcile")
-        .scalar()
+    last_reconcile_q = db.query(func.max(Operation.created_at)).filter(
+        Operation.trigger == "reconcile"
     )
+    if accessible is not None:
+        last_reconcile_q = last_reconcile_q.filter(
+            Operation.repository_id.in_(accessible)
+        )
+    last_reconcile = last_reconcile_q.scalar()
     return HubResponse(
         repositories=rows,
         totals=HubTotals(
             repositories=len(rows),
             archives=sum(r.archives for r in rows),
             history_rows=sum(r.history.rows for r in rows),
-            history_bytes=_history_table_bytes(db),
+            # A whole-table figure, so only a caller who sees every
+            # repository is told it.
+            history_bytes=(_history_table_bytes(db) if accessible is None else None),
         ),
         last_reconcile_at=last_reconcile,
         reconcile_interval_minutes=interval,
