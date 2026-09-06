@@ -6,6 +6,7 @@ Provides a unified view of all operations (backups, restores, checks, compacts, 
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from typing import Any, List, Optional
 from datetime import datetime
@@ -404,6 +405,7 @@ def _operation_activity_items(
     status: Optional[str],
     category: Optional[List[str]],
     trigger: Optional[List[str]],
+    repository_id: Optional[int] = None,
     collapse_runs: bool,
     log_save_policy: str,
 ) -> List[dict]:
@@ -421,6 +423,8 @@ def _operation_activity_items(
     q = _scope_to_accessible_repos(
         db.query(Operation), accessible_repository_ids(db, current_user)
     )
+    if repository_id is not None:
+        q = q.filter(Operation.repository_id == repository_id)
     if job_type:
         if job_type not in op_vocab.KINDS:
             return []
@@ -501,6 +505,7 @@ async def list_recent_activity(
     status: Optional[str] = None,  # Filter by status: 'running', 'completed', 'failed'
     category: Optional[List[str]] = Query(default=None),
     trigger: Optional[List[str]] = Query(default=None),
+    repository_id: Optional[int] = None,
     collapse_runs: bool = True,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -510,16 +515,36 @@ async def list_recent_activity(
 
     Returns a unified list of all operations sorted by start time (most recent first).
     Excludes the logs column for performance - use the logs endpoint to fetch logs.
+
+    `repository_id` narrows every source in SQL, before each source's own
+    limit, so one repository's history does not depend on how busy the rest
+    of the install has been.
     """
 
     activities = []
     log_save_policy = get_log_save_policy(db)
+    scoped_repository = (
+        db.get(Repository, repository_id) if repository_id is not None else None
+    )
+    if repository_id is not None and scoped_repository is None:
+        return []
+    # Plan runs, availability skips, package installs, and script executions
+    # belong to no single repository, so a repository view drops them.
+    repository_scoped = repository_id is not None
 
     # Fetch backup jobs
     if not job_type or job_type == "backup":
         # Filter in SQL, before the limit: "status=failed" must return the
         # newest failed jobs, not the failed jobs among the newest rows.
         backup_query = db.query(BackupJob)
+        if scoped_repository is not None:
+            # Older rows carry the path, newer ones the id.
+            backup_query = backup_query.filter(
+                or_(
+                    BackupJob.repository_id == scoped_repository.id,
+                    BackupJob.repository == scoped_repository.path,
+                )
+            )
         if status:
             backup_query = backup_query.filter(BackupJob.status == status)
         backup_jobs = (
@@ -591,8 +616,10 @@ async def list_recent_activity(
 
     # Availability Plan skips are plan-run records, not BackupJobs: Borg was never
     # invoked, so they must be added independently to Activity.
-    if (not job_type or job_type == "availability_check") and (
-        not status or status == "skipped"
+    if (
+        (not job_type or job_type == "availability_check")
+        and (not status or status == "skipped")
+        and not repository_scoped
     ):
         plan_skips = (
             db.query(BackupPlanRun)
@@ -665,6 +692,10 @@ async def list_recent_activity(
     # Fetch restore jobs
     if not job_type or job_type == "restore":
         restore_query = db.query(RestoreJob)
+        if scoped_repository is not None:
+            restore_query = restore_query.filter(
+                RestoreJob.repository == scoped_repository.path
+            )
         if status:
             restore_query = restore_query.filter(RestoreJob.status == status)
         restore_jobs = (
@@ -703,6 +734,8 @@ async def list_recent_activity(
     # Fetch check jobs
     if not job_type or job_type == "check":
         check_query = db.query(CheckJob)
+        if repository_id is not None:
+            check_query = check_query.filter(CheckJob.repository_id == repository_id)
         if status:
             check_query = check_query.filter(CheckJob.status == status)
         check_jobs = check_query.order_by(CheckJob.id.desc()).limit(limit).all()
@@ -748,6 +781,10 @@ async def list_recent_activity(
     # Fetch restore check jobs
     if not job_type or job_type == "restore_check":
         restore_check_query = db.query(RestoreCheckJob)
+        if repository_id is not None:
+            restore_check_query = restore_check_query.filter(
+                RestoreCheckJob.repository_id == repository_id
+            )
         if status:
             restore_check_query = restore_check_query.filter(
                 RestoreCheckJob.status == status
@@ -798,6 +835,10 @@ async def list_recent_activity(
     # Fetch compact jobs
     if not job_type or job_type == "compact":
         compact_query = db.query(CompactJob)
+        if repository_id is not None:
+            compact_query = compact_query.filter(
+                CompactJob.repository_id == repository_id
+            )
         if status:
             compact_query = compact_query.filter(CompactJob.status == status)
         compact_jobs = (
@@ -846,6 +887,8 @@ async def list_recent_activity(
     # Fetch prune jobs
     if not job_type or job_type == "prune":
         prune_query = db.query(PruneJob)
+        if repository_id is not None:
+            prune_query = prune_query.filter(PruneJob.repository_id == repository_id)
         if status:
             prune_query = prune_query.filter(PruneJob.status == status)
         prune_jobs = prune_query.order_by(PruneJob.started_at.desc()).limit(limit).all()
@@ -890,7 +933,7 @@ async def list_recent_activity(
             )
 
     # Fetch package install jobs
-    if not job_type or job_type == "package":
+    if (not job_type or job_type == "package") and not repository_scoped:
         package_query = db.query(PackageInstallJob)
         if status:
             package_query = package_query.filter(PackageInstallJob.status == status)
@@ -936,7 +979,7 @@ async def list_recent_activity(
             )
 
     # Fetch script executions
-    if not job_type or job_type == "script_execution":
+    if (not job_type or job_type == "script_execution") and not repository_scoped:
         script_query = db.query(ScriptExecution)
         if status:
             script_query = script_query.filter(ScriptExecution.status == status)
@@ -994,6 +1037,10 @@ async def list_recent_activity(
         rclone_query = db.query(RcloneSyncJob).filter(
             RcloneSyncJob.operation.in_(operations)
         )
+        if repository_id is not None:
+            rclone_query = rclone_query.filter(
+                RcloneSyncJob.repository_id == repository_id
+            )
         if status:
             rclone_query = rclone_query.filter(RcloneSyncJob.status == status)
         rclone_jobs = rclone_query.order_by(RcloneSyncJob.id.desc()).limit(limit).all()
@@ -1050,6 +1097,7 @@ async def list_recent_activity(
             status=status,
             category=category,
             trigger=trigger,
+            repository_id=repository_id,
             collapse_runs=collapse_runs,
             log_save_policy=log_save_policy,
         )

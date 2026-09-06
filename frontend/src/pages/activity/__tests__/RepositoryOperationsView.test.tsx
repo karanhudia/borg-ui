@@ -63,7 +63,6 @@ describe('RepositoryOperationsView', () => {
           completed_at: null,
           followups: [{ id: 21, kind: 'history_merge', status: 'running' }],
         }),
-        run({ id: 3, repository_id: 2, repository: 'photos', repository_path: '/mnt/photos' }),
       ],
     })
   })
@@ -74,9 +73,14 @@ describe('RepositoryOperationsView', () => {
     expect(screen.getByText('Today')).toBeInTheDocument()
     expect(screen.getByText('Yesterday')).toBeInTheDocument()
     expect(screen.getAllByTestId('run-row')).toHaveLength(2)
-    expect(
-      screen.queryAllByTestId('run-row').some((row) => row.textContent?.includes('photos'))
-    ).toBe(false)
+  })
+
+  it('asks the route for this repository rather than filtering a shared window', async () => {
+    // Filtering the newest 200 rows in the browser hid a quiet repository
+    // behind whatever the rest of the install had been doing.
+    renderWithProviders(<RepositoryOperationsView repositoryId={1} />)
+    await screen.findAllByTestId('run-row')
+    expect(activityAPI.list).toHaveBeenLastCalledWith(expect.objectContaining({ repository_id: 1 }))
   })
 
   it('switches repositories from the header selector', async () => {
