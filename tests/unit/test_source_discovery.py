@@ -892,8 +892,12 @@ class TestSourceDiscovery:
         self, test_client, admin_headers, tmp_path, monkeypatch
     ):
         monkeypatch.setattr(source_discovery, "which", lambda command: None)
-        first_db = tmp_path / "app.sqlite3"
-        second_db = tmp_path / "cache.db"
+        # The scan root is a directory of its own: tmp_path also holds the
+        # test client's own SQLite database, which the scan would find.
+        scan_root = tmp_path / "scan"
+        scan_root.mkdir()
+        first_db = scan_root / "app.sqlite3"
+        second_db = scan_root / "cache.db"
         first_db.write_bytes(b"SQLite format 3\x00")
         second_db.write_bytes(b"SQLite format 3\x00")
 
@@ -902,7 +906,7 @@ class TestSourceDiscovery:
             json={
                 "source_type": "local",
                 "source_ssh_connection_id": None,
-                "paths": [str(tmp_path)],
+                "paths": [str(scan_root)],
             },
             headers=admin_headers,
         )
@@ -1142,7 +1146,8 @@ class TestSourceDiscovery:
         # PG_VERSION lives 3 levels below the scan root. Default depth (6)
         # should discover it.
         monkeypatch.setattr(source_discovery, "which", lambda command: None)
-        nested_pg = tmp_path / "var" / "lib" / "postgresql" / "16" / "main"
+        scan_root = tmp_path / "scan"
+        nested_pg = scan_root / "var" / "lib" / "postgresql" / "16" / "main"
         nested_pg.mkdir(parents=True)
         (nested_pg / "PG_VERSION").write_text("16\n")
 
@@ -1151,7 +1156,7 @@ class TestSourceDiscovery:
             json={
                 "source_type": "local",
                 "source_ssh_connection_id": None,
-                "paths": [str(tmp_path)],
+                "paths": [str(scan_root)],
             },
             headers=admin_headers,
         )
@@ -1168,7 +1173,8 @@ class TestSourceDiscovery:
         # PG_VERSION sits 4 levels below the scan root. max_depth=2 means
         # the walk stops before reaching it, so nothing is detected.
         monkeypatch.setattr(source_discovery, "which", lambda command: None)
-        nested_pg = tmp_path / "a" / "b" / "c" / "d"
+        scan_root = tmp_path / "scan"
+        nested_pg = scan_root / "a" / "b" / "c" / "d"
         nested_pg.mkdir(parents=True)
         (nested_pg / "PG_VERSION").write_text("16\n")
 
@@ -1177,7 +1183,7 @@ class TestSourceDiscovery:
             json={
                 "source_type": "local",
                 "source_ssh_connection_id": None,
-                "paths": [str(tmp_path)],
+                "paths": [str(scan_root)],
                 "max_depth": 2,
             },
             headers=admin_headers,
