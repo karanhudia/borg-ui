@@ -612,11 +612,15 @@ export default function ArchivePathSelector({
                               : managedCanary
                                 ? 'default'
                                 : 'pointer',
+                          // The product's tables hover in a neutral tint; the
+                          // blue tint is kept for the keyboard cursor only.
                           '&:hover': {
                             bgcolor: (theme) =>
                               managedCanary
                                 ? alpha(theme.palette.info.main, 0.09)
-                                : alpha(theme.palette.primary.main, 0.08),
+                                : embedded
+                                  ? alpha(theme.palette.text.primary, 0.03)
+                                  : alpha(theme.palette.primary.main, 0.08),
                           },
                         }}
                       >
