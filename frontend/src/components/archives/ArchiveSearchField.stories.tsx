@@ -8,7 +8,7 @@ const meta = {
   component: ArchiveSearchField,
   args: {
     repositoryId: 7,
-    newestArchiveId: 12,
+    newestArchiveIdBySeries: { nightly: 12 },
   },
   render: (args) => (
     <Box sx={{ width: 420, maxWidth: 'calc(100vw - 32px)' }}>
