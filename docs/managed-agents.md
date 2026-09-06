@@ -36,6 +36,20 @@ installer requires root or sudo, installs system dependencies, registers
 `/etc/borg-ui-agent/config.toml`, runs `service-check`, and enables the systemd
 service with `systemctl enable --now borg-ui-agent`.
 
+By default the installer fetches the exact Borg versions the server runs, as
+the static Linux binaries borgbackup publishes for x86_64 and aarch64. Those
+binaries need a minimum glibc; when the machine's glibc is too old, the
+installer says which version it needs and stops. Borg 1 can then be taken from
+the distribution instead (`--borg-source distro`). No distribution ships
+Borg 2 yet: install the server's version yourself and expose it as `borg2` on
+PATH, then re-run the installer with `--skip-borg-install`. The installer's
+message prints the commands for that, pinned to the server's version — a
+virtualenv with `borgbackup` and `borgstore`, and a `borg2` symlink in
+`/usr/local/bin` (a plain pip install provides only `borg`, which the agent
+does not use for Borg 2). That install builds Borg from source, so the machine
+needs a C toolchain, Borg's build dependencies and, from 2.0.0b24 on, OpenSSL
+3.2 or newer.
+
 By default, the service runs as the user who invoked `sudo`. That means the
 agent can read and write the same paths that user can access, matching the
 permission model used by SSH remote machines. Repository paths must be writable
