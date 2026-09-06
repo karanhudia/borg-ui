@@ -13,7 +13,17 @@ vi.mock('../../../components/LogViewerDialog', () => ({
   default: ({ open }: { open: boolean }) => (open ? <div>Log Viewer</div> : null),
 }))
 
-const hoursAgo = (hours: number) => new Date(Date.now() - hours * 3600 * 1000).toISOString()
+// Day groups are calendar days, so the fixtures sit at local noon: an offset
+// in hours from "now" lands on the wrong calendar day when the suite runs
+// shortly after midnight.
+const noonDaysAgo = (days: number) => {
+  const day = new Date()
+  day.setHours(12, 0, 0, 0)
+  day.setDate(day.getDate() - days)
+  return day.toISOString()
+}
+const minutesAfterNoon = (days: number, minutes: number) =>
+  new Date(new Date(noonDaysAgo(days)).getTime() + minutes * 60 * 1000).toISOString()
 
 const run = (overrides: Record<string, unknown>) => ({
   id: 1,
@@ -22,8 +32,8 @@ const run = (overrides: Record<string, unknown>) => ({
   category: 'backup',
   status: 'completed',
   trigger: 'plan',
-  started_at: hoursAgo(1),
-  completed_at: hoursAgo(0.5),
+  started_at: noonDaysAgo(0),
+  completed_at: minutesAfterNoon(0, 30),
   error_message: null,
   repository: 'nas',
   repository_id: 1,
@@ -59,7 +69,7 @@ describe('RepositoryOperationsView', () => {
           schedule_name: 'weekly',
           backup_plan_name: null,
           status: 'running',
-          started_at: hoursAgo(26),
+          started_at: noonDaysAgo(1),
           completed_at: null,
           followups: [{ id: 21, kind: 'history_merge', status: 'running' }],
         }),
