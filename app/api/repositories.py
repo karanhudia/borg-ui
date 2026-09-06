@@ -2469,6 +2469,11 @@ async def _create_agent_repository_record(
 
             record_import_connect(db, repository, user_id=current_user.id)
         except Exception as e:
+            # A failed flush/chain build leaves the session unusable and may
+            # leave a half-flushed import_connect row that a later commit on
+            # this same session would persist without its follow-ups. Roll the
+            # session back before continuing best-effort.
+            db.rollback()
             logger.warning(
                 "Failed to enqueue post-import operations",
                 repository=repository.name,
@@ -3862,6 +3867,11 @@ async def import_repository(
 
             record_import_connect(db, repository, user_id=current_user.id)
         except Exception as e:
+            # A failed flush/chain build leaves the session unusable and may
+            # leave a half-flushed import_connect row that a later commit on
+            # this same session would persist without its follow-ups. Roll the
+            # session back before continuing best-effort.
+            db.rollback()
             logger.warning(
                 "Failed to enqueue post-import operations",
                 repository=repository.name,
