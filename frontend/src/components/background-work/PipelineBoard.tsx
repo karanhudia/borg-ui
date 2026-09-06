@@ -29,6 +29,7 @@ import { usePlan } from '../../hooks/usePlan'
 import {
   HUB_GRID_COLUMNS,
   deriveTrack,
+  REBUILD_STAGES,
   REBUILD_STAGE_FOR,
   type StageState,
 } from './repositoryTrack'
@@ -301,8 +302,8 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
     )
   }
 
-  const columnHeader = (label: string, extra?: React.ReactNode) => (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+  const columnHeader = (label: string, extra?: React.ReactNode, key?: string) => (
+    <Box key={key} sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
       <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
         {label}
       </Typography>
@@ -360,15 +361,19 @@ export default function PipelineBoard({ canManage }: PipelineBoardProps) {
             }}
           >
             {columnHeader(t('operations.background.repositoryColumn'))}
-            {columnHeader(t('operations.background.stage.stats'))}
-            {columnHeader(t('operations.background.stage.archives'))}
-            {columnHeader(
-              t('operations.background.stage.history'),
-              <WorkerStepper
-                count={queue.data.limits.index_workers}
-                canManage={canManage}
-                onChange={(next) => limitsMutation.mutate(next)}
-              />
+            {REBUILD_STAGES.map((stage) =>
+              columnHeader(
+                t(`operations.background.stage.${stage}`),
+                // History is the only stage with a pool of workers to size.
+                stage === 'history' ? (
+                  <WorkerStepper
+                    count={queue.data.limits.index_workers}
+                    canManage={canManage}
+                    onChange={(next) => limitsMutation.mutate(next)}
+                  />
+                ) : undefined,
+                stage
+              )
             )}
             <span />
           </Box>

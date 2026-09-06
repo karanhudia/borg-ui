@@ -12,9 +12,8 @@ import {
 import { ChevronDown, RotateCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import PlanGate from '../shared/PlanGate'
+import { REBUILD_STAGES } from './repositoryTrack'
 import type { RebuildStage } from '../../types/operations'
-
-const STAGES: RebuildStage[] = ['stats', 'archives', 'history']
 
 interface RebuildMenuProps {
   onSelect: (stage: RebuildStage) => void
@@ -60,7 +59,7 @@ export default function RebuildMenu({ onSelect, variant = 'button', label }: Reb
             {t('operations.background.rebuildMenuHint')}
           </Typography>
         </ListSubheader>
-        {STAGES.map((stage, index) => {
+        {REBUILD_STAGES.map((stage, index) => {
           const item = (
             <MenuItem
               key={stage}

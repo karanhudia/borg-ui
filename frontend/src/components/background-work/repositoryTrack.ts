@@ -31,14 +31,23 @@ export const REBUILD_STAGE_FOR: Partial<Record<StageKey, RebuildStage>> = {
   history: 'history',
 }
 
+// Width of each stage's column in the hub table. The rebuild stages are
+// the columns; `connect` is a one-off import step with nothing at rest to
+// show, so it has no column. Adding a stage means adding a width here and
+// a cell in the row; the header and grid follow from this table.
+const HUB_STAGE_COLUMN_WIDTH: Record<RebuildStage, string> = {
+  stats: 'minmax(130px, 1fr)',
+  archives: 'minmax(170px, 1.2fr)',
+  history: 'minmax(190px, 1.4fr)',
+}
+
 // One grid shared by the hub header and every repository row: name, then
-// the three derived-data stages in the order the runner builds them
-// (stats, archive list, file history), then the row menu.
-// On small screens the name and the row menu share the first line and
-// every data cell spans the full width beneath them.
+// one column per stage in the order the runner builds them, then the row
+// menu. On small screens the name and the row menu share the first line
+// and every data cell spans the full width beneath them.
 export const HUB_GRID_COLUMNS = {
   xs: 'minmax(0, 1fr) auto',
-  md: 'minmax(180px, 1.4fr) minmax(130px, 1fr) minmax(170px, 1.2fr) minmax(190px, 1.4fr) 40px',
+  md: `minmax(180px, 1.4fr) ${REBUILD_STAGES.map((s) => HUB_STAGE_COLUMN_WIDTH[s]).join(' ')} 40px`,
 }
 
 export type StageStatus = 'idle' | 'done' | 'running' | 'waiting' | 'failed' | 'skipped'
