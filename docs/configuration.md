@@ -317,9 +317,9 @@ requirements.
 | --- | --- | --- |
 | `ACTIVATION_SERVICE_URL` | `https://license.borgui.com` | License activation endpoint |
 | `ACTIVATION_TIMEOUT_SECONDS` | `10` | Activation request timeout |
-| `ENABLE_STARTUP_LICENSE_SYNC` | `true` in production | Sync license/full-access state at startup |
+| `ENABLE_STARTUP_LICENSE_SYNC` | `true` in production | Sync license/full-access state at startup and hourly |
 
-Set `ENABLE_STARTUP_LICENSE_SYNC=false` to prevent startup contact with the activation service.
+Set `ENABLE_STARTUP_LICENSE_SYNC=false` to prevent all contact with the activation service, both at startup and on the hourly refresh.
 
 ## Reverse Proxy Sub-Path
 

@@ -291,8 +291,13 @@ async def startup_event():
             except Exception as e:
                 logger.warning("Background licensing refresh failed", error=str(e))
 
+    # The same setting has to gate this loop, not just the startup call above.
+    # Spawning it unconditionally meant ENABLE_STARTUP_LICENSE_SYNC=false only
+    # delayed contact with the activation service by an hour instead of
+    # preventing it, so an instance could never actually be kept offline.
     global licensing_refresh_task
-    licensing_refresh_task = _spawn_background_task(licensing_refresh_loop())
+    if settings.enable_startup_license_sync:
+        licensing_refresh_task = _spawn_background_task(licensing_refresh_loop())
 
     # Create first user if no users exist
     await create_first_user()

@@ -75,30 +75,41 @@ Two things, both of which you can see and control.
 
 ### The license service
 
-Your instance talks to `https://license.borgui.com` to activate the 30-day full
-access period, to check a license key you entered, and to refresh entitlement
-state afterwards. Each request sends:
+Your instance talks to a license service to activate the 30-day full access
+period, to check a license key you entered, and to refresh entitlement state
+afterward. The endpoint defaults to `https://license.borgui.com` and is
+overridable with `ACTIVATION_SERVICE_URL`, so if you want to see the traffic or
+block it, point that at your own host or firewall the one you configured.
 
-| Field | Value |
+Four requests exist, and this is every field each one sends
+(`app/services/licensing_service.py`):
+
+| Request | Fields |
 | --- | --- |
-| `instance_id` | A random id generated on your instance |
-| `app` | The literal string `borg-ui` |
-| `app_version` | The version you are running |
-| `hostname` | The container's `HOSTNAME` environment variable |
-| `requested_plan` | The plan being asked for |
+| Full access activation (`/v1/trials/activate`) | `instance_id`, `app`, `app_version`, `hostname`, `fingerprint`, `requested_plan` |
+| Entitlement refresh (`/v1/entitlements/refresh`) | `instance_id`, `current_entitlement_id`, `app_version` |
+| License activation (`/v1/licenses/activate`) | `instance_id`, `license_key`, `app_version` |
+| License deactivation (`/v1/licenses/deactivate`) | `instance_id`, `license_id` |
 
-That is the whole payload (`app/services/licensing_service.py`). No repository
-names, no paths, no archive contents, no file names, no user accounts, no email
-addresses, and no authentication headers.
+`instance_id` is a random id generated on your instance. `hostname` is the
+container's `HOSTNAME` environment variable, and it is sent only by the first
+request. No authentication headers are attached to any of them.
+
+Nothing else is in these requests: no repository names, no paths, no archive
+contents, no file names, no user accounts, and no email addresses.
 
 Community does not need a license key and no feature is gated behind reaching
-this service. If the service is unreachable, Borg UI keeps working.
+this service. If it is unreachable, Borg UI keeps working.
 
-Contact happens at startup and then on a background refresh roughly every hour.
-`ENABLE_STARTUP_LICENSE_SYNC=false` currently suppresses only the startup call,
-not the background refresh, so it does not yet make an instance fully offline.
-If you need an instance that never reaches the network, block the host at your
-firewall until that setting covers both.
+To stop the contact entirely, set:
+
+```bash
+ENABLE_STARTUP_LICENSE_SYNC=false
+```
+
+That covers both the call at startup and the hourly refresh, so an instance
+with it set never reaches the license service. Plan upgrades and full-access
+activation then cannot refresh on their own.
 
 ### Usage analytics
 
@@ -107,9 +118,10 @@ usage. It is on by default and you can turn it off in Settings > Preferences.
 
 Before anything is sent, your real hostname and URL are replaced with
 `app.borgui`, so your private DNS names and IP addresses do not leave the
-browser. The identifier attached to a session is a hash of your install id and
-username, not the username itself. See `frontend/src/utils/analytics.ts` and
-[Analytics](analytics).
+browser. The script tag is loaded with `referrerpolicy="no-referrer"` so the
+request that fetches it cannot carry the origin either. The identifier attached
+to a session is a hash of your install id and username, not the username
+itself. See `frontend/src/utils/analytics.ts` and [Analytics](analytics).
 
 Nothing else phones home. No crash reporting, no error telemetry, no update
 beacon.

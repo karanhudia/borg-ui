@@ -27,11 +27,14 @@ Startup license sync contacts:
 https://license.borgui.com
 ```
 
-To disable startup sync:
+Contact happens at startup and then on a background refresh every hour. To
+disable both:
 
 ```bash
 ENABLE_STARTUP_LICENSE_SYNC=false
 ```
+
+With it set, the instance never reaches the activation service.
 
 ## Enter a License
 
@@ -44,3 +47,5 @@ The app stores the effective plan locally and refreshes activation state when li
 The Community feature set does not require a license key.
 
 If you disable activation sync, plan upgrades and full-access activation cannot refresh automatically.
+
+What the instance sends when sync is enabled is listed in [What Borg UI Does With Your Data](trust).
