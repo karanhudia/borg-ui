@@ -278,6 +278,16 @@ class Settings(BaseSettings):
             self.rclone_cache_root = f"{self.data_dir}/rclone-cache"
 
 
+def derive_ssh_dirs(settings: "Settings", env: Mapping[str, str]) -> None:
+    """Derive the SSH key directories from data_dir and the environment.
+
+    Kept out of the module body so it can be exercised on a fresh Settings
+    without re-importing the module.
+    """
+    settings.ssh_keys_dir = f"{settings.data_dir}/ssh_keys"
+    settings.ssh_home_dir = resolve_ssh_home_dir(env, settings.ssh_keys_dir)
+
+
 # Create settings instance
 settings = Settings()
 
@@ -295,8 +305,7 @@ if not os.getenv("RCLONE_CACHE_ROOT"):
 settings.database_url = resolve_database_url(os.environ, settings.data_dir)
 
 # 2. SSH keys directory - always derived from data_dir
-settings.ssh_keys_dir = f"{settings.data_dir}/ssh_keys"
-settings.ssh_home_dir = resolve_ssh_home_dir(os.environ, settings.ssh_keys_dir)
+derive_ssh_dirs(settings, os.environ)
 
 # 3. Log file - always derived from data_dir
 settings.log_file = f"{settings.data_dir}/logs/borg-ui.log"
