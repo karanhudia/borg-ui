@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-09-06T18:11:44.726Z",
+  "generatedAt": "2026-09-06T18:39:35.839Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #913 visual report",
-    "commitSha": "800ffea6709d",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/34050366925"
+    "commitSha": "b29510924e2e",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/34051413690"
   },
   "totals": {
     "baseline": 510,
-    "actual": 666,
+    "actual": 684,
     "compared": 486,
-    "changed": 34,
-    "added": 180,
+    "changed": 38,
+    "added": 198,
     "removed": 24,
-    "unchanged": 452
+    "unchanged": 448
   },
   "changed": [
     {
@@ -21,9 +21,9 @@
       "baselinePath": "images/baseline/components-archivepathselector--awaiting-agent-listing--mobile.png",
       "actualPath": "images/actual/components-archivepathselector--awaiting-agent-listing--mobile.png",
       "diffPath": "images/diff/components-archivepathselector--awaiting-agent-listing--mobile.png",
-      "diffPixels": 21197,
+      "diffPixels": 21205,
       "totalPixels": 329160,
-      "diffRatio": 0.06439725361526309,
+      "diffRatio": 0.06442155790497023,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -618,6 +618,78 @@
       "diffPixels": 24896,
       "totalPixels": 1024000,
       "diffRatio": 0.0243125,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "remote-machines-remotemachinecard--with-run-diagnostics--mobile.png",
+      "baselinePath": "images/baseline/remote-machines-remotemachinecard--with-run-diagnostics--mobile.png",
+      "actualPath": "images/actual/remote-machines-remotemachinecard--with-run-diagnostics--mobile.png",
+      "diffPath": "images/diff/remote-machines-remotemachinecard--with-run-diagnostics--mobile.png",
+      "diffPixels": 30498,
+      "totalPixels": 329160,
+      "diffRatio": 0.09265402843601896,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "remote-machines-remotemachinecard--with-run-diagnostics.png",
+      "baselinePath": "images/baseline/remote-machines-remotemachinecard--with-run-diagnostics.png",
+      "actualPath": "images/actual/remote-machines-remotemachinecard--with-run-diagnostics.png",
+      "diffPath": "images/diff/remote-machines-remotemachinecard--with-run-diagnostics.png",
+      "diffPixels": 30443,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0297294921875,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 1280,
+        "height": 800
+      },
+      "actual": {
+        "width": 1280,
+        "height": 800
+      }
+    },
+    {
+      "fileName": "remote-machines-remotemachinecard--without-run-diagnostics--mobile.png",
+      "baselinePath": "images/baseline/remote-machines-remotemachinecard--without-run-diagnostics--mobile.png",
+      "actualPath": "images/actual/remote-machines-remotemachinecard--without-run-diagnostics--mobile.png",
+      "diffPath": "images/diff/remote-machines-remotemachinecard--without-run-diagnostics--mobile.png",
+      "diffPixels": 30338,
+      "totalPixels": 329160,
+      "diffRatio": 0.09216794264187629,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "fileName": "remote-machines-remotemachinecard--without-run-diagnostics.png",
+      "baselinePath": "images/baseline/remote-machines-remotemachinecard--without-run-diagnostics.png",
+      "actualPath": "images/actual/remote-machines-remotemachinecard--without-run-diagnostics.png",
+      "diffPath": "images/diff/remote-machines-remotemachinecard--without-run-diagnostics.png",
+      "diffPixels": 30283,
+      "totalPixels": 1024000,
+      "diffRatio": 0.0295732421875,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
@@ -1311,12 +1383,84 @@
       "actualPath": "images/actual/components-planinfodrawer--pro-plan-drawer.png"
     },
     {
+      "fileName": "components-reposelect--labelled--mobile.png",
+      "actualPath": "images/actual/components-reposelect--labelled--mobile.png"
+    },
+    {
+      "fileName": "components-reposelect--labelled.png",
+      "actualPath": "images/actual/components-reposelect--labelled.png"
+    },
+    {
+      "fileName": "components-reposelect--without-label--mobile.png",
+      "actualPath": "images/actual/components-reposelect--without-label--mobile.png"
+    },
+    {
+      "fileName": "components-reposelect--without-label.png",
+      "actualPath": "images/actual/components-reposelect--without-label.png"
+    },
+    {
       "fileName": "components-storagebrowserdialog--with-title-action--mobile.png",
       "actualPath": "images/actual/components-storagebrowserdialog--with-title-action--mobile.png"
     },
     {
       "fileName": "components-storagebrowserdialog--with-title-action.png",
       "actualPath": "images/actual/components-storagebrowserdialog--with-title-action.png"
+    },
+    {
+      "fileName": "remote-machines-hostkeydialog--first-connect--mobile.png",
+      "actualPath": "images/actual/remote-machines-hostkeydialog--first-connect--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-hostkeydialog--first-connect.png",
+      "actualPath": "images/actual/remote-machines-hostkeydialog--first-connect.png"
+    },
+    {
+      "fileName": "remote-machines-hostkeydialog--host-unreachable--mobile.png",
+      "actualPath": "images/actual/remote-machines-hostkeydialog--host-unreachable--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-hostkeydialog--host-unreachable.png",
+      "actualPath": "images/actual/remote-machines-hostkeydialog--host-unreachable.png"
+    },
+    {
+      "fileName": "remote-machines-hostkeydialog--key-changed--mobile.png",
+      "actualPath": "images/actual/remote-machines-hostkeydialog--key-changed--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-hostkeydialog--key-changed.png",
+      "actualPath": "images/actual/remote-machines-hostkeydialog--key-changed.png"
+    },
+    {
+      "fileName": "remote-machines-hostkeydialog--loading--mobile.png",
+      "actualPath": "images/actual/remote-machines-hostkeydialog--loading--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-hostkeydialog--loading.png",
+      "actualPath": "images/actual/remote-machines-hostkeydialog--loading.png"
+    },
+    {
+      "fileName": "remote-machines-hostkeydialog--trusted--mobile.png",
+      "actualPath": "images/actual/remote-machines-hostkeydialog--trusted--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-hostkeydialog--trusted.png",
+      "actualPath": "images/actual/remote-machines-hostkeydialog--trusted.png"
+    },
+    {
+      "fileName": "remote-machines-remotemachinecard--host-key-not-verified--mobile.png",
+      "actualPath": "images/actual/remote-machines-remotemachinecard--host-key-not-verified--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-remotemachinecard--host-key-not-verified.png",
+      "actualPath": "images/actual/remote-machines-remotemachinecard--host-key-not-verified.png"
+    },
+    {
+      "fileName": "remote-machines-remotemachinecard--host-key-verified--mobile.png",
+      "actualPath": "images/actual/remote-machines-remotemachinecard--host-key-verified--mobile.png"
+    },
+    {
+      "fileName": "remote-machines-remotemachinecard--host-key-verified.png",
+      "actualPath": "images/actual/remote-machines-remotemachinecard--host-key-verified.png"
     },
     {
       "fileName": "settings-backgroundworktab--busy--mobile.png",
@@ -2781,18 +2925,6 @@
     },
     {
       "fileName": "remote-machines-deploykeydialog--preset-icon-colors.png"
-    },
-    {
-      "fileName": "remote-machines-remotemachinecard--with-run-diagnostics--mobile.png"
-    },
-    {
-      "fileName": "remote-machines-remotemachinecard--with-run-diagnostics.png"
-    },
-    {
-      "fileName": "remote-machines-remotemachinecard--without-run-diagnostics--mobile.png"
-    },
-    {
-      "fileName": "remote-machines-remotemachinecard--without-run-diagnostics.png"
     },
     {
       "fileName": "remote-machines-sshhostfield--invalid-host--mobile.png"
