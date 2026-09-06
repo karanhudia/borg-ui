@@ -545,6 +545,14 @@ class TestChanges:
             headers=admin_headers,
         )
         assert sorted(c["path"] for c in r.json()["changes"]) == ["b", "d"]
+        # The totals are the filter chips' counts, so they describe the whole
+        # comparison, not the slice the chips currently show.
+        assert r.json()["totals"] == {
+            "added": 1,
+            "removed": 1,
+            "modified": 1,
+            "summary": 1,
+        }
         r = test_client.get(
             f"/api/repositories/{repo.id}/archives/{a3.id}/changes?path_prefix=lib/",
             headers=admin_headers,

@@ -517,6 +517,9 @@ async def archive_changes(
         changes = list(fold_sequence(deltas).values())
     if path_prefix:
         changes = [c for c in changes if c.path.startswith(path_prefix)]
+    # The totals feed the filter chips, so they count the whole comparison
+    # (within the path scope) rather than the change types currently shown.
+    totals = _totals(changes)
     if change:
         wanted = set(change)
         changes = [c for c in changes if c.change in wanted]
@@ -527,7 +530,7 @@ async def archive_changes(
         **base,
         "compare_to_id": compare.id if compare else None,
         "changes": [_serialize_change(c) for c in page],
-        "totals": _totals(changes),
+        "totals": totals,
         "next_cursor": next_cursor,
         "incomplete": bool(unindexed),
         "unindexed_archive_ids": unindexed,

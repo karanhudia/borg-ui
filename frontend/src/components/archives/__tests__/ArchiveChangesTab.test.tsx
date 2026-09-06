@@ -127,6 +127,17 @@ describe('ArchiveChangesTab', () => {
     })
   })
 
+  it('keeps the counts on the chips while a filtered request is in flight', async () => {
+    renderTab()
+    await screen.findByText('invoices.xlsx')
+    expect(screen.getByRole('button', { name: /^modified$/i })).toHaveTextContent('1')
+    ;(archivesAPI.getChanges as ReturnType<typeof vi.fn>).mockReturnValue(new Promise(() => {}))
+    fireEvent.click(screen.getByRole('button', { name: /^added$/i }))
+    await vi.waitFor(() => expect(archivesAPI.getChanges).toHaveBeenCalledTimes(2))
+    expect(screen.getByRole('button', { name: /^modified$/i })).toHaveTextContent('1')
+    expect(screen.getByRole('button', { name: /^added$/i })).toHaveTextContent('0')
+  })
+
   it('re-requests changes against the chosen compare target', async () => {
     renderTab()
     await screen.findByText('invoices.xlsx')

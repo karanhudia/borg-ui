@@ -11,7 +11,7 @@ import {
   useTheme,
 } from '@mui/material'
 import { useTranslation } from 'react-i18next'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import RichSelect from '../shared/RichSelect'
 import PlanGate from '../shared/PlanGate'
 import { usePlan } from '../../hooks/usePlan'
@@ -70,6 +70,10 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
           setCursor(res.data.next_cursor)
           return res.data
         }),
+    // A filter change re-queries; keeping the last response up until the
+    // new one lands stops the chip counts flashing to nothing and the
+    // chips changing width.
+    placeholderData: keepPreviousData,
   })
 
   const morePages = useMutation({
@@ -151,7 +155,16 @@ function ArchiveChangesTabContent({ repositoryId, archive }: ArchiveChangesTabPr
                 </Box>
                 {t(`archives.changes.${type}`)}
                 {count != null && (
-                  <Box component="span" sx={{ color: 'text.secondary', fontWeight: 500 }}>
+                  <Box
+                    component="span"
+                    sx={{
+                      color: 'text.secondary',
+                      fontWeight: 500,
+                      fontVariantNumeric: 'tabular-nums',
+                      minWidth: '2ch',
+                      textAlign: 'left',
+                    }}
+                  >
                     {count}
                   </Box>
                 )}
