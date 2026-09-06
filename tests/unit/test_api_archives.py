@@ -754,3 +754,74 @@ def test_archives_list_route_sends_deprecation_headers(
     assert r.status_code == 200
     assert r.headers["deprecation"] == "true"
     assert "/archives" in r.headers["link"]
+
+
+@pytest.mark.unit
+class TestDeleteJobCancel:
+    @staticmethod
+    def _create_delete_job(test_db, status: str) -> DeleteArchiveJob:
+        repo = Repository(
+            name="Cancel Repo",
+            path="/tmp/cancel-repo",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.flush()
+        job = DeleteArchiveJob(
+            repository_id=repo.id,
+            repository_path=repo.path,
+            archive_name="archive-1",
+            status=status,
+            started_at=datetime(2026, 4, 27, 3, 0, 6),
+        )
+        test_db.add(job)
+        test_db.commit()
+        return job
+
+    def test_cancel_running_delete_job_marks_it_cancelled(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        job = self._create_delete_job(test_db, "running")
+
+        response = test_client.post(
+            f"/api/archives/delete-jobs/{job.id}/cancel", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "message": "backend.success.archives.deletionCancelled"
+        }
+        test_db.expire_all()
+        assert (
+            test_db.query(DeleteArchiveJob).filter_by(id=job.id).one().status
+            == "cancelled"
+        )
+
+    def test_cancel_finished_delete_job_returns_400(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        job = self._create_delete_job(test_db, "completed")
+
+        response = test_client.post(
+            f"/api/archives/delete-jobs/{job.id}/cancel", headers=admin_headers
+        )
+
+        assert response.status_code == 400
+        test_db.expire_all()
+        assert (
+            test_db.query(DeleteArchiveJob).filter_by(id=job.id).one().status
+            == "completed"
+        )
+
+    def test_cancel_unknown_delete_job_returns_404(
+        self, test_client: TestClient, admin_headers
+    ):
+        response = test_client.post(
+            "/api/archives/delete-jobs/999999/cancel", headers=admin_headers
+        )
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == {
+            "key": "backend.errors.archives.deleteJobNotFound"
+        }
