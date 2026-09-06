@@ -9,6 +9,7 @@ import Dashboard from './pages/DashboardV3'
 import Backup from './pages/Backup'
 import BackupPlans from './pages/BackupPlans'
 import Archives from './pages/Archives'
+import ArchiveDetail from './pages/ArchiveDetail'
 import Schedule from './pages/Schedule'
 import Repositories from './pages/Repositories'
 import CloudStorage from './pages/CloudStorage'
@@ -174,6 +175,14 @@ function App() {
           element={
             <ProtectedRoute requiredTab="archives">
               <Archives />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/archives/:repositoryId/:archiveId"
+          element={
+            <ProtectedRoute requiredTab="archives">
+              <ArchiveDetail />
             </ProtectedRoute>
           }
         />

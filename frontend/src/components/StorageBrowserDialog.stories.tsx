@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { Box, Typography } from '@mui/material'
+import { Box, Link, Typography } from '@mui/material'
 import { Hourglass } from 'lucide-react'
 import StorageBrowserDialog, { type StorageBrowserItem } from './StorageBrowserDialog'
 
@@ -61,4 +61,15 @@ export const Loading: Story = {
 // (managed-agent) listing is still running.
 export const LoadingWithHint: Story = {
   args: { items: null, isLoading: true, loadingHint: slowLoadingHint },
+}
+
+export const WithTitleAction: Story = {
+  args: {
+    items,
+    titleAction: (
+      <Link href="#" variant="body2" underline="hover">
+        Open full page
+      </Link>
+    ),
+  },
 }

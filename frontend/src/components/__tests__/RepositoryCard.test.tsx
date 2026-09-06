@@ -10,6 +10,12 @@ import * as useAnalyticsModule from '../../hooks/useAnalytics'
 vi.mock('../../hooks/useMaintenanceJobs')
 vi.mock('../../hooks/useAnalytics')
 
+const navigateMock = vi.fn()
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
+  return { ...actual, useNavigate: () => navigateMock }
+})
+
 describe('RepositoryCard', () => {
   const mockRepository = {
     id: 1,
@@ -773,6 +779,21 @@ describe('RepositoryCard', () => {
       fireEvent.click(screen.getByRole('button', { name: /View Archives/i }))
       expect(mockCallbacks.onViewArchives).toHaveBeenCalledTimes(1)
       expect(mockAnalyticsTracking.trackArchive).toHaveBeenCalledWith('View', mockRepository)
+    })
+
+    it('navigates to Activity with the repository filter pinned when Operations is clicked', () => {
+      renderWithProviders(
+        <RepositoryCard
+          repository={mockRepository}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: /Operations/i }))
+      expect(navigateMock).toHaveBeenCalledWith(`/activity?repository_id=${mockRepository.id}`)
     })
 
     it('calls onViewBackupPlans and tracks event when View linked backup plans button is clicked', () => {

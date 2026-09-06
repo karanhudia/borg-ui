@@ -1,4 +1,5 @@
 import React from 'react'
+import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   FormControl,
@@ -59,6 +60,7 @@ export default function RepoSelect({
   const { t } = useTranslation()
   const theme = useTheme()
   const resolvedLabel = label ?? t('repoSelect.label')
+  const labelId = useId()
   const resolvedLoadingLabel = loadingLabel ?? t('common.loading')
   const resolvedPlaceholderLabel = placeholderLabel ?? t('repoSelect.placeholder')
 
@@ -92,8 +94,9 @@ export default function RepoSelect({
       size={size}
       sx={{ minWidth: { xs: '100%', sm: 300 }, ...sx }}
     >
-      {resolvedLabel && <InputLabel>{resolvedLabel}</InputLabel>}
+      {resolvedLabel && <InputLabel id={labelId}>{resolvedLabel}</InputLabel>}
       <Select
+        labelId={resolvedLabel ? labelId : undefined}
         value={value}
         onChange={(e) => onChange(e.target.value as number | string)}
         label={resolvedLabel || undefined}

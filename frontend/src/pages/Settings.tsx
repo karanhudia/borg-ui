@@ -39,7 +39,7 @@ const Settings: React.FC = () => {
   const canManageMounts = hasGlobalPermission('settings.mounts.manage')
   const canManageScripts = hasGlobalPermission('settings.scripts.manage')
   const canManageExportImport = hasGlobalPermission('settings.export_import.manage')
-  const { globalRoleRank, currentGlobalRole } = useAuthorization()
+  const { globalRoleRank, currentGlobalRole, isLoading: authorizationLoading } = useAuthorization()
   const canViewBackgroundWork =
     (globalRoleRank?.get(currentGlobalRole ?? '') ?? 0) >=
     (globalRoleRank?.get('operator') ?? Infinity)
@@ -124,6 +124,13 @@ const Settings: React.FC = () => {
       trackSettings(EventAction.VIEW, { section: 'settings', tab: currentTabId })
     }
   }, [currentTabId, trackSettings, EventAction])
+
+  // Tabs gated on the authorization model are missing from the order until
+  // it loads, and an index lookup for one of them would fall back to the
+  // Account tab for a frame. Hold the render for that case only.
+  if (authorizationLoading && tab && !tabOrder.includes(tab)) {
+    return null
+  }
 
   return (
     <Box>

@@ -1,31 +1,7 @@
 import { Box, Chip, useTheme, alpha } from '@mui/material'
-import type { ComponentType } from 'react'
-import { Download, Save, RotateCcw, Wrench, Database, Cloud, Package } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { OperationCategory } from '../types/operations'
-
-const ICONS: Record<OperationCategory, ComponentType<{ size?: number }>> = {
-  import: Download,
-  backup: Save,
-  restore: RotateCcw,
-  maintenance: Wrench,
-  index: Database,
-  mirror: Cloud,
-  system: Package,
-}
-
-const PALETTE_KEYS: Record<
-  OperationCategory,
-  'primary' | 'success' | 'warning' | 'info' | 'secondary'
-> = {
-  import: 'info',
-  backup: 'success',
-  restore: 'primary',
-  maintenance: 'warning',
-  index: 'secondary',
-  mirror: 'info',
-  system: 'secondary',
-}
+import { CATEGORY_ICONS, categoryColor } from './categoryStyle'
 
 interface CategoryTokenProps {
   category: OperationCategory
@@ -35,9 +11,8 @@ interface CategoryTokenProps {
 export default function CategoryToken({ category, size = 'small' }: CategoryTokenProps) {
   const { t } = useTranslation()
   const theme = useTheme()
-  const Icon = ICONS[category]
-  const colorKey = PALETTE_KEYS[category]
-  const color = (theme.palette[colorKey] as { main: string }).main
+  const Icon = CATEGORY_ICONS[category]
+  const color = categoryColor(theme, category)
   return (
     <Chip
       size={size}

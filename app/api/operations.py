@@ -2,14 +2,17 @@
 
 import os
 from datetime import datetime, timedelta
+from time import monotonic
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import case, func, text
 from sqlalchemy.orm import Session
 
 from app.api.activity import _paginate_log_text
+from app.api.archive_index import sync_state_from
 from app.core.security import (
     check_repo_access,
     get_current_admin_user,
@@ -19,6 +22,7 @@ from app.core.security import (
 )
 from app.database.database import get_db
 from app.database.models import (
+    Archive,
     Operation,
     Repository,
     SystemSettings,
@@ -27,10 +31,15 @@ from app.database.models import (
     utc_now,
 )
 from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
+from app.services.operations.followups import history_enabled
 from app.services.operations.lanes import lane_free, running_count
 from app.services.operations.models import is_terminal, serialize_operation
+from app.services.operations.reconcile import (
+    DEFAULT_INTERVAL_MINUTES,
+    enqueue_reconcile_runs,
+)
 from app.services.operations.runner import operation_runner
-from app.services.operations.vocab import INDEX_KINDS
+from app.services.operations.vocab import INDEX_KINDS, SUCCESS_STATUSES
 
 router = APIRouter()
 
@@ -116,6 +125,67 @@ class QueueResponse(BaseModel):
 
 class LimitsUpdate(BaseModel):
     index_workers: int = Field(ge=1, le=32)
+
+
+class HistorySummary(BaseModel):
+    indexed: int = 0
+    pending: int = 0
+    failed: int = 0
+    skipped: int = 0
+    truncated: int = 0
+    rows: int = 0
+
+
+class HubRepository(BaseModel):
+    """One repository's derived data at rest (spec 6.4, 6.5): how fresh the
+    archive list is, how much of the file history is built, and how big it
+    has grown. The queue route carries what is happening; this carries what
+    the last runs left behind."""
+
+    repository_id: int
+    repository_name: str
+    repository_type: Optional[str] = None
+    sync_state: str
+    last_synced_at: Optional[datetime] = None
+    last_stats_at: Optional[datetime] = None
+    last_history_at: Optional[datetime] = None
+    archives: int = 0
+    history: HistorySummary
+
+
+class HubTotals(BaseModel):
+    repositories: int
+    archives: int
+    history_rows: int
+    # On-disk size of the archive_changes table when the engine can report
+    # it (PostgreSQL always, SQLite only with the dbstat module). Null means
+    # unknown, never zero.
+    history_bytes: Optional[int] = None
+
+
+class HubResponse(BaseModel):
+    repositories: list[HubRepository]
+    totals: HubTotals
+    last_reconcile_at: Optional[datetime] = None
+    reconcile_interval_minutes: int
+    history_available: bool
+
+
+class HubArchive(BaseModel):
+    id: int
+    name: str
+    start: datetime
+    history_attempts: int = 0
+    history_rows: Optional[int] = None
+
+
+class HubRepositoryDetail(BaseModel):
+    repository_id: int
+    failed_archives: list[HubArchive]
+    truncated_archives: list[HubArchive]
+
+
+HUB_DETAIL_LIMIT = 50
 
 
 # -- helpers ---------------------------------------------------------------------
@@ -218,9 +288,116 @@ def _limits(db: Session, settings: SystemSettings) -> QueueLimits:
     )
 
 
+def _reconcile_interval(settings: SystemSettings) -> int:
+    value = settings.stats_refresh_interval_minutes
+    return value if value is not None else DEFAULT_INTERVAL_MINUTES
+
+
+# The scan below walks the whole archive_changes b-tree on SQLite, and the
+# Background work board polls this route every 30 seconds, so the answer is
+# measured at most once per interval and shared by every caller.
+HISTORY_BYTES_TTL_SECONDS = 300
+_history_bytes_cache: Optional[tuple[float, Optional[int]]] = None
+
+
+def _measure_history_table_bytes(db: Session) -> Optional[int]:
+    """Best-effort on-disk size of archive_changes. Returns None when the
+    engine cannot say, so the client never renders a made-up number."""
+    dialect = db.get_bind().dialect.name
+    try:
+        if dialect == "postgresql":
+            row = db.execute(
+                text("SELECT pg_total_relation_size('archive_changes')")
+            ).scalar()
+        elif dialect == "sqlite":
+            row = db.execute(
+                text("SELECT SUM(pgsize) FROM dbstat WHERE name = 'archive_changes'")
+            ).scalar()
+        else:
+            return None
+    except Exception:
+        db.rollback()
+        return None
+    return int(row) if row is not None else None
+
+
+def _history_table_bytes(db: Session) -> Optional[int]:
+    global _history_bytes_cache
+    now = monotonic()
+    if _history_bytes_cache is not None:
+        measured_at, value = _history_bytes_cache
+        if now - measured_at < HISTORY_BYTES_TTL_SECONDS:
+            return value
+    value = _measure_history_table_bytes(db)
+    _history_bytes_cache = (now, value)
+    return value
+
+
+def _latest_completed_by_repository(
+    db: Session, kind: str, repository_ids: Optional[set]
+) -> dict[int, datetime]:
+    q = db.query(Operation.repository_id, func.max(Operation.completed_at)).filter(
+        Operation.kind == kind,
+        Operation.status.in_(SUCCESS_STATUSES),
+        Operation.repository_id.isnot(None),
+    )
+    if repository_ids is not None:
+        q = q.filter(Operation.repository_id.in_(repository_ids))
+    rows = q.group_by(Operation.repository_id).all()
+    return {repo_id: at for repo_id, at in rows if at is not None}
+
+
+def _history_by_repository(
+    db: Session, repository_ids: Optional[set]
+) -> dict[int, dict]:
+    def count_state(state: str):
+        return func.sum(case((Archive.history_state == state, 1), else_=0))
+
+    q = db.query(
+        Archive.repository_id,
+        func.count(Archive.id),
+        count_state("indexed"),
+        count_state("pending"),
+        count_state("failed"),
+        count_state("skipped"),
+        func.sum(case((Archive.history_truncated.is_(True), 1), else_=0)),
+        func.coalesce(func.sum(Archive.history_rows), 0),
+        func.max(Archive.history_indexed_at),
+    )
+    if repository_ids is not None:
+        q = q.filter(Archive.repository_id.in_(repository_ids))
+    rows = q.group_by(Archive.repository_id).all()
+    return {
+        repo_id: {
+            "archives": archives,
+            "summary": HistorySummary(
+                indexed=indexed or 0,
+                pending=pending or 0,
+                failed=failed or 0,
+                skipped=skipped or 0,
+                truncated=truncated or 0,
+                rows=int(history_rows or 0),
+            ),
+            "last_history_at": last_history_at,
+        }
+        for (
+            repo_id,
+            archives,
+            indexed,
+            pending,
+            failed,
+            skipped,
+            truncated,
+            history_rows,
+            last_history_at,
+        ) in rows
+    }
+
+
 # -- routes ------------------------------------------------------------------------
 # Fixed paths are declared before /{operation_id} so FastAPI does not try to
-# parse "queue", "pause", "resume", or "limits" as an id.
+# parse "queue", "pause", "resume", "limits", "repositories", or "reconcile"
+# as an id.
 
 
 @router.get("/", response_model=OperationListResponse)
@@ -307,6 +484,124 @@ async def get_queue(
         limits=_limits(db, settings),
         paused=bool(settings.background_paused),
     )
+
+
+@router.get("/repositories", response_model=HubResponse)
+async def get_repositories_hub(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """One row per repository the user may see, with the state of its
+    derived data, plus totals and the reconcile cadence. Two grouped
+    queries for archives and operations, not one per repository."""
+    accessible = accessible_repository_ids(db, current_user)
+    q = db.query(Repository)
+    if accessible is not None:
+        q = q.filter(Repository.id.in_(accessible))
+    repositories = q.order_by(func.lower(Repository.name), Repository.id).all()
+
+    settings = _settings_row(db)
+    interval = _reconcile_interval(settings)
+    history = _history_by_repository(db, accessible)
+    last_sync = _latest_completed_by_repository(db, "archive_sync", accessible)
+    last_stats = _latest_completed_by_repository(db, "stats", accessible)
+    syncing_q = db.query(Operation.repository_id).filter(
+        Operation.kind == "archive_sync",
+        Operation.status.in_(("queued", "running")),
+    )
+    if accessible is not None:
+        syncing_q = syncing_q.filter(Operation.repository_id.in_(accessible))
+    syncing = {repo_id for (repo_id,) in syncing_q.distinct()}
+
+    rows = []
+    for repo in repositories:
+        facts = history.get(repo.id)
+        last_at = last_sync.get(repo.id)
+        rows.append(
+            HubRepository(
+                repository_id=repo.id,
+                repository_name=repo.name,
+                repository_type=repo.repository_type,
+                sync_state=sync_state_from(repo.id in syncing, last_at, interval or 60),
+                last_synced_at=last_at,
+                last_stats_at=last_stats.get(repo.id),
+                last_history_at=facts["last_history_at"] if facts else None,
+                archives=facts["archives"] if facts else 0,
+                history=facts["summary"] if facts else HistorySummary(),
+            )
+        )
+
+    last_reconcile_q = db.query(func.max(Operation.created_at)).filter(
+        Operation.trigger == "reconcile"
+    )
+    if accessible is not None:
+        last_reconcile_q = last_reconcile_q.filter(
+            Operation.repository_id.in_(accessible)
+        )
+    last_reconcile = last_reconcile_q.scalar()
+    return HubResponse(
+        repositories=rows,
+        totals=HubTotals(
+            repositories=len(rows),
+            archives=sum(r.archives for r in rows),
+            history_rows=sum(r.history.rows for r in rows),
+            # A whole-table figure, so only a caller who sees every
+            # repository is told it.
+            history_bytes=(_history_table_bytes(db) if accessible is None else None),
+        ),
+        last_reconcile_at=last_reconcile,
+        reconcile_interval_minutes=interval,
+        history_available=history_enabled(db),
+    )
+
+
+@router.get("/repositories/{repository_id}", response_model=HubRepositoryDetail)
+async def get_repository_hub_detail(
+    repository_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """The archives behind a row's failed and truncated counts, newest
+    first, so the person can see which ones and how many attempts."""
+    repo = db.get(Repository, repository_id)
+    if repo is None:
+        raise HTTPException(status_code=404, detail=NOT_FOUND)
+    check_repo_access(db, current_user, repo, "viewer")
+
+    def archives(*filters):
+        return [
+            HubArchive(
+                id=a.id,
+                name=a.name,
+                start=a.start,
+                history_attempts=a.history_attempts or 0,
+                history_rows=a.history_rows,
+            )
+            for a in db.query(Archive)
+            .filter(Archive.repository_id == repo.id, *filters)
+            .order_by(Archive.start.desc(), Archive.id.desc())
+            .limit(HUB_DETAIL_LIMIT)
+            .all()
+        ]
+
+    return HubRepositoryDetail(
+        repository_id=repo.id,
+        failed_archives=archives(Archive.history_state == "failed"),
+        truncated_archives=archives(Archive.history_truncated.is_(True)),
+    )
+
+
+@router.post("/reconcile")
+async def reconcile_now(
+    current_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    """Run the reconcile tick now instead of waiting for the interval
+    (spec 7.5). Repositories with index work already queued are skipped,
+    exactly as the scheduler skips them."""
+    count = enqueue_reconcile_runs(db)
+    operation_runner.wake()
+    return {"repositories": count}
 
 
 @router.post("/pause")

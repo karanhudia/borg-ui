@@ -37,6 +37,7 @@ For a new setup, follow the sidebar in this order:
 | Backups | Backup | Run older repository-based backups or legacy backup jobs. New workflows should usually start from Backup Plans. |
 | Backups | Schedule | Review scheduled repository work, scheduled restore checks, and plan schedules from one operational view. |
 | Backups | Archives | Browse archives, select files or folders, restore data, and run archive-level actions. |
+| Backups | Archive detail (`/archives/:repositoryId/:archiveId`) | Changes, Files, and Info tabs for one archive, reached from the Archives heatmap or list. |
 
 ## Settings
 

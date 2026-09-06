@@ -228,3 +228,48 @@ export const StatusComparison: Story = {
     </Box>
   ),
 }
+
+// A run whose follow-up chain rides under the row, which is where DataTable's
+// sub-row hook is used: a desktop table row and a mobile card both mount it.
+const runWithFollowups: Job[] = [
+  {
+    id: 301,
+    repository_id: 4,
+    repository: '/backups/nas',
+    repository_path: '/backups/nas',
+    type: 'backup',
+    kind: 'backup',
+    category: 'backup',
+    trigger: 'plan',
+    status: 'completed',
+    started_at: '2026-09-05T02:00:00Z',
+    completed_at: '2026-09-05T02:12:00Z',
+    triggered_by: 'backup_plan',
+    execution_mode: 'local',
+    followups: [
+      { id: 302, type: 'operation', kind: 'archive_sync', status: 'completed' },
+      { id: 303, type: 'operation', kind: 'history_merge', status: 'completed' },
+      {
+        id: 304,
+        type: 'operation',
+        kind: 'history_index',
+        status: 'running',
+        progress_current: 14,
+        progress_total: 38,
+      },
+    ],
+  },
+]
+
+export const RunWithFollowups: Story = {
+  args: {
+    jobs: runWithFollowups,
+    showTypeColumn: true,
+    showTriggerColumn: true,
+  },
+  render: (args) => (
+    <Box sx={{ p: 3 }}>
+      <BackupJobsTable {...args} />
+    </Box>
+  ),
+}

@@ -3,7 +3,7 @@ import { renderWithProviders, screen } from '../../test/test-utils'
 import { ThemeProvider } from '../../context/ThemeContext'
 import Settings from '../Settings'
 
-const { authState, currentTab } = vi.hoisted(() => ({
+const { authState, currentTab, authorization } = vi.hoisted(() => ({
   authState: {
     user: {
       id: 7,
@@ -15,6 +15,7 @@ const { authState, currentTab } = vi.hoisted(() => ({
     },
   },
   currentTab: { value: 'users' },
+  authorization: { isLoading: false },
 }))
 
 const trackSettings = vi.fn()
@@ -26,6 +27,24 @@ vi.mock('../../hooks/useAuth', () => ({
       authState.user.global_permissions.includes(permission),
     refreshUser: vi.fn(),
   }),
+}))
+
+vi.mock('../../hooks/useAuthorization', () => ({
+  useAuthorization: () => ({
+    isLoading: authorization.isLoading,
+    globalRoleRank: authorization.isLoading
+      ? new Map<string, number>()
+      : new Map([
+          ['viewer', 10],
+          ['operator', 20],
+          ['admin', 30],
+        ]),
+    currentGlobalRole: authState.user.role,
+  }),
+}))
+
+vi.mock('../../components/BackgroundWorkTab', () => ({
+  default: () => <div>Background Work Tab</div>,
 }))
 
 vi.mock('../../hooks/useAnalytics', () => ({
@@ -112,11 +131,34 @@ vi.mock('react-router-dom', async () => {
 describe('Settings permission routing', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    authorization.isLoading = false
     authState.user = {
       ...authState.user,
       role: 'viewer',
       global_permissions: [],
     }
+  })
+
+  it('does not flash the account tab while the authorization model is still loading', async () => {
+    currentTab.value = 'background-work'
+    authState.user = { ...authState.user, role: 'operator' }
+    authorization.isLoading = true
+
+    const { rerender } = renderWithProviders(
+      <ThemeProvider>
+        <Settings />
+      </ThemeProvider>
+    )
+    expect(screen.queryByText('Account Tab')).not.toBeInTheDocument()
+    expect(screen.queryByText('Background Work Tab')).not.toBeInTheDocument()
+
+    authorization.isLoading = false
+    rerender(
+      <ThemeProvider>
+        <Settings />
+      </ThemeProvider>
+    )
+    expect(await screen.findByText('Background Work Tab')).toBeInTheDocument()
   })
 
   it('renders the users tab when the user has users permission but not system permission', async () => {

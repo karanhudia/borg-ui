@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Alert,
@@ -14,16 +14,17 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  TextField,
   Tooltip,
   Typography,
+  type Theme,
 } from '@mui/material'
 import {
   CheckSquare,
   ChevronRight,
-  File,
-  Folder,
   Home,
   MinusSquare,
+  Search,
   ShieldCheck,
   Square,
 } from 'lucide-react'
@@ -31,8 +32,9 @@ import { BorgApiClient, type Repository } from '../services/borgApi/client'
 import type { Archive } from '../types'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import type { RestorePathMetadata } from '../utils/restorePaths'
+import FileTypeIcon from './FileTypeIcon'
 
-interface ArchiveItem {
+export interface ArchiveItem {
   name: string
   type: 'file' | 'directory'
   path: string
@@ -61,6 +63,16 @@ export interface ArchivePathSelectionData {
   selectedItems?: RestorePathMetadata[]
 }
 
+export interface ArchiveBrowseState {
+  currentPath: string
+  /** The rows actually on screen, filter applied, so a wrapper's keyboard
+   *  cursor and the list agree on what index means. */
+  items: ArchiveItem[]
+  navigateTo: (path: string) => void
+  activateItem: (item: ArchiveItem) => void
+  focusFilter: () => void
+}
+
 interface ArchivePathSelectorProps {
   repository: Repository
   archive: Pick<Archive, 'id' | 'name'>
@@ -69,6 +81,16 @@ interface ArchivePathSelectorProps {
   title?: string
   subtitle?: string
   helpText?: string
+  /** `embedded` drops the heading, selection bar, and helper caption so a
+   *  page that owns those surfaces (the archive Files tab) shows them once. */
+  variant?: 'standalone' | 'embedded'
+  /** Optional escape hatch reporting the current browse state and imperative
+   *  navigation, so a wrapper (e.g. keyboard shortcuts) can drive this
+   *  component without it becoming a controlled component. */
+  onBrowseStateChange?: (state: ArchiveBrowseState) => void
+  /** Row the wrapper's keyboard cursor sits on, so arrow keys have something
+   *  visible to move. Undefined leaves the list unhighlighted. */
+  activeIndex?: number
 }
 
 export default function ArchivePathSelector({
@@ -79,8 +101,14 @@ export default function ArchivePathSelector({
   title,
   subtitle,
   helpText,
+  variant = 'standalone',
+  onBrowseStateChange,
+  activeIndex,
 }: ArchivePathSelectorProps) {
+  const embedded = variant === 'embedded'
   const { t } = useTranslation()
+  const [filter, setFilter] = useState('')
+  const filterRef = useRef<HTMLInputElement>(null)
   const [currentPath, setCurrentPath] = useState<string>('')
   const [items, setItems] = useState<ArchiveItem[]>([])
   const [loading, setLoading] = useState<boolean>(false)
@@ -143,6 +171,12 @@ export default function ArchivePathSelector({
 
   const pathParts = currentPath ? currentPath.split('/').filter(Boolean) : []
 
+  const visibleItems = useMemo(() => {
+    const needle = filter.trim().toLowerCase()
+    if (!needle) return items
+    return items.filter((item) => item.name.toLowerCase().includes(needle))
+  }, [items, filter])
+
   const handleItemClick = (item: ArchiveItem) => {
     if (item.type === 'directory') {
       setCurrentPath(item.path)
@@ -151,8 +185,18 @@ export default function ArchivePathSelector({
     }
   }
 
+  // The selected ancestor that already covers a path, if any. Borg extracts
+  // whole trees and the restore has no exclude list, so a path under a
+  // selected folder is included whatever happens to its own checkbox.
+  const coveredBy = (path: string): string | null => {
+    for (const selected of selectedPaths) {
+      if (path.startsWith(selected + '/')) return selected
+    }
+    return null
+  }
+
   const toggleSelection = (item: ArchiveItem) => {
-    if (isRestoreCanaryItem(item)) {
+    if (isRestoreCanaryItem(item) || coveredBy(item.path)) {
       return
     }
 
@@ -163,6 +207,14 @@ export default function ArchivePathSelector({
     if (newPaths.has(path)) {
       newPaths.delete(path)
     } else {
+      // Selecting a folder makes every selection inside it redundant, and
+      // keeping them would double count the size and clutter the list.
+      if (item.type === 'directory') {
+        for (const selected of selectedPaths) {
+          if (selected.startsWith(path + '/')) newPaths.delete(selected)
+        }
+        newItems = newItems.filter((selectedItem) => !selectedItem.path.startsWith(path + '/'))
+      }
       newPaths.add(path)
       newItems = [...newItems, { path, type: item.type }]
     }
@@ -171,8 +223,33 @@ export default function ArchivePathSelector({
   }
 
   const navigateToPath = (targetPath: string) => {
+    setFilter('')
     setCurrentPath(targetPath)
   }
+
+  // The published callbacks are read through refs rather than captured, so a
+  // wrapper that holds one from an earlier render still toggles against the
+  // current selection instead of the one this effect last saw.
+  const activateRef = useRef(handleItemClick)
+  const navigateRef = useRef(navigateToPath)
+
+  // Written in an effect rather than during render: a ref belongs to the
+  // committed tree, and the published callbacks only read it when they run.
+  useEffect(() => {
+    activateRef.current = handleItemClick
+    navigateRef.current = navigateToPath
+  })
+
+  useEffect(() => {
+    onBrowseStateChange?.({
+      currentPath,
+      items: visibleItems,
+      navigateTo: (path: string) => navigateRef.current(path),
+      activateItem: (item: ArchiveItem) => activateRef.current(item),
+      focusFilter: () => filterRef.current?.focus(),
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPath, visibleItems])
 
   const formatSize = (bytes?: number): string => {
     if (!bytes) return '0 B'
@@ -183,7 +260,7 @@ export default function ArchivePathSelector({
   }
 
   const isSelected = (path: string): boolean => {
-    return selectedPaths.has(path)
+    return selectedPaths.has(path) || coveredBy(path) != null
   }
 
   const hasSelectedChildren = (dirPath: string): boolean => {
@@ -193,6 +270,9 @@ export default function ArchivePathSelector({
   const getDirectoryIcon = (item: ArchiveItem) => {
     if (isRestoreCanaryItem(item)) {
       return <Square size={20} color="rgba(0, 0, 0, 0.35)" />
+    }
+    if (coveredBy(item.path)) {
+      return <CheckSquare size={20} color="rgba(25, 118, 210, 0.5)" />
     }
     if (isSelected(item.path)) {
       return <CheckSquare size={20} color="#1976d2" />
@@ -207,26 +287,39 @@ export default function ArchivePathSelector({
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <Box sx={{ mb: 2 }}>
-        <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-          {title || t('wizard.restoreFiles.title')}
-        </Typography>
-        <Typography
-          variant="body2"
-          sx={{
-            color: 'text.secondary',
-          }}
-        >
-          {subtitle || t('wizard.restoreFiles.subtitle')}
-        </Typography>
-      </Box>
+      {!embedded && (
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+            {title || t('wizard.restoreFiles.title')}
+          </Typography>
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'text.secondary',
+            }}
+          >
+            {subtitle || t('wizard.restoreFiles.subtitle')}
+          </Typography>
+        </Box>
+      )}
 
       <Box
         sx={{
           minHeight: 32,
           display: 'flex',
           alignItems: 'center',
-          mb: 2,
+          mb: embedded ? 0 : 2,
+          ...(embedded
+            ? {
+                px: 2,
+                py: 1.25,
+                borderBottom: '1px solid',
+                borderColor: 'divider',
+                bgcolor: (theme: Theme) => alpha(theme.palette.text.primary, 0.025),
+                borderTopLeftRadius: 'inherit',
+                borderTopRightRadius: 'inherit',
+              }
+            : {}),
         }}
       >
         <Breadcrumbs
@@ -279,6 +372,27 @@ export default function ArchivePathSelector({
             )
           })}
         </Breadcrumbs>
+        {embedded && (
+          <TextField
+            inputRef={filterRef}
+            size="small"
+            variant="outlined"
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            placeholder={t('wizard.restoreFiles.filterPlaceholder')}
+            sx={{ ml: 'auto', width: { xs: 140, sm: 220 }, flexShrink: 0 }}
+            slotProps={{
+              // The label belongs on the input, not on the wrapper MUI would
+              // otherwise put it on.
+              htmlInput: { 'aria-label': t('wizard.restoreFiles.filterLabel') },
+              input: {
+                startAdornment: (
+                  <Search size={14} style={{ marginRight: 6, opacity: 0.6 }} aria-hidden />
+                ),
+              },
+            }}
+          />
+        )}
       </Box>
 
       <Box
@@ -286,9 +400,11 @@ export default function ArchivePathSelector({
           flex: 1,
           display: 'flex',
           flexDirection: 'column',
-          border: '1px solid',
+          // Embedded in the Files tab the panel around the list owns the
+          // frame; a second border here read as a box inside a box.
+          border: embedded ? 0 : '1px solid',
           borderColor: 'divider',
-          borderRadius: 1,
+          borderRadius: embedded ? 0 : 1,
           bgcolor: 'background.paper',
           overflow: 'hidden',
         }}
@@ -319,36 +435,38 @@ export default function ArchivePathSelector({
           </Box>
         )}
 
-        <Box
-          sx={{
-            px: 2,
-            py: 1,
-            borderBottom: '1px solid',
-            borderColor: 'divider',
-            bgcolor: (theme) => alpha(theme.palette.primary.main, 0.05),
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1,
-            height: 40,
-            minHeight: 40,
-            maxHeight: 40,
-          }}
-        >
-          <CheckSquare size={16} />
-          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-            {selectedPaths.size > 0
-              ? t('wizard.restoreFiles.itemsSelected', { count: selectedPaths.size })
-              : t('wizard.restoreFiles.noItemsSelected')}
-          </Typography>
-          {selectedPaths.size > 0 && (
-            <Chip
-              label={t('wizard.restoreFiles.clearAll')}
-              size="small"
-              onClick={() => onChange({ selectedPaths: [], selectedItems: [] })}
-              sx={{ ml: 'auto', cursor: 'pointer', height: 24 }}
-            />
-          )}
-        </Box>
+        {!embedded && (
+          <Box
+            sx={{
+              px: 2,
+              py: 1,
+              borderBottom: '1px solid',
+              borderColor: 'divider',
+              bgcolor: (theme) => alpha(theme.palette.primary.main, 0.05),
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              height: 40,
+              minHeight: 40,
+              maxHeight: 40,
+            }}
+          >
+            <CheckSquare size={16} />
+            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+              {selectedPaths.size > 0
+                ? t('wizard.restoreFiles.itemsSelected', { count: selectedPaths.size })
+                : t('wizard.restoreFiles.noItemsSelected')}
+            </Typography>
+            {selectedPaths.size > 0 && (
+              <Chip
+                label={t('wizard.restoreFiles.clearAll')}
+                size="small"
+                onClick={() => onChange({ selectedPaths: [], selectedItems: [] })}
+                sx={{ ml: 'auto', cursor: 'pointer', height: 24 }}
+              />
+            )}
+          </Box>
+        )}
 
         <Box sx={{ flex: 1, overflow: 'auto' }}>
           {loading && (
@@ -378,12 +496,14 @@ export default function ArchivePathSelector({
           )}
 
           {error && (
-            <Box sx={{ p: 2 }}>
-              <Alert severity="error">{error}</Alert>
-            </Box>
+            // Flush with the panel: the panel already owns the frame, so a
+            // second rounded box inside it reads as a mistake.
+            <Alert severity="error" sx={{ borderRadius: 0, px: 2.5, py: 1.5 }}>
+              {error}
+            </Alert>
           )}
 
-          {!loading && !error && items.length === 0 && (
+          {!loading && !error && visibleItems.length === 0 && (
             <Box sx={{ p: 4, textAlign: 'center' }}>
               <Typography
                 variant="body2"
@@ -396,10 +516,11 @@ export default function ArchivePathSelector({
             </Box>
           )}
 
-          {!loading && !error && items.length > 0 && (
+          {!loading && !error && visibleItems.length > 0 && (
             <List dense disablePadding>
-              {items.map((item) => {
+              {visibleItems.map((item, index) => {
                 const managedCanary = isRestoreCanaryItem(item)
+                const isActive = activeIndex === index
                 const managedTooltip =
                   item.type === 'directory'
                     ? canaryDescription
@@ -407,9 +528,15 @@ export default function ArchivePathSelector({
                 return (
                   <Tooltip
                     key={item.path}
-                    title={managedCanary ? managedTooltip : ''}
+                    title={
+                      managedCanary
+                        ? managedTooltip
+                        : coveredBy(item.path) && item.type !== 'directory'
+                          ? t('archiveContents.includedByParent', { parent: coveredBy(item.path) })
+                          : ''
+                    }
                     arrow
-                    disableHoverListener={!managedCanary}
+                    disableHoverListener={!managedCanary && !coveredBy(item.path)}
                   >
                     <ListItem
                       disablePadding
@@ -419,7 +546,11 @@ export default function ArchivePathSelector({
                             title={
                               managedCanary
                                 ? t('archiveContents.managedCanaryProbeDisabled')
-                                : t('wizard.restoreFiles.selectDirTooltip')
+                                : coveredBy(item.path)
+                                  ? t('archiveContents.includedByParent', {
+                                      parent: coveredBy(item.path),
+                                    })
+                                  : t('wizard.restoreFiles.selectDirTooltip')
                             }
                             describeChild
                           >
@@ -430,9 +561,13 @@ export default function ArchivePathSelector({
                                 aria-label={
                                   managedCanary
                                     ? t('archiveContents.managedCanaryProbeDisabled')
-                                    : t('wizard.restoreFiles.selectDirTooltip')
+                                    : coveredBy(item.path)
+                                      ? t('archiveContents.includedByParent', {
+                                          parent: coveredBy(item.path),
+                                        })
+                                      : t('wizard.restoreFiles.selectDirTooltip')
                                 }
-                                disabled={managedCanary}
+                                disabled={managedCanary || coveredBy(item.path) != null}
                                 onClick={() => toggleSelection(item)}
                               >
                                 {getDirectoryIcon(item)}
@@ -444,35 +579,82 @@ export default function ArchivePathSelector({
                     >
                       <ListItemButton
                         onClick={() => handleItemClick(item)}
+                        data-active={isActive || undefined}
+                        ref={(node: HTMLDivElement | null) => {
+                          if (isActive) node?.scrollIntoView({ block: 'nearest' })
+                        }}
                         sx={{
-                          border: '1px solid',
-                          borderColor: (theme) =>
-                            managedCanary ? alpha(theme.palette.info.main, 0.25) : 'transparent',
+                          py: embedded ? 1 : undefined,
+                          px: embedded ? 2 : undefined,
+                          ...(isActive && {
+                            outline: (theme: Theme) =>
+                              `2px solid ${alpha(theme.palette.primary.main, 0.5)}`,
+                            outlineOffset: '-2px',
+                          }),
+                          // Embedded rows are separated by a hairline and never
+                          // outlined; the panel around the list owns the frame.
+                          ...(embedded
+                            ? {
+                                border: 0,
+                                borderRadius: 0,
+                                borderBottom: '1px solid',
+                                borderBottomColor: 'divider',
+                                '.MuiListItem-root:last-of-type &': { borderBottom: 0 },
+                              }
+                            : {
+                                border: '1px solid',
+                                borderColor: (theme: Theme) =>
+                                  managedCanary
+                                    ? alpha(theme.palette.info.main, 0.25)
+                                    : 'transparent',
+                              }),
+                          // One resolver owns the background: a second
+                          // bgcolor key later in the object would win and drop
+                          // the keyboard cursor's tint.
                           bgcolor: (theme) =>
-                            managedCanary ? alpha(theme.palette.info.main, 0.05) : 'transparent',
+                            isActive
+                              ? alpha(theme.palette.primary.main, 0.12)
+                              : managedCanary
+                                ? alpha(theme.palette.info.main, 0.05)
+                                : 'transparent',
                           cursor:
                             item.type === 'directory'
                               ? 'pointer'
                               : managedCanary
                                 ? 'default'
                                 : 'pointer',
+                          // The product's tables hover in a neutral tint; the
+                          // blue tint is kept for the keyboard cursor only.
                           '&:hover': {
                             bgcolor: (theme) =>
                               managedCanary
                                 ? alpha(theme.palette.info.main, 0.09)
-                                : alpha(theme.palette.primary.main, 0.08),
+                                : embedded
+                                  ? alpha(theme.palette.text.primary, 0.03)
+                                  : alpha(theme.palette.primary.main, 0.08),
                           },
                         }}
                       >
-                        <ListItemIcon sx={{ minWidth: 36 }}>
+                        <ListItemIcon sx={{ minWidth: 44 }}>
                           {managedCanary ? (
                             <ShieldCheck size={20} />
-                          ) : item.type === 'directory' ? (
-                            <Folder size={20} />
-                          ) : isSelected(item.path) ? (
-                            <CheckSquare size={20} color="#1976d2" />
+                          ) : isSelected(item.path) && item.type !== 'directory' ? (
+                            <Box
+                              sx={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: '9px',
+                                bgcolor: 'primary.main',
+                                color: 'primary.contrastText',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              <CheckSquare size={18} />
+                            </Box>
                           ) : (
-                            <File size={20} />
+                            <FileTypeIcon name={item.name} type={item.type} />
                           )}
                         </ListItemIcon>
                         <ListItemText
@@ -519,15 +701,17 @@ export default function ArchivePathSelector({
         </Box>
       </Box>
 
-      <Typography
-        variant="caption"
-        sx={{
-          color: 'text.secondary',
-          mt: 1,
-        }}
-      >
-        {helpText || t('wizard.restoreFiles.helpText')}
-      </Typography>
+      {!embedded && (
+        <Typography
+          variant="caption"
+          sx={{
+            color: 'text.secondary',
+            mt: 1,
+          }}
+        >
+          {helpText || t('wizard.restoreFiles.helpText')}
+        </Typography>
+      )}
     </Box>
   )
 }

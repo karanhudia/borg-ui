@@ -32,13 +32,16 @@ from app.services.operations.executors.history import (
 from app.services.operations.followups import PLAN_GATED_KINDS, history_enabled
 from app.services.operations.history_fold import Change, fold_sequence, rows_to_changes
 from app.services.operations.legacy_status import latest_legacy_terminal
+from app.services.operations.reconcile import enqueue_reconcile_run
 from app.services.operations.series import cron_for_repository
 from app.services.operations.vocab import PRIORITY_RECONCILE
 
 router = APIRouter()
 
 NOT_FOUND = {"key": "backend.errors.archives.notFound"}
-STALE_AFTER_INTERVALS = 2
+# Three intervals, so one missed reconcile (a backend restart sleeps a
+# full interval before its first run) does not flip every chip to stale.
+STALE_AFTER_INTERVALS = 3
 STRIP_CELLS: tuple[tuple[str, dict], ...] = (
     ("backup", {"kinds": ("backup",)}),
     ("check", {"kinds": ("check",)}),
@@ -103,19 +106,28 @@ def sync_state_for(
         .first()
     )
     last_at = last.completed_at if last else None
-    if active:
-        return "syncing", last_at
-    if last_at is None:
-        return "never", None
     settings = db.query(SystemSettings).first()
     interval = (settings.stats_refresh_interval_minutes if settings else None) or 60
+    return sync_state_from(active is not None, last_at, interval), last_at
+
+
+def sync_state_from(
+    active: bool, last_at: Optional[datetime], interval_minutes: int
+) -> str:
+    """The archive index freshness rule on its own, so callers that already
+    hold the per-repository facts (the Background work hub reads them for
+    every repository in two queries) do not repeat the lookups."""
+    if active:
+        return "syncing"
+    if last_at is None:
+        return "never"
     # DB timestamps round-trip as naive UTC (spec 6.1); compare against a
     # naive "now" rather than utc_now()'s tz-aware value.
     if utc_now().replace(tzinfo=None) - last_at > timedelta(
-        minutes=interval * STALE_AFTER_INTERVALS
+        minutes=interval_minutes * STALE_AFTER_INTERVALS
     ):
-        return "stale", last_at
-    return "fresh", last_at
+        return "stale"
+    return "fresh"
 
 
 def _naive_utc(value: Optional[datetime]) -> Optional[datetime]:
@@ -379,6 +391,25 @@ async def rebuild(
     return {"run_id": ops[0].run_id if ops else None, "operations": [o.id for o in ops]}
 
 
+@router.post("/{repo_id}/resync")
+async def resync(
+    repo_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Bring the stored archive list back in line with the repository after
+    work that removed archives (delete, prune, wipe). Unlike /rebuild this
+    invalidates nothing: archive_sync reconciles the list, history_merge
+    folds the rows of archives that have gone, and stats refreshes the
+    totals. A run already in flight is reused rather than duplicated."""
+    repository = _repo(db, current_user, repo_id, role="operator")
+    ops = enqueue_reconcile_run(db, repository.id)
+    return {
+        "run_id": ops[0].run_id if ops else None,
+        "operations": [o.id for o in ops],
+    }
+
+
 # -- Pro routes (spec 11.2) -------------------------------------------------------
 
 MAX_LIMIT = 500
@@ -486,6 +517,9 @@ async def archive_changes(
         changes = list(fold_sequence(deltas).values())
     if path_prefix:
         changes = [c for c in changes if c.path.startswith(path_prefix)]
+    # The totals feed the filter chips, so they count the whole comparison
+    # (within the path scope) rather than the change types currently shown.
+    totals = _totals(changes)
     if change:
         wanted = set(change)
         changes = [c for c in changes if c.change in wanted]
@@ -496,7 +530,7 @@ async def archive_changes(
         **base,
         "compare_to_id": compare.id if compare else None,
         "changes": [_serialize_change(c) for c in page],
-        "totals": _totals(changes),
+        "totals": totals,
         "next_cursor": next_cursor,
         "incomplete": bool(unindexed),
         "unindexed_archive_ids": unindexed,

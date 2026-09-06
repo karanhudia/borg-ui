@@ -8,6 +8,7 @@ import json
 import os
 import asyncio
 import re
+from typing import Optional
 import tempfile  # noqa: F401 - retained as a patch target in download endpoint tests
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -44,6 +45,26 @@ from app.utils.datetime_utils import serialize_borg_archive_time, serialize_date
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["Archives v2"], dependencies=[require_feature("borg_v2")])
+
+
+_UNSUPPORTED_VERSION = re.compile(
+    r"repository version (\d+) is not supported by this borg version"
+)
+
+
+def _unsupported_repository_version(stderr: str) -> Optional[dict]:
+    """Borg 2 is in beta and its repository format has changed between
+    betas. A repository written by another beta fails with a borgstore
+    trace that ends in this sentence; hand the frontend a key it can
+    translate instead of the trace."""
+    match = _UNSUPPORTED_VERSION.search(stderr or "")
+    if not match:
+        return None
+    return {
+        "key": "backend.errors.archives.unsupportedRepositoryVersion",
+        "params": {"version": int(match.group(1))},
+    }
+
 
 ARCHIVE_ID_RE = re.compile(r"^[0-9a-fA-F]{16,}$")
 
@@ -514,9 +535,11 @@ async def get_archive_contents(
             stderr=result.get("stderr", "")[:200],
         )
         if not stdout and not result.get("success", True):
+            stderr = result.get("stderr", "unknown error")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to get archive contents: {result.get('stderr', 'unknown error')}",
+                detail=_unsupported_repository_version(stderr)
+                or f"Failed to get archive contents: {stderr}",
             )
 
         # An agent listing renders mtimes in the agent's zone; a server-side

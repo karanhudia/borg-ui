@@ -56,6 +56,8 @@ export interface DataTableProps<T> {
   // Row behavior
   onRowClick?: (row: T) => void
   getRowKey: (row: T) => string | number
+  /** Extra content rendered beneath a row, spanning the full width. Return null/undefined to skip a row. */
+  renderSubRow?: (row: T) => React.ReactNode
 
   // Styling
   headerBgColor?: string
@@ -104,6 +106,7 @@ export default function DataTable<T>({
   actions,
   onRowClick,
   getRowKey,
+  renderSubRow,
   headerBgColor = 'background.default',
   enableHover = true,
   enablePointer = false,
@@ -481,6 +484,7 @@ export default function DataTable<T>({
                   </Box>
                 )}
               </Box>
+              {renderSubRow?.(row)}
             </Box>
           ))}
         </Stack>
@@ -589,60 +593,78 @@ export default function DataTable<T>({
           </TableRow>
         </TableHead>
         <TableBody>
-          {paginatedData.map((row) => (
-            <TableRow
-              key={getRowKey(row)}
-              onClick={onRowClick ? () => onRowClick(row) : undefined}
-              sx={{
-                ...(enableHover && {
-                  '&:hover': {
-                    bgcolor: 'rgba(255,255,255,0.03)',
-                    '& .MuiIconButton-root': {
-                      opacity: 0.7,
-                    },
-                  },
-                }),
-                ...(enablePointer &&
-                  onRowClick && {
-                    cursor: 'pointer',
-                  }),
-                '&:last-child td': {
-                  borderBottom: 0,
-                },
-                transition: 'background-color 180ms ease',
-              }}
-            >
-              {columns.map((column) => (
-                <TableCell
-                  key={column.id}
-                  align={column.align || 'left'}
+          {paginatedData.map((row) => {
+            const subRow = renderSubRow?.(row)
+            return (
+              <React.Fragment key={getRowKey(row)}>
+                <TableRow
+                  onClick={onRowClick ? () => onRowClick(row) : undefined}
                   sx={{
-                    width: column.width,
-                    minWidth: column.minWidth,
-                    maxWidth: column.width,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
+                    ...(enableHover && {
+                      '&:hover': {
+                        bgcolor: 'rgba(255,255,255,0.03)',
+                        '& .MuiIconButton-root': {
+                          opacity: 0.7,
+                        },
+                      },
+                    }),
+                    ...(enablePointer &&
+                      onRowClick && {
+                        cursor: 'pointer',
+                      }),
+                    ...(!subRow && {
+                      '&:last-child td': {
+                        borderBottom: 0,
+                      },
+                    }),
+                    transition: 'background-color 180ms ease',
                   }}
                 >
-                  {column.render
-                    ? column.render(row)
-                    : ((row as Record<string, unknown>)[column.id] as React.ReactNode)}
-                </TableCell>
-              ))}
-              {actions && actions.length > 0 && (
-                <TableCell
-                  align="right"
-                  sx={{
-                    width: bodyActionColumnWidth,
-                    minWidth: bodyActionColumnWidth,
-                    maxWidth: bodyActionColumnWidth,
-                  }}
-                >
-                  {renderActions(row)}
-                </TableCell>
-              )}
-            </TableRow>
-          ))}
+                  {columns.map((column) => (
+                    <TableCell
+                      key={column.id}
+                      align={column.align || 'left'}
+                      sx={{
+                        width: column.width,
+                        minWidth: column.minWidth,
+                        maxWidth: column.width,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        ...(subRow && { borderBottom: 'none' }),
+                      }}
+                    >
+                      {column.render
+                        ? column.render(row)
+                        : ((row as Record<string, unknown>)[column.id] as React.ReactNode)}
+                    </TableCell>
+                  ))}
+                  {actions && actions.length > 0 && (
+                    <TableCell
+                      align="right"
+                      sx={{
+                        width: bodyActionColumnWidth,
+                        minWidth: bodyActionColumnWidth,
+                        maxWidth: bodyActionColumnWidth,
+                        ...(subRow && { borderBottom: 'none' }),
+                      }}
+                    >
+                      {renderActions(row)}
+                    </TableCell>
+                  )}
+                </TableRow>
+                {subRow && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={columns.length + (actions && actions.length > 0 ? 1 : 0)}
+                      sx={{ pt: 0 }}
+                    >
+                      {subRow}
+                    </TableCell>
+                  </TableRow>
+                )}
+              </React.Fragment>
+            )
+          })}
         </TableBody>
       </Table>
       {data.length > 0 && (

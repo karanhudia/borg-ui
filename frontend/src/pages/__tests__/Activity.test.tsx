@@ -57,8 +57,15 @@ vi.mock('@tanstack/react-query', async () => {
     await vi.importActual<typeof import('@tanstack/react-query')>('@tanstack/react-query')
   return {
     ...actual,
-    useQuery: ({ queryFn }: { queryFn: () => Promise<unknown> }) => {
+    useQuery: ({ queryKey, queryFn }: { queryKey: unknown[]; queryFn: () => Promise<unknown> }) => {
       void queryFn()
+      if (queryKey[0] === 'repositories') {
+        return {
+          data: { data: { repositories: [{ id: 1, name: 'nas', path: '/mnt/nas' }] } },
+          isLoading: false,
+          refetch: refetchSpy,
+        }
+      }
       return {
         data: activityData.current,
         isLoading: false,
@@ -67,6 +74,21 @@ vi.mock('@tanstack/react-query', async () => {
     },
   }
 })
+
+vi.mock('../activity/RepositoryOperationsView', () => ({
+  default: ({
+    repositoryId,
+    initialCategory,
+  }: {
+    repositoryId: number
+    initialCategory?: string[]
+  }) => (
+    <div>
+      Repository View {repositoryId}
+      {initialCategory?.length ? ` (${initialCategory.join(',')})` : ''}
+    </div>
+  ),
+}))
 
 vi.mock('../../components/BackupJobsTable', () => ({
   default: (props: unknown) => {
@@ -167,6 +189,27 @@ describe('Activity page', () => {
 
     await user.click(refreshButton)
     expect(refetchSpy).toHaveBeenCalled()
+  })
+
+  it('switches to the repository view when a repository is chosen', async () => {
+    renderWithProviders(<Activity />, { initialRoute: '/activity' })
+    await screen.findByText('Jobs Table')
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /repository/i }))
+    fireEvent.click(await screen.findByRole('option', { name: /nas/ }))
+    expect(await screen.findByText('Repository View 1')).toBeInTheDocument()
+  })
+
+  it('renders the repository view when the URL carries repository_id', async () => {
+    renderWithProviders(<Activity />, { initialRoute: '/activity?repository_id=4' })
+    expect(await screen.findByText('Repository View 4')).toBeInTheDocument()
+    expect(screen.queryByText('Jobs Table')).not.toBeInTheDocument()
+  })
+
+  it('hands a valid category from the URL to the repository view and drops unknown ones', async () => {
+    renderWithProviders(<Activity />, {
+      initialRoute: '/activity?repository_id=4&category=index&category=bogus',
+    })
+    expect(await screen.findByText('Repository View 4 (index)')).toBeInTheDocument()
   })
 
   it('offers cloud storage activity filters and summarizes active rclone jobs', async () => {
