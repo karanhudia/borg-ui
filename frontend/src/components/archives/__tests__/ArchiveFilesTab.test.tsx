@@ -143,6 +143,19 @@ describe('ArchiveFilesTab', () => {
     expect(within(bar).getByRole('button', { name: /restore selection/i })).toBeInTheDocument()
   })
 
+  it('expands the bar to list every path that will be restored and lets one be removed', () => {
+    renderWithProviders(
+      <ArchiveFilesTab repositoryId={7} repository={repository} archive={archive} />
+    )
+    fireEvent.click(screen.getByTestId('archive-path-selector'))
+    const bar = screen.getByRole('toolbar', { name: /selection/i })
+    expect(within(bar).queryByText('home/karan/docs/invoices.xlsx')).not.toBeInTheDocument()
+    fireEvent.click(within(bar).getByRole('button', { name: /show selected/i }))
+    expect(within(bar).getByText('home/karan/docs/invoices.xlsx')).toBeInTheDocument()
+    fireEvent.click(within(bar).getByRole('button', { name: /remove invoices\.xlsx/i }))
+    expect(screen.queryByRole('toolbar', { name: /selection/i })).not.toBeInTheDocument()
+  })
+
   it('clears the selection from the bar', () => {
     renderWithProviders(
       <ArchiveFilesTab repositoryId={7} repository={repository} archive={archive} />
