@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from app.database.models import Archive, Base, Repository, SystemSettings
 from app.services.operations.executors import index as index_exec
 from app.services.operations.runner import Outcome
+from app.services.storage_usage import SizeResult
 
 
 @pytest.fixture()
@@ -222,17 +223,81 @@ async def test_run_archive_sync_skips_missing_repository(db, repo):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_run_stats_writes_total_size(db, repo, monkeypatch):
+    """stats persists the measured size with its source and Borg's
+    last_modified (#934)."""
     monkeypatch.setattr(
         index_exec, "_prepare_repository_borg_env", lambda repository, db: ({}, None)
     )
-    with patch(
-        "app.core.borg_router.BorgRouter.calculate_total_size_bytes",
-        new=AsyncMock(return_value=2048),
-    ):
-        outcome = await index_exec.run_stats(_ctx(db, repo, kind="stats"))
-    assert outcome.result == {"unique_csize": 2048}
+    monkeypatch.setattr(
+        index_exec,
+        "measure_repository_size",
+        AsyncMock(
+            return_value=SizeResult(
+                bytes=2048,
+                objects=3,
+                source="borg2_index",
+                last_modified=datetime(2026, 9, 6, 8, 57, 17),
+            )
+        ),
+    )
+    outcome = await index_exec.run_stats(_ctx(db, repo, kind="stats"))
+    assert outcome.result == {
+        "bytes": 2048,
+        "objects": 3,
+        "source": "borg2_index",
+        "last_modified": "2026-09-06T08:57:17",
+    }
     db.refresh(repo)
     assert repo.total_size == "2.00 KB"
+    assert repo.total_size_source == "borg2_index"
+    assert repo.borg_last_modified == datetime(2026, 9, 6, 8, 57, 17)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_stats_leaves_size_alone_when_unknown(db, repo, monkeypatch):
+    repo.total_size = "keep"
+    repo.total_size_source = "borg1_cache_stats"
+    db.commit()
+    monkeypatch.setattr(
+        index_exec, "_prepare_repository_borg_env", lambda repository, db: ({}, None)
+    )
+    monkeypatch.setattr(
+        index_exec, "measure_repository_size", AsyncMock(return_value=SizeResult())
+    )
+    outcome = await index_exec.run_stats(_ctx(db, repo, kind="stats"))
+    assert outcome.status == "completed" and outcome.result["bytes"] is None
+    db.refresh(repo)
+    assert repo.total_size == "keep" and repo.total_size_source == "borg1_cache_stats"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_stats_persists_last_modified_when_the_size_is_unknown(
+    db, repo, monkeypatch
+):
+    """Borg 2 with `repo-info` working but no index and no store measurement:
+    the size stays as it was, `last_modified` is still written."""
+    from datetime import datetime
+
+    repo.total_size = "keep"
+    repo.total_size_source = "borg1_cache_stats"
+    db.commit()
+    monkeypatch.setattr(
+        index_exec, "_prepare_repository_borg_env", lambda repository, db: ({}, None)
+    )
+    monkeypatch.setattr(
+        index_exec,
+        "measure_repository_size",
+        AsyncMock(return_value=SizeResult(last_modified=datetime(2026, 9, 7, 8, 0))),
+    )
+    outcome = await index_exec.run_stats(_ctx(db, repo, kind="stats"))
+    assert outcome.status == "completed"
+    assert outcome.result["bytes"] is None
+    assert outcome.result["last_modified"] == "2026-09-07T08:00:00"
+    db.refresh(repo)
+    assert repo.total_size == "keep" and repo.total_size_source == "borg1_cache_stats"
+    assert repo.borg_last_modified == datetime(2026, 9, 7, 8, 0)
 
 
 @pytest.mark.unit
@@ -257,7 +322,7 @@ async def test_run_stats_agent_repository_leaves_size_alone_when_unmeasurable(
     )
     with patch.object(index_exec, "_publish_mqtt_state"):
         outcome = await index_exec.run_stats(_ctx(db, repo, kind="stats"))
-    assert outcome.result == {"total_size": "keep", "source": "agent"}
+    assert outcome.result == {"total_size": "keep", "executor": "agent"}
     db.refresh(repo)
     assert repo.total_size == "keep"
 
@@ -510,11 +575,12 @@ async def test_index_executors_publish_mqtt_state_after_writing_stats(
         side_effect=lambda session, reason="manual": reasons.append(reason),
     ):
         await index_exec.run_archive_sync(_ctx(db, repo))
-        with patch(
-            "app.core.borg_router.BorgRouter.calculate_total_size_bytes",
-            new=AsyncMock(return_value=2048),
-        ):
-            await index_exec.run_stats(_ctx(db, repo, kind="stats"))
+        monkeypatch.setattr(
+            index_exec,
+            "measure_repository_size",
+            AsyncMock(return_value=SizeResult(bytes=2048, source="borg1_cache_stats")),
+        )
+        await index_exec.run_stats(_ctx(db, repo, kind="stats"))
     assert len(reasons) == 2
 
 

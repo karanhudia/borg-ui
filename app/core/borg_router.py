@@ -499,41 +499,6 @@ class BorgRouter:
 
         return await update_repository_stats(self.repo, db)
 
-    async def calculate_total_size_bytes(
-        self,
-        *,
-        env: dict = None,
-        info_timeout: int = 60,
-        use_bypass_lock: bool = False,
-        temp_key_file: str = None,
-    ) -> int:
-        """Return repository total size in bytes using the versioned implementation."""
-        if self.is_v2:
-            from app.services.v2.repository_service import repository_v2_service
-
-            return await repository_v2_service.calculate_total_size_bytes(
-                self.repo,
-                temp_key_file=temp_key_file,
-                timeout=30,
-            )
-
-        import json
-        from app.core.borg import borg
-
-        cmd = self.build_repo_info_command(self.repo.path)
-        if remote_path := effective_repository_remote_path(self.repo):
-            cmd.extend(["--remote-path", remote_path])
-        if use_bypass_lock:
-            cmd.append("--bypass-lock")
-
-        info_result = await borg._execute_command(cmd, timeout=info_timeout, env=env)
-        if not info_result["success"]:
-            return 0
-
-        info_data = json.loads(info_result["stdout"])
-        cache = info_data.get("cache", {}).get("stats", {})
-        return cache.get("unique_csize", 0) or 0
-
     def _is_agent(self) -> bool:
         """Whether this repository is executed by a managed agent.
 

@@ -165,6 +165,21 @@ Rules:
   it with `skip_reason = dependency_failed`.
 - Follow-ups are created automatically when an operation succeeds. An
   import enqueues stats and archive listing.
+- `stats` measures the repository read-only through the best source Borg
+  offers and records it in `repositories.total_size_source`: Borg 1
+  `cache.stats.unique_csize` (`borg1_cache_stats`, deduplicated); Borg 2 the
+  chunk-index sum through Borg's Python API next to the configured binary
+  (`borg2_index`, the bytes of every indexed object), else a store-level
+  measurement per URL scheme (`storage_used`, file bytes including index and
+  pack headers: rclone for `sftp://` and `rclone:` paths with the prepared
+  environment, du for local
+  paths and `ssh://`, a REST listing for http; none for `rest://user@host`,
+  whose key is bound to the REST server). The labels name different
+  quantities: `compact --stats` counts pack file bytes, which include data
+  no index entry covers, so it and `borg2_index` agree only on a fully
+  indexed repository. An unknown size leaves the stored value alone,
+  never `0`. Both versions' `repository.last_modified` (the last manifest
+  write) lands in `repositories.borg_last_modified`.
 - The reconcile scheduler replaces the old stats refresh loop. Every
   `stats_refresh_interval_minutes` it enqueues an index run for each
   repository that has none queued or running. `0` disables it.
