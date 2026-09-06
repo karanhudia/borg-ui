@@ -145,7 +145,7 @@ describe('PipelineBoard', () => {
     expect(screen.queryByTestId('stage-track')).not.toBeInTheDocument()
   })
 
-  it('puts repositories with work in progress first and shows their track', async () => {
+  it('keeps a repository with work in progress in its place and shows its track', async () => {
     mockQueue([
       {
         repository_id: 2,
@@ -157,9 +157,10 @@ describe('PipelineBoard', () => {
     renderBoard()
     await waitFor(() => expect(screen.getAllByTestId('repository-row')).toHaveLength(2))
     const rows = screen.getAllByTestId('repository-row')
-    expect(within(rows[0]).getByText('photos')).toBeInTheDocument()
-    expect(within(rows[0]).getByTestId('stage-stats')).toHaveAttribute('data-status', 'running')
-    expect(within(rows[1]).queryByTestId('stage-track')).not.toBeInTheDocument()
+    expect(within(rows[0]).getByText('nas')).toBeInTheDocument()
+    expect(within(rows[0]).queryByTestId('stage-track')).not.toBeInTheDocument()
+    expect(within(rows[1]).getByText('photos')).toBeInTheDocument()
+    expect(within(rows[1]).getByTestId('stage-stats')).toHaveAttribute('data-status', 'running')
   })
 
   it('shows the foreground job on its repository row', async () => {

@@ -86,10 +86,11 @@ const COMPARE: Record<HubSort, (a: HubRow, b: HubRow) => number> = {
   synced: (a, b) => syncedAt(b) - syncedAt(a),
 }
 
-// The rows the table shows for a toolbar state. Rows with work in progress
-// stay on top whatever the sort so the live part of the board is where the
-// eye lands; the system lane comes last and only when nothing is filtered
-// by name, since it has no name to match.
+// The rows the table shows for a toolbar state. A row keeps its place when
+// work starts on it: moving it to the top made a rebuild look like the list
+// had reshuffled. The track under the row and the running count in the
+// summary say what is live. The system lane comes last and only when
+// nothing is filtered by name, since it has no name to match.
 export function applyToolbar(rows: HubRow[], state: HubToolbarState): HubRow[] {
   const query = state.query.trim().toLowerCase()
   const compare = COMPARE[state.sort]
@@ -100,13 +101,12 @@ export function applyToolbar(rows: HubRow[], state: HubToolbarState): HubRow[] {
       (query === '' || row.repository.repository_name.toLowerCase().includes(query)) &&
       matchesAttention(row, state.attention)
   )
-  const active = repositories.filter((row) => trackIsActive(row.track)).sort(tie)
-  const rest = repositories.filter((row) => !trackIsActive(row.track)).sort(tie)
+  repositories.sort(tie)
   const system =
     query === ''
       ? rows.filter((row) => row.repository == null && matchesAttention(row, state.attention))
       : []
-  return [...active, ...rest, ...system]
+  return [...repositories, ...system]
 }
 
 // One row per repository from the hub, in the hub's order, merged with its

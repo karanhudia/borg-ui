@@ -120,23 +120,23 @@ describe('applyToolbar', () => {
 
   it('shows the union of every reason for the attention view', () => {
     const result = applyToolbar(rows, { query: '', attention: 'attention', sort: 'name' })
-    expect(names(result)).toEqual(['echo', 'bravo', 'charlie', 'delta'])
+    expect(names(result)).toEqual(['bravo', 'charlie', 'delta', 'echo'])
   })
 
-  it('sorts by name but keeps rows with work in progress on top', () => {
+  it('sorts by name and leaves a row with work in progress in its place', () => {
     const shuffled = [rows[3], rows[1], rows[4], rows[0], rows[2]]
     const result = applyToolbar(shuffled, { query: '', attention: 'all', sort: 'name' })
-    expect(names(result)).toEqual(['echo', 'alpha', 'bravo', 'charlie', 'delta'])
+    expect(names(result)).toEqual(['alpha', 'bravo', 'charlie', 'delta', 'echo'])
   })
 
   it('sorts by history rows, largest first', () => {
     const result = applyToolbar(rows, { query: '', attention: 'all', sort: 'rows' })
-    expect(names(result)).toEqual(['echo', 'bravo', 'delta', 'alpha', 'charlie'])
+    expect(names(result)).toEqual(['bravo', 'delta', 'alpha', 'echo', 'charlie'])
   })
 
   it('sorts by last synced, most recent first, never synced last', () => {
     const result = applyToolbar(rows, { query: '', attention: 'all', sort: 'synced' })
-    expect(names(result)).toEqual(['echo', 'alpha', 'delta', 'bravo', 'charlie'])
+    expect(names(result)).toEqual(['alpha', 'echo', 'delta', 'bravo', 'charlie'])
   })
 
   it('keeps the system lane after every repository', () => {
