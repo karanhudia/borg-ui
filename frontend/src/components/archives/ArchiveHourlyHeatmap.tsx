@@ -182,7 +182,18 @@ export default function ArchiveHourlyHeatmap({
               >
                 {series}
               </Typography>
-              <Box sx={{ width: HOUR_WIDTH, flexShrink: 0 }}>
+              {/* The hour axis stays put next to the series label; scrolled
+                  away, the cells on screen would have no time to read. */}
+              <Box
+                sx={{
+                  width: HOUR_WIDTH,
+                  flexShrink: 0,
+                  position: 'sticky',
+                  left: LABEL_WIDTH,
+                  bgcolor: 'background.paper',
+                  zIndex: 1,
+                }}
+              >
                 {Array.from({ length: HOURS }, (_, hour) => (
                   <Typography
                     key={hour}
