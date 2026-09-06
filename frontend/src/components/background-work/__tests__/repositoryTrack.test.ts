@@ -119,6 +119,56 @@ describe('deriveTrack', () => {
     expect(track.stages[1].status).toBe('done')
   })
 
+  it('describes only the newest run when an older one is still in the queue window', () => {
+    const track = deriveTrack(
+      repo([
+        op({ id: 1, kind: 'archive_sync', status: 'completed', run_id: 'reconcile' }),
+        op({ id: 2, kind: 'history_index', status: 'completed', run_id: 'reconcile' }),
+        op({ id: 3, kind: 'stats', status: 'completed', run_id: 'reconcile' }),
+        op({ id: 4, kind: 'stats', status: 'queued', run_id: 'rebuild', trigger: 'manual' }),
+      ]),
+      limits,
+      false
+    )
+    expect(track.stages.map((s) => [s.key, s.status])).toEqual([
+      ['connect', 'idle'],
+      ['stats', 'waiting'],
+      ['archives', 'idle'],
+      ['history', 'idle'],
+    ])
+  })
+
+  it('prefers the run with work in progress over a newer finished one', () => {
+    const track = deriveTrack(
+      repo([
+        op({ id: 1, kind: 'archive_sync', status: 'completed', run_id: 'reconcile' }),
+        op({ id: 2, kind: 'history_index', status: 'running', run_id: 'reconcile' }),
+        op({ id: 5, kind: 'stats', status: 'completed', run_id: 'rebuild', trigger: 'manual' }),
+      ]),
+      limits,
+      false
+    )
+    expect(track.stages.map((s) => [s.key, s.status])).toEqual([
+      ['connect', 'idle'],
+      ['stats', 'idle'],
+      ['archives', 'done'],
+      ['history', 'running'],
+    ])
+  })
+
+  it('marks a stage skipped after its dependency failed instead of done', () => {
+    const track = deriveTrack(
+      repo([
+        op({ id: 1, kind: 'archive_sync', status: 'failed' }),
+        op({ id: 2, kind: 'history_index', status: 'skipped', skip_reason: 'dependency_failed' }),
+      ]),
+      limits,
+      false
+    )
+    expect(track.stages[2].status).toBe('failed')
+    expect(track.stages[3].status).toBe('skipped')
+  })
+
   it('surfaces a running foreground operation separately from the stages', () => {
     const track = deriveTrack(
       repo([op({ id: 7, kind: 'backup', category: 'backup', status: 'running' })], true),

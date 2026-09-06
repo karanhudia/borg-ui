@@ -37,7 +37,7 @@ export const HUB_GRID_COLUMNS = {
   md: 'minmax(180px, 1.4fr) minmax(130px, 1fr) minmax(170px, 1.2fr) minmax(190px, 1.4fr) 40px',
 }
 
-export type StageStatus = 'idle' | 'done' | 'running' | 'waiting' | 'failed'
+export type StageStatus = 'idle' | 'done' | 'running' | 'waiting' | 'failed' | 'skipped'
 
 // Why a queued stage has not started, in the order a person would want to
 // hear it: the whole queue is paused, a foreground job owns this
@@ -73,6 +73,8 @@ function stageStatus(status: OperationItem['status']): StageStatus {
     case 'failed':
     case 'cancelled':
       return 'failed'
+    case 'skipped':
+      return 'skipped'
     default:
       return 'done'
   }
@@ -83,8 +85,24 @@ export function deriveTrack(
   limits: QueueLimits,
   paused: boolean
 ): RepositoryTrack {
-  const latest = new Map<StageKey, OperationItem>()
+  // The queue keeps every operation from the last minute, so a repository
+  // can carry a finished reconcile next to the rebuild that was just
+  // queued. The track describes one run: the one still working, or else
+  // the newest.
+  const runs = new Map<string, OperationItem[]>()
   for (const operation of repository.operations) {
+    if (!STAGE_FOR_KIND[operation.kind]) continue
+    runs.set(operation.run_id, [...(runs.get(operation.run_id) ?? []), operation])
+  }
+  const newestId = (ops: OperationItem[]) => Math.max(...ops.map((o) => o.id))
+  const active = (ops: OperationItem[]) =>
+    ops.some((o) => o.status === 'queued' || o.status === 'running')
+  const byNewest = (a: OperationItem[], b: OperationItem[]) => newestId(b) - newestId(a)
+  const candidates = [...runs.values()]
+  const chosen = candidates.filter(active).sort(byNewest)[0] ?? candidates.sort(byNewest)[0] ?? []
+
+  const latest = new Map<StageKey, OperationItem>()
+  for (const operation of chosen) {
     const stage = STAGE_FOR_KIND[operation.kind]
     if (!stage) continue
     const current = latest.get(stage)

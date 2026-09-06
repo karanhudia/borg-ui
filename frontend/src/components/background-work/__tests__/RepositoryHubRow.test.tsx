@@ -112,19 +112,37 @@ describe('RepositoryHubRow', () => {
     expect(screen.queryByText(/of 18 indexed/i)).not.toBeInTheDocument()
   })
 
-  it('leaves the connect stage out of a run that did not start with an import', () => {
+  it('shows only the stages that belong to the run', () => {
     renderRow({
       track: track({
         stages: [
           stage('connect'),
-          stage('stats', { status: 'done', operation: op({ status: 'completed' }) }),
-          stage('archives', { status: 'running', operation: op({ status: 'running' }) }),
-          stage('history', { status: 'waiting', operation: op({}), reason: 'queued' }),
+          stage('stats', { status: 'running', operation: op({ status: 'running' }) }),
+          stage('archives'),
+          stage('history'),
         ],
       }),
     })
     expect(screen.queryByTestId('stage-connect')).not.toBeInTheDocument()
-    expect(screen.getByTestId('stage-archives')).toHaveAttribute('data-status', 'running')
+    expect(screen.queryByTestId('stage-archives')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('stage-history')).not.toBeInTheDocument()
+    expect(screen.getByTestId('stage-stats')).toHaveAttribute('data-status', 'running')
+  })
+
+  it('says a stage was skipped rather than done', () => {
+    renderRow({
+      track: track({
+        stages: [
+          stage('connect'),
+          stage('stats'),
+          stage('archives', { status: 'failed', operation: op({ status: 'failed' }) }),
+          stage('history', { status: 'skipped', operation: op({ status: 'skipped' }) }),
+        ],
+      }),
+    })
+    expect(screen.getByTestId('stage-history')).toHaveAttribute('data-status', 'skipped')
+    expect(screen.getByText(/^skipped$/i)).toBeInTheDocument()
+    expect(screen.queryByText(/^done$/i)).not.toBeInTheDocument()
   })
 
   it('renders the stage track under the numbers while work is running', () => {

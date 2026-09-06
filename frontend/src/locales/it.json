@@ -3446,6 +3446,7 @@
       "viewRuns": "Vedi esecuzioni",
       "stageDone": "Fatto",
       "stageFailed": "Fallito",
+      "stageSkipped": "Saltato",
       "repositoryColumn": "Repository",
       "workersLabel": "Worker di indicizzazione",
       "workersDecrease": "Meno worker di indicizzazione",

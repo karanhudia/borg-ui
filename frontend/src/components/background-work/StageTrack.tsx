@@ -20,6 +20,7 @@ function StageSegment({
     running: theme.palette.primary.main,
     waiting: 'transparent',
     failed: theme.palette.error.main,
+    skipped: alpha(theme.palette.text.primary, 0.12),
   }[stage.status]
   const outline =
     stage.status === 'waiting'
@@ -32,6 +33,7 @@ function StageSegment({
   let caption: string | null = null
   if (stage.status === 'done') caption = t('operations.background.stageDone')
   else if (stage.status === 'failed') caption = t('operations.background.stageFailed')
+  else if (stage.status === 'skipped') caption = t('operations.background.stageSkipped')
   else if (stage.status === 'waiting' && stage.reason)
     caption = t(`operations.background.reason.${stage.reason}`)
   else if (stage.status === 'running') {
@@ -114,10 +116,11 @@ interface StageTrackProps {
 // The four derivation stages of one run, side by side and self-labelled,
 // so the track reads on its own wherever it is placed.
 export default function StageTrack({ stages, now, onRetry }: StageTrackProps) {
-  // Connect is the synchronous import request. A reconcile or rebuild run
-  // never has one, and an empty segment would only raise the question of
-  // what it is waiting for.
-  const shown = stages.filter((stage) => stage.key !== 'connect' || stage.status !== 'idle')
+  // Only the stages that belong to this run. A rebuild from stats has one
+  // segment; a reconcile has three; an import has four. An empty segment
+  // for a stage the run never had would only raise the question of what
+  // it is waiting for.
+  const shown = stages.filter((stage) => stage.status !== 'idle')
   return (
     <Box
       data-testid="stage-track"

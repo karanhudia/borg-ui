@@ -3446,6 +3446,7 @@
       "viewRuns": "View runs",
       "stageDone": "Done",
       "stageFailed": "Failed",
+      "stageSkipped": "Skipped",
       "repositoryColumn": "Repository",
       "workersLabel": "Index workers",
       "workersDecrease": "Fewer index workers",

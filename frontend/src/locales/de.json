@@ -3446,6 +3446,7 @@
       "viewRuns": "Läufe anzeigen",
       "stageDone": "Fertig",
       "stageFailed": "Fehlgeschlagen",
+      "stageSkipped": "Übersprungen",
       "repositoryColumn": "Repository",
       "workersLabel": "Index-Worker",
       "workersDecrease": "Weniger Index-Worker",
