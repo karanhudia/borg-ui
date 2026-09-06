@@ -147,6 +147,24 @@ def _mark_backup_job_failed_after_restart(
 
 
 def _has_running_check_child(db: Session, backup_job: BackupJob) -> bool:
+    # Phase 5 moved check to `operations`, so a live check child is normally an
+    # operation now. The legacy table is still consulted for a row a pre-phase-5
+    # process left running; both are deleted in phase 9.
+    if backup_job.repository_id is not None:
+        from app.database.models import Operation
+
+        running_operation = (
+            db.query(Operation.id)
+            .filter(
+                Operation.kind == "check",
+                Operation.status == "running",
+                Operation.repository_id == backup_job.repository_id,
+            )
+            .first()
+        )
+        if running_operation is not None:
+            return True
+
     query = db.query(CheckJob.id).filter(CheckJob.status == "running")
     if backup_job.repository_id is not None:
         query = query.filter(CheckJob.repository_id == backup_job.repository_id)
@@ -563,7 +581,11 @@ def cleanup_orphaned_jobs(db: Session):
         db.query(RestoreJob).filter(RestoreJob.status == "running").all()
     )
 
-    # Find all running check jobs
+    # Running check rows written before phase 5 moved check to `operations`.
+    # New work is recovered by OperationRunner.recover_on_startup (spec 7.6),
+    # which also makes the local lock-break attempt this loop makes below. This
+    # query is empty on any install that has restarted since the upgrade, and
+    # goes away with the table in phase 9.
     running_check_jobs = db.query(CheckJob).filter(CheckJob.status == "running").all()
 
     # Find all running restore check jobs

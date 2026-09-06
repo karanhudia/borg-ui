@@ -30,6 +30,7 @@ from app.database.models import (
     AgentJob,
     AgentMachine,
     CheckJob,
+    Operation,
     CompactJob,
     LicensingState,
     PruneJob,
@@ -1053,16 +1054,49 @@ class TestRepositoriesCreate:
         assert repo.connection_id is None
         assert repo.repository_type == "local"
 
+    def test_agent_repository_check_route_enqueues_instead_of_queueing_the_agent(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Phase 5: the check route no longer has an agent branch. It enqueues
+        an operation, and `BorgRouter.check` inside the executor is what
+        queues the agent job when the runner starts the work."""
+        agent = _agent_machine_with_capabilities("repository.check")
+        repo = Repository(
+            name="Agent check Repo",
+            path="/agent/check/repo",
+            encryption="none",
+            compression="lz4",
+            executor_type="agent",
+            execution_target="agent",
+            agent_machine_id=1,
+            repository_type="local",
+        )
+        test_db.add_all([agent, repo])
+        test_db.commit()
+        repo.agent_machine_id = agent.id
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch(
+            "app.services.operations.executors.maintenance.BorgRouter"
+        ) as router:
+            router.return_value.check = AsyncMock()
+            response = test_client.post(
+                f"/api/repositories/{repo.id}/check",
+                json={"max_duration": 600},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        op = test_db.get(Operation, response.json()["job_id"])
+        assert op.kind == "check"
+        assert op.repository_id == repo.id
+        assert op.params["max_duration"] == 600
+        assert test_db.query(CheckJob).count() == 0
+
     @pytest.mark.parametrize(
         "endpoint,request_body,job_model,job_kind,capability",
         [
-            (
-                "check",
-                {"max_duration": 600},
-                CheckJob,
-                "repository.check",
-                "repository.check",
-            ),
             ("compact", None, CompactJob, "repository.compact", "repository.compact"),
             (
                 "prune",
@@ -3604,31 +3638,21 @@ class TestRepositoryCheck:
         test_db.commit()
         test_db.refresh(repo)
 
-        with patch(
-            "app.api.repositories.start_background_maintenance_job"
-        ) as mock_start:
-            mock_start.return_value = CheckJob(
-                id=42,
-                repository_id=repo.id,
-                status="pending",
-                max_duration=0,
-                extra_flags="--repair --archives-only",
-            )
-
-            response = test_client.post(
-                f"/api/repositories/{repo.id}/check",
-                headers=admin_headers,
-                json={
-                    "max_duration": 0,
-                    "check_extra_flags": "  --repair --archives-only  ",
-                },
-            )
+        response = test_client.post(
+            f"/api/repositories/{repo.id}/check",
+            headers=admin_headers,
+            json={
+                "max_duration": 0,
+                "check_extra_flags": "  --repair --archives-only  ",
+            },
+        )
 
         assert response.status_code == 200
-        assert mock_start.call_args.kwargs["extra_fields"] == {
-            "max_duration": 0,
-            "extra_flags": "--repair --archives-only",
-        }
+        # Phase 5: the flags live in `operations.params` (spec 6.2), trimmed.
+        op = test_db.get(Operation, response.json()["job_id"])
+        assert op.kind == "check"
+        assert op.params["max_duration"] == 0
+        assert op.params["extra_flags"] == "--repair --archives-only"
 
     def test_start_check_rejects_full_check_flags_with_partial_duration(
         self, test_client: TestClient, admin_headers, test_db

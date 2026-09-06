@@ -152,6 +152,15 @@ def _get_operation_or_404(
         .filter(Operation.id == job_id, Operation.kind == job_type)
         .first()
     )
+    if op is None:
+        # A kind migrated in phases 5 to 8 still has history in its old table
+        # until phase 9 deletes it. Those rows carry the same status, error,
+        # and log-path attributes every branch below reads.
+        from app.services.operations.job_facade import LEGACY_MODELS
+
+        legacy_model = LEGACY_MODELS.get(job_type)
+        if legacy_model is not None:
+            op = db.query(legacy_model).filter(legacy_model.id == job_id).first()
     if not op:
         raise HTTPException(
             status_code=404,
@@ -169,7 +178,8 @@ def _get_operation_or_404(
 
 def _read_operation_log(op: Operation) -> str:
     if not op.log_file_path:
-        return ""
+        # Pre-phase-5 rows kept a text mirror of the log on the row itself.
+        return getattr(op, "logs", "") or ""
     try:
         with open(op.log_file_path, "r", encoding="utf-8", errors="replace") as fh:
             return fh.read()
@@ -1151,7 +1161,6 @@ async def get_job_logs(
     job_models = {
         "backup": BackupJob,
         "restore": RestoreJob,
-        "check": CheckJob,
         "restore_check": RestoreCheckJob,
         "compact": CompactJob,
         "prune": PruneJob,
@@ -1163,7 +1172,10 @@ async def get_job_logs(
         op = _get_operation_or_404(db, job_type, job_id, current_user)
         policy = get_log_save_policy(db)
         if not job_has_logs_by_policy(
-            op, policy, output_text=[op.error_message], file_path=op.log_file_path
+            op,
+            policy,
+            output_text=[getattr(op, "logs", None), op.error_message],
+            file_path=op.log_file_path,
         ):
             raise _no_logs_available_exception()
         return _paginate_log_text(_read_operation_log(op), offset, limit)
@@ -1477,7 +1489,6 @@ async def download_job_logs(
     job_models = {
         "backup": BackupJob,
         "restore": RestoreJob,
-        "check": CheckJob,
         "restore_check": RestoreCheckJob,
         "compact": CompactJob,
         "prune": PruneJob,
@@ -1492,7 +1503,7 @@ async def download_job_logs(
         if not job_has_logs_by_policy(
             op,
             get_log_save_policy(db),
-            output_text=[op.error_message],
+            output_text=[getattr(op, "logs", None), op.error_message],
             file_path=op.log_file_path,
         ):
             raise _no_logs_available_exception()
@@ -1684,7 +1695,6 @@ async def delete_job(
     job_models = {
         "backup": BackupJob,
         "restore": RestoreJob,
-        "check": CheckJob,
         "restore_check": RestoreCheckJob,
         "compact": CompactJob,
         "prune": PruneJob,

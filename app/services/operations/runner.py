@@ -11,7 +11,7 @@ import structlog
 from sqlalchemy.orm import Session
 
 from app.config import settings as app_settings
-from app.database.models import Operation, SystemSettings, utc_now
+from app.database.models import Operation, Repository, SystemSettings, utc_now
 from app.services.operations import executors as executor_registry
 from app.services.operations.enqueue import enqueue_chain
 from app.services.operations.events import (
@@ -20,7 +20,7 @@ from app.services.operations.events import (
 )
 from app.services.operations.followups import chain_for, history_enabled
 from app.services.operations.lanes import can_start
-from app.services.operations.vocab import INDEX_KINDS, SUCCESS_STATUSES
+from app.services.operations.vocab import INDEX_KINDS, SUCCESS_STATUSES, is_exclusive
 from app.utils.process_utils import is_process_alive
 
 logger = structlog.get_logger()
@@ -338,6 +338,44 @@ class OperationRunner:
 
     # -- recovery --------------------------------------------------------------
 
+    def _recover_repository_lock(self, db: Session, op: Operation) -> None:
+        from app.utils.process_utils import (
+            _is_remote_repository,
+            break_repository_lock,
+        )
+
+        if op.repository_id is None:
+            return
+        repository = db.get(Repository, op.repository_id)
+        if repository is None:
+            return
+        try:
+            if _is_remote_repository(repository, db):
+                logger.warning(
+                    "Interrupted remote operation may still hold its lock",
+                    operation_id=op.id,
+                    repository_id=repository.id,
+                )
+                return
+            if break_repository_lock(repository):
+                logger.info(
+                    "Broke lock for local repository after restart",
+                    operation_id=op.id,
+                    repository_id=repository.id,
+                )
+            else:
+                logger.warning(
+                    "Failed to break lock for local repository after restart",
+                    operation_id=op.id,
+                    repository_id=repository.id,
+                )
+        except Exception as exc:
+            logger.warning(
+                "Lock recovery raised",
+                operation_id=op.id,
+                error=str(exc),
+            )
+
     def recover_on_startup(self, db: Session) -> dict:
         counts = {"requeued": 0, "failed": 0, "kept": 0}
         for op in db.query(Operation).filter(Operation.status == "running").all():
@@ -360,6 +398,11 @@ class OperationRunner:
                 op.error_message = "interrupted by restart"
                 op.completed_at = utc_now()
                 counts["failed"] += 1
+                # Spec 7.6: a local repository gets the lock-break attempt the
+                # per-table sweep used to make; a remote one does not, because
+                # the remote process may still be running.
+                if is_exclusive(op.kind):
+                    self._recover_repository_lock(db, op)
         db.commit()
         logger.info("Operations recovery completed", **counts)
         return counts

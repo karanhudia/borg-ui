@@ -333,8 +333,11 @@ def queue_agent_repository_operation_job(
     agent = validate_agent_repository_operation(db, repository, job_kind=job_kind)
     operation_payload = operation
     admission_operation = operation_for_agent_job_kind(job_kind)
+    # Phase 5 moved check to `operations`; the rest follow in tasks 3 to 6 of
+    # the same phase. The value is the table admission should ignore, so the
+    # row this caller just created cannot block its own admission.
     maintenance_table_by_kind = {
-        "check": "check_jobs",
+        "check": "operations",
         "restore_check": "restore_check_jobs",
         "compact": "compact_jobs",
         "prune": "prune_jobs",

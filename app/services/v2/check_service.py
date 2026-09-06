@@ -2,7 +2,7 @@
 
 Mirrors check_service.py but uses the borg2 binary with --progress --log-json
 flags required for parseable progress output.  Progress is stored in the shared
-CheckJob table so the existing frontend polling endpoints work unchanged.
+operations row, so the existing frontend polling endpoints work unchanged.
 """
 
 import asyncio
@@ -12,8 +12,12 @@ from datetime import datetime
 from pathlib import Path
 import structlog
 
-from app.database.models import CheckJob, Repository
+from app.database.models import Repository
 from app.database.database import SessionLocal
+from app.services.operations.job_facade import (
+    claim_running,
+    resolve_maintenance_job,
+)
 from app.core.borg2 import _get_borg2_binary
 from app.core.borg_errors import is_borg_warning_exit_code
 from app.config import settings
@@ -42,7 +46,7 @@ def _get_process_start_time(pid: int) -> int:
 
 
 class CheckV2Service:
-    """Run borg2 check with real-time progress tracking via CheckJob records."""
+    """Run borg2 check with real-time progress tracking via operation rows."""
 
     def __init__(self):
         self.log_dir = Path(settings.data_dir) / "logs"
@@ -50,12 +54,12 @@ class CheckV2Service:
         self.running_processes: dict = {}
 
     async def execute_check(self, job_id: int, repository_id: int, _db=None):
-        """Execute borg2 check with progress streaming into a CheckJob record."""
+        """Execute borg2 check with progress streaming into an operation row."""
         db = SessionLocal()
         temp_key_file = None
 
         try:
-            job = db.query(CheckJob).filter(CheckJob.id == job_id).first()
+            job = resolve_maintenance_job(db, job_id, "check")
             if not job:
                 logger.error("Borg2 check job not found", job_id=job_id)
                 return
@@ -101,17 +105,7 @@ class CheckV2Service:
 
             def persist_start_state():
                 nonlocal claimed
-                claimed = (
-                    db.query(CheckJob)
-                    .filter(
-                        CheckJob.id == job_id,
-                        CheckJob.status.in_(("pending", "running")),
-                    )
-                    .update(
-                        {"status": "running", "started_at": started_at},
-                        synchronize_session=False,
-                    )
-                )
+                claimed = claim_running(db, job_id, "check", started_at)
 
             await commit_with_retry(
                 db,

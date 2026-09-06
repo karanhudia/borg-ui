@@ -209,6 +209,77 @@ def get_repository_jobs(
     )
 
 
+def get_maintenance_job_with_repository(
+    db: Session,
+    current_user: User,
+    kind: str,
+    job_id: int,
+    *,
+    not_found_key: str,
+    required_role: str = "viewer",
+):
+    """Resolve a maintenance job id to an operation, or to the legacy row it
+    belonged to before phase 5. Deleted in phase 9."""
+    from app.services.operations.job_facade import resolve_maintenance_job
+
+    job = resolve_maintenance_job(db, job_id, kind)
+    if job is None:
+        raise HTTPException(status_code=404, detail={"key": not_found_key})
+
+    repository = db.query(Repository).filter(Repository.id == job.repository_id).first()
+    if not repository:
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"}
+        )
+
+    check_repo_access(db, current_user, repository, required_role)
+    return job, repository
+
+
+def get_repository_maintenance_jobs(
+    db: Session,
+    current_user: User,
+    repo_id: int,
+    kind: str,
+    *,
+    limit: int = 10,
+    required_role: str = "viewer",
+) -> list[Any]:
+    """Operations for this kind, plus the legacy rows written before phase 5,
+    newest first. Deleted in phase 9."""
+    from app.database.models import Operation
+    from app.services.operations.job_facade import LEGACY_MODELS, MaintenanceJobFacade
+
+    repository = get_repository_with_access_or_empty(
+        db, current_user, repo_id, required_role=required_role
+    )
+    if not repository:
+        return []
+
+    operations = (
+        db.query(Operation)
+        .filter(Operation.repository_id == repo_id, Operation.kind == kind)
+        .order_by(Operation.id.desc())
+        .limit(limit)
+        .all()
+    )
+    rows: list[Any] = [MaintenanceJobFacade(db, op) for op in operations]
+
+    model = LEGACY_MODELS[kind]
+    rows.extend(
+        db.query(model)
+        .filter(model.repository_id == repo_id)
+        .order_by(model.id.desc())
+        .limit(limit)
+        .all()
+    )
+    rows.sort(
+        key=lambda row: (row.created_at or row.started_at or datetime.min),
+        reverse=True,
+    )
+    return rows[:limit]
+
+
 def job_has_logs_for_policy(
     job: Any, *, log_save_policy: str = DEFAULT_LOG_SAVE_POLICY
 ) -> bool:

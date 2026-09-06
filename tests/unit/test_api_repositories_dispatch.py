@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.core.security import create_access_token, get_password_hash
 from app.database.models import (
-    CheckJob,
+    Operation,
     PruneJob,
     Repository,
     SystemSettings,
@@ -33,36 +33,46 @@ class TestRepositoryApiDispatch:
         test_db.commit()
         test_db.refresh(repo)
 
-        dispatched = {}
+        # Phase 5: the route enqueues and the executor routes. BorgRouter is
+        # called by `run_check` with the live repository row, so this asserts
+        # the executor's routing rather than a dispatcher the route builds.
+        from app.services.operations.executors import maintenance
+
         fake_router = Mock(check=AsyncMock())
 
-        def fake_start(db, repository, job_model, **kwargs):
-            dispatched["dispatcher"] = kwargs["dispatcher"]
-            return SimpleNamespace(id=11, repository_id=repository.id, status="pending")
-
-        with (
-            patch(
-                "app.api.repositories.BorgRouter", return_value=fake_router
-            ) as mock_router,
-            patch(
-                "app.api.repositories.start_background_maintenance_job",
-                side_effect=fake_start,
-            ),
-        ):
-            response = test_client.post(
-                f"/api/repositories/{repo.id}/check",
-                json={"max_duration": 120},
-                headers=admin_headers,
-            )
-            await dispatched["dispatcher"](SimpleNamespace(id=99))
+        response = test_client.post(
+            f"/api/repositories/{repo.id}/check",
+            json={"max_duration": 120},
+            headers=admin_headers,
+        )
 
         assert response.status_code == 200
+        operation_id = response.json()["job_id"]
+        op = test_db.get(Operation, operation_id)
+        assert op.kind == "check"
+        assert op.params["max_duration"] == 120
+
+        ctx = SimpleNamespace(
+            db=test_db,
+            operation=op,
+            operation_id=op.id,
+            repository_id=repo.id,
+            kind="check",
+            params=dict(op.params or {}),
+            cancelled=lambda: False,
+            log=lambda line: None,
+        )
+        with patch(
+            "app.services.operations.executors.maintenance.BorgRouter",
+            return_value=fake_router,
+        ) as mock_router:
+            await maintenance.run_check(ctx)
+
         mock_router.assert_called_once()
         routed_repo = mock_router.call_args.args[0]
-        assert not isinstance(routed_repo, Repository)
         assert routed_repo.id == repo.id
         assert routed_repo.borg_version == repo.borg_version
-        fake_router.check.assert_awaited_once_with(99)
+        fake_router.check.assert_awaited_once_with(op.id)
 
     def test_check_route_accepts_guided_recovery_diagnosis_payload(
         self, test_client: TestClient, admin_headers, test_db
@@ -78,38 +88,24 @@ class TestRepositoryApiDispatch:
         test_db.commit()
         test_db.refresh(repo)
 
-        dispatched = {}
-
-        def fake_start(db, repository, job_model, **kwargs):
-            dispatched["repository"] = repository
-            dispatched["job_model"] = job_model
-            dispatched["extra_fields"] = kwargs["extra_fields"]
-            dispatched["error_key"] = kwargs["error_key"]
-            return SimpleNamespace(id=17, repository_id=repository.id, status="pending")
-
-        with patch(
-            "app.api.repositories.start_background_maintenance_job",
-            side_effect=fake_start,
-        ):
-            response = test_client.post(
-                f"/api/repositories/{repo.id}/check",
-                json={"max_duration": 0, "check_extra_flags": ""},
-                headers=admin_headers,
-            )
+        response = test_client.post(
+            f"/api/repositories/{repo.id}/check",
+            json={"max_duration": 0, "check_extra_flags": ""},
+            headers=admin_headers,
+        )
 
         assert response.status_code == 200
-        assert response.json() == {
-            "job_id": 17,
-            "status": "pending",
-            "message": "backend.success.repo.checkJobStarted",
-        }
-        assert dispatched["repository"].id == repo.id
-        assert dispatched["job_model"] is CheckJob
-        assert dispatched["error_key"] == "backend.errors.repo.checkAlreadyRunning"
-        assert dispatched["extra_fields"] == {
-            "max_duration": 0,
-            "extra_flags": None,
-        }
+        body = response.json()
+        assert body["status"] == "pending"
+        assert body["message"] == "backend.success.repo.checkJobStarted"
+
+        op = test_db.get(Operation, body["job_id"])
+        assert op.kind == "check"
+        assert op.repository_id == repo.id
+        # An empty flags string is normalised away, and spec 6.2 keeps the
+        # inputs in params. `extra_flags` is dropped rather than stored as
+        # None, so the service's own default still applies.
+        assert op.params == {"max_duration": 0, "scheduled_check": False}
 
     @pytest.mark.asyncio
     async def test_compact_route_dispatches_through_borg_router(

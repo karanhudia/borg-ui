@@ -122,3 +122,70 @@ def test_rclone_sync_is_mapped_and_classed_as_a_read():
     # to be in one of the two sets: operation_class_for() raises on an
     # operation it cannot classify, so the mapping alone would still fail.
     assert operation_class_for(OPERATION_RCLONE_SYNC) == OPERATION_CLASS_REPOSITORY_READ
+
+
+def test_break_lock_is_refused_while_a_check_operation_runs(db_session):
+    """Phase 5 moved check into `operations`. Admission must still see it, or
+    break_lock would tear the lock out from under a running borg check."""
+    from app.database.models import Operation
+
+    repo = Repository(
+        name="Repo",
+        path="/repos/check-operation",
+        encryption="none",
+        repository_type="local",
+    )
+    db_session.add(repo)
+    db_session.flush()
+    db_session.add(
+        Operation(
+            repository_id=repo.id,
+            kind="check",
+            category="maintenance",
+            status="running",
+            trigger="manual",
+            priority=0,
+            run_id="run-admission",
+        )
+    )
+    db_session.commit()
+
+    with pytest.raises(HTTPException) as exc:
+        ensure_repository_admission(db_session, repo, OPERATION_BREAK_LOCK)
+
+    assert exc.value.status_code == 409
+    params = exc.value.detail["params"]
+    assert params["active_operation"] == "check"
+    assert params["active_job_table"] == "operations"
+    # The payload keeps the legacy vocabulary readers already understand.
+    assert params["active_status"] == "running"
+
+
+def test_a_queued_check_operation_reports_the_legacy_pending_word(db_session):
+    from app.database.models import Operation
+    from app.services.job_admission import list_active_repository_work
+
+    repo = Repository(
+        name="Repo",
+        path="/repos/queued-check",
+        encryption="none",
+        repository_type="local",
+    )
+    db_session.add(repo)
+    db_session.flush()
+    db_session.add(
+        Operation(
+            repository_id=repo.id,
+            kind="check",
+            category="maintenance",
+            status="queued",
+            trigger="manual",
+            priority=0,
+            run_id="run-queued",
+        )
+    )
+    db_session.commit()
+
+    work = list_active_repository_work(db_session, repo)
+
+    assert [(w.operation, w.status) for w in work] == [("check", "pending")]

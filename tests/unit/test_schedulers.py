@@ -11,6 +11,7 @@ from app.database.models import (
     BackupJob,
     AvailabilityScheduleSkip,
     CheckJob,
+    Operation,
     Repository,
     RestoreCheckJob,
     ScheduledJob,
@@ -76,37 +77,30 @@ async def test_check_scheduler_creates_job_and_updates_next_run(db_session):
     db_session.commit()
     db_session.refresh(repo)
 
-    fake_router = MagicMock()
-    fake_router.check.return_value = AsyncMock()
-    with patch("app.services.check_scheduler.BorgRouter", return_value=fake_router):
-        with patch(
-            "app.services.check_scheduler.start_background_maintenance_job"
-        ) as mock_start:
-            mock_start.side_effect = lambda db, repo, job_model, **kwargs: CheckJob(
-                id=42,
-                repository_id=repo.id,
-                status="pending",
-                max_duration=kwargs["extra_fields"]["max_duration"],
-                extra_flags=kwargs["extra_fields"]["extra_flags"],
-                scheduled_check=True,
-            )
-            await run_due_scheduled_checks(db_session)
+    # Phase 5: the scheduler enqueues an operation and the runner dispatches it.
+    await run_due_scheduled_checks(db_session)
 
     db_session.refresh(repo)
     assert repo.last_scheduled_check is not None
     assert repo.next_scheduled_check is not None
-    mock_start.assert_called_once()
-    assert mock_start.call_args.kwargs["extra_fields"]["max_duration"] == 0
-    assert mock_start.call_args.kwargs["extra_fields"]["extra_flags"] == "--verify-data"
+    operations = db_session.query(Operation).filter(Operation.kind == "check").all()
+    assert len(operations) == 1
+    op = operations[0]
+    assert op.status == "queued"
+    assert op.trigger == "schedule"
+    assert op.params["max_duration"] == 0
+    assert op.params["extra_flags"] == "--verify-data"
+    assert op.params["scheduled_check"] is True
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_check_scheduler_snapshot_preserves_agent_routing(db_session):
-    # BorgRouter decides agent-vs-server on executor_type. The scheduler hands
-    # the router a detached snapshot instead of the ORM instance; if that
-    # snapshot drops executor_type, checks for agent-executed repositories
-    # silently run on the server.
+    # Phase 5: the scheduler enqueues and never routes. BorgRouter still
+    # decides agent-vs-server on executor_type, but it does so inside the
+    # check executor, which loads the live repository row rather than a
+    # snapshot, so an agent repository can no longer be silently run on the
+    # server by a lossy copy.
     from app.services.repository_executor import is_agent_executor
 
     repo = Repository(
@@ -123,21 +117,13 @@ async def test_check_scheduler_snapshot_preserves_agent_routing(db_session):
     db_session.commit()
     db_session.refresh(repo)
 
-    with patch(
-        "app.services.check_scheduler.start_background_maintenance_job"
-    ) as mock_start:
-        mock_start.side_effect = lambda db, repo, job_model, **kwargs: CheckJob(
-            id=43,
-            repository_id=repo.id,
-            status="pending",
-            scheduled_check=True,
-        )
-        await run_due_scheduled_checks(db_session)
+    await run_due_scheduled_checks(db_session)
 
-    mock_start.assert_called_once()
-    snapshot = mock_start.call_args.kwargs["dispatcher"].args[0]
-    assert snapshot.executor_type == "agent"
-    assert is_agent_executor(snapshot) is True
+    op = db_session.query(Operation).filter(Operation.kind == "check").one()
+    assert op.repository_id == repo.id
+    assert op.trigger == "schedule"
+    db_session.refresh(repo)
+    assert is_agent_executor(repo) is True
 
 
 @pytest.mark.unit
@@ -201,18 +187,7 @@ async def test_check_scheduler_ignores_invalid_cron_expression(db_session):
     db_session.commit()
     db_session.refresh(repo)
 
-    fake_router = MagicMock()
-    fake_router.check.return_value = AsyncMock()
-    with patch("app.services.check_scheduler.BorgRouter", return_value=fake_router):
-        with patch(
-            "app.services.check_scheduler.start_background_maintenance_job"
-        ) as mock_start:
-            mock_start.side_effect = lambda db, repo, job_model, **kwargs: CheckJob(
-                id=43,
-                repository_id=repo.id,
-                status="pending",
-            )
-            await run_due_scheduled_checks(db_session)
+    await run_due_scheduled_checks(db_session)
 
     db_session.refresh(repo)
     assert repo.last_scheduled_check is not None
@@ -235,21 +210,9 @@ async def test_check_scheduler_uses_repository_check_timezone(db_session):
     db_session.commit()
     db_session.refresh(repo)
 
-    fake_router = MagicMock()
-    fake_router.check.return_value = AsyncMock()
-    with patch("app.services.check_scheduler.BorgRouter", return_value=fake_router):
-        with patch(
-            "app.services.check_scheduler.start_background_maintenance_job"
-        ) as mock_start:
-            mock_start.side_effect = lambda db, repo, job_model, **kwargs: CheckJob(
-                id=44,
-                repository_id=repo.id,
-                status="pending",
-                scheduled_check=True,
-            )
-            await run_due_scheduled_checks(
-                db_session, datetime(2026, 1, 1, 20, 0, tzinfo=timezone.utc)
-            )
+    await run_due_scheduled_checks(
+        db_session, datetime(2026, 1, 1, 20, 0, tzinfo=timezone.utc)
+    )
 
     db_session.refresh(repo)
     assert repo.next_scheduled_check == datetime(2026, 1, 1, 20, 30)
@@ -291,22 +254,25 @@ class _FakeProcess:
 
 
 class _LockingSession(Session):
-    """Inject one transient SQLite lock when a check job is first marked running."""
+    """Inject one transient SQLite lock when a check operation is first marked
+    running."""
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._injected_running_lock = False
+    # Class level: the runner opens a fresh session per tick, and the point of
+    # the test is one transient lock overall, not one per session.
+    _injected_running_lock = False
 
     def commit(self):
         dirty_running_jobs = [
             obj
             for obj in self.dirty
-            if isinstance(obj, CheckJob) and getattr(obj, "status", None) == "running"
+            if isinstance(obj, Operation)
+            and obj.kind == "check"
+            and getattr(obj, "status", None) == "running"
         ]
-        if dirty_running_jobs and not self._injected_running_lock:
-            self._injected_running_lock = True
+        if dirty_running_jobs and not _LockingSession._injected_running_lock:
+            _LockingSession._injected_running_lock = True
             raise OperationalError(
-                "UPDATE check_jobs SET status='running'",
+                "UPDATE operations SET status='running'",
                 {},
                 Exception("database is locked"),
             )
@@ -336,6 +302,7 @@ async def test_check_scheduler_runs_all_due_checks_despite_transient_sqlite_lock
     for repo in repos:
         db_session.refresh(repo)
 
+    _LockingSession._injected_running_lock = False
     testing_session_local = sessionmaker(
         bind=db_session.get_bind(),
         autocommit=False,
@@ -343,25 +310,15 @@ async def test_check_scheduler_runs_all_due_checks_despite_transient_sqlite_lock
         class_=_LockingSession,
     )
 
-    started_tasks = []
     fake_processes = [
         _FakeProcess(returncode=0, pid=5000 + idx) for idx in range(len(repos))
     ]
-
-    def schedule_and_track(coro):
-        task = asyncio.create_task(coro)
-        started_tasks.append(task)
-        return None
 
     async def fake_exec(*args, **kwargs):
         return fake_processes.pop(0)
 
     with (
         patch("app.services.check_service.SessionLocal", testing_session_local),
-        patch(
-            "app.api.maintenance_jobs.schedule_background_job",
-            side_effect=schedule_and_track,
-        ),
         patch(
             "app.services.check_service.asyncio.create_subprocess_exec",
             side_effect=fake_exec,
@@ -373,21 +330,41 @@ async def test_check_scheduler_runs_all_due_checks_despite_transient_sqlite_lock
         ),
     ):
         from app.services.check_service import check_service
+        from app.services.operations.executors import load_default_executors
+        from app.services.operations.runner import OperationRunner
 
         check_service.log_dir = Path(tmp_path)
         scheduler_session = testing_session_local()
         await run_due_scheduled_checks(scheduler_session)
         scheduler_session.close()
-        await asyncio.gather(*started_tasks)
+
+        # Phase 5: the runner dispatches what the scheduler enqueued.
+        load_default_executors()
+        runner = OperationRunner(session_factory=testing_session_local)
+        # A transient lock can land on the runner's own dispatch commit.
+        # `OperationRunner.start()` logs and keeps looping, so the row stays
+        # queued and the next tick picks it up; that is what is reproduced
+        # here, rather than letting the error escape a single tick.
+        for _ in range(3):
+            try:
+                await runner.tick()
+            except OperationalError:
+                continue
+        await asyncio.gather(*runner.running_tasks.values())
 
     verification_session = testing_session_local()
     try:
-        check_jobs = verification_session.query(CheckJob).order_by(CheckJob.id).all()
-        assert len(check_jobs) == 4
-        assert [job.status for job in check_jobs] == ["completed"] * 4
-        assert all(job.started_at is not None for job in check_jobs)
-        assert all(job.completed_at is not None for job in check_jobs)
-        assert not any(job.status == "pending" for job in check_jobs)
+        operations = (
+            verification_session.query(Operation)
+            .filter(Operation.kind == "check")
+            .order_by(Operation.id)
+            .all()
+        )
+        assert len(operations) == 4
+        assert [op.status for op in operations] == ["completed"] * 4
+        assert all(op.started_at is not None for op in operations)
+        assert all(op.completed_at is not None for op in operations)
+        assert not any(op.status == "queued" for op in operations)
     finally:
         verification_session.close()
 
@@ -703,19 +680,12 @@ async def test_shared_scheduler_dispatch_limits_scheduled_checks(db_session):
     )
     db_session.commit()
 
-    with patch(
-        "app.services.check_scheduler.start_background_maintenance_job",
-        side_effect=lambda db, repo, job_model, **kwargs: CheckJob(
-            id=100 + repo.id,
-            repository_id=repo.id,
-            status="pending",
-            max_duration=kwargs["extra_fields"]["max_duration"],
-            scheduled_check=True,
-        ),
-    ) as mock_start:
-        await run_due_scheduled_checks(db_session, datetime.utcnow())
+    await run_due_scheduled_checks(db_session, datetime.utcnow())
 
-    assert mock_start.call_count == 1
+    # One legacy scheduled check is already running, so a limit of two leaves
+    # room for exactly one more.
+    enqueued = db_session.query(Operation).filter(Operation.kind == "check").all()
+    assert len(enqueued) == 1
 
 
 @pytest.mark.unit
@@ -746,22 +716,13 @@ async def test_check_scheduler_cleans_stale_pending_checks_before_capacity_check
     db_session.add(stale_job)
     db_session.commit()
 
-    with patch(
-        "app.services.check_scheduler.start_background_maintenance_job",
-        side_effect=lambda db, repo, job_model, **kwargs: CheckJob(
-            id=100 + repo.id,
-            repository_id=repo.id,
-            status="pending",
-            max_duration=kwargs["extra_fields"]["max_duration"],
-            scheduled_check=True,
-        ),
-    ) as mock_start:
-        await run_due_scheduled_checks(db_session, datetime.utcnow())
+    await run_due_scheduled_checks(db_session, datetime.utcnow())
 
     db_session.refresh(stale_job)
     assert stale_job.status == "failed"
     assert stale_job.completed_at is not None
-    assert mock_start.call_count == 1
+    # The stale legacy row freed the only slot, so one check is enqueued.
+    assert db_session.query(Operation).filter(Operation.kind == "check").count() == 1
 
 
 @pytest.mark.unit
@@ -795,22 +756,13 @@ async def test_check_scheduler_cleans_stale_running_checks_before_capacity_check
     db_session.add(stale_job)
     db_session.commit()
 
-    with patch(
-        "app.services.check_scheduler.start_background_maintenance_job",
-        side_effect=lambda db, repo, job_model, **kwargs: CheckJob(
-            id=100 + repo.id,
-            repository_id=repo.id,
-            status="pending",
-            max_duration=kwargs["extra_fields"]["max_duration"],
-            scheduled_check=True,
-        ),
-    ) as mock_start:
-        await run_due_scheduled_checks(db_session, datetime.utcnow())
+    await run_due_scheduled_checks(db_session, datetime.utcnow())
 
     db_session.refresh(stale_job)
     assert stale_job.status == "failed"
     assert stale_job.completed_at is not None
-    assert mock_start.call_count == 1
+    # The stale legacy row freed the only slot, so one check is enqueued.
+    assert db_session.query(Operation).filter(Operation.kind == "check").count() == 1
 
 
 @pytest.mark.unit

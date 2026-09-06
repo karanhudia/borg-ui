@@ -17,33 +17,37 @@ import uuid
 
 from app.database.database import get_db, SessionLocal
 from app.database.models import (
-    DEFAULT_HISTORY_INDEX_EXCLUDES,
-    User,
-    Repository,
-    RepositoryStorage,
-    RcloneRemote,
-    RcloneSyncJob,
     AgentMachine,
     CheckJob,
     CompactJob,
+    DEFAULT_HISTORY_INDEX_EXCLUDES,
+    Operation,
     PruneJob,
+    RcloneRemote,
+    RcloneSyncJob,
+    Repository,
+    RepositoryStorage,
+    RepositoryWipeJob,
     RestoreCheckJob,
     ScheduledJob,
     ScheduledJobRepository,
     SystemSettings,
+    User,
     UserRepositoryPermission,
-    RepositoryWipeJob,
 )
 from app.api.maintenance_jobs import (
     create_maintenance_job,
-    start_background_maintenance_job,
     get_job_with_repository,
+    get_maintenance_job_with_repository,
     get_repository_jobs,
+    get_repository_maintenance_jobs,
     get_repository_with_access,
     read_job_logs,
     serialize_job_status,
     serialize_job_summary,
+    start_background_maintenance_job,
 )
+from app.services.operations.maintenance_start import start_maintenance
 from app.core.authorization import authorize_request
 from app.core.security import get_current_user, check_repo_access, decrypt_secret
 from app.core.borg import BorgInterface
@@ -86,7 +90,6 @@ from app.services.agent_connection_manager import (
 )
 from app.core.agent_constants import AGENT_FILESYSTEM_BROWSE_TIMEOUT_SECONDS
 from app.services.job_admission import (
-    OPERATION_CHECK,
     OPERATION_COMPACT,
     OPERATION_PRUNE,
     ensure_repository_admission,
@@ -155,10 +158,6 @@ def _router_repo_snapshot(repository: Repository) -> SimpleNamespace:
         executor_type=repository.executor_type,
         execution_target=repository.execution_target,
     )
-
-
-def _dispatch_router_check(router_repo: SimpleNamespace, job: CheckJob):
-    return BorgRouter(router_repo).check(job.id)
 
 
 def _dispatch_router_compact(router_repo: SimpleNamespace, job: CompactJob):
@@ -3058,29 +3057,31 @@ async def get_repositories(
         repo_list = []
         log_save_policy = get_log_save_policy(db)
         for repo in repositories:
-            # Check if this repository has running check, compact, or prune jobs
-            has_check = (
-                db.query(CheckJob)
-                .filter(CheckJob.repository_id == repo.id, CheckJob.status == "running")
-                .first()
-                is not None
-            )
-
-            has_compact = (
-                db.query(CompactJob)
+            # Running check, compact, or prune. Phase 5 moved these to
+            # `operations`; the legacy tables are still consulted for work
+            # that a pre-upgrade process left behind (deleted in phase 9).
+            running_kinds = {
+                row.kind
+                for row in db.query(Operation.kind)
                 .filter(
-                    CompactJob.repository_id == repo.id, CompactJob.status == "running"
+                    Operation.repository_id == repo.id,
+                    Operation.status == "running",
+                    Operation.kind.in_(("check", "compact", "prune")),
                 )
-                .first()
-                is not None
-            )
+                .all()
+            }
 
-            has_prune = (
-                db.query(PruneJob)
-                .filter(PruneJob.repository_id == repo.id, PruneJob.status == "running")
-                .first()
-                is not None
-            )
+            def _legacy_running(model) -> bool:
+                return (
+                    db.query(model.id)
+                    .filter(model.repository_id == repo.id, model.status == "running")
+                    .first()
+                    is not None
+                )
+
+            has_check = "check" in running_kinds or _legacy_running(CheckJob)
+            has_compact = "compact" in running_kinds or _legacy_running(CompactJob)
+            has_prune = "prune" in running_kinds or _legacy_running(PruneJob)
             schedule_summary = _get_repository_schedule_summary(repo.id, db)
             source_directories = _decode_json_list_field(repo.source_directories)
 
@@ -5343,65 +5344,26 @@ async def check_repository(
         except CheckFlagConflictError as exc:
             _raise_check_flag_conflict(exc)
 
-        if is_agent_executor(repository):
-            ensure_repository_admission(
-                db,
-                repository,
-                OPERATION_CHECK,
-                duplicate_error_key="backend.errors.repo.checkAlreadyRunning",
-            )
-            check_job = create_maintenance_job(
-                db,
-                CheckJob,
-                repository,
-                extra_fields={
-                    "max_duration": max_duration,
-                    "extra_flags": check_extra_flags,
-                },
-            )
-            agent_job = queue_agent_repository_operation_job(
-                db,
-                repository,
-                job_kind="repository.check",
-                operation={
-                    "max_duration": max_duration,
-                    "check_extra_flags": check_extra_flags,
-                },
-                maintenance_job_kind="check",
-                maintenance_job_id=check_job.id,
-            )
-            await dispatch_agent_job_best_effort(db, agent_job, repository_id=repo_id)
-            logger.info(
-                "Agent repository check job queued",
-                job_id=check_job.id,
-                agent_job_id=agent_job.id,
-                repository_id=repo_id,
-                user=current_user.username,
-            )
-            return {
-                "job_id": check_job.id,
-                "status": "pending",
-                "message": "backend.success.repo.checkJobStarted",
-            }
-
-        check_job = start_background_maintenance_job(
+        # The agent branch is gone: BorgRouter.check() already routes an agent
+        # repository to its node and waits, so the executor covers all three
+        # worlds (spec section 13 phase 5).
+        check_job = start_maintenance(
             db,
             repository,
-            CheckJob,
-            error_key="backend.errors.repo.checkAlreadyRunning",
-            dispatcher=partial(
-                _dispatch_router_check,
-                _router_repo_snapshot(repository),
-            ),
-            extra_fields={
+            "check",
+            trigger="manual",
+            params={
                 "max_duration": max_duration,
                 "extra_flags": check_extra_flags,
+                "scheduled_check": False,
             },
+            user_id=current_user.id,
+            duplicate_error_key="backend.errors.repo.checkAlreadyRunning",
         )
 
         logger.info(
-            "Check job created",
-            job_id=check_job.id,
+            "Check operation queued",
+            operation_id=check_job.id,
             repository_id=repo_id,
             user=current_user.username,
         )
@@ -6431,10 +6393,10 @@ async def get_check_job_status(
 ):
     """Get status of a check job"""
     try:
-        job, _ = get_job_with_repository(
+        job, _ = get_maintenance_job_with_repository(
             db,
             current_user,
-            CheckJob,
+            "check",
             job_id,
             not_found_key="backend.errors.repo.checkJobNotFound",
         )
@@ -6463,7 +6425,9 @@ async def get_repository_check_jobs(
 ):
     """Get recent check jobs for a repository"""
     try:
-        jobs = get_repository_jobs(db, current_user, repo_id, CheckJob, limit=limit)
+        jobs = get_repository_maintenance_jobs(
+            db, current_user, repo_id, "check", limit=limit
+        )
         if scheduled_only:
             jobs = [job for job in jobs if bool(getattr(job, "scheduled_check", False))]
         log_save_policy = get_log_save_policy(db)
