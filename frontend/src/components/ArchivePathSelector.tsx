@@ -231,9 +231,14 @@ export default function ArchivePathSelector({
   // wrapper that holds one from an earlier render still toggles against the
   // current selection instead of the one this effect last saw.
   const activateRef = useRef(handleItemClick)
-  activateRef.current = handleItemClick
   const navigateRef = useRef(navigateToPath)
-  navigateRef.current = navigateToPath
+
+  // Written in an effect rather than during render: a ref belongs to the
+  // committed tree, and the published callbacks only read it when they run.
+  useEffect(() => {
+    activateRef.current = handleItemClick
+    navigateRef.current = navigateToPath
+  })
 
   useEffect(() => {
     onBrowseStateChange?.({
@@ -582,7 +587,6 @@ export default function ArchivePathSelector({
                           py: embedded ? 1 : undefined,
                           px: embedded ? 2 : undefined,
                           ...(isActive && {
-                            bgcolor: (theme: Theme) => alpha(theme.palette.primary.main, 0.12),
                             outline: (theme: Theme) =>
                               `2px solid ${alpha(theme.palette.primary.main, 0.5)}`,
                             outlineOffset: '-2px',
@@ -604,8 +608,15 @@ export default function ArchivePathSelector({
                                     ? alpha(theme.palette.info.main, 0.25)
                                     : 'transparent',
                               }),
+                          // One resolver owns the background: a second
+                          // bgcolor key later in the object would win and drop
+                          // the keyboard cursor's tint.
                           bgcolor: (theme) =>
-                            managedCanary ? alpha(theme.palette.info.main, 0.05) : 'transparent',
+                            isActive
+                              ? alpha(theme.palette.primary.main, 0.12)
+                              : managedCanary
+                                ? alpha(theme.palette.info.main, 0.05)
+                                : 'transparent',
                           cursor:
                             item.type === 'directory'
                               ? 'pointer'
