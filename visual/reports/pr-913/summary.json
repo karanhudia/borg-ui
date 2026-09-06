@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-09-06T17:56:37.322Z",
+  "generatedAt": "2026-09-06T18:11:44.726Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #913 visual report",
-    "commitSha": "147a0babc2d3",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/34049349879"
+    "commitSha": "800ffea6709d",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/34050366925"
   },
   "totals": {
     "baseline": 510,
@@ -21,9 +21,9 @@
       "baselinePath": "images/baseline/components-archivepathselector--awaiting-agent-listing--mobile.png",
       "actualPath": "images/actual/components-archivepathselector--awaiting-agent-listing--mobile.png",
       "diffPath": "images/diff/components-archivepathselector--awaiting-agent-listing--mobile.png",
-      "diffPixels": 21205,
+      "diffPixels": 21197,
       "totalPixels": 329160,
-      "diffRatio": 0.06442155790497023,
+      "diffRatio": 0.06439725361526309,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -39,9 +39,9 @@
       "baselinePath": "images/baseline/components-archivepathselector--awaiting-agent-listing.png",
       "actualPath": "images/actual/components-archivepathselector--awaiting-agent-listing.png",
       "diffPath": "images/diff/components-archivepathselector--awaiting-agent-listing.png",
-      "diffPixels": 33371,
+      "diffPixels": 33373,
       "totalPixels": 1024000,
-      "diffRatio": 0.0325888671875,
+      "diffRatio": 0.0325908203125,
       "dimensionsChanged": false,
       "baseline": {
         "width": 1280,
