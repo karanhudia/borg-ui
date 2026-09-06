@@ -134,12 +134,17 @@ const RestoreWizard = ({
     if (open && !wasOpenRef.current) {
       // Dialog just opened (was closed before)
       const preselected = initialSelectedPaths ?? []
+      // A caller can hand over paths with no metadata, or with metadata for
+      // only some of them; every preselected path still needs an entry, or
+      // the restore goes out with no path_metadata for it.
+      const suppliedItems = new Map((initialSelectedItems ?? []).map((item) => [item.path, item]))
       setActiveStep(preselected.length > 0 ? 1 : 0)
       setWizardState({
         ...initialState,
         selectedPaths: preselected,
-        selectedItems:
-          initialSelectedItems ?? preselected.map((path) => ({ path, type: 'file' as const })),
+        selectedItems: preselected.map(
+          (path) => suppliedItems.get(path) ?? { path, type: 'file' as const }
+        ),
       })
       loadSshConnections()
       wasOpenRef.current = true
