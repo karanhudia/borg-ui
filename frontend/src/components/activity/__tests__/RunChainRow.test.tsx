@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import RunChainRow from '../RunChainRow'
 
 function followup(kind: string, status: string) {
@@ -74,7 +75,7 @@ describe('RunChainRow', () => {
     expect(screen.getAllByTestId('run-chain-followup')).toHaveLength(4)
   })
 
-  it('renders no action buttons', () => {
+  it('renders no action buttons beyond the expand control', () => {
     render(
       <RunChainRow
         operation={{
@@ -85,6 +86,28 @@ describe('RunChainRow', () => {
       />
     )
     expect(screen.queryAllByRole('button')).toHaveLength(0)
+  })
+
+  it('expands the collapsed chain from the keyboard', async () => {
+    const user = userEvent.setup()
+    render(
+      <RunChainRow
+        operation={{
+          kind: 'backup',
+          status: 'completed',
+          followups: [
+            followup('archive_sync', 'completed'),
+            followup('history_index', 'completed'),
+            followup('stats', 'completed'),
+            followup('history_merge', 'completed'),
+          ],
+        }}
+      />
+    )
+    await user.tab()
+    expect(screen.getByRole('button', { name: '4 steps' })).toHaveFocus()
+    await user.keyboard('{Enter}')
+    expect(screen.getAllByTestId('run-chain-followup')).toHaveLength(4)
   })
 })
 
