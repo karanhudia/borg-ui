@@ -112,6 +112,21 @@ describe('RepositoryHubRow', () => {
     expect(screen.queryByText(/of 18 indexed/i)).not.toBeInTheDocument()
   })
 
+  it('leaves the connect stage out of a run that did not start with an import', () => {
+    renderRow({
+      track: track({
+        stages: [
+          stage('connect'),
+          stage('stats', { status: 'done', operation: op({ status: 'completed' }) }),
+          stage('archives', { status: 'running', operation: op({ status: 'running' }) }),
+          stage('history', { status: 'waiting', operation: op({}), reason: 'queued' }),
+        ],
+      }),
+    })
+    expect(screen.queryByTestId('stage-connect')).not.toBeInTheDocument()
+    expect(screen.getByTestId('stage-archives')).toHaveAttribute('data-status', 'running')
+  })
+
   it('renders the stage track under the numbers while work is running', () => {
     renderRow({
       track: track({

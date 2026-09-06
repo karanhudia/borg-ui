@@ -114,17 +114,24 @@ interface StageTrackProps {
 // The four derivation stages of one run, side by side and self-labelled,
 // so the track reads on its own wherever it is placed.
 export default function StageTrack({ stages, now, onRetry }: StageTrackProps) {
+  // Connect is the synchronous import request. A reconcile or rebuild run
+  // never has one, and an empty segment would only raise the question of
+  // what it is waiting for.
+  const shown = stages.filter((stage) => stage.key !== 'connect' || stage.status !== 'idle')
   return (
     <Box
       data-testid="stage-track"
       sx={{
         display: 'grid',
-        gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', sm: 'repeat(4, minmax(0, 1fr))' },
+        gridTemplateColumns: {
+          xs: 'repeat(2, minmax(0, 1fr))',
+          sm: `repeat(${shown.length}, minmax(0, 1fr))`,
+        },
         columnGap: 2,
         rowGap: 1,
       }}
     >
-      {stages.map((stage) => (
+      {shown.map((stage) => (
         <StageSegment key={stage.key} stage={stage} now={now} onRetry={onRetry} />
       ))}
     </Box>
