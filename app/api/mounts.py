@@ -30,6 +30,8 @@ class MountBorgRequest(BaseModel):
     repository_id: int
     archive_name: Optional[str] = None
     mount_point: Optional[str] = None
+    # Borg 2 series archives share one name; the id addresses exactly one.
+    archive_id: Optional[str] = None
 
 
 class MountResponse(BaseModel):
@@ -109,6 +111,7 @@ async def mount_borg_archive(
             repository_id=request.repository_id,
             archive_name=request.archive_name,
             mount_point=request.mount_point,
+            archive_id=request.archive_id,
         )
 
         # Get mount info

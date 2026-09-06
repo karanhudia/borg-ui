@@ -16,6 +16,7 @@ import ArchivesList from '../components/ArchivesList'
 import LastRestoreSection from '../components/LastRestoreSection'
 import DeleteArchiveDialog from '../components/DeleteArchiveDialog'
 import MountArchiveDialog from '../components/MountArchiveDialog'
+import { getDefaultMountPoint } from '../utils/mountPoint'
 import ArchiveContentsDialog from '../components/ArchiveContentsDialog'
 import { toast } from 'react-hot-toast'
 import MountSuccessToast from '../components/MountSuccessToast'
@@ -38,10 +39,6 @@ interface RestoreJob {
   started_at?: string
   completed_at?: string
   error_message?: string
-}
-
-function getDefaultMountPoint(archiveName: string): string {
-  return archiveName.replace(/[/:]/g, '_').replace(/\s+/g, '_')
 }
 
 function normalizeRepositoryId(value: number | string | null | undefined): number | null {
@@ -214,13 +211,15 @@ const Archives: React.FC = () => {
       repository_id,
       archive_name,
       mount_point,
+      archive_id,
     }: {
       repository_id: number
       archive_name: string
       mount_point?: string
+      archive_id?: string
       archive_start?: string
       is_custom_mount_point: boolean
-    }) => mountsAPI.mountBorgArchive({ repository_id, archive_name, mount_point }),
+    }) => mountsAPI.mountBorgArchive({ repository_id, archive_name, mount_point, archive_id }),
     onSuccess: (data, variables) => {
       const mountPoint = data.data.mount_point
       const containerName = 'borg-web-ui'
@@ -346,10 +345,15 @@ const Archives: React.FC = () => {
   // Handle archive mounting
   const handleMountArchive = () => {
     if (selectedRepositoryId && mountDialogArchive) {
-      const defaultMountPoint = getDefaultMountPoint(mountDialogArchive.name)
+      const defaultMountPoint = getDefaultMountPoint(
+        mountDialogArchive,
+        selectedRepository?.borg_version
+      )
       mountArchiveMutation.mutate({
         repository_id: selectedRepositoryId,
         archive_name: mountDialogArchive.name,
+        // Borg 2 series archives share one name; the id addresses exactly one.
+        archive_id: mountDialogArchive.id || undefined,
         mount_point: customMountPoint || undefined,
         archive_start: mountDialogArchive.start,
         is_custom_mount_point: !!customMountPoint && customMountPoint !== defaultMountPoint,
@@ -362,8 +366,8 @@ const Archives: React.FC = () => {
   // Open mount dialog
   const openMountDialog = (archive: Archive) => {
     setMountDialogArchive(archive)
-    // Pre-fill with archive name (sanitized for filesystem)
-    setCustomMountPoint(getDefaultMountPoint(archive.name))
+    // Pre-fill with the default mount point (sanitised; Borg 2 adds the start time).
+    setCustomMountPoint(getDefaultMountPoint(archive, selectedRepository?.borg_version))
   }
 
   // Open restore wizard directly
