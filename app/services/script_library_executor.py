@@ -652,7 +652,7 @@ class ScriptLibraryExecutor:
         except Exception as e:
             logger.error(
                 "Inline script execution exception",
-                repository_id=repository_id,
+                repository_id=repository.id,
                 error=str(e),
             )
 
