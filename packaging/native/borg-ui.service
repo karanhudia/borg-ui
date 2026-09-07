@@ -19,6 +19,12 @@ EnvironmentFile=@ENV_FILE@
 # is a different Borg than this release was built against. The installer leaves
 # a pre-existing /usr/local/bin/borg alone on purpose, so this is what keeps
 # that from silently deciding which Borg the service runs.
+# Some ARM64 kernels report OpenSSL CPU capabilities that cryptography's
+# bundled OpenSSL path cannot execute, and importing it dies with SIGILL. The
+# Docker image sets this for the same reason. It lives in the unit rather than
+# the env file because the env file is written once and never rewritten, so an
+# install made before this existed would not pick it up on upgrade.
+Environment=OPENSSL_armcap=0
 Environment=PATH=@PREFIX@/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 WorkingDirectory=@PREFIX@/current
 # One virtualenv per release, so an upgrade builds the new environment while

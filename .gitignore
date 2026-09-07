@@ -151,3 +151,9 @@ trivy-*.sarif
 .planning/
 
 .worktrees/
+
+# Native install artifacts: scripts/build-native-tarball.sh output, and the
+# agent wheel build it runs on the way there.
+dist/
+build/
+*.egg-info/

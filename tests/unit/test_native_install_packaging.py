@@ -477,3 +477,71 @@ def test_the_unverified_shortcut_says_so_where_it_is_shown():
             f"docs/installation.md:{number + 1} pipes the installer into a root "
             "shell without being labelled unverified nearby"
         )
+
+
+def test_conflicting_source_options_are_a_usage_error():
+    """--tarball carries its own version, so pairing it with --version is
+    ambiguous. Checked during parsing, so it is reachable without root."""
+    result = subprocess.run(
+        ["bash", str(INSTALLER), "--tarball", "/nonexistent", "--version", "1.2.3"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2, result.stderr
+    assert "mutually exclusive" in result.stderr
+
+
+def test_the_install_matrix_harness_covers_the_transitions_review_keeps_finding():
+    """Most findings on this installer have been state left inconsistent by a
+    second run, a run with different flags, or a run over an interrupted one.
+    Those are only reachable by running it, so the harness has to keep covering
+    them even as cases get added.
+    """
+    harness = REPO_ROOT / "scripts" / "test-native-install.sh"
+    assert harness.is_file(), "the install matrix harness is gone"
+    assert harness.stat().st_mode & 0o111, "the harness is not executable"
+
+    text = harness.read_text()
+    for case in (
+        "fresh",
+        "rerun",
+        "flags",
+        "nostart",
+        "skipborg2",
+        "partial",
+        "serviceuser",
+    ):
+        assert f"run_case {case}" in text, f"the {case} case is no longer covered"
+
+
+def test_the_native_install_sets_what_the_image_sets():
+    """Parity guard between the two ways to run Borg UI.
+
+    The image's ENV list is the working configuration; anything it sets that
+    the native path does not is a difference in behaviour between them. This
+    caught OPENSSL_armcap=0, whose absence made the app die with SIGILL on
+    ARM64 at first boot, long after every structural check had passed.
+    """
+    dockerfile = (REPO_ROOT / "Dockerfile").read_text()
+    production = dockerfile[dockerfile.index("AS production") :]
+    keys = set(re.findall(r"^ENV ([A-Za-z_][A-Za-z0-9_]*)=", production, re.M))
+    assert keys, "no ENV lines found in the Dockerfile's production stage"
+
+    # Set from the VERSION file the tarball ships; app/config.py prefers that
+    # over the environment, so the native path needs no equivalent.
+    keys.discard("APP_VERSION")
+
+    native = "\n".join(
+        path.read_text()
+        for path in (
+            UNIT,
+            START,
+            INSTALLER,
+            REPO_ROOT / "packaging" / "native" / "borg-ui.service",
+        )
+    )
+    missing = sorted(key for key in keys if key not in native)
+    assert not missing, (
+        "the image sets these but the native install does not, so the two "
+        f"behave differently: {missing}"
+    )

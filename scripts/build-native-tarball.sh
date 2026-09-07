@@ -27,6 +27,16 @@ mkdir -p "${STAGE}"
 
 # --- frontend --------------------------------------------------------------
 echo "==> Building the frontend bundle"
+# npm ci deletes frontend/node_modules before reinstalling. A git worktree may
+# have that symlinked into another checkout to share one install, and npm
+# follows the symlink, so this would wipe the other checkout's modules rather
+# than this one's. Refuse instead.
+if [[ -L frontend/node_modules ]]; then
+  echo "error: frontend/node_modules is a symlink to $(readlink frontend/node_modules)." >&2
+  echo "npm ci would delete that other checkout's modules. Remove the symlink and" >&2
+  echo "run 'npm --prefix frontend ci' here, or build from a plain checkout." >&2
+  exit 1
+fi
 npm --prefix frontend ci
 npm --prefix frontend run build
 
@@ -83,7 +93,33 @@ done
 
 # --- tarball ---------------------------------------------------------------
 mkdir -p "${OUT_DIR}"
-tar -czf "${OUT_DIR}/${NAME}.tar.gz" -C "$(dirname "${STAGE}")" "${NAME}"
+
+# COPYFILE_DISABLE stops the BSD tar on macOS writing an AppleDouble "._name"
+# sidecar for every file carrying an extended attribute. Those sidecars are
+# binary, and they match *.py, so Alembic picks up "._0001_something.py" as a
+# migration and dies on "source code string cannot contain null bytes" at the
+# first boot. The --exclude is the belt to that braces, and covers a tree that
+# already has such files in it.
+COPYFILE_DISABLE=1 tar --exclude='._*' --exclude='__pycache__' \
+  -czf "${OUT_DIR}/${NAME}.tar.gz" -C "$(dirname "${STAGE}")" "${NAME}"
+
+# The build succeeding is not the same as the artifact being installable, and
+# both of the above fail silently at boot rather than here. Check the tarball
+# that was actually written.
+contents="$(tar -tzf "${OUT_DIR}/${NAME}.tar.gz")"
+for pattern in '/\._' '__pycache__'; do
+  if grep -q "${pattern}" <<<"${contents}"; then
+    echo "error: ${NAME}.tar.gz contains ${pattern} entries; it would fail at first boot" >&2
+    grep "${pattern}" <<<"${contents}" | head -5 >&2
+    exit 1
+  fi
+done
+for required in "${NAME}/VERSION" "${NAME}/requirements.txt" \
+  "${NAME}/packaging/native/versions.env" "${NAME}/app/static/index.html"; do
+  grep -qx "${required}" <<<"${contents}" ||
+    { echo "error: ${NAME}.tar.gz is missing ${required}" >&2; exit 1; }
+done
+
 (cd "${OUT_DIR}" && sha256sum "${NAME}.tar.gz" >"${NAME}.tar.gz.sha256")
 
 # The installer ships as a release asset too, not only inside the tarball, so

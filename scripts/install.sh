@@ -30,6 +30,7 @@ UNIT_FILE="/etc/systemd/system/borg-ui.service"
 SERVICE_USER="root"
 PORT="8081"
 VERSION=""
+TARBALL=""
 START_SERVICE="true"
 SKIP_BORG2="false"
 DATA_DIR_EXPLICIT="false"
@@ -43,6 +44,11 @@ usage() {
 Usage: install.sh [options]
 
   --version <v>        Release to install (default: the latest GitHub release)
+  --tarball <path>     Install from a local tarball built by
+                       scripts/build-native-tarball.sh instead of downloading a
+                       release. For air-gapped hosts, and for testing the
+                       installer itself. Not checksum-verified: the file is
+                       whatever you point it at.
   --port <n>           Port to serve on (default: 8081, ignored on upgrades)
   --data-dir <path>    Data directory (default: /var/lib/borg-ui, ignored on upgrades)
   --service-user <u>   User the service runs as (default: root; see below)
@@ -71,6 +77,7 @@ require_value() {
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --version) require_value "$@"; VERSION="$2"; shift 2 ;;
+    --tarball) require_value "$@"; TARBALL="$2"; shift 2 ;;
     --port) require_value "$@"; PORT="$2"; PORT_EXPLICIT="true"; shift 2 ;;
     --data-dir) require_value "$@"; DATA_DIR="$2"; DATA_DIR_EXPLICIT="true"; shift 2 ;;
     --service-user) require_value "$@"; SERVICE_USER="$2"; SERVICE_USER_EXPLICIT="true"; shift 2 ;;
@@ -80,6 +87,11 @@ while [[ $# -gt 0 ]]; do
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
+
+if [[ -n "${TARBALL}" ]] && [[ -n "${VERSION}" ]]; then
+  echo "error: --tarball and --version are mutually exclusive; the tarball names its own version" >&2
+  exit 2
+fi
 
 log() { echo "==> $*"; }
 warn() { echo "warning: $*" >&2; }
@@ -165,8 +177,47 @@ resolve_version() {
   VERSION="${tag#v}"
 }
 
+# An operator-supplied tarball is trusted because they built it; a release
+# download is not, which is why only that path verifies a checksum. Replaces a
+# release directory of the same version outright, since a rebuilt tarball of an
+# unchanged version is the normal case here and its contents differ.
+unpack_local_tarball() {
+  local tmp
+
+  [[ -f "${TARBALL}" ]] || die "no such tarball: ${TARBALL}"
+
+  # Unpack first and read the version out of the tree, rather than listing the
+  # archive to find its top-level directory. `tar -tzf | head` looks harmless
+  # but kills tar with SIGPIPE once head has what it needs, and under
+  # `set -o pipefail` that fails the whole installer. GNU tar does this; the
+  # BSD tar on a Mac does not, so it only shows up where this actually runs.
+  install -d -m 0755 "${PREFIX}/releases"
+  tmp="$(mktemp -d "${PREFIX}/releases/.staging.XXXXXX")"
+  mkdir -p "${tmp}/unpack"
+  tar -xzf "${TARBALL}" -C "${tmp}/unpack" --strip-components=1
+
+  if [[ ! -f "${tmp}/unpack/VERSION" ]] ||
+    [[ ! -f "${tmp}/unpack/packaging/native/versions.env" ]]; then
+    rm -rf "${tmp}"
+    die "${TARBALL} is not a Borg UI release tarball"
+  fi
+
+  VERSION="$(tr -d '[:space:]' <"${tmp}/unpack/VERSION")"
+  RELEASE_DIR="${PREFIX}/releases/${VERSION}"
+
+  warn "Installing ${VERSION} from ${TARBALL}; no checksum is verified for a local file."
+  rm -rf "${RELEASE_DIR}"
+  mv "${tmp}/unpack" "${RELEASE_DIR}"
+  rm -rf "${tmp}"
+}
+
 download_release() {
   local base tarball sha url
+
+  if [[ -n "${TARBALL}" ]]; then
+    unpack_local_tarball
+    return
+  fi
   base="https://github.com/${REPO}/releases/download/v${VERSION}"
   tarball="borg-ui-${VERSION}.tar.gz"
 
@@ -577,8 +628,15 @@ activate_release() {
   local group
   group="$(id -gn "${SERVICE_USER}")"
 
-  PREVIOUS_RELEASE="$(readlink -f "${PREFIX}/current" 2>/dev/null || true)"
-  [[ "${PREVIOUS_RELEASE}" != "${RELEASE_DIR}" ]] || PREVIOUS_RELEASE=""
+  # Only a symlink that already exists names a previous release. readlink -f
+  # resolves a path whose last component is missing, so on a first install it
+  # returned "<prefix>/current" itself, and the rollback below then "rolled
+  # back" to the symlink it had just pointed at the failing release.
+  PREVIOUS_RELEASE=""
+  if [[ -L "${PREFIX}/current" ]]; then
+    PREVIOUS_RELEASE="$(readlink -f "${PREFIX}/current" 2>/dev/null || true)"
+    [[ "${PREVIOUS_RELEASE}" != "${RELEASE_DIR}" ]] || PREVIOUS_RELEASE=""
+  fi
 PREVIOUS_SERVICE_USER=""
 
   # Only when this run will start it again. With --no-start, install_service
@@ -699,7 +757,7 @@ report() {
 
 main() {
   preflight
-  resolve_version
+  [[ -n "${TARBALL}" ]] || resolve_version
   install_packages
   download_release
 
