@@ -411,7 +411,8 @@
         "outdatedCount_one": "{{count}} Endpunkt verwendet einen älteren Agenten",
         "outdatedCount_other": "{{count}} Endpunkte verwenden einen älteren Agenten",
         "bannerBody": "Die aktuelle Agent-Version ist {{version}}.",
-        "bannerManual": "Installieren Sie jeden Endpunkt über seine Karte neu, um ihn zu aktualisieren."
+        "bannerManual": "Installieren Sie jeden Endpunkt über seine Karte neu, um ihn zu aktualisieren.",
+        "bannerMixedTargets": "Jeder Endpunkt zielt auf seine eigene konfigurierte Version."
       }
     },
     "installCommand": {

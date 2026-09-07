@@ -411,7 +411,8 @@
         "outdatedCount_one": "{{count}} endpoint is running an older agent",
         "outdatedCount_other": "{{count}} endpoints are running an older agent",
         "bannerBody": "The current agent version is {{version}}.",
-        "bannerManual": "Reinstall each one from its card to bring it up to date."
+        "bannerManual": "Reinstall each one from its card to bring it up to date.",
+        "bannerMixedTargets": "Each one targets its own configured version."
       }
     },
     "installCommand": {

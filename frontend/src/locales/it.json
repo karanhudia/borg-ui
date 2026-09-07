@@ -411,7 +411,8 @@
         "outdatedCount_one": "{{count}} endpoint esegue un agente più vecchio",
         "outdatedCount_other": "{{count}} endpoint eseguono un agente più vecchio",
         "bannerBody": "La versione attuale dell'agente è {{version}}.",
-        "bannerManual": "Reinstalla ciascuno dalla sua scheda per aggiornarlo."
+        "bannerManual": "Reinstalla ciascuno dalla sua scheda per aggiornarlo.",
+        "bannerMixedTargets": "Ognuno punta alla propria versione configurata."
       }
     },
     "installCommand": {

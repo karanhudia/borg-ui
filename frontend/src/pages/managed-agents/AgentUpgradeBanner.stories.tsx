@@ -37,6 +37,24 @@ export const SeveralOutdated: Story = {
   },
 }
 
+export const MixedTargets: Story = {
+  name: 'Outdated agents with different targets',
+  args: {
+    agents: [
+      base,
+      {
+        ...base,
+        id: 2,
+        name: 'Legacy Print Server',
+        agent_id: 'agt_legacy_02',
+        agent_version: '0.1.1',
+        desired_agent_version: '0.1.2',
+        available_agent_version: '0.1.3',
+      },
+    ],
+  },
+}
+
 export const NoneOutdated: Story = {
   args: {
     agents: [{ ...base, upgrade_status: 'up_to_date', agent_version: '0.1.3' }],
