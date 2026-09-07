@@ -380,3 +380,59 @@ def test_every_path_that_cannot_provide_a_borg_clears_its_forwarder():
         "the distribution-package fallback must own the forwarder too, or a "
         "stale one from an earlier install shadows it"
     )
+
+
+def test_an_option_without_its_value_is_a_usage_error():
+    """Argument parsing runs before anything privileged, so it can be executed.
+
+    A trailing `--version` used to read `$2` under `set -u` and die with
+    "unbound variable", which tells the operator nothing about what they got
+    wrong.
+    """
+    for option in ("--version", "--port", "--data-dir", "--service-user"):
+        result = subprocess.run(
+            ["bash", str(INSTALLER), option], capture_output=True, text=True
+        )
+        assert result.returncode == 2, (
+            f"{option} without a value exited {result.returncode}, not a usage error"
+        )
+        assert f"{option} needs a value" in result.stderr, result.stderr
+        assert "unbound variable" not in result.stderr, result.stderr
+
+
+def test_help_and_unknown_options_do_not_start_an_install():
+    help_result = subprocess.run(
+        ["bash", str(INSTALLER), "--help"], capture_output=True, text=True
+    )
+    assert help_result.returncode == 0
+    assert "Usage: install.sh" in help_result.stdout
+
+    unknown = subprocess.run(
+        ["bash", str(INSTALLER), "--nope"], capture_output=True, text=True
+    )
+    assert unknown.returncode == 2
+    assert "Unknown option: --nope" in unknown.stderr
+
+
+def test_the_release_workflow_expands_nothing_ref_derived_into_a_shell_body():
+    """A tag name is attacker-controlled input to this job, and only the tag
+    being released is validated, not the previous one picked off the tag list.
+    Expansions belong in `env:`, where they cannot be read as shell source."""
+    workflow = (REPO_ROOT / ".github" / "workflows" / "release.yml").read_text()
+
+    offenders = []
+    in_run_body = False
+    for number, line in enumerate(workflow.splitlines(), start=1):
+        stripped = line.strip()
+        if stripped.startswith("run: |"):
+            in_run_body = True
+            continue
+        if in_run_body and stripped.startswith("- name:"):
+            in_run_body = False
+        if in_run_body and "${{" in line:
+            offenders.append(f"line {number}: {stripped}")
+
+    assert not offenders, (
+        "pass these through `env:` and reference them as shell variables:\n"
+        + "\n".join(offenders)
+    )

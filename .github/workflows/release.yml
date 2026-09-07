@@ -38,11 +38,12 @@ jobs:
 
       - name: Get version from tag
         id: version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          VERSION="${{ github.ref_name }}"
-          VERSION="${VERSION#v}"  # Remove 'v' prefix
+          VERSION="${RELEASE_TAG#v}"  # Remove 'v' prefix
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          echo "tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
           if [[ "$VERSION" == *-* ]]; then
             echo "is_prerelease=true" >> $GITHUB_OUTPUT
           else
@@ -51,9 +52,11 @@ jobs:
 
       - name: Get previous tag
         id: previous_tag
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          PREVIOUS_TAG=$(git tag --sort=-v:refname | grep -A 1 "${{ github.ref_name }}" | tail -1)
-          if [ -z "$PREVIOUS_TAG" ] || [ "$PREVIOUS_TAG" == "${{ github.ref_name }}" ]; then
+          PREVIOUS_TAG=$(git tag --sort=-v:refname | grep -A 1 "$RELEASE_TAG" | tail -1)
+          if [ -z "$PREVIOUS_TAG" ] || [ "$PREVIOUS_TAG" == "$RELEASE_TAG" ]; then
             # No previous tag, use initial commit
             PREVIOUS_TAG=$(git rev-list --max-parents=0 HEAD)
           fi
@@ -62,8 +65,16 @@ jobs:
 
       - name: Generate changelog
         id: changelog
+        # Nothing derived from a ref or a tag name is expanded into the shell
+        # body below. A tag is attacker-controlled input as far as this job is
+        # concerned, and only the tag being released is validated, not the
+        # previous one this step picks off the tag list.
         env:
+          RELEASE_TAG: ${{ github.ref_name }}
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          PREVIOUS_TAG: ${{ steps.previous_tag.outputs.tag }}
+          IS_PRERELEASE: ${{ steps.version.outputs.is_prerelease }}
+          REPO_SLUG: ${{ github.repository }}
           ASSET_BASE: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}
         run: |
           {
@@ -72,7 +83,7 @@ jobs:
             echo ""
 
             # Get commits between previous tag and current tag
-            git log ${{ steps.previous_tag.outputs.tag }}..${{ github.ref_name }} \
+            git log "${PREVIOUS_TAG}..${RELEASE_TAG}" \
               --pretty=format:"* %s (%h)" \
               --no-merges \
               | grep -v "^* chore: bump version" || echo "* Initial release"
@@ -83,8 +94,8 @@ jobs:
             echo ""
             echo "Published to Docker Hub:"
             echo '```'
-            echo "docker pull ainullcode/borg-ui:${{ steps.version.outputs.version }}"
-            if [[ "${{ steps.version.outputs.is_prerelease }}" != "true" ]]; then
+            echo "docker pull ainullcode/borg-ui:${RELEASE_VERSION}"
+            if [[ "${IS_PRERELEASE}" != "true" ]]; then
               echo "docker pull ainullcode/borg-ui:latest"
             fi
             echo '```'
@@ -101,7 +112,7 @@ jobs:
             echo "  && sudo bash install.sh --version ${RELEASE_VERSION}"
             echo '```'
             echo ""
-            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ steps.previous_tag.outputs.tag }}...${{ github.ref_name }}"
+            echo "**Full Changelog**: https://github.com/${REPO_SLUG}/compare/${PREVIOUS_TAG}...${RELEASE_TAG}"
             echo 'EOF'
           } >> $GITHUB_OUTPUT
 

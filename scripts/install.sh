@@ -56,12 +56,23 @@ will only be able to back up what it can read.
 USAGE
 }
 
+# Every value-taking option has to actually carry one. Without this, a trailing
+# `--version` reads $2 under `set -u` and the operator gets "unbound variable"
+# instead of being told which option they got wrong.
+require_value() {
+  if [[ $# -lt 2 ]]; then
+    echo "error: $1 needs a value" >&2
+    usage >&2
+    exit 2
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --version) VERSION="$2"; shift 2 ;;
-    --port) PORT="$2"; PORT_EXPLICIT="true"; shift 2 ;;
-    --data-dir) DATA_DIR="$2"; DATA_DIR_EXPLICIT="true"; shift 2 ;;
-    --service-user) SERVICE_USER="$2"; SERVICE_USER_EXPLICIT="true"; shift 2 ;;
+    --version) require_value "$@"; VERSION="$2"; shift 2 ;;
+    --port) require_value "$@"; PORT="$2"; PORT_EXPLICIT="true"; shift 2 ;;
+    --data-dir) require_value "$@"; DATA_DIR="$2"; DATA_DIR_EXPLICIT="true"; shift 2 ;;
+    --service-user) require_value "$@"; SERVICE_USER="$2"; SERVICE_USER_EXPLICIT="true"; shift 2 ;;
     --skip-borg2) SKIP_BORG2="true"; shift ;;
     --no-start) START_SERVICE="false"; shift ;;
     -h|--help) usage; exit 0 ;;
