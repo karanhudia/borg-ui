@@ -161,8 +161,11 @@ unsatisfiable.
 This is the load-bearing security design. The agent gets exactly one
 escalation, and it carries no attacker-controlled input.
 
-`install.sh` writes three root-owned artifacts, all skipped when the service
-user is `root` (that case needs no escalation):
+`install.sh` writes four root-owned artifacts. They are skipped entirely when
+the service user is `root` (that case needs no escalation) and when the operator
+passes `--no-remote-upgrade` (section 11.3). A reinstall preserves the existing
+choice unless the flag is given explicitly, matching how the installer already
+preserves the service user (`app/api/agent_installer.py:279`):
 
 **`/etc/borg-ui-agent/upgrade.conf`** — mode `0644`, owned `root:root`. Records
 the parameters a reinstall needs: server URL, borg install mode, service user
@@ -176,6 +179,11 @@ values the operator gave the installer.
 root-owned file rather than the caller, a compromised agent process cannot
 redirect the install source, change the service user, or inject installer
 flags. This is the property that makes the sudoers rule safe.
+
+Before fetching anything it compares the server URL in `upgrade.conf` against
+the one in `/etc/borg-ui-agent/config.toml` and aborts if they differ, so a
+config left behind by an earlier enrollment cannot point a live agent's upgrade
+at a host it no longer talks to.
 
 **`/etc/sudoers.d/borg-ui-agent-upgrade`** — mode `0440`, granting the service
 user exactly:
@@ -312,18 +320,55 @@ it, setting a desired Borg version does nothing an operator can act on.
 
 ## 11. Security
 
-- The escalation is one command with no caller-supplied input (section 6). The
-  agent cannot influence what gets installed or from where.
-- The sudoers file is validated before installation and never written on a
-  root-mode install.
-- `upgrade.conf` is root-owned and not writable by the service user, so a
-  compromised agent cannot rewrite the server URL and turn its own upgrade into
-  arbitrary code execution from an attacker-controlled host.
-- The helper fetches `install.sh` over the same channel and pinning the
-  installer already uses; this feature does not widen that trust boundary.
+### 11.1 What this actually grants
+
+State the escalation plainly rather than minimising it.
+
+Before this feature, a compromised Borg UI server can already, on every
+endpoint: run arbitrary code as the service user (`script.run`,
+`agent/borg_ui_agent/runtime.py:52`) and read any file on the machine, because
+the unit carries `CAP_DAC_READ_SEARCH` (`app/api/agent_installer.py:722`). It
+also already dictates which agent code the endpoint runs, since the endpoint
+installs the wheel the server serves.
+
+After this feature, on endpoints that carry the helper, it can additionally
+obtain **root** on demand: write access, persistence, and everything the read
+capability did not cover.
+
+That is a genuine escalation, not a repackaging of existing trust. It is
+accepted because the alternative — restricting upgrades to root-mode installs —
+excludes the installer's own default service user mode (`current`,
+`app/api/agent_installer.py:51`) and therefore excludes most installs from the
+feature. The escalation is bounded to "the server that already controls this
+endpoint's agent code can also restart it as root", which is a step up from
+that starting position rather than a new party gaining access.
+
+### 11.2 Properties the design must preserve
+
+- The escalation is one command with no caller-supplied input (section 6). A
+  compromised **agent** cannot influence what gets installed or from where; only
+  a compromised **server** can, and only into the reinstall path.
+- `upgrade.conf` is root-owned and not writable by the service user, so the
+  agent cannot rewrite the server URL and redirect its own upgrade to an
+  attacker-controlled host.
+- The sudoers file is validated with `visudo -cf` before installation, names one
+  absolute command path, and is never written on a root-mode install or when the
+  operator opted out (section 6).
+- The helper is refused entirely when `upgrade.conf` names a server URL that is
+  not the one the agent is enrolled against, so a stale or tampered config
+  cannot silently repoint an upgrade.
 - Upgrade endpoints require the same authorization as every other agent
   mutation. Add the new actions to `app/core/authorization.py` alongside the
   existing agent actions.
+
+### 11.3 Operator control
+
+Remote upgrade is installed by default, because a fleet feature that is off by
+default is not a fleet feature. `install.sh` accepts `--no-remote-upgrade` to
+skip all four artifacts; such an endpoint reports no `self_upgrade` capability
+and lands on the manual path described in section 9, which is the same path an
+endpoint installed before this feature takes. Document the flag and its trade in
+`docs/managed-agents.md` in the same phase that adds it.
 
 ## 12. Testing
 
@@ -332,7 +377,9 @@ it, setting a desired Borg version does nothing an operator can act on.
   and a pinned agent matching and not matching its pin.
 - **Installer packaging** — extend `tests/unit/test_native_install_packaging.py`
   style guard tests: the served script writes all four artifacts, skips them in
-  root mode, and the sudoers line names only the one command.
+  root mode and under `--no-remote-upgrade`, preserves the choice across a
+  reinstall that does not pass the flag, and emits a sudoers line naming exactly
+  one absolute command path.
 - **Session command** — the agent refuses when busy and when unsupported, and
   invokes the expected `sudo` argv (mocked) otherwise.
 - **Reconciliation** — an agent re-registering with the target version clears
@@ -374,10 +421,11 @@ change to how upgrades are performed.
 
 ### 13.3 Phase 2 — privileged helper and capability
 
-The four installer artifacts, the root-mode skip, `visudo` validation, and
-capability detection in the agent. No server behavior change beyond
-`self_upgrade_supported` appearing in the response and the manual-path
-affordance in the UI becoming meaningful.
+The four installer artifacts, the root-mode skip, the `--no-remote-upgrade`
+opt-out, `visudo` validation, and capability detection in the agent. Update
+`docs/managed-agents.md` with what the helper grants (section 11.1) and how to
+decline it. No server behavior change beyond `self_upgrade_supported` appearing
+in the response and the manual-path affordance in the UI becoming meaningful.
 
 Gate: a freshly installed endpoint reports `self_upgrade`; an endpoint
 installed before this phase does not, and the UI says so.
@@ -431,10 +479,13 @@ Gate: an operator moves an endpoint from Borg 1 to Borg 2 from the UI.
 ## Appendix B — decisions made
 
 **D1. Escalation is a dedicated oneshot unit plus a narrow sudoers rule.**
-Rejected: only upgrading root-mode installs, which leaves the recommended
-install unable to use the headline feature. Rejected: an agent-writable venv,
-which weakens the agent's own code path and still cannot update the systemd
-unit or the bundled Borg binary.
+The decisive argument is that the installer's default service user mode is
+`current` — an unprivileged user (`app/api/agent_installer.py:51`). Rejected:
+only upgrading root-mode installs, which would ship a fleet feature that does
+not work on the installer's own default and would leave most endpoints on the
+copy-paste path permanently. Rejected: an agent-writable venv, which weakens the
+agent's own code path and still cannot update the systemd unit or the bundled
+Borg binary. Section 11.1 states what the accepted option grants.
 
 **D2. The helper takes no arguments; all parameters come from a root-owned
 config file.** The alternative — the agent passing a server URL or flags
@@ -462,3 +513,17 @@ naming the endpoints that need a manual reinstall first.
 
 **D7. Server self-upgrade is out of scope.** It is a different problem with a
 different failure model and belongs in its own spec.
+
+**D8. The helper is installed by default, with `--no-remote-upgrade` to opt
+out.** Rejected: opt-in by default, which reintroduces the problem D1 rejects —
+the feature would not work on a normal install until someone knew to ask for it.
+An operator with one sensitive host opts that host out and keeps the manual
+path.
+
+**D9. Upgrades are pulled by the agent, not pushed by the server over SSH.**
+A server that could SSH into each endpoint could push upgrades directly, and at
+least one comparable product appears to be built that way. Borg UI's managed
+agents deliberately dial out, which is what lets them sit behind NAT with no
+inbound access and no server-held credentials for the endpoint. Adding
+server-to-endpoint SSH to enable upgrades would undo that property for the sake
+of one feature.
