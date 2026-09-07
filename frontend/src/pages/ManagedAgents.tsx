@@ -64,6 +64,8 @@ import LogViewerDialog, { type LogViewerFetchLogs } from '../components/shared/L
 import ResponsiveDialog from '../components/shared/ResponsiveDialog'
 import DiagnosticsTcpTargetFields from '../components/shared/DiagnosticsTcpTargetFields'
 import AddAgentDialog from './managed-agents/AddAgentDialog'
+import AgentUpgradeBanner from './managed-agents/AgentUpgradeBanner'
+import AgentUpgradeChip from './managed-agents/AgentUpgradeChip'
 import BorgInstallModeRadioGroup from './managed-agents/BorgInstallModeRadioGroup'
 import { resolveAgentServerUrl } from './managed-agents/agentServerUrl'
 import {
@@ -1614,6 +1616,7 @@ export function AgentList({
 
   return (
     <>
+      <AgentUpgradeBanner agents={agents} />
       <Box
         sx={{
           display: 'grid',
@@ -1698,19 +1701,34 @@ export function AgentList({
                         {agent.status}
                       </Typography>
                     </Box>
-                    {agent.agent_version && (
-                      <Typography
-                        sx={{
-                          fontSize: '0.58rem',
-                          fontWeight: 500,
-                          color: 'text.disabled',
-                          letterSpacing: '0.02em',
-                          flexShrink: 0,
-                        }}
-                      >
-                        v{agent.agent_version}
-                      </Typography>
-                    )}
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 0.5,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {agent.agent_version && (
+                        <Typography
+                          sx={{
+                            fontSize: '0.58rem',
+                            fontWeight: 500,
+                            color: 'text.disabled',
+                            letterSpacing: '0.02em',
+                          }}
+                        >
+                          v{agent.agent_version}
+                        </Typography>
+                      )}
+                      {agent.upgrade_status && agent.upgrade_status !== 'up_to_date' && (
+                        <AgentUpgradeChip
+                          status={agent.upgrade_status}
+                          targetVersion={agent.available_agent_version}
+                          pinnedVersion={agent.desired_agent_version}
+                        />
+                      )}
+                    </Box>
                   </Box>
 
                   <Typography

@@ -1173,4 +1173,100 @@ describe('ManagedAgents', () => {
     expect(buttons[1]).toBeDisabled()
     expect(buttons[2]).toBeDisabled()
   })
+
+  it('shows an update chip and a banner for an out-of-date agent', () => {
+    const agent = {
+      id: 11,
+      agent_id: 'agent-behind-11',
+      name: 'behind',
+      hostname: 'behind-01',
+      status: 'online',
+      agent_version: '0.1.2',
+      available_agent_version: '0.1.3',
+      upgrade_status: 'outdated',
+      created_at: '2026-05-18T09:00:00.000Z',
+      updated_at: '2026-05-18T10:00:00.000Z',
+    } as AgentMachineResponse
+
+    renderWithProviders(
+      <AgentList
+        agents={[agent]}
+        serverUrl="https://borg-ui.example.com"
+        onCopy={vi.fn()}
+        onRevoke={vi.fn()}
+        onDelete={vi.fn()}
+        onViewLogs={vi.fn()}
+        isRevoking={false}
+        isDeleting={false}
+      />
+    )
+
+    expect(screen.getByText('Update available')).toBeInTheDocument()
+    expect(screen.getByText(/1 endpoint is running an older agent/i)).toBeInTheDocument()
+  })
+
+  it('stays quiet for an agent running the served version', () => {
+    const agent = {
+      id: 12,
+      agent_id: 'agent-current-12',
+      name: 'current',
+      hostname: 'current-01',
+      status: 'online',
+      agent_version: '0.1.3',
+      available_agent_version: '0.1.3',
+      upgrade_status: 'up_to_date',
+      created_at: '2026-05-18T09:00:00.000Z',
+      updated_at: '2026-05-18T10:00:00.000Z',
+    } as AgentMachineResponse
+
+    renderWithProviders(
+      <AgentList
+        agents={[agent]}
+        serverUrl="https://borg-ui.example.com"
+        onCopy={vi.fn()}
+        onRevoke={vi.fn()}
+        onDelete={vi.fn()}
+        onViewLogs={vi.fn()}
+        isRevoking={false}
+        isDeleting={false}
+      />
+    )
+
+    expect(screen.queryByText('Update available')).not.toBeInTheDocument()
+    expect(screen.queryByText('Current')).not.toBeInTheDocument()
+    expect(screen.queryByText(/running an older agent/i)).not.toBeInTheDocument()
+  })
+
+  it('shows the pin state instead of an update prompt for a pinned agent', () => {
+    const agent = {
+      id: 13,
+      agent_id: 'agent-pinned-13',
+      name: 'pinned',
+      hostname: 'pinned-01',
+      status: 'online',
+      agent_version: '0.1.2',
+      desired_agent_version: '0.1.2',
+      available_agent_version: '0.1.3',
+      upgrade_status: 'pinned',
+      created_at: '2026-05-18T09:00:00.000Z',
+      updated_at: '2026-05-18T10:00:00.000Z',
+    } as AgentMachineResponse
+
+    renderWithProviders(
+      <AgentList
+        agents={[agent]}
+        serverUrl="https://borg-ui.example.com"
+        onCopy={vi.fn()}
+        onRevoke={vi.fn()}
+        onDelete={vi.fn()}
+        onViewLogs={vi.fn()}
+        isRevoking={false}
+        isDeleting={false}
+      />
+    )
+
+    expect(screen.getByText('Pinned')).toBeInTheDocument()
+    expect(screen.queryByText('Update available')).not.toBeInTheDocument()
+    expect(screen.queryByText(/running an older agent/i)).not.toBeInTheDocument()
+  })
 })
