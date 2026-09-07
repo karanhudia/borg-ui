@@ -157,6 +157,30 @@ def test_facade_logs_round_trip_through_the_log_file(db, repository, tmp_path):
     assert job.has_logs is True
 
 
+def test_facade_logs_setter_does_not_clobber_an_already_written_file(
+    db, repository, tmp_path
+):
+    """The five migrated maintenance services (spec section 13 phase 5) write
+    the real captured output straight to the log file, set
+    `log_file_path`, and then assign `job.logs = "Logs saved to: X"` as a
+    backwards-compatible marker for callers that still read the legacy
+    `logs` column. For a legacy row those are two independent columns, so
+    that marker write is harmless there; for a facade, `.logs` reads and
+    writes through the same file `log_file_path` already points at, so the
+    marker write silently overwrote the real content it was written next
+    to. The setter must leave a file that already has content alone."""
+    op = _operation(db, repository)
+    log_path = tmp_path / "operation.log"
+    log_path.write_text("real captured borg output\n", encoding="utf-8")
+    op.log_file_path = str(log_path)
+    job = MaintenanceJobFacade(db, op)
+
+    job.logs = "Logs saved to: operation.log"
+    db.commit()
+
+    assert job.logs == "real captured borg output\n"
+
+
 def test_facade_allocates_a_log_path_when_the_operation_has_none(
     db, repository, tmp_path, monkeypatch
 ):

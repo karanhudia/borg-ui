@@ -287,6 +287,40 @@ async def test_cancel_queued_and_running(db, repo, runner, registry):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_cancel_preserves_a_service_written_cancelled_status(
+    db, repo, runner, registry
+):
+    """A maintenance executor's `_run` helper (spec section 13 phase 5)
+    writes `cancelled` straight to the row through the legacy job facade,
+    since `Outcome` has no cancelled member, and reports the verdict back as
+    `Outcome(status="failed", ...)`. `run_operation` must not let that
+    outcome overwrite the row's already-correct `cancelled` status with
+    `failed`."""
+    started = asyncio.Event()
+
+    async def cancels_like_a_maintenance_kind(ctx):
+        started.set()
+        while not ctx.cancelled():
+            await asyncio.sleep(0.01)
+        # `ctx.db` is the same session (and identity-mapped Operation
+        # instance) `run_operation` holds as `op`, exactly like the real
+        # `_run` helper in executors/maintenance.py.
+        ctx.operation.status = "cancelled"
+        ctx.db.commit()
+        return Outcome(status="failed", error_message="cancelled")
+
+    registry["stats"] = cancels_like_a_maintenance_kind
+    op = enqueue(db, "stats", repository_id=repo.id)
+    await runner.tick()
+    await started.wait()
+    assert await runner.request_cancel(op.id) is True
+    await asyncio.gather(*runner.running_tasks.values(), return_exceptions=True)
+    db.expire_all()
+    assert db.get(Operation, op.id).status == "cancelled"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_cancel_refused_for_running_rows_this_process_does_not_own(
     db, repo, runner
 ):
@@ -355,6 +389,47 @@ def test_recover_on_startup(db, repo, runner, monkeypatch):
 
 
 @pytest.mark.unit
+def test_recover_on_startup_does_not_break_a_managed_agent_lock(
+    db, runner, monkeypatch
+):
+    """The Borg process for an agent-executed repository runs on the agent
+    machine, not the server. Recovery must not call `break_repository_lock`
+    against it after a server restart: the agent's own operation, if any, is
+    still the one actually holding the lock."""
+    agent_repo = Repository(
+        name="agent-repo",
+        path="/tmp/agent-repo",
+        encryption="none",
+        compression="lz4",
+        executor_type="agent",
+        execution_target="agent",
+    )
+    db.add(agent_repo)
+    db.commit()
+
+    dead = enqueue(db, "check", repository_id=agent_repo.id)
+    dead.status = "running"
+    dead.process_pid = 4242
+    dead.process_start_time = 1.0
+    db.commit()
+
+    monkeypatch.setattr(
+        "app.services.operations.runner.is_process_alive", lambda pid, start: False
+    )
+    break_lock_calls = []
+    monkeypatch.setattr(
+        "app.utils.process_utils.break_repository_lock",
+        lambda repository: break_lock_calls.append(repository.id) or True,
+    )
+
+    runner.recover_on_startup(db)
+
+    assert break_lock_calls == []
+    db.expire_all()
+    assert db.get(Operation, dead.id).status == "failed"
+
+
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_start_loop_dispatches_and_stops(db, repo, runner, registry):
     done = asyncio.Event()
@@ -370,3 +445,45 @@ async def test_start_loop_dispatches_and_stops(db, repo, runner, registry):
     runner.stop()
     runner.wake()
     await asyncio.wait_for(task, timeout=2)
+
+
+@pytest.mark.unit
+def test_start_survives_a_second_event_loop(session_factory, registry):
+    """A production process only ever runs `start()` on one event loop, but
+    a test suite that builds a fresh `TestClient(app)` per test starts the
+    module-level `operation_runner` on a new loop each time (spec 7.1).
+    `asyncio.Event` binds to whichever loop first calls `wait()`/`clear()`
+    on it; `_wake` used to be created once and cached, so the second loop's
+    `start()` called `wait()` on an Event still bound to the first (closed)
+    loop and got `RuntimeError: ... bound to a different event loop`. That
+    happens outside `tick()`'s own try/except, so it kills the `start()`
+    coroutine outright; nothing awaits that task until shutdown's
+    `gather(..., return_exceptions=True)` swallows it, leaving every
+    operation from that point queued forever with no visible error.
+    `start()` must hand back a fresh event every time it begins."""
+    from app.services.operations.runner import OperationRunner
+
+    runner = OperationRunner(session_factory=session_factory, registry=registry)
+
+    async def bind_wake_to_this_loop():
+        # Force `_event()` to create an Event and bind it to *this* loop,
+        # the way any real tick cycle eventually does inside `start()`.
+        try:
+            await asyncio.wait_for(runner._event().wait(), timeout=0.01)
+        except asyncio.TimeoutError:
+            pass
+
+    async def start_and_stop_on_a_fresh_loop():
+        task = asyncio.create_task(runner.start())
+        await asyncio.sleep(0.05)
+        runner.stop()
+        runner.wake()
+        # Before the fix, `start()` raised inside its own loop the moment it
+        # reached `wait()` on the stale, first-loop-bound Event, so this
+        # await re-raises that RuntimeError instead of returning cleanly.
+        await asyncio.wait_for(task, timeout=2)
+
+    # Two independent event loops, exactly as two integration tests each
+    # driving their own `TestClient(app)` do against the same singleton.
+    asyncio.run(bind_wake_to_this_loop())
+    asyncio.run(start_and_stop_on_a_fresh_loop())

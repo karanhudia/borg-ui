@@ -27,7 +27,6 @@ from app.database.models import (
     Repository,
     RepositoryStorage,
     RepositoryWipeJob,
-    RestoreCheckJob,
     ScheduledJob,
     ScheduledJobRepository,
     SystemSettings,
@@ -43,6 +42,7 @@ from app.api.maintenance_jobs import (
     serialize_job_summary,
 )
 from app.services.operations.maintenance_start import (
+    active_maintenance_operation,
     finish_inline_maintenance,
     start_inline_maintenance,
     start_maintenance,
@@ -6558,41 +6558,20 @@ async def get_running_jobs(
         # Force refresh from database to get latest values
         db.expire_all()
 
-        check_job = (
-            db.query(CheckJob)
-            .filter(
-                CheckJob.repository_id == repo_id,
-                CheckJob.status.in_(ACTIVE_MAINTENANCE_JOB_STATUSES),
-            )
-            .first()
-        )
+        # Phase 5 moved these four kinds to `operations`; nothing writes new
+        # rows to their legacy tables any more. `active_maintenance_operation`
+        # checks operations first and falls back to a legacy row a
+        # pre-phase-5 install left active, so this stays accurate either way.
+        def _job_or_legacy(kind: str):
+            job = active_maintenance_operation(db, repo_id, kind)
+            if isinstance(job, Operation):
+                return MaintenanceJobFacade(db, job)
+            return job
 
-        compact_job = (
-            db.query(CompactJob)
-            .filter(
-                CompactJob.repository_id == repo_id,
-                CompactJob.status.in_(ACTIVE_MAINTENANCE_JOB_STATUSES),
-            )
-            .first()
-        )
-
-        prune_job = (
-            db.query(PruneJob)
-            .filter(
-                PruneJob.repository_id == repo_id,
-                PruneJob.status.in_(ACTIVE_MAINTENANCE_JOB_STATUSES),
-            )
-            .first()
-        )
-
-        restore_check_job = (
-            db.query(RestoreCheckJob)
-            .filter(
-                RestoreCheckJob.repository_id == repo_id,
-                RestoreCheckJob.status.in_(ACTIVE_MAINTENANCE_JOB_STATUSES),
-            )
-            .first()
-        )
+        check_job = _job_or_legacy("check")
+        compact_job = _job_or_legacy("compact")
+        prune_job = _job_or_legacy("prune")
+        restore_check_job = _job_or_legacy("restore_check")
 
         wipe_job = (
             db.query(RepositoryWipeJob)

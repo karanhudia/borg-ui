@@ -81,6 +81,33 @@ def test_start_rejects_a_second_check_on_the_same_repository(db, repository):
     assert excinfo.value.detail["key"] == "backend.errors.repo.checkAlreadyRunning"
 
 
+def test_start_rejects_a_second_check_when_a_legacy_row_is_still_running(
+    db, repository
+):
+    """A pre-phase-5 install can restart mid-check, leaving a `running`
+    `CheckJob` row. `active_maintenance_operation` only sees `Operation`
+    rows, so without this check a second check would queue right alongside
+    it instead of getting the usual 409."""
+    from app.database.models import CheckJob
+
+    db.add(CheckJob(repository_id=repository.id, status="running"))
+    db.commit()
+
+    with pytest.raises(HTTPException) as excinfo:
+        start_maintenance(
+            db,
+            repository,
+            "check",
+            trigger="manual",
+            params={},
+            user_id=None,
+            duplicate_error_key="backend.errors.repo.checkAlreadyRunning",
+        )
+
+    assert excinfo.value.status_code == 409
+    assert excinfo.value.detail["key"] == "backend.errors.repo.checkAlreadyRunning"
+
+
 def test_start_allows_a_different_kind_to_queue_alongside(db, repository):
     start_maintenance(
         db,
@@ -284,6 +311,24 @@ def test_active_delete_is_scoped_to_one_archive(db, repository):
         trigger="manual",
         params={"archive_name": "nightly-1"},
     )
+
+    assert active_delete_for_archive(db, repository.id, "nightly-1") is not None
+    assert active_delete_for_archive(db, repository.id, "nightly-2") is None
+
+
+def test_active_delete_sees_a_legacy_row_for_the_same_archive(db, repository):
+    from app.database.models import DeleteArchiveJob
+    from app.services.operations.maintenance_start import active_delete_for_archive
+
+    db.add(
+        DeleteArchiveJob(
+            repository_id=repository.id,
+            repository_path=repository.path,
+            archive_name="nightly-1",
+            status="running",
+        )
+    )
+    db.commit()
 
     assert active_delete_for_archive(db, repository.id, "nightly-1") is not None
     assert active_delete_for_archive(db, repository.id, "nightly-2") is None

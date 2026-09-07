@@ -245,10 +245,23 @@ class MaintenanceJobFacade:
 
     @logs.setter
     def logs(self, value) -> None:
+        """A service writes this as backwards-compatible text alongside
+        `log_file_path`, a pattern from the legacy tables where the two are
+        independent columns. Here `.logs` reads through the same file
+        `log_file_path` points at, so a no-op once that file already has
+        content: otherwise a service's post-write marker (e.g. "Logs saved
+        to: X") clobbers the real captured output moments after it wrote
+        it. Still creates the file for a service that never wrote one (an
+        early failure with no log content at all), so that text has
+        somewhere `logs`/`read_job_logs` can find it."""
+        from pathlib import Path
+
         from app.services.operations.runner import operation_log_path
 
-        text = value or ""
         path = self.operation.log_file_path
+        if path and Path(path).exists():
+            return
+        text = value or ""
         if not path:
             resolved = operation_log_path(self.operation.id)
             resolved.parent.mkdir(parents=True, exist_ok=True)

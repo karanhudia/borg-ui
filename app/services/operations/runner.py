@@ -175,6 +175,18 @@ class OperationRunner:
 
     async def start(self) -> None:
         self._stopped = False
+        # A fresh `asyncio.Event` every time: the one from a previous call
+        # is bound to that call's event loop (asyncio.Event binds to the
+        # loop of its first `wait()`/`clear()`), and reusing it here after
+        # that loop closed raises "bound to a different event loop" the
+        # instant this loop's `wait()` runs. That's uncaught, so it kills
+        # this coroutine right there; nothing awaits it until shutdown's
+        # `gather(..., return_exceptions=True)`, which swallows it, so the
+        # runner silently stops dispatching for the rest of the process.
+        # Production runs `start()` once per process and never hits this;
+        # a test suite that builds a fresh app (and event loop) per test
+        # does, every time.
+        self._wake = asyncio.Event()
         logger.info("Operations runner started", poll_interval=self._poll_interval)
         while not self._stopped:
             try:
@@ -272,7 +284,9 @@ class OperationRunner:
                 )
             if outcome is None:
                 outcome = Outcome()
-            if operation_id in self.cancel_requested and outcome.status != "failed":
+            if op.status == "cancelled" or (
+                operation_id in self.cancel_requested and outcome.status != "failed"
+            ):
                 op.status = "cancelled"
             else:
                 op.status = outcome.status
@@ -339,6 +353,7 @@ class OperationRunner:
     # -- recovery --------------------------------------------------------------
 
     def _recover_repository_lock(self, db: Session, op: Operation) -> None:
+        from app.services.repository_executor import is_agent_executor
         from app.utils.process_utils import (
             _is_remote_repository,
             break_repository_lock,
@@ -350,6 +365,13 @@ class OperationRunner:
         if repository is None:
             return
         try:
+            if is_agent_executor(repository):
+                logger.warning(
+                    "Interrupted managed-agent operation may still hold its lock",
+                    operation_id=op.id,
+                    repository_id=repository.id,
+                )
+                return
             if _is_remote_repository(repository, db):
                 logger.warning(
                     "Interrupted remote operation may still hold its lock",

@@ -99,7 +99,10 @@ class TestCheckReadRoutes:
         body = response.json()
         assert body["id"] == started["job_id"]
         # The contract keeps the legacy vocabulary the frontend polls for.
-        assert body["status"] == "pending"
+        # The runner may already have picked the row up in this process (it
+        # wakes on enqueue rather than waiting for its poll interval), so
+        # assert it is not terminal rather than racing it for "pending".
+        assert body["status"] in ("pending", "running")
         assert "progress" in body
 
     def test_status_route_still_serves_a_pre_phase_5_row(
@@ -220,7 +223,10 @@ class TestCompactMigration:
         assert response.status_code == 200
         op = test_db.get(Operation, response.json()["job_id"])
         assert op.kind == "compact"
-        assert op.status == "queued"
+        # The runner may already have picked the row up in this process (it
+        # wakes on enqueue rather than waiting for its poll interval), so
+        # assert it is not terminal rather than racing it for "queued".
+        assert op.status in ("queued", "running")
         assert test_db.query(CompactJob).count() == 0
 
 

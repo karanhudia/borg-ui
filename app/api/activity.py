@@ -1507,17 +1507,20 @@ async def download_job_logs(
             file_path=op.log_file_path,
         ):
             raise _no_logs_available_exception()
-        if (
-            op.status == "running"
-            or not op.log_file_path
-            or not os.path.exists(op.log_file_path)
-        ):
+        if op.status == "running":
             raise _no_logs_available_exception()
-        return FileResponse(
-            op.log_file_path,
-            media_type="text/plain",
-            filename=f"operation_{op.id}.log",
-        )
+        if op.log_file_path and os.path.exists(op.log_file_path):
+            return FileResponse(
+                op.log_file_path,
+                media_type="text/plain",
+                filename=f"operation_{op.id}.log",
+            )
+        # A pre-phase-5 legacy row mirrored its output into `logs` with no
+        # file at all; `_read_operation_log` already falls back to that.
+        text = _read_operation_log(op)
+        if not text:
+            raise _no_logs_available_exception()
+        return _text_download_response(text, filename=f"operation_{op.id}_logs.txt")
 
     if job_type == "script_execution":
         execution = (

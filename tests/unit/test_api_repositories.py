@@ -3566,6 +3566,59 @@ class TestRepositoriesJobStatus:
         assert data[response_key]["id"] == job.id
         assert data[response_key]["status"] == "pending"
 
+    @pytest.mark.parametrize(
+        "kind,response_key",
+        [
+            ("check", "check_job"),
+            ("compact", "compact_job"),
+            ("prune", "prune_job"),
+            ("restore_check", "restore_check_job"),
+        ],
+    )
+    def test_get_repository_running_jobs_includes_a_queued_operation(
+        self, test_client: TestClient, admin_headers, test_db, kind, response_key
+    ):
+        """Phase 5 moved check, compact, prune, and restore check to
+        `operations`; this endpoint must still see them as running work,
+        since nothing writes new rows to their legacy tables any more."""
+        from app.database.models import Operation
+        from app.services.operations.vocab import category_for
+
+        repo = Repository(
+            name=f"Queued {response_key} Repo",
+            path=f"/job/queued-{response_key}-repo",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        # A raw insert, not `enqueue()`: `enqueue()` wakes the real
+        # background runner, which would then actually dispatch this row
+        # against a repository with no real Borg data behind it.
+        op = Operation(
+            repository_id=repo.id,
+            kind=kind,
+            category=category_for(kind),
+            status="queued",
+            trigger="manual",
+            priority=0,
+            run_id="test-run",
+        )
+        test_db.add(op)
+        test_db.commit()
+
+        response = test_client.get(
+            f"/api/repositories/{repo.id}/running-jobs", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["has_running_jobs"] is True
+        assert data[response_key]["id"] == op.id
+        assert data[response_key]["status"] == "pending"
+
     def test_get_check_jobs_repository_not_found(
         self, test_client: TestClient, admin_headers
     ):
