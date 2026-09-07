@@ -281,16 +281,29 @@ The agent advertises `self_upgrade` in `DEFAULT_CAPABILITIES`
 Capability is detected, not assumed, so an agent upgraded from an older install
 that lacks the helper reports honestly and the UI routes it to the manual path.
 
-The probe branches on how the agent runs, because the escalation only exists
-for the unprivileged case:
+**The upgrade preconditions.** One predicate, evaluated in one place, decides
+both whether the agent advertises `self_upgrade` and whether `agent.upgrade`
+will run. A partial or half-removed install can leave any one of these pieces
+behind without the others, and each missing piece fails at a different point
+after the operator has already been told the endpoint can upgrade itself:
 
-Both branches first check that the unit file exists *and* that the helper its
-`ExecStart` names is present and executable. A unit left behind by a partial or
-half-removed install would otherwise let the agent advertise a capability whose
-first use fails at exec time, which is exactly the dishonest report the probe
-exists to prevent.
+1. `/etc/systemd/system/borg-ui-agent-upgrade.service` exists. Without it there
+   is nothing to start.
+2. The helper its `ExecStart` names is present and executable. Without it the
+   unit starts and fails at exec time.
+3. `/etc/borg-ui-agent/upgrade.conf` is readable and carries its required
+   fields. The helper takes no arguments and reads every parameter from this
+   file, so without it the root helper runs and fails having done nothing. The
+   agent needs the file for the recorded `systemctl` path in any case.
 
-- **Running as root.** Those two checks are the whole probe. There is no
+Splitting the predicate between the probe and the command is what would let
+those diverge, so both call it and the failure is reported once, honestly, as
+"cannot upgrade itself" rather than as an upgrade that starts and dies.
+
+On top of the preconditions the probe branches on how the agent runs, because
+the escalation only exists for the unprivileged case:
+
+- **Running as root.** The preconditions are the whole probe. There is no
   sudoers file to consult and the installer does not install `sudo`, so a probe
   that shelled out to `sudo -l` would report no capability on exactly the
   endpoints that need none.
@@ -309,7 +322,10 @@ Handler steps:
 1. Refuse with `upgrade_busy` if this agent has any other job in flight. An
    upgrade restarts the process; doing it under a running backup would orphan
    that backup's job.
-2. Refuse with `upgrade_unsupported` if the helper is not present.
+2. Refuse with `upgrade_unsupported` if the upgrade preconditions above do not
+   hold. This is the same predicate the capability probe uses, re-evaluated
+   rather than trusted, because the endpoint may have been changed since it
+   last reported capabilities.
 3. Emit a log line, then start the unit, using the absolute `systemctl` path
    recorded in `upgrade.conf`. A root agent invokes
    `<systemctl path> start --no-block borg-ui-agent-upgrade.service` directly;
@@ -504,8 +520,10 @@ endpoint installed before this feature takes. Document the flag and its trade in
   `<systemctl path> start --no-block borg-ui-agent-upgrade.service` as root,
   and that same argv behind `sudo -n` unprivileged. Capability detection and
   the upgrade are both covered for a root endpoint with no `sudo` on `PATH`,
-  and the probe reports no capability when the unit exists but its `ExecStart`
-  helper is missing or not executable.
+  and the probe reports no capability, and `agent.upgrade` refuses with
+  `upgrade_unsupported`, for each precondition failing on its own: unit
+  missing, `ExecStart` helper missing or not executable, and `upgrade.conf`
+  missing or short a required field.
 - **Reconciliation** — an agent re-registering with the target version clears
   `requested`; one re-registering with the old version does not; the reaper
   marks a stale request `failed`.
