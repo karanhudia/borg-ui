@@ -331,11 +331,12 @@ def refresh_job(db: Session, job: Any) -> None:
 def claim_running(db: Session, job_id: int, kind: str, started_at: datetime) -> int:
     """Conditionally mark the job running, returning the number of rows
     claimed. The v2 services use this shape so two dispatches of the same id
-    cannot both start work. A manual-start route pre-sets the row to
-    "running" with no `started_at` before this ever runs, so "running" alone
-    isn't "already claimed" - only a "running" row that already has a
-    `started_at` is, and matching it here would let two concurrent claims
-    both report success."""
+    cannot both start work. A manual-start route (or a test simulating one,
+    for either an Operation or a legacy row) pre-sets the row to "running"
+    with no `started_at` before this ever runs, so "running" alone isn't
+    "already claimed" - only a "running" row that already has a `started_at`
+    is, and matching it here would let two concurrent claims both report
+    success."""
     operation = (
         db.query(Operation)
         .filter(Operation.id == job_id, Operation.kind == kind)
@@ -362,7 +363,13 @@ def claim_running(db: Session, job_id: int, kind: str, started_at: datetime) -> 
     model = LEGACY_MODELS[kind]
     return (
         db.query(model)
-        .filter(model.id == job_id, model.status == "pending")
+        .filter(
+            model.id == job_id,
+            or_(
+                model.status == "pending",
+                and_(model.status == "running", model.started_at.is_(None)),
+            ),
+        )
         .update(
             {"status": "running", "started_at": started_at},
             synchronize_session=False,

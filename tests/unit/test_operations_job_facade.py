@@ -306,13 +306,29 @@ def test_claim_running_still_claims_a_legacy_row(db, repository):
     assert legacy.status == "running"
 
 
-def test_claim_running_rejects_an_already_running_legacy_row(db, repository):
-    """New work never writes legacy rows any more, so an already-`running`
-    legacy row can only be one this function itself already claimed - a
-    second claim must not also report success."""
+def test_claim_running_claims_a_manually_started_legacy_row_once(db, repository):
+    """A legacy row can also be pre-set to "running" with no `started_at`
+    before the service claims it, same as a manual-start Operation."""
     legacy = CheckJob(repository_id=repository.id, status="running")
     db.add(legacy)
     db.commit()
     started = datetime(2026, 9, 6, 12, 0, 0)
 
-    assert claim_running(db, legacy.id, "check", started) == 0
+    assert claim_running(db, legacy.id, "check", started) == 1
+    db.commit()
+    db.refresh(legacy)
+    assert legacy.started_at == started
+
+
+def test_claim_running_rejects_an_already_started_legacy_row(db, repository):
+    """A second claim on a legacy row that already has `started_at` set
+    must not also report success."""
+    legacy = CheckJob(repository_id=repository.id, status="running")
+    db.add(legacy)
+    db.commit()
+    first_started = datetime(2026, 9, 6, 12, 0, 0)
+    assert claim_running(db, legacy.id, "check", first_started) == 1
+    db.commit()
+
+    second_started = datetime(2026, 9, 6, 12, 5, 0)
+    assert claim_running(db, legacy.id, "check", second_started) == 0
