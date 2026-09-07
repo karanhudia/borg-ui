@@ -58,3 +58,21 @@ export const SizesUnknown: Story = {
     },
   },
 }
+
+// 566.6 MiB unique of 820 GiB: 0.07 %, which used to render as "0%".
+export const UniqueShareBelowOnePercent: Story = {
+  args: {
+    archive: {
+      ...Default.args.archive,
+      original_size: 820 * 1024 ** 3,
+      compressed_size: 731 * 1024 ** 3,
+      deduplicated_size: 566.6 * 1024 ** 2,
+    },
+  },
+}
+
+export const NoUniqueData: Story = {
+  args: {
+    archive: { ...Default.args.archive, deduplicated_size: 0 },
+  },
+}
