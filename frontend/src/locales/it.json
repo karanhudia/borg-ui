@@ -398,6 +398,21 @@
         "tcpFailed": "TCP non riuscito",
         "emptyResult": "Esegui un controllo per verificare la sessione agente attiva. Aggiungi un host e una porta per testare la raggiungibilità TCP dall'host dell'agente.",
         "unavailable": "La diagnostica non è disponibile in questa superficie di storia o test."
+      },
+      "upgrade": {
+        "upToDate": "Aggiornato",
+        "outdated": "Aggiornamento disponibile",
+        "ahead": "Più recente del server",
+        "pinned": "Bloccato",
+        "unknown": "Versione sconosciuta",
+        "targetTooltip": "Questo server fornisce la versione {{version}} dell'agente",
+        "pinnedTooltip": "Bloccato alla versione {{version}} e non seguirà il server",
+        "unknownTooltip": "Questo endpoint non ha segnalato una versione confrontabile",
+        "outdatedCount_one": "{{count}} endpoint esegue un agente più vecchio",
+        "outdatedCount_other": "{{count}} endpoint eseguono un agente più vecchio",
+        "bannerBody": "La versione attuale dell'agente è {{version}}.",
+        "bannerManual": "Reinstalla ciascuno dalla sua scheda per aggiornarlo.",
+        "bannerMixedTargets": "Ognuno punta alla propria versione configurata."
       }
     },
     "installCommand": {
@@ -5525,7 +5540,8 @@
         "jobNotStartable": "Questo lavoro agente non può essere avviato",
         "repositoryOperationFailed": "L'operazione repository dell'agente non è riuscita",
         "repositoryOperationTimeout": "L'operazione repository dell'agente è scaduta",
-        "unsupportedJobKind": "Tipo di lavoro agente non supportato"
+        "unsupportedJobKind": "Tipo di lavoro agente non supportato",
+        "desiredVersionUnavailable": "Quella versione dell'agente non è disponibile su questo server."
       },
       "repo": {
         "repositoryNotFound": "Repository non trovato",

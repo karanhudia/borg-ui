@@ -1184,6 +1184,8 @@ export interface SSHHostKeyResponse {
   observed_key: string | null
 }
 
+export type AgentUpgradeStatus = 'up_to_date' | 'outdated' | 'ahead' | 'pinned' | 'unknown'
+
 export interface AgentMachineResponse {
   id: number
   name: string
@@ -1192,6 +1194,14 @@ export interface AgentMachineResponse {
   os?: string | null
   arch?: string | null
   agent_version?: string | null
+  desired_agent_version?: string | null
+  desired_borg_version?: string | null
+  available_agent_version?: string | null
+  upgrade_status?: AgentUpgradeStatus
+  self_upgrade_supported?: boolean
+  upgrade_state?: string | null
+  upgrade_requested_at?: string | null
+  upgrade_error?: string | null
   default_path?: string | null
   borg_versions?: Array<Record<string, unknown>> | null
   capabilities?: string[] | null

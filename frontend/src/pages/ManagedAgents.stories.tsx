@@ -640,3 +640,53 @@ export const AgentJobLogs: Story = {
     </Box>
   ),
 }
+
+export const AgentFleetVersionStates: Story = {
+  name: 'Agent list with mixed agent versions',
+  render: () => (
+    <AgentList
+      agents={[
+        {
+          ...agents[0],
+          name: 'Production NAS',
+          agent_version: '0.1.2',
+          available_agent_version: '0.1.3',
+          upgrade_status: 'outdated',
+        },
+        {
+          ...agents[1],
+          name: 'Finance Workstation',
+          agent_version: '0.1.3',
+          available_agent_version: '0.1.3',
+          upgrade_status: 'up_to_date',
+        },
+        {
+          ...agents[0],
+          id: 91,
+          agent_id: 'agt_pinned_91',
+          name: 'Legacy Print Server',
+          agent_version: '0.1.1',
+          desired_agent_version: '0.1.1',
+          available_agent_version: '0.1.3',
+          upgrade_status: 'pinned',
+        },
+        {
+          ...agents[0],
+          id: 92,
+          agent_id: 'agt_unknown_92',
+          name: 'Newly Enrolled Laptop',
+          agent_version: null,
+          available_agent_version: '0.1.3',
+          upgrade_status: 'unknown',
+        },
+      ]}
+      serverUrl="https://borg-ui.example.com"
+      onCopy={() => {}}
+      onRevoke={() => {}}
+      onDelete={() => {}}
+      onViewLogs={() => {}}
+      isRevoking={false}
+      isDeleting={false}
+    />
+  ),
+}

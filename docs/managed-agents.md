@@ -83,6 +83,44 @@ the registration step, refreshes the installed package and systemd unit, and
 restarts `borg-ui-agent`. You do not need a new enrollment token unless you are
 enrolling a different machine or recreating a missing local agent config.
 
+## Knowing Which Agents Are Out of Date
+
+Every agent reports the version it runs each time it checks in. Borg UI compares
+that against the agent package the server itself ships, and shows the result as
+a chip on the agent card:
+
+| Chip | Meaning |
+| --- | --- |
+| No chip | The agent runs the version this server serves. Nothing to do. |
+| **Update available** | The agent is older than the version this server serves. Reinstall it using the command above. |
+| **Ahead of server** | The agent is newer than the version this server serves, which happens after a server rollback. Upgrade the server rather than downgrading the agent. |
+| **Pinned** | The agent is held at a specific version and will not follow the server. |
+| **Version unknown** | The agent has not reported a version yet, or the version cannot be compared. A freshly enrolled agent shows this until its first check-in. |
+
+A banner above the fleet counts how many endpoints are running an older agent.
+
+Upgrading is still a manual reinstall on each machine in this release. The
+comparison tells you which machines need it, so you are not reinstalling
+everything to be sure.
+
+### Pinning an Agent Version
+
+An endpoint can be held at a specific agent version so it stops tracking the
+server. Pinning is available through the API:
+
+```bash
+curl -X PUT "$BASE_URL/api/managed-machines/agents/<id>/desired-version" \
+  -H "X-Borg-Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"desired_agent_version": "0.1.3", "desired_borg_version": null}'
+```
+
+This is an admin endpoint. `$TOKEN` is an API token for an admin account; see
+[the API guide](api.md) for how to obtain one. Send `null` for
+`desired_agent_version` to clear the pin and track the server
+again. You can only pin to a version this server can actually serve, because
+the installer installs from this server and nowhere else.
+
 ## Server URL and Localhost
 
 The `--server` value must be reachable from the client machine. If Borg UI and
