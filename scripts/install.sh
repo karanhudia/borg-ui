@@ -26,7 +26,9 @@ VERSION=""
 START_SERVICE="true"
 SKIP_BORG2="false"
 DATA_DIR_EXPLICIT="false"
+PREVIOUS_RELEASE=""
 PORT_EXPLICIT="false"
+SERVICE_USER_EXPLICIT="false"
 
 usage() {
   cat <<'USAGE'
@@ -52,7 +54,7 @@ while [[ $# -gt 0 ]]; do
     --version) VERSION="$2"; shift 2 ;;
     --port) PORT="$2"; PORT_EXPLICIT="true"; shift 2 ;;
     --data-dir) DATA_DIR="$2"; DATA_DIR_EXPLICIT="true"; shift 2 ;;
-    --service-user) SERVICE_USER="$2"; shift 2 ;;
+    --service-user) SERVICE_USER="$2"; SERVICE_USER_EXPLICIT="true"; shift 2 ;;
     --skip-borg2) SKIP_BORG2="true"; shift ;;
     --no-start) START_SERVICE="false"; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -155,8 +157,13 @@ download_release() {
     return
   fi
 
+  # Staged on the same filesystem as the destination, so the rename below is a
+  # real rename. From /tmp it would be a copy-and-delete, and an interruption
+  # mid-copy would leave a partial RELEASE_DIR that the next run takes for a
+  # finished release.
   local tmp
-  tmp="$(mktemp -d)"
+  install -d -m 0755 "${PREFIX}/releases"
+  tmp="$(mktemp -d "${PREFIX}/releases/.staging.XXXXXX")"
   trap 'rm -rf "${tmp}"' RETURN
 
   log "Downloading Borg UI ${VERSION}"
@@ -174,7 +181,6 @@ download_release() {
   # RELEASE_DIR only ever exists complete. Extracting straight into it would
   # leave a truncated tree behind on an interrupted run, and the next run would
   # take that for an already-unpacked release.
-  install -d -m 0755 "${PREFIX}/releases"
   mkdir -p "${tmp}/unpack"
   tar -xzf "${tmp}/${tarball}" -C "${tmp}/unpack" --strip-components=1
   mv "${tmp}/unpack" "${RELEASE_DIR}"
@@ -191,8 +197,19 @@ load_persisted_settings() {
 
   local key persisted explicit
   for key in DATA_DIR PORT; do
-    persisted="$(grep -m1 "^${key}=" "${ENV_FILE}" | cut -d= -f2- || true)"
+    # systemd lets a later assignment win and strips one layer of matching
+    # quotes, so read it the same way: last match, unquoted. Anything fancier
+    # than that (escapes, line continuations) is rejected rather than guessed
+    # at, because acting on a misparsed DATA_DIR would chown the wrong tree.
+    persisted="$(grep "^${key}=" "${ENV_FILE}" | tail -n 1 | cut -d= -f2- || true)"
     [[ -n "${persisted}" ]] || continue
+    case "${persisted}" in
+      \"*\") persisted="${persisted#\"}"; persisted="${persisted%\"}" ;;
+      \'*\') persisted="${persisted#\'}"; persisted="${persisted%\'}" ;;
+    esac
+    if [[ "${persisted}" == *\\* ]]; then
+      die "${ENV_FILE} sets ${key} with escapes this installer will not guess at; simplify it and re-run"
+    fi
 
     explicit="${key}_EXPLICIT"
     if [[ "${!explicit}" == "true" ]] && [[ "${!key}" != "${persisted}" ]]; then
@@ -201,15 +218,17 @@ load_persisted_settings() {
     fi
     printf -v "${key}" '%s' "${persisted}"
   done
-}
 
-# pip must not rewrite the virtualenv the running service is importing from.
-# Stopping first trades a few seconds of downtime, which an upgrade takes
-# anyway, for never leaving a half-upgraded environment under a live process.
-stop_service_for_upgrade() {
-  if systemctl is-active --quiet borg-ui 2>/dev/null; then
-    log "Stopping borg-ui for the upgrade"
-    systemctl stop borg-ui
+  # The service user lives in the unit, not the env file. Resetting it on a
+  # re-run would rewrite the unit with User=root and hand the data directory
+  # to root, quietly undoing a deliberate --service-user install.
+  persisted="$(grep -m1 '^User=' "${UNIT_FILE}" 2>/dev/null | cut -d= -f2- || true)"
+  if [[ -n "${persisted}" ]]; then
+    if [[ "${SERVICE_USER_EXPLICIT}" == "true" ]] && [[ "${SERVICE_USER}" != "${persisted}" ]]; then
+      log "Changing the service user from ${persisted} to ${SERVICE_USER}"
+    else
+      SERVICE_USER="${persisted}"
+    fi
   fi
 }
 
@@ -424,15 +443,24 @@ install_rclone() {
 
 # --- application -----------------------------------------------------------
 
+# One virtualenv per release, inside the release. A shared one forces a choice
+# between rewriting an environment a live process is importing from and holding
+# the service down across the whole install; per-release, the running service
+# keeps its own environment untouched while this one is built, and the previous
+# release stays complete and startable for a rollback.
 install_python_env() {
-  log "Installing Python dependencies"
-  if [[ ! -x "${PREFIX}/venv/bin/python" ]]; then
-    python3 -m venv "${PREFIX}/venv"
+  local venv="${RELEASE_DIR}/venv"
+
+  if [[ -x "${venv}/bin/gunicorn" ]]; then
+    log "Python environment for ${VERSION} is already built"
+    return
   fi
-  "${PREFIX}/venv/bin/pip" install --quiet --upgrade pip setuptools wheel
-  "${PREFIX}/venv/bin/pip" install --quiet -r "${RELEASE_DIR}/requirements.txt"
-  chown -R root:root "${PREFIX}/venv"
-  chmod -R go=rX "${PREFIX}/venv"
+
+  log "Building the Python environment for ${VERSION}"
+  rm -rf "${venv}"
+  python3 -m venv "${venv}"
+  "${venv}/bin/pip" install --quiet --upgrade pip setuptools wheel
+  "${venv}/bin/pip" install --quiet -r "${RELEASE_DIR}/requirements.txt"
 }
 
 write_env_file() {
@@ -473,9 +501,21 @@ ENV
   chown "root:$(id -gn "${SERVICE_USER}")" "${ENV_FILE}"
 }
 
+# Everything above this point is preparation and leaves the running install
+# alone, so a failure there exits with the old release still serving. From here
+# on the switch is a symlink move and a restart, and PREVIOUS_RELEASE is what
+# install_service falls back to if the new one will not come up.
 activate_release() {
   local group
   group="$(id -gn "${SERVICE_USER}")"
+
+  PREVIOUS_RELEASE="$(readlink -f "${PREFIX}/current" 2>/dev/null || true)"
+  [[ "${PREVIOUS_RELEASE}" != "${RELEASE_DIR}" ]] || PREVIOUS_RELEASE=""
+
+  if systemctl is-active --quiet borg-ui 2>/dev/null; then
+    log "Stopping borg-ui for the switch"
+    systemctl stop borg-ui
+  fi
 
   log "Activating release ${VERSION}"
   # Root-owned and read-only to the service user: the service executes
@@ -494,6 +534,21 @@ activate_release() {
   fi
 }
 
+# Keeps the running release and the one before it, so a rollback always has a
+# complete tree with its own virtualenv to go back to. Older ones are only
+# disk.
+prune_old_releases() {
+  local release
+  for release in "${PREFIX}"/releases/*/; do
+    release="${release%/}"
+    [[ -d "${release}" ]] || continue
+    [[ "${release}" != "${RELEASE_DIR}" ]] || continue
+    [[ "${release}" != "${PREVIOUS_RELEASE}" ]] || continue
+    log "Removing superseded release $(basename "${release}")"
+    rm -rf "${release}"
+  done
+}
+
 install_service() {
   log "Installing the systemd unit"
   sed -e "s|@PREFIX@|${PREFIX}|g" \
@@ -509,7 +564,21 @@ install_service() {
     return
   fi
 
-  systemctl restart borg-ui
+  if systemctl restart borg-ui; then
+    return
+  fi
+
+  # The unit is prefix-based, not release-specific, so pointing "current" back
+  # at the previous release is the whole rollback: that tree still has its own
+  # virtualenv and was serving a moment ago.
+  if [[ -n "${PREVIOUS_RELEASE}" ]] && [[ -d "${PREVIOUS_RELEASE}" ]]; then
+    warn "${VERSION} did not start; rolling back to $(basename "${PREVIOUS_RELEASE}")"
+    ln -sfn "${PREVIOUS_RELEASE}" "${PREFIX}/current"
+    [[ -d "${PREVIOUS_RELEASE}/agent-dist" ]] &&
+      ln -sfn "${PREVIOUS_RELEASE}/agent-dist" "${PREFIX}/agent-dist"
+    systemctl start borg-ui || warn "the previous release did not start either"
+  fi
+  die "borg-ui failed to start; see: journalctl -u borg-ui -n 50"
 }
 
 report() {
@@ -546,6 +615,7 @@ main() {
   write_env_file
   activate_release
   install_service
+  prune_old_releases
   report
 }
 

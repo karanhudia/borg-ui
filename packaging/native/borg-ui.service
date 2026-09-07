@@ -14,9 +14,10 @@ User=@SERVICE_USER@
 Group=@SERVICE_GROUP@
 EnvironmentFile=@ENV_FILE@
 WorkingDirectory=@PREFIX@/current
-# The virtualenv lives beside the releases so it survives an upgrade;
-# start.sh cannot infer that from its own location.
-Environment=BORG_UI_VENV=@PREFIX@/venv
+# One virtualenv per release, so an upgrade builds the new environment while
+# this one keeps serving from its own, and a rollback finds the previous
+# release complete.
+Environment=BORG_UI_VENV=@PREFIX@/current/venv
 ExecStart=@PREFIX@/current/packaging/native/start.sh
 Restart=on-failure
 RestartSec=5

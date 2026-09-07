@@ -474,7 +474,7 @@ Options:
 | Path | Contents |
 | --- | --- |
 | `/opt/borg-ui/current` | The running release (a symlink into `releases/<version>`) |
-| `/opt/borg-ui/venv` | The application's Python environment |
+| `/opt/borg-ui/current/venv` | The application's Python environment, one per release |
 | `/var/lib/borg-ui` | Database, SSH keys, Borg keyfiles, cache, logs |
 | `/etc/borg-ui/borg-ui.env` | Configuration |
 | `/etc/systemd/system/borg-ui.service` | The systemd unit |
@@ -520,9 +520,15 @@ sudo journalctl -u borg-ui -f
 
 ### Upgrading
 
-Re-run the installer. It unpacks the new release beside the current one, moves
-the `current` symlink, and restarts the service. The data directory, database
-and configuration file are never touched.
+Re-run the installer. It unpacks the new release beside the current one and
+builds that release's Python environment while the running one keeps serving,
+then stops the service, moves the `current` symlink, and starts it again. The
+data directory, database and configuration file are never touched.
+
+Anything that fails before the switch leaves the old release running. If the new
+one does not come up, the installer points `current` back at the previous
+release and starts that instead, then reports the failure. The previous release
+is kept for exactly this reason; older ones are removed.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/karanhudia/borg-ui/main/scripts/install.sh | sudo bash

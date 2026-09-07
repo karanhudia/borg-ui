@@ -121,3 +121,82 @@ def test_native_install_serves_the_agent_wheelhouse_from_the_default_path():
     prefix = re.search(r'^PREFIX="([^"]+)"', installer, re.M)
     assert prefix, "install.sh no longer defines PREFIX"
     assert f"{prefix.group(1)}/agent-dist" == DEFAULT_AGENT_PACKAGE_DIR
+
+
+def _run_load_persisted_settings(
+    tmp_path, env_file_text=None, unit_text=None, data_dir_explicit="false"
+):
+    """Exercise install.sh's load_persisted_settings in isolation.
+
+    Extracting the one function is worth the awkwardness: an upgrade that
+    misreads the installed DATA_DIR provisions and chowns the wrong tree, and
+    two rounds of review found real bugs in exactly this parsing.
+    """
+    env_file = tmp_path / "borg-ui.env"
+    unit_file = tmp_path / "borg-ui.service"
+    if env_file_text is not None:
+        env_file.write_text(env_file_text)
+    if unit_text is not None:
+        unit_file.write_text(unit_text)
+
+    body = re.search(
+        r"^load_persisted_settings\(\) \{.*?^\}", INSTALLER.read_text(), re.M | re.S
+    )
+    assert body, "load_persisted_settings is no longer a top-level function"
+
+    script = "\n".join(
+        [
+            "set -euo pipefail",
+            f'ENV_FILE="{env_file}"',
+            f'UNIT_FILE="{unit_file}"',
+            'DATA_DIR="/var/lib/borg-ui"',
+            'PORT="8081"',
+            'SERVICE_USER="root"',
+            f'DATA_DIR_EXPLICIT="{data_dir_explicit}"',
+            'PORT_EXPLICIT="false"',
+            'SERVICE_USER_EXPLICIT="false"',
+            "log() { :; }",
+            'warn() { echo "WARN:$*"; }',
+            'die() { echo "DIE:$*"; exit 1; }',
+            body.group(0),
+            "load_persisted_settings",
+            'echo "RESULT ${DATA_DIR} ${PORT} ${SERVICE_USER}"',
+        ]
+    )
+    return subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+
+
+def test_upgrade_reads_back_the_settings_the_install_actually_uses(tmp_path):
+    result = _run_load_persisted_settings(
+        tmp_path,
+        # A later assignment wins and one layer of quotes is stripped, the way
+        # systemd reads an EnvironmentFile.
+        env_file_text='DATA_DIR=/tmp/first\nPORT=9000\nDATA_DIR="/srv/borg-ui"\n',
+        # The service user lives in the unit, not the env file.
+        unit_text="[Service]\nUser=borgui\n",
+    )
+    assert result.returncode == 0, result.stderr
+    assert "RESULT /srv/borg-ui 9000 borgui" in result.stdout
+
+
+def test_fresh_install_keeps_the_defaults(tmp_path):
+    result = _run_load_persisted_settings(tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert "RESULT /var/lib/borg-ui 8081 root" in result.stdout
+
+
+def test_a_flag_contradicting_the_installed_value_warns_and_keeps_it(tmp_path):
+    result = _run_load_persisted_settings(
+        tmp_path, env_file_text="DATA_DIR=/srv/plain\n", data_dir_explicit="true"
+    )
+    assert result.returncode == 0, result.stderr
+    assert "WARN:" in result.stdout
+    assert "RESULT /srv/plain " in result.stdout
+
+
+def test_syntax_the_parser_cannot_honour_is_refused_not_guessed_at(tmp_path):
+    result = _run_load_persisted_settings(
+        tmp_path, env_file_text="DATA_DIR=/srv/a\\ b\n"
+    )
+    assert result.returncode != 0
+    assert "DIE:" in result.stdout

@@ -11,10 +11,10 @@ set -euo pipefail
 # <prefix>/releases/<version>.
 APP_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 
-# The virtualenv sits beside the releases, not inside one, so it survives an
-# upgrade. The systemd unit passes its absolute path; the fallback only exists
-# so this script can be run by hand from an installed tree.
-VENV="${BORG_UI_VENV:-${APP_ROOT%/releases/*}/venv}"
+# Each release carries its own virtualenv, so an upgrade never rewrites the one
+# a running service is importing from. The systemd unit passes its path; the
+# fallback only exists so this script can be run by hand from an installed tree.
+VENV="${BORG_UI_VENV:-${APP_ROOT}/venv}"
 PYTHON="${VENV}/bin/python"
 PORT="${PORT:-8081}"
 
