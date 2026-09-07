@@ -6,8 +6,10 @@
 #
 #   ./scripts/test-native-install.sh              # full matrix
 #   ./scripts/test-native-install.sh --keep       # leave the container running
-#   ./scripts/test-native-install.sh --case upgrade
+#   ./scripts/test-native-install.sh --case rerun
 #   ./scripts/test-native-install.sh --case fresh --publish 8099   # open it
+#
+# Cases: fresh rerun flags nostart skipborg2 partial serviceuser
 #
 # Needs Docker with a Linux daemon. The container is privileged because systemd
 # needs it; it is a disposable test container and nothing else runs in it.
@@ -22,16 +24,41 @@ KEEP="false"
 ONLY=""
 PUBLISH=""
 
+# Matches scripts/install.sh: a trailing option would otherwise read $2 under
+# set -u and print bash's "unbound variable" instead of what went wrong.
+require_value() {
+  if [[ $# -lt 2 ]]; then
+    echo "error: $1 needs a value" >&2
+    exit 2
+  fi
+}
+
+CASES=(fresh rerun flags nostart skipborg2 partial serviceuser)
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --keep) KEEP="true"; shift ;;
-    --publish) PUBLISH="$2"; KEEP="true"; shift 2 ;;
-    --case) ONLY="$2"; shift 2 ;;
-    --image) IMAGE="$2"; shift 2 ;;
+    --publish) require_value "$@"; PUBLISH="$2"; KEEP="true"; shift 2 ;;
+    --case) require_value "$@"; ONLY="$2"; shift 2 ;;
+    --image) require_value "$@"; IMAGE="$2"; shift 2 ;;
     -h|--help) sed -n '2,12p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
 done
+
+# Without this, a typo skips every case and the harness reports "0 passed, 0
+# failed" and exits 0. A test harness that says nothing went wrong when it ran
+# nothing is worse than one that crashes.
+if [[ -n "${ONLY}" ]]; then
+  found="false"
+  for known in "${CASES[@]}"; do
+    [[ "${ONLY}" == "${known}" ]] && found="true"
+  done
+  if [[ "${found}" != "true" ]]; then
+    echo "error: unknown case '${ONLY}'. Known cases: ${CASES[*]}" >&2
+    exit 2
+  fi
+fi
 
 PASSED=0
 FAILED=0
@@ -85,7 +112,9 @@ TARBALL="$(ls -t dist/borg-ui-*.tar.gz | head -n 1)"
 # The installer installs the unit, start.sh and the app from the tarball, not
 # from this working tree. Editing a source file and re-running the harness
 # therefore tests the previous build, which makes a correct fix look broken.
-newer="$(find app packaging scripts/install.sh requirements.txt VERSION frontend/src \
+newer="$(find app packaging scripts/install.sh scripts/build-native-tarball.sh \
+  requirements.txt VERSION frontend/src docker/runtime-base.env \
+  Dockerfile.runtime-base \
   -newer "${TARBALL}" -type f -print -quit 2>/dev/null || true)"
 if [[ -n "${newer}" ]]; then
   echo "error: ${TARBALL} is older than ${newer}" >&2

@@ -514,6 +514,32 @@ def test_the_install_matrix_harness_covers_the_transitions_review_keeps_finding(
         assert f"run_case {case}" in text, f"the {case} case is no longer covered"
 
 
+def _native_env_assignments() -> set[str]:
+    """Keys the native install actually puts in the environment.
+
+    Substring matching passed on a key that appeared only in a comment, which
+    is how a Docker ENV regression could satisfy the parity guard while the
+    native behaviour differed. These are assignments: `Environment=` in the
+    unit, `export` in the launcher, and the env file the installer writes.
+    """
+    keys: set[str] = set()
+
+    keys |= set(
+        re.findall(r"^Environment=([A-Za-z_][A-Za-z0-9_]*)=", UNIT.read_text(), re.M)
+    )
+    keys |= set(
+        re.findall(r"^\s*export\s+([A-Za-z_][A-Za-z0-9_]*)=", START.read_text(), re.M)
+    )
+
+    installer = INSTALLER.read_text()
+    env_file = re.search(
+        r'cat >"\$\{ENV_FILE\}" <<ENV\n(.*?)^ENV$', installer, re.M | re.S
+    )
+    assert env_file, "install.sh no longer writes the env file as an ENV heredoc"
+    keys |= set(re.findall(r"^([A-Za-z_][A-Za-z0-9_]*)=", env_file.group(1), re.M))
+    return keys
+
+
 def test_the_native_install_sets_what_the_image_sets():
     """Parity guard between the two ways to run Borg UI.
 
@@ -531,16 +557,7 @@ def test_the_native_install_sets_what_the_image_sets():
     # over the environment, so the native path needs no equivalent.
     keys.discard("APP_VERSION")
 
-    native = "\n".join(
-        path.read_text()
-        for path in (
-            UNIT,
-            START,
-            INSTALLER,
-            REPO_ROOT / "packaging" / "native" / "borg-ui.service",
-        )
-    )
-    missing = sorted(key for key in keys if key not in native)
+    missing = sorted(keys - _native_env_assignments())
     assert not missing, (
         "the image sets these but the native install does not, so the two "
         f"behave differently: {missing}"

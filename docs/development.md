@@ -215,9 +215,13 @@ To try the installer on a real host instead, build the tarball, copy it over,
 and point the installer at it:
 
 ```bash
-scp dist/borg-ui-*.tar.gz scripts/install.sh root@host:/tmp/
-ssh root@host 'bash /tmp/install.sh --tarball /tmp/borg-ui-*.tar.gz'
+TARBALL=$(ls -t dist/borg-ui-*.tar.gz | head -n 1)
+scp "$TARBALL" scripts/install.sh root@host:/tmp/
+ssh root@host "bash /tmp/install.sh --tarball /tmp/$(basename "$TARBALL")"
 ```
+
+One explicit path, not a glob: with more than one build in `dist/` a glob
+copies them all and hands `--tarball` several arguments.
 
 `--tarball` skips the release download, so it also covers air-gapped installs.
 

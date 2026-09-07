@@ -203,10 +203,27 @@ unpack_local_tarball() {
   fi
 
   VERSION="$(tr -d '[:space:]' <"${tmp}/unpack/VERSION")"
-  RELEASE_DIR="${PREFIX}/releases/${VERSION}"
+
+  # A local tarball is normally a rebuild of a version that is already
+  # installed, so the release directory is keyed by the tarball's content as
+  # well as its version. Naming it by version alone meant replacing the tree
+  # the running service was using, before the new virtualenv existed: a failure
+  # during preparation would leave "current" dangling with nothing to roll back
+  # to. Rebuilding identical content reuses the directory, so re-running stays
+  # idempotent.
+  local digest
+  digest="$(sha256sum "${TARBALL}" | cut -c1-8)"
+  RELEASE_DIR="${PREFIX}/releases/${VERSION}+${digest}"
 
   warn "Installing ${VERSION} from ${TARBALL}; no checksum is verified for a local file."
-  rm -rf "${RELEASE_DIR}"
+
+  if [[ -d "${RELEASE_DIR}" ]]; then
+    # Same content, already unpacked. Leave it alone: install_python_env decides
+    # whether its virtualenv is complete, and activate_release does the switch.
+    rm -rf "${tmp}"
+    return
+  fi
+
   mv "${tmp}/unpack" "${RELEASE_DIR}"
   rm -rf "${tmp}"
 }
