@@ -795,6 +795,8 @@ class TestDashboardScheduleAndOverview:
                     completed_at=now - timedelta(days=2, minutes=10),
                     progress=100,
                     scheduled_job_id=schedule.id,
+                    # its archive was pruned since: the run still counts
+                    archive_pruned_at=now - timedelta(days=1),
                 ),
                 BackupJob(
                     repository=full_repo.path,
@@ -912,6 +914,10 @@ class TestDashboardScheduleAndOverview:
             "prune",
         ]
         assert data["activity_feed"][0]["repository"] == "Full Repo"
+        # the pruned run is still in the feed, and says so
+        assert data["activity_feed"][1]["archive_pruned_at"] is None
+        assert data["activity_feed"][2]["status"] == "completed"
+        assert data["activity_feed"][2]["archive_pruned_at"] is not None
         assert [item["name"] for item in data["upcoming_tasks"]] == [
             "Nightly Full Repo"
         ]

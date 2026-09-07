@@ -695,6 +695,7 @@ def _serialize_backup_job(
         ),
         "maintenance_status": job.maintenance_status,
         "archive_name": job.archive_name,
+        "archive_pruned_at": serialize_datetime(job.archive_pruned_at),
         "execution_mode": job.execution_mode or "local",
         "route_strategy": job.route_strategy,
         "retry_attempt": job.retry_attempt or 1,

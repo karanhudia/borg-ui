@@ -692,6 +692,11 @@ class TestBackupStart:
             {"line_number": 1, "content": "Creating archive"}
         ]
 
+        # the archive gets pruned later: the row stays and reports it in the
+        # same UTC-stamped form as its other timestamps
+        backup_job.archive_pruned_at = datetime(2026, 9, 7, 12, 30)
+        test_db.commit()
+
         jobs_response = test_client.get(
             "/api/backup/jobs", params={"manual_only": True}, headers=admin_headers
         )
@@ -702,6 +707,7 @@ class TestBackupStart:
         assert history_job["triggered_by"] == "manual"
         assert history_job["execution_mode"] == "agent"
         assert history_job["archive_name"] == "agent-archive"
+        assert history_job["archive_pruned_at"] == "2026-09-07T12:30:00+00:00"
         assert history_job["has_logs"] is True
 
 

@@ -216,6 +216,10 @@ Rules:
 - Operations write their logs to files under `data/logs/`. Retention deletes
   those files at `log_retention_days` and again with the row itself at
   `cleanup_retention_days`.
+- A backup job outlives its archive. When a prune or an archive deletion
+  removes the archive a job created, the job row is marked
+  (`archive_pruned_at`) and kept as the record that the backup ran; it falls
+  with `cleanup_retention_days` like every other job row.
 - A failed listing is never written as derived state: if borg or the agent
   fails, `archive_sync` fails rather than recording the repository as empty.
 - Cancelling a running operation is cooperative: the executor observes the

@@ -25,6 +25,12 @@ user-visible:
                           unbounded job table is never what anyone wants, so
                           only the window moves.
 
+A pruned or deleted archive does not take its backup job with it: the row
+is the record that the backup ran (the dashboard timeline and the plan
+history are built from it), so it is marked with archive_pruned_at and
+falls with cleanup_retention_days like everything else. The log content
+follows the two windows above as before.
+
 Deletes are chunked so SQLite never holds a giant transaction;
 DB-level FK actions (agent_job_logs CASCADE, script_executions CASCADE,
 various SET NULL) handle the children — SQLite connections run with
@@ -37,14 +43,14 @@ the file; the manual cleanup endpoint runs VACUUM for that.
 from __future__ import annotations
 
 import re
-from datetime import timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from app.config import settings as app_config
 from typing import Dict, Iterable, Optional
 
 import structlog
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.services.log_policy import DEFAULT_LOG_SAVE_POLICY, LOG_SAVE_POLICIES
@@ -345,82 +351,90 @@ def archive_names_from_prune_output(output: str) -> set:
     return {match.group("name") for match in _PRUNED_ARCHIVE_LINE.finditer(output)}
 
 
-def purge_jobs_for_pruned_archives(
-    db: Session, repository_id: Optional[int], archive_names: Iterable[str]
+def mark_jobs_of_pruned_archives(
+    db: Session,
+    repository_id: Optional[int],
+    archive_names: Iterable[str],
+    *,
+    created_before: Optional[datetime] = None,
+    pruned_at: Optional[datetime] = None,
 ) -> int:
-    """Delete the job records of archives that no longer exist.
+    """Record on the backup jobs of `archive_names` that their archive is gone.
 
-    A backup job whose archive was pruned is not history anymore but a
-    reference into the void, so the whole record goes: its log file on disk,
-    the linked agent job (whose log rows die via the DB cascade, as do the
-    job's script executions), and the backup_jobs row itself.
+    The job row stays: it is the record that the backup ran, which the
+    dashboard timeline, the plan history and the activity feed are built
+    from. Only `archive_pruned_at` is set (once; a second call for the same
+    archive is a no-op), and the row still falls with cleanup_retention_days.
+    Log content is untouched here; log_retention_days and the save policy
+    handle it like for any other job.
+
+    Jobs belong to the repository by id or, for rows written before the id
+    column existed, by path. `created_before` is when the prune or delete
+    started, on the server clock, compared with the job's server-set
+    `created_at`: Borg 1 lets a name be reused once its archive is gone, so
+    a job created once the prune was under way made a different archive and
+    is left alone. (`completed_at` would not do for the comparison: an agent
+    reports it from its own clock.) `pruned_at` is the time recorded on the
+    row, normally when the prune or delete finished; it defaults to now.
 
     Borg 2 repositories are skipped: an archive *series* shares one name
     across all its archives, so a name match would hit jobs whose archives
     still exist. Lifting that needs the archive id captured per job first.
     """
-    names = {name for name in archive_names if name}
+    names = sorted({name for name in archive_names if name})
     if not names or repository_id is None:
         return 0
     repository = db.get(Repository, repository_id)
     if repository is None or int(getattr(repository, "borg_version", 1) or 1) == 2:
         return 0
 
-    jobs = (
-        db.query(BackupJob)
-        .filter(
-            BackupJob.repository_id == repository_id,
-            BackupJob.archive_name.in_(names),
+    owner = BackupJob.repository_id == repository_id
+    if repository.path:
+        # older rows carry the path only, some with a trailing slash
+        owner = or_(
+            owner,
+            func.rtrim(BackupJob.repository, "/") == repository.path.rstrip("/"),
         )
-        .all()
-    )
-    if not jobs:
-        return 0
+    filters = [owner, BackupJob.archive_pruned_at.is_(None)]
+    if created_before is not None:
+        created = func.coalesce(
+            BackupJob.created_at, BackupJob.started_at, BackupJob.completed_at
+        )
+        filters.append(created <= created_before)
+    pruned_at = pruned_at or utc_now()
 
-    # Captured before the delete: afterwards the ORM objects are gone. The
-    # files are only unlinked once the DB delete has committed, so a failed
-    # commit never leaves surviving rows pointing at vanished log files.
-    log_files = [job.log_file_path for job in jobs if job.log_file_path]
-    ids = [job.id for job in jobs]
-    db.query(AgentJob).filter(AgentJob.backup_job_id.in_(ids)).delete(
-        synchronize_session=False
-    )
-    removed = (
-        db.query(BackupJob)
-        .filter(BackupJob.id.in_(ids))
-        .delete(synchronize_session=False)
-    )
-    db.commit()
-    for path in log_files:
-        try:
-            Path(path).unlink(missing_ok=True)
-        except OSError:
-            pass
-    # The bulk delete bypasses the identity map: detach only the rows we
-    # removed. Callers run this mid-flow in long-lived sessions and still
-    # update their own objects afterwards - those must stay attached.
-    for job in jobs:
-        db.expunge(job)
-    logger.info(
-        "Removed job records for pruned archives",
-        repository_id=repository_id,
-        archives=sorted(names),
-        backup_jobs_removed=removed,
-    )
-    return removed
+    marked = 0
+    # one transaction per chunk, like the module's deletes
+    for start in range(0, len(names), CHUNK_SIZE):
+        marked += (
+            db.query(BackupJob)
+            .filter(
+                *filters, BackupJob.archive_name.in_(names[start : start + CHUNK_SIZE])
+            )
+            .update({BackupJob.archive_pruned_at: pruned_at}, synchronize_session=False)
+        )
+        db.commit()
+    if marked:
+        logger.info(
+            "Marked job records of pruned archives",
+            repository_id=repository_id,
+            archives=names,
+            backup_jobs_marked=marked,
+        )
+    return marked
 
 
 def sweep_pruned_archive_records(
     db: Session, lookback: timedelta = timedelta(days=2)
 ) -> int:
-    """Re-parse recent agent prune logs and cascade any pruned archives.
+    """Re-parse recent agent prune logs and mark any pruned archives' jobs.
 
     The completion hook in the agents API often runs before the agent's log
     lines have all been ingested (log streaming races the command result), so
     it can miss the 'Pruning archive:' lines entirely. By the time the daily
-    retention pass runs they are all there: parse again, cascade
-    idempotently, and while at it repair the linked prune job's stored log -
-    the same race leaves it truncated to whatever had arrived at completion.
+    retention pass runs they are all there: parse again, mark idempotently,
+    and while at it repair the linked prune job's stored log - the same race
+    leaves it truncated to whatever had arrived at completion.
     """
     since = utc_now() - lookback
     candidates = (
@@ -432,7 +446,7 @@ def sweep_pruned_archive_records(
         )
         .all()
     )
-    removed = 0
+    marked = 0
     for agent_job in candidates:
         payload = agent_job.payload if isinstance(agent_job.payload, dict) else {}
         if str(payload.get("job_kind") or "") != "repository.prune":
@@ -462,12 +476,16 @@ def sweep_pruned_archive_records(
             prune_job.has_logs = True
             db.commit()
 
-        removed += purge_jobs_for_pruned_archives(
+        marked += mark_jobs_of_pruned_archives(
             db,
             prune_job.repository_id,
             archive_names_from_prune_output(full_log),
+            # claimed_at is the server's clock; the prune cannot have started
+            # before the agent claimed the job
+            created_before=agent_job.claimed_at or prune_job.started_at,
+            pruned_at=prune_job.completed_at or agent_job.completed_at,
         )
-    return removed
+    return marked
 
 
 def _policy_discarded_statuses(policy: str) -> tuple:
@@ -504,7 +522,11 @@ def run_retention(db: Session, settings: Optional[SystemSettings] = None) -> Dic
 
     now = utc_now()
     log_cutoff = now - timedelta(days=log_days)
-    results = {
+    # First: the sweep reads recent agent prune logs, and the save policy
+    # below drops the logs of completed jobs regardless of age (the default
+    # policy keeps failures and warnings only). Read before deleting.
+    results = {"pruned_archive_records_marked": sweep_pruned_archive_records(db)}
+    results |= {
         "agent_log_rows_deleted": purge_agent_job_logs(
             db, _older_than(AgentJob, log_cutoff)
         ),
@@ -536,7 +558,6 @@ def run_retention(db: Session, settings: Optional[SystemSettings] = None) -> Dic
         "orphaned_log_files_deleted": sweep_orphaned_log_files(
             db, now - timedelta(days=row_days)
         ),
-        "pruned_archive_records_removed": sweep_pruned_archive_records(db),
     }
     if any(results.values()):
         logger.info(

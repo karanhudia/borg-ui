@@ -162,6 +162,51 @@ export const TransportModes: Story = {
   ),
 }
 
+const prunedArchiveJobs: Job[] = [
+  {
+    id: 301,
+    repository: '/backups/server',
+    repository_path: '/backups/server',
+    type: 'backup',
+    status: 'completed',
+    started_at: '2026-05-20T02:00:00Z',
+    completed_at: '2026-05-20T02:06:00Z',
+    triggered_by: 'schedule',
+    scheduled_job_id: 8,
+    execution_mode: 'local',
+    archive_name: 'server-2026-05-20T02:00',
+    // the nightly prune removed this archive two days later
+    archive_pruned_at: '2026-05-22T03:00:00Z',
+  },
+  {
+    id: 302,
+    repository: '/backups/server',
+    repository_path: '/backups/server',
+    type: 'backup',
+    status: 'completed',
+    started_at: '2026-05-22T02:00:00Z',
+    completed_at: '2026-05-22T02:05:00Z',
+    triggered_by: 'schedule',
+    scheduled_job_id: 8,
+    execution_mode: 'local',
+    archive_name: 'server-2026-05-22T02:00',
+  },
+]
+
+/** A run whose archive was pruned keeps its row; "View Archive" stays but is disabled. */
+export const PrunedArchive: Story = {
+  args: {
+    jobs: prunedArchiveJobs,
+    showTriggerColumn: true,
+    actions: { viewArchive: true },
+  },
+  render: (args) => (
+    <Box sx={{ p: 3 }}>
+      <BackupJobsTable {...args} />
+    </Box>
+  ),
+}
+
 export const RetryableFailedBackupJob: Story = {
   args: {
     jobs: retryableFailedBackupJobs,
