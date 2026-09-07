@@ -115,7 +115,15 @@ docker run -d \
 
 Access the app at `http://localhost:8081` with `admin` / `admin123`.
 
-For setup details, see the [installation guide](https://docs.borgui.com/installation).
+No Docker? Install straight onto a Debian or Ubuntu host, whether that is bare
+metal, a VM, or an LXC container:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/karanhudia/borg-ui/main/scripts/install.sh | sudo bash
+```
+
+For setup details and the native install options, see the
+[installation guide](https://docs.borgui.com/installation).
 
 ## Documentation
 

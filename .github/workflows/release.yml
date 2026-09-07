@@ -86,9 +86,28 @@ jobs:
             fi
             echo '```'
             echo ""
+            echo "## Install without Docker"
+            echo ""
+            echo "Debian or Ubuntu host (bare metal, VM, or LXC):"
+            echo '```'
+            echo "curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/install.sh | sudo bash -s -- --version ${{ steps.version.outputs.version }}"
+            echo '```'
+            echo ""
             echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ steps.previous_tag.outputs.tag }}...${{ github.ref_name }}"
             echo 'EOF'
           } >> $GITHUB_OUTPUT
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      # The tarball scripts/install.sh downloads: application source, prebuilt
+      # frontend, agent wheelhouse and the pinned Borg/rclone versions. Without
+      # it a native install has nothing to fetch, so this runs before the
+      # release is created rather than as a follow-up job.
+      - name: Build native install tarball
+        run: ./scripts/build-native-tarball.sh dist
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
@@ -99,5 +118,8 @@ jobs:
           draft: false
           prerelease: ${{ steps.version.outputs.is_prerelease == 'true' }}
           generate_release_notes: false
+          files: |
+            dist/borg-ui-${{ steps.version.outputs.version }}.tar.gz
+            dist/borg-ui-${{ steps.version.outputs.version }}.tar.gz.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

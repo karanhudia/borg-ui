@@ -1,0 +1,34 @@
+# Borg UI systemd unit template. scripts/install.sh substitutes the at-sign
+# delimited names below when it installs it. Editing the installed copy at
+# /etc/systemd/system/borg-ui.service is fine, but re-running the installer
+# rewrites it. Persistent configuration belongs in @ENV_FILE@ instead.
+[Unit]
+Description=Borg UI
+Documentation=https://github.com/karanhudia/borg-ui
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=@SERVICE_USER@
+Group=@SERVICE_GROUP@
+EnvironmentFile=@ENV_FILE@
+WorkingDirectory=@PREFIX@/current
+# The virtualenv lives beside the releases so it survives an upgrade;
+# start.sh cannot infer that from its own location.
+Environment=BORG_UI_VENV=@PREFIX@/venv
+ExecStart=@PREFIX@/current/packaging/native/start.sh
+Restart=on-failure
+RestartSec=5
+
+# A backup run can take hours and must not be killed mid-archive; the app
+# shuts its own workers down on SIGTERM.
+TimeoutStopSec=300
+KillMode=mixed
+
+# Filesystem sandboxing (ProtectSystem, PrivateTmp, ReadOnlyPaths) is
+# deliberately absent: Borg UI's job is to read arbitrary paths on this host
+# and to mount archives over FUSE, both of which those options break.
+
+[Install]
+WantedBy=multi-user.target
