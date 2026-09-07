@@ -48,6 +48,31 @@ class CheckService:
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.running_processes = {}  # Track running processes by job_id
 
+    async def cancel_check(self, job_id: int) -> bool:
+        """Cancel a running check job by terminating its tracked process."""
+        if job_id not in self.running_processes:
+            logger.warning("No running check process found for job", job_id=job_id)
+            return False
+
+        process = self.running_processes[job_id]
+        try:
+            process.terminate()
+            logger.info("Sent SIGTERM to check process", job_id=job_id, pid=process.pid)
+            try:
+                await asyncio.wait_for(process.wait(), timeout=5.0)
+            except asyncio.TimeoutError:
+                process.kill()
+                logger.warning(
+                    "Force killed check process (SIGKILL)",
+                    job_id=job_id,
+                    pid=process.pid,
+                )
+                await process.wait()
+            return True
+        except Exception as e:
+            logger.error("Failed to cancel check process", job_id=job_id, error=str(e))
+            return False
+
     async def execute_check(self, job_id: int, repository_id: int, db: Session = None):
         """Execute repository check operation with progress tracking"""
 

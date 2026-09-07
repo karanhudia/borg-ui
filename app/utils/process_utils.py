@@ -26,6 +26,7 @@ from app.database.models import (
     CompactJob,
     BackupJob,
     DeleteArchiveJob,
+    Operation,
     PruneJob,
     RestoreCheckJob,
     RestoreJob,
@@ -235,6 +236,15 @@ _MAINTENANCE_CHILD_MODELS = {
     "running_check": CheckJob,
 }
 
+# Phase 5 moved prune, compact, and check onto `operations`; the post-backup
+# inline path (`start_inline_maintenance`) writes a `running` Operation row
+# for the whole synchronous run, which the legacy tables below never see.
+_MAINTENANCE_STATUS_KIND = {
+    "running_prune": "prune",
+    "running_compact": "compact",
+    "running_check": "check",
+}
+
 
 def _has_running_maintenance_child(
     db: Session, backup_job: BackupJob, maintenance_status: str
@@ -246,6 +256,20 @@ def _has_running_maintenance_child(
     signal. Agent maintenance jobs carry no backup_job_id, so we correlate by
     repository (mirroring _has_running_check_child).
     """
+    kind = _MAINTENANCE_STATUS_KIND.get(maintenance_status)
+    if (
+        kind is not None
+        and backup_job.repository_id is not None
+        and db.query(Operation.id)
+        .filter(
+            Operation.repository_id == backup_job.repository_id,
+            Operation.kind == kind,
+            Operation.status == "running",
+        )
+        .first()
+        is not None
+    ):
+        return True
     model = _MAINTENANCE_CHILD_MODELS.get(maintenance_status)
     if model is None:
         return False

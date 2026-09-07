@@ -264,6 +264,36 @@ def test_claim_running_claims_a_queued_operation_once(db, repository):
     assert claim_running(db, op.id, "check", started) == 0
 
 
+def test_claim_running_claims_a_manually_started_operation_once(db, repository):
+    """A manual-start route pre-sets the row to "running" with no
+    `started_at` before the executor ever calls `claim_running`; this must
+    still succeed exactly once, recording the real execution start."""
+    op = _operation(db, repository, status="running")
+    started = datetime(2026, 9, 6, 12, 0, 0)
+
+    assert claim_running(db, op.id, "check", started) == 1
+    db.commit()
+    db.refresh(op)
+    assert op.started_at == started
+
+
+def test_claim_running_rejects_an_already_started_running_operation(db, repository):
+    """Two concurrent dispatches of the same id must not both report a
+    successful claim. Before this, "running" alone was accepted regardless
+    of `started_at`, so a second claim on an already-started row also
+    returned 1 and could re-run the same work."""
+    op = _operation(db, repository, status="running")
+    first_started = datetime(2026, 9, 6, 12, 0, 0)
+    assert claim_running(db, op.id, "check", first_started) == 1
+    db.commit()
+
+    second_started = datetime(2026, 9, 6, 12, 5, 0)
+    assert claim_running(db, op.id, "check", second_started) == 0
+    db.commit()
+    db.refresh(op)
+    assert op.started_at == first_started
+
+
 def test_claim_running_still_claims_a_legacy_row(db, repository):
     legacy = CheckJob(repository_id=repository.id, status="pending")
     db.add(legacy)
@@ -274,3 +304,15 @@ def test_claim_running_still_claims_a_legacy_row(db, repository):
     db.commit()
     db.refresh(legacy)
     assert legacy.status == "running"
+
+
+def test_claim_running_rejects_an_already_running_legacy_row(db, repository):
+    """New work never writes legacy rows any more, so an already-`running`
+    legacy row can only be one this function itself already claimed - a
+    second claim must not also report success."""
+    legacy = CheckJob(repository_id=repository.id, status="running")
+    db.add(legacy)
+    db.commit()
+    started = datetime(2026, 9, 6, 12, 0, 0)
+
+    assert claim_running(db, legacy.id, "check", started) == 0

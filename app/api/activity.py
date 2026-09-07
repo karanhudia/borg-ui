@@ -6,6 +6,7 @@ Provides a unified view of all operations (backups, restores, checks, compacts, 
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from typing import Any, List, Optional
@@ -379,6 +380,7 @@ def _text_download_response(log_text: str, *, filename: str) -> FileResponse:
             path=temp_file.name,
             filename=filename,
             media_type="text/plain",
+            background=BackgroundTask(os.unlink, temp_file.name),
         )
     except Exception as e:
         if os.path.exists(temp_file.name):

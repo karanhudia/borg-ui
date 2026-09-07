@@ -128,7 +128,9 @@ class TestPruneServiceSSHKey:
 
         def mock_query(model):
             m = MagicMock()
-            if model == PruneJob:
+            if model == Operation:
+                m.filter.return_value.first.return_value = None
+            elif model == PruneJob:
                 m.filter.return_value.first.return_value = job
             elif model == Repository:
                 m.filter.return_value.first.return_value = repo
@@ -182,7 +184,9 @@ class TestPruneServiceSSHKey:
 
         def mock_query(model):
             m = MagicMock()
-            if model == PruneJob:
+            if model == Operation:
+                m.filter.return_value.first.return_value = None
+            elif model == PruneJob:
                 m.filter.return_value.first.return_value = job
             elif model == Repository:
                 m.filter.return_value.first.return_value = repo
@@ -248,7 +252,9 @@ class TestCompactServiceSSHKey:
 
         def mock_query(model):
             m = MagicMock()
-            if model == CompactJob:
+            if model == Operation:
+                m.filter.return_value.first.return_value = None
+            elif model == CompactJob:
                 m.filter.return_value.first.return_value = job
             elif model == Repository:
                 m.filter.return_value.first.return_value = repo
@@ -300,7 +306,9 @@ class TestCompactServiceSSHKey:
 
         def mock_query(model):
             m = MagicMock()
-            if model == CompactJob:
+            if model == Operation:
+                m.filter.return_value.first.return_value = None
+            elif model == CompactJob:
                 m.filter.return_value.first.return_value = job
             elif model == Repository:
                 m.filter.return_value.first.return_value = repo

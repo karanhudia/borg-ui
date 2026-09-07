@@ -22,6 +22,7 @@ from app.database.models import (
     CheckJob,
     CompactJob,
     DeleteArchiveJob,
+    Operation,
     PruneJob,
     Repository,
 )
@@ -461,6 +462,53 @@ class TestProcessUtils:
                 repository_id=repo.id,
                 repository_path=repo.path,
                 status="running",
+            )
+        )
+        db_session.add(backup_job)
+        db_session.commit()
+
+        reaped = reconcile_stale_backup_maintenance(db_session)
+
+        assert reaped == 0
+        db_session.refresh(backup_job)
+        assert backup_job.maintenance_status == "running_prune"
+
+    def test_reconcile_stale_backup_maintenance_preserves_live_inline_operation(
+        self, db_session
+    ):
+        """Phase 5's post-backup prune/compact/check runs inline through
+        `start_inline_maintenance`, which writes a `running` Operation row
+        instead of a PruneJob/CompactJob/CheckJob row. The legacy-only check
+        this reconciler used to make was blind to that row, so a
+        long-running inline prune could get reaped as stuck mid-run."""
+        from datetime import timedelta
+
+        repo = Repository(
+            name="Live Inline Prune Repo",
+            path="/repos/live-inline-prune",
+            encryption="none",
+            repository_type="local",
+        )
+        db_session.add(repo)
+        db_session.flush()
+        old = datetime.utcnow() - timedelta(minutes=10)
+        backup_job = BackupJob(
+            repository=repo.path,
+            repository_id=repo.id,
+            status="completed",
+            started_at=old,
+            completed_at=old,
+            maintenance_status="running_prune",
+        )
+        db_session.add(
+            Operation(
+                repository_id=repo.id,
+                kind="prune",
+                category="maintenance",
+                status="running",
+                trigger="manual",
+                priority=0,
+                run_id="run-1",
             )
         )
         db_session.add(backup_job)

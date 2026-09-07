@@ -1,5 +1,7 @@
 """Phase 5: the maintenance executors (spec 6.3, 7.4, section 13 phase 5)."""
 
+import asyncio
+
 import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
@@ -192,6 +194,45 @@ async def test_check_does_not_stamp_last_check_on_failure(db, repository, monkey
 
     db.refresh(repository)
     assert repository.last_check is None
+
+
+@pytest.mark.asyncio
+async def test_check_cancellation_terminates_the_tracked_borg_process(
+    db, repository, monkeypatch
+):
+    """`run_check`'s canceller is `getattr(check_service, "cancel_check",
+    None)`; before `cancel_check` existed, `cancel_watcher` saw the flag but
+    had nothing to call, so a cancelled check operation left its Borg
+    process running untouched."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from app.services.check_service import check_service
+    from app.services.operations.executors import maintenance
+
+    op = _operation(db, repository)
+    ctx = FakeContext(db, op)
+    ctx._cancelled = True
+
+    fake_process = MagicMock()
+    fake_process.pid = 4242
+    fake_process.wait = AsyncMock(return_value=None)
+    check_service.running_processes[op.id] = fake_process
+
+    async def call(self, job_id, *args, **kwargs):
+        # Give the cancel watcher a scheduling turn before completing, the
+        # way a real Borg subprocess wait would.
+        await asyncio.sleep(0.05)
+        job = MaintenanceJobFacade(db, db.get(Operation, job_id))
+        job.status = "cancelled"
+        db.commit()
+
+    monkeypatch.setattr("app.core.borg_router.BorgRouter.check", call, raising=True)
+
+    try:
+        await maintenance.run_check(ctx)
+        fake_process.terminate.assert_called_once()
+    finally:
+        check_service.running_processes.pop(op.id, None)
 
 
 @pytest.mark.asyncio
