@@ -1,0 +1,48 @@
+# Borg UI systemd unit template. scripts/install.sh substitutes the at-sign
+# delimited names below when it installs it. Editing the installed copy at
+# /etc/systemd/system/borg-ui.service is fine, but re-running the installer
+# rewrites it. Persistent configuration belongs in @ENV_FILE@ instead.
+[Unit]
+Description=Borg UI
+Documentation=https://github.com/karanhudia/borg-ui
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=@SERVICE_USER@
+Group=@SERVICE_GROUP@
+EnvironmentFile=@ENV_FILE@
+# The pinned Borg and rclone live in @PREFIX@/bin, and the app resolves borg,
+# borg2 and rclone by name. Without this the service inherits systemd's default
+# PATH and would run whatever /usr/local/bin or /usr/bin happens to hold, which
+# is a different Borg than this release was built against. The installer leaves
+# a pre-existing /usr/local/bin/borg alone on purpose, so this is what keeps
+# that from silently deciding which Borg the service runs.
+# Some ARM64 kernels report OpenSSL CPU capabilities that cryptography's
+# bundled OpenSSL path cannot execute, and importing it dies with SIGILL. The
+# Docker image sets this for the same reason. It lives in the unit rather than
+# the env file because the env file is written once and never rewritten, so an
+# install made before this existed would not pick it up on upgrade.
+Environment=OPENSSL_armcap=0
+Environment=PATH=@PREFIX@/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+WorkingDirectory=@PREFIX@/current
+# One virtualenv per release, so an upgrade builds the new environment while
+# this one keeps serving from its own, and a rollback finds the previous
+# release complete.
+Environment=BORG_UI_VENV=@PREFIX@/current/venv
+ExecStart=@PREFIX@/current/packaging/native/start.sh
+Restart=on-failure
+RestartSec=5
+
+# A backup run can take hours and must not be killed mid-archive; the app
+# shuts its own workers down on SIGTERM.
+TimeoutStopSec=300
+KillMode=mixed
+
+# Filesystem sandboxing (ProtectSystem, PrivateTmp, ReadOnlyPaths) is
+# deliberately absent: Borg UI's job is to read arbitrary paths on this host
+# and to mount archives over FUSE, both of which those options break.
+
+[Install]
+WantedBy=multi-user.target
