@@ -8,8 +8,8 @@
 # not run Docker.
 #
 #   curl -fsSLO https://github.com/karanhudia/borg-ui/releases/latest/download/install.sh
-#   curl -fsSL https://github.com/karanhudia/borg-ui/releases/latest/download/install.sh.sha256 | sha256sum -c -
-#   sudo bash install.sh
+#   curl -fsSL https://github.com/karanhudia/borg-ui/releases/latest/download/install.sh.sha256 | sha256sum -c - \
+#     && sudo bash install.sh
 #
 # The installer is published as an asset of each release with its checksum
 # beside it, so that names a fixed artifact and verifies it before it runs as
@@ -337,6 +337,22 @@ FORWARDER
   fi
 }
 
+# The counterpart of write_forwarder. An upgrade that can no longer provide a
+# Borg must take the old forwarder away with it: @PREFIX@/bin comes first on
+# the service PATH, so a leftover would keep answering for a binary this
+# install does not have, or dangle at a path that was removed.
+remove_forwarder() {
+  local name="$1" link="/usr/local/bin/$1"
+
+  [[ -e "${PREFIX}/bin/${name}" ]] || [[ -L "${link}" ]] || return 0
+
+  rm -f "${PREFIX}/bin/${name}"
+  if [[ "$(readlink -f "${link}" 2>/dev/null)" == "${PREFIX}/bin/${name}" ]]; then
+    rm -f "${link}"
+  fi
+  warn "Removed the ${name} this install can no longer provide"
+}
+
 install_borg_binary() {
   local major="$1" row sha url version dest tmp
 
@@ -371,6 +387,16 @@ install_borg1() {
 
   warn "no pinned Borg 1 binary matches ${MACHINE_ARCH}/glibc ${MACHINE_GLIBC}; using the distribution package"
   apt-get install -y --no-install-recommends borgbackup
+
+  # Point the forwarder at the package, rather than leaving one from an earlier
+  # install ahead of it on the service PATH. The absolute path is deliberate:
+  # resolving "borg" here could find our own symlink and build a loop.
+  if [[ -x /usr/bin/borg ]]; then
+    write_forwarder borg /usr/bin/borg
+  else
+    remove_forwarder borg
+    die "borgbackup installed no /usr/bin/borg; cannot provide Borg 1"
+  fi
 }
 
 # Borg 2 has no stable release and no distribution package. Prefer the pinned
@@ -381,6 +407,7 @@ install_borg1() {
 install_borg2() {
   if [[ "${SKIP_BORG2}" == "true" ]]; then
     log "Skipping Borg 2 (--skip-borg2)"
+    remove_forwarder borg2
     return
   fi
 
@@ -395,6 +422,7 @@ install_borg2() {
     warn "Borg 2 needs OpenSSL 3.2 or newer to build; this host has ${openssl_version:-none}."
     warn "Borg 2 repositories will be unavailable. Borg 1 repositories work normally."
     warn "Debian 13 (trixie) and Ubuntu 25.04 or newer carry a new enough OpenSSL."
+    remove_forwarder borg2
     return
   fi
 
@@ -408,7 +436,11 @@ install_borg2() {
   "${PREFIX}/borg2-venv/bin/pip" install --quiet --pre \
     "borgbackup==${BORG2_VERSION}" \
     "borgstore[rclone,sftp,rest,s3,blake3]==${BORGSTORE_VERSION}" ||
-    { warn "Borg 2 failed to build; Borg 2 repositories will be unavailable"; return; }
+    {
+      warn "Borg 2 failed to build; Borg 2 repositories will be unavailable"
+      remove_forwarder borg2
+      return
+    }
 
   write_forwarder borg2 "${PREFIX}/borg2-venv/bin/borg"
 }

@@ -320,3 +320,63 @@ def test_the_unit_resolves_borg_from_the_installed_prefix_first():
     )
     for required in ("/usr/local/bin", "/usr/bin", "/bin"):
         assert required in entries, f"{required} dropped from the service PATH"
+
+
+def test_a_failed_checksum_stops_the_install():
+    """Verification only helps if it gates what follows.
+
+    The verify and the run were separate lines in every documented block, so a
+    pasted block ran `sudo bash install.sh` even after the checksum failed,
+    which is the whole point of publishing the checksum.
+    """
+    offenders = []
+    sources = (
+        REPO_ROOT / "README.md",
+        REPO_ROOT / "docs" / "installation.md",
+        INSTALLER,
+        REPO_ROOT / ".github" / "workflows" / "release.yml",
+    )
+    for doc in sources:
+        lines = doc.read_text().splitlines()
+        for number, line in enumerate(lines, start=1):
+            if "sha256sum -c -" not in line or "install.sh.sha256" not in line:
+                continue
+            if not line.rstrip().endswith(("\\", '\\"')):
+                offenders.append(f"{doc.name}:{number}: {line.strip()}")
+                continue
+            following = lines[number] if number < len(lines) else ""
+            if "&&" not in following:
+                offenders.append(f"{doc.name}:{number + 1}: {following.strip()}")
+
+    assert not offenders, (
+        "verifying install.sh must gate running it; chain the commands with "
+        "&& so a bad checksum stops the install:\n" + "\n".join(offenders)
+    )
+
+
+def test_every_path_that_cannot_provide_a_borg_clears_its_forwarder():
+    """@PREFIX@/bin is first on the service PATH, so a leftover forwarder there
+    keeps answering for a Borg this install does not have. Every branch that
+    ends without one has to take it away."""
+    installer = INSTALLER.read_text()
+    assert "remove_forwarder() {" in installer, "remove_forwarder is gone"
+
+    borg2 = re.search(r"^install_borg2\(\) \{.*?^\}", installer, re.M | re.S)
+    assert borg2, "install_borg2 is no longer a top-level function"
+    body = borg2.group(0)
+
+    # Each early return in install_borg2 is a path that provides no Borg 2,
+    # apart from the one that has just written the forwarder.
+    returns = body.count("return")
+    cleanups = body.count("remove_forwarder borg2")
+    assert cleanups >= returns - 1, (
+        f"install_borg2 has {returns} exits but clears the forwarder on only "
+        f"{cleanups} of them"
+    )
+
+    borg1 = re.search(r"^install_borg1\(\) \{.*?^\}", installer, re.M | re.S)
+    assert borg1, "install_borg1 is no longer a top-level function"
+    assert "write_forwarder borg /usr/bin/borg" in borg1.group(0), (
+        "the distribution-package fallback must own the forwarder too, or a "
+        "stale one from an earlier install shadows it"
+    )

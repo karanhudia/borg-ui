@@ -120,8 +120,8 @@ metal, a VM, or an LXC container:
 
 ```bash
 curl -fsSLO https://github.com/karanhudia/borg-ui/releases/latest/download/install.sh
-curl -fsSL https://github.com/karanhudia/borg-ui/releases/latest/download/install.sh.sha256 | sha256sum -c -
-sudo bash install.sh
+curl -fsSL https://github.com/karanhudia/borg-ui/releases/latest/download/install.sh.sha256 | sha256sum -c - \
+  && sudo bash install.sh
 ```
 
 For setup details and the native install options, see the

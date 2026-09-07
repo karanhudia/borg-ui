@@ -433,8 +433,8 @@ mounts.
 
 ```bash
 curl -fsSLO https://github.com/karanhudia/borg-ui/releases/latest/download/install.sh
-curl -fsSL https://github.com/karanhudia/borg-ui/releases/latest/download/install.sh.sha256 | sha256sum -c -
-sudo bash install.sh
+curl -fsSL https://github.com/karanhudia/borg-ui/releases/latest/download/install.sh.sha256 | sha256sum -c - \
+  && sudo bash install.sh
 ```
 
 That installs the latest release and starts it on port 8081. The installer
@@ -462,8 +462,8 @@ lines filled in:
 
 ```bash
 curl -fsSLO https://github.com/karanhudia/borg-ui/releases/download/v2.3.0/install.sh
-curl -fsSL https://github.com/karanhudia/borg-ui/releases/download/v2.3.0/install.sh.sha256 | sha256sum -c -
-sudo bash install.sh --version 2.3.0
+curl -fsSL https://github.com/karanhudia/borg-ui/releases/download/v2.3.0/install.sh.sha256 | sha256sum -c - \
+  && sudo bash install.sh --version 2.3.0
 ```
 
 The release archive the installer then downloads is verified against its own
@@ -547,8 +547,8 @@ is kept for exactly this reason; older ones are removed.
 
 ```bash
 curl -fsSLO https://github.com/karanhudia/borg-ui/releases/latest/download/install.sh
-curl -fsSL https://github.com/karanhudia/borg-ui/releases/latest/download/install.sh.sha256 | sha256sum -c -
-sudo bash install.sh
+curl -fsSL https://github.com/karanhudia/borg-ui/releases/latest/download/install.sh.sha256 | sha256sum -c - \
+  && sudo bash install.sh
 ```
 
 The Borg 2 repository-format warning under [Docker upgrade](#docker-upgrade)

@@ -97,8 +97,8 @@ jobs:
             # published artifact rather than a branch that can move under it,
             # and its checksum is verified before it runs as root.
             echo "curl -fsSLO ${ASSET_BASE}/install.sh"
-            echo "curl -fsSL ${ASSET_BASE}/install.sh.sha256 | sha256sum -c -"
-            echo "sudo bash install.sh --version ${RELEASE_VERSION}"
+            echo "curl -fsSL ${ASSET_BASE}/install.sh.sha256 | sha256sum -c - \\"
+            echo "  && sudo bash install.sh --version ${RELEASE_VERSION}"
             echo '```'
             echo ""
             echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ steps.previous_tag.outputs.tag }}...${{ github.ref_name }}"
