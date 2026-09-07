@@ -399,6 +399,12 @@ write_forwarder() {
   cat >"${PREFIX}/bin/${name}" <<FORWARDER
 #!/usr/bin/env bash
 # Installed by the Borg UI native installer.
+#
+# Some ARM64 kernels report OpenSSL CPU capabilities that Borg's bundled
+# OpenSSL cannot execute, and it dies with SIGILL before doing anything. The
+# service already sets this through its unit, but a hook, a cron entry or an
+# operator at a shell does not, and Borg has to work in all of those.
+export OPENSSL_armcap=0
 exec ${target} "\$@"
 FORWARDER
   chmod 0755 "${PREFIX}/bin/${name}"

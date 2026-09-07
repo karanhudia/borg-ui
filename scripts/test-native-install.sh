@@ -7,6 +7,7 @@
 #   ./scripts/test-native-install.sh              # full matrix
 #   ./scripts/test-native-install.sh --keep       # leave the container running
 #   ./scripts/test-native-install.sh --case upgrade
+#   ./scripts/test-native-install.sh --case fresh --publish 8099   # open it
 #
 # Needs Docker with a Linux daemon. The container is privileged because systemd
 # needs it; it is a disposable test container and nothing else runs in it.
@@ -19,10 +20,12 @@ IMAGE="debian:13"
 NAME="borg-ui-install-test"
 KEEP="false"
 ONLY=""
+PUBLISH=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --keep) KEEP="true"; shift ;;
+    --publish) PUBLISH="$2"; KEEP="true"; shift 2 ;;
     --case) ONLY="$2"; shift 2 ;;
     --image) IMAGE="$2"; shift 2 ;;
     -h|--help) sed -n '2,12p' "${BASH_SOURCE[0]}"; exit 0 ;;
@@ -35,13 +38,17 @@ FAILED=0
 FAILURES=()
 
 cleanup() {
+  local status=$?
+
   if [[ "${KEEP}" == "true" ]]; then
     echo "Container ${NAME} left running. Shell into it with:"
     echo "  docker exec -it ${NAME} bash"
-    return
+    exit "${status}"
   fi
   docker rm -f "${NAME}" >/dev/null 2>&1 || true
+  exit "${status}"
 }
+
 trap cleanup EXIT
 
 c() { docker exec "${NAME}" bash -c "$1"; }
@@ -108,9 +115,18 @@ DOCKERFILE
 
 echo "==> Starting ${IMAGE} with systemd as PID 1"
 docker rm -f "${NAME}" >/dev/null 2>&1 || true
+publish_args=()
+if [[ -n "${PUBLISH}" ]]; then
+  # Reaching the installed app from the host, to look at it rather than to
+  # assert on it. Implies --keep: there is nothing to open once the container
+  # is gone.
+  publish_args=(-p "${PUBLISH}:8081")
+fi
+
 docker run -d --name "${NAME}" --privileged \
   --tmpfs /run --tmpfs /run/lock \
   -v /sys/fs/cgroup:/sys/fs/cgroup:rw --cgroupns=host \
+  ${publish_args[@]+"${publish_args[@]}"} \
   "${BASE_IMAGE}" >/dev/null
 
 booted="false"
@@ -152,6 +168,12 @@ if run_case fresh; then
   check "database created" "test -f /var/lib/borg-ui/borg.db"
   check "borg resolves to the pinned binary" "readlink -f \$(command -v borg) | grep -q '^/opt/borg-ui/'"
   check "unit puts the prefix first on PATH" "grep -q 'Environment=PATH=/opt/borg-ui/bin:' /etc/systemd/system/borg-ui.service"
+  # Installed is not the same as runnable: both of these died with SIGILL on
+  # ARM64 while every path and permission check above still passed.
+  check "borg 1 runs" "borg --version"
+  check "borg 2 runs" "borg2 --version"
+  check "rclone runs" "rclone version"
+  check "borg can create and read a repository" "export BORG_PASSPHRASE=x HOME=/var/lib/borg-ui/home && mkdir -p /tmp/src && echo hi >/tmp/src/f && borg init -e repokey /tmp/repo && borg create /tmp/repo::a1 /tmp/src && borg list /tmp/repo | grep -q a1"
 fi
 
 if run_case rerun; then
@@ -209,6 +231,9 @@ fi
 
 echo
 echo "==> ${PASSED} passed, ${FAILED} failed"
+if [[ -n "${PUBLISH}" ]]; then
+  echo "==> Open http://localhost:${PUBLISH} (admin / admin123)"
+fi
 if ((FAILED > 0)); then
   printf '    %s\n' "${FAILURES[@]}"
   echo
