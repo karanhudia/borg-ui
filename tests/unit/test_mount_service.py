@@ -435,6 +435,182 @@ class TestMountService:
             assert "borg14" in captured_args
 
     @pytest.mark.asyncio
+    async def test_borg2_mount_addresses_series_archive_by_aid(self, mount_service):
+        """Borg 2 series archives share one name; `-a <name>` mounts every
+        archive of the series. With the id supplied, the mount must address
+        exactly one archive via the aid: selector."""
+        with (
+            patch("app.services.mount_service.SessionLocal") as mock_session,
+            patch(
+                "app.services.mount_service.asyncio.create_subprocess_exec"
+            ) as mock_exec,
+            patch("app.services.mount_service.os.makedirs"),
+            patch("app.services.mount_service.os.path.exists", return_value=False),
+            patch.dict("os.environ", {}, clear=True),
+        ):
+            mock_db = Mock()
+            mock_session.return_value = mock_db
+            mock_repo = Mock(spec=Repository)
+            mock_repo.id = 1
+            mock_repo.name = "b2-repo"
+            mock_repo.path = "/backup/b2-repo"
+            mock_repo.passphrase = None
+            mock_repo.connection_id = None
+            mock_repo.bypass_lock = False
+            mock_repo.remote_path = None
+            mock_repo.borg_version = 2
+            mock_db.query.return_value.filter.return_value.first.side_effect = [
+                mock_repo,
+                None,
+            ]
+            mock_db.query.return_value.first.return_value = None
+
+            captured_args = []
+
+            async def fake_exec(*args, **kwargs):
+                captured_args.extend(args)
+                proc = AsyncMock()
+                proc.pid = 12345
+                proc.stdout = AsyncMock()
+                proc.stdout.readline = AsyncMock(return_value=b"")
+                proc.stderr = AsyncMock()
+                proc.stderr.read = AsyncMock(return_value=b"")
+                proc.wait = AsyncMock(return_value=0)
+                return proc
+
+            mock_exec.side_effect = fake_exec
+
+            try:
+                await mount_service.mount_borg_archive(
+                    repository_id=1,
+                    archive_name="myplan-daily",
+                    archive_id="ab12cd34ef567890",
+                )
+            except Exception:
+                pass
+
+            assert mock_exec.called
+            assert "aid:ab12cd34ef567890" in captured_args
+            # The bare series name must not be the -a value.
+            assert "myplan-daily" not in captured_args
+
+    @pytest.mark.asyncio
+    async def test_borg2_mount_id_only_request_still_addresses_by_aid(
+        self, mount_service
+    ):
+        """An id without a name must mount that one archive by aid:, not fall
+        back to the whole repository."""
+        with (
+            patch("app.services.mount_service.SessionLocal") as mock_session,
+            patch(
+                "app.services.mount_service.asyncio.create_subprocess_exec"
+            ) as mock_exec,
+            patch("app.services.mount_service.os.makedirs"),
+            patch("app.services.mount_service.os.path.exists", return_value=False),
+            patch.dict("os.environ", {}, clear=True),
+        ):
+            mock_db = Mock()
+            mock_session.return_value = mock_db
+            mock_repo = Mock(spec=Repository)
+            mock_repo.id = 1
+            mock_repo.name = "b2-repo"
+            mock_repo.path = "/backup/b2-repo"
+            mock_repo.passphrase = None
+            mock_repo.connection_id = None
+            mock_repo.bypass_lock = False
+            mock_repo.remote_path = None
+            mock_repo.borg_version = 2
+            mock_db.query.return_value.filter.return_value.first.side_effect = [
+                mock_repo,
+                None,
+            ]
+            mock_db.query.return_value.first.return_value = None
+
+            captured_args = []
+
+            async def fake_exec(*args, **kwargs):
+                captured_args.extend(args)
+                proc = AsyncMock()
+                proc.pid = 12345
+                proc.stdout = AsyncMock()
+                proc.stdout.readline = AsyncMock(return_value=b"")
+                proc.stderr = AsyncMock()
+                proc.stderr.read = AsyncMock(return_value=b"")
+                proc.wait = AsyncMock(return_value=0)
+                return proc
+
+            mock_exec.side_effect = fake_exec
+
+            try:
+                await mount_service.mount_borg_archive(
+                    repository_id=1,
+                    archive_name=None,
+                    archive_id="ab12cd34ef567890",
+                )
+            except Exception:
+                pass
+
+            assert mock_exec.called
+            assert "aid:ab12cd34ef567890" in captured_args
+
+    @pytest.mark.asyncio
+    async def test_borg1_mount_keeps_name_addressing(self, mount_service):
+        """Borg 1 names are unique; a supplied id must not change addressing."""
+        with (
+            patch("app.services.mount_service.SessionLocal") as mock_session,
+            patch(
+                "app.services.mount_service.asyncio.create_subprocess_exec"
+            ) as mock_exec,
+            patch("app.services.mount_service.os.makedirs"),
+            patch("app.services.mount_service.os.path.exists", return_value=False),
+            patch.dict("os.environ", {}, clear=True),
+        ):
+            mock_db = Mock()
+            mock_session.return_value = mock_db
+            mock_repo = Mock(spec=Repository)
+            mock_repo.id = 1
+            mock_repo.name = "b1-repo"
+            mock_repo.path = "/backup/b1-repo"
+            mock_repo.passphrase = None
+            mock_repo.connection_id = None
+            mock_repo.bypass_lock = False
+            mock_repo.remote_path = None
+            mock_repo.borg_version = 1
+            mock_db.query.return_value.filter.return_value.first.side_effect = [
+                mock_repo,
+                None,
+            ]
+            mock_db.query.return_value.first.return_value = None
+
+            captured_args = []
+
+            async def fake_exec(*args, **kwargs):
+                captured_args.extend(args)
+                proc = AsyncMock()
+                proc.pid = 12345
+                proc.stdout = AsyncMock()
+                proc.stdout.readline = AsyncMock(return_value=b"")
+                proc.stderr = AsyncMock()
+                proc.stderr.read = AsyncMock(return_value=b"")
+                proc.wait = AsyncMock(return_value=0)
+                return proc
+
+            mock_exec.side_effect = fake_exec
+
+            try:
+                await mount_service.mount_borg_archive(
+                    repository_id=1,
+                    archive_name="backup-2026-01-01",
+                    archive_id="ab12cd34ef567890",
+                )
+            except Exception:
+                pass
+
+            assert mock_exec.called
+            assert "/backup/b1-repo::backup-2026-01-01" in captured_args
+            assert not any(str(a).startswith("aid:") for a in captured_args)
+
+    @pytest.mark.asyncio
     async def test_mount_borg_archive_no_remote_path(self, mount_service):
         """Test that mount_borg_archive omits --remote-path when repository has no remote_path"""
         with (

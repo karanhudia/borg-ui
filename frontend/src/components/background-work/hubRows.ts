@@ -37,9 +37,14 @@ export const DEFAULT_TOOLBAR: HubToolbarState = { query: '', attention: 'all', s
 
 export type AttentionCounts = Record<AttentionReason, number> & { total: number }
 
+// The queue keeps finished operations for a while, so a stage that reads
+// `done`, `failed` or `skipped` is history, not work in flight.
+const LIVE_STAGE_STATUSES = new Set(['running', 'waiting'])
+
 export function trackIsActive(track: RepositoryTrack | null): boolean {
   return (
-    track != null && (track.foreground != null || track.stages.some((s) => s.status !== 'idle'))
+    track != null &&
+    (track.foreground != null || track.stages.some((s) => LIVE_STAGE_STATUSES.has(s.status)))
   )
 }
 

@@ -30,6 +30,7 @@ from app.utils.borg_env import effective_repository_remote_path, get_standard_ss
 from app.core.security import decrypt_secret
 from app.database.database import SessionLocal
 from app.database.models import SSHConnection, SSHKey, Repository, SystemSettings
+from app.utils.ssh_host_keys import host_key_ssh_opts
 from app.utils.ssh_utils import (
     resolve_repo_ssh_key_file,
     resolve_repository_ssh_connection,
@@ -915,6 +916,7 @@ class MountService:
         repository_id: int,
         archive_name: Optional[str] = None,
         mount_point: Optional[str] = None,
+        archive_id: Optional[str] = None,
     ) -> Tuple[str, str]:
         """
         Mount a Borg repository or specific archive for browsing
@@ -923,6 +925,9 @@ class MountService:
             repository_id: Repository ID to mount
             archive_name: Optional specific archive name (None = mount entire repo)
             mount_point: Optional custom mount point (must be validated)
+            archive_id: Borg 2 archive id for series disambiguation - archives
+                in a series share one name and only the id addresses exactly
+                one of them
 
         Returns:
             Tuple of (mount_point, mount_id)
@@ -1014,7 +1019,11 @@ class MountService:
                 connection = resolve_repository_ssh_connection(repository, db)
                 if connection:
                     temp_key_file = resolve_repo_ssh_key_file(repository, db)
-                    ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
+                    ssh_opts = get_standard_ssh_opts(
+                        include_key_path=temp_key_file,
+                        connection=connection,
+                        db=db,
+                    )
                     env["BORG_RSH"] = f"ssh {' '.join(ssh_opts)}"
                     logger.info(
                         "Set BORG_RSH for repository connection",
@@ -1030,9 +1039,21 @@ class MountService:
                 if repository.passphrase:
                     env["BORG_PASSPHRASE"] = repository.passphrase
 
+                # Borg 2 archives in a series share one name; `-a <name>`
+                # matches and mounts every archive of the series as its own
+                # subdirectory. Address by aid: whenever a Borg 2 id is
+                # present - the selector pattern extract and restore checks
+                # use - including an id-only request, which must still mount
+                # exactly that archive rather than falling back to the whole
+                # repository. The human-readable name stays on mount point,
+                # source label and logs.
+                archive_selector = archive_name
+                if archive_id and (repository.borg_version or 1) == 2:
+                    archive_selector = f"aid:{archive_id}"
+
                 cmd = BorgRouter(repository).build_mount_command(
                     repository_path=repository.path,
-                    archive_name=archive_name,
+                    archive_name=archive_selector,
                     mount_point=mount_point,
                     remote_path=effective_repository_remote_path(repository, db),
                     bypass_lock=repository.bypass_lock,
@@ -1390,10 +1411,7 @@ class MountService:
             cmd = [
                 "ssh",
                 *ssh_key_auth_args(temp_key_file),
-                "-o",
-                "StrictHostKeyChecking=no",
-                "-o",
-                "UserKnownHostsFile=/dev/null",
+                *host_key_ssh_opts(connection),
                 "-o",
                 "ConnectTimeout=10",
                 "-p",
@@ -1471,10 +1489,7 @@ class MountService:
         cmd = [
             "sftp",
             *ssh_key_auth_args(temp_key_file),
-            "-o",
-            "StrictHostKeyChecking=no",
-            "-o",
-            "UserKnownHostsFile=/dev/null",
+            *host_key_ssh_opts(connection),
             "-o",
             "ConnectTimeout=10",
             "-P",
@@ -1585,10 +1600,7 @@ class MountService:
                 diag_ssh = [
                     "ssh",
                     *ssh_key_auth_args(temp_key_file),
-                    "-o",
-                    "StrictHostKeyChecking=no",
-                    "-o",
-                    "UserKnownHostsFile=/dev/null",
+                    *host_key_ssh_opts(connection),
                     "-o",
                     "ConnectTimeout=10",
                     "-p",
@@ -1647,10 +1659,7 @@ class MountService:
                 "-p",
                 str(connection.port),
                 *sshfs_key_auth_options(temp_key_file),
-                "-o",
-                "StrictHostKeyChecking=no",
-                "-o",
-                "UserKnownHostsFile=/dev/null",
+                *host_key_ssh_opts(connection),
                 "-o",
                 "ConnectTimeout=30",
                 "-o",

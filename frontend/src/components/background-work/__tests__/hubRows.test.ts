@@ -4,6 +4,7 @@ import {
   attentionCounts,
   applyToolbar,
   mergeRows,
+  trackIsActive,
   type HubRow,
 } from '../hubRows'
 import type { RepositoryTrack } from '../repositoryTrack'
@@ -70,6 +71,29 @@ const rows: HubRow[] = [
 ]
 
 const names = (result: HubRow[]) => result.map((r) => r.repository?.repository_name ?? r.key)
+
+describe('trackIsActive', () => {
+  it('counts a running or waiting stage as work in flight', () => {
+    expect(trackIsActive(runningTrack(5, 'echo'))).toBe(true)
+    expect(
+      trackIsActive({
+        ...runningTrack(5, 'echo'),
+        stages: [{ key: 'stats', status: 'waiting', operation: null, reason: null }],
+      })
+    ).toBe(true)
+  })
+
+  it('does not count a finished run the queue still remembers', () => {
+    for (const status of ['done', 'failed', 'skipped'] as const) {
+      expect(
+        trackIsActive({
+          ...runningTrack(5, 'echo'),
+          stages: [{ key: 'stats', status, operation: null, reason: null }],
+        })
+      ).toBe(false)
+    }
+  })
+})
 
 describe('attentionCounts', () => {
   it('counts each attention reason and the rows that have at least one', () => {

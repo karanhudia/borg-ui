@@ -57,7 +57,7 @@ export default function SyncStateChip({
           '& .MuiChip-icon': { color },
         }}
       />
-      {showRebuild && state !== 'syncing' && (
+      {showRebuild && onRebuild && state !== 'syncing' && (
         <Button
           size="small"
           variant="outlined"

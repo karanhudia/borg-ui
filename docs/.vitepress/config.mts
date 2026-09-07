@@ -75,6 +75,7 @@ export default defineConfig({
       {
         text: 'Security',
         items: [
+          { text: 'What We Do With Your Data', link: '/trust' },
           { text: 'Authentication and SSO', link: '/authentication' },
           { text: 'Access Control', link: '/access-control' },
           { text: 'Security', link: '/security' },

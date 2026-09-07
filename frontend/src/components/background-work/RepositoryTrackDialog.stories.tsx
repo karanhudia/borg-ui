@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import MockAdapter from 'axios-mock-adapter'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter } from 'react-router-dom'
 import { Button } from '@mui/material'
 import RepositoryTrackDialog from './RepositoryTrackDialog'
 import api from '../../services/api'
@@ -24,19 +23,17 @@ function Wrapper({ detail }: { detail: HubRepositoryDetail }) {
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
-      <MemoryRouter>
-        <Button onClick={() => setOpen(true)}>Open</Button>
-        <RepositoryTrackDialog
-          open={open}
-          onClose={() => setOpen(false)}
-          repositoryId={4}
-          repositoryName="laptop"
-          operations={[
-            op({ kind: 'stats', status: 'completed' }),
-            op({ id: 2, kind: 'archive_sync', status: 'running' }),
-          ]}
-        />
-      </MemoryRouter>
+      <Button onClick={() => setOpen(true)}>Open</Button>
+      <RepositoryTrackDialog
+        open={open}
+        onClose={() => setOpen(false)}
+        repositoryId={4}
+        repositoryName="laptop"
+        operations={[
+          op({ kind: 'stats', status: 'completed' }),
+          op({ id: 2, kind: 'archive_sync', status: 'running' }),
+        ]}
+      />
     </QueryClientProvider>
   )
 }

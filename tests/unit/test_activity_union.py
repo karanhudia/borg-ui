@@ -6,6 +6,7 @@ from app.database.models import (
     Operation,
     PruneJob,
     Repository,
+    ScriptExecution,
     UserRepositoryPermission,
     utc_now,
 )
@@ -358,6 +359,52 @@ class TestActivityUnion:
         ).json()
         assert [i["type"] for i in body] == ["import_connect", "prune"]
         assert {i["repository"] for i in body} == {"r"}
+
+    def test_repository_id_keeps_that_repository_script_executions(
+        self, test_client, test_db, admin_headers
+    ):
+        """A script execution names its repository, so the repository's own
+        Activity keeps the hooks that ran against it."""
+        mine = _repo(test_db)
+        other = Repository(
+            name="other", path="/tmp/other", encryption="none", compression="lz4"
+        )
+        test_db.add(other)
+        test_db.commit()
+        test_db.refresh(other)
+
+        test_db.add_all(
+            [
+                ScriptExecution(
+                    repository_id=mine.id,
+                    agent_script_name="pre-backup.sh",
+                    hook_type="pre-backup",
+                    status="completed",
+                    started_at=utc_now(),
+                ),
+                ScriptExecution(
+                    repository_id=other.id,
+                    agent_script_name="other.sh",
+                    hook_type="pre-backup",
+                    status="completed",
+                    started_at=utc_now(),
+                ),
+                ScriptExecution(
+                    agent_script_name="standalone.sh",
+                    hook_type="standalone",
+                    status="completed",
+                    started_at=utc_now(),
+                ),
+            ]
+        )
+        test_db.commit()
+
+        body = test_client.get(
+            f"/api/activity/recent?repository_id={mine.id}", headers=admin_headers
+        ).json()
+        scripts = [i for i in body if i["type"] == "script_execution"]
+        assert len(scripts) == 1
+        assert scripts[0]["repository"] == "r"
 
     def test_repository_id_drops_rows_with_no_repository(
         self, test_client, test_db, admin_headers

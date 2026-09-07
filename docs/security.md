@@ -8,6 +8,10 @@ description: "Security practices for Borg UI deployments"
 
 Borg UI controls backup and restore operations. Treat it as sensitive infrastructure.
 
+This page is about hardening your deployment. For what the software itself stores,
+encrypts, and sends anywhere else, see
+[What Borg UI Does With Your Data](trust).
+
 ## First Steps
 
 After installation:

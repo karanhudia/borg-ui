@@ -49,6 +49,7 @@ vi.mock('../../components/RestoreWizard', () => ({
 vi.mock('../../services/api', () => ({
   archivesAPI: {
     getArchive: vi.fn(),
+    getChanges: vi.fn(),
   },
   repositoriesAPI: {
     getRepositories: vi.fn(),
@@ -92,6 +93,20 @@ function renderRoute(path: string) {
 describe('ArchiveDetail', () => {
   beforeEach(() => {
     vi.mocked(archivesAPI.getArchive).mockReset()
+    vi.mocked(archivesAPI.getChanges).mockReset()
+    vi.mocked(archivesAPI.getChanges).mockResolvedValue({
+      data: {
+        archive_id: 12,
+        compare_to_id: 11,
+        changes: [],
+        totals: { added: 4, removed: 2, modified: 3, summary: 0 },
+        next_cursor: null,
+        incomplete: false,
+        unindexed_archive_ids: [],
+        history_state: 'indexed',
+        history_truncated: false,
+      },
+    } as never)
     vi.mocked(repositoriesAPI.getRepositories).mockReset()
     vi.mocked(repositoriesAPI.getRepositories).mockResolvedValue({
       data: { repositories: [{ id: 7, name: 'nas', path: '/data/nas', mode: 'full' }] },
@@ -101,6 +116,19 @@ describe('ArchiveDetail', () => {
   it('shows the archive header and defaults to the Changes tab', async () => {
     vi.mocked(archivesAPI.getArchive).mockResolvedValue({ data: archive } as never)
     renderRoute('/archives/7/12')
+    expect(await screen.findByText('nas-2026-09-02T02:00')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /changes/i })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('labels the Changes tab with the totals the route returns', async () => {
+    vi.mocked(archivesAPI.getArchive).mockResolvedValue({ data: archive } as never)
+    renderRoute('/archives/7/12')
+    expect(await screen.findByRole('tab', { name: 'Changes (+4 −2 ~3)' })).toBeInTheDocument()
+  })
+
+  it('falls back to the Changes tab for a tab the page does not have', async () => {
+    vi.mocked(archivesAPI.getArchive).mockResolvedValue({ data: archive } as never)
+    renderRoute('/archives/7/12?tab=unknown')
     expect(await screen.findByText('nas-2026-09-02T02:00')).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: /changes/i })).toHaveAttribute('aria-selected', 'true')
   })

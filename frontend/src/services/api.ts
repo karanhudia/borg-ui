@@ -1161,7 +1161,27 @@ export const sshKeysAPI = {
     ),
   redeployKeyToConnection: (connectionId: number, password: string) =>
     api.post(`/ssh-keys/connections/${connectionId}/redeploy`, { password }),
+  getConnectionHostKey: (connectionId: number) =>
+    api.get<SSHHostKeyResponse>(`/ssh-keys/connections/${connectionId}/host-key`),
+  trustConnectionHostKey: (connectionId: number, key: string) =>
+    api.post<SSHHostKeyResponse>(`/ssh-keys/connections/${connectionId}/host-key/trust`, {
+      key,
+    }),
+  forgetConnectionHostKey: (connectionId: number) =>
+    api.delete(`/ssh-keys/connections/${connectionId}/host-key`),
   importSSHKey: (data: ApiData) => api.post('/ssh-keys/import', data),
+}
+
+export type SSHHostKeyStatus = 'trusted' | 'unknown' | 'changed' | 'unreachable'
+
+export interface SSHHostKeyResponse {
+  connection_id: number
+  host: string
+  port: number
+  status: SSHHostKeyStatus
+  trusted_fingerprint: string | null
+  observed_fingerprint: string | null
+  observed_key: string | null
 }
 
 export interface AgentMachineResponse {
@@ -1479,6 +1499,8 @@ export const mountsAPI = {
     repository_id: number
     archive_name?: string
     mount_point?: string
+    // Borg 2 series archives share one name; the id addresses exactly one.
+    archive_id?: string
   }) => api.post('/mounts/borg', data),
 
   // Unmount a mounted archive

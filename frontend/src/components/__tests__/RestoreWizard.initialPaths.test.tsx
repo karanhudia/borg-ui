@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
+import userEvent from '@testing-library/user-event'
 import { renderWithProviders, screen } from '../../test/test-utils'
 import RestoreWizard from '../RestoreWizard'
 import { BorgApiClient } from '../../services/borgApi/client'
@@ -33,6 +34,31 @@ describe('RestoreWizard with preselected paths', () => {
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
     expect(screen.queryByText('Select files to restore')).not.toBeInTheDocument()
     expect(BorgApiClient).not.toHaveBeenCalled()
+  })
+
+  it('sends metadata for a preselected path handed over without any', async () => {
+    const user = userEvent.setup()
+    const onRestore = vi.fn()
+    renderWithProviders(
+      <RestoreWizard
+        open
+        onClose={vi.fn()}
+        archive={archive}
+        repository={repository}
+        repositoryType="local"
+        onRestore={onRestore}
+        initialSelectedPaths={['home/karan/docs/invoices.xlsx']}
+        initialSelectedItems={[]}
+      />
+    )
+    await screen.findByRole('dialog')
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await user.click(screen.getByRole('button', { name: 'Restore Files' }))
+    expect(onRestore).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path_metadata: [{ path: 'home/karan/docs/invoices.xlsx', type: 'file' }],
+      })
+    )
   })
 
   it('starts on the file step without preselected paths', async () => {

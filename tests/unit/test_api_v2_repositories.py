@@ -1258,25 +1258,6 @@ class TestV2RepositoryRoutes:
         assert response.status_code == 500
         assert response.json()["detail"]["key"] == "backend.errors.repo.listFailed"
 
-    def test_list_archives_returns_500_on_borg_failure(
-        self, test_client: TestClient, admin_headers, test_db
-    ):
-        _enable_borg_v2(test_db)
-        repo = _create_v2_repo(test_db)
-
-        with patch(
-            "app.api.v2.repositories.borg2.list_archives",
-            new=AsyncMock(
-                return_value={"success": False, "stdout": "", "stderr": "boom"}
-            ),
-        ):
-            response = test_client.get(
-                f"/api/v2/repositories/{repo.id}/archives", headers=admin_headers
-            )
-
-        assert response.status_code == 500
-        assert response.json()["detail"]["key"] == "backend.errors.repo.listFailed"
-
     def test_get_repository_stats_success(
         self, test_client: TestClient, admin_headers, test_db
     ):

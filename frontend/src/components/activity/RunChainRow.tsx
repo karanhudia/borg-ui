@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Box, Stack, Typography } from '@mui/material'
+import { Box, ButtonBase, Stack, Typography } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import RunStatusIcon from './RunStatusIcon'
 
@@ -61,14 +61,15 @@ export default function RunChainRow({
   return (
     <Box sx={{ pl: layout === 'stacked' ? 0 : 3, mt: 0.5 }}>
       {collapsible && !expanded ? (
-        <Typography
-          variant="caption"
-          color="text.secondary"
+        <ButtonBase
           onClick={() => setExpanded(true)}
-          sx={{ cursor: 'pointer', textDecoration: 'underline' }}
+          aria-expanded={false}
+          sx={{ borderRadius: 0.5, px: 0.25 }}
         >
-          {t('activity.followupsCollapsed', { count: followups.length })}
-        </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ textDecoration: 'underline' }}>
+            {t('activity.followupsCollapsed', { count: followups.length })}
+          </Typography>
+        </ButtonBase>
       ) : (
         <Stack
           direction={layout === 'stacked' ? 'column' : 'row'}

@@ -2,7 +2,6 @@ import { useEffect, useState, type ReactNode } from 'react'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import MockAdapter from 'axios-mock-adapter'
 import { Box } from '@mui/material'
-import { BrowserRouter } from 'react-router-dom'
 import BackendTargetSwitcher from './BackendTargetSwitcher'
 import { AuthProvider } from '../hooks/useAuth'
 import api from '../services/api'
@@ -70,11 +69,9 @@ function SwitcherStoryProviders({
   if (!isReady) return null
 
   return (
-    <BrowserRouter>
-      <RemoteBackendStoryProvider state={state}>
-        <AuthProvider>{children}</AuthProvider>
-      </RemoteBackendStoryProvider>
-    </BrowserRouter>
+    <RemoteBackendStoryProvider state={state}>
+      <AuthProvider>{children}</AuthProvider>
+    </RemoteBackendStoryProvider>
   )
 }
 

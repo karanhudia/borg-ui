@@ -7,6 +7,8 @@
  * Most fields are optional as different contexts provide different subsets of data.
  */
 
+import type { OperationCategory, OperationTrigger } from './operations'
+
 export interface Job {
   id: string | number
   repository_id?: number | null
@@ -44,8 +46,8 @@ export interface Job {
   retry_requested_at?: string | null
   progress_details?: unknown
   kind?: string | null
-  category?: string | null
-  trigger?: string | null
+  category?: OperationCategory | null
+  trigger?: OperationTrigger | null
   progress_current?: number | null
   progress_total?: number | null
   followups?: Job[]

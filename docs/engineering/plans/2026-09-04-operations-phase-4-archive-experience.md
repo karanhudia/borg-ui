@@ -121,7 +121,7 @@ Field names come from `app/api/archive_index.py`: `serialize_archive` at
 line 56, `_serialize_change` at line 388, and the route returns at lines
 141, 173, 407, 529, 634. Do not invent fields.
 
-- [ ] **Step 1: Write `frontend/src/types/archives.ts`**
+- [x] **Step 1: Write `frontend/src/types/archives.ts`**
 
 ```typescript
 // Mirrors the response shapes in app/api/archive_index.py (spec 9.2).
@@ -269,7 +269,7 @@ export interface SearchResponse {
 }
 ```
 
-- [ ] **Step 2: Write the failing API client test**
+- [x] **Step 2: Write the failing API client test**
 
 Append to `frontend/src/services/__tests__/api.test.ts`, matching the
 existing describe-block style in that file:
@@ -303,12 +303,12 @@ describe('archivesAPI stored-archive methods', () => {
 })
 ```
 
-- [ ] **Step 3: Run the test and confirm it fails**
+- [x] **Step 3: Run the test and confirm it fails**
 
 Run: `npx vitest run src/services/__tests__/api.test.ts -t "stored-archive"`
 Expected: FAIL, `archivesAPI.listStored is not a function`.
 
-- [ ] **Step 4: Add the methods to `archivesAPI`**
+- [x] **Step 4: Add the methods to `archivesAPI`**
 
 Insert before the closing brace at `frontend/src/services/api.ts:707`.
 `paramsSerializer: { indexes: null }` is required on `getChanges`: FastAPI's
@@ -346,12 +346,12 @@ Insert before the closing brace at `frontend/src/services/api.ts:707`.
 Add the type imports alongside the existing `types/operations` import block
 at `frontend/src/services/api.ts:25`.
 
-- [ ] **Step 5: Run the tests and confirm they pass**
+- [x] **Step 5: Run the tests and confirm they pass**
 
 Run: `npx vitest run src/services/__tests__/api.test.ts`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add frontend/src/types/archives.ts frontend/src/services/api.ts \
@@ -377,7 +377,7 @@ git commit -m "feat(archives): add stored-archive types and API client"
 Spec 10.3: "Synced 2 min ago", "Syncing", or "Not indexed yet" with a
 rebuild link.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```typescript
 import { describe, it, expect, vi } from 'vitest'
@@ -412,12 +412,12 @@ describe('SyncStateChip', () => {
 })
 ```
 
-- [ ] **Step 2: Run it and confirm it fails**
+- [x] **Step 2: Run it and confirm it fails**
 
 Run: `npx vitest run src/components/archives/__tests__/SyncStateChip.test.tsx`
 Expected: FAIL, cannot resolve `../SyncStateChip`.
 
-- [ ] **Step 3: Add the locale keys**
+- [x] **Step 3: Add the locale keys**
 
 Add to each of the four locale files under `archives.sync`. English:
 
@@ -441,7 +441,7 @@ Italian: `"Sincronizzato {{ago}}"`, `"Sincronizzazione in corso"`,
 `"La sincronizzazione non è aggiornata"`, `"Non ancora indicizzato"`,
 `"Ricostruisci"`.
 
-- [ ] **Step 4: Write the component**
+- [x] **Step 4: Write the component**
 
 ```typescript
 import { Box, Chip, Link as MuiLink } from '@mui/material'
@@ -478,17 +478,17 @@ export default function SyncStateChip({ state, lastSyncedAt, onRebuild }: SyncSt
 }
 ```
 
-- [ ] **Step 5: Run the test and confirm it passes**
+- [x] **Step 5: Run the test and confirm it passes**
 
 Run: `npx vitest run src/components/archives/__tests__/SyncStateChip.test.tsx`
 Expected: PASS, 3 tests.
 
-- [ ] **Step 6: Write the story**
+- [x] **Step 6: Write the story**
 
 One story per state: `Fresh`, `Syncing`, `Stale`, `Never`. No providers are
 needed; the component uses only `useTranslation`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add frontend/src/components/archives/SyncStateChip.tsx \
@@ -520,7 +520,7 @@ click opens the archive route. Spec 11.3: outlier legend entries carry a
 small Pro chip using `PLAN_LABEL` and `PLAN_COLOR`; the flags themselves are
 not gated in the UI because the API omits them.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```typescript
 import { describe, it, expect, vi } from 'vitest'
@@ -583,12 +583,12 @@ describe('ArchiveSeriesHeatmap', () => {
 })
 ```
 
-- [ ] **Step 2: Run it and confirm it fails**
+- [x] **Step 2: Run it and confirm it fails**
 
 Run: `npx vitest run src/components/archives/__tests__/ArchiveSeriesHeatmap.test.tsx`
 Expected: FAIL, cannot resolve `../ArchiveSeriesHeatmap`.
 
-- [ ] **Step 3: Add the locale keys**
+- [x] **Step 3: Add the locale keys**
 
 Under `archives.heatmap` in all four files. English:
 
@@ -609,7 +609,7 @@ Under `archives.heatmap` in all four files. English:
 Translate each into de, es and it. Keep the `_one`/`_other` plural suffixes;
 i18next resolves them by count.
 
-- [ ] **Step 4: Write `HeatmapLegend`**
+- [x] **Step 4: Write `HeatmapLegend`**
 
 Renders the count scale swatches from `legendLess` to `legendMore`, then one
 row per anomaly kind: `missed` always, `sizeOutlier` and `durationOutlier`
@@ -619,7 +619,7 @@ false. Import `PLAN_LABEL` and `PLAN_COLOR` from wherever
 exports them; grep for `PLAN_LABEL` before writing this and use the real
 path.
 
-- [ ] **Step 5: Write `ArchiveSeriesHeatmap`**
+- [x] **Step 5: Write `ArchiveSeriesHeatmap`**
 
 Structure per series: a `Typography` with the series name, then a grid.
 Group `days` into ISO weeks (Monday first), one row per week, seven columns.
@@ -638,18 +638,18 @@ Each cell is a `Box` with:
 Cells with no archive get no `role`, no `tabIndex` and no click handler, so
 the third test passes.
 
-- [ ] **Step 6: Run the tests and confirm they pass**
+- [x] **Step 6: Run the tests and confirm they pass**
 
 Run: `npx vitest run src/components/archives/__tests__/ArchiveSeriesHeatmap.test.tsx`
 Expected: PASS, 4 tests.
 
-- [ ] **Step 7: Write the stories**
+- [x] **Step 7: Write the stories**
 
 `ArchiveSeriesHeatmap`: `Default` (two series, a gap, an outlier),
 `SingleSeries`, `Empty`. `HeatmapLegend`: `Community`
 (`size_outlier: false`, showing the Pro chips) and `Pro` (all true).
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add frontend/src/components/archives frontend/src/locales
@@ -673,7 +673,7 @@ Spec 10.3: results in a `ResponsiveDialog` list with "present in latest" and
 "last seen" columns. Spec 11.3: `PlanGate` with `disabled`,
 `surface="archives"`, `operation="search"`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Mock `archivesAPI` and `usePlan`. The global test setup at
 `frontend/src/test/setup.ts` already mocks `usePlan` with `can: () => true`,
@@ -714,11 +714,11 @@ describe('ArchiveSearchField', () => {
 })
 ```
 
-- [ ] **Step 2: Run it and confirm it fails**
+- [x] **Step 2: Run it and confirm it fails**
 
 Expected: FAIL, cannot resolve `../ArchiveSearchField`.
 
-- [ ] **Step 3: Add the locale keys**
+- [x] **Step 3: Add the locale keys**
 
 Under `archives.search`: `placeholder` ("Search files in this repository"),
 `title` ("Search results"), `columnPath`, `columnLastSeen`,
@@ -726,7 +726,7 @@ Under `archives.search`: `placeholder` ("Search files in this repository"),
 `empty` ("No matching files"), `truncated` ("Showing the first
 {{count}} matches"). Translate into de, es and it.
 
-- [ ] **Step 4: Write the component**
+- [x] **Step 4: Write the component**
 
 A `<form role="search">` wrapping a `TextField`, wrapped in `PlanGate` with
 `feature="archive_history"`, `disabled`, `surface="archives"`,
@@ -741,16 +741,16 @@ Revise the produced interface to
 `<ArchiveSearchField repositoryId={number} newestArchiveId={number | null} />`
 and use that signature in Task 9.
 
-- [ ] **Step 5: Run the tests and confirm they pass**
+- [x] **Step 5: Run the tests and confirm they pass**
 
 Expected: PASS, 2 tests.
 
-- [ ] **Step 6: Write the story**
+- [x] **Step 6: Write the story**
 
 `Unlocked` and `Locked`, following `PlanGate.stories.tsx` for how the plan
 is stubbed.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add frontend/src/components/archives frontend/src/locales
@@ -779,7 +779,7 @@ Spec 10.4: header with name, series, start, duration, sizes, and
 (`RestoreWizard.tsx`, `MountArchiveDialog.tsx`, `DeleteArchiveDialog.tsx`).
 Tabs: Changes, Files, Info.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```typescript
 describe('ArchiveDetail', () => {
@@ -803,11 +803,11 @@ describe('ArchiveDetail', () => {
 })
 ```
 
-- [ ] **Step 2: Run it and confirm it fails**
+- [x] **Step 2: Run it and confirm it fails**
 
 Expected: FAIL, cannot resolve `../ArchiveDetail`.
 
-- [ ] **Step 3: Add the locale keys**
+- [x] **Step 3: Add the locale keys**
 
 Under `archives.detail`: `tabChanges`, `tabFiles`, `tabInfo`, `series`,
 `started`, `duration`, `originalSize`, `compressedSize`,
@@ -816,14 +816,14 @@ Under `archives.detail`: `tabChanges`, `tabFiles`, `tabInfo`, `series`,
 carries counts, so add `tabChangesWithCounts`: `"Changes (+{{added}}
 −{{removed}} ~{{modified}})"`. Translate into de, es and it.
 
-- [ ] **Step 4: Write `ArchiveInfoTab`**
+- [x] **Step 4: Write `ArchiveInfoTab`**
 
 A definition list of the `ArchiveRow` fields, formatted with `formatBytes`
 and `parseBackendDate`. Follow the metadata layout already used in
 `RepositoryInfo`; grep for that component and match its markup rather than
 inventing one.
 
-- [ ] **Step 5: Write `ArchiveDetail`**
+- [x] **Step 5: Write `ArchiveDetail`**
 
 Reads `repositoryId` and `archiveId` from `useParams`, coerces both with
 `Number(...)`, and guards against `NaN` by rendering the load-failure alert.
@@ -833,7 +833,7 @@ with the tab held in a `?tab=` search param so the tab survives a reload.
 Changes and Files render placeholders in this task; Tasks 6 and 7 replace
 them.
 
-- [ ] **Step 6: Register the route**
+- [x] **Step 6: Register the route**
 
 In `frontend/src/App.tsx`, directly after the `/archives` route that ends at
 line 179:
@@ -849,17 +849,17 @@ line 179:
         />
 ```
 
-- [ ] **Step 7: Run the tests and confirm they pass**
+- [x] **Step 7: Run the tests and confirm they pass**
 
 Run: `npx vitest run src/pages/__tests__/ArchiveDetail.test.tsx`
 Expected: PASS, 3 tests.
 
-- [ ] **Step 8: Document the route**
+- [x] **Step 8: Document the route**
 
 Add the archive detail route to `docs/navigation.md` beside the existing
 `/archives` entry.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add frontend/src/pages/ArchiveDetail.tsx frontend/src/components/archives \
@@ -892,7 +892,7 @@ virtualised rows grouped by top-level directory, truncated banner when
 `preview` set to a static inert sample rendered from fixture data,
 `surface="archive_detail"`, `operation="view_changes"`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```typescript
 describe('ArchiveChangesTab', () => {
@@ -908,11 +908,11 @@ describe('ArchiveChangesTab', () => {
 Write each body out in full following the mocking style established in
 Task 4; do not leave the comment placeholders in the committed test.
 
-- [ ] **Step 2: Run it and confirm it fails**
+- [x] **Step 2: Run it and confirm it fails**
 
 Expected: FAIL, cannot resolve `../ArchiveChangesTab`.
 
-- [ ] **Step 3: Add the locale keys**
+- [x] **Step 3: Add the locale keys**
 
 Under `archives.changes`: `compareWith`, `previous` ("previous"), `net`,
 `added`, `removed`, `modified`, `summaryRow` ("{{count}} more in
@@ -922,13 +922,13 @@ indexed yet."), `skipped` ("History indexing was skipped for this
 archive."), `rebuildLink` ("Rebuild the history index"), `empty` ("No
 changes between these archives."). Translate into de, es and it.
 
-- [ ] **Step 4: Write `ArchiveChangesPreview`**
+- [x] **Step 4: Write `ArchiveChangesPreview`**
 
 A module-level fixture array of six `ChangeRow` values and a render of the
 same row markup with every interactive element removed. It takes no props
 and issues no requests, so it is safe behind the gate.
 
-- [ ] **Step 5: Write `ArchiveChangesTab`**
+- [x] **Step 5: Write `ArchiveChangesTab`**
 
 - Compare picker: `RichSelect` whose options are the archives in the same
   series older than this one, fetched with `archivesAPI.listStored`. The
@@ -945,20 +945,20 @@ and issues no requests, so it is safe behind the gate.
   `preview={<ArchiveChangesPreview />}`, `surface="archive_detail"`,
   `operation="view_changes"`.
 
-- [ ] **Step 6: Run the tests and confirm they pass**
+- [x] **Step 6: Run the tests and confirm they pass**
 
 Expected: PASS, 6 tests.
 
-- [ ] **Step 7: Mount it in `ArchiveDetail`**
+- [x] **Step 7: Mount it in `ArchiveDetail`**
 
 Replace the Changes placeholder from Task 5. Feed the tab label from the
 `totals` in the response using `tabChangesWithCounts`.
 
-- [ ] **Step 8: Write the stories**
+- [x] **Step 8: Write the stories**
 
 `Default`, `Truncated`, `Pending`, `Locked`.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add frontend/src/components/archives frontend/src/pages/ArchiveDetail.tsx \
@@ -994,7 +994,7 @@ footer shows the selection count with a restore action opening
 `RestoreWizard` preselected. Spec 11.3: the history panel uses `PlanGate`
 with `disabled`, `surface="archive_files"`, `operation="view_history"`.
 
-- [ ] **Step 1: Write the three failing tests**
+- [x] **Step 1: Write the three failing tests**
 
 `FileHistoryPanel`: renders one row per entry with its size and change,
 renders "Not present in {{count}} older archives" from the `present`
@@ -1007,11 +1007,11 @@ null, shows file metadata when set, and calls `onRestore` and `onDownload`.
 `ArchiveFilesTab`: shows the footer only when there is a selection, and the
 footer count reflects the number selected.
 
-- [ ] **Step 2: Run them and confirm they fail**
+- [x] **Step 2: Run them and confirm they fail**
 
 Expected: FAIL, unresolved imports for all three.
 
-- [ ] **Step 3: Add the locale keys**
+- [x] **Step 3: Add the locale keys**
 
 Under `archives.files`: `size`, `modified`, `owner`, `permissions`,
 `restore`, `download`, `history`, `firstSeen`, `unchanged`, `changed`,
@@ -1019,7 +1019,7 @@ Under `archives.files`: `size`, `modified`, `owner`, `permissions`,
 `selected` ("{{count}} selected ({{size}})"), `restoreSelection`,
 `searchInArchive`. Translate into de, es and it.
 
-- [ ] **Step 4: Write `FileHistoryPanel`**
+- [x] **Step 4: Write `FileHistoryPanel`**
 
 `useQuery` on `['path-history', repositoryId, path]`, enabled only when
 `path` is set. One row per entry, newest first, showing date, size and the
@@ -1028,7 +1028,7 @@ change word. `changed` rows show the signed delta between `size_before` and
 `firstSeen`. Wrap in `PlanGate` with `disabled`,
 `surface="archive_files"`, `operation="view_history"`.
 
-- [ ] **Step 5: Write `ArchiveFileDetailsPane`**
+- [x] **Step 5: Write `ArchiveFileDetailsPane`**
 
 Props: `repositoryId`, `archive`, `selectedPath: string | null`,
 `selectedEntry` (the row object `ArchivePathSelector` already yields; grep
@@ -1036,7 +1036,7 @@ that file for its item type and reuse it rather than declaring a new one),
 `onRestore`, `onDownload`. Renders metadata, the two buttons, and
 `FileHistoryPanel`.
 
-- [ ] **Step 6: Write `ArchiveFilesTab`**
+- [x] **Step 6: Write `ArchiveFilesTab`**
 
 Two-column `Box` layout above `md`, collapsing to browse-only with the pane
 in a `ResponsiveDialog` below it (`useMediaQuery(theme.breakpoints.down('md'))`).
@@ -1044,20 +1044,20 @@ Holds `selectedPaths: string[]` and `lastClickedPath: string | null`.
 The footer appears when `selectedPaths.length > 0` and opens `RestoreWizard`
 preselected to those paths.
 
-- [ ] **Step 7: Run the tests and confirm they pass**
+- [x] **Step 7: Run the tests and confirm they pass**
 
 Expected: PASS across the three files.
 
-- [ ] **Step 8: Mount it in `ArchiveDetail`**
+- [x] **Step 8: Mount it in `ArchiveDetail`**
 
 Replace the Files placeholder from Task 5.
 
-- [ ] **Step 9: Write the stories**
+- [x] **Step 9: Write the stories**
 
 `FileHistoryPanel`: `Unlocked`, `Locked`. `ArchiveFileDetailsPane`:
 `Folder`, `File`. `ArchiveFilesTab`: `Default`, `MultiSelect`.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add frontend/src/components/archives frontend/src/pages/ArchiveDetail.tsx \
@@ -1080,7 +1080,7 @@ git commit -m "feat(archives): add Files tab with details pane and file history"
 Spec 10.6: arrow keys move selection, Enter opens a folder, Backspace goes
 up, `/` focuses search, `r` opens restore for the selection.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 One test per binding: ArrowDown moves the active row, Enter on a folder
 descends, Backspace on a nested path ascends, `/` moves focus to the search
@@ -1088,22 +1088,22 @@ input, and `r` with a selection opens the restore wizard. Assert that `/`
 and `r` do nothing while focus is inside a text input, so typing a path
 containing a slash is not hijacked.
 
-- [ ] **Step 2: Run them and confirm they fail**
+- [x] **Step 2: Run them and confirm they fail**
 
 Expected: FAIL, the key handlers do not exist.
 
-- [ ] **Step 3: Implement the handler**
+- [x] **Step 3: Implement the handler**
 
 A single `onKeyDown` on the browse pane container. Guard every binding with
 a check that `document.activeElement` is not an `input` or `textarea` before
 treating a printable key as a shortcut. `preventDefault()` on Backspace so
 the browser does not navigate back.
 
-- [ ] **Step 4: Run the tests and confirm they pass**
+- [x] **Step 4: Run the tests and confirm they pass**
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/components/archives
@@ -1128,7 +1128,7 @@ already moved to `/repositories/{id}/archives/live`, and
 `repositoriesAPI.listRepositoryArchives` at `frontend/src/services/api.ts:937`
 already points there. This task changes which of the two the page calls.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 The page reads `archivesAPI.listStored` rather than
 `BorgApiClient.listArchives`; the heatmap renders by default; the List
@@ -1136,16 +1136,16 @@ toggle switches to `ArchivesList` and persists to `localStorage` under
 `archives-view-mode`; the persisted preference is honoured on mount; the
 sync chip renders with the response's `sync_state`.
 
-- [ ] **Step 2: Run them and confirm they fail**
+- [x] **Step 2: Run them and confirm they fail**
 
 Expected: FAIL, the page still calls the live route.
 
-- [ ] **Step 3: Add the locale keys**
+- [x] **Step 3: Add the locale keys**
 
 Under `archives.view`: `heatmap` ("Heatmap"), `list` ("List"). Translate
 into de, es and it.
 
-- [ ] **Step 4: Rewrite the archives query**
+- [x] **Step 4: Rewrite the archives query**
 
 Replace the `useQuery` at `frontend/src/pages/Archives.tsx:120-128` with one
 keyed `['repository-archives-stored', selectedRepositoryId]` calling
@@ -1153,7 +1153,7 @@ keyed `['repository-archives-stored', selectedRepositoryId]` calling
 working: that effect reads `error.response.status`, which the axios client
 still provides.
 
-- [ ] **Step 5: Add the view toggle, sync chip and search**
+- [x] **Step 5: Add the view toggle, sync chip and search**
 
 A `ToggleButtonGroup` with the two modes, initialised from
 `localStorage.getItem('archives-view-mode')` and written on change,
@@ -1163,7 +1163,7 @@ heatmap with `newestArchiveId` from the first row of `archives`, and
 `ArchiveSeriesHeatmap` with `onSelectDay` navigating to
 `/archives/{repositoryId}/{day.archive_ids[0]}`.
 
-- [ ] **Step 6: Add "Open full page" to `ArchiveContentsDialog`**
+- [x] **Step 6: Add "Open full page" to `ArchiveContentsDialog`**
 
 A button in the dialog actions navigating to the archive route and closing
 the dialog. The dialog currently identifies archives by name; it needs the
@@ -1171,12 +1171,12 @@ numeric id. Look up the row by `borg_id` from the stored list already in the
 page's query cache, and hide the action when no match is found rather than
 guessing an id.
 
-- [ ] **Step 7: Run the tests and confirm they pass**
+- [x] **Step 7: Run the tests and confirm they pass**
 
 Expected: PASS. Also run the full suite here, since this task changes a page
 many other tests render: `npx vitest run`.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add frontend/src/pages/Archives.tsx frontend/src/components/ArchiveContentsDialog.tsx \
@@ -1205,7 +1205,7 @@ Spec 10.5: category chips using `CategoryToken` and a trigger select;
 Index chip is on; no action buttons for index work; a `RepositoryCard`
 "Operations" action opening Activity with `?repository_id=`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `RunChainRow`: renders one entry per follow-up with its status, collapses
 to "{{count}} follow-ups" past three, and renders no action buttons.
@@ -1214,11 +1214,11 @@ reach `onChange`; the Index chip is off by default.
 `RepositoryCard`: the Operations action links to
 `/activity?repository_id={id}`.
 
-- [ ] **Step 2: Run them and confirm they fail**
+- [x] **Step 2: Run them and confirm they fail**
 
 Expected: FAIL.
 
-- [ ] **Step 3: Add the locale keys**
+- [x] **Step 3: Add the locale keys**
 
 Under `activity`: `filterCategory`, `filterTrigger`, `allTriggers`,
 `followupsCollapsed` ("{{count}} follow-ups"), `operations`
@@ -1226,36 +1226,36 @@ Under `activity`: `filterCategory`, `filterTrigger`, `allTriggers`,
 `operations.kind.*` keys from phase 3 for the chip and follow-up labels
 rather than adding duplicates. Translate the new keys into de, es and it.
 
-- [ ] **Step 4: Write `RunChainRow`**
+- [x] **Step 4: Write `RunChainRow`**
 
 Reads `operation.followups`. Renders up to three inline with a status tick
 per kind and a progress fragment for a running one; past three, renders
 `followupsCollapsed` with an expand toggle. No action buttons.
 
-- [ ] **Step 5: Extend `ActivityFilters`**
+- [x] **Step 5: Extend `ActivityFilters`**
 
 Category chips built from the `OperationCategory` union, each rendering a
 `CategoryToken`, and a trigger `RichSelect` from the `OperationTrigger`
 union. Index starts unselected, matching the backend default that excludes
 index rows unless asked for.
 
-- [ ] **Step 6: Mount `RunChainRow` in `BackupJobsTable`**
+- [x] **Step 6: Mount `RunChainRow` in `BackupJobsTable`**
 
 Render it beneath a row whose operation has a non-empty `followups`.
 
-- [ ] **Step 7: Add the `RepositoryCard` action**
+- [x] **Step 7: Add the `RepositoryCard` action**
 
 A menu item linking to `/activity?repository_id={repository.id}`.
 
-- [ ] **Step 8: Run the tests and confirm they pass**
+- [x] **Step 8: Run the tests and confirm they pass**
 
 Expected: PASS.
 
-- [ ] **Step 9: Write the story**
+- [x] **Step 9: Write the story**
 
 `RunChainRow`: `TwoFollowups`, `Collapsed`, `WithRunning`.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add frontend/src/components/activity frontend/src/pages/activity/ActivityFilters.tsx \
@@ -1281,7 +1281,7 @@ Spec 11.3: the `history` option is rendered through `PlanGate` with
 `disabled`. Spec 11.4: the frontend features test asserts the same key and
 plan as the backend.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `RebuildMenu`: the history item is disabled without the feature and
 selectable with it; stats and archives are never gated.
@@ -1290,25 +1290,25 @@ assertion already exists before adding it; the key was registered in phase
 2 and the test may already cover it. If it does, skip this half and say so
 in the commit message.
 
-- [ ] **Step 2: Run them and confirm they fail**
+- [x] **Step 2: Run them and confirm they fail**
 
 Expected: FAIL on the RebuildMenu assertions.
 
-- [ ] **Step 3: Wrap the history option**
+- [x] **Step 3: Wrap the history option**
 
 Wrap only the `history` `MenuItem` in `PlanGate` with
 `feature="archive_history"`, `disabled`, `surface="background_work"`,
 `operation="rebuild_history"`.
 
-- [ ] **Step 4: Run the tests and confirm they pass**
+- [x] **Step 4: Run the tests and confirm they pass**
 
 Expected: PASS.
 
-- [ ] **Step 5: Update the RebuildMenu story**
+- [x] **Step 5: Update the RebuildMenu story**
 
 Add a `Locked` story alongside the existing `Default`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add frontend/src/components/background-work frontend/src/core
@@ -1321,23 +1321,23 @@ git commit -m "feat(operations): gate the history rebuild option behind the plan
 
 **Files:** none. This task only runs checks and fixes what they surface.
 
-- [ ] **Step 1: Run the whole frontend suite**
+- [x] **Step 1: Run the whole frontend suite**
 
 Run: `npx vitest run`
 Expected: every file passes. The phase 3 baseline was 2362 tests across 204
 files; this phase adds to both numbers.
 
-- [ ] **Step 2: Lint and typecheck**
+- [x] **Step 2: Lint and typecheck**
 
 Run: `npm run lint && npm run typecheck`
 Expected: both clean, no warnings.
 
-- [ ] **Step 3: Build Storybook**
+- [x] **Step 3: Build Storybook**
 
 Run: `npm run build-storybook` under Node 20.19+ (`fnm use 20.19.4`).
 Expected: success.
 
-- [ ] **Step 4: Render every story**
+- [x] **Step 4: Render every story**
 
 Run: `npm run visual:screenshots`
 Expected: no "Retrying ... after load failure" and no timeout. Step 3
@@ -1346,18 +1346,18 @@ story, so a story that throws only fails here and in CI. If Playwright
 browsers are missing, install them with
 `PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install chromium`.
 
-- [ ] **Step 5: Confirm locale parity**
+- [x] **Step 5: Confirm locale parity**
 
 Run the key-comparison the pre-commit hook uses, or compare the flattened
 key sets of the four locale files directly. Expected: de, es and it each
 report zero missing and zero extra against en.
 
-- [ ] **Step 6: Check for em dashes**
+- [x] **Step 6: Check for em dashes**
 
 Run: `git diff main --name-only | xargs grep -l "—"`
 Expected: no file introduced or modified by this phase appears.
 
-- [ ] **Step 7: Stop at gate G2**
+- [x] **Step 7: Stop at gate G2**
 
 Present the verification output and ask whether to commit and push. Per
 `.claude/instructions.md`, nothing is committed or pushed without that

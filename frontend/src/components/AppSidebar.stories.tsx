@@ -2,7 +2,6 @@ import { useEffect, useState, type ReactNode } from 'react'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import MockAdapter from 'axios-mock-adapter'
 import { Box } from '@mui/material'
-import { BrowserRouter } from 'react-router-dom'
 import AppSidebar from './AppSidebar'
 import { AppProvider } from '../context/AppContext'
 import { AuthProvider } from '../hooks/useAuth'
@@ -76,13 +75,11 @@ function SidebarStoryProviders({
   if (!isReady) return null
 
   return (
-    <BrowserRouter>
-      <RemoteBackendProvider>
-        <AuthProvider>
-          <AppProvider>{children}</AppProvider>
-        </AuthProvider>
-      </RemoteBackendProvider>
-    </BrowserRouter>
+    <RemoteBackendProvider>
+      <AuthProvider>
+        <AppProvider>{children}</AppProvider>
+      </AuthProvider>
+    </RemoteBackendProvider>
   )
 }
 
@@ -106,6 +103,9 @@ const meta = {
   parameters: {
     layout: 'fullscreen',
     systemInfo: proSystemInfo,
+    // The sidebar highlights the active nav item from useLocation, so pin the
+    // story to a real route instead of the router's default '/'.
+    router: { initialEntries: ['/dashboard'] },
   },
 } satisfies Meta<typeof AppSidebar>
 

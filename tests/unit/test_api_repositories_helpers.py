@@ -44,8 +44,9 @@ class TestRepositoryHelperFunctions:
         opts = get_standard_ssh_opts()
 
         assert "-i" not in opts
-        assert "StrictHostKeyChecking=no" in opts
-        assert "UserKnownHostsFile=/dev/null" in opts
+        assert "StrictHostKeyChecking=no" not in opts
+        assert "UserKnownHostsFile=/dev/null" not in opts
+        assert "StrictHostKeyChecking=accept-new" in opts
         assert "BatchMode=yes" in opts
         assert "PreferredAuthentications=publickey" in opts
         assert "PasswordAuthentication=no" in opts
@@ -57,7 +58,7 @@ class TestRepositoryHelperFunctions:
         opts = get_standard_ssh_opts("/tmp/test-key")
 
         assert opts[:2] == ["-i", "/tmp/test-key"]
-        assert "StrictHostKeyChecking=no" in opts
+        assert "StrictHostKeyChecking=no" not in opts
         assert "BatchMode=yes" in opts
         assert "IdentitiesOnly=yes" in opts
         assert "PreferredAuthentications=publickey" in opts

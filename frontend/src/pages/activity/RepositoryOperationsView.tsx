@@ -84,8 +84,11 @@ function RunRow({
   // row after its first step ("Sync archive list") undersold it, so index
   // runs take their name from what started them and list every step.
   const isIndexRun = item.category === 'index' && followups.length > 0
+  // Rows written before operations carried a trigger only say how they were
+  // triggered in `triggered_by`, the same fallback `triggerSource` makes.
+  const runTrigger = item.trigger ?? (item.triggered_by === 'schedule' ? 'schedule' : 'manual')
   const runTitle = isIndexRun
-    ? t(`activity.runTitle.${item.trigger ?? 'manual'}`, {
+    ? t(`activity.runTitle.${runTrigger}`, {
         defaultValue: t(`operations.kind.${kind}`, { defaultValue: kind }),
       })
     : t(`operations.kind.${kind}`, { defaultValue: kind })

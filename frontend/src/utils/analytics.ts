@@ -68,6 +68,10 @@ const initUmamiScript = (): void => {
 
   const script = document.createElement('script')
   script.defer = true
+  // Without this the browser attaches the instance's own origin to the script
+  // request, which hands Umami the private hostname the payload masking exists
+  // to keep from it.
+  script.referrerPolicy = 'no-referrer'
   script.src = UMAMI_SCRIPT_URL
   script.setAttribute('data-website-id', UMAMI_WEBSITE_ID)
   // Disable auto page tracking — we handle it via trackPageView so it respects opt-out

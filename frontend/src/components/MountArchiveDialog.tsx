@@ -13,6 +13,7 @@ import ResponsiveDialog from './shared/ResponsiveDialog'
 import { useTranslation } from 'react-i18next'
 import { HardDrive, Info } from 'lucide-react'
 import { Archive } from '../types'
+import { formatDate } from '../utils/dateUtils'
 
 interface MountArchiveDialogProps {
   open: boolean
@@ -75,6 +76,13 @@ export default function MountArchiveDialog({
             >
               {archive?.name}
             </Typography>
+            {archive && (
+              // Borg 2 series archives share one name; name plus timestamp is
+              // what identifies the selected archive for the user.
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                {formatDate(archive.start || archive.time)}
+              </Typography>
+            )}
           </Box>
         </Stack>
       </DialogTitle>
