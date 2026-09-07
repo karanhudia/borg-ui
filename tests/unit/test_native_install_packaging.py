@@ -276,3 +276,22 @@ def test_every_step_main_calls_actually_exists():
         if line.startswith("MISSING")
     ]
     assert not missing, f"main() calls steps that do not exist: {missing}"
+
+
+def test_the_installer_never_brings_the_service_up_with_a_bare_start():
+    """`systemctl start` does nothing to an already-active unit.
+
+    The rollback path has to replace a process that may still be running: a
+    release can be active yet never answer on its port, which is exactly the
+    case `wait_until_serving` catches. `start` there would leave the hung new
+    release running behind a symlink pointing at the old one.
+    """
+    offenders = [
+        f"line {number}: {line.strip()}"
+        for number, line in enumerate(INSTALLER.read_text().splitlines(), start=1)
+        if re.search(r"^\s*(if\s+)?systemctl start borg-ui", line)
+    ]
+    assert not offenders, (
+        "use `systemctl restart borg-ui`; `start` is a no-op on an active unit:\n"
+        + "\n".join(offenders)
+    )

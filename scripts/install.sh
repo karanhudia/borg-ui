@@ -608,7 +608,10 @@ install_service() {
     ln -sfn "${PREVIOUS_RELEASE}" "${PREFIX}/current"
     [[ -d "${PREVIOUS_RELEASE}/agent-dist" ]] &&
       ln -sfn "${PREVIOUS_RELEASE}/agent-dist" "${PREFIX}/agent-dist"
-    if systemctl start borg-ui && wait_until_serving; then
+    # restart, not start: wait_until_serving also fails on a release that is
+    # still "active" but never answers, and start would be a no-op there,
+    # leaving the hung new release running behind a rolled-back symlink.
+    if systemctl restart borg-ui && wait_until_serving; then
       warn "rolled back; ${PREVIOUS_RELEASE##*/} is serving again"
     else
       warn "the previous release did not come up either"
