@@ -186,7 +186,11 @@ async def run_restore_check(ctx) -> Outcome:
     async def call(_router, job_id):
         await restore_check_service.execute_restore_check(job_id, ctx.repository_id)
 
-    return await _run(ctx, call)
+    return await _run(
+        ctx,
+        call,
+        canceller=getattr(restore_check_service, "cancel_restore_check", None),
+    )
 
 
 executors.register("restore_check", run_restore_check)

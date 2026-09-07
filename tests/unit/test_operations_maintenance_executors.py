@@ -398,3 +398,46 @@ async def test_restore_check_runs_the_service_with_the_operation_id(
     assert outcome.status == "completed"
     assert seen["job_id"] == op.id
     assert seen["repository_id"] == repository.id
+
+
+@pytest.mark.asyncio
+async def test_restore_check_cancellation_terminates_the_tracked_borg_process(
+    db, repository, monkeypatch
+):
+    """`run_restore_check` previously passed no canceller at all, the same
+    gap `run_check` had before it gained `cancel_check`; `execute_restore_check`
+    already tracks `running_processes[job_id]` the same way, so this is the
+    same fix applied to the same pattern."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from app.services.operations.executors import maintenance
+    from app.services.restore_check_service import restore_check_service
+
+    op = _operation(db, repository, kind="restore_check")
+    op.category = "restore"
+    db.commit()
+    ctx = FakeContext(db, op)
+    ctx._cancelled = True
+
+    fake_process = MagicMock()
+    fake_process.pid = 4242
+    fake_process.wait = AsyncMock(return_value=None)
+    restore_check_service.running_processes[op.id] = fake_process
+
+    async def fake_execute(job_id, repository_id):
+        await asyncio.sleep(0.05)
+        job = MaintenanceJobFacade(db, db.get(Operation, job_id))
+        job.status = "cancelled"
+        db.commit()
+
+    monkeypatch.setattr(
+        "app.services.restore_check_service.restore_check_service.execute_restore_check",
+        fake_execute,
+        raising=True,
+    )
+
+    try:
+        await maintenance.run_restore_check(ctx)
+        fake_process.terminate.assert_called_once()
+    finally:
+        restore_check_service.running_processes.pop(op.id, None)
