@@ -7,7 +7,14 @@
 # here. Docker stays the recommended path; this exists for the hosts that do
 # not run Docker.
 #
-#   curl -fsSL https://raw.githubusercontent.com/karanhudia/borg-ui/main/scripts/install.sh | sudo bash
+#   curl -fsSLO https://github.com/karanhudia/borg-ui/releases/latest/download/install.sh
+#   curl -fsSL https://github.com/karanhudia/borg-ui/releases/latest/download/install.sh.sha256 | sha256sum -c -
+#   sudo bash install.sh
+#
+# The installer is published as an asset of each release with its checksum
+# beside it, so that names a fixed artifact and verifies it before it runs as
+# root. Piping a branch download straight into a root shell is not the
+# documented path.
 #
 # Re-running the script upgrades an existing install in place: the release is
 # unpacked beside the current one and the "current" symlink is moved, so the
@@ -325,7 +332,8 @@ FORWARDER
     ln -sfn "${PREFIX}/bin/${name}" "${link}"
   else
     warn "${link} exists and is not a symlink; leaving it alone"
-    warn "Borg UI will use whichever ${name} PATH resolves to"
+    warn "The service still uses ${PREFIX}/bin/${name}, which its unit puts"
+    warn "first on PATH; your shell keeps resolving ${name} to ${link}"
   fi
 }
 

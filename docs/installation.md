@@ -489,12 +489,16 @@ Options:
 | `/var/lib/borg-ui` | Database, SSH keys, Borg keyfiles, cache, logs |
 | `/etc/borg-ui/borg-ui.env` | Configuration |
 | `/etc/systemd/system/borg-ui.service` | The systemd unit |
-| `/usr/local/bin/borg`, `/usr/local/bin/borg2` | The Borg versions this release runs |
+| `/opt/borg-ui/bin` | The pinned `borg`, `borg2` and `rclone` this release runs |
+| `/usr/local/bin/borg`, `/usr/local/bin/borg2` | Links to the above, so your shell finds them too |
 
 Borg and rclone are pinned to exactly the versions the Docker image ships, and
-every download is verified against a published SHA-256 checksum. An existing
-`borg` on the host is left alone if it is not a symlink; the installer says so
-when that happens.
+every download is verified against a published SHA-256 checksum.
+
+An existing `borg` on the host is left alone if it is not a symlink, and the
+installer says so when that happens. The service is unaffected either way: its
+unit puts `/opt/borg-ui/bin` first on `PATH`, so Borg UI always runs the Borg
+this release was built against, whatever your shell resolves `borg` to.
 
 ### Service user
 

@@ -13,6 +13,13 @@ Type=exec
 User=@SERVICE_USER@
 Group=@SERVICE_GROUP@
 EnvironmentFile=@ENV_FILE@
+# The pinned Borg and rclone live in @PREFIX@/bin, and the app resolves borg,
+# borg2 and rclone by name. Without this the service inherits systemd's default
+# PATH and would run whatever /usr/local/bin or /usr/bin happens to hold, which
+# is a different Borg than this release was built against. The installer leaves
+# a pre-existing /usr/local/bin/borg alone on purpose, so this is what keeps
+# that from silently deciding which Borg the service runs.
+Environment=PATH=@PREFIX@/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 WorkingDirectory=@PREFIX@/current
 # One virtualenv per release, so an upgrade builds the new environment while
 # this one keeps serving from its own, and a rollback finds the previous

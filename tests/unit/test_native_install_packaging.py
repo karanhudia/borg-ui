@@ -211,7 +211,14 @@ def test_no_documented_install_command_fetches_from_a_mutable_branch():
     checksum beside them, so every documented command names one of those.
     """
     offenders = []
-    for doc in (REPO_ROOT / "README.md", REPO_ROOT / "docs" / "installation.md"):
+    # The installer's own header documents the command too, and got missed the
+    # first time precisely because this guard did not look at it.
+    sources = (
+        REPO_ROOT / "README.md",
+        REPO_ROOT / "docs" / "installation.md",
+        INSTALLER,
+    )
+    for doc in sources:
         for number, line in enumerate(doc.read_text().splitlines(), start=1):
             if "install.sh" not in line or "curl" not in line:
                 continue
@@ -295,3 +302,21 @@ def test_the_installer_never_brings_the_service_up_with_a_bare_start():
         "use `systemctl restart borg-ui`; `start` is a no-op on an active unit:\n"
         + "\n".join(offenders)
     )
+
+
+def test_the_unit_resolves_borg_from_the_installed_prefix_first():
+    """The app runs `borg`, `borg2` and `rclone` by name.
+
+    A pre-existing /usr/local/bin/borg is left in place on purpose, and
+    systemd's default PATH would let it decide which Borg the service runs,
+    which is not the one this release was built against.
+    """
+    path_line = re.search(r"^Environment=PATH=(.+)$", UNIT.read_text(), re.M)
+    assert path_line, "the unit sets no PATH, so the service inherits systemd's default"
+
+    entries = path_line.group(1).split(":")
+    assert entries[0] == "@PREFIX@/bin", (
+        f"the installed binaries must come first on PATH, got {entries[0]}"
+    )
+    for required in ("/usr/local/bin", "/usr/bin", "/bin"):
+        assert required in entries, f"{required} dropped from the service PATH"
