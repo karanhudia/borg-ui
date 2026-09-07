@@ -19,6 +19,20 @@ class TestStartupEvent:
         mock.close = Mock()
         return mock
 
+    @pytest.fixture(autouse=True)
+    def _reset_licensing_refresh_task(self):
+        """Startup stores the spawned refresh task in a module global.
+
+        The fakes here return plain Mocks, and a Mock left behind makes every
+        later lifespan shutdown fail with "object Mock can't be used in
+        'await' expression"; the runner then never stops and its event stays
+        bound to a dead loop.
+        """
+        import app.main as main
+
+        yield
+        main.licensing_refresh_task = None
+
     async def test_startup_configures_mqtt(self, mock_db):
         """Test that startup configures MQTT service"""
         with (
