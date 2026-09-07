@@ -269,6 +269,27 @@ class TestStatusStrip:
         assert cells["index"]["age_seconds"] < 4000
         assert r.json()["overdue_available"] is False
 
+    def test_status_strip_prefers_a_new_check_operation_over_the_legacy_row(
+        self, test_client, test_db, admin_headers
+    ):
+        """Phase 5 moved check to `operations`; a migrated kind's first run
+        must take over its status-strip cell with no route change."""
+        from app.database.models import CheckJob
+
+        repo = _repo(test_db)
+        old = utc_now() - timedelta(days=10)
+        test_db.add(CheckJob(repository_id=repo.id, status="failed", completed_at=old))
+        _op(test_db, repo, "check", completed_at=old + timedelta(hours=1))
+        test_db.commit()
+
+        r = test_client.get(
+            f"/api/repositories/{repo.id}/status-strip", headers=admin_headers
+        )
+
+        cells = {c["cell"]: c for c in r.json()["cells"]}
+        assert cells["check"]["status"] == "completed"
+        assert cells["check"]["source"] == "operations"
+
     def test_overdue_flags_for_pro_and_mirror_cell(
         self, test_client, test_db, admin_headers
     ):

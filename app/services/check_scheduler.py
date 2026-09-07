@@ -1,15 +1,12 @@
 from datetime import datetime, timedelta
-from functools import partial
-from types import SimpleNamespace
 from typing import Optional
 
 import structlog
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
-from app.api.maintenance_jobs import start_background_maintenance_job
-from app.core.borg_router import BorgRouter
-from app.database.models import CheckJob, Repository, SystemSettings
+from app.database.models import CheckJob, Operation, Repository, SystemSettings
+from app.services.operations.maintenance_start import start_maintenance
 from app.utils.process_utils import is_process_alive
 from app.utils.schedule_time import (
     DEFAULT_SCHEDULE_TIMEZONE,
@@ -20,22 +17,6 @@ from app.utils.schedule_time import (
 logger = structlog.get_logger()
 
 STALE_PENDING_SCHEDULED_CHECK_AFTER = timedelta(minutes=15)
-
-
-def _router_repo_snapshot(repository: Repository) -> SimpleNamespace:
-    # BorgRouter routes on executor_type (with the legacy execution_target
-    # fallback). Dropping those here would silently disable its agent gate
-    # and run checks for agent-executed repositories on the server.
-    return SimpleNamespace(
-        id=repository.id,
-        borg_version=repository.borg_version,
-        executor_type=repository.executor_type,
-        execution_target=repository.execution_target,
-    )
-
-
-def _dispatch_router_check(router_repo: SimpleNamespace, job: CheckJob):
-    return BorgRouter(router_repo).check(job.id)
 
 
 def _utc_naive(value: datetime) -> datetime:
@@ -52,7 +33,12 @@ def _mark_stale_scheduled_check_failed(
 
 
 def cleanup_stale_scheduled_check_jobs(db: Session, now: datetime) -> int:
-    """Fail scheduled check jobs that can no longer be dispatched or monitored."""
+    """Fail scheduled check jobs that can no longer be dispatched or monitored.
+
+    Legacy rows only. A queued check operation is waiting for its repository's
+    lane, which may take hours behind a backup and is not a stall; a running
+    one that lost its process is recovered by `OperationRunner` on startup
+    (spec 7.6)."""
     cutoff = now - STALE_PENDING_SCHEDULED_CHECK_AFTER
     stale_count = 0
 
@@ -99,9 +85,24 @@ def cleanup_stale_scheduled_check_jobs(db: Session, now: datetime) -> int:
     return stale_count
 
 
+def count_active_scheduled_operations(db: Session) -> int:
+    """Scheduled checks waiting or running in `operations` (spec 6.2 keeps
+    the flag in `params`, so the filter happens in Python; the row count is
+    tiny)."""
+    rows = (
+        db.query(Operation)
+        .filter(
+            Operation.kind == "check",
+            Operation.status.in_(("queued", "running")),
+        )
+        .all()
+    )
+    return sum(1 for row in rows if (row.params or {}).get("scheduled_check"))
+
+
 def count_active_scheduled_check_jobs(db: Session, now: datetime) -> int:
     pending_cutoff = now - STALE_PENDING_SCHEDULED_CHECK_AFTER
-    return (
+    legacy = (
         db.query(CheckJob)
         .filter(
             CheckJob.scheduled_check == True,
@@ -116,6 +117,7 @@ def count_active_scheduled_check_jobs(db: Session, now: datetime) -> int:
         )
         .count()
     )
+    return legacy + count_active_scheduled_operations(db)
 
 
 async def run_due_scheduled_checks(db: Session, now: Optional[datetime] = None) -> None:
@@ -178,16 +180,12 @@ async def run_due_scheduled_checks(db: Session, now: Optional[datetime] = None) 
         if dispatched >= available_slots:
             break
         try:
-            check_job = start_background_maintenance_job(
+            check_job = start_maintenance(
                 db,
                 repo,
-                CheckJob,
-                error_key="backend.errors.repo.checkAlreadyRunning",
-                dispatcher=partial(
-                    _dispatch_router_check,
-                    _router_repo_snapshot(repo),
-                ),
-                extra_fields={
+                "check",
+                trigger="schedule",
+                params={
                     "max_duration": (
                         repo.check_max_duration
                         if repo.check_max_duration is not None
@@ -196,6 +194,8 @@ async def run_due_scheduled_checks(db: Session, now: Optional[datetime] = None) 
                     "extra_flags": repo.check_extra_flags,
                     "scheduled_check": True,
                 },
+                user_id=None,
+                duplicate_error_key="backend.errors.repo.checkAlreadyRunning",
             )
 
             logger.info(
@@ -203,7 +203,7 @@ async def run_due_scheduled_checks(db: Session, now: Optional[datetime] = None) 
                 repo_id=repo.id,
                 repo_name=repo.name,
                 check_job_id=check_job.id,
-                max_duration=check_job.max_duration,
+                max_duration=(check_job.params or {}).get("max_duration"),
             )
 
             repo.last_scheduled_check = now

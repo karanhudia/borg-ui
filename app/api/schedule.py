@@ -12,8 +12,6 @@ from app.database.models import (
     ScheduledJobRepository,
     AvailabilityScheduleSkip,
     BackupJob,
-    CompactJob,
-    PruneJob,
     Repository,
     Script,
     RepositoryScript,
@@ -25,7 +23,10 @@ from app.core.authorization import authorize_request
 from app.core.borg_router import BorgRouter
 from app.core.security import get_current_user, check_repo_access
 from app.config import settings
-from app.api.maintenance_jobs import create_started_maintenance_job
+from app.services.operations.maintenance_start import (
+    finish_inline_maintenance,
+    start_inline_maintenance,
+)
 from app.services.notification_service import notification_service
 from app.services.check_scheduler import run_due_scheduled_checks
 from app.services.restore_check_scheduler import run_due_scheduled_restore_checks
@@ -2360,11 +2361,21 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                     prune_job = None
                     try:
                         logger.info("Running scheduled prune", repository=repo.path)
-                        prune_job = create_started_maintenance_job(
+                        prune_job = start_inline_maintenance(
                             db,
-                            PruneJob,
                             repo,
-                            extra_fields={"scheduled_prune": True},
+                            "prune",
+                            params={
+                                "keep_hourly": scheduled_job.prune_keep_hourly,
+                                "keep_daily": scheduled_job.prune_keep_daily,
+                                "keep_weekly": scheduled_job.prune_keep_weekly,
+                                "keep_monthly": scheduled_job.prune_keep_monthly,
+                                "keep_quarterly": scheduled_job.prune_keep_quarterly,
+                                "keep_yearly": scheduled_job.prune_keep_yearly,
+                                "keep_within": scheduled_job.prune_keep_within,
+                                "scheduled_prune": True,
+                            },
+                            user_id=None,
                         )
 
                         # Update backup job status to show prune is running
@@ -2385,6 +2396,7 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
 
                         # Refresh job to get updated status
                         db.refresh(prune_job)
+                        finish_inline_maintenance(db, prune_job)
 
                         if prune_job.status == "completed":
                             scheduled_job.last_prune = datetime.now(timezone.utc)
@@ -2405,7 +2417,7 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                         # Ensure maintenance_status is always cleared even if commit fails
                         try:
                             backup_job.maintenance_status = "prune_failed"
-                            # Update PruneJob record if it was created
+                            # Update the prune operation if it was created
                             if prune_job:
                                 prune_job.status = "failed"
                                 prune_job.completed_at = datetime.now(timezone.utc)
@@ -2425,11 +2437,12 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                 if scheduled_job.run_compact_after:
                     try:
                         logger.info("Running scheduled compact", repository=repo.path)
-                        compact_job = create_started_maintenance_job(
+                        compact_job = start_inline_maintenance(
                             db,
-                            CompactJob,
                             repo,
-                            extra_fields={"scheduled_compact": True},
+                            "compact",
+                            params={"scheduled_compact": True},
+                            user_id=None,
                         )
 
                         # Update backup job status to show compact is running
@@ -2440,6 +2453,7 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
 
                         # Refresh job to get updated status
                         db.refresh(compact_job)
+                        finish_inline_maintenance(db, compact_job)
 
                         if compact_job.status == "completed":
                             scheduled_job.last_compact = datetime.now(timezone.utc)
@@ -2614,12 +2628,22 @@ async def execute_scheduled_backup_with_maintenance(
                     repository=repository_path,
                 )
 
-                # Create a PruneJob record for tracking and activity feed
-                prune_job = create_started_maintenance_job(
+                # Create a prune operation for tracking and activity feed
+                prune_job = start_inline_maintenance(
                     db,
-                    PruneJob,
                     repo,
-                    extra_fields={"scheduled_prune": True},
+                    "prune",
+                    params={
+                        "keep_hourly": scheduled_job.prune_keep_hourly,
+                        "keep_daily": scheduled_job.prune_keep_daily,
+                        "keep_weekly": scheduled_job.prune_keep_weekly,
+                        "keep_monthly": scheduled_job.prune_keep_monthly,
+                        "keep_quarterly": scheduled_job.prune_keep_quarterly,
+                        "keep_yearly": scheduled_job.prune_keep_yearly,
+                        "keep_within": scheduled_job.prune_keep_within,
+                        "scheduled_prune": True,
+                    },
+                    user_id=None,
                 )
 
                 # Update backup job status to show prune is running
@@ -2640,6 +2664,7 @@ async def execute_scheduled_backup_with_maintenance(
 
                 # Refresh job to get updated status
                 db.refresh(prune_job)
+                finish_inline_maintenance(db, prune_job)
 
                 if prune_job.status == "completed":
                     scheduled_job.last_prune = datetime.now(timezone.utc)
@@ -2664,7 +2689,7 @@ async def execute_scheduled_backup_with_maintenance(
                 # Ensure maintenance_status is always cleared even if commit fails
                 try:
                     backup_job.maintenance_status = "prune_failed"
-                    # Update PruneJob record if it was created
+                    # Update the prune operation if it was created
                     if prune_job:
                         prune_job.status = "failed"
                         prune_job.completed_at = datetime.now(timezone.utc)
@@ -2693,12 +2718,13 @@ async def execute_scheduled_backup_with_maintenance(
                     repository=repository_path,
                 )
 
-                # Create a CompactJob record for tracking and activity feed
-                compact_job = create_started_maintenance_job(
+                # Create a compact operation for tracking and activity feed
+                compact_job = start_inline_maintenance(
                     db,
-                    CompactJob,
                     repo,
-                    extra_fields={"scheduled_compact": True},
+                    "compact",
+                    params={"scheduled_compact": True},
+                    user_id=None,
                 )
 
                 # Update backup job status to show compact is running
@@ -2709,6 +2735,7 @@ async def execute_scheduled_backup_with_maintenance(
 
                 # Refresh job to get updated status
                 db.refresh(compact_job)
+                finish_inline_maintenance(db, compact_job)
 
                 if compact_job.status == "completed":
                     scheduled_job.last_compact = datetime.now(timezone.utc)

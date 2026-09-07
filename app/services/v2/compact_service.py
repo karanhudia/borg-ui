@@ -18,11 +18,16 @@ from datetime import datetime
 from pathlib import Path
 import structlog
 
-from app.database.models import CompactJob, Repository
+from app.database.models import Repository
 from app.database.database import SessionLocal
 from app.core.borg2 import _get_borg2_binary
 from app.config import settings
 from app.services.maintenance_state import apply_compact_completion
+from app.services.operations.job_facade import (
+    claim_running,
+    refresh_job,
+    resolve_maintenance_job,
+)
 from app.utils.db_retries import commit_with_retry
 from app.utils.borg_env import (
     build_repository_borg_env,
@@ -91,7 +96,7 @@ class CompactV2Service:
         temp_key_file = None
 
         try:
-            job = db.query(CompactJob).filter(CompactJob.id == job_id).first()
+            job = resolve_maintenance_job(db, job_id, "compact")
             if not job:
                 logger.error("Borg2 compact job not found", job_id=job_id)
                 return
@@ -119,7 +124,7 @@ class CompactV2Service:
 
             # Refresh to ensure we have the latest state. If the job was
             # somehow already completed/cancelled (race), bail out.
-            db.refresh(job)
+            refresh_job(db, job)
             if job.status not in ("running", "pending"):
                 logger.warning(
                     "Compact job already in terminal state, skipping",
@@ -138,17 +143,7 @@ class CompactV2Service:
 
             def persist_start_state():
                 nonlocal claimed
-                claimed = (
-                    db.query(CompactJob)
-                    .filter(
-                        CompactJob.id == job_id,
-                        CompactJob.status.in_(("pending", "running")),
-                    )
-                    .update(
-                        {"status": "running", "started_at": started_at},
-                        synchronize_session=False,
-                    )
-                )
+                claimed = claim_running(db, job_id, "compact", started_at)
 
             await commit_with_retry(
                 db,
@@ -164,7 +159,7 @@ class CompactV2Service:
                     job_id=job_id,
                 )
                 return
-            db.refresh(job)
+            refresh_job(db, job)
 
             env, temp_key_file = build_repository_borg_env(
                 repository,
@@ -228,7 +223,7 @@ class CompactV2Service:
                 nonlocal cancelled
                 while not cancelled and process.returncode is None:
                     await asyncio.sleep(3)
-                    db.refresh(job)
+                    refresh_job(db, job)
                     if job.status == "cancelled":
                         logger.info(
                             "Borg2 compact cancelled, terminating", job_id=job_id

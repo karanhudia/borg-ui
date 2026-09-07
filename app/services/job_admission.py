@@ -14,7 +14,7 @@ from app.database.models import (
     BackupJob,
     CheckJob,
     CompactJob,
-    DeleteArchiveJob,
+    Operation,
     PruneJob,
     Repository,
     RepositoryWipeJob,
@@ -58,6 +58,17 @@ ACTIVE_BACKUP_STATUSES = {"pending", "running"}
 ACTIVE_MAINTENANCE_STATUSES = {"pending", "running"}
 ACTIVE_AGENT_STATUSES = {"queued", "claimed", "cancel_requested", "running"}
 ACTIVE_REPOSITORY_WIPE_STATUSES = {"pending", "running"}
+ACTIVE_OPERATION_STATUSES = {"queued", "running"}
+
+# Kinds that moved to `operations` in phase 5, mapped to the admission
+# operation they used to be recorded as. Grows as phases 6 to 8 migrate more.
+MAINTENANCE_OPERATION_KINDS = {
+    "check": OPERATION_CHECK,
+    "restore_check": OPERATION_RESTORE_CHECK,
+    "compact": OPERATION_COMPACT,
+    "prune": OPERATION_PRUNE,
+    "delete_archive": OPERATION_DELETE_ARCHIVE,
+}
 
 REPOSITORY_OPERATION_ACTIVE_KEY = "backend.errors.jobs.repositoryOperationActive"
 MANUAL_BACKUP_LIMIT_KEY = "backend.errors.backup.concurrentLimitReached"
@@ -226,6 +237,8 @@ def _active_work(
     operation: str,
     job_table: str,
     job: Any,
+    *,
+    status: Optional[str] = None,
 ) -> ActiveRepositoryWork:
     return ActiveRepositoryWork(
         resource_type="repository",
@@ -234,7 +247,7 @@ def _active_work(
         operation_class=operation_class_for(operation),
         job_table=job_table,
         job_id=int(job.id),
-        status=str(job.status),
+        status=str(job.status if status is None else status),
     )
 
 
@@ -260,25 +273,28 @@ def list_active_repository_work(
         for job in backup_jobs
     )
 
-    maintenance_specs = (
-        (CheckJob, OPERATION_CHECK),
-        (RestoreCheckJob, OPERATION_RESTORE_CHECK),
-        (CompactJob, OPERATION_COMPACT),
-        (PruneJob, OPERATION_PRUNE),
-        (DeleteArchiveJob, OPERATION_DELETE_ARCHIVE),
-    )
-    for job_model, operation in maintenance_specs:
-        jobs = (
-            db.query(job_model)
-            .filter(
-                job_model.repository_id == repository.id,
-                job_model.status.in_(ACTIVE_MAINTENANCE_STATUSES),
-            )
-            .all()
+    # Migrated kinds live in `operations` (spec section 13 phase 5). Admission
+    # must still see them, or break_lock and wipe would run alongside a check
+    # or a prune that is holding the borg lock.
+    from app.services.operations.job_facade import legacy_status
+
+    for op in (
+        db.query(Operation)
+        .filter(
+            Operation.repository_id == repository.id,
+            Operation.kind.in_(tuple(MAINTENANCE_OPERATION_KINDS)),
+            Operation.status.in_(ACTIVE_OPERATION_STATUSES),
         )
-        active.extend(
-            _active_work(repository, operation, job_model.__tablename__, job)
-            for job in jobs
+        .all()
+    ):
+        active.append(
+            _active_work(
+                repository,
+                MAINTENANCE_OPERATION_KINDS[op.kind],
+                Operation.__tablename__,
+                op,
+                status=legacy_status(op.status),
+            )
         )
 
     wipe_jobs = (

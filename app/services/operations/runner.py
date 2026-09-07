@@ -11,7 +11,7 @@ import structlog
 from sqlalchemy.orm import Session
 
 from app.config import settings as app_settings
-from app.database.models import Operation, SystemSettings, utc_now
+from app.database.models import Operation, Repository, SystemSettings, utc_now
 from app.services.operations import executors as executor_registry
 from app.services.operations.enqueue import enqueue_chain
 from app.services.operations.events import (
@@ -20,7 +20,7 @@ from app.services.operations.events import (
 )
 from app.services.operations.followups import chain_for, history_enabled
 from app.services.operations.lanes import can_start
-from app.services.operations.vocab import INDEX_KINDS, SUCCESS_STATUSES
+from app.services.operations.vocab import INDEX_KINDS, SUCCESS_STATUSES, is_exclusive
 from app.utils.process_utils import is_process_alive
 
 logger = structlog.get_logger()
@@ -157,8 +157,16 @@ class OperationRunner:
         """Request cooperative cancellation for every running task and wait
         for them to finish, so shutdown goes through
         `OperationContext.cancelled()` instead of a raw task cancellation.
-        Call `stop()` first so no new tasks start while draining."""
-        tasks = list(self.running_tasks.values())
+        Call `stop()` first so no new tasks start while draining.
+
+        A dispatched entry is normally a real `asyncio.Task`, but a test that
+        patches `asyncio.create_task` around a request can catch this
+        runner's own `tick()` dispatching newly enqueued work on the same
+        event loop mid-request, landing a `MagicMock` in `running_tasks`
+        instead. `asyncio.gather` raises `TypeError` outright on anything
+        that isn't awaitable, which would otherwise crash every shutdown
+        from that point on; filter those out instead of gathering them."""
+        tasks = [t for t in self.running_tasks.values() if asyncio.isfuture(t)]
         if not tasks:
             return
         for operation_id in list(self.running_tasks):
@@ -175,6 +183,28 @@ class OperationRunner:
 
     async def start(self) -> None:
         self._stopped = False
+        # A fresh `asyncio.Event` every time: the one from a previous call
+        # is bound to that call's event loop (asyncio.Event binds to the
+        # loop of its first `wait()`/`clear()`), and reusing it here after
+        # that loop closed raises "bound to a different event loop" the
+        # instant this loop's `wait()` runs. That's uncaught, so it kills
+        # this coroutine right there; nothing awaits it until shutdown's
+        # `gather(..., return_exceptions=True)`, which swallows it, so the
+        # runner silently stops dispatching for the rest of the process.
+        # Production runs `start()` once per process and never hits this;
+        # a test suite that builds a fresh app (and event loop) per test
+        # does, every time.
+        self._wake = asyncio.Event()
+        # Same reasoning as `_wake`: a task from a previous `start()` belongs
+        # to that call's (closed) event loop and can never be gathered by
+        # this one's `drain()` anyway. Without this, a task that failed to
+        # dispatch as a real `asyncio.Task` (e.g. a test patching
+        # `asyncio.create_task` at the exact moment this runner's own tick
+        # fires) sits in `running_tasks` forever, since nothing ever
+        # completes it to trigger the normal `.pop()` cleanup below - and
+        # the next process-lifetime's `drain()` crashes trying to `gather()`
+        # it (`TypeError: ... a coroutine or an awaitable is required`).
+        self.running_tasks = {}
         logger.info("Operations runner started", poll_interval=self._poll_interval)
         while not self._stopped:
             try:
@@ -272,7 +302,9 @@ class OperationRunner:
                 )
             if outcome is None:
                 outcome = Outcome()
-            if operation_id in self.cancel_requested and outcome.status != "failed":
+            if op.status == "cancelled" or (
+                operation_id in self.cancel_requested and outcome.status != "failed"
+            ):
                 op.status = "cancelled"
             else:
                 op.status = outcome.status
@@ -338,6 +370,52 @@ class OperationRunner:
 
     # -- recovery --------------------------------------------------------------
 
+    def _recover_repository_lock(self, db: Session, op: Operation) -> None:
+        from app.services.repository_executor import is_agent_executor
+        from app.utils.process_utils import (
+            _is_remote_repository,
+            break_repository_lock,
+        )
+
+        if op.repository_id is None:
+            return
+        repository = db.get(Repository, op.repository_id)
+        if repository is None:
+            return
+        try:
+            if is_agent_executor(repository):
+                logger.warning(
+                    "Interrupted managed-agent operation may still hold its lock",
+                    operation_id=op.id,
+                    repository_id=repository.id,
+                )
+                return
+            if _is_remote_repository(repository, db):
+                logger.warning(
+                    "Interrupted remote operation may still hold its lock",
+                    operation_id=op.id,
+                    repository_id=repository.id,
+                )
+                return
+            if break_repository_lock(repository):
+                logger.info(
+                    "Broke lock for local repository after restart",
+                    operation_id=op.id,
+                    repository_id=repository.id,
+                )
+            else:
+                logger.warning(
+                    "Failed to break lock for local repository after restart",
+                    operation_id=op.id,
+                    repository_id=repository.id,
+                )
+        except Exception as exc:
+            logger.warning(
+                "Lock recovery raised",
+                operation_id=op.id,
+                error=str(exc),
+            )
+
     def recover_on_startup(self, db: Session) -> dict:
         counts = {"requeued": 0, "failed": 0, "kept": 0}
         for op in db.query(Operation).filter(Operation.status == "running").all():
@@ -360,6 +438,11 @@ class OperationRunner:
                 op.error_message = "interrupted by restart"
                 op.completed_at = utc_now()
                 counts["failed"] += 1
+                # Spec 7.6: a local repository gets the lock-break attempt the
+                # per-table sweep used to make; a remote one does not, because
+                # the remote process may still be running.
+                if is_exclusive(op.kind):
+                    self._recover_repository_lock(db, op)
         db.commit()
         logger.info("Operations recovery completed", **counts)
         return counts

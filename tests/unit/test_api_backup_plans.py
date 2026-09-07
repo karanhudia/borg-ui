@@ -18,10 +18,8 @@ from app.database.models import (
     BackupPlanRun,
     BackupPlanRunRepository,
     BackupPlanScript,
-    CheckJob,
-    CompactJob,
     LicensingState,
-    PruneJob,
+    Operation,
     Repository,
     Script,
     ScriptExecution,
@@ -4672,28 +4670,28 @@ class TestBackupPlanRoutes:
 
             async def check(self, job_id):
                 maintenance_calls.append("check")
-                job = test_db.query(CheckJob).filter_by(id=job_id).one()
-                assert job.repository_id == repo.id
-                assert job.extra_flags == "--verify-data"
-                job.status = "completed"
-                job.completed_at = datetime.utcnow()
+                op = test_db.query(Operation).filter_by(id=job_id, kind="check").one()
+                assert op.repository_id == repo.id
+                assert op.params["extra_flags"] == "--verify-data"
+                op.status = "completed"
+                op.completed_at = datetime.utcnow()
                 test_db.commit()
 
             async def prune(self, job_id, **kwargs):
                 maintenance_calls.append("prune")
                 assert kwargs["keep_within"] == "1d"
-                job = test_db.query(PruneJob).filter_by(id=job_id).one()
-                assert job.repository_id == repo.id
-                job.status = "completed"
-                job.completed_at = datetime.utcnow()
+                op = test_db.query(Operation).filter_by(id=job_id, kind="prune").one()
+                assert op.repository_id == repo.id
+                op.status = "completed"
+                op.completed_at = datetime.utcnow()
                 test_db.commit()
 
             async def compact(self, job_id):
                 maintenance_calls.append("compact")
-                job = test_db.query(CompactJob).filter_by(id=job_id).one()
-                assert job.repository_id == repo.id
-                job.status = "completed"
-                job.completed_at = datetime.utcnow()
+                op = test_db.query(Operation).filter_by(id=job_id, kind="compact").one()
+                assert op.repository_id == repo.id
+                op.status = "completed"
+                op.completed_at = datetime.utcnow()
                 test_db.commit()
 
         with (
@@ -4711,15 +4709,30 @@ class TestBackupPlanRoutes:
         test_db.expire_all()
         run = test_db.query(BackupPlanRun).filter_by(id=run.id).one()
         backup_job = test_db.query(BackupJob).filter_by(backup_plan_run_id=run.id).one()
-        check_job = test_db.query(CheckJob).filter_by(repository_id=repo.id).one()
-        prune_job = test_db.query(PruneJob).filter_by(repository_id=repo.id).one()
-        compact_job = test_db.query(CompactJob).filter_by(repository_id=repo.id).one()
+        check_job = (
+            test_db.query(Operation)
+            .filter_by(repository_id=repo.id, kind="check")
+            .one()
+        )
+        prune_job = (
+            test_db.query(Operation)
+            .filter_by(repository_id=repo.id, kind="prune")
+            .one()
+        )
+        compact_job = (
+            test_db.query(Operation)
+            .filter_by(repository_id=repo.id, kind="compact")
+            .one()
+        )
         assert run.status == "completed"
         assert backup_job.maintenance_status == "maintenance_completed"
         assert maintenance_calls == ["prune", "compact", "check"]
-        assert check_job.scheduled_check is False
-        assert prune_job.scheduled_prune is False
-        assert compact_job.scheduled_compact is False
+        assert check_job.status == "completed"
+        assert prune_job.status == "completed"
+        assert compact_job.status == "completed"
+        assert check_job.params["scheduled_check"] is False
+        assert prune_job.params["scheduled_prune"] is False
+        assert compact_job.params["scheduled_compact"] is False
 
     @pytest.mark.asyncio
     async def test_cancel_after_backup_completion_does_not_start_maintenance(

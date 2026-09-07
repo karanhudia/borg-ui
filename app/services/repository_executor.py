@@ -333,19 +333,15 @@ def queue_agent_repository_operation_job(
     agent = validate_agent_repository_operation(db, repository, job_kind=job_kind)
     operation_payload = operation
     admission_operation = operation_for_agent_job_kind(job_kind)
-    maintenance_table_by_kind = {
-        "check": "check_jobs",
-        "restore_check": "restore_check_jobs",
-        "compact": "compact_jobs",
-        "prune": "prune_jobs",
-        "delete_archive": "delete_archive_jobs",
-    }
+    # Phase 5 moved every maintenance kind to `operations`. The value is the
+    # table admission should ignore, so the row this caller just created
+    # cannot block its own admission.
     ensure_repository_admission(
         db,
         repository,
         admission_operation,
         ignore=ignore_active_job(
-            maintenance_table_by_kind.get(maintenance_job_kind or ""),
+            "operations" if maintenance_job_kind else None,
             maintenance_job_id,
         ),
     )

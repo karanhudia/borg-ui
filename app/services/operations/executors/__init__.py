@@ -24,4 +24,8 @@ def registered_kinds() -> set[str]:
 
 def load_default_executors() -> None:
     """Import executor modules for their registration side effect."""
-    from app.services.operations.executors import history, index  # noqa: F401
+    from app.services.operations.executors import (  # noqa: F401
+        history,
+        index,
+        maintenance,
+    )

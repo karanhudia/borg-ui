@@ -5,12 +5,13 @@ from datetime import datetime
 from pathlib import Path
 import structlog
 from sqlalchemy.orm import Session
-from app.database.models import CheckJob, Repository
+from app.database.models import Repository
 from app.database.database import SessionLocal
 from app.config import settings
 from app.core.borg import borg
 from app.core.borg_errors import is_borg_warning_exit_code
 from app.services.notification_service import NotificationService
+from app.services.operations.job_facade import refresh_job, resolve_maintenance_job
 from app.utils.db_retries import commit_with_retry
 from app.utils.borg_env import (
     build_repository_borg_env,
@@ -47,6 +48,31 @@ class CheckService:
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.running_processes = {}  # Track running processes by job_id
 
+    async def cancel_check(self, job_id: int) -> bool:
+        """Cancel a running check job by terminating its tracked process."""
+        if job_id not in self.running_processes:
+            logger.warning("No running check process found for job", job_id=job_id)
+            return False
+
+        process = self.running_processes[job_id]
+        try:
+            process.terminate()
+            logger.info("Sent SIGTERM to check process", job_id=job_id, pid=process.pid)
+            try:
+                await asyncio.wait_for(process.wait(), timeout=5.0)
+            except asyncio.TimeoutError:
+                process.kill()
+                logger.warning(
+                    "Force killed check process (SIGKILL)",
+                    job_id=job_id,
+                    pid=process.pid,
+                )
+                await process.wait()
+            return True
+        except Exception as e:
+            logger.error("Failed to cancel check process", job_id=job_id, error=str(e))
+            return False
+
     async def execute_check(self, job_id: int, repository_id: int, db: Session = None):
         """Execute repository check operation with progress tracking"""
 
@@ -56,7 +82,7 @@ class CheckService:
 
         try:
             # Get job
-            job = db.query(CheckJob).filter(CheckJob.id == job_id).first()
+            job = resolve_maintenance_job(db, job_id, "check")
             if not job:
                 logger.error("Check job not found", job_id=job_id)
                 return
@@ -205,7 +231,7 @@ class CheckService:
                 nonlocal cancelled
                 while not cancelled and process.returncode is None:
                     await asyncio.sleep(3)
-                    db.refresh(job)
+                    refresh_job(db, job)
                     if job.status == "cancelled":
                         logger.info(
                             "Check job cancelled, terminating process", job_id=job_id

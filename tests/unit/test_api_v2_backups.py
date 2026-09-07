@@ -10,6 +10,7 @@ from app.database.models import (
     CheckJob,
     CompactJob,
     LicensingState,
+    Operation,
     PruneJob,
     Repository,
 )
@@ -187,67 +188,68 @@ class TestV2BackupRoutes:
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(test_db, source_directories=["/data/source"])
 
-        with patch("app.api.v2.backups.start_background_maintenance_job") as mock_start:
-            mock_start.return_value = PruneJob(
-                id=6, repository_id=repo.id, status="running"
-            )
-            response = test_client.post(
-                "/api/v2/backup/prune",
-                json={"repository_id": repo.id, "keep_daily": 3, "dry_run": False},
-                headers=admin_headers,
-            )
+        response = test_client.post(
+            "/api/v2/backup/prune",
+            json={"repository_id": repo.id, "keep_daily": 3, "dry_run": False},
+            headers=admin_headers,
+        )
 
         assert response.status_code == 200
-        assert response.json() == {
-            "job_id": 6,
-            "status": "running",
-            "message": "backend.success.repo.pruneJobStarted",
-        }
-        mock_start.assert_called_once()
+        body = response.json()
+        assert body["status"] == "pending"
+        assert body["message"] == "backend.success.repo.pruneJobStarted"
+        op = test_db.get(Operation, body["job_id"])
+        assert op.kind == "prune"
+        assert op.params["keep_daily"] == 3
+        assert test_db.query(PruneJob).count() == 0
 
     @pytest.mark.asyncio
     async def test_backup_prune_dispatcher_uses_stable_repo_id(
         self, test_client: TestClient, admin_headers, test_db
     ):
+        # Phase 5: the route enqueues and the executor routes. BorgRouter is
+        # called by `run_prune` with the live repository row, so this asserts
+        # the executor's routing rather than a dispatcher the route builds.
+        from app.services.operations.executors import maintenance
+
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(test_db, source_directories=["/data/source"])
-        dispatched = {}
 
-        def fake_start(db, repository, job_model, **kwargs):
-            dispatched["dispatcher"] = kwargs["dispatcher"]
-            assert job_model is PruneJob
-            assert kwargs["extra_fields"] == {"scheduled_prune": False}
-            return PruneJob(id=6, repository_id=repository.id, status="running")
+        response = test_client.post(
+            "/api/v2/backup/prune",
+            json={
+                "repository_id": repo.id,
+                "keep_hourly": 1,
+                "keep_daily": 3,
+                "keep_weekly": 2,
+                "keep_monthly": 1,
+                "keep_quarterly": 0,
+                "keep_yearly": 0,
+                "dry_run": False,
+            },
+            headers=admin_headers,
+        )
+        op = test_db.get(Operation, response.json()["job_id"])
 
-        with (
-            patch(
-                "app.api.v2.backups.start_background_maintenance_job",
-                side_effect=fake_start,
-            ),
-            patch(
-                "app.api.v2.backups.prune_v2_service.execute_prune",
-                new=AsyncMock(),
-            ) as mock_execute,
+        ctx = SimpleNamespace(
+            db=test_db,
+            operation=op,
+            operation_id=op.id,
+            repository_id=repo.id,
+            kind="prune",
+            params=dict(op.params or {}),
+            cancelled=lambda: False,
+            log=lambda line: None,
+        )
+        fake_router = AsyncMock()
+        with patch(
+            "app.services.operations.executors.maintenance.BorgRouter",
+            return_value=fake_router,
         ):
-            response = test_client.post(
-                "/api/v2/backup/prune",
-                json={
-                    "repository_id": repo.id,
-                    "keep_hourly": 1,
-                    "keep_daily": 3,
-                    "keep_weekly": 2,
-                    "keep_monthly": 1,
-                    "keep_quarterly": 0,
-                    "keep_yearly": 0,
-                    "dry_run": False,
-                },
-                headers=admin_headers,
-            )
-            test_db.expunge_all()
-            await dispatched["dispatcher"](SimpleNamespace(id=44))
+            await maintenance.run_prune(ctx)
 
         assert response.status_code == 200
-        mock_execute.assert_awaited_once_with(44, repo.id, 1, 3, 2, 1, 0, 0, False)
+        fake_router.prune.assert_awaited_once_with(op.id, 1, 3, 2, 1, 0, 0, False)
 
     def test_backup_prune_dry_run_returns_legacy_modal_shape(
         self, test_client: TestClient, admin_headers, test_db
@@ -255,21 +257,15 @@ class TestV2BackupRoutes:
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(test_db, source_directories=["/data/source"])
 
-        with (
-            patch(
-                "app.api.v2.backups.prune_v2_service.run_prune",
-                new=AsyncMock(
-                    return_value={
-                        "success": True,
-                        "stdout": "would prune",
-                        "stderr": "",
-                    }
-                ),
+        with patch(
+            "app.api.v2.backups.prune_v2_service.run_prune",
+            new=AsyncMock(
+                return_value={
+                    "success": True,
+                    "stdout": "would prune",
+                    "stderr": "",
+                }
             ),
-            patch(
-                "app.api.v2.backups.BorgRouter.update_stats",
-                new=AsyncMock(return_value=True),
-            ) as mock_update_stats,
         ):
             response = test_client.post(
                 "/api/v2/backup/prune",
@@ -287,7 +283,6 @@ class TestV2BackupRoutes:
                 "stderr": "",
             },
         }
-        mock_update_stats.assert_not_awaited()
 
     def test_backup_compact_creates_job(
         self, test_client: TestClient, admin_headers, test_db
@@ -295,67 +290,69 @@ class TestV2BackupRoutes:
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(test_db, source_directories=["/data/source"])
 
-        with patch("app.api.v2.backups.start_background_maintenance_job") as mock_start:
-            mock_start.return_value = CompactJob(
-                id=5, repository_id=repo.id, status="running"
-            )
-            response = test_client.post(
-                "/api/v2/backup/compact",
-                json={"repository_id": repo.id},
-                headers=admin_headers,
-            )
+        response = test_client.post(
+            "/api/v2/backup/compact",
+            json={"repository_id": repo.id},
+            headers=admin_headers,
+        )
 
         assert response.status_code == 200
-        assert response.json()["status"] == "running"
+        assert response.json()["status"] == "pending"
         assert response.json()["message"] == "backend.success.repo.compactJobStarted"
-        mock_start.assert_called_once()
+        op = test_db.get(Operation, response.json()["job_id"])
+        assert op.kind == "compact"
+        assert test_db.query(CompactJob).count() == 0
 
     @pytest.mark.asyncio
     async def test_backup_compact_dispatcher_uses_stable_repo_id(
         self, test_client: TestClient, admin_headers, test_db
     ):
+        from app.services.operations.executors import maintenance
+
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(test_db, source_directories=["/data/source"])
-        dispatched = {}
 
-        def fake_start(db, repository, job_model, **kwargs):
-            dispatched["dispatcher"] = kwargs["dispatcher"]
-            return CompactJob(id=5, repository_id=repository.id, status="running")
+        response = test_client.post(
+            "/api/v2/backup/compact",
+            json={"repository_id": repo.id},
+            headers=admin_headers,
+        )
+        op = test_db.get(Operation, response.json()["job_id"])
 
-        with (
-            patch(
-                "app.api.v2.backups.start_background_maintenance_job",
-                side_effect=fake_start,
-            ),
-            patch(
-                "app.api.v2.backups.compact_v2_service.execute_compact",
-                new=AsyncMock(),
-            ) as mock_execute,
+        ctx = SimpleNamespace(
+            db=test_db,
+            operation=op,
+            operation_id=op.id,
+            repository_id=repo.id,
+            kind="compact",
+            params=dict(op.params or {}),
+            cancelled=lambda: False,
+            log=lambda line: None,
+        )
+        fake_router = AsyncMock()
+        with patch(
+            "app.services.operations.executors.maintenance.BorgRouter",
+            return_value=fake_router,
         ):
-            response = test_client.post(
-                "/api/v2/backup/compact",
-                json={"repository_id": repo.id},
-                headers=admin_headers,
-            )
-            test_db.expunge_all()
-            await dispatched["dispatcher"](SimpleNamespace(id=44))
+            await maintenance.run_compact(ctx)
 
         assert response.status_code == 200
-        mock_execute.assert_awaited_once_with(44, repo.id)
+        fake_router.compact.assert_awaited_once_with(op.id)
 
     def test_backup_compact_rejects_duplicate_running_job(
         self, test_client: TestClient, admin_headers, test_db
     ):
+        from app.services.operations.enqueue import enqueue
+
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(test_db, source_directories=["/data/source"])
-        test_db.add(
-            CompactJob(
-                repository_id=repo.id,
-                repository_path=repo.path,
-                status="running",
-            )
+        enqueue(
+            test_db,
+            "compact",
+            repository_id=repo.id,
+            trigger="manual",
+            params={"scheduled_compact": False},
         )
-        test_db.commit()
 
         response = test_client.post(
             "/api/v2/backup/compact",
@@ -374,21 +371,19 @@ class TestV2BackupRoutes:
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(test_db, source_directories=["/data/source"])
 
-        with patch("app.api.v2.backups.start_background_maintenance_job") as mock_start:
-            mock_start.return_value = CheckJob(
-                id=7, repository_id=repo.id, status="running"
-            )
-            response = test_client.post(
-                "/api/v2/backup/check",
-                json={"repository_id": repo.id, "max_duration": 3600},
-                headers=admin_headers,
-            )
+        response = test_client.post(
+            "/api/v2/backup/check",
+            json={"repository_id": repo.id, "max_duration": 3600},
+            headers=admin_headers,
+        )
 
         assert response.status_code == 200
-        assert response.json()["status"] == "running"
+        assert response.json()["status"] == "pending"
         assert response.json()["message"] == "backend.success.repo.checkJobStarted"
-        mock_start.assert_called_once()
-        assert mock_start.call_args.kwargs["extra_fields"] == {"max_duration": 3600}
+        op = test_db.get(Operation, response.json()["job_id"])
+        assert op.kind == "check"
+        assert op.params["max_duration"] == 3600
+        assert test_db.query(CheckJob).count() == 0
 
     def test_backup_check_stores_extra_flags(
         self, test_client: TestClient, admin_headers, test_db
@@ -396,25 +391,20 @@ class TestV2BackupRoutes:
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(test_db, source_directories=["/data/source"])
 
-        with patch("app.api.v2.backups.start_background_maintenance_job") as mock_start:
-            mock_start.return_value = CheckJob(
-                id=7, repository_id=repo.id, status="running"
-            )
-            response = test_client.post(
-                "/api/v2/backup/check",
-                json={
-                    "repository_id": repo.id,
-                    "max_duration": 0,
-                    "check_extra_flags": "  --repair --verify-data  ",
-                },
-                headers=admin_headers,
-            )
+        response = test_client.post(
+            "/api/v2/backup/check",
+            json={
+                "repository_id": repo.id,
+                "max_duration": 0,
+                "check_extra_flags": "  --repair --verify-data  ",
+            },
+            headers=admin_headers,
+        )
 
         assert response.status_code == 200
-        assert mock_start.call_args.kwargs["extra_fields"] == {
-            "max_duration": 0,
-            "extra_flags": "--repair --verify-data",
-        }
+        op = test_db.get(Operation, response.json()["job_id"])
+        assert op.params["max_duration"] == 0
+        assert op.params["extra_flags"] == "--repair --verify-data"
 
     def test_backup_check_rejects_full_check_flags_with_partial_duration(
         self, test_client: TestClient, admin_headers, test_db
@@ -422,70 +412,73 @@ class TestV2BackupRoutes:
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(test_db, source_directories=["/data/source"])
 
-        with patch("app.api.v2.backups.start_background_maintenance_job") as mock_start:
-            response = test_client.post(
-                "/api/v2/backup/check",
-                json={
-                    "repository_id": repo.id,
-                    "max_duration": 3600,
-                    "check_extra_flags": " --verify-data ",
-                },
-                headers=admin_headers,
-            )
+        response = test_client.post(
+            "/api/v2/backup/check",
+            json={
+                "repository_id": repo.id,
+                "max_duration": 3600,
+                "check_extra_flags": " --verify-data ",
+            },
+            headers=admin_headers,
+        )
 
         assert response.status_code == 422
         assert response.json()["detail"]["key"] == (
             "backend.errors.repo.checkFlagsRequireUnlimitedDuration"
         )
         assert response.json()["detail"]["params"]["flags"] == "--verify-data"
-        mock_start.assert_not_called()
+        assert test_db.query(Operation).filter(Operation.kind == "check").count() == 0
 
     @pytest.mark.asyncio
     async def test_backup_check_dispatcher_uses_stable_repo_id(
         self, test_client: TestClient, admin_headers, test_db
     ):
+        from app.services.operations.executors import maintenance
+
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(test_db, source_directories=["/data/source"])
-        dispatched = {}
 
-        def fake_start(db, repository, job_model, **kwargs):
-            dispatched["dispatcher"] = kwargs["dispatcher"]
-            return CheckJob(id=7, repository_id=repository.id, status="running")
+        response = test_client.post(
+            "/api/v2/backup/check",
+            json={"repository_id": repo.id, "max_duration": 3600},
+            headers=admin_headers,
+        )
+        op = test_db.get(Operation, response.json()["job_id"])
 
-        with (
-            patch(
-                "app.api.v2.backups.start_background_maintenance_job",
-                side_effect=fake_start,
-            ),
-            patch(
-                "app.api.v2.backups.check_v2_service.execute_check",
-                new=AsyncMock(),
-            ) as mock_execute,
+        ctx = SimpleNamespace(
+            db=test_db,
+            operation=op,
+            operation_id=op.id,
+            repository_id=repo.id,
+            kind="check",
+            params=dict(op.params or {}),
+            cancelled=lambda: False,
+            log=lambda line: None,
+        )
+        fake_router = AsyncMock()
+        with patch(
+            "app.services.operations.executors.maintenance.BorgRouter",
+            return_value=fake_router,
         ):
-            response = test_client.post(
-                "/api/v2/backup/check",
-                json={"repository_id": repo.id, "max_duration": 3600},
-                headers=admin_headers,
-            )
-            test_db.expunge_all()
-            await dispatched["dispatcher"](SimpleNamespace(id=55))
+            await maintenance.run_check(ctx)
 
         assert response.status_code == 200
-        mock_execute.assert_awaited_once_with(55, repo.id)
+        fake_router.check.assert_awaited_once_with(op.id)
 
     def test_backup_check_rejects_duplicate_running_job(
         self, test_client: TestClient, admin_headers, test_db
     ):
+        from app.services.operations.enqueue import enqueue
+
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(test_db, source_directories=["/data/source"])
-        test_db.add(
-            CheckJob(
-                repository_id=repo.id,
-                repository_path=repo.path,
-                status="running",
-            )
+        enqueue(
+            test_db,
+            "check",
+            repository_id=repo.id,
+            trigger="manual",
+            params={"max_duration": 3600, "scheduled_check": False},
         )
-        test_db.commit()
 
         response = test_client.post(
             "/api/v2/backup/check",

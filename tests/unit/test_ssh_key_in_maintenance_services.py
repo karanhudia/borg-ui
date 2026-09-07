@@ -16,6 +16,7 @@ from cryptography.fernet import Fernet
 
 from app.database.models import (
     CheckJob,
+    Operation,
     CompactJob,
     PruneJob,
     Repository,
@@ -135,7 +136,9 @@ class TestPruneServiceSSHKey:
 
         def mock_query(model):
             m = MagicMock()
-            if model == PruneJob:
+            if model == Operation:
+                m.filter.return_value.first.return_value = None
+            elif model == PruneJob:
                 m.filter.return_value.first.return_value = job
             elif model == Repository:
                 m.filter.return_value.first.return_value = repo
@@ -189,7 +192,9 @@ class TestPruneServiceSSHKey:
 
         def mock_query(model):
             m = MagicMock()
-            if model == PruneJob:
+            if model == Operation:
+                m.filter.return_value.first.return_value = None
+            elif model == PruneJob:
                 m.filter.return_value.first.return_value = job
             elif model == Repository:
                 m.filter.return_value.first.return_value = repo
@@ -254,7 +259,9 @@ class TestCompactServiceSSHKey:
 
         def mock_query(model):
             m = MagicMock()
-            if model == CompactJob:
+            if model == Operation:
+                m.filter.return_value.first.return_value = None
+            elif model == CompactJob:
                 m.filter.return_value.first.return_value = job
             elif model == Repository:
                 m.filter.return_value.first.return_value = repo
@@ -306,7 +313,9 @@ class TestCompactServiceSSHKey:
 
         def mock_query(model):
             m = MagicMock()
-            if model == CompactJob:
+            if model == Operation:
+                m.filter.return_value.first.return_value = None
+            elif model == CompactJob:
                 m.filter.return_value.first.return_value = job
             elif model == Repository:
                 m.filter.return_value.first.return_value = repo
@@ -366,7 +375,11 @@ class TestCheckServiceSSHKey:
 
         def mock_query(model):
             m = MagicMock()
-            if model == CheckJob:
+            if model == Operation:
+                # Phase 5: the service resolves through `operations` first and
+                # falls back to the legacy row, which is what this test drives.
+                m.filter.return_value.first.return_value = None
+            elif model == CheckJob:
                 m.filter.return_value.first.return_value = job
             elif model == Repository:
                 m.filter.return_value.first.return_value = repo
@@ -416,7 +429,11 @@ class TestCheckServiceSSHKey:
 
         def mock_query(model):
             m = MagicMock()
-            if model == CheckJob:
+            if model == Operation:
+                # Phase 5: the service resolves through `operations` first and
+                # falls back to the legacy row, which is what this test drives.
+                m.filter.return_value.first.return_value = None
+            elif model == CheckJob:
                 m.filter.return_value.first.return_value = job
             elif model == Repository:
                 m.filter.return_value.first.return_value = repo
@@ -469,7 +486,11 @@ class TestCheckServiceSSHKey:
 
         def mock_query(model):
             m = MagicMock()
-            if model == CheckJob:
+            if model == Operation:
+                # Phase 5: the service resolves through `operations` first and
+                # falls back to the legacy row, which is what this test drives.
+                m.filter.return_value.first.return_value = None
+            elif model == CheckJob:
                 m.filter.return_value.first.return_value = job
             elif model == Repository:
                 m.filter.return_value.first.return_value = repo

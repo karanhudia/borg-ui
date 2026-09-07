@@ -1605,6 +1605,77 @@ class TestActivityLogContracts:
         assert response.status_code == 200
         assert "text/plain" in response.headers.get("content-type", "")
 
+    def test_download_job_logs_uses_legacy_row_logs_when_no_file(
+        self, test_client, admin_headers, test_db
+    ):
+        """A pre-phase-5 `CheckJob` row (spec section 13 phase 5) mirrored its
+        output straight into the `logs` column with no log file at all. The
+        operation-only download branch must fall back to that text instead
+        of 404ing just because `log_file_path` is unset."""
+        from app.database.models import CheckJob, Repository
+
+        _set_log_save_policy(test_db, "all_jobs")
+        repo = Repository(
+            name="Repo", path="/tmp/repo", encryption="none", repository_type="local"
+        )
+        test_db.add(repo)
+        test_db.commit()
+        job = CheckJob(
+            repository_id=repo.id,
+            status="completed",
+            logs="legacy check output",
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.get(
+            f"/api/activity/check/{job.id}/logs/download",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        assert "text/plain" in response.headers.get("content-type", "")
+        assert response.content.decode() == "legacy check output"
+
+    def test_download_job_logs_for_running_operation_returns_cannot_download_error(
+        self, test_client, admin_headers, test_db
+    ):
+        """A running operation-only job (check/prune/compact/...) must reject
+        the download the same way every other job type does: 400 with
+        `cannotDownloadLogsForRunningJob`, not the unrelated 404 for a
+        completed job with no logs at all."""
+        from app.database.models import Operation, Repository
+
+        repo = Repository(
+            name="Repo", path="/tmp/repo", encryption="none", repository_type="local"
+        )
+        test_db.add(repo)
+        test_db.commit()
+        op = Operation(
+            repository_id=repo.id,
+            kind="check",
+            category="maintenance",
+            status="running",
+            trigger="manual",
+            priority=0,
+            run_id="run-1",
+        )
+        test_db.add(op)
+        test_db.commit()
+        test_db.refresh(op)
+
+        response = test_client.get(
+            f"/api/activity/check/{op.id}/logs/download",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.activity.cannotDownloadLogsForRunningJob"
+        )
+
     def test_activity_log_download_accepts_proxy_auth(
         self, test_client, test_db, monkeypatch
     ):

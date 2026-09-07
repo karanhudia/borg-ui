@@ -30,6 +30,7 @@ from app.database.models import (
     AgentJob,
     AgentMachine,
     CheckJob,
+    Operation,
     CompactJob,
     LicensingState,
     PruneJob,
@@ -41,10 +42,6 @@ from app.database.models import (
     SystemSettings,
 )
 from app.api.repositories import _build_repository_path_from_connection
-
-
-def _discard_background_coro(coro):
-    coro.close()
 
 
 def _enable_borg_v2(test_db):
@@ -1053,41 +1050,16 @@ class TestRepositoriesCreate:
         assert repo.connection_id is None
         assert repo.repository_type == "local"
 
-    @pytest.mark.parametrize(
-        "endpoint,request_body,job_model,job_kind,capability",
-        [
-            (
-                "check",
-                {"max_duration": 600},
-                CheckJob,
-                "repository.check",
-                "repository.check",
-            ),
-            ("compact", None, CompactJob, "repository.compact", "repository.compact"),
-            (
-                "prune",
-                {"keep_daily": 7, "dry_run": False},
-                PruneJob,
-                "repository.prune",
-                "repository.prune",
-            ),
-        ],
-    )
-    def test_agent_repository_maintenance_routes_queue_agent_job(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        test_db,
-        endpoint,
-        request_body,
-        job_model,
-        job_kind,
-        capability,
+    def test_agent_repository_check_route_enqueues_instead_of_queueing_the_agent(
+        self, test_client: TestClient, admin_headers, test_db
     ):
-        agent = _agent_machine_with_capabilities(capability)
+        """Phase 5: the check route no longer has an agent branch. It enqueues
+        an operation, and `BorgRouter.check` inside the executor is what
+        queues the agent job when the runner starts the work."""
+        agent = _agent_machine_with_capabilities("repository.check")
         repo = Repository(
-            name=f"Agent {endpoint} Repo",
-            path=f"/agent/{endpoint}/repo",
+            name="Agent check Repo",
+            path="/agent/check/repo",
             encryption="none",
             compression="lz4",
             executor_type="agent",
@@ -1101,39 +1073,100 @@ class TestRepositoriesCreate:
         test_db.commit()
         test_db.refresh(repo)
 
-        with (
-            patch(
-                "app.api.repositories.BorgRouter.check", new_callable=AsyncMock
-            ) as check,
-            patch(
-                "app.api.repositories.BorgRouter.compact", new_callable=AsyncMock
-            ) as compact,
-            patch(
-                "app.api.repositories.BorgRouter.prune", new_callable=AsyncMock
-            ) as prune,
-        ):
+        with patch(
+            "app.services.operations.executors.maintenance.BorgRouter"
+        ) as router:
+            router.return_value.check = AsyncMock()
             response = test_client.post(
-                f"/api/repositories/{repo.id}/{endpoint}",
-                json=request_body,
+                f"/api/repositories/{repo.id}/check",
+                json={"max_duration": 600},
                 headers=admin_headers,
             )
 
         assert response.status_code == 200
-        maintenance_job = (
-            test_db.query(job_model).filter_by(repository_id=repo.id).one()
+        op = test_db.get(Operation, response.json()["job_id"])
+        assert op.kind == "check"
+        assert op.repository_id == repo.id
+        assert op.params["max_duration"] == 600
+        assert test_db.query(CheckJob).count() == 0
+
+    def test_agent_repository_prune_route_enqueues_instead_of_queueing_the_agent(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Phase 5: the prune route no longer has an agent branch. It enqueues
+        an operation, and `BorgRouter.prune` inside the executor is what
+        queues the agent job when the runner starts the work."""
+        agent = _agent_machine_with_capabilities("repository.prune")
+        repo = Repository(
+            name="Agent prune Repo",
+            path="/agent/prune/repo",
+            encryption="none",
+            compression="lz4",
+            executor_type="agent",
+            execution_target="agent",
+            agent_machine_id=1,
+            repository_type="local",
         )
-        agent_job = test_db.query(AgentJob).one()
-        assert response.json()["job_id"] == maintenance_job.id
-        assert agent_job.agent_machine_id == agent.id
-        assert agent_job.payload["job_kind"] == job_kind
-        assert agent_job.payload["repository"]["path"] == repo.path
-        assert agent_job.payload["operation"]["maintenance_job"] == {
-            "kind": endpoint,
-            "id": maintenance_job.id,
-        }
-        check.assert_not_called()
-        compact.assert_not_called()
-        prune.assert_not_called()
+        test_db.add_all([agent, repo])
+        test_db.commit()
+        repo.agent_machine_id = agent.id
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch(
+            "app.services.operations.executors.maintenance.BorgRouter"
+        ) as router:
+            router.return_value.prune = AsyncMock()
+            response = test_client.post(
+                f"/api/repositories/{repo.id}/prune",
+                json={"keep_daily": 7, "dry_run": False},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        op = test_db.get(Operation, response.json()["job_id"])
+        assert op.kind == "prune"
+        assert op.repository_id == repo.id
+        assert op.params["keep_daily"] == 7
+        assert test_db.query(PruneJob).count() == 0
+
+    def test_agent_repository_compact_route_enqueues_instead_of_queueing_the_agent(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Phase 5: the compact route no longer has an agent branch. It
+        enqueues an operation, and `BorgRouter.compact` inside the executor is
+        what queues the agent job when the runner starts the work."""
+        agent = _agent_machine_with_capabilities("repository.compact")
+        repo = Repository(
+            name="Agent compact Repo",
+            path="/agent/compact/repo",
+            encryption="none",
+            compression="lz4",
+            executor_type="agent",
+            execution_target="agent",
+            agent_machine_id=1,
+            repository_type="local",
+        )
+        test_db.add_all([agent, repo])
+        test_db.commit()
+        repo.agent_machine_id = agent.id
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch(
+            "app.services.operations.executors.maintenance.BorgRouter"
+        ) as router:
+            router.return_value.compact = AsyncMock()
+            response = test_client.post(
+                f"/api/repositories/{repo.id}/compact",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        op = test_db.get(Operation, response.json()["job_id"])
+        assert op.kind == "compact"
+        assert op.repository_id == repo.id
+        assert test_db.query(CompactJob).count() == 0
 
     def test_agent_repository_info_queues_agent_job_and_returns_existing_shape(
         self, test_client: TestClient, admin_headers, test_db
@@ -3589,6 +3622,59 @@ class TestRepositoriesJobStatus:
         assert data[response_key]["id"] == job.id
         assert data[response_key]["status"] == "pending"
 
+    @pytest.mark.parametrize(
+        "kind,response_key",
+        [
+            ("check", "check_job"),
+            ("compact", "compact_job"),
+            ("prune", "prune_job"),
+            ("restore_check", "restore_check_job"),
+        ],
+    )
+    def test_get_repository_running_jobs_includes_a_queued_operation(
+        self, test_client: TestClient, admin_headers, test_db, kind, response_key
+    ):
+        """Phase 5 moved check, compact, prune, and restore check to
+        `operations`; this endpoint must still see them as running work,
+        since nothing writes new rows to their legacy tables any more."""
+        from app.database.models import Operation
+        from app.services.operations.vocab import category_for
+
+        repo = Repository(
+            name=f"Queued {response_key} Repo",
+            path=f"/job/queued-{response_key}-repo",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        # A raw insert, not `enqueue()`: `enqueue()` wakes the real
+        # background runner, which would then actually dispatch this row
+        # against a repository with no real Borg data behind it.
+        op = Operation(
+            repository_id=repo.id,
+            kind=kind,
+            category=category_for(kind),
+            status="queued",
+            trigger="manual",
+            priority=0,
+            run_id="test-run",
+        )
+        test_db.add(op)
+        test_db.commit()
+
+        response = test_client.get(
+            f"/api/repositories/{repo.id}/running-jobs", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["has_running_jobs"] is True
+        assert data[response_key]["id"] == op.id
+        assert data[response_key]["status"] == "pending"
+
     def test_get_check_jobs_repository_not_found(
         self, test_client: TestClient, admin_headers
     ):
@@ -3660,31 +3746,21 @@ class TestRepositoryCheck:
         test_db.commit()
         test_db.refresh(repo)
 
-        with patch(
-            "app.api.repositories.start_background_maintenance_job"
-        ) as mock_start:
-            mock_start.return_value = CheckJob(
-                id=42,
-                repository_id=repo.id,
-                status="pending",
-                max_duration=0,
-                extra_flags="--repair --archives-only",
-            )
-
-            response = test_client.post(
-                f"/api/repositories/{repo.id}/check",
-                headers=admin_headers,
-                json={
-                    "max_duration": 0,
-                    "check_extra_flags": "  --repair --archives-only  ",
-                },
-            )
+        response = test_client.post(
+            f"/api/repositories/{repo.id}/check",
+            headers=admin_headers,
+            json={
+                "max_duration": 0,
+                "check_extra_flags": "  --repair --archives-only  ",
+            },
+        )
 
         assert response.status_code == 200
-        assert mock_start.call_args.kwargs["extra_fields"] == {
-            "max_duration": 0,
-            "extra_flags": "--repair --archives-only",
-        }
+        # Phase 5: the flags live in `operations.params` (spec 6.2), trimmed.
+        op = test_db.get(Operation, response.json()["job_id"])
+        assert op.kind == "check"
+        assert op.params["max_duration"] == 0
+        assert op.params["extra_flags"] == "--repair --archives-only"
 
     def test_start_check_rejects_full_check_flags_with_partial_duration(
         self, test_client: TestClient, admin_headers, test_db
@@ -3700,24 +3776,20 @@ class TestRepositoryCheck:
         test_db.commit()
         test_db.refresh(repo)
 
-        with patch(
-            "app.api.repositories.start_background_maintenance_job"
-        ) as mock_start:
-            response = test_client.post(
-                f"/api/repositories/{repo.id}/check",
-                headers=admin_headers,
-                json={
-                    "max_duration": 600,
-                    "check_extra_flags": " --verify-data ",
-                },
-            )
+        response = test_client.post(
+            f"/api/repositories/{repo.id}/check",
+            headers=admin_headers,
+            json={
+                "max_duration": 600,
+                "check_extra_flags": " --verify-data ",
+            },
+        )
 
         assert response.status_code == 422
         assert response.json()["detail"]["key"] == (
             "backend.errors.repo.checkFlagsRequireUnlimitedDuration"
         )
         assert response.json()["detail"]["params"]["flags"] == "--verify-data"
-        mock_start.assert_not_called()
 
 
 @pytest.mark.unit
@@ -4116,25 +4188,18 @@ class TestRepositoryRestoreCheckSchedule:
         test_db.commit()
         test_db.refresh(repo)
 
-        with patch(
-            "app.api.repositories.start_background_maintenance_job"
-        ) as mock_start:
-            mock_start.return_value = RestoreCheckJob(
-                id=501,
-                repository_id=repo.id,
-                status="pending",
-                probe_paths='["etc/hostname"]',
-            )
-            response = test_client.post(
-                f"/api/repositories/{repo.id}/restore-check",
-                headers=admin_headers,
-                json={},
-            )
+        response = test_client.post(
+            f"/api/repositories/{repo.id}/restore-check",
+            headers=admin_headers,
+            json={},
+        )
 
         assert response.status_code == 200
         data = response.json()
-        assert data["job_id"] == 501
         assert data["message"] == "backend.success.repo.restoreCheckJobStarted"
+        op = test_db.get(Operation, data["job_id"])
+        assert op.kind == "restore_check"
+        assert op.category == "restore"
 
     def test_manual_canary_restore_check_marks_canary_for_future_backups(
         self, test_client: TestClient, admin_headers, test_db
@@ -4150,15 +4215,11 @@ class TestRepositoryRestoreCheckSchedule:
         test_db.commit()
         test_db.refresh(repo)
 
-        with patch(
-            "app.api.maintenance_jobs.schedule_background_job",
-            side_effect=_discard_background_coro,
-        ):
-            response = test_client.post(
-                f"/api/repositories/{repo.id}/restore-check",
-                headers=admin_headers,
-                json={"paths": [], "full_archive": False},
-            )
+        response = test_client.post(
+            f"/api/repositories/{repo.id}/restore-check",
+            headers=admin_headers,
+            json={"paths": [], "full_archive": False},
+        )
 
         assert response.status_code == 200
         test_db.refresh(repo)
@@ -4206,15 +4267,11 @@ class TestRepositoryRestoreCheckSchedule:
         test_db.commit()
         test_db.refresh(repo)
 
-        with patch(
-            "app.api.maintenance_jobs.schedule_background_job",
-            side_effect=_discard_background_coro,
-        ):
-            response = test_client.post(
-                f"/api/repositories/{repo.id}/restore-check",
-                headers=admin_headers,
-                json={"paths": ["etc/hostname"], "full_archive": False},
-            )
+        response = test_client.post(
+            f"/api/repositories/{repo.id}/restore-check",
+            headers=admin_headers,
+            json={"paths": ["etc/hostname"], "full_archive": False},
+        )
 
         assert response.status_code == 200
 

@@ -3,7 +3,7 @@ from datetime import datetime
 from pathlib import Path
 import structlog
 from sqlalchemy.orm import Session
-from app.database.models import PruneJob, Repository
+from app.database.models import Repository
 from app.database.database import SessionLocal
 from app.config import settings
 from app.core.borg import borg
@@ -14,6 +14,7 @@ from app.utils.borg_env import (
     cleanup_temp_key_file,
     effective_repository_remote_path,
 )
+from app.services.operations.job_facade import refresh_job, resolve_maintenance_job
 
 logger = structlog.get_logger()
 
@@ -73,7 +74,7 @@ class PruneService:
 
         try:
             # Get job
-            job = db.query(PruneJob).filter(PruneJob.id == job_id).first()
+            job = resolve_maintenance_job(db, job_id, "prune")
             if not job:
                 logger.error("Prune job not found", job_id=job_id)
                 return
@@ -200,7 +201,7 @@ class PruneService:
                 nonlocal cancelled
                 while not cancelled and process.returncode is None:
                     await asyncio.sleep(3)
-                    db.refresh(job)
+                    refresh_job(db, job)
                     if job.status == "cancelled":
                         logger.info(
                             "Prune job cancelled, terminating process", job_id=job_id

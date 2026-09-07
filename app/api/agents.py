@@ -35,11 +35,11 @@ from app.database.models import (
     AgentJobLog,
     AgentMachine,
     BackupJob,
-    CheckJob,
-    CompactJob,
-    DeleteArchiveJob,
-    PruneJob,
     Repository,
+)
+from app.services.operations.job_facade import (
+    LEGACY_MODELS,
+    resolve_maintenance_job,
 )
 from app.services.agent_artifact_relay import agent_artifact_relay
 from app.services.agent_connection_manager import (
@@ -99,12 +99,16 @@ FINAL_AGENT_JOB_STATUSES = {
 # activity is newer than the cutoff, so a genuinely running operation is
 # never requeued however long it takes.
 STALE_AGENT_JOB_REQUEUE_AFTER = timedelta(minutes=2)
-REPOSITORY_OPERATION_JOB_MODELS = {
-    "check": CheckJob,
-    "compact": CompactJob,
-    "prune": PruneJob,
-    "delete_archive": DeleteArchiveJob,
-}
+# The maintenance kinds an agent can run. Phase 5 moved these to the
+# `operations` table; `resolve_maintenance_job` hands back an operation-backed
+# facade for new work and the legacy row for anything queued before the
+# upgrade, so both shapes flow through the callbacks below.
+REPOSITORY_OPERATION_JOB_KINDS = (
+    "check",
+    "compact",
+    "prune",
+    "delete_archive",
+)
 
 
 def _now_utc() -> datetime:
@@ -490,10 +494,21 @@ def _get_repository_operation_job(agent_job: AgentJob, db: Session) -> Any | Non
 
     kind = str(maintenance_job.get("kind") or "")
     job_id = maintenance_job.get("id")
-    model = REPOSITORY_OPERATION_JOB_MODELS.get(kind)
-    if not model or not job_id:
+    if kind not in REPOSITORY_OPERATION_JOB_KINDS or not job_id:
         return None
-    return db.query(model).filter(model.id == int(job_id)).first()
+    return resolve_maintenance_job(db, int(job_id), kind)
+
+
+def _maintenance_kind(operation_job: Any) -> Optional[str]:
+    """The kind of a maintenance row, whether it is an operation-backed facade
+    (which knows its own kind) or a pre-phase-5 legacy row."""
+    kind = getattr(operation_job, "kind", None)
+    if kind:
+        return kind
+    for name, model in LEGACY_MODELS.items():
+        if isinstance(operation_job, model):
+            return name
+    return None
 
 
 def _sync_repository_operation_progress(agent_job: AgentJob, db: Session) -> None:
@@ -538,10 +553,11 @@ def _finish_linked_repository_operation_job(
         .filter(Repository.id == operation_job.repository_id)
         .first()
     )
+    kind = _maintenance_kind(operation_job)
     if repository and status_value in ("completed", "completed_with_warnings"):
-        if isinstance(operation_job, CheckJob):
+        if kind == "check":
             repository.last_check = completed_at
-        elif isinstance(operation_job, CompactJob):
+        elif kind == "compact":
             repository.last_compact = completed_at
         repository.updated_at = _now_utc()
 
@@ -553,15 +569,13 @@ def _finish_linked_repository_operation_job(
             purge_jobs_for_pruned_archives,
         )
 
-        if isinstance(operation_job, PruneJob):
+        if kind == "prune":
             purge_jobs_for_pruned_archives(
                 db,
                 operation_job.repository_id,
                 archive_names_from_prune_output(operation_job.logs or ""),
             )
-        elif isinstance(operation_job, DeleteArchiveJob) and getattr(
-            operation_job, "archive_name", None
-        ):
+        elif kind == "delete_archive" and getattr(operation_job, "archive_name", None):
             purge_jobs_for_pruned_archives(
                 db, operation_job.repository_id, {operation_job.archive_name}
             )
@@ -847,7 +861,7 @@ async def _notify_agent_job_outcome(db: Session, job: AgentJob) -> None:
             await notify_backup_job_finished(db, backup_job)
             return
         operation_job = _get_repository_operation_job(job, db)
-        if isinstance(operation_job, CheckJob):
+        if _maintenance_kind(operation_job) == "check":
             await notify_check_job_finished(db, operation_job)
     except Exception as exc:
         logger.warning(

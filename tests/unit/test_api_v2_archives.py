@@ -1015,41 +1015,38 @@ class TestV2ArchiveRoutes:
     def test_delete_archive_success_creates_job(
         self, test_client: TestClient, admin_headers, test_db
     ):
+        from app.database.models import Operation
+
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(test_db)
 
-        with patch(
-            "app.api.v2.archives.asyncio.create_task", return_value=object()
-        ) as mock_create_task:
-            response = test_client.delete(
-                f"/api/v2/archives/archive-1?repository={repo.id}",
-                headers=admin_headers,
-            )
-
-            scheduled = mock_create_task.call_args.args[0]
-            scheduled.close()
+        response = test_client.delete(
+            f"/api/v2/archives/archive-1?repository={repo.id}",
+            headers=admin_headers,
+        )
 
         assert response.status_code == 200
         assert response.json()["status"] == "pending"
-        job = test_db.query(DeleteArchiveJob).first()
-        assert job is not None
-        assert job.archive_name == "archive-1"
-        assert job.repository_id == repo.id
+        op = test_db.get(Operation, response.json()["job_id"])
+        assert op.kind == "delete_archive"
+        assert op.params["archive_name"] == "archive-1"
+        assert op.repository_id == repo.id
+        assert test_db.query(DeleteArchiveJob).count() == 0
 
     def test_delete_archive_rejects_duplicate_running_job(
         self, test_client: TestClient, admin_headers, test_db
     ):
+        from app.services.operations.enqueue import enqueue
+
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(test_db)
-        test_db.add(
-            DeleteArchiveJob(
-                repository_id=repo.id,
-                repository_path=repo.path,
-                archive_name="archive-1",
-                status="running",
-            )
+        enqueue(
+            test_db,
+            "delete_archive",
+            repository_id=repo.id,
+            trigger="manual",
+            params={"archive_name": "archive-1"},
         )
-        test_db.commit()
 
         response = test_client.delete(
             f"/api/v2/archives/archive-1?repository={repo.id}",

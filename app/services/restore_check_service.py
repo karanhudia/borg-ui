@@ -17,6 +17,7 @@ from app.core.borg_router import BorgRouter
 from app.database.database import SessionLocal
 from app.database.models import Repository, RestoreCheckJob
 from app.services.notification_service import NotificationService
+from app.services.operations.job_facade import resolve_maintenance_job
 from app.services.restore_check_canary import (
     CANARY_MANIFEST,
     get_legacy_restore_canary_archive_paths,
@@ -126,6 +127,37 @@ class RestoreCheckService:
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.running_processes: dict[int, asyncio.subprocess.Process] = {}
 
+    async def cancel_restore_check(self, job_id: int) -> bool:
+        """Cancel a running restore check by terminating its tracked process."""
+        if job_id not in self.running_processes:
+            logger.warning(
+                "No running restore check process found for job", job_id=job_id
+            )
+            return False
+
+        process = self.running_processes[job_id]
+        try:
+            process.terminate()
+            logger.info(
+                "Sent SIGTERM to restore check process", job_id=job_id, pid=process.pid
+            )
+            try:
+                await asyncio.wait_for(process.wait(), timeout=5.0)
+            except asyncio.TimeoutError:
+                process.kill()
+                logger.warning(
+                    "Force killed restore check process (SIGKILL)",
+                    job_id=job_id,
+                    pid=process.pid,
+                )
+                await process.wait()
+            return True
+        except Exception as e:
+            logger.error(
+                "Failed to cancel restore check process", job_id=job_id, error=str(e)
+            )
+            return False
+
     def _save_job_logs(
         self, job: RestoreCheckJob, job_id: int, raw_logs: list[str]
     ) -> None:
@@ -213,7 +245,7 @@ class RestoreCheckService:
         use_canary = False
 
         try:
-            job = db.query(RestoreCheckJob).filter(RestoreCheckJob.id == job_id).first()
+            job = resolve_maintenance_job(db, job_id, "restore_check")
             if not job:
                 logger.error("Restore check job not found", job_id=job_id)
                 return
@@ -455,11 +487,7 @@ class RestoreCheckService:
             try:
                 db.rollback()
                 if job is None:
-                    job = (
-                        db.query(RestoreCheckJob)
-                        .filter(RestoreCheckJob.id == job_id)
-                        .first()
-                    )
+                    job = resolve_maintenance_job(db, job_id, "restore_check")
                 if job:
                     job.status = "failed"
                     job.error_message = str(exc)
