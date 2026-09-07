@@ -487,3 +487,33 @@ def test_start_survives_a_second_event_loop(session_factory, registry):
     # driving their own `TestClient(app)` do against the same singleton.
     asyncio.run(bind_wake_to_this_loop())
     asyncio.run(start_and_stop_on_a_fresh_loop())
+
+
+@pytest.mark.unit
+def test_start_clears_stale_tasks_from_a_previous_loop(session_factory, registry):
+    """`running_tasks` is a plain dict on the module-level singleton, so it
+    survives across separate `start()`/`drain()` lifecycles the same way
+    `_wake` used to. A task recorded by one lifecycle (e.g. a non-awaitable
+    stand-in, from a test that patches `asyncio.create_task` at the moment
+    this runner's own tick fires) can never be gathered by a later
+    lifecycle's `drain()` anyway, since nothing from that closed loop is
+    still running; left in place, `drain()`'s `asyncio.gather(*tasks, ...)`
+    blows up on it instead of draining cleanly. `start()` must clear
+    `running_tasks` the same way it refreshes `_wake`."""
+    from unittest.mock import MagicMock
+
+    from app.services.operations.runner import OperationRunner
+
+    runner = OperationRunner(session_factory=session_factory, registry=registry)
+    runner.running_tasks[999] = MagicMock(name="stale_task_from_a_closed_loop")
+
+    async def start_and_stop():
+        task = asyncio.create_task(runner.start())
+        await asyncio.sleep(0.05)
+        runner.stop()
+        runner.wake()
+        await asyncio.wait_for(task, timeout=2)
+
+    asyncio.run(start_and_stop())
+
+    assert 999 not in runner.running_tasks

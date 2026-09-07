@@ -157,8 +157,16 @@ class OperationRunner:
         """Request cooperative cancellation for every running task and wait
         for them to finish, so shutdown goes through
         `OperationContext.cancelled()` instead of a raw task cancellation.
-        Call `stop()` first so no new tasks start while draining."""
-        tasks = list(self.running_tasks.values())
+        Call `stop()` first so no new tasks start while draining.
+
+        A dispatched entry is normally a real `asyncio.Task`, but a test that
+        patches `asyncio.create_task` around a request can catch this
+        runner's own `tick()` dispatching newly enqueued work on the same
+        event loop mid-request, landing a `MagicMock` in `running_tasks`
+        instead. `asyncio.gather` raises `TypeError` outright on anything
+        that isn't awaitable, which would otherwise crash every shutdown
+        from that point on; filter those out instead of gathering them."""
+        tasks = [t for t in self.running_tasks.values() if asyncio.isfuture(t)]
         if not tasks:
             return
         for operation_id in list(self.running_tasks):
@@ -187,6 +195,16 @@ class OperationRunner:
         # a test suite that builds a fresh app (and event loop) per test
         # does, every time.
         self._wake = asyncio.Event()
+        # Same reasoning as `_wake`: a task from a previous `start()` belongs
+        # to that call's (closed) event loop and can never be gathered by
+        # this one's `drain()` anyway. Without this, a task that failed to
+        # dispatch as a real `asyncio.Task` (e.g. a test patching
+        # `asyncio.create_task` at the exact moment this runner's own tick
+        # fires) sits in `running_tasks` forever, since nothing ever
+        # completes it to trigger the normal `.pop()` cleanup below - and
+        # the next process-lifetime's `drain()` crashes trying to `gather()`
+        # it (`TypeError: ... a coroutine or an awaitable is required`).
+        self.running_tasks = {}
         logger.info("Operations runner started", poll_interval=self._poll_interval)
         while not self._stopped:
             try:
