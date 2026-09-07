@@ -451,7 +451,10 @@ install_rclone() {
 install_python_env() {
   local venv="${RELEASE_DIR}/venv"
 
-  if [[ -x "${venv}/bin/gunicorn" ]]; then
+  # Written only once every requirement is in. Testing for a binary instead
+  # would call an interrupted install finished: pip installs in its own order,
+  # so bin/gunicorn can exist while later dependencies are still missing.
+  if [[ -f "${venv}/.install-complete" ]]; then
     log "Python environment for ${VERSION} is already built"
     return
   fi
@@ -461,6 +464,7 @@ install_python_env() {
   python3 -m venv "${venv}"
   "${venv}/bin/pip" install --quiet --upgrade pip setuptools wheel
   "${venv}/bin/pip" install --quiet -r "${RELEASE_DIR}/requirements.txt"
+  touch "${venv}/.install-complete"
 }
 
 write_env_file() {
@@ -512,7 +516,12 @@ activate_release() {
   PREVIOUS_RELEASE="$(readlink -f "${PREFIX}/current" 2>/dev/null || true)"
   [[ "${PREVIOUS_RELEASE}" != "${RELEASE_DIR}" ]] || PREVIOUS_RELEASE=""
 
-  if systemctl is-active --quiet borg-ui 2>/dev/null; then
+  # Only when this run will start it again. With --no-start, install_service
+  # returns without starting, so stopping here would turn an upgrade into an
+  # outage lasting until the operator noticed. The running service keeps
+  # serving the code it already loaded; moving the symlink underneath it does
+  # not disturb it, and the new release takes effect on the next restart.
+  if [[ "${START_SERVICE}" == "true" ]] && systemctl is-active --quiet borg-ui 2>/dev/null; then
     log "Stopping borg-ui for the switch"
     systemctl stop borg-ui
   fi
@@ -549,6 +558,29 @@ prune_old_releases() {
   done
 }
 
+# Type=exec makes systemctl return as soon as gunicorn is exec'd, which is
+# before it has bound the port and says nothing about whether it stayed up. A
+# release that dies on a bad migration or a taken port would otherwise count as
+# a successful start and never roll back, so wait for the app to actually
+# answer.
+wait_until_serving() {
+  local deadline=$((SECONDS + 90))
+
+  while ((SECONDS < deadline)); do
+    if ! systemctl is-active --quiet borg-ui; then
+      warn "borg-ui exited during startup"
+      return 1
+    fi
+    if curl -fsS -o /dev/null --max-time 2 "http://127.0.0.1:${PORT}/" 2>/dev/null; then
+      return 0
+    fi
+    sleep 2
+  done
+
+  warn "borg-ui did not answer on port ${PORT} within 90s"
+  return 1
+}
+
 install_service() {
   log "Installing the systemd unit"
   sed -e "s|@PREFIX@|${PREFIX}|g" \
@@ -560,11 +592,11 @@ install_service() {
   systemctl enable borg-ui >/dev/null
 
   if [[ "${START_SERVICE}" != "true" ]]; then
-    log "Not starting the service (--no-start). Start it with: systemctl start borg-ui"
+    log "Not starting the service (--no-start). Apply it with: systemctl restart borg-ui"
     return
   fi
 
-  if systemctl restart borg-ui; then
+  if systemctl restart borg-ui && wait_until_serving; then
     return
   fi
 
@@ -576,9 +608,13 @@ install_service() {
     ln -sfn "${PREVIOUS_RELEASE}" "${PREFIX}/current"
     [[ -d "${PREVIOUS_RELEASE}/agent-dist" ]] &&
       ln -sfn "${PREVIOUS_RELEASE}/agent-dist" "${PREFIX}/agent-dist"
-    systemctl start borg-ui || warn "the previous release did not start either"
+    if systemctl start borg-ui && wait_until_serving; then
+      warn "rolled back; ${PREVIOUS_RELEASE##*/} is serving again"
+    else
+      warn "the previous release did not come up either"
+    fi
   fi
-  die "borg-ui failed to start; see: journalctl -u borg-ui -n 50"
+  die "borg-ui ${VERSION} failed to start; see: journalctl -u borg-ui -n 50"
 }
 
 report() {
@@ -605,7 +641,6 @@ main() {
   source "${RELEASE_DIR}/packaging/native/versions.env"
 
   load_persisted_settings
-  stop_service_for_upgrade
   create_service_user
   create_directories
   install_python_env

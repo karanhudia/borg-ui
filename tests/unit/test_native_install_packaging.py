@@ -232,3 +232,47 @@ def test_the_release_publishes_the_installer_and_its_checksum():
     release = (REPO_ROOT / ".github" / "workflows" / "release.yml").read_text()
     for asset in ("dist/install.sh", "dist/install.sh.sha256"):
         assert asset in release, f"{asset} is never attached to the release"
+
+
+def test_every_step_main_calls_actually_exists():
+    """The composition layer, checked by bash itself.
+
+    A review round found `main` still calling a function that a refactor had
+    deleted. Under `set -e` that aborts every install at that line, and no
+    other test noticed because none of them run `main`. Sourcing the script
+    with its invocation stripped and asking bash to resolve each step is the
+    cheapest way to keep that from recurring.
+    """
+    installer = INSTALLER.read_text()
+    assert installer.rstrip().endswith('main "$@"'), (
+        "install.sh no longer ends with its main invocation; this guard "
+        "strips that line to source the script safely"
+    )
+    definitions = installer.rstrip()[: -len('main "$@"')]
+
+    body = re.search(r"^main\(\) \{\n(.*?)^\}", installer, re.M | re.S)
+    assert body, "install.sh has no top-level main()"
+
+    steps = []
+    for line in body.group(1).splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        steps.append(line.split()[0])
+    assert len(steps) > 5, f"main() looks unparsed, found only {steps}"
+
+    probe = "\n".join(
+        [definitions]
+        + [
+            f"declare -F {step} >/dev/null || type -t {step} >/dev/null || "
+            f'echo "MISSING {step}"'
+            for step in steps
+        ]
+    )
+    result = subprocess.run(["bash", "-c", probe], capture_output=True, text=True)
+    missing = [
+        line.split()[1]
+        for line in result.stdout.splitlines()
+        if line.startswith("MISSING")
+    ]
+    assert not missing, f"main() calls steps that do not exist: {missing}"
