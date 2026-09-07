@@ -297,6 +297,11 @@ class Repository(Base):
     last_check = Column(DateTime, nullable=True)  # Last successful check completion
     last_compact = Column(DateTime, nullable=True)  # Last successful compact completion
     total_size = Column(String, nullable=True)
+    # Which measurement total_size holds: borg1_cache_stats (deduplicated),
+    # borg2_index (repository object size), storage_used (store file bytes).
+    total_size_source = Column(String, nullable=True)
+    # repository.last_modified as Borg reports it: the last manifest write.
+    borg_last_modified = Column(DateTime, nullable=True)
     archive_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)

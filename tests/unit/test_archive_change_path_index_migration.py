@@ -62,11 +62,14 @@ def _insert_long_path(url):
     engine = _engine(url)
     session = sessionmaker(bind=engine)()
     try:
-        repo = Repository(name="r", path="/srv/r")
-        session.add(repo)
-        session.flush()
+        # Core insert with explicit columns: the schema at this revision
+        # predates columns later revisions add to repositories, which an
+        # ORM insert would include.
+        repo_id = session.execute(
+            Repository.__table__.insert().values(name="r", path="/srv/r")
+        ).inserted_primary_key[0]
         archive = Archive(
-            repository_id=repo.id,
+            repository_id=repo_id,
             borg_id="b",
             name="a",
             series="s",

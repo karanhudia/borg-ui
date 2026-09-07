@@ -9,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api import repositories as repositories_api
+from app.services.storage_usage import SOURCE_BORG1_CACHE_STATS, SizeResult
 from app.database.models import (
     BackupJob,
     BackupPlan,
@@ -513,9 +514,15 @@ class TestRepositoryHelperContracts:
                 AsyncMock(return_value=list_payload["stdout"]),
             ) as mock_list,
             patch.object(
-                repositories_api.BorgRouter,
-                "calculate_total_size_bytes",
-                AsyncMock(return_value=2097152),
+                repositories_api,
+                "measure_repository_size",
+                AsyncMock(
+                    return_value=SizeResult(
+                        bytes=2097152,
+                        source=SOURCE_BORG1_CACHE_STATS,
+                        last_modified=datetime(2024, 2, 1, 12, 30),
+                    )
+                ),
             ) as mock_size,
         ):
             success = await repositories_api.update_repository_stats(repo, test_db)
@@ -523,6 +530,8 @@ class TestRepositoryHelperContracts:
         assert success is True
         assert repo.archive_count == 2
         assert repo.total_size == "2.00 MB"
+        assert repo.total_size_source == SOURCE_BORG1_CACHE_STATS
+        assert repo.borg_last_modified == datetime(2024, 2, 1, 12, 30)
         assert repo.last_backup == datetime(2024, 2, 1, 12, 0)
         mock_list.assert_awaited_once()
         # TZ=UTC is pinned inside the wrapper methods (mocked away here);
@@ -545,7 +554,8 @@ class TestRepositoryHelperContracts:
         # Borg 1 repo-info carries repo-level dedup size in cache.stats.
         rinfo_stdout = (
             '{"encryption":{"mode":"repokey-aes-ocb"},'
-            '"cache":{"stats":{"unique_csize":2097152}}}'
+            '"cache":{"stats":{"unique_csize":2097152}},'
+            '"repository":{"last_modified":"2024-02-01T12:30:00+00:00"}}'
         )
         wait_returns = [
             {"success": True, "stdout": list_stdout},
@@ -576,6 +586,8 @@ class TestRepositoryHelperContracts:
         assert repo.archive_count == 2
         assert repo.encryption == "repokey-aes-ocb"
         assert repo.total_size == "2.00 MB"
+        assert repo.total_size_source == "borg1_cache_stats"
+        assert repo.borg_last_modified == datetime(2024, 2, 1, 12, 30)
         assert repo.last_backup == datetime(2024, 2, 1, 12, 0)
         job_kinds = [c.kwargs["job_kind"] for c in mock_queue.call_args_list]
         assert job_kinds == ["repository.list_archives", "repository.rinfo"]
@@ -635,9 +647,9 @@ class TestRepositoryHelperContracts:
                 AsyncMock(return_value=archives),
             ),
             patch.object(
-                repositories_api.BorgRouter,
-                "calculate_total_size_bytes",
-                AsyncMock(return_value=0),
+                repositories_api,
+                "measure_repository_size",
+                AsyncMock(return_value=SizeResult()),
             ),
         ):
             success = await repositories_api.update_repository_stats(repo, test_db)
@@ -687,9 +699,11 @@ class TestRepositoryHelperContracts:
                 AsyncMock(return_value='{"archives": []}'),
             ) as mock_list,
             patch.object(
-                repositories_api.BorgRouter,
-                "calculate_total_size_bytes",
-                AsyncMock(return_value=1024),
+                repositories_api,
+                "measure_repository_size",
+                AsyncMock(
+                    return_value=SizeResult(bytes=1024, source=SOURCE_BORG1_CACHE_STATS)
+                ),
             ) as mock_size,
             patch("app.api.repositories.os.path.exists", return_value=False),
         ):
@@ -701,7 +715,7 @@ class TestRepositoryHelperContracts:
         assert not mock_size.await_args.kwargs["use_bypass_lock"]
 
     @pytest.mark.asyncio
-    async def test_update_repository_stats_formats_v2_total_size_from_router(
+    async def test_update_repository_stats_formats_v2_total_size_from_the_measurement(
         self, test_db
     ):
         repo = _create_repo(test_db, "Repo V2", "/repos/v2-main", borg_version=2)
@@ -719,9 +733,9 @@ class TestRepositoryHelperContracts:
                 ),
             ) as mock_list,
             patch.object(
-                repositories_api.BorgRouter,
-                "calculate_total_size_bytes",
-                AsyncMock(return_value=4096),
+                repositories_api,
+                "measure_repository_size",
+                AsyncMock(return_value=SizeResult(bytes=4096, source="borg2_index")),
             ) as mock_size,
             patch("app.api.repositories.os.path.exists", return_value=False),
         ):
@@ -730,9 +744,11 @@ class TestRepositoryHelperContracts:
         assert success is True
         assert repo.archive_count == 1
         assert repo.total_size == "4.00 KB"
+        assert repo.total_size_source == "borg2_index"
         assert repo.last_backup == datetime(2024, 2, 1, 12, 0)
         mock_list.assert_awaited_once()
         mock_size.assert_awaited_once()
+        assert mock_size.await_args.args[0] is repo
 
     @pytest.mark.asyncio
     async def test_repo_metadata_routes_serialize_borg_commands_per_repository(
