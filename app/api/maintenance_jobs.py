@@ -1,18 +1,12 @@
-import asyncio
 import os
 from datetime import datetime
-from typing import Any, Awaitable, Callable, Optional, Type
+from typing import Any, Optional
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.security import check_repo_access
 from app.database.models import Repository, User
-from app.services.job_admission import (
-    ACTIVE_MAINTENANCE_STATUSES,
-    ensure_repository_admission,
-    operation_for_maintenance_model,
-)
 from app.services.log_policy import DEFAULT_LOG_SAVE_POLICY, job_has_logs_by_policy
 from app.utils.datetime_utils import serialize_datetime
 
@@ -45,168 +39,6 @@ def get_repository_with_access_or_empty(
         return None
     check_repo_access(db, current_user, repository, required_role)
     return repository
-
-
-def ensure_no_running_job(
-    db: Session,
-    job_model: Type[Any],
-    repository_id: int,
-    *,
-    error_key: str,
-) -> None:
-    running_job = (
-        db.query(job_model)
-        .filter(
-            job_model.repository_id == repository_id,
-            job_model.status.in_(ACTIVE_MAINTENANCE_STATUSES),
-        )
-        .first()
-    )
-    if running_job:
-        raise HTTPException(status_code=409, detail={"key": error_key})
-
-
-def create_maintenance_job(
-    db: Session,
-    job_model: Type[Any],
-    repository: Repository,
-    *,
-    status: str = "pending",
-    extra_fields: Optional[dict[str, Any]] = None,
-):
-    payload = {
-        "repository_id": repository.id,
-        "repository_path": repository.path,
-        "status": status,
-    }
-    if extra_fields:
-        payload.update(extra_fields)
-
-    job = job_model(**payload)
-    db.add(job)
-    db.commit()
-    db.refresh(job)
-    return job
-
-
-def create_running_maintenance_job(
-    db: Session,
-    job_model: Type[Any],
-    repository: Repository,
-):
-    return create_maintenance_job(
-        db,
-        job_model,
-        repository,
-        status="running",
-        extra_fields={
-            "started_at": datetime.utcnow(),
-            "progress": 0,
-        },
-    )
-
-
-def schedule_background_job(coro) -> None:
-    asyncio.create_task(coro)
-
-
-def create_started_maintenance_job(
-    db: Session,
-    job_model: Type[Any],
-    repository: Repository,
-    *,
-    status: str = "pending",
-    extra_fields: Optional[dict[str, Any]] = None,
-):
-    payload = dict(extra_fields or {})
-    if status == "running":
-        payload.setdefault("started_at", datetime.utcnow())
-        payload.setdefault("progress", 0)
-    return create_maintenance_job(
-        db,
-        job_model,
-        repository,
-        status=status,
-        extra_fields=payload or None,
-    )
-
-
-def start_background_maintenance_job(
-    db: Session,
-    repository: Repository,
-    job_model: Type[Any],
-    *,
-    error_key: str,
-    dispatcher: Callable[[Any], Awaitable[Any]],
-    status: str = "pending",
-    extra_fields: Optional[dict[str, Any]] = None,
-):
-    operation = operation_for_maintenance_model(job_model)
-    ensure_repository_admission(
-        db,
-        repository,
-        operation,
-        duplicate_error_key=error_key,
-    )
-    job = create_started_maintenance_job(
-        db,
-        job_model,
-        repository,
-        status=status,
-        extra_fields=extra_fields,
-    )
-    schedule_background_job(dispatcher(job))
-    return job
-
-
-def get_job_with_repository(
-    db: Session,
-    current_user: User,
-    job_model: Type[Any],
-    job_id: int,
-    *,
-    not_found_key: str,
-    required_role: str = "viewer",
-):
-    job = db.query(job_model).filter(job_model.id == job_id).first()
-    if not job:
-        raise HTTPException(status_code=404, detail={"key": not_found_key})
-
-    repository = db.query(Repository).filter(Repository.id == job.repository_id).first()
-    if not repository:
-        raise HTTPException(
-            status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"}
-        )
-
-    check_repo_access(db, current_user, repository, required_role)
-    return job, repository
-
-
-def get_repository_jobs(
-    db: Session,
-    current_user: User,
-    repo_id: int,
-    job_model: Type[Any],
-    *,
-    limit: int = 10,
-    required_role: str = "viewer",
-) -> list[Any]:
-    repository = get_repository_with_access_or_empty(
-        db,
-        current_user,
-        repo_id,
-        required_role=required_role,
-    )
-    if not repository:
-        return []
-
-    return (
-        db.query(job_model)
-        .filter(job_model.repository_id == repo_id)
-        .order_by(job_model.id.desc())
-        .limit(limit)
-        .all()
-    )
 
 
 def get_maintenance_job_with_repository(
@@ -274,7 +106,7 @@ def get_repository_maintenance_jobs(
         .all()
     )
     rows.sort(
-        key=lambda row: (row.created_at or row.started_at or datetime.min),
+        key=lambda row: row.created_at or row.started_at or datetime.min,
         reverse=True,
     )
     return rows[:limit]

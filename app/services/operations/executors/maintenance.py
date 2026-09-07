@@ -114,3 +114,79 @@ async def run_check(ctx) -> Outcome:
 
 
 executors.register("check", run_check)
+
+
+_PRUNE_DEFAULTS = {
+    "keep_hourly": 0,
+    "keep_daily": 7,
+    "keep_weekly": 4,
+    "keep_monthly": 6,
+    "keep_quarterly": 0,
+    "keep_yearly": 1,
+}
+
+
+async def run_prune(ctx) -> Outcome:
+    from app.services.prune_service import prune_service
+
+    params = ctx.params
+    retention = tuple(
+        params.get(name, default) for name, default in _PRUNE_DEFAULTS.items()
+    )
+    keep_within = params.get("keep_within")
+    kwargs = {"keep_within": keep_within} if keep_within is not None else {}
+
+    async def call(router, job_id):
+        await router.prune(job_id, *retention, False, **kwargs)
+
+    return await _run(ctx, call, canceller=getattr(prune_service, "cancel_prune", None))
+
+
+executors.register("prune", run_prune)
+
+
+async def run_compact(ctx) -> Outcome:
+    from app.services.compact_service import compact_service
+
+    return await _run(
+        ctx,
+        lambda router, job_id: router.compact(job_id),
+        canceller=getattr(compact_service, "cancel_compact", None),
+    )
+
+
+executors.register("compact", run_compact)
+
+
+async def run_delete_archive(ctx) -> Outcome:
+    from app.services.delete_archive_service import delete_archive_service
+
+    archive_name = ctx.params.get("archive_name")
+    if not archive_name:
+        return Outcome(
+            status="failed", error_message="delete_archive requires an archive name"
+        )
+
+    async def cancel(operation_id):
+        return await delete_archive_service.cancel_delete(operation_id, ctx.db)
+
+    return await _run(
+        ctx,
+        lambda router, job_id: router.delete_archive(job_id, archive_name),
+        canceller=cancel,
+    )
+
+
+executors.register("delete_archive", run_delete_archive)
+
+
+async def run_restore_check(ctx) -> Outcome:
+    from app.services.restore_check_service import restore_check_service
+
+    async def call(_router, job_id):
+        await restore_check_service.execute_restore_check(job_id, ctx.repository_id)
+
+    return await _run(ctx, call)
+
+
+executors.register("restore_check", run_restore_check)

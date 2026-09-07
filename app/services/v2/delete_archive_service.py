@@ -12,6 +12,7 @@ from app.database.models import DeleteArchiveJob, Repository
 from app.database.database import SessionLocal
 from app.core.borg2 import borg2
 from app.config import settings
+from app.services.operations.job_facade import claim_running, resolve_maintenance_job
 from app.utils.db_retries import commit_with_retry
 from app.utils.borg_env import (
     build_repository_borg_env,
@@ -34,9 +35,7 @@ class DeleteArchiveV2Service:
         db = SessionLocal()
         temp_key_file = None
         try:
-            job = (
-                db.query(DeleteArchiveJob).filter(DeleteArchiveJob.id == job_id).first()
-            )
+            job = resolve_maintenance_job(db, job_id, "delete_archive")
             if not job:
                 logger.error("Borg2 delete job not found", job_id=job_id)
                 return
@@ -59,18 +58,36 @@ class DeleteArchiveV2Service:
                 return
 
             started_at = datetime.now(timezone.utc)
+            claimed = 0
 
             def persist_start_state():
-                job.status = "running"
-                job.started_at = started_at
-                job.progress = 10
-                job.progress_message = "Deleting archive..."
+                nonlocal claimed
+                claimed = claim_running(db, job_id, "delete_archive", started_at)
 
             await commit_with_retry(
                 db,
                 prepare=persist_start_state,
                 logger=logger,
                 action="borg2_delete_start",
+                job_id=job_id,
+                repository_id=repository_id,
+            )
+            if not claimed:
+                logger.warning(
+                    "Delete job reached a terminal state before start, skipping",
+                    job_id=job_id,
+                )
+                return
+
+            def persist_progress_state():
+                job.progress = 10
+                job.progress_message = "Deleting archive..."
+
+            await commit_with_retry(
+                db,
+                prepare=persist_progress_state,
+                logger=logger,
+                action="borg2_delete_progress",
                 job_id=job_id,
                 repository_id=repository_id,
             )

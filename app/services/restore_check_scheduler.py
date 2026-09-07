@@ -7,10 +7,9 @@ import structlog
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app.api.maintenance_jobs import start_background_maintenance_job
 from app.database.database import SessionLocal
-from app.database.models import Repository, RestoreCheckJob
-from app.services.restore_check_service import restore_check_service
+from app.database.models import Repository
+from app.services.operations.maintenance_start import start_maintenance
 from app.utils.schedule_time import (
     DEFAULT_SCHEDULE_TIMEZONE,
     calculate_next_cron_run,
@@ -70,19 +69,18 @@ async def run_due_scheduled_restore_checks(
                 )
                 continue
 
-            start_background_maintenance_job(
+            start_maintenance(
                 db,
                 repo,
-                RestoreCheckJob,
-                error_key="backend.errors.repo.restoreCheckAlreadyRunning",
-                dispatcher=lambda job, repo_id=repo.id: (
-                    restore_check_service.execute_restore_check(job.id, repo_id)
-                ),
-                extra_fields={
+                "restore_check",
+                trigger="schedule",
+                params={
                     "probe_paths": repo.restore_check_paths,
                     "full_archive": bool(repo.restore_check_full_archive),
                     "scheduled_restore_check": True,
                 },
+                user_id=None,
+                duplicate_error_key="backend.errors.repo.restoreCheckAlreadyRunning",
             )
             repo.last_scheduled_restore_check = now
             try:

@@ -3,7 +3,7 @@ legacy rows (spec section 13, Appendix A.2)."""
 
 import pytest
 
-from app.database.models import BackupJob, CheckJob, Operation, Repository
+from app.database.models import BackupJob, CheckJob, Operation, PruneJob, Repository
 
 
 def _repo(test_db, name="nas"):
@@ -156,3 +156,144 @@ class TestCheckReadRoutes:
         )
 
         assert response.status_code == 404
+
+
+@pytest.mark.unit
+class TestPruneMigration:
+    def test_starting_a_prune_creates_an_operation_with_the_policy(
+        self, test_client, test_db, admin_headers
+    ):
+        repo = _repo(test_db)
+
+        response = test_client.post(
+            f"/api/repositories/{repo.id}/prune",
+            json={"keep_daily": 5, "keep_within": "2d"},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        op = test_db.get(Operation, response.json()["job_id"])
+        assert op.kind == "prune"
+        assert op.params["keep_daily"] == 5
+        assert op.params["keep_within"] == "2d"
+        assert test_db.query(PruneJob).count() == 0
+
+    def test_a_dry_run_prune_answers_inline_and_is_never_queued(
+        self, test_client, test_db, admin_headers, monkeypatch
+    ):
+        async def fake_prune(self, job_id, *args, **kwargs):
+            from app.services.operations.job_facade import MaintenanceJobFacade
+
+            op = test_db.get(Operation, job_id)
+            MaintenanceJobFacade(test_db, op).status = "completed"
+            test_db.commit()
+
+        monkeypatch.setattr("app.core.borg_router.BorgRouter.prune", fake_prune)
+
+        repo = _repo(test_db)
+        response = test_client.post(
+            f"/api/repositories/{repo.id}/prune",
+            json={"dry_run": True},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["dry_run"] is True
+        op = test_db.get(Operation, body["job_id"])
+        assert op.status == "completed"
+
+
+@pytest.mark.unit
+class TestCompactMigration:
+    def test_starting_a_compact_creates_an_operation(
+        self, test_client, test_db, admin_headers
+    ):
+        from app.database.models import CompactJob
+
+        repo = _repo(test_db)
+
+        response = test_client.post(
+            f"/api/repositories/{repo.id}/compact", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        op = test_db.get(Operation, response.json()["job_id"])
+        assert op.kind == "compact"
+        assert op.status == "queued"
+        assert test_db.query(CompactJob).count() == 0
+
+
+@pytest.mark.unit
+class TestDeleteArchiveMigration:
+    def test_deleting_an_archive_queues_an_operation(
+        self, test_client, test_db, admin_headers
+    ):
+        from app.database.models import DeleteArchiveJob
+
+        repo = _repo(test_db)
+
+        response = test_client.delete(
+            f"/api/archives/nightly-2026-09-01?repository={repo.path}",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        op = test_db.get(Operation, response.json()["job_id"])
+        assert op.kind == "delete_archive"
+        assert op.params["archive_name"] == "nightly-2026-09-01"
+        assert test_db.query(DeleteArchiveJob).count() == 0
+
+    def test_a_second_delete_of_the_same_archive_is_rejected(
+        self, test_client, test_db, admin_headers
+    ):
+        repo = _repo(test_db)
+
+        test_client.delete(
+            f"/api/archives/nightly-2026-09-01?repository={repo.path}",
+            headers=admin_headers,
+        )
+        second = test_client.delete(
+            f"/api/archives/nightly-2026-09-01?repository={repo.path}",
+            headers=admin_headers,
+        )
+
+        assert second.status_code == 409
+
+    def test_a_delete_of_another_archive_is_allowed(
+        self, test_client, test_db, admin_headers
+    ):
+        repo = _repo(test_db)
+
+        test_client.delete(
+            f"/api/archives/nightly-2026-09-01?repository={repo.path}",
+            headers=admin_headers,
+        )
+        other = test_client.delete(
+            f"/api/archives/nightly-2026-09-02?repository={repo.path}",
+            headers=admin_headers,
+        )
+
+        assert other.status_code == 200
+
+
+@pytest.mark.unit
+class TestRestoreCheckMigration:
+    def test_starting_a_restore_check_creates_a_restore_category_operation(
+        self, test_client, test_db, admin_headers
+    ):
+        from app.database.models import RestoreCheckJob
+
+        repo = _repo(test_db)
+
+        response = test_client.post(
+            f"/api/repositories/{repo.id}/restore-check",
+            json={"full_archive": True},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        op = test_db.get(Operation, response.json()["job_id"])
+        assert op.kind == "restore_check"
+        assert op.category == "restore"
+        assert test_db.query(RestoreCheckJob).count() == 0

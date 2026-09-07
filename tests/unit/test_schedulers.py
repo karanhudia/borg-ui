@@ -13,7 +13,6 @@ from app.database.models import (
     CheckJob,
     Operation,
     Repository,
-    RestoreCheckJob,
     ScheduledJob,
     SystemSettings,
 )
@@ -394,19 +393,7 @@ async def test_restore_check_scheduler_creates_job_and_updates_next_run(db_sessi
     with patch(
         "app.services.restore_check_scheduler.SessionLocal", testing_session_local
     ):
-        with patch(
-            "app.services.restore_check_scheduler.start_background_maintenance_job"
-        ) as mock_start:
-            mock_start.side_effect = lambda db, repo, job_model, **kwargs: (
-                RestoreCheckJob(
-                    id=84,
-                    repository_id=repo.id,
-                    status="pending",
-                    probe_paths=kwargs["extra_fields"]["probe_paths"],
-                    scheduled_restore_check=True,
-                )
-            )
-            await scheduler.run_scheduled_restore_checks()
+        await scheduler.run_scheduled_restore_checks()
 
     verification_session = testing_session_local()
     repo = (
@@ -416,7 +403,17 @@ async def test_restore_check_scheduler_creates_job_and_updates_next_run(db_sessi
     assert repo.next_scheduled_restore_check is not None
     assert repo.next_scheduled_restore_check.hour == 22
     assert repo.next_scheduled_restore_check.minute == 30
-    mock_start.assert_called_once()
+    operations = (
+        verification_session.query(Operation)
+        .filter(Operation.kind == "restore_check")
+        .all()
+    )
+    assert len(operations) == 1
+    op = operations[0]
+    assert op.status == "queued"
+    assert op.trigger == "schedule"
+    assert op.params["probe_paths"] == '["etc/hostname"]'
+    assert op.params["scheduled_restore_check"] is True
     verification_session.close()
 
 
@@ -450,10 +447,7 @@ async def test_restore_check_scheduler_skips_canary_for_observe_repositories(
     with patch(
         "app.services.restore_check_scheduler.SessionLocal", testing_session_local
     ):
-        with patch(
-            "app.services.restore_check_scheduler.start_background_maintenance_job"
-        ) as mock_start:
-            await scheduler.run_scheduled_restore_checks()
+        await scheduler.run_scheduled_restore_checks()
 
     verification_session = testing_session_local()
     repo = (
@@ -461,7 +455,12 @@ async def test_restore_check_scheduler_skips_canary_for_observe_repositories(
     )
     assert repo.restore_check_canary_enabled is False
     assert repo.next_scheduled_restore_check is not None
-    mock_start.assert_not_called()
+    assert (
+        verification_session.query(Operation)
+        .filter(Operation.kind == "restore_check")
+        .count()
+        == 0
+    )
     verification_session.close()
 
 

@@ -1920,7 +1920,7 @@ rows, so an inline row is never picked up twice).
   `start_inline_maintenance(db, repository, kind, params, user_id) -> Operation`
   in `maintenance_start.py`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/unit/test_operations_maintenance_executors.py (append)
@@ -1990,12 +1990,12 @@ async def test_prune_omits_keep_within_when_it_is_not_set(
     assert "keep_within" not in seen["kwargs"]
 ```
 
-- [ ] **Step 2: Run them and watch them fail**
+- [x] **Step 2: Run them and watch them fail**
 
 Run: `python -m pytest tests/unit/test_operations_maintenance_executors.py -q -p no:cacheprovider -k prune`
 Expected: FAIL, `module 'app.services.operations.executors.maintenance' has no attribute 'run_prune'`
 
-- [ ] **Step 3: Add the executor**
+- [x] **Step 3: Add the executor**
 
 ```python
 # app/services/operations/executors/maintenance.py (append before the register calls)
@@ -2033,14 +2033,14 @@ executors.register("prune", run_prune)
 The literal `False` is `dry_run`: a queued prune is never a dry run, because
 a dry run answers inside the request (Step 6).
 
-- [ ] **Step 4: Point the prune services at the facade**
+- [x] **Step 4: Point the prune services at the facade**
 
 `app/services/prune_service.py:76` becomes
 `job = resolve_maintenance_job(db, job_id, "prune")` with the import added.
 `app/services/v2/prune_service.py:101` takes the same change, `:264` too, and
 its claim update becomes `claim_running(db, job_id, "prune", started_at)`.
 
-- [ ] **Step 5: Add the inline starter**
+- [x] **Step 5: Add the inline starter**
 
 ```python
 # app/services/operations/maintenance_start.py (append)
@@ -2074,7 +2074,7 @@ def start_inline_maintenance(
     return operation
 ```
 
-- [ ] **Step 6: Rewrite the prune start route**
+- [x] **Step 6: Rewrite the prune start route**
 
 Delete the agent branch and the `ensure_repository_admission` call. The whole
 body after the retention values are read becomes:
@@ -2147,20 +2147,20 @@ refresh still works) and wrap it for reading:
 and read `prune_view.status` and `prune_view.error_message` in the response
 body, so the dry-run payload keeps the legacy status words.
 
-- [ ] **Step 7: Rewrite the prune read routes**
+- [x] **Step 7: Rewrite the prune read routes**
 
 `GET /prune-jobs/{job_id}` and `GET /{repo_id}/prune-jobs` switch to
 `get_maintenance_job_with_repository(db, current_user, "prune", job_id, ...)`
 and `get_repository_maintenance_jobs(db, current_user, repo_id, "prune", limit=limit)`
 from Task 2.
 
-- [ ] **Step 8: Finish the sweep for prune**
+- [x] **Step 8: Finish the sweep for prune**
 
 Drop `"prune": PruneJob` from both `job_models` maps in `app/api/activity.py`;
 change `maintenance_table_by_kind["prune"]` to `"operations"`; delete the
 prune branch from `cleanup_orphaned_jobs`; delete `_dispatch_router_prune`.
 
-- [ ] **Step 9: Add the route tests**
+- [x] **Step 9: Add the route tests**
 
 ```python
 # tests/unit/test_api_maintenance_migration.py (append)
@@ -2208,7 +2208,7 @@ def test_a_dry_run_prune_answers_inline_and_is_never_queued(
     assert op.status == "completed"
 ```
 
-- [ ] **Step 10: Run the suite**
+- [x] **Step 10: Run the suite**
 
 Run: `python -m pytest tests/unit -q -p no:cacheprovider` then
 `ruff check app tests`.
@@ -2238,7 +2238,7 @@ dry run, no cancellation subtleties beyond the existing `cancel_compact`.
 **Interfaces:**
 - Produces: `run_compact(ctx) -> Outcome` registered as executor `compact`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/unit/test_operations_maintenance_executors.py (append)
@@ -2265,12 +2265,12 @@ async def test_compact_stamps_last_compact_on_success(db, repository, monkeypatc
     assert repository.last_compact is not None
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `python -m pytest tests/unit/test_operations_maintenance_executors.py -q -p no:cacheprovider -k compact`
 Expected: FAIL, no attribute `run_compact`.
 
-- [ ] **Step 3: Add the executor**
+- [x] **Step 3: Add the executor**
 
 ```python
 # app/services/operations/executors/maintenance.py (append)
@@ -2287,14 +2287,14 @@ async def run_compact(ctx) -> Outcome:
 executors.register("compact", run_compact)
 ```
 
-- [ ] **Step 4: Point the compact services at the facade**
+- [x] **Step 4: Point the compact services at the facade**
 
 `app/services/compact_service.py:88` becomes
 `job = resolve_maintenance_job(db, job_id, "compact")`.
 `app/services/v2/compact_service.py:94` the same, and its claim update at
 `:142` becomes `claim_running(db, job_id, "compact", started_at)`.
 
-- [ ] **Step 5: Rewrite the compact start route**
+- [x] **Step 5: Rewrite the compact start route**
 
 Delete the agent branch and the `start_background_maintenance_job` call:
 
@@ -2323,18 +2323,18 @@ Delete the agent branch and the `start_background_maintenance_job` call:
         }
 ```
 
-- [ ] **Step 6: Rewrite the compact read routes**
+- [x] **Step 6: Rewrite the compact read routes**
 
 `GET /compact-jobs/{job_id}` and `GET /{repo_id}/compact-jobs` use the two
 helpers from Task 2 with kind `"compact"`.
 
-- [ ] **Step 7: Finish the sweep for compact**
+- [x] **Step 7: Finish the sweep for compact**
 
 Drop `"compact": CompactJob` from both `job_models` maps; set
 `maintenance_table_by_kind["compact"] = "operations"`; delete the compact
 branch from `cleanup_orphaned_jobs`; delete `_dispatch_router_compact`.
 
-- [ ] **Step 8: Add the route test**
+- [x] **Step 8: Add the route test**
 
 ```python
 # tests/unit/test_api_maintenance_migration.py (append)
@@ -2354,7 +2354,7 @@ def test_starting_a_compact_creates_an_operation(
     assert test_db.query(CompactJob).count() == 0
 ```
 
-- [ ] **Step 9: Run the suite**
+- [x] **Step 9: Run the suite**
 
 Run: `python -m pytest tests/unit -q -p no:cacheprovider` then
 `ruff check app tests`.
@@ -2385,7 +2385,7 @@ in the check.
   `delete_archive`; `active_delete_for_archive(db, repository_id, archive_name)`
   in `maintenance_start.py`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/unit/test_operations_maintenance_executors.py (append)
@@ -2430,12 +2430,12 @@ async def test_delete_archive_fails_without_an_archive_name(db, repository):
     assert outcome.status == "failed"
 ```
 
-- [ ] **Step 2: Run them and watch them fail**
+- [x] **Step 2: Run them and watch them fail**
 
 Run: `python -m pytest tests/unit/test_operations_maintenance_executors.py -q -p no:cacheprovider -k delete_archive`
 Expected: FAIL, no attribute `run_delete_archive`.
 
-- [ ] **Step 3: Add the executor**
+- [x] **Step 3: Add the executor**
 
 ```python
 # app/services/operations/executors/maintenance.py (append)
@@ -2461,14 +2461,14 @@ async def run_delete_archive(ctx) -> Outcome:
 executors.register("delete_archive", run_delete_archive)
 ```
 
-- [ ] **Step 4: Point the delete services at the facade**
+- [x] **Step 4: Point the delete services at the facade**
 
 Four lookups change to `resolve_maintenance_job(db, job_id, "delete_archive")`:
 `app/services/delete_archive_service.py:59` and `:324` (the cancel path), and
 `app/services/v2/delete_archive_service.py:38`, whose claim update at `:170`
 becomes `claim_running(db, job_id, "delete_archive", started_at)`.
 
-- [ ] **Step 5: Add the per-archive duplicate check**
+- [x] **Step 5: Add the per-archive duplicate check**
 
 ```python
 # app/services/operations/maintenance_start.py (append)
@@ -2492,7 +2492,7 @@ def active_delete_for_archive(
     return None
 ```
 
-- [ ] **Step 6: Rewrite the delete route**
+- [x] **Step 6: Rewrite the delete route**
 
 In `app/api/archives.py`, the `DeleteArchiveJob` query, the row creation, and
 the `asyncio.create_task(BorgRouter(...).delete_archive(...))` all go:
@@ -2536,7 +2536,7 @@ Use `enqueue()` here rather than `start_maintenance()`, because the duplicate
 rule is per archive and already checked above. The `SimpleNamespace` snapshot
 disappears with the task: the executor loads the real repository row.
 
-- [ ] **Step 7: Rewrite the delete status and cancel routes**
+- [x] **Step 7: Rewrite the delete status and cancel routes**
 
 `GET /delete-jobs/{job_id}` resolves through
 `resolve_maintenance_job(db, job_id, "delete_archive")` and keeps its
@@ -2567,7 +2567,7 @@ operation is cancelled without touching a process:
 `request_cancel` sets the flag the executor's `cancel_watcher` turns into the
 process kill (spec 7.7), so the running case still terminates Borg.
 
-- [ ] **Step 8: Finish the sweep for delete archive**
+- [x] **Step 8: Finish the sweep for delete archive**
 
 `delete_archive` is not in the `job_models` maps in `app/api/activity.py`, so
 there is nothing to remove there; confirm it resolves as operation-only by
@@ -2575,7 +2575,7 @@ reading `_is_operation_only_kind`. Set
 `maintenance_table_by_kind["delete_archive"] = "operations"`. Delete the
 delete-archive branch from `cleanup_orphaned_jobs` if it has one.
 
-- [ ] **Step 9: Add the route tests**
+- [x] **Step 9: Add the route tests**
 
 ```python
 # tests/unit/test_api_maintenance_migration.py (append)
@@ -2629,7 +2629,7 @@ def test_a_delete_of_another_archive_is_allowed(
 Check the real query-parameter shape of the delete route before writing these;
 it takes `repository` as a query parameter and the archive id in the path.
 
-- [ ] **Step 10: Run the suite**
+- [x] **Step 10: Run the suite**
 
 Run: `python -m pytest tests/unit -q -p no:cacheprovider` then
 `ruff check app tests`. `tests/unit/test_delete_archive_service.py` exercises
@@ -2659,7 +2659,7 @@ service's `json.loads` is unchanged) and the full-archive flag.
 - Produces: `run_restore_check(ctx) -> Outcome` registered as executor
   `restore_check`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/unit/test_operations_maintenance_executors.py (append)
@@ -2700,12 +2700,12 @@ async def test_restore_check_runs_the_service_with_the_operation_id(
     assert seen["repository_id"] == repository.id
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `python -m pytest tests/unit/test_operations_maintenance_executors.py -q -p no:cacheprovider -k restore_check`
 Expected: FAIL, no attribute `run_restore_check`.
 
-- [ ] **Step 3: Add the executor**
+- [x] **Step 3: Add the executor**
 
 Restore check does not go through `BorgRouter`; the route calls the service
 directly today, so the executor does too. It reuses `_run`'s status read-back
@@ -2725,7 +2725,7 @@ async def run_restore_check(ctx) -> Outcome:
 executors.register("restore_check", run_restore_check)
 ```
 
-- [ ] **Step 4: Point the restore check service at the facade**
+- [x] **Step 4: Point the restore check service at the facade**
 
 `app/services/restore_check_service.py:216` becomes
 `job = resolve_maintenance_job(db, job_id, "restore_check")`. The second
@@ -2733,7 +2733,7 @@ lookup at `:459` is inside the agent branch; give it the same treatment. The
 `maintenance_job_kind="restore_check"` payload it builds at `:611` keeps
 working once `repository_executor`'s map points at `"operations"`.
 
-- [ ] **Step 5: Rewrite the restore-check start route**
+- [x] **Step 5: Rewrite the restore-check start route**
 
 ```python
         restore_check_job = start_maintenance(
@@ -2753,20 +2753,20 @@ working once `repository_executor`'s map points at `"operations"`.
 
 The canary handling above it is untouched.
 
-- [ ] **Step 6: Rewrite the restore-check read routes**
+- [x] **Step 6: Rewrite the restore-check read routes**
 
 `GET /restore-check-jobs/{job_id}` and `GET /{repo_id}/restore-check-jobs` use
 the Task 2 helpers with kind `"restore_check"`. The list route's
 `scheduled_only` filter reads `scheduled_restore_check` off the facade.
 
-- [ ] **Step 7: Move the restore-check scheduler onto the queue**
+- [x] **Step 7: Move the restore-check scheduler onto the queue**
 
 `app/services/restore_check_scheduler.py:76` currently calls
 `start_background_maintenance_job` with a dispatcher lambda. Replace it with
 `start_maintenance(..., trigger="schedule", params={..., "scheduled_restore_check": True}, user_id=None, duplicate_error_key="backend.errors.repo.restoreCheckAlreadyRunning")`
 and delete the lambda.
 
-- [ ] **Step 8: Finish the sweep**
+- [x] **Step 8: Finish the sweep**
 
 Drop `"restore_check": RestoreCheckJob` from both `job_models` maps; set
 `maintenance_table_by_kind["restore_check"] = "operations"`, which makes every
@@ -2774,12 +2774,12 @@ value in that dict `"operations"`, so collapse it to a single constant string
 and delete the dict; delete the restore-check branch from
 `cleanup_orphaned_jobs`.
 
-- [ ] **Step 9: Remove the xfail from Task 2**
+- [x] **Step 9: Remove the xfail from Task 2**
 
 `test_every_maintenance_kind_has_an_executor` now passes for all five kinds.
 Delete the `@pytest.mark.xfail` marker added in Task 2 Step 9.
 
-- [ ] **Step 10: Add the route test and run the suite**
+- [x] **Step 10: Add the route test and run the suite**
 
 ```python
 # tests/unit/test_api_maintenance_migration.py (append)
@@ -2844,7 +2844,7 @@ phase 8, when the backup itself becomes an operation and can be a parent.
 - Produces: `finish_inline_maintenance(db, operation, *, enqueue_followups=True)`
   in `maintenance_start.py`.
 
-- [ ] **Step 1: Write the failing test for the inline finisher**
+- [x] **Step 1: Write the failing test for the inline finisher**
 
 ```python
 # tests/unit/test_maintenance_start.py (append)
@@ -2899,12 +2899,12 @@ def test_finish_inline_enqueues_nothing_after_a_failure(db, repository):
     assert db.query(Operation).count() == 1
 ```
 
-- [ ] **Step 2: Run them and watch them fail**
+- [x] **Step 2: Run them and watch them fail**
 
 Run: `python -m pytest tests/unit/test_maintenance_start.py -q -p no:cacheprovider -k inline`
 Expected: FAIL, cannot import `finish_inline_maintenance`.
 
-- [ ] **Step 3: Write the finisher**
+- [x] **Step 3: Write the finisher**
 
 The runner enqueues the spec 7.4 chain when an operation it dispatched
 succeeds. An inline operation never passes through the runner, so its caller
@@ -2944,14 +2944,14 @@ def finish_inline_maintenance(
     )
 ```
 
-- [ ] **Step 4: Call the finisher from the dry-run prune route**
+- [x] **Step 4: Call the finisher from the dry-run prune route**
 
 In `app/api/repositories.py`, after the dry-run prune has written its terminal
 status, call `finish_inline_maintenance(db, prune_job, enqueue_followups=False)`.
 A dry run changed nothing, so it gets no chain; passing the flag explicitly
 documents that rather than leaving the reader to wonder.
 
-- [ ] **Step 5: Migrate the three v2 routes**
+- [x] **Step 5: Migrate the three v2 routes**
 
 `app/api/v2/backups.py` gets the same treatment as the v1 routes. Prune:
 
@@ -2981,7 +2981,7 @@ Compact and check follow the shape of their v1 counterparts from Tasks 4 and
 2. Delete the `CheckJob`, `CompactJob`, and `PruneJob` imports and the
 `start_background_maintenance_job` import once nothing in the file uses them.
 
-- [ ] **Step 6: Delete the stats call the chain now covers**
+- [x] **Step 6: Delete the stats call the chain now covers**
 
 `app/api/v2/backups.py:251` calls `await BorgRouter(repo).update_stats(db)`
 after a prune, and `app/services/v2/prune_service.py:223` does the same inside
@@ -2997,7 +2997,7 @@ is wipe (phase 6), and the two in `app/routers/config.py` plus the one in
 so no follow-up chain replaces them. Delete two here, leave four, and record
 the count in the phase notes rather than hunting for two that do not exist.
 
-- [ ] **Step 7: Migrate post-backup maintenance in the scheduler**
+- [x] **Step 7: Migrate post-backup maintenance in the scheduler**
 
 In `app/api/schedule.py`, each of the three blocks changes the same way. The
 prune block becomes:
@@ -3051,7 +3051,7 @@ Do the same for the compact and check blocks in the same function, using
 `params={"scheduled_compact": True}` and the check block's existing
 `max_duration` and `extra_flags` values.
 
-- [ ] **Step 8: Migrate post-backup maintenance in the plan executor**
+- [x] **Step 8: Migrate post-backup maintenance in the plan executor**
 
 `app/services/backup_plan_execution_service.py:2106-2190` has the same three
 blocks with `create_started_maintenance_job`. Replace each with
@@ -3077,7 +3077,7 @@ running prune operation:
 The `cancel_prune(maintenance_job.id)` call below it is unchanged: the service
 resolves that id through the facade.
 
-- [ ] **Step 9: Run the affected suites**
+- [x] **Step 9: Run the affected suites**
 
 Run: `python -m pytest tests/unit/test_maintenance_state.py tests/unit/test_api_v2_backups.py tests/unit/test_schedulers.py tests/unit/test_backup_plan_execution.py -q -p no:cacheprovider`
 Expected: PASS. `test_maintenance_state.py` asserts the `maintenance_status`
@@ -3102,7 +3102,7 @@ with their startup sweep. This is deletion with a full suite behind it.
 - Modify: `app/services/job_history_retention.py`
 - Test: the existing suites, updated in place
 
-- [ ] **Step 1: Delete the dead helpers**
+- [x] **Step 1: Delete the dead helpers**
 
 From `app/api/maintenance_jobs.py` delete `ensure_no_running_job`,
 `create_maintenance_job`, `create_running_maintenance_job`,
@@ -3116,7 +3116,7 @@ only if a caller outside the five kinds still uses them; grep first.
 Run `grep -rn "start_background_maintenance_job\|create_started_maintenance_job\|create_running_maintenance_job\|ensure_no_running_job" app tests`
 and expect no hits outside the tests you are about to update.
 
-- [ ] **Step 2: Finish the startup sweep**
+- [x] **Step 2: Finish the startup sweep**
 
 **Amended during Task 2.** Do not delete the five branches. Removing one
 strands any legacy row a pre-upgrade process left running: nothing fails it,
@@ -3129,7 +3129,7 @@ phase 9. Six `test_utils.py` tests mock `db.query` positionally, so removing a
 query shifts every later mock and breaks them; that is the signal you removed
 too much.
 
-- [ ] **Step 3: Take the five models out of the admission scan**
+- [x] **Step 3: Take the five models out of the admission scan**
 
 In `app/services/job_admission.py`, `list_active_repository_work` no longer
 needs to query `CheckJob`, `RestoreCheckJob`, `CompactJob`, `PruneJob`, or
@@ -3138,7 +3138,7 @@ nothing writes new rows to those tables. Remove them from the per-model loop,
 keeping `BackupJob`, `RepositoryWipeJob`, and the agent job scan. Historical
 rows are all terminal, so dropping them changes nothing that is live.
 
-- [ ] **Step 4: Confirm retention still covers both worlds**
+- [x] **Step 4: Confirm retention still covers both worlds**
 
 `app/services/job_history_retention.py` gained `operations` in phase 1. Read
 it and confirm the five legacy tables are still in its list, since their
@@ -3155,7 +3155,7 @@ def test_retention_covers_operations_and_the_legacy_maintenance_tables():
 
 Match the real symbol name in that module; read it before writing the test.
 
-- [ ] **Step 5: Prove the status strip needs no change**
+- [x] **Step 5: Prove the status strip needs no change**
 
 `GET /repositories/{id}/status-strip` (spec 9.2) already reads the operation
 first and only prefers `latest_legacy_terminal()` when the legacy row is
@@ -3201,7 +3201,7 @@ def test_status_strip_prefers_a_new_check_operation_over_the_legacy_row(
 Read the real response shape in `tests/unit/test_api_archive_index.py` before
 writing this and match its key names.
 
-- [ ] **Step 6: Run everything**
+- [x] **Step 6: Run everything**
 
 Run: `python -m pytest tests/unit -q -p no:cacheprovider`
 Run: `ruff check app tests`
@@ -3211,7 +3211,7 @@ Expected: green apart from the three known `test_source_discovery.py` failures.
 
 ### Task 9: Documentation, Postman, and phase verification
 
-- [ ] **Step 1: Update the job system document**
+- [x] **Step 1: Update the job system document**
 
 `docs/architecture/job-system.md` describes per-kind tables and per-kind
 startup cleanup. Rewrite the maintenance section: the five kinds are rows in
@@ -3219,20 +3219,20 @@ startup cleanup. Rewrite the maintenance section: the five kinds are rows in
 the legacy tables hold history only until phase 9. Do not describe phases 6 to
 8 as done.
 
-- [ ] **Step 2: Update the API document**
+- [x] **Step 2: Update the API document**
 
 `docs/api.md`: the start routes still return `{"job_id", "status", "message"}`,
 and `job_id` is now an operation id. Say so once, in the maintenance section,
 and note that the job status routes serve operations first and fall back to
 pre-phase-5 rows.
 
-- [ ] **Step 3: Postman**
+- [x] **Step 3: Postman**
 
 `Borg_UI_API.postman_collection.json` needs no new requests. Check the saved
 example responses for the check, prune, compact, restore check, and delete
 routes still match; update any that named a legacy field.
 
-- [ ] **Step 4: Full verification**
+- [x] **Step 4: Full verification**
 
 Run and record the output of each:
 
@@ -3252,7 +3252,7 @@ git diff origin/main...HEAD --name-only | xargs grep -l "—" || echo "no em das
 Use the merge-base form. The literal `main` form over-reports, as the phase 4
 notes in the spec record.
 
-- [ ] **Step 5: Confirm nothing writes the five tables**
+- [x] **Step 5: Confirm nothing writes the five tables**
 
 ```bash
 grep -rn "CheckJob(\|PruneJob(\|CompactJob(\|DeleteArchiveJob(\|RestoreCheckJob(" app/
@@ -3261,7 +3261,7 @@ grep -rn "CheckJob(\|PruneJob(\|CompactJob(\|DeleteArchiveJob(\|RestoreCheckJob(
 Expected: no constructor calls outside `app/database/models.py`. Any hit is a
 writer this phase missed.
 
-- [ ] **Step 6: Update the spec's progress table**
+- [x] **Step 6: Update the spec's progress table**
 
 Set phase 5 to `in review` in section 19.1 with the branch name, the plan
 path, and notes covering: the facade design, the inline exception for dry-run

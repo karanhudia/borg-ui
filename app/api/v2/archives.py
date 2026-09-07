@@ -6,7 +6,6 @@ All routes accept a `repository` query param (the repo path).
 
 import json
 import os
-import asyncio
 import re
 from typing import Optional
 import tempfile  # noqa: F401 - retained as a patch target in download endpoint tests
@@ -17,7 +16,10 @@ import structlog
 
 from app.api.archive_download import extract_file_download
 from app.database.database import get_db
-from app.database.models import User, Repository, DeleteArchiveJob, SystemSettings
+from app.database.models import User, Repository, SystemSettings
+from app.services.operations.enqueue import enqueue
+from app.services.operations.job_facade import resolve_maintenance_job
+from app.services.operations.maintenance_start import active_delete_for_archive
 from app.core.security import (
     check_repo_access,
     get_current_user,
@@ -600,15 +602,10 @@ async def delete_archive(
     repo = _get_v2_repo(repository, db, current_user)
     archive_name = await _resolve_archive_name(repo, archive_id, db)
 
-    running_job = (
-        db.query(DeleteArchiveJob)
-        .filter(
-            DeleteArchiveJob.repository_id == repo.id,
-            DeleteArchiveJob.archive_name == archive_name,
-            DeleteArchiveJob.status == "running",
-        )
-        .first()
-    )
+    # Deletes are rejected per archive, not per repository (spec section 13
+    # phase 5): two different archives may be removed at once, the same one
+    # may not.
+    running_job = active_delete_for_archive(db, repo.id, archive_name)
     if running_job:
         raise HTTPException(
             status_code=409,
@@ -618,27 +615,18 @@ async def delete_archive(
             },
         )
 
-    delete_job = DeleteArchiveJob(
+    delete_job = enqueue(
+        db,
+        "delete_archive",
         repository_id=repo.id,
-        repository_path=repo.path,
-        archive_name=archive_name,
-        status="pending",
-    )
-    db.add(delete_job)
-    db.commit()
-    db.refresh(delete_job)
-
-    from app.services.v2.delete_archive_service import delete_archive_v2_service
-
-    asyncio.create_task(
-        delete_archive_v2_service.execute_delete(
-            delete_job.id, repo.id, archive_name, None
-        )
+        trigger="manual",
+        params={"archive_name": archive_name},
+        triggered_by_user_id=current_user.id,
     )
 
     logger.info(
-        "Borg2 delete archive job created",
-        job_id=delete_job.id,
+        "Borg2 delete archive operation queued",
+        operation_id=delete_job.id,
         repository_id=repo.id,
         archive=archive_name,
     )
@@ -713,7 +701,7 @@ async def get_delete_job_status(
     db: Session = Depends(get_db),
 ):
     """Get status of a Borg 2 archive delete job."""
-    job = db.query(DeleteArchiveJob).filter(DeleteArchiveJob.id == job_id).first()
+    job = resolve_maintenance_job(db, job_id, "delete_archive")
     if not job:
         raise HTTPException(
             status_code=404, detail={"key": "backend.errors.archives.deleteJobNotFound"}

@@ -85,9 +85,6 @@ def _completing(db, status="completed", error=None):
     return call
 
 
-@pytest.mark.xfail(
-    reason="prune, compact, delete_archive, restore_check land in tasks 3 to 6"
-)
 def test_every_maintenance_kind_has_an_executor():
     load_default_executors()
     for kind in ("check", "prune", "compact", "delete_archive", "restore_check"):
@@ -195,3 +192,168 @@ async def test_check_does_not_stamp_last_check_on_failure(db, repository, monkey
 
     db.refresh(repository)
     assert repository.last_check is None
+
+
+@pytest.mark.asyncio
+async def test_prune_passes_the_retention_policy_from_params(
+    db, repository, monkeypatch
+):
+    from app.services.operations.executors import maintenance
+
+    op = _operation(
+        db,
+        repository,
+        kind="prune",
+        params={
+            "keep_hourly": 0,
+            "keep_daily": 7,
+            "keep_weekly": 4,
+            "keep_monthly": 6,
+            "keep_quarterly": 0,
+            "keep_yearly": 1,
+            "keep_within": "2d",
+        },
+    )
+    ctx = FakeContext(db, op)
+    seen = {}
+
+    async def fake_prune(self, job_id, *args, **kwargs):
+        seen["args"] = args
+        seen["kwargs"] = kwargs
+        job = MaintenanceJobFacade(db, db.get(Operation, job_id))
+        job.status = "completed"
+        db.commit()
+
+    monkeypatch.setattr(
+        "app.core.borg_router.BorgRouter.prune", fake_prune, raising=True
+    )
+
+    outcome = await maintenance.run_prune(ctx)
+
+    assert outcome.status == "completed"
+    assert seen["args"] == (0, 7, 4, 6, 0, 1, False)
+    assert seen["kwargs"]["keep_within"] == "2d"
+
+
+@pytest.mark.asyncio
+async def test_prune_omits_keep_within_when_it_is_not_set(db, repository, monkeypatch):
+    from app.services.operations.executors import maintenance
+
+    op = _operation(db, repository, kind="prune", params={"keep_daily": 7})
+    ctx = FakeContext(db, op)
+    seen = {}
+
+    async def fake_prune(self, job_id, *args, **kwargs):
+        seen["kwargs"] = kwargs
+        job = MaintenanceJobFacade(db, db.get(Operation, job_id))
+        job.status = "completed"
+        db.commit()
+
+    monkeypatch.setattr(
+        "app.core.borg_router.BorgRouter.prune", fake_prune, raising=True
+    )
+
+    await maintenance.run_prune(ctx)
+
+    assert "keep_within" not in seen["kwargs"]
+
+
+@pytest.mark.asyncio
+async def test_compact_stamps_last_compact_on_success(db, repository, monkeypatch):
+    from app.services.operations.executors import maintenance
+
+    op = _operation(db, repository, kind="compact")
+    ctx = FakeContext(db, op)
+
+    async def fake_compact(self, job_id):
+        job = MaintenanceJobFacade(db, db.get(Operation, job_id))
+        job.status = "completed"
+        db.commit()
+
+    monkeypatch.setattr(
+        "app.core.borg_router.BorgRouter.compact", fake_compact, raising=True
+    )
+
+    outcome = await maintenance.run_compact(ctx)
+
+    assert outcome.status == "completed"
+    db.refresh(repository)
+    assert repository.last_compact is not None
+
+
+@pytest.mark.asyncio
+async def test_delete_archive_passes_the_archive_name(db, repository, monkeypatch):
+    from app.services.operations.executors import maintenance
+
+    op = _operation(
+        db,
+        repository,
+        kind="delete_archive",
+        params={"archive_name": "aid:deadbeef"},
+    )
+    ctx = FakeContext(db, op)
+    seen = {}
+
+    async def fake_delete(self, job_id, archive_name):
+        seen["archive"] = archive_name
+        job = MaintenanceJobFacade(db, db.get(Operation, job_id))
+        job.status = "completed"
+        db.commit()
+
+    monkeypatch.setattr(
+        "app.core.borg_router.BorgRouter.delete_archive", fake_delete, raising=True
+    )
+
+    outcome = await maintenance.run_delete_archive(ctx)
+
+    assert outcome.status == "completed"
+    assert seen["archive"] == "aid:deadbeef"
+
+
+@pytest.mark.asyncio
+async def test_delete_archive_fails_without_an_archive_name(db, repository):
+    from app.services.operations.executors import maintenance
+
+    op = _operation(db, repository, kind="delete_archive", params={})
+    ctx = FakeContext(db, op)
+
+    outcome = await maintenance.run_delete_archive(ctx)
+
+    assert outcome.status == "failed"
+
+
+@pytest.mark.asyncio
+async def test_restore_check_runs_the_service_with_the_operation_id(
+    db, repository, monkeypatch
+):
+    from app.services.operations.executors import maintenance
+
+    op = _operation(
+        db,
+        repository,
+        kind="restore_check",
+        params={"probe_paths": "[]", "full_archive": True},
+    )
+    op.category = "restore"
+    db.commit()
+    ctx = FakeContext(db, op)
+    seen = {}
+
+    async def fake_execute(job_id, repository_id):
+        seen["job_id"] = job_id
+        seen["repository_id"] = repository_id
+        job = MaintenanceJobFacade(db, db.get(Operation, job_id))
+        job.status = "completed"
+        db.commit()
+
+    monkeypatch.setattr(
+        "app.services.restore_check_service.restore_check_service.execute_restore_check",
+        fake_execute,
+        raising=True,
+    )
+
+    outcome = await maintenance.run_restore_check(ctx)
+
+    assert outcome.status == "completed"
+    assert seen["job_id"] == op.id
+    assert seen["repository_id"] == repository.id

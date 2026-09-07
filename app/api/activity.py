@@ -1161,9 +1161,6 @@ async def get_job_logs(
     job_models = {
         "backup": BackupJob,
         "restore": RestoreJob,
-        "restore_check": RestoreCheckJob,
-        "compact": CompactJob,
-        "prune": PruneJob,
         "package": PackageInstallJob,
         "script_execution": ScriptExecution,
     }
@@ -1489,9 +1486,6 @@ async def download_job_logs(
     job_models = {
         "backup": BackupJob,
         "restore": RestoreJob,
-        "restore_check": RestoreCheckJob,
-        "compact": CompactJob,
-        "prune": PruneJob,
         "package": PackageInstallJob,
         "script_execution": ScriptExecution,
     }
@@ -1695,9 +1689,6 @@ async def delete_job(
     job_models = {
         "backup": BackupJob,
         "restore": RestoreJob,
-        "restore_check": RestoreCheckJob,
-        "compact": CompactJob,
-        "prune": PruneJob,
         "package": PackageInstallJob,
         "script_execution": ScriptExecution,
     }

@@ -491,6 +491,23 @@ def test_sweep_cascades_from_late_arriving_prune_logs(db, tmp_path):
 
 
 @pytest.mark.unit
+def test_retention_covers_operations_and_the_legacy_maintenance_tables():
+    """Phase 5 moved the five maintenance kinds to `operations`, but their
+    legacy tables still hold pre-migration history that must keep aging out
+    until phase 9 deletes the tables outright."""
+    from app.database.models import (
+        CompactJob,
+        DeleteArchiveJob,
+        Operation,
+        RestoreCheckJob,
+    )
+    from app.services.job_history_retention import _JOB_TABLES
+
+    models = {model for model, _ in _JOB_TABLES}
+    assert Operation in models
+    assert {CheckJob, PruneJob, CompactJob, RestoreCheckJob, DeleteArchiveJob} <= models
+
+
 def test_operations_rows_fall_with_cleanup_retention(db):
     from app.database.models import Operation
     from app.services.operations.enqueue import enqueue

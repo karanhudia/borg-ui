@@ -107,6 +107,21 @@ class MaintenanceJobFacade:
         object.__setattr__(self, "operation", operation)
         object.__setattr__(self, "_fields", PARAM_FIELDS.get(operation.kind, ()))
 
+    def __setattr__(self, name: str, value) -> None:
+        # A kind-specific input (e.g. restore_check writing back the archive
+        # it resolved) lives in `operation.params`, not on this object, so a
+        # plain `object.__setattr__` would silently drop it. Everything else
+        # (status, progress, ...) is a real property below and goes through
+        # the normal descriptor path via `object.__setattr__`.
+        fields = object.__getattribute__(self, "_fields")
+        if name in fields:
+            operation = object.__getattribute__(self, "operation")
+            params = dict(operation.params or {})
+            params[name] = value
+            operation.params = params
+            return
+        object.__setattr__(self, name, value)
+
     # -- identity ----------------------------------------------------------
 
     @property
@@ -289,6 +304,14 @@ def resolve_maintenance_job(db: Session, job_id: int, kind: str) -> Any:
     if model is None:
         return None
     return db.query(model).filter(model.id == job_id).first()
+
+
+def refresh_job(db: Session, job: Any) -> None:
+    """`db.refresh()` requires a mapped instance, which a facade is not: its
+    mapped object is `.operation`. Callers hold either shape after
+    `resolve_maintenance_job`, so route the refresh accordingly rather than
+    let `Session.refresh` raise `UnmappedInstanceError` on a facade."""
+    db.refresh(job.operation if isinstance(job, MaintenanceJobFacade) else job)
 
 
 def claim_running(db: Session, job_id: int, kind: str, started_at: datetime) -> int:

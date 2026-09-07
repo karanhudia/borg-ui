@@ -125,6 +125,22 @@ def test_facade_rejects_an_input_the_kind_does_not_have(db, repository):
         job.keep_daily
 
 
+def test_facade_writes_a_kind_specific_input_through_to_params(db, repository):
+    op = _operation(
+        db,
+        repository,
+        kind="restore_check",
+        params={"probe_paths": "[]", "full_archive": False},
+    )
+    job = MaintenanceJobFacade(db, op)
+
+    job.archive_name = "nightly-2026-09-01"
+    db.commit()
+
+    assert op.params["archive_name"] == "nightly-2026-09-01"
+    assert job.archive_name == "nightly-2026-09-01"
+
+
 def test_facade_logs_round_trip_through_the_log_file(db, repository, tmp_path):
     op = _operation(db, repository)
     # Write to a path this test owns. Letting the facade resolve one from

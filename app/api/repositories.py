@@ -4,7 +4,6 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any, Union
 from datetime import datetime, timezone
-from functools import partial
 from pathlib import Path as FilesystemPath
 from types import SimpleNamespace
 import structlog
@@ -36,18 +35,19 @@ from app.database.models import (
     UserRepositoryPermission,
 )
 from app.api.maintenance_jobs import (
-    create_maintenance_job,
-    get_job_with_repository,
     get_maintenance_job_with_repository,
-    get_repository_jobs,
     get_repository_maintenance_jobs,
     get_repository_with_access,
     read_job_logs,
     serialize_job_status,
     serialize_job_summary,
-    start_background_maintenance_job,
 )
-from app.services.operations.maintenance_start import start_maintenance
+from app.services.operations.maintenance_start import (
+    finish_inline_maintenance,
+    start_inline_maintenance,
+    start_maintenance,
+)
+from app.services.operations.job_facade import MaintenanceJobFacade
 from app.core.authorization import authorize_request
 from app.core.security import get_current_user, check_repo_access, decrypt_secret
 from app.core.borg import BorgInterface
@@ -62,7 +62,6 @@ from app.core.features import (
 )
 from app.config import settings
 from app.services.mqtt_service import mqtt_service
-from app.services.restore_check_service import restore_check_service
 from app.services.repository_wipe_service import (
     WipeArchiveSetChanged,
     WipeValidationError,
@@ -89,11 +88,6 @@ from app.services.agent_connection_manager import (
     AgentCommandError,
 )
 from app.core.agent_constants import AGENT_FILESYSTEM_BROWSE_TIMEOUT_SECONDS
-from app.services.job_admission import (
-    OPERATION_COMPACT,
-    OPERATION_PRUNE,
-    ensure_repository_admission,
-)
 from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.services.repository_info_sync import sync_archive_stats_from_info
 from app.services.repository_command_lock import run_serialized_repository_command
@@ -158,35 +152,6 @@ def _router_repo_snapshot(repository: Repository) -> SimpleNamespace:
         executor_type=repository.executor_type,
         execution_target=repository.execution_target,
     )
-
-
-def _dispatch_router_compact(router_repo: SimpleNamespace, job: CompactJob):
-    return BorgRouter(router_repo).compact(job.id)
-
-
-def _dispatch_router_prune(
-    router_repo: SimpleNamespace,
-    keep_hourly: int,
-    keep_daily: int,
-    keep_weekly: int,
-    keep_monthly: int,
-    keep_quarterly: int,
-    keep_yearly: int,
-    keep_within: str | None,
-    job: PruneJob,
-):
-    args = (
-        job.id,
-        keep_hourly,
-        keep_daily,
-        keep_weekly,
-        keep_monthly,
-        keep_quarterly,
-        keep_yearly,
-        False,
-    )
-    kwargs = {"keep_within": keep_within} if keep_within is not None else {}
-    return BorgRouter(router_repo).prune(*args, **kwargs)
 
 
 AGENT_RCLONE_SYNC_CAPABILITY = "repository.rclone_sync"
@@ -755,20 +720,6 @@ def _parse_agent_json_result(result: dict[str, Any]) -> dict[str, Any]:
         except json.JSONDecodeError:
             return {}
     return {}
-
-
-def _agent_prune_operation_payload(request: dict) -> dict[str, Any]:
-    keep_within = _normalize_prune_keep_within(request.get("keep_within"))
-    return {
-        "keep_hourly": request.get("keep_hourly", 0),
-        "keep_daily": request.get("keep_daily", 7),
-        "keep_weekly": request.get("keep_weekly", 4),
-        "keep_monthly": request.get("keep_monthly", 6),
-        "keep_quarterly": request.get("keep_quarterly", 0),
-        "keep_yearly": request.get("keep_yearly", 1),
-        "keep_within": keep_within,
-        "dry_run": request.get("dry_run", False),
-    }
 
 
 def _normalize_prune_keep_within(value: Any) -> str | None:
@@ -5411,24 +5362,23 @@ async def restore_check_repository(
             repository.restore_check_paths = json.dumps([])
             repository.restore_check_full_archive = False
 
-        restore_check_job = start_background_maintenance_job(
+        restore_check_job = start_maintenance(
             db,
             repository,
-            RestoreCheckJob,
-            error_key="backend.errors.repo.restoreCheckAlreadyRunning",
-            dispatcher=lambda job: restore_check_service.execute_restore_check(
-                job.id, repository.id
-            ),
-            extra_fields={
+            "restore_check",
+            trigger="manual",
+            params={
                 "probe_paths": json.dumps(probe_paths),
                 "full_archive": full_archive,
                 "scheduled_restore_check": False,
             },
+            user_id=current_user.id,
+            duplicate_error_key="backend.errors.repo.restoreCheckAlreadyRunning",
         )
 
         logger.info(
-            "Restore check job created",
-            job_id=restore_check_job.id,
+            "Restore check operation queued",
+            operation_id=restore_check_job.id,
             repository_id=repo_id,
             user=current_user.username,
         )
@@ -5464,55 +5414,20 @@ async def compact_repository(
         repository = get_repository_with_access(
             db, current_user, repo_id, required_role="operator"
         )
-        if is_agent_executor(repository):
-            ensure_repository_admission(
-                db,
-                repository,
-                OPERATION_COMPACT,
-                duplicate_error_key="backend.errors.repo.compactAlreadyRunning",
-            )
-            compact_job = create_maintenance_job(
-                db,
-                CompactJob,
-                repository,
-                extra_fields={"scheduled_compact": False},
-            )
-            agent_job = queue_agent_repository_operation_job(
-                db,
-                repository,
-                job_kind="repository.compact",
-                maintenance_job_kind="compact",
-                maintenance_job_id=compact_job.id,
-            )
-            await dispatch_agent_job_best_effort(db, agent_job, repository_id=repo_id)
-            logger.info(
-                "Agent repository compact job queued",
-                job_id=compact_job.id,
-                agent_job_id=agent_job.id,
-                repository_id=repo_id,
-                user=current_user.username,
-            )
-            return {
-                "job_id": compact_job.id,
-                "status": "pending",
-                "message": "backend.success.repo.compactJobStarted",
-            }
 
-        compact_job = start_background_maintenance_job(
+        compact_job = start_maintenance(
             db,
             repository,
-            CompactJob,
-            error_key="backend.errors.repo.compactAlreadyRunning",
-            dispatcher=partial(
-                _dispatch_router_compact,
-                _router_repo_snapshot(repository),
-            ),
-            extra_fields={"scheduled_compact": False},
+            "compact",
+            trigger="manual",
+            params={"scheduled_compact": False},
+            user_id=current_user.id,
+            duplicate_error_key="backend.errors.repo.compactAlreadyRunning",
         )
 
         logger.info(
-            "Compact job created",
-            job_id=compact_job.id,
+            "Compact operation queued",
+            operation_id=compact_job.id,
             repository_id=repo_id,
             user=current_user.username,
         )
@@ -5543,12 +5458,6 @@ async def prune_repository(
         repository = get_repository_with_access(
             db, current_user, repo_id, required_role="operator"
         )
-        ensure_repository_admission(
-            db,
-            repository,
-            OPERATION_PRUNE,
-            duplicate_error_key="backend.errors.repo.pruneAlreadyRunning",
-        )
 
         # Extract retention policy from request
         keep_hourly = request.get("keep_hourly", 0)
@@ -5560,103 +5469,53 @@ async def prune_repository(
         keep_within = _normalize_prune_keep_within(request.get("keep_within"))
         dry_run = request.get("dry_run", False)
 
-        if is_agent_executor(repository):
-            prune_job = create_maintenance_job(
+        if not dry_run:
+            prune_job = start_maintenance(
                 db,
-                PruneJob,
                 repository,
-                extra_fields={
+                "prune",
+                trigger="manual",
+                params={
+                    "keep_hourly": keep_hourly,
+                    "keep_daily": keep_daily,
+                    "keep_weekly": keep_weekly,
+                    "keep_monthly": keep_monthly,
+                    "keep_quarterly": keep_quarterly,
+                    "keep_yearly": keep_yearly,
+                    "keep_within": keep_within,
                     "scheduled_prune": False,
                 },
+                user_id=current_user.id,
+                duplicate_error_key="backend.errors.repo.pruneAlreadyRunning",
             )
-            agent_job = queue_agent_repository_operation_job(
-                db,
-                repository,
-                job_kind="repository.prune",
-                operation=_agent_prune_operation_payload(request),
-                maintenance_job_kind="prune",
-                maintenance_job_id=prune_job.id,
-            )
-            await dispatch_agent_job_best_effort(db, agent_job, repository_id=repo_id)
             logger.info(
-                "Agent repository prune job queued",
-                job_id=prune_job.id,
-                agent_job_id=agent_job.id,
-                repository_id=repo_id,
-                dry_run=dry_run,
-                user=current_user.username,
-            )
-            if not dry_run:
-                return {
-                    "job_id": prune_job.id,
-                    "status": "pending",
-                    "message": "backend.success.repo.pruneJobStarted",
-                }
-
-            result = await wait_for_agent_repository_operation_job(db, agent_job.id)
-            db.refresh(prune_job)
-            if prune_job.status == "pending":
-                prune_job.status = "completed"
-                prune_job.completed_at = datetime.utcnow()
-                db.commit()
-                db.refresh(prune_job)
-            stdout_output = read_job_logs(
-                prune_job, fallback_to_logs=True, log_save_policy="all_jobs"
-            )
-            if not stdout_output:
-                stdout_output = str(result.get("stdout") or "")
-            return {
-                "job_id": prune_job.id,
-                "status": prune_job.status,
-                "dry_run": dry_run,
-                "prune_result": {
-                    "success": prune_job.status == "completed",
-                    "stdout": stdout_output,
-                    "stderr": prune_job.error_message
-                    or str(result.get("stderr") or ""),
-                },
-            }
-
-        if not dry_run:
-            prune_job = start_background_maintenance_job(
-                db,
-                repository,
-                PruneJob,
-                error_key="backend.errors.repo.pruneAlreadyRunning",
-                dispatcher=partial(
-                    _dispatch_router_prune,
-                    _router_repo_snapshot(repository),
-                    keep_hourly,
-                    keep_daily,
-                    keep_weekly,
-                    keep_monthly,
-                    keep_quarterly,
-                    keep_yearly,
-                    keep_within,
-                ),
-                extra_fields={"scheduled_prune": False},
-            )
-
-            logger.info(
-                "Prune job created",
-                job_id=prune_job.id,
+                "Prune operation queued",
+                operation_id=prune_job.id,
                 repository_id=repo_id,
                 user=current_user.username,
             )
-
             return {
                 "job_id": prune_job.id,
                 "status": "pending",
                 "message": "backend.success.repo.pruneJobStarted",
             }
 
-        prune_job = create_maintenance_job(
+        prune_job = start_inline_maintenance(
             db,
-            PruneJob,
             repository,
-            extra_fields={
+            "prune",
+            params={
+                "keep_hourly": keep_hourly,
+                "keep_daily": keep_daily,
+                "keep_weekly": keep_weekly,
+                "keep_monthly": keep_monthly,
+                "keep_quarterly": keep_quarterly,
+                "keep_yearly": keep_yearly,
+                "keep_within": keep_within,
+                "dry_run": True,
                 "scheduled_prune": False,
             },
+            user_id=current_user.id,
         )
 
         logger.info(
@@ -5683,24 +5542,29 @@ async def prune_repository(
 
         # Refresh job to get updated status and logs
         db.refresh(prune_job)
+        # A dry run changed nothing, so it gets no follow-up chain; passing
+        # the flag explicitly documents that rather than leaving the reader
+        # to wonder.
+        finish_inline_maintenance(db, prune_job, enqueue_followups=False)
+        prune_view = MaintenanceJobFacade(db, prune_job)
 
         # Read log file if it exists
         stdout_output = read_job_logs(
-            prune_job, fallback_to_logs=True, log_save_policy="all_jobs"
+            prune_view, fallback_to_logs=True, log_save_policy="all_jobs"
         )
         stderr_output = ""
 
         # Return results in format expected by frontend
         return {
             "job_id": prune_job.id,
-            "status": prune_job.status,
+            "status": prune_view.status,
             "dry_run": dry_run,
             "prune_result": {
-                "success": prune_job.status == "completed",
+                "success": prune_view.status == "completed",
                 "stdout": stdout_output,
                 "stderr": stderr_output
-                if stderr_output or prune_job.error_message
-                else (prune_job.error_message or ""),
+                if stderr_output or prune_view.error_message
+                else (prune_view.error_message or ""),
             },
         }
     except HTTPException:
@@ -6462,10 +6326,10 @@ async def get_restore_check_job_status(
 ):
     """Get status of a restore verification job."""
     try:
-        job, _ = get_job_with_repository(
+        job, _ = get_maintenance_job_with_repository(
             db,
             current_user,
-            RestoreCheckJob,
+            "restore_check",
             job_id,
             not_found_key="backend.errors.repo.restoreCheckJobNotFound",
         )
@@ -6505,8 +6369,8 @@ async def get_repository_restore_check_jobs(
 ):
     """Get recent restore verification jobs for a repository."""
     try:
-        jobs = get_repository_jobs(
-            db, current_user, repo_id, RestoreCheckJob, limit=limit
+        jobs = get_repository_maintenance_jobs(
+            db, current_user, repo_id, "restore_check", limit=limit
         )
         log_save_policy = get_log_save_policy(db)
         return {
@@ -6552,10 +6416,10 @@ async def get_compact_job_status(
 ):
     """Get status of a compact job"""
     try:
-        job, _ = get_job_with_repository(
+        job, _ = get_maintenance_job_with_repository(
             db,
             current_user,
-            CompactJob,
+            "compact",
             job_id,
             not_found_key="backend.errors.repo.compactJobNotFound",
         )
@@ -6583,7 +6447,9 @@ async def get_repository_compact_jobs(
 ):
     """Get recent compact jobs for a repository"""
     try:
-        jobs = get_repository_jobs(db, current_user, repo_id, CompactJob, limit=limit)
+        jobs = get_repository_maintenance_jobs(
+            db, current_user, repo_id, "compact", limit=limit
+        )
         log_save_policy = get_log_save_policy(db)
         return {
             "jobs": [
@@ -6613,10 +6479,10 @@ async def get_prune_job_status(
 ):
     """Get status of a prune job"""
     try:
-        job, _ = get_job_with_repository(
+        job, _ = get_maintenance_job_with_repository(
             db,
             current_user,
-            PruneJob,
+            "prune",
             job_id,
             not_found_key="backend.errors.repo.pruneJobNotFound",
         )
@@ -6643,7 +6509,9 @@ async def get_repository_prune_jobs(
 ):
     """Get recent prune jobs for a repository"""
     try:
-        jobs = get_repository_jobs(db, current_user, repo_id, PruneJob, limit=limit)
+        jobs = get_repository_maintenance_jobs(
+            db, current_user, repo_id, "prune", limit=limit
+        )
         log_save_policy = get_log_save_policy(db)
         return {
             "jobs": [

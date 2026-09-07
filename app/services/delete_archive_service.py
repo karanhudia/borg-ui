@@ -3,11 +3,12 @@ from datetime import datetime
 from pathlib import Path
 import structlog
 from sqlalchemy.orm import Session
-from app.database.models import DeleteArchiveJob, Repository
+from app.database.models import Repository
 from app.database.database import SessionLocal
 from app.config import settings
 from app.core.borg import borg
 from app.core.borg_errors import is_borg_warning_exit_code
+from app.services.operations.job_facade import refresh_job, resolve_maintenance_job
 from app.utils.db_retries import commit_with_retry
 from app.utils.borg_env import (
     build_repository_borg_env,
@@ -55,9 +56,7 @@ class DeleteArchiveService:
         temp_key_file = None
         try:
             # Get job
-            job = (
-                db.query(DeleteArchiveJob).filter(DeleteArchiveJob.id == job_id).first()
-            )
+            job = resolve_maintenance_job(db, job_id, "delete_archive")
             if not job:
                 logger.error("Delete archive job not found", job_id=job_id)
                 return
@@ -169,7 +168,7 @@ class DeleteArchiveService:
                 nonlocal cancelled
                 while not cancelled and process.returncode is None:
                     await asyncio.sleep(3)
-                    db.refresh(job)
+                    refresh_job(db, job)
                     if job.status == "cancelled":
                         logger.info(
                             "Delete job cancelled, terminating process", job_id=job_id
@@ -321,7 +320,7 @@ class DeleteArchiveService:
 
     async def cancel_delete(self, job_id: int, db: Session):
         """Cancel a running delete job"""
-        job = db.query(DeleteArchiveJob).filter(DeleteArchiveJob.id == job_id).first()
+        job = resolve_maintenance_job(db, job_id, "delete_archive")
         if not job:
             raise ValueError(f"Delete job {job_id} not found")
 

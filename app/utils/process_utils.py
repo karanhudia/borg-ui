@@ -588,15 +588,25 @@ def cleanup_orphaned_jobs(db: Session):
     # goes away with the table in phase 9.
     running_check_jobs = db.query(CheckJob).filter(CheckJob.status == "running").all()
 
-    # Find all running restore check jobs
+    # Running restore-check rows written before phase 5 moved restore_check to
+    # `operations`, kept for the same reason as running_check_jobs above.
+    # Empty after the first restart past the upgrade; goes away with the
+    # table in phase 9.
     running_restore_check_jobs = (
         db.query(RestoreCheckJob).filter(RestoreCheckJob.status == "running").all()
     )
 
-    # Find all running prune jobs
+    # Running prune rows written before phase 5 moved prune to `operations`,
+    # kept for the same reason as running_check_jobs above: OperationRunner.
+    # recover_on_startup covers new work, but a pre-upgrade running row still
+    # needs this loop to mark it failed. Empty after the first restart past
+    # the upgrade; goes away with the table in phase 9.
     running_prune_jobs = db.query(PruneJob).filter(PruneJob.status == "running").all()
 
-    # Find all running compact jobs
+    # Running compact rows written before phase 5 moved compact to
+    # `operations`, kept for the same reason as running_check_jobs and
+    # running_prune_jobs above. Empty after the first restart past the
+    # upgrade; goes away with the table in phase 9.
     running_compact_jobs = (
         db.query(CompactJob).filter(CompactJob.status == "running").all()
     )

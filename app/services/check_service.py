@@ -11,7 +11,7 @@ from app.config import settings
 from app.core.borg import borg
 from app.core.borg_errors import is_borg_warning_exit_code
 from app.services.notification_service import NotificationService
-from app.services.operations.job_facade import resolve_maintenance_job
+from app.services.operations.job_facade import refresh_job, resolve_maintenance_job
 from app.utils.db_retries import commit_with_retry
 from app.utils.borg_env import (
     build_repository_borg_env,
@@ -206,7 +206,7 @@ class CheckService:
                 nonlocal cancelled
                 while not cancelled and process.returncode is None:
                     await asyncio.sleep(3)
-                    db.refresh(job)
+                    refresh_job(db, job)
                     if job.status == "cancelled":
                         logger.info(
                             "Check job cancelled, terminating process", job_id=job_id

@@ -17,25 +17,17 @@ from app.database.database import get_db
 from app.database.models import (
     User,
     Repository,
-    CheckJob,
-    CompactJob,
     BackupJob,
-    PruneJob,
 )
-from app.api.maintenance_jobs import (
-    get_repository_with_access,
-    start_background_maintenance_job,
-)
+from app.api.maintenance_jobs import get_repository_with_access
 from app.core.security import get_current_user
 from app.core.features import require_feature
-from app.core.borg_router import BorgRouter
 from app.services.backup_service import backup_service
 from app.services.check_flag_validation import (
     CheckFlagConflictError,
     validate_check_flags_for_max_duration,
 )
-from app.services.v2.check_service import check_v2_service
-from app.services.v2.compact_service import compact_v2_service
+from app.services.operations.maintenance_start import start_maintenance
 from app.services.v2.prune_service import prune_v2_service
 
 logger = structlog.get_logger()
@@ -189,37 +181,35 @@ async def prune_archives(
     keep_within = _normalize_keep_within(data.keep_within)
     prune_kwargs = {"keep_within": keep_within} if keep_within is not None else {}
     if not data.dry_run:
-        prune_job = start_background_maintenance_job(
+        prune_job = start_maintenance(
             db,
             repo,
-            PruneJob,
-            error_key="backend.errors.prune.alreadyRunning",
-            dispatcher=lambda job, repo_id=repo.id: prune_v2_service.execute_prune(
-                job.id,
-                repo_id,
-                data.keep_hourly,
-                data.keep_daily,
-                data.keep_weekly,
-                data.keep_monthly,
-                data.keep_quarterly,
-                data.keep_yearly,
-                False,
-                **prune_kwargs,
-            ),
-            status="running",
-            extra_fields={"scheduled_prune": False},
+            "prune",
+            trigger="manual",
+            params={
+                "keep_hourly": data.keep_hourly,
+                "keep_daily": data.keep_daily,
+                "keep_weekly": data.keep_weekly,
+                "keep_monthly": data.keep_monthly,
+                "keep_quarterly": data.keep_quarterly,
+                "keep_yearly": data.keep_yearly,
+                "keep_within": keep_within,
+                "scheduled_prune": False,
+            },
+            user_id=current_user.id,
+            duplicate_error_key="backend.errors.prune.alreadyRunning",
         )
 
         logger.info(
-            "Borg2 prune job created",
-            job_id=prune_job.id,
+            "Borg2 prune operation queued",
+            operation_id=prune_job.id,
             repository_id=repo.id,
             user=current_user.username,
         )
 
         return {
             "job_id": prune_job.id,
-            "status": "running",
+            "status": "pending",
             "message": "backend.success.repo.pruneJobStarted",
         }
 
@@ -248,7 +238,6 @@ async def prune_archives(
     if not data.dry_run:
         note = "Run compact to reclaim freed space"
         stdout = "\n\n".join(part for part in [stdout, note] if part)
-        await BorgRouter(repo).update_stats(db)
 
     return {
         "success": True,
@@ -279,27 +268,26 @@ async def compact_repository(
 
     repo = _get_v2_repo_by_id(data.repository_id, db, current_user)
 
-    compact_job = start_background_maintenance_job(
+    compact_job = start_maintenance(
         db,
         repo,
-        CompactJob,
-        error_key="backend.errors.compact.alreadyRunning",
-        dispatcher=lambda job, repo_id=repo.id: compact_v2_service.execute_compact(
-            job.id, repo_id
-        ),
-        status="running",
+        "compact",
+        trigger="manual",
+        params={"scheduled_compact": False},
+        user_id=current_user.id,
+        duplicate_error_key="backend.errors.compact.alreadyRunning",
     )
 
     logger.info(
-        "Borg2 compact job created",
-        job_id=compact_job.id,
+        "Borg2 compact operation queued",
+        operation_id=compact_job.id,
         repository_id=repo.id,
         user=current_user.username,
     )
 
     return {
         "job_id": compact_job.id,
-        "status": "running",
+        "status": "pending",
         "message": "backend.success.repo.compactJobStarted",
     }
 
@@ -330,31 +318,29 @@ async def check_repository(
     except CheckFlagConflictError as exc:
         _raise_check_flag_conflict(exc)
 
-    extra_fields = {"max_duration": data.max_duration}
-    if check_extra_flags:
-        extra_fields["extra_flags"] = check_extra_flags
-
-    check_job = start_background_maintenance_job(
+    check_job = start_maintenance(
         db,
         repo,
-        CheckJob,
-        error_key="backend.errors.repo.checkAlreadyRunning",
-        dispatcher=lambda job, repo_id=repo.id: check_v2_service.execute_check(
-            job.id, repo_id
-        ),
-        status="running",
-        extra_fields=extra_fields,
+        "check",
+        trigger="manual",
+        params={
+            "max_duration": data.max_duration,
+            "extra_flags": check_extra_flags,
+            "scheduled_check": False,
+        },
+        user_id=current_user.id,
+        duplicate_error_key="backend.errors.repo.checkAlreadyRunning",
     )
 
     logger.info(
-        "Borg2 check job created",
-        job_id=check_job.id,
+        "Borg2 check operation queued",
+        operation_id=check_job.id,
         repository_id=repo.id,
         user=current_user.username,
     )
 
     return {
         "job_id": check_job.id,
-        "status": "running",
+        "status": "pending",
         "message": "backend.success.repo.checkJobStarted",
     }

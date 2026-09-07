@@ -16,6 +16,7 @@ from app.database.models import Repository
 from app.database.database import SessionLocal
 from app.services.operations.job_facade import (
     claim_running,
+    refresh_job,
     resolve_maintenance_job,
 )
 from app.core.borg2 import _get_borg2_binary
@@ -86,7 +87,7 @@ class CheckV2Service:
 
             # Refresh to ensure we have the latest state. If the job was
             # somehow already completed/cancelled (race), bail out.
-            db.refresh(job)
+            refresh_job(db, job)
             if job.status not in ("running", "pending"):
                 logger.warning(
                     "Check job already in terminal state, skipping",
@@ -121,7 +122,7 @@ class CheckV2Service:
                     job_id=job_id,
                 )
                 return
-            db.refresh(job)
+            refresh_job(db, job)
 
             env, temp_key_file = build_repository_borg_env(
                 repo,
@@ -209,7 +210,7 @@ class CheckV2Service:
                 nonlocal cancelled
                 while not cancelled and process.returncode is None:
                     await asyncio.sleep(3)
-                    db.refresh(job)
+                    refresh_job(db, job)
                     if job.status == "cancelled":
                         logger.info("Borg2 check cancelled, terminating", job_id=job_id)
                         cancelled = True

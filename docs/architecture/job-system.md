@@ -54,17 +54,37 @@ Restores can target:
 
 Notifications can be sent for restore success or failure.
 
-## Check, Prune, and Compact
+## Check, Prune, Compact, Archive Delete, and Restore Check
 
-Maintenance jobs run Borg maintenance commands and record job history.
+These five kinds are rows in the `operations` table (see "Operations
+runner" below), not per-kind tables. Check, prune, compact, and archive
+delete are exclusive: they take the repository lane, so they queue behind a
+running backup instead of being rejected outright, and the runner starts
+them when the lane is free. Restore check is category `restore`: it only
+reads, so it does not take the lane and keeps its own cron scheduler.
+
+Prune's dry run and every post-backup prune/compact/check are the
+exceptions: they run inline (`start_inline_maintenance` /
+`finish_inline_maintenance`), because a queued child would deadlock
+against the backup row holding the lane in `running_prune`. An inline
+operation still gets a real row and the same follow-up chain a
+runner-dispatched one would get, just without the runner's queueing.
 
 Use them carefully:
 
 - checks can be expensive on large repositories
 - prune changes retention state
 - compact reclaims space after prune
+- archive delete requires a per-archive lock: two different archives may be
+  removed at once, the same one may not
 
 Do not interrupt maintenance unless necessary.
+
+Pre-phase-5 installs still have history in `check_jobs`, `prune_jobs`,
+`compact_jobs`, `delete_archive_jobs`, and `restore_check_jobs`. The status
+and list routes serve operations first and fall back to those tables by id,
+so old links and activity rows keep resolving. The tables themselves are
+deleted in a later phase.
 
 ## Logs
 
@@ -85,19 +105,26 @@ Startup cleanup currently covers:
 
 - backup jobs
 - restore jobs
-- check jobs
-- restore-check jobs
-- prune jobs
-- compact jobs
+- check, restore-check, prune, and compact rows in their legacy tables,
+  written by an install that has not restarted since upgrading to phase 5
+
+Check, prune, compact, and restore-check now run as operations, and new
+work in that shape is recovered by the operations runner on startup
+(requeue index rows, fail the rest unless their process is still alive; see
+"Operations runner"), including a local lock-break attempt equivalent to
+the one this sweep makes. The five legacy-table branches below stay only to
+resolve a running row a pre-upgrade process left behind; each query is
+empty on any install that has restarted since the upgrade, and the branches
+are deleted with the tables in a later phase.
 
 What happens:
 
 - running backup jobs are marked `failed`
 - running restore jobs are marked `failed`
-- running prune jobs are marked `failed`
-- running check, restore-check, and compact jobs are marked `failed` when their recorded process is no longer alive
+- running legacy prune rows are marked `failed`
+- running legacy check, restore-check, and compact rows are marked `failed` when their recorded process is no longer alive
 - backup rows left in `running_prune` or `running_compact` maintenance states are marked `failed`, with maintenance state changed to `prune_failed` or `compact_failed`
-- orphaned prune and compact jobs update the related backup maintenance state when possible
+- orphaned legacy prune and compact rows update the related backup maintenance state when possible
 
 For local check and compact jobs, Borg UI attempts to break the repository lock after detecting an orphaned process. For remote repositories, it does not automatically break the lock because the remote Borg process may still be running.
 

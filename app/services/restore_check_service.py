@@ -17,6 +17,7 @@ from app.core.borg_router import BorgRouter
 from app.database.database import SessionLocal
 from app.database.models import Repository, RestoreCheckJob
 from app.services.notification_service import NotificationService
+from app.services.operations.job_facade import resolve_maintenance_job
 from app.services.restore_check_canary import (
     CANARY_MANIFEST,
     get_legacy_restore_canary_archive_paths,
@@ -213,7 +214,7 @@ class RestoreCheckService:
         use_canary = False
 
         try:
-            job = db.query(RestoreCheckJob).filter(RestoreCheckJob.id == job_id).first()
+            job = resolve_maintenance_job(db, job_id, "restore_check")
             if not job:
                 logger.error("Restore check job not found", job_id=job_id)
                 return
@@ -455,11 +456,7 @@ class RestoreCheckService:
             try:
                 db.rollback()
                 if job is None:
-                    job = (
-                        db.query(RestoreCheckJob)
-                        .filter(RestoreCheckJob.id == job_id)
-                        .first()
-                    )
+                    job = resolve_maintenance_job(db, job_id, "restore_check")
                 if job:
                     job.status = "failed"
                     job.error_message = str(exc)

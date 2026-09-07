@@ -14,7 +14,6 @@ import structlog
 from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
 
-from app.api.maintenance_jobs import create_started_maintenance_job
 from app.config import settings
 from app.core.borg_router import BorgRouter
 from app.core.security import decrypt_secret
@@ -28,14 +27,16 @@ from app.database.models import (
     BackupPlanRun,
     BackupPlanRunRetryLineage,
     BackupPlanRunRepository,
-    CheckJob,
-    CompactJob,
-    PruneJob,
+    Operation,
     Repository,
     Script,
     ScriptExecution,
     SSHConnection,
     SSHKey,
+)
+from app.services.operations.maintenance_start import (
+    finish_inline_maintenance,
+    start_inline_maintenance,
 )
 from app.services.backup_service import backup_service
 from app.services.backup_plan_policy import evaluate_backup_plan_access
@@ -835,12 +836,13 @@ class BackupPlanExecutionService:
 
         if backup_job.maintenance_status == "running_prune":
             maintenance_job = (
-                db.query(PruneJob)
+                db.query(Operation)
                 .filter(
-                    PruneJob.repository_id == repo.id,
-                    PruneJob.status == "running",
+                    Operation.repository_id == repo.id,
+                    Operation.kind == "prune",
+                    Operation.status == "running",
                 )
-                .order_by(PruneJob.id.desc())
+                .order_by(Operation.id.desc())
                 .first()
             )
             if not maintenance_job:
@@ -860,12 +862,13 @@ class BackupPlanExecutionService:
 
         if backup_job.maintenance_status == "running_compact":
             maintenance_job = (
-                db.query(CompactJob)
+                db.query(Operation)
                 .filter(
-                    CompactJob.repository_id == repo.id,
-                    CompactJob.status == "running",
+                    Operation.repository_id == repo.id,
+                    Operation.kind == "compact",
+                    Operation.status == "running",
                 )
-                .order_by(CompactJob.id.desc())
+                .order_by(Operation.id.desc())
                 .first()
             )
             if not maintenance_job:
@@ -2116,11 +2119,21 @@ class BackupPlanExecutionService:
         if context.run_prune_after:
             if self._is_run_cancelled(run_id):
                 return "cancelled"
-            prune_job = create_started_maintenance_job(
+            prune_job = start_inline_maintenance(
                 db,
-                PruneJob,
                 repo,
-                extra_fields={"scheduled_prune": False},
+                "prune",
+                params={
+                    "keep_hourly": context.prune_keep_hourly,
+                    "keep_daily": context.prune_keep_daily,
+                    "keep_weekly": context.prune_keep_weekly,
+                    "keep_monthly": context.prune_keep_monthly,
+                    "keep_quarterly": context.prune_keep_quarterly,
+                    "keep_yearly": context.prune_keep_yearly,
+                    "keep_within": context.prune_keep_within,
+                    "scheduled_prune": False,
+                },
+                user_id=None,
             )
             backup_job.maintenance_status = "running_prune"
             db.commit()
@@ -2136,6 +2149,7 @@ class BackupPlanExecutionService:
                 keep_within=context.prune_keep_within,
             )
             db.refresh(prune_job)
+            finish_inline_maintenance(db, prune_job)
             if self._is_run_cancelled(run_id):
                 return "cancelled"
             if prune_job.status == "completed":
@@ -2148,16 +2162,18 @@ class BackupPlanExecutionService:
         if context.run_compact_after:
             if self._is_run_cancelled(run_id):
                 return "cancelled"
-            compact_job = create_started_maintenance_job(
+            compact_job = start_inline_maintenance(
                 db,
-                CompactJob,
                 repo,
-                extra_fields={"scheduled_compact": False},
+                "compact",
+                params={"scheduled_compact": False},
+                user_id=None,
             )
             backup_job.maintenance_status = "running_compact"
             db.commit()
             await BorgRouter(repo).compact(compact_job.id)
             db.refresh(compact_job)
+            finish_inline_maintenance(db, compact_job)
             if self._is_run_cancelled(run_id):
                 return "cancelled"
             if compact_job.status == "completed":
@@ -2170,20 +2186,22 @@ class BackupPlanExecutionService:
         if context.run_check_after:
             if self._is_run_cancelled(run_id):
                 return "cancelled"
-            check_job = create_started_maintenance_job(
+            check_job = start_inline_maintenance(
                 db,
-                CheckJob,
                 repo,
-                extra_fields={
+                "check",
+                params={
                     "scheduled_check": False,
                     "max_duration": context.check_max_duration,
                     "extra_flags": context.check_extra_flags,
                 },
+                user_id=None,
             )
             backup_job.maintenance_status = "running_check"
             db.commit()
             await BorgRouter(repo).check(check_job.id)
             db.refresh(check_job)
+            finish_inline_maintenance(db, check_job)
             if self._is_run_cancelled(run_id):
                 return "cancelled"
             if check_job.status == "completed":

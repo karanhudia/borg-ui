@@ -8,7 +8,6 @@ from fastapi.testclient import TestClient
 from app.core.security import create_access_token, get_password_hash
 from app.database.models import (
     Operation,
-    PruneJob,
     Repository,
     SystemSettings,
     User,
@@ -108,7 +107,7 @@ class TestRepositoryApiDispatch:
         assert op.params == {"max_duration": 0, "scheduled_check": False}
 
     @pytest.mark.asyncio
-    async def test_compact_route_dispatches_through_borg_router(
+    async def test_compact_route_enqueues_and_the_executor_dispatches_through_borg_router(
         self, test_client: TestClient, admin_headers, test_db
     ):
         repo = Repository(
@@ -122,35 +121,45 @@ class TestRepositoryApiDispatch:
         test_db.commit()
         test_db.refresh(repo)
 
-        dispatched = {}
-        fake_router = Mock(compact=AsyncMock())
+        # Phase 5: the route enqueues and the executor routes. BorgRouter is
+        # called by `run_compact` with the live repository row, so this
+        # asserts the executor's routing rather than a dispatcher the route
+        # builds.
+        from app.services.operations.executors import maintenance
 
-        def fake_start(db, repository, job_model, **kwargs):
-            dispatched["dispatcher"] = kwargs["dispatcher"]
-            return SimpleNamespace(id=12, repository_id=repository.id, status="pending")
-
-        with (
-            patch(
-                "app.api.repositories.BorgRouter", return_value=fake_router
-            ) as mock_router,
-            patch(
-                "app.api.repositories.start_background_maintenance_job",
-                side_effect=fake_start,
-            ),
-        ):
-            response = test_client.post(
-                f"/api/repositories/{repo.id}/compact",
-                headers=admin_headers,
-            )
-            await dispatched["dispatcher"](SimpleNamespace(id=77))
+        response = test_client.post(
+            f"/api/repositories/{repo.id}/compact",
+            headers=admin_headers,
+        )
 
         assert response.status_code == 200
+        body = response.json()
+        assert body["status"] == "pending"
+        op = test_db.get(Operation, body["job_id"])
+        assert op.kind == "compact"
+
+        ctx = SimpleNamespace(
+            db=test_db,
+            operation=op,
+            operation_id=op.id,
+            repository_id=repo.id,
+            kind="compact",
+            params=dict(op.params or {}),
+            cancelled=lambda: False,
+            log=lambda line: None,
+        )
+        fake_router = Mock(compact=AsyncMock())
+        with patch(
+            "app.services.operations.executors.maintenance.BorgRouter",
+            return_value=fake_router,
+        ) as mock_router:
+            await maintenance.run_compact(ctx)
+
         mock_router.assert_called_once()
         routed_repo = mock_router.call_args.args[0]
-        assert not isinstance(routed_repo, Repository)
         assert routed_repo.id == repo.id
         assert routed_repo.borg_version == repo.borg_version
-        fake_router.compact.assert_awaited_once_with(77)
+        fake_router.compact.assert_awaited_once_with(op.id)
 
     def test_prune_route_dispatches_through_borg_router(
         self, test_client: TestClient, admin_headers, test_db
@@ -203,9 +212,11 @@ class TestRepositoryApiDispatch:
         )
 
         async def complete_prune_with_logs(job_id, *_args, **_kwargs):
+            from app.services.operations.job_facade import MaintenanceJobFacade
+
             log_path = tmp_path / "prune-dry-run.log"
             log_path.write_text(dry_run_logs, encoding="utf-8")
-            job = test_db.query(PruneJob).filter(PruneJob.id == job_id).one()
+            job = MaintenanceJobFacade(test_db, test_db.get(Operation, job_id))
             job.status = "completed"
             job.log_file_path = str(log_path)
             job.has_logs = True
@@ -227,7 +238,7 @@ class TestRepositoryApiDispatch:
         assert "Would prune:" in body["prune_result"]["stdout"]
 
     @pytest.mark.asyncio
-    async def test_prune_route_starts_background_job_for_actual_prune(
+    async def test_prune_route_enqueues_and_the_executor_dispatches_through_borg_router(
         self, test_client: TestClient, admin_headers, test_db
     ):
         repo = Repository(
@@ -241,54 +252,55 @@ class TestRepositoryApiDispatch:
         test_db.commit()
         test_db.refresh(repo)
 
-        dispatched = {}
-        fake_router = Mock(prune=AsyncMock())
+        # Phase 5: the route enqueues and the executor routes. BorgRouter is
+        # called by `run_prune` with the live repository row, so this asserts
+        # the executor's routing rather than a dispatcher the route builds.
+        from app.services.operations.executors import maintenance
 
-        def fake_start(db, repository, job_model, **kwargs):
-            dispatched["dispatcher"] = kwargs["dispatcher"]
-            assert job_model is PruneJob
-            assert kwargs["extra_fields"] == {"scheduled_prune": False}
-            return SimpleNamespace(id=13, repository_id=repository.id, status="pending")
-
-        with (
-            patch(
-                "app.api.repositories.BorgRouter", return_value=fake_router
-            ) as mock_router,
-            patch(
-                "app.api.repositories.start_background_maintenance_job",
-                side_effect=fake_start,
-            ) as mock_start,
-        ):
-            response = test_client.post(
-                f"/api/repositories/{repo.id}/prune",
-                json={
-                    "keep_hourly": 1,
-                    "keep_daily": 3,
-                    "keep_weekly": 2,
-                    "keep_monthly": 1,
-                    "keep_quarterly": 0,
-                    "keep_yearly": 0,
-                    "dry_run": False,
-                },
-                headers=admin_headers,
-            )
-
-            fake_router.prune.assert_not_awaited()
-            await dispatched["dispatcher"](SimpleNamespace(id=99))
+        response = test_client.post(
+            f"/api/repositories/{repo.id}/prune",
+            json={
+                "keep_hourly": 1,
+                "keep_daily": 3,
+                "keep_weekly": 2,
+                "keep_monthly": 1,
+                "keep_quarterly": 0,
+                "keep_yearly": 0,
+                "dry_run": False,
+            },
+            headers=admin_headers,
+        )
 
         assert response.status_code == 200
-        assert response.json() == {
-            "job_id": 13,
-            "status": "pending",
-            "message": "backend.success.repo.pruneJobStarted",
-        }
-        mock_start.assert_called_once()
+        body = response.json()
+        assert body["status"] == "pending"
+        assert body["message"] == "backend.success.repo.pruneJobStarted"
+        op = test_db.get(Operation, body["job_id"])
+        assert op.kind == "prune"
+        assert op.params["keep_daily"] == 3
+
+        ctx = SimpleNamespace(
+            db=test_db,
+            operation=op,
+            operation_id=op.id,
+            repository_id=repo.id,
+            kind="prune",
+            params=dict(op.params or {}),
+            cancelled=lambda: False,
+            log=lambda line: None,
+        )
+        fake_router = Mock(prune=AsyncMock())
+        with patch(
+            "app.services.operations.executors.maintenance.BorgRouter",
+            return_value=fake_router,
+        ) as mock_router:
+            await maintenance.run_prune(ctx)
+
         mock_router.assert_called_once()
         routed_repo = mock_router.call_args.args[0]
-        assert not isinstance(routed_repo, Repository)
         assert routed_repo.id == repo.id
         assert routed_repo.borg_version == repo.borg_version
-        fake_router.prune.assert_awaited_once_with(99, 1, 3, 2, 1, 0, 0, False)
+        fake_router.prune.assert_awaited_once_with(op.id, 1, 3, 2, 1, 0, 0, False)
 
     def test_break_lock_route_dispatches_through_borg_router(
         self, test_client: TestClient, admin_headers, test_db

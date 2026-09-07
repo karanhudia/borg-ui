@@ -14,7 +14,6 @@ from app.database.models import (
     BackupJob,
     CheckJob,
     CompactJob,
-    DeleteArchiveJob,
     Operation,
     PruneJob,
     Repository,
@@ -273,27 +272,6 @@ def list_active_repository_work(
         _active_work(repository, OPERATION_BACKUP, BackupJob.__tablename__, job)
         for job in backup_jobs
     )
-
-    maintenance_specs = (
-        (CheckJob, OPERATION_CHECK),
-        (RestoreCheckJob, OPERATION_RESTORE_CHECK),
-        (CompactJob, OPERATION_COMPACT),
-        (PruneJob, OPERATION_PRUNE),
-        (DeleteArchiveJob, OPERATION_DELETE_ARCHIVE),
-    )
-    for job_model, operation in maintenance_specs:
-        jobs = (
-            db.query(job_model)
-            .filter(
-                job_model.repository_id == repository.id,
-                job_model.status.in_(ACTIVE_MAINTENANCE_STATUSES),
-            )
-            .all()
-        )
-        active.extend(
-            _active_work(repository, operation, job_model.__tablename__, job)
-            for job in jobs
-        )
 
     # Migrated kinds live in `operations` (spec section 13 phase 5). Admission
     # must still see them, or break_lock and wipe would run alongside a check

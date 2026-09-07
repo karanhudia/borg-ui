@@ -164,6 +164,24 @@ curl -sS "$BASE_URL/api/backup/logs/$JOB_ID/download" \
   -o "backup_job_${JOB_ID}_logs.txt"
 ```
 
+## Maintenance jobs (check, prune, compact, restore check, archive delete)
+
+The start routes (`POST /api/repositories/{id}/check`, `/prune`, `/compact`,
+`/restore-check`, and `DELETE /api/archives/{archive_id}`) still return
+`{"job_id", "status", "message"}`. As of section 13 phase 5, `job_id` is an
+`operations` row id rather than a row in a per-kind table: the work is
+queued behind the repository's other exclusive operations (a running
+backup, for example) instead of being rejected with a conflict, so `status`
+is usually `pending` rather than `running`. A prune's dry run is the
+exception: it runs and answers inline, so its payload carries the legacy
+`prune_result` shape instead of a `job_id` to poll.
+
+The corresponding status and list routes (`GET .../check-jobs/{id}`,
+`/prune-jobs/{id}`, `/compact-jobs/{id}`, `/restore-check-jobs/{id}`,
+`/api/archives/delete-jobs/{id}`, and their per-repository list forms) serve
+operations first and fall back to the pre-phase-5 row for that id, so a link
+or activity entry from before the upgrade keeps resolving.
+
 ## Archive index and history
 
 Database-backed archive routes under `/api/repositories/{id}`. Routes
