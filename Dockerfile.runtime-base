@@ -66,9 +66,9 @@ RUN pip install --no-cache-dir pyfuse3 "borgbackup==${BORG1_VERSION}" && \
 # runtime-base.env; the download+unzip tooling stays in this builder stage and
 # only the verified binary is copied into the runtime image. Bump RCLONE_VERSION
 # and both checksums together to upgrade.
-ARG RCLONE_VERSION=1.75.0
-ARG RCLONE_SHA256_AMD64=aa2804e08f48250e71009c727124b6341cd0288465804a9a09d14663cabafbaa
-ARG RCLONE_SHA256_ARM64=d0ad88ba4c8e285b7c9efa591e0ab643280a91741e13c27f3a9c0957ccfa5203
+ARG RCLONE_VERSION=1.75.1
+ARG RCLONE_SHA256_AMD64=982b5aa772841168f8e380f139e9e787b2a105403e32b94da8676a0e1c0a13ab
+ARG RCLONE_SHA256_ARM64=03f2504174034b6d004152ed7369251c9a9ec1f7e0836eda420f5c7a5ec0dff9
 # TARGETARCH is provided automatically by BuildKit for each target platform.
 ARG TARGETARCH
 RUN set -eux; \
