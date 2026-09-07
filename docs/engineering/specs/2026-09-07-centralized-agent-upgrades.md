@@ -284,12 +284,19 @@ that lacks the helper reports honestly and the UI routes it to the manual path.
 The probe branches on how the agent runs, because the escalation only exists
 for the unprivileged case:
 
-- **Running as root.** The unit file exists, and that is the whole check. There
-  is no sudoers file to consult and the installer does not install `sudo`, so a
-  probe that shelled out to `sudo -l` would report no capability on exactly the
+Both branches first check that the unit file exists *and* that the helper its
+`ExecStart` names is present and executable. A unit left behind by a partial or
+half-removed install would otherwise let the agent advertise a capability whose
+first use fails at exec time, which is exactly the dishonest report the probe
+exists to prevent.
+
+- **Running as root.** Those two checks are the whole probe. There is no
+  sudoers file to consult and the installer does not install `sudo`, so a probe
+  that shelled out to `sudo -l` would report no capability on exactly the
   endpoints that need none.
-- **Running unprivileged.** The unit file exists *and*
-  `sudo -n <systemctl path> start --no-block` for it is listed by `sudo -l`.
+- **Running unprivileged.** Additionally,
+  `sudo -n <systemctl path> start --no-block borg-ui-agent-upgrade.service`
+  is listed by `sudo -l`.
 
 ## 7. The upgrade command
 
@@ -303,10 +310,12 @@ Handler steps:
    upgrade restarts the process; doing it under a running backup would orphan
    that backup's job.
 2. Refuse with `upgrade_unsupported` if the helper is not present.
-3. Emit a log line, then start `borg-ui-agent-upgrade.service`, using the
-   absolute `systemctl` path recorded in `upgrade.conf`. A root agent invokes
-   `<systemctl path> start --no-block` directly; an unprivileged one prefixes
-   `sudo -n`, and the recorded path is what makes the sudoers rule match.
+3. Emit a log line, then start the unit, using the absolute `systemctl` path
+   recorded in `upgrade.conf`. A root agent invokes
+   `<systemctl path> start --no-block borg-ui-agent-upgrade.service` directly;
+   an unprivileged one prefixes `sudo -n` to that same argv. The argv must match
+   the sudoers rule exactly, recorded path and unit name included, or the
+   unprivileged form is refused.
 4. Report success and let the process die.
 
 `--no-block` matters: the call returns as soon as systemd has queued the job,
@@ -490,9 +499,13 @@ endpoint installed before this feature takes. Document the flag and its trade in
   in-flight upgrade returns the existing job rather than a new one; an unpinned
   agent on a server serving no wheel is rejected.
 - **Session command** — the agent refuses when busy and when unsupported, and
-  invokes the expected argv (mocked) otherwise: bare `systemctl` as root, and
-  `sudo -n systemctl` unprivileged. Capability detection and the upgrade are
-  both covered for a root endpoint with no `sudo` on `PATH`.
+  otherwise invokes the complete expected argv (mocked), asserted in full
+  including the unit name:
+  `<systemctl path> start --no-block borg-ui-agent-upgrade.service` as root,
+  and that same argv behind `sudo -n` unprivileged. Capability detection and
+  the upgrade are both covered for a root endpoint with no `sudo` on `PATH`,
+  and the probe reports no capability when the unit exists but its `ExecStart`
+  helper is missing or not executable.
 - **Reconciliation** — an agent re-registering with the target version clears
   `requested`; one re-registering with the old version does not; the reaper
   marks a stale request `failed`.
