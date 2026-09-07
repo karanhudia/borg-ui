@@ -358,8 +358,10 @@ that starting position rather than a new party gaining access.
   not the one the agent is enrolled against, so a stale or tampered config
   cannot silently repoint an upgrade.
 - Upgrade endpoints require the same authorization as every other agent
-  mutation. Add the new actions to `app/core/authorization.py` alongside the
-  existing agent actions.
+  mutation, which for this router means the `get_current_admin_user` dependency
+  in the route signature. `managed-machines` routes are deliberately not
+  registered in `ENDPOINT_POLICIES` (`app/core/authorization.py`); do not add
+  them there, or the router gains a second divergent authorization path.
 
 ### 11.3 Operator control
 
@@ -412,12 +414,20 @@ Agents update this table and nothing else as work advances. Statuses:
 Migration adding `desired_agent_version`, `desired_borg_version`,
 `upgrade_state`, `upgrade_requested_at`, `upgrade_target_version`, and
 `upgrade_error` to `agent_machines`. The comparison helper and `upgrade_status`
-on `AgentMachineResponse`. The version cell, its chips, the fleet banner, and
-the pin control with its `PUT` endpoint. Stories for every chip state and the
-banner.
+on `AgentMachineResponse`. The version cell, its chips, the informational
+out-of-date banner, and the pin `PUT` endpoint. Stories for every chip state
+and the banner.
 
-Gate: an operator can see which endpoints are behind and pin one, with no
-change to how upgrades are performed.
+The banner carries no action in this phase. An "Upgrade all" button belongs to
+phase 4, and a button that does nothing is worse than no button.
+
+The **UI** for setting a pin ships in phase 3, not here. Only the endpoint and
+the chip that displays an existing pin land in phase 1: until upgrades are
+automatic, an operator already controls an endpoint's version by choosing what
+to paste, so a pin control would be a setting with no effect.
+
+Gate: an operator can see which endpoints are behind, and the pin endpoint is
+callable, with no change to how upgrades are performed.
 
 ### 13.3 Phase 2 — privileged helper and capability
 
@@ -433,8 +443,8 @@ installed before this phase does not, and the UI says so.
 ### 13.4 Phase 3 — single-agent remote upgrade
 
 The `agent.upgrade` session command, the `agent_upgrade` job type, the
-single-agent upgrade action and dialog, and the full reconciliation path
-including the reaper timeout.
+single-agent upgrade action and dialog, the pin control UI deferred from
+phase 1, and the full reconciliation path including the reaper timeout.
 
 Gate: one endpoint upgrades from the UI and the row resolves to up to date
 without anyone touching that machine.
