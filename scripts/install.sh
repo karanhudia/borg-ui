@@ -25,6 +25,8 @@ PORT="8081"
 VERSION=""
 START_SERVICE="true"
 SKIP_BORG2="false"
+DATA_DIR_EXPLICIT="false"
+PORT_EXPLICIT="false"
 
 usage() {
   cat <<'USAGE'
@@ -48,8 +50,8 @@ USAGE
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --version) VERSION="$2"; shift 2 ;;
-    --port) PORT="$2"; shift 2 ;;
-    --data-dir) DATA_DIR="$2"; shift 2 ;;
+    --port) PORT="$2"; PORT_EXPLICIT="true"; shift 2 ;;
+    --data-dir) DATA_DIR="$2"; DATA_DIR_EXPLICIT="true"; shift 2 ;;
     --service-user) SERVICE_USER="$2"; shift 2 ;;
     --skip-borg2) SKIP_BORG2="true"; shift ;;
     --no-start) START_SERVICE="false"; shift ;;
@@ -168,12 +170,48 @@ download_release() {
   printf '%s  %s\n' "${sha}" "${tmp}/${tarball}" | sha256sum -c - >/dev/null ||
     die "checksum mismatch for ${tarball}; refusing to install it"
 
+  # Unpacked under the temporary directory and renamed into place, so
+  # RELEASE_DIR only ever exists complete. Extracting straight into it would
+  # leave a truncated tree behind on an interrupted run, and the next run would
+  # take that for an already-unpacked release.
   install -d -m 0755 "${PREFIX}/releases"
-  mkdir -p "${RELEASE_DIR}"
-  tar -xzf "${tmp}/${tarball}" -C "${RELEASE_DIR}" --strip-components=1
+  mkdir -p "${tmp}/unpack"
+  tar -xzf "${tmp}/${tarball}" -C "${tmp}/unpack" --strip-components=1
+  mv "${tmp}/unpack" "${RELEASE_DIR}"
 }
 
 # --- host layout -----------------------------------------------------------
+
+# An upgrade must act on the paths the running install uses, not on this
+# script's defaults. Without this a re-run of a `--data-dir /srv/borg-ui`
+# install would provision and chown /var/lib/borg-ui, leave the real data
+# directory's permissions unfixed, and print the wrong URL.
+load_persisted_settings() {
+  [[ -f "${ENV_FILE}" ]] || return 0
+
+  local key persisted explicit
+  for key in DATA_DIR PORT; do
+    persisted="$(grep -m1 "^${key}=" "${ENV_FILE}" | cut -d= -f2- || true)"
+    [[ -n "${persisted}" ]] || continue
+
+    explicit="${key}_EXPLICIT"
+    if [[ "${!explicit}" == "true" ]] && [[ "${!key}" != "${persisted}" ]]; then
+      warn "${ENV_FILE} already says ${key}=${persisted}; keeping that."
+      warn "To change it, edit that file and run: systemctl restart borg-ui"
+    fi
+    printf -v "${key}" '%s' "${persisted}"
+  done
+}
+
+# pip must not rewrite the virtualenv the running service is importing from.
+# Stopping first trades a few seconds of downtime, which an upgrade takes
+# anyway, for never leaving a half-upgraded environment under a live process.
+stop_service_for_upgrade() {
+  if systemctl is-active --quiet borg-ui 2>/dev/null; then
+    log "Stopping borg-ui for the upgrade"
+    systemctl stop borg-ui
+  fi
+}
 
 create_service_user() {
   [[ "${SERVICE_USER}" != "root" ]] || return 0
@@ -393,6 +431,8 @@ install_python_env() {
   fi
   "${PREFIX}/venv/bin/pip" install --quiet --upgrade pip setuptools wheel
   "${PREFIX}/venv/bin/pip" install --quiet -r "${RELEASE_DIR}/requirements.txt"
+  chown -R root:root "${PREFIX}/venv"
+  chmod -R go=rX "${PREFIX}/venv"
 }
 
 write_env_file() {
@@ -438,7 +478,13 @@ activate_release() {
   group="$(id -gn "${SERVICE_USER}")"
 
   log "Activating release ${VERSION}"
-  chown -R "${SERVICE_USER}:${group}" "${RELEASE_DIR}"
+  # Root-owned and read-only to the service user: the service executes
+  # start.sh and imports the application from this tree, so letting the user
+  # it runs as write here would mean a compromised app could replace the code
+  # that runs on the next restart. Nothing in the app writes inside the
+  # release tree; every path it writes to derives from DATA_DIR.
+  chown -R "root:${group}" "${RELEASE_DIR}"
+  chmod -R u=rwX,go=rX "${RELEASE_DIR}"
   ln -sfn "${RELEASE_DIR}" "${PREFIX}/current"
 
   # app/api/agent_installer.py serves the managed-agent wheelhouse from
@@ -489,6 +535,8 @@ main() {
   # shellcheck source=/dev/null
   source "${RELEASE_DIR}/packaging/native/versions.env"
 
+  load_persisted_settings
+  stop_service_for_upgrade
   create_service_user
   create_directories
   install_python_env

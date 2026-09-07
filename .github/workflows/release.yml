@@ -62,6 +62,10 @@ jobs:
 
       - name: Generate changelog
         id: changelog
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          RAW_BASE: https://raw.githubusercontent.com/${{ github.repository }}
         run: |
           {
             echo 'changelog<<EOF'
@@ -90,7 +94,9 @@ jobs:
             echo ""
             echo "Debian or Ubuntu host (bare metal, VM, or LXC):"
             echo '```'
-            echo "curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/install.sh | sudo bash -s -- --version ${{ steps.version.outputs.version }}"
+            # Pinned to this tag, not to main: an installer taken from a moving
+            # branch may not match the release it is being asked to install.
+            echo "curl -fsSL ${RAW_BASE}/${RELEASE_TAG}/scripts/install.sh | sudo bash -s -- --version ${RELEASE_VERSION}"
             echo '```'
             echo ""
             echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ steps.previous_tag.outputs.tag }}...${{ github.ref_name }}"

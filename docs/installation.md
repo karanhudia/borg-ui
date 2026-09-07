@@ -447,6 +447,17 @@ less install.sh
 sudo bash install.sh
 ```
 
+`main` always has the newest installer. To pin the installer itself to a
+release, so that what you reviewed is what runs, take it from that release's
+tag instead. Every release's notes carry this line filled in:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/karanhudia/borg-ui/v2.3.0/scripts/install.sh | sudo bash -s -- --version 2.3.0
+```
+
+The release archive the installer then downloads is verified against a
+published SHA-256 before anything is unpacked.
+
 Options:
 
 | Option | Default | What it does |
@@ -562,6 +573,15 @@ with the number of archives, and make sure the port you chose is reachable.
 sudo systemctl disable --now borg-ui
 sudo rm -f /etc/systemd/system/borg-ui.service
 sudo systemctl daemon-reload
+
+# Remove the borg, borg2 and rclone links, but only where they still point
+# into the install; a link you put there yourself is left alone.
+for cmd in borg borg2 rclone; do
+  case "$(readlink -f "/usr/local/bin/$cmd" 2>/dev/null)" in
+    /opt/borg-ui/*) sudo rm -f "/usr/local/bin/$cmd" ;;
+  esac
+done
+
 sudo rm -rf /opt/borg-ui /etc/borg-ui
 ```
 
