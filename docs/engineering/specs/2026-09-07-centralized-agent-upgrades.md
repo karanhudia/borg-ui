@@ -60,7 +60,7 @@ rest of the fleet moves.
   behind.
 - The operator selects out-of-date endpoints, clicks Upgrade, confirms a dialog
   that names exactly which machines will briefly disconnect, and watches each
-  row move through upgrading to up to date without touching a single machine.
+  row move through upgrading to up-to-date without touching a single machine.
 - An endpoint that must stay on an older agent is pinned, and it stops being
   counted as out of date.
 - An endpoint whose install predates this feature is clearly labelled as
@@ -121,34 +121,60 @@ routes and inherit its `authorize_request` dependency.
 
 **`GET /api/managed-machines/agents`** — `AgentMachineResponse` gains:
 
-```
+```text
 desired_agent_version: str | None
+desired_borg_version: "1" | "2" | None
 available_agent_version: str | None
 upgrade_status: Literal["up_to_date","outdated","ahead","pinned","unknown"]
 self_upgrade_supported: bool          # "self_upgrade" in capabilities
-upgrade_state: Literal["idle","requested","failed"] | None
+upgrade_state: Literal["idle","queued","requested","failed"] | None
 upgrade_requested_at: datetime | None
 upgrade_error: str | None
 ```
 
 `available_agent_version` is resolved once per request, not per row.
 
+`desired_borg_version` is returned as well as accepted, so the pin control can
+restore what an operator selected rather than resetting on reload, and so the
+UI can compare the intended Borg major version against the ones the endpoint
+actually reports in `borg_versions`.
+
+`upgrade_state` distinguishes an endpoint accepted into a fleet upgrade but
+still waiting for a wave (`queued`) from one whose upgrade has actually been
+dispatched (`requested`). Without that split, every endpoint in a large bulk
+request would read as idle until its wave started, and the operator would think
+the request had been dropped.
+
 **`POST /api/managed-machines/agents/upgrade`**
 
-```
-{ "agent_machine_ids": [int, ...] }
+```json
+{ "agent_machine_ids": [1, 2, 3] }
 ```
 
-Queues one upgrade per named agent. Rejects with `422` and a
-`backend.errors.agents.upgradeUnsupported` key if any named agent reports no
-`self_upgrade` capability, rather than silently skipping it — a partial success
-that looks like a full one is the failure mode to avoid. Returns the created
-job ids and, per agent, the resulting state.
+Queues one upgrade per named agent. Returns the created job ids and, per agent,
+the resulting state.
+
+Validation runs over the whole request before any job is created, and any
+failure rejects the entire request rather than partially applying it. A partial
+success that reports as a full one is the failure mode to avoid. Three checks,
+each with its own error key:
+
+| Condition | Key |
+| --- | --- |
+| An agent reports no `self_upgrade` capability | `backend.errors.agents.upgradeUnsupported` |
+| An agent has no effective target, because it is unpinned and this server serves no agent wheel | `backend.errors.agents.upgradeTargetUnavailable` |
+
+`agent_machine_ids` is deduplicated before validation, and an agent that
+already has an `agent_upgrade` job in a non-terminal state returns that job
+rather than queueing a second one. An upgrade restarts the endpoint, so
+queueing two for one machine could restart it twice or race two reinstalls
+against each other. This makes the endpoint idempotent under a double-click or
+a client retry.
 
 **`PUT /api/managed-machines/agents/{id}/desired-version`**
 
-```
-{ "desired_agent_version": str | null, "desired_borg_version": "1" | "2" | null }
+```json
+{ "desired_agent_version": "0.1.3", "desired_borg_version": "2" }
 ```
 
 Sets or clears the pin. Setting a `desired_agent_version` the server cannot
@@ -161,11 +187,18 @@ unsatisfiable.
 This is the load-bearing security design. The agent gets exactly one
 escalation, and it carries no attacker-controlled input.
 
-`install.sh` writes four root-owned artifacts. They are skipped entirely when
-the service user is `root` (that case needs no escalation) and when the operator
+`install.sh` writes four root-owned artifacts, skipped only when the operator
 passes `--no-remote-upgrade` (section 11.3). A reinstall preserves the existing
 choice unless the flag is given explicitly, matching how the installer already
-preserves the service user (`app/api/agent_installer.py:279`):
+preserves the service user (`app/api/agent_installer.py:279`).
+
+**A root-mode install gets three of the four.** The unit, the helper script and
+`upgrade.conf` are installed exactly as for an unprivileged agent; only the
+sudoers file is skipped, because a root agent can already start the unit. An
+earlier draft skipped the whole set for root, which left root endpoints with
+nothing to trigger and therefore no upgrade path at all: strictly worse than
+the unprivileged case the escalation exists to serve. The escalation is what
+root does not need; the mechanism it escalates to is needed either way.
 
 **`/etc/borg-ui-agent/upgrade.conf`** — mode `0644`, owned `root:root`. Records
 the parameters a reinstall needs: server URL, borg install mode, service user
@@ -174,11 +207,45 @@ values the operator gave the installer.
 
 **`/opt/borg-ui-agent/bin/borg-ui-agent-upgrade`** — mode `0755`, owned
 `root:root`, in a root-owned directory. It takes **no arguments**. It reads
-`upgrade.conf`, fetches `install.sh` from the recorded server, and runs it with
-`--reinstall` and the recorded flags. Because every parameter comes from a
-root-owned file rather than the caller, a compromised agent process cannot
-redirect the install source, change the service user, or inject installer
-flags. This is the property that makes the sudoers rule safe.
+`upgrade.conf`, fetches `install.sh` from the recorded server, verifies it
+(below), and runs it with `--reinstall` and the recorded flags. Because every
+parameter comes from a root-owned file rather than the caller, a compromised
+agent process cannot redirect the install source, change the service user, or
+inject installer flags. This is the property that makes the sudoers rule safe.
+
+*Which version it installs.* `upgrade.conf` records the endpoint's `agent_id`,
+not a version. The helper requests the installer as that agent, and **the
+server** resolves which versions to pin into the script it serves, from the
+endpoint's stored `desired_agent_version` and `desired_borg_version` (falling
+back to the served wheel and the installed Borg when unpinned). The mechanism
+already exists: the served script carries `PINNED_AGENT_VERSION` and the Borg
+pinning block, rewritten per request (`app/api/agent_installer.py:829`).
+
+This is the only propagation path, and it is deliberate. A pin set in the UI
+after install time has to reach the endpoint somehow, and every alternative is
+worse: writing the version into `upgrade.conf` needs a root-writable channel
+from the agent, and passing it through sudo would hand the agent the argument
+surface section 11.2 exists to deny. Resolving it server-side means the agent
+never names a version, so it can neither install one of its own choosing nor
+escape a pin, and the pin survives a server upgrade because it lives in the
+database rather than on the endpoint.
+
+*Transport and integrity.* The helper runs the fetched script as root, so:
+
+- The recorded server URL must be `https`, with certificate and hostname
+  verification on. An `http` URL is refused rather than downgraded, and a
+  redirect that changes scheme or host aborts the upgrade. `curl` is invoked
+  without `--insecure` and with `--proto '=https' --location-trusted` omitted.
+- The server publishes a SHA256 for the script it serves, and the helper
+  verifies the download against it before executing. This mirrors what the
+  native installer already does for its own artifacts, where checksums are
+  published alongside the release rather than fetched from a mutable branch.
+- Verification failure aborts without executing anything, leaves the agent
+  running, and reports through the upgrade's timeout path (section 7.1).
+
+Pinning versions is not integrity: `PINNED_AGENT_VERSION` says which wheel to
+install, not that the script asking for it is the script we published. Both are
+needed.
 
 Before fetching anything it compares the server URL in `upgrade.conf` against
 the one in `/etc/borg-ui-agent/config.toml` and aborts if they differ, so a
@@ -188,7 +255,7 @@ at a host it no longer talks to.
 **`/etc/sudoers.d/borg-ui-agent-upgrade`** — mode `0440`, granting the service
 user exactly:
 
-```
+```text
 <service_user> ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block borg-ui-agent-upgrade.service
 ```
 
@@ -202,7 +269,7 @@ sudoers file.
 
 **`/etc/systemd/system/borg-ui-agent-upgrade.service`** — `Type=oneshot`,
 `ExecStart=/opt/borg-ui-agent/bin/borg-ui-agent-upgrade`. It is not enabled;
-it only ever runs when started. Running the reinstall inside a separate unit is
+it only ever runs when started. Running the reinstall inside a separate one-shot unit is
 what lets the upgrade survive the restart of `borg-ui-agent` that it performs:
 the upgrade is not in the agent's own process tree, so systemd killing the
 agent does not kill the upgrade.
@@ -265,6 +332,17 @@ maintenance action into an outage. Waves are advanced by the same reconciler
 that resolves outcomes: a slot frees when an agent leaves `requested`, by
 success or by timeout.
 
+**The cap bounds upgrades in flight, not endpoints offline.** A timeout frees
+its slot even though that endpoint may still be mid-reinstall, so in the worst
+case more than `AGENT_UPGRADE_CONCURRENCY` endpoints are briefly down at once.
+This is deliberate. The alternative, holding a slot until the endpoint
+reconnects, lets one machine that never comes back stall every remaining
+upgrade in the fleet indefinitely, which is a worse failure than a transient
+overshoot. The timeout is set generously (600s, far longer than a reinstall
+takes) so an endpoint that hits it is far more likely broken than slow, and a
+timed-out endpoint is marked `failed` and excluded from further automatic waves
+until an operator acts on it, so the overshoot cannot compound.
+
 Jobs are ordinary `agent_jobs` rows with `job_type="agent_upgrade"`, so they
 appear in the existing agent job list, logs, and activity views for free.
 
@@ -274,10 +352,17 @@ All on the Managed Agents page (`frontend/src/pages/ManagedAgents.tsx`),
 composed from small components per `AGENTS.md`, no left accent borders.
 
 **Fleet banner** — shown only when at least one endpoint is `outdated`. Names
-the count and the target version, with an Upgrade all action. Endpoints without
+the count, with an Upgrade all action. Endpoints without
 `self_upgrade_supported` are excluded from the count in the action and called
 out separately, so the number in the button is the number that will actually
 move.
+
+The banner names a target version only when every outdated endpoint agrees on
+one. They do not always: an endpoint pinned below the served version is
+outdated against its pin, not against what the server serves, so its effective
+target is its own. When targets differ the banner says each endpoint targets
+its configured version rather than naming one, and Upgrade all upgrades each to
+its own effective target rather than to a single shared version.
 
 **Per-agent version cell** — the reported version, with a chip: `Current`,
 `Update available`, `Pinned`, `Ahead of server`, or `Unknown`. A pinned agent
@@ -378,10 +463,21 @@ endpoint installed before this feature takes. Document the flag and its trade in
   matrix in section 4, including unparseable versions, `NULL` on either side,
   and a pinned agent matching and not matching its pin.
 - **Installer packaging** — extend `tests/unit/test_native_install_packaging.py`
-  style guard tests: the served script writes all four artifacts, skips them in
-  root mode and under `--no-remote-upgrade`, preserves the choice across a
-  reinstall that does not pass the flag, and emits a sudoers line naming exactly
-  one absolute command path.
+  style guard tests: the served script writes all four artifacts, writes the
+  unit, helper and `upgrade.conf` but not the sudoers file in root mode, skips
+  all four under `--no-remote-upgrade`, preserves the choice across a reinstall
+  that does not pass the flag, and emits a sudoers line naming exactly one
+  absolute command path.
+- **Helper transport and integrity** — the helper refuses an `http` server URL,
+  refuses a redirect that changes scheme or host, refuses a script whose SHA256
+  does not match the published one, and executes nothing in each case.
+- **Version resolution** — the installer served to a pinned endpoint carries
+  that endpoint's pinned versions, and the one served to an unpinned endpoint
+  carries the wheel this server ships.
+- **Bulk validation** — a request naming one unsupported agent creates no jobs
+  at all; duplicate ids create one job; a second request for an agent with an
+  in-flight upgrade returns the existing job rather than a new one; an unpinned
+  agent on a server serving no wheel is rejected.
 - **Session command** — the agent refuses when busy and when unsupported, and
   invokes the expected `sudo` argv (mocked) otherwise.
 - **Reconciliation** — an agent re-registering with the target version clears
@@ -446,7 +542,7 @@ The `agent.upgrade` session command, the `agent_upgrade` job type, the
 single-agent upgrade action and dialog, the pin control UI deferred from
 phase 1, and the full reconciliation path including the reaper timeout.
 
-Gate: one endpoint upgrades from the UI and the row resolves to up to date
+Gate: one endpoint upgrades from the UI and the row resolves to up-to-date
 without anyone touching that machine.
 
 ### 13.5 Phase 4 — fleet upgrade
@@ -530,7 +626,25 @@ the feature would not work on a normal install until someone knew to ask for it.
 An operator with one sensitive host opts that host out and keeps the manual
 path.
 
-**D9. Upgrades are pulled by the agent, not pushed by the server over SSH.**
+**D9. The server resolves which version an endpoint installs, not the endpoint.**
+`upgrade.conf` records the endpoint's identity, and the server pins versions
+into the installer it serves for that identity. Rejected: recording the version
+on the endpoint, which needs a root-writable channel from the agent to change a
+pin set later; and passing it through sudo, which would hand the agent exactly
+the argument surface D2 exists to deny.
+
+**D10. Root-mode endpoints get the helper and the unit, only the sudoers file
+is skipped.** Skipping the whole set for root left those endpoints with no
+upgrade path at all, which is worse than the unprivileged case the escalation
+exists to serve. Root does not need the escalation; it still needs the thing
+being escalated to.
+
+**D11. The concurrency cap bounds upgrades in flight, not endpoints offline.**
+A timeout frees its slot even though that endpoint may still be reinstalling.
+Rejected: holding the slot until the endpoint reconnects, which lets a single
+machine that never returns stall every remaining upgrade indefinitely.
+
+**D12. Upgrades are pulled by the agent, not pushed by the server over SSH.**
 A server that could SSH into each endpoint could push upgrades directly, and at
 least one comparable product appears to be built that way. Borg UI's managed
 agents deliberately dial out, which is what lets them sit behind NAT with no
