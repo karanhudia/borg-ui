@@ -432,30 +432,41 @@ mounts.
 ### Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/karanhudia/borg-ui/main/scripts/install.sh | sudo bash
+curl -fsSLO https://github.com/karanhudia/borg-ui/releases/latest/download/install.sh
+curl -fsSL https://github.com/karanhudia/borg-ui/releases/latest/download/install.sh.sha256 | sha256sum -c -
+sudo bash install.sh
 ```
 
 That installs the latest release and starts it on port 8081. The installer
 prints the URL when it finishes.
 
-To review the script before running it, which is the safer habit for anything
-piped into a shell:
+The installer is published as an asset of each release, alongside its SHA-256,
+so those commands name a fixed artifact rather than a branch. `sha256sum -c`
+prints `install.sh: OK` and exits non-zero on a mismatch, which is what stops
+the third line from running something other than what was published. Reading
+the script before running it as root is worth the minute it takes:
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/karanhudia/borg-ui/main/scripts/install.sh
 less install.sh
-sudo bash install.sh
 ```
 
-`main` always has the newest installer. To pin the installer itself to a
-release, so that what you reviewed is what runs, take it from that release's
-tag instead. Every release's notes carry this line filled in:
+If you would rather not stop to verify, the one-liner is:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/karanhudia/borg-ui/v2.3.0/scripts/install.sh | sudo bash -s -- --version 2.3.0
+curl -fsSL https://github.com/karanhudia/borg-ui/releases/latest/download/install.sh | sudo bash
 ```
 
-The release archive the installer then downloads is verified against a
+To install a specific release instead of the newest, take the installer from
+that release and pass the matching version. Every release's notes carry these
+lines filled in:
+
+```bash
+curl -fsSLO https://github.com/karanhudia/borg-ui/releases/download/v2.3.0/install.sh
+curl -fsSL https://github.com/karanhudia/borg-ui/releases/download/v2.3.0/install.sh.sha256 | sha256sum -c -
+sudo bash install.sh --version 2.3.0
+```
+
+The release archive the installer then downloads is verified against its own
 published SHA-256 before anything is unpacked.
 
 Options:
@@ -531,7 +542,9 @@ release and starts that instead, then reports the failure. The previous release
 is kept for exactly this reason; older ones are removed.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/karanhudia/borg-ui/main/scripts/install.sh | sudo bash
+curl -fsSLO https://github.com/karanhudia/borg-ui/releases/latest/download/install.sh
+curl -fsSL https://github.com/karanhudia/borg-ui/releases/latest/download/install.sh.sha256 | sha256sum -c -
+sudo bash install.sh
 ```
 
 The Borg 2 repository-format warning under [Docker upgrade](#docker-upgrade)

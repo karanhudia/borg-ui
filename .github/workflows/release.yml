@@ -63,9 +63,8 @@ jobs:
       - name: Generate changelog
         id: changelog
         env:
-          RELEASE_TAG: ${{ github.ref_name }}
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
-          RAW_BASE: https://raw.githubusercontent.com/${{ github.repository }}
+          ASSET_BASE: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}
         run: |
           {
             echo 'changelog<<EOF'
@@ -94,9 +93,12 @@ jobs:
             echo ""
             echo "Debian or Ubuntu host (bare metal, VM, or LXC):"
             echo '```'
-            # Pinned to this tag, not to main: an installer taken from a moving
-            # branch may not match the release it is being asked to install.
-            echo "curl -fsSL ${RAW_BASE}/${RELEASE_TAG}/scripts/install.sh | sudo bash -s -- --version ${RELEASE_VERSION}"
+            # The installer is an asset of this release, so the command names a
+            # published artifact rather than a branch that can move under it,
+            # and its checksum is verified before it runs as root.
+            echo "curl -fsSLO ${ASSET_BASE}/install.sh"
+            echo "curl -fsSL ${ASSET_BASE}/install.sh.sha256 | sha256sum -c -"
+            echo "sudo bash install.sh --version ${RELEASE_VERSION}"
             echo '```'
             echo ""
             echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ steps.previous_tag.outputs.tag }}...${{ github.ref_name }}"
@@ -127,5 +129,7 @@ jobs:
           files: |
             dist/borg-ui-${{ steps.version.outputs.version }}.tar.gz
             dist/borg-ui-${{ steps.version.outputs.version }}.tar.gz.sha256
+            dist/install.sh
+            dist/install.sh.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

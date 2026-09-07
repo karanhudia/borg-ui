@@ -86,5 +86,13 @@ mkdir -p "${OUT_DIR}"
 tar -czf "${OUT_DIR}/${NAME}.tar.gz" -C "$(dirname "${STAGE}")" "${NAME}"
 (cd "${OUT_DIR}" && sha256sum "${NAME}.tar.gz" >"${NAME}.tar.gz.sha256")
 
+# The installer ships as a release asset too, not only inside the tarball, so
+# the command that bootstraps an install names a published artifact rather than
+# a branch that can move under it. Its checksum is published beside it so the
+# script can be verified before it is run as root.
+cp scripts/install.sh "${OUT_DIR}/install.sh"
+(cd "${OUT_DIR}" && sha256sum install.sh >install.sh.sha256)
+
 echo "==> ${OUT_DIR}/${NAME}.tar.gz"
 cat "${OUT_DIR}/${NAME}.tar.gz.sha256"
+cat "${OUT_DIR}/install.sh.sha256"

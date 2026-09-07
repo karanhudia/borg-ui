@@ -119,7 +119,9 @@ No Docker? Install straight onto a Debian or Ubuntu host, whether that is bare
 metal, a VM, or an LXC container:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/karanhudia/borg-ui/main/scripts/install.sh | sudo bash
+curl -fsSLO https://github.com/karanhudia/borg-ui/releases/latest/download/install.sh
+curl -fsSL https://github.com/karanhudia/borg-ui/releases/latest/download/install.sh.sha256 | sha256sum -c -
+sudo bash install.sh
 ```
 
 For setup details and the native install options, see the

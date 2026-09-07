@@ -200,3 +200,35 @@ def test_syntax_the_parser_cannot_honour_is_refused_not_guessed_at(tmp_path):
     )
     assert result.returncode != 0
     assert "DIE:" in result.stdout
+
+
+def test_no_documented_install_command_fetches_from_a_mutable_branch():
+    """The bootstrap script runs as root, so what it is fetched from matters.
+
+    A raw.githubusercontent.com URL on a branch resolves to whatever that
+    branch holds at the moment the command is run, and it can move after a
+    release. Release assets are fixed per release and have a published
+    checksum beside them, so every documented command names one of those.
+    """
+    offenders = []
+    for doc in (REPO_ROOT / "README.md", REPO_ROOT / "docs" / "installation.md"):
+        for number, line in enumerate(doc.read_text().splitlines(), start=1):
+            if "install.sh" not in line or "curl" not in line:
+                continue
+            if "raw.githubusercontent.com" in line:
+                offenders.append(f"{doc.name}:{number}: {line.strip()}")
+
+    assert not offenders, (
+        "install commands must come from a release asset, not a branch:\n"
+        + "\n".join(offenders)
+    )
+
+
+def test_the_release_publishes_the_installer_and_its_checksum():
+    builder = TARBALL_BUILDER.read_text()
+    assert 'cp scripts/install.sh "${OUT_DIR}/install.sh"' in builder
+    assert "sha256sum install.sh >install.sh.sha256" in builder
+
+    release = (REPO_ROOT / ".github" / "workflows" / "release.yml").read_text()
+    for asset in ("dist/install.sh", "dist/install.sh.sha256"):
+        assert asset in release, f"{asset} is never attached to the release"
