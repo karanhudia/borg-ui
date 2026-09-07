@@ -18,10 +18,23 @@ from app.core.agent_versions import (
         (None, None),
         ("1.-2.3", None),
         ("1..3", None),
+        # str.isdigit accepts these but int refuses them, so an agent
+        # reporting one must read as unparseable rather than raise.
+        ("1.\u00b2.3", None),
+        ("\u0661.0.0", None),
     ],
 )
 def test_parse_agent_version(value, expected):
     assert parse_agent_version(value) == expected
+
+
+def test_unparseable_version_reads_as_unknown_rather_than_raising():
+    assert (
+        compute_agent_upgrade_status(
+            reported="1.\u00b2.3", desired=None, available="0.1.3"
+        )
+        == "unknown"
+    )
 
 
 @pytest.mark.parametrize(

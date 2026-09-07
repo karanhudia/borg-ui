@@ -1269,4 +1269,41 @@ describe('ManagedAgents', () => {
     expect(screen.queryByText('Update available')).not.toBeInTheDocument()
     expect(screen.queryByText(/running an older agent/i)).not.toBeInTheDocument()
   })
+
+  it('names the pin, not the served version, for an agent behind its pin', async () => {
+    // Pinned to 0.1.2 while the server serves 0.1.3: the endpoint is outdated
+    // against its pin. Naming 0.1.3 here would point the operator at a version
+    // the pin forbids.
+    const user = userEvent.setup()
+    const agent = {
+      id: 14,
+      agent_id: 'agent-behind-pin-14',
+      name: 'behind-pin',
+      hostname: 'behind-pin-01',
+      status: 'online',
+      agent_version: '0.1.1',
+      desired_agent_version: '0.1.2',
+      available_agent_version: '0.1.3',
+      upgrade_status: 'outdated',
+      created_at: '2026-05-18T09:00:00.000Z',
+      updated_at: '2026-05-18T10:00:00.000Z',
+    } as AgentMachineResponse
+
+    renderWithProviders(
+      <AgentList
+        agents={[agent]}
+        serverUrl="https://borg-ui.example.com"
+        onCopy={vi.fn()}
+        onRevoke={vi.fn()}
+        onDelete={vi.fn()}
+        onViewLogs={vi.fn()}
+        isRevoking={false}
+        isDeleting={false}
+      />
+    )
+
+    await user.hover(screen.getByText('Update available'))
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(/Pinned to version 0\.1\.2/i)
+    expect(screen.queryByText(/serves agent version 0\.1\.3/i)).not.toBeInTheDocument()
+  })
 })

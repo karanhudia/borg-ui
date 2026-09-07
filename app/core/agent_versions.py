@@ -35,12 +35,17 @@ def parse_agent_version(value: Optional[str]) -> Optional[tuple[int, ...]]:
     Deliberately strict: a pre-release such as "0.1.3a1" returns None so the
     caller reports unknown instead of ordering it wrongly. ``str.isdigit`` also
     rejects a leading sign, so "1.-2.3" does not parse.
+
+    The ASCII check is not redundant: ``str.isdigit`` accepts characters such as
+    the superscript "\u00b2" that ``int`` then refuses, and the version string
+    arrives from an agent heartbeat, so an unparseable one must return None
+    rather than raise out of a list request.
     """
     if not value:
         return None
     components: list[int] = []
     for part in value.split("."):
-        if not part.isdigit():
+        if not (part.isascii() and part.isdigit()):
             return None
         components.append(int(part))
     return tuple(components)

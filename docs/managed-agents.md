@@ -109,12 +109,15 @@ An endpoint can be held at a specific agent version so it stops tracking the
 server. Pinning is available through the API:
 
 ```bash
-curl -X PUT http://borg-ui-host:8083/api/managed-machines/agents/<id>/desired-version \
+curl -X PUT "$BASE_URL/api/managed-machines/agents/<id>/desired-version" \
+  -H "X-Borg-Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"desired_agent_version": "0.1.3", "desired_borg_version": null}'
 ```
 
-Send `null` for `desired_agent_version` to clear the pin and track the server
+This is an admin endpoint. `$TOKEN` is an API token for an admin account; see
+[the API guide](api.md) for how to obtain one. Send `null` for
+`desired_agent_version` to clear the pin and track the server
 again. You can only pin to a version this server can actually serve, because
 the installer installs from this server and nowhere else.
 

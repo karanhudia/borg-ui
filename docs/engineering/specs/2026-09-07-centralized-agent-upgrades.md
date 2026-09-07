@@ -235,7 +235,9 @@ database rather than on the endpoint.
 - The recorded server URL must be `https`, with certificate and hostname
   verification on. An `http` URL is refused rather than downgraded, and a
   redirect that changes scheme or host aborts the upgrade. `curl` is invoked
-  without `--insecure` and with `--proto '=https' --location-trusted` omitted.
+  with `--proto '=https'`, which holds across redirects, so an https URL that
+  redirects to http fails instead of downloading in cleartext. `--insecure` and
+  `--location-trusted` are both omitted.
 - The server publishes a SHA256 for the script it serves, and the helper
   verifies the download against it before executing. This mirrors what the
   native installer already does for its own artifacts, where checksums are
@@ -275,11 +277,19 @@ the upgrade is not in the agent's own process tree, so systemd killing the
 agent does not kill the upgrade.
 
 The agent advertises `self_upgrade` in `DEFAULT_CAPABILITIES`
-(`agent/borg_ui_agent/runtime.py:19`) only when it can actually see the helper:
-the unit file exists and `sudo -n systemctl start --no-block` for it passes
-`sudo -l`. Capability is detected, not assumed, so an agent upgraded from an
-older install that lacks the helper reports honestly and the UI routes it to
-the manual path.
+(`agent/borg_ui_agent/runtime.py:19`) only when it can actually see the helper.
+Capability is detected, not assumed, so an agent upgraded from an older install
+that lacks the helper reports honestly and the UI routes it to the manual path.
+
+The probe branches on how the agent runs, because the escalation only exists
+for the unprivileged case:
+
+- **Running as root.** The unit file exists, and that is the whole check. There
+  is no sudoers file to consult and the installer does not install `sudo`, so a
+  probe that shelled out to `sudo -l` would report no capability on exactly the
+  endpoints that need none.
+- **Running unprivileged.** The unit file exists *and*
+  `sudo -n <systemctl path> start --no-block` for it is listed by `sudo -l`.
 
 ## 7. The upgrade command
 
@@ -293,9 +303,10 @@ Handler steps:
    upgrade restarts the process; doing it under a running backup would orphan
    that backup's job.
 2. Refuse with `upgrade_unsupported` if the helper is not present.
-3. Emit a log line, then run
-   `sudo -n <systemctl path> start --no-block borg-ui-agent-upgrade.service`,
-   using the absolute path recorded in `upgrade.conf` so the sudoers rule matches.
+3. Emit a log line, then start `borg-ui-agent-upgrade.service`, using the
+   absolute `systemctl` path recorded in `upgrade.conf`. A root agent invokes
+   `<systemctl path> start --no-block` directly; an unprivileged one prefixes
+   `sudo -n`, and the recorded path is what makes the sudoers rule match.
 4. Report success and let the process die.
 
 `--no-block` matters: the call returns as soon as systemd has queued the job,
@@ -479,7 +490,9 @@ endpoint installed before this feature takes. Document the flag and its trade in
   in-flight upgrade returns the existing job rather than a new one; an unpinned
   agent on a server serving no wheel is rejected.
 - **Session command** — the agent refuses when busy and when unsupported, and
-  invokes the expected `sudo` argv (mocked) otherwise.
+  invokes the expected argv (mocked) otherwise: bare `systemctl` as root, and
+  `sudo -n systemctl` unprivileged. Capability detection and the upgrade are
+  both covered for a root endpoint with no `sudo` on `PATH`.
 - **Reconciliation** — an agent re-registering with the target version clears
   `requested`; one re-registering with the old version does not; the reaper
   marks a stale request `failed`.
@@ -551,7 +564,9 @@ Multi-select, the bulk endpoint, the wave scheduler, and the banner's
 Upgrade all action.
 
 Gate: a fleet of endpoints upgrades in waves, and no more than the cap are
-offline at once.
+in flight at once. The gate is on upgrades in flight, not endpoints offline,
+because a timed-out endpoint releases its slot while possibly still down
+(section 8).
 
 ### 13.6 Phase 5 — per-endpoint Borg version
 

@@ -35,7 +35,11 @@ export default function AgentUpgradeChip({
   const { t } = useTranslation()
 
   const tooltipText = () => {
-    if (status === 'pinned' && pinnedVersion) {
+    // A pin decides the target whatever the status is. An endpoint pinned below
+    // the served version reads as `outdated` against its pin, so naming the
+    // served version here would point the operator at a version the pin
+    // forbids. This mirrors `desired or available` in app/core/agent_versions.py.
+    if (pinnedVersion) {
       return t('managedAgents.page.upgrade.pinnedTooltip', { version: pinnedVersion })
     }
     if (status === 'unknown') {

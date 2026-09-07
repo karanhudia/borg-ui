@@ -23,6 +23,11 @@ export default meta
 
 type Story = StoryObj<typeof AgentUpgradeBanner>
 
+// There is deliberately no story for a fleet with nothing outdated: the banner
+// renders null, and the snapshot harness waits for a visible #storybook-root,
+// so an empty story times out the visual job. That case is asserted in
+// __tests__/AgentUpgradeBanner.test.tsx instead.
+
 export const OneOutdated: Story = {
   args: { agents: [base] },
 }
@@ -52,11 +57,5 @@ export const MixedTargets: Story = {
         available_agent_version: '0.1.3',
       },
     ],
-  },
-}
-
-export const NoneOutdated: Story = {
-  args: {
-    agents: [{ ...base, upgrade_status: 'up_to_date', agent_version: '0.1.3' }],
   },
 }
