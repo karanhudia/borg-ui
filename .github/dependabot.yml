@@ -19,6 +19,17 @@ updates:
       include: "scope"
     # Group non-security updates
     groups:
+      # vitest, @vitest/ui and @vitest/coverage-v8 pin each other to the same
+      # version, so a single-package bump cannot install (#961). Listed first:
+      # a dependency joins the first group whose patterns match it.
+      vitest:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+        update-types:
+          - "major"
+          - "minor"
+          - "patch"
       frontend-minor-patch:
         patterns:
           - "*"
