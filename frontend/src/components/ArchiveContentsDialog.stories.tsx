@@ -2,7 +2,6 @@ import { useEffect, type ComponentProps } from 'react'
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import MockAdapter from 'axios-mock-adapter'
 import ArchiveContentsDialog from './ArchiveContentsDialog'
-import { MemoryRouter } from 'react-router-dom'
 import { httpClient, type Repository } from '../services/borgApi/client'
 import type { Archive } from '../types'
 import type { ArchiveRow } from '../types/archives'
@@ -95,9 +94,5 @@ export const WithFullPageLink: Story = {
     storedArchives: [storedArchive],
     onClose: () => {},
   },
-  render: (args) => (
-    <MemoryRouter>
-      <AwaitingAgentStory {...args} />
-    </MemoryRouter>
-  ),
+  render: (args) => <AwaitingAgentStory {...args} />,
 }
