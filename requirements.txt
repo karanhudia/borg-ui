@@ -1,7 +1,7 @@
 alembic==1.19.1
-apprise==1.13.0
+apprise==1.13.1
 bcrypt==5.0.0
-coverage[toml]==7.15.4
+coverage[toml]==7.16.0
 croniter==6.2.4
 cryptography==50.0.1
 fastapi-cache2==0.2.2
@@ -9,9 +9,9 @@ fastapi==0.141.1
 gunicorn==26.2.0
 httpx==0.28.1
 psutil==7.2.2
-psycopg[binary]==3.3.4
+psycopg[binary]==3.3.5
 pydantic-settings==2.15.0
-pydantic==2.13.4
+pydantic==2.13.5
 pre-commit==4.6.2
 pytest-asyncio==1.4.0
 pytest-cov==7.1.0
@@ -22,11 +22,11 @@ python-multipart==0.0.32
 pyyaml==6.0.3
 redis==8.1.0
 requests==2.34.2
-ruff==0.16.5
+ruff==0.16.6
 sqlalchemy==2.0.52
 structlog==26.1.0
 tzdata==2026.3
 uvicorn[standard]==0.52.4
 paho-mqtt==2.1.0
 webauthn==3.0.0
-websocket-client==1.9.0
+websocket-client==1.9.2
