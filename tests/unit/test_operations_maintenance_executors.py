@@ -236,6 +236,53 @@ async def test_check_cancellation_terminates_the_tracked_borg_process(
 
 
 @pytest.mark.asyncio
+async def test_cancel_watcher_retries_until_the_process_is_registered(
+    db, repository, monkeypatch
+):
+    """A cancel request can land before the service has registered its
+    process (still resolving the repository, listing archives, etc.).
+    `cancel_watcher` used to call the canceller exactly once and give up for
+    good on a `False` result, so a cancel that arrived during that setup
+    window was silently dropped and the Borg process ran to completion
+    untouched. It must keep retrying each poll interval until something
+    actually terminates."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from app.services.check_service import check_service
+    from app.services.operations.executors import maintenance
+
+    monkeypatch.setattr(maintenance, "_CANCEL_POLL_SECONDS", 0.02)
+
+    op = _operation(db, repository)
+    ctx = FakeContext(db, op)
+    ctx._cancelled = True
+
+    fake_process = MagicMock()
+    fake_process.pid = 4242
+    fake_process.wait = AsyncMock(return_value=None)
+    # Not registered yet: the first cancel_watcher attempt must see no
+    # tracked process and retry instead of giving up.
+
+    async def call(self, job_id, *args, **kwargs):
+        # Simulate setup time (resolving the repository) before the process
+        # is actually tracked, well past the first poll interval.
+        await asyncio.sleep(0.06)
+        check_service.running_processes[job_id] = fake_process
+        await asyncio.sleep(0.06)
+        job = MaintenanceJobFacade(db, db.get(Operation, job_id))
+        job.status = "cancelled"
+        db.commit()
+
+    monkeypatch.setattr("app.core.borg_router.BorgRouter.check", call, raising=True)
+
+    try:
+        await maintenance.run_check(ctx)
+        fake_process.terminate.assert_called_once()
+    finally:
+        check_service.running_processes.pop(op.id, None)
+
+
+@pytest.mark.asyncio
 async def test_prune_passes_the_retention_policy_from_params(
     db, repository, monkeypatch
 ):

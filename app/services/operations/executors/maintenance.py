@@ -39,21 +39,28 @@ async def cancel_watcher(
     ctx, canceller: Optional[Callable[[int], Awaitable[bool]]]
 ) -> None:
     """Turn the runner's cooperative cancel flag (spec 7.7) into the process
-    kill the legacy cancel routes performed. Returns when the flag is seen or
-    the task is cancelled."""
+    kill the legacy cancel routes performed. Returns once the process is
+    actually terminated, or the task is cancelled from outside (`_run`'s
+    `finally` does this once `call()` itself returns, cancelled or not)."""
     if canceller is None:
         return
     while True:
         if ctx.cancelled():
             try:
-                await canceller(ctx.operation_id)
+                # A cancel request can land before the service has registered
+                # its process (still resolving the repository, listing
+                # archives, etc.), so a single `False` doesn't mean the
+                # operation won't be cancellable - keep retrying each poll
+                # interval until it actually terminates something.
+                if await canceller(ctx.operation_id):
+                    return
             except Exception as exc:
                 logger.warning(
                     "Maintenance cancel failed",
                     operation_id=ctx.operation_id,
                     error=str(exc),
                 )
-            return
+                return
         await asyncio.sleep(_CANCEL_POLL_SECONDS)
 
 
