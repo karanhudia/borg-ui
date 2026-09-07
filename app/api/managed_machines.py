@@ -2,14 +2,16 @@ import ipaddress
 import re
 import secrets
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session, defer
 import structlog
 
+from app.api.agent_installer import agent_package_version
 from app.core.agent_auth import AGENT_TOKEN_PREFIX_LENGTH
+from app.core.agent_versions import compute_agent_upgrade_status
 from app.core.agent_constants import AGENT_FILESYSTEM_BROWSE_TIMEOUT_SECONDS
 from app.core.features import require_feature_access
 from app.core.security import get_current_admin_user, get_password_hash
@@ -105,6 +107,14 @@ class AgentMachineResponse(BaseModel):
     os: Optional[str] = None
     arch: Optional[str] = None
     agent_version: Optional[str] = None
+    desired_agent_version: Optional[str] = None
+    desired_borg_version: Optional[str] = None
+    available_agent_version: Optional[str] = None
+    upgrade_status: str = "unknown"
+    self_upgrade_supported: bool = False
+    upgrade_state: Optional[str] = None
+    upgrade_requested_at: Optional[datetime] = None
+    upgrade_error: Optional[str] = None
     default_path: Optional[str] = None
     borg_versions: Optional[list[dict[str, Any]]] = None
     capabilities: Optional[list[str]] = None
@@ -467,6 +477,32 @@ async def revoke_enrollment_token(
         )
 
 
+class AgentDesiredVersionRequest(BaseModel):
+    """Pin an endpoint to a version, or clear the pin by sending nulls."""
+
+    desired_agent_version: Optional[str] = None
+    desired_borg_version: Optional[Literal["1", "2"]] = None
+
+
+def _agent_machine_response(
+    agent: AgentMachine, *, available: Optional[str]
+) -> AgentMachineResponse:
+    """Serialize one agent together with its computed upgrade status.
+
+    ``available`` is passed in rather than resolved here so a list response
+    reads the served wheel version once instead of once per agent.
+    """
+    response = AgentMachineResponse.model_validate(agent)
+    response.available_agent_version = available
+    response.upgrade_status = compute_agent_upgrade_status(
+        reported=agent.agent_version,
+        desired=agent.desired_agent_version,
+        available=available,
+    )
+    response.self_upgrade_supported = "self_upgrade" in (agent.capabilities or [])
+    return response
+
+
 @router.get("/agents", response_model=list[AgentMachineResponse])
 async def list_agent_machines(
     _: User = Depends(get_current_admin_user),
@@ -490,7 +526,54 @@ async def list_agent_machines(
             changed = True
     if changed:
         db.commit()
-    return agents
+    available = agent_package_version()
+    return [_agent_machine_response(agent, available=available) for agent in agents]
+
+
+@router.put(
+    "/agents/{agent_machine_id}/desired-version",
+    response_model=AgentMachineResponse,
+)
+async def set_agent_desired_version(
+    agent_machine_id: int,
+    payload: AgentDesiredVersionRequest,
+    _: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    """Pin this endpoint to an agent version, or clear the pin so it tracks the
+    server again."""
+    agent = (
+        db.query(AgentMachine)
+        .filter(
+            AgentMachine.id == agent_machine_id,
+            AgentMachine.status != "deleted",
+        )
+        .first()
+    )
+    if agent is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"key": "backend.errors.agents.agentNotFound"},
+        )
+
+    available = agent_package_version()
+    if (
+        payload.desired_agent_version is not None
+        and payload.desired_agent_version != available
+    ):
+        # The installer installs from this server's wheelhouse and nowhere
+        # else, so a pin to any other version could never be satisfied.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"key": "backend.errors.agents.desiredVersionUnavailable"},
+        )
+
+    agent.desired_agent_version = payload.desired_agent_version
+    agent.desired_borg_version = payload.desired_borg_version
+    agent.updated_at = _now_utc()
+    db.commit()
+    db.refresh(agent)
+    return _agent_machine_response(agent, available=available)
 
 
 @router.post(

@@ -398,6 +398,20 @@
         "tcpFailed": "TCP failed",
         "emptyResult": "Run a check to verify the active agent session. Add a host and port to test TCP reachability from the agent host.",
         "unavailable": "Diagnostics are unavailable in this story or test surface."
+      },
+      "upgrade": {
+        "upToDate": "Current",
+        "outdated": "Update available",
+        "ahead": "Ahead of server",
+        "pinned": "Pinned",
+        "unknown": "Version unknown",
+        "targetTooltip": "This server serves agent version {{version}}",
+        "pinnedTooltip": "Pinned to version {{version}} and will not track the server",
+        "unknownTooltip": "This endpoint has not reported a version we can compare",
+        "outdatedCount_one": "{{count}} endpoint is running an older agent",
+        "outdatedCount_other": "{{count}} endpoints are running an older agent",
+        "bannerBody": "The current agent version is {{version}}.",
+        "bannerManual": "Reinstall each one from its card to bring it up to date."
       }
     },
     "installCommand": {
@@ -5525,7 +5539,8 @@
         "jobNotStartable": "This agent job cannot be started",
         "repositoryOperationFailed": "The agent repository operation failed",
         "repositoryOperationTimeout": "The agent repository operation timed out",
-        "unsupportedJobKind": "Unsupported agent job type"
+        "unsupportedJobKind": "Unsupported agent job type",
+        "desiredVersionUnavailable": "That agent version is not available on this server."
       },
       "repo": {
         "repositoryNotFound": "Repository not found",
