@@ -90,6 +90,12 @@ from app.services.agent_connection_manager import (
 from app.core.agent_constants import AGENT_FILESYSTEM_BROWSE_TIMEOUT_SECONDS
 from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
 from app.services.repository_info_sync import sync_archive_stats_from_info
+from app.services.storage_usage import (
+    SOURCE_BORG1_CACHE_STATS,
+    SOURCE_STORAGE_USED,
+    SizeResult,
+    measure_repository_size,
+)
 from app.services.repository_command_lock import run_serialized_repository_command
 from app.services.rclone_repository_service import (
     SYNC_DIRECTION_AGENT_TO_REMOTE,
@@ -848,6 +854,8 @@ async def _update_agent_repository_stats(repository: Repository, db: Session) ->
 
         encryption_mode = None
         total_size = None
+        total_size_source = None
+        borg_last_modified = None
         try:
             rinfo_job = queue_agent_repository_operation_job(
                 db, repository, job_kind="repository.rinfo"
@@ -874,6 +882,13 @@ async def _update_agent_repository_stats(repository: Repository, db: Session) ->
             size_bytes = stats.get("unique_csize") or stats.get("unique_size")
             if isinstance(size_bytes, (int, float)) and size_bytes > 0:
                 total_size = format_bytes(int(size_bytes))
+                total_size_source = SOURCE_BORG1_CACHE_STATS
+            # Both versions report the last manifest write; the agent renders
+            # it in its reported zone (UTC since #889).
+            borg_last_modified = _parse_borg_archive_time(
+                (rinfo.get("repository") or {}).get("last_modified"),
+                timezone_name=agent_zone,
+            )
         except Exception as e:
             logger.warning(
                 "agent repo-info for stats refresh failed",
@@ -903,6 +918,7 @@ async def _update_agent_repository_stats(repository: Repository, db: Session) ->
                     fields = first.split()
                     if fields and fields[0].isdigit() and int(fields[0]) > 0:
                         total_size = format_bytes(int(fields[0]))
+                        total_size_source = SOURCE_STORAGE_USED
             except Exception as e:
                 logger.warning(
                     "agent disk-usage for stats refresh failed",
@@ -918,6 +934,9 @@ async def _update_agent_repository_stats(repository: Repository, db: Session) ->
             repository.encryption = encryption_mode
         if total_size:
             repository.total_size = total_size
+            repository.total_size_source = total_size_source
+        if borg_last_modified:
+            repository.borg_last_modified = borg_last_modified
         db.commit()
         logger.info(
             "Updated agent repository stats",
@@ -1014,21 +1033,25 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
         # Get timeouts from DB settings (with fallback to config)
         timeouts = get_operation_timeouts(db)
 
+        # The same source order as the `stats` operation, so the two writers
+        # of total_size agree on the quantity and label it the same way.
         try:
-            total_size_bytes = await router.calculate_total_size_bytes(
+            measured = await measure_repository_size(
+                repository,
                 env=env,
-                info_timeout=timeouts["info_timeout"],
-                use_bypass_lock=use_bypass_lock,
                 temp_key_file=temp_key_file,
+                info_timeout=timeouts["info_timeout"],
+                use_bypass_lock=bool(use_bypass_lock),
             )
-            if total_size_bytes > 0:
-                total_size = format_bytes(total_size_bytes)
         except Exception as e:
             logger.warning(
                 "Failed to get repository size",
                 repository=repository.name,
                 error=str(e),
             )
+            measured = SizeResult()
+        if measured.bytes:
+            total_size = format_bytes(measured.bytes)
 
         # Update repository
         old_count = repository.archive_count
@@ -1037,6 +1060,9 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
         repository.archive_count = archive_count
         if total_size:
             repository.total_size = total_size
+            repository.total_size_source = measured.source
+        if measured.last_modified:
+            repository.borg_last_modified = measured.last_modified
         if last_backup_time:
             repository.last_backup = last_backup_time
 
@@ -6203,7 +6229,8 @@ async def get_repository_stats(
             "compressed_size": "Unknown",
             "deduplicated_size": "Unknown",
             "archive_count": repository.archive_count or 0,
-            "last_modified": format_datetime(repository.updated_at),
+            "last_modified": format_datetime(repository.borg_last_modified),
+            "total_size_source": repository.total_size_source,
             "encryption": repository.encryption or "Unknown",
             "executor": "agent",
         }
@@ -6218,13 +6245,31 @@ async def get_repository_stats(
             cmd.append("--bypass-lock")
         if remote_path := effective_repository_remote_path(repository):
             cmd.extend(["--remote-path", remote_path])
-        info_result = await borg._execute_command(cmd, env=env)
+        # machine-parsed: render timestamps in UTC (Borg 1 prints them naive)
+        info_env = dict(env or {})
+        info_env["TZ"] = "UTC"
+        info_result = await borg._execute_command(cmd, env=info_env)
 
         if not info_result["success"]:
             return {
                 "error": "Failed to get repository info",
                 "details": info_result["stderr"],
             }
+
+        # The info call just made carries Borg's own last_modified; the stored
+        # column is the fallback for a payload without one.
+        last_modified = repository.borg_last_modified
+        try:
+            payload = json.loads(info_result.get("stdout") or "{}")
+            last_modified = (
+                _parse_borg_archive_time(
+                    (payload.get("repository") or {}).get("last_modified"),
+                    timezone_name="UTC",
+                )
+                or last_modified
+            )
+        except (json.JSONDecodeError, ValueError, AttributeError):
+            pass
 
         # Parse repository info (basic implementation)
         # In a real implementation, you would parse the borg info output
@@ -6233,7 +6278,8 @@ async def get_repository_stats(
             "compressed_size": "Unknown",
             "deduplicated_size": "Unknown",
             "archive_count": 0,
-            "last_modified": None,
+            "last_modified": format_datetime(last_modified),
+            "total_size_source": repository.total_size_source,
             "encryption": "Unknown",
         }
 

@@ -398,6 +398,21 @@
         "tcpFailed": "TCP fehlgeschlagen",
         "emptyResult": "Führen Sie eine Prüfung aus, um die aktive Agent-Sitzung zu bestätigen. Fügen Sie Host und Port hinzu, um die TCP-Erreichbarkeit vom Agent-Host zu testen.",
         "unavailable": "Diagnosen sind in dieser Story- oder Testansicht nicht verfügbar."
+      },
+      "upgrade": {
+        "upToDate": "Aktuell",
+        "outdated": "Update verfügbar",
+        "ahead": "Neuer als der Server",
+        "pinned": "Angeheftet",
+        "unknown": "Version unbekannt",
+        "targetTooltip": "Dieser Server stellt Agent-Version {{version}} bereit",
+        "pinnedTooltip": "Auf Version {{version}} angeheftet und folgt dem Server nicht",
+        "unknownTooltip": "Dieser Endpunkt hat keine vergleichbare Version gemeldet",
+        "outdatedCount_one": "{{count}} Endpunkt verwendet einen älteren Agenten",
+        "outdatedCount_other": "{{count}} Endpunkte verwenden einen älteren Agenten",
+        "bannerBody": "Die aktuelle Agent-Version ist {{version}}.",
+        "bannerManual": "Installieren Sie jeden Endpunkt über seine Karte neu, um ihn zu aktualisieren.",
+        "bannerMixedTargets": "Jeder Endpunkt zielt auf seine eigene konfigurierte Version."
       }
     },
     "installCommand": {
@@ -5525,7 +5540,8 @@
         "jobNotStartable": "Dieser Agent-Auftrag kann nicht gestartet werden",
         "repositoryOperationFailed": "Die Repository-Operation des Agenten ist fehlgeschlagen",
         "repositoryOperationTimeout": "Zeitüberschreitung bei der Repository-Operation des Agenten",
-        "unsupportedJobKind": "Nicht unterstützter Agent-Auftragstyp"
+        "unsupportedJobKind": "Nicht unterstützter Agent-Auftragstyp",
+        "desiredVersionUnavailable": "Diese Agent-Version ist auf diesem Server nicht verfügbar."
       },
       "repo": {
         "repositoryNotFound": "Repository nicht gefunden",

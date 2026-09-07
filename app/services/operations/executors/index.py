@@ -25,6 +25,7 @@ from app.services.operations.runner import Outcome
 from app.services.operations.series import infer_series, series_prefixes_for_repository
 from app.services.repository_command_lock import run_serialized_repository_command
 from app.services.repository_executor import is_agent_executor
+from app.services.storage_usage import measure_repository_size
 from app.utils.borg_env import cleanup_temp_key_file, effective_repository_remote_path
 
 logger = structlog.get_logger()
@@ -364,7 +365,9 @@ async def run_stats(ctx) -> Outcome:
             )
         _publish_mqtt_state(db, "operations stats")
         ctx.log(f"agent repository size {repository.total_size}")
-        return Outcome(result={"total_size": repository.total_size, "source": "agent"})
+        return Outcome(
+            result={"total_size": repository.total_size, "executor": "agent"}
+        )
     env, temp_key_file = _prepare_repository_borg_env(repository, db)
     try:
         system_settings = db.query(SystemSettings).first()
@@ -373,26 +376,40 @@ async def run_stats(ctx) -> Outcome:
             or (system_settings and system_settings.bypass_lock_on_list)
         )
         timeouts = get_operation_timeouts(db)
-        router = BorgRouter(repository)
-        total = await run_serialized_repository_command(
+        measured = await run_serialized_repository_command(
             repository.id,
-            lambda: router.calculate_total_size_bytes(
+            lambda: measure_repository_size(
+                repository,
                 env=env,
+                temp_key_file=temp_key_file,
                 info_timeout=timeouts["info_timeout"],
                 use_bypass_lock=use_bypass_lock,
-                temp_key_file=temp_key_file,
             ),
             scope="metadata",
         )
-        if total and total > 0:
-            repository.total_size = format_bytes(total)
+        if measured.bytes:
+            repository.total_size = format_bytes(measured.bytes)
+            repository.total_size_source = measured.source
+        if measured.last_modified:
+            repository.borg_last_modified = measured.last_modified
         if system_settings is not None:
             system_settings.last_stats_refresh = utc_now()
         db.commit()
-        if total and total > 0:
+        if measured.bytes:
             _publish_mqtt_state(db, "operations stats")
-        ctx.log(f"repository size {total} bytes")
-        return Outcome(result={"unique_csize": total})
+        ctx.log(
+            f"repository size {measured.bytes} bytes ({measured.source or 'unknown'})"
+        )
+        return Outcome(
+            result={
+                "bytes": measured.bytes,
+                "objects": measured.objects,
+                "source": measured.source,
+                "last_modified": measured.last_modified.isoformat()
+                if measured.last_modified
+                else None,
+            }
+        )
     finally:
         cleanup_temp_key_file(temp_key_file)
 

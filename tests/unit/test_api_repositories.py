@@ -3100,6 +3100,62 @@ class TestRepositoriesStatistics:
         mock_list.assert_awaited_once()
 
     @pytest.mark.asyncio
+    async def test_get_repository_stats_reports_last_modified_from_the_info_call(
+        self, test_db
+    ):
+        """The endpoint runs `info` anyway; Borg's own last_modified from
+        that payload wins over the stored column, which serves as the
+        fallback for a payload without one."""
+        from datetime import datetime
+
+        from app.api.repositories import get_repository_stats
+
+        repo = Repository(
+            name="Stats Repo",
+            path="/tmp/stats-repo",
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+            borg_last_modified=datetime(2026, 9, 1, 6, 0),
+        )
+        test_db.add(repo)
+        test_db.commit()
+
+        async def stats_for(stdout):
+            with (
+                patch(
+                    "app.api.repositories.resolve_repo_ssh_key_file", return_value=None
+                ),
+                patch(
+                    "app.api.repositories.borg._execute_command",
+                    new=AsyncMock(
+                        return_value={
+                            "success": True,
+                            "stdout": stdout,
+                            "stderr": "",
+                            "return_code": 0,
+                        }
+                    ),
+                ) as mock_exec,
+                patch(
+                    "app.api.repositories.BorgRouter.list_archives",
+                    new=AsyncMock(return_value=[]),
+                ),
+            ):
+                stats = await get_repository_stats(repo, test_db)
+            assert mock_exec.call_args.kwargs["env"]["TZ"] == "UTC"
+            return stats
+
+        live = await stats_for(
+            '{"repository": {"last_modified": "2026-09-07T08:00:00.000000"}}'
+        )
+        assert live["last_modified"] == "2026-09-07T08:00:00+00:00"
+        stored = await stats_for('{"repository": {}}')
+        assert stored["last_modified"] == "2026-09-01T06:00:00+00:00"
+        unparsable = await stats_for("ok")
+        assert unparsable["last_modified"] == "2026-09-01T06:00:00+00:00"
+
+    @pytest.mark.asyncio
     async def test_get_repository_stats_omits_passphrase_for_unencrypted_local_repo(
         self, test_db
     ):
