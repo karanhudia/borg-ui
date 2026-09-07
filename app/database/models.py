@@ -114,6 +114,19 @@ class AgentMachine(Base):
     os = Column(String, nullable=True)
     arch = Column(String, nullable=True)
     agent_version = Column(String, nullable=True)
+    # Version an operator pinned this endpoint to. NULL means "track whatever
+    # this server serves", which is the default and the normal case.
+    desired_agent_version = Column(String, nullable=True)
+    # Borg major version this endpoint should run ("1" or "2"). NULL means
+    # leave whatever is installed alone.
+    desired_borg_version = Column(String, nullable=True)
+    # Set while a remote upgrade is in flight. The agent is killed by the
+    # upgrade it performs, so the server owns the outcome rather than waiting
+    # for a completion the agent cannot send.
+    upgrade_state = Column(String, nullable=True)
+    upgrade_requested_at = Column(DateTime, nullable=True)
+    upgrade_target_version = Column(String, nullable=True)
+    upgrade_error = Column(Text, nullable=True)
     # IANA zone the agent reported (e.g. "Europe/Berlin"); interprets the
     # local-time archive timestamps borg emits on that machine.
     timezone = Column(String, nullable=True)
