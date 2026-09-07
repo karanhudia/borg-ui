@@ -1508,7 +1508,12 @@ async def download_job_logs(
         ):
             raise _no_logs_available_exception()
         if op.status == "running":
-            raise _no_logs_available_exception()
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "key": "backend.errors.activity.cannotDownloadLogsForRunningJob"
+                },
+            )
         if op.log_file_path and os.path.exists(op.log_file_path):
             return FileResponse(
                 op.log_file_path,
