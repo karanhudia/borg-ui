@@ -47,6 +47,33 @@ describe('ArchiveInfoTab', () => {
     expect(screen.getByRole('meter')).toHaveAttribute('aria-valuenow', '25')
   })
 
+  it('says "< 1%" instead of "0%" when the unique share rounds to zero', () => {
+    render(
+      <ArchiveInfoTab
+        archive={archive({ original_size: 820 * 1024 ** 3, deduplicated_size: 566.6 * 1024 ** 2 })}
+      />
+    )
+    expect(
+      screen.getByText(/566\.60 MB of this archive is unique to it, < 1%/i)
+    ).toBeInTheDocument()
+    expect(screen.getByRole('meter')).toHaveAttribute('aria-valuenow', '0')
+  })
+
+  it('says "< 1%" for a share that would round up to 1%', () => {
+    render(
+      <ArchiveInfoTab
+        archive={archive({ original_size: 1000 * 1024, deduplicated_size: 6 * 1024 })}
+      />
+    )
+    expect(screen.getByText(/6\.00 KB of this archive is unique to it, < 1%/i)).toBeInTheDocument()
+    expect(screen.getByRole('meter')).toHaveAttribute('aria-valuenow', '1')
+  })
+
+  it('keeps "0%" for an archive with no unique data', () => {
+    render(<ArchiveInfoTab archive={archive({ deduplicated_size: 0 })} />)
+    expect(screen.getByText(/0 B of this archive is unique to it, 0%/i)).toBeInTheDocument()
+  })
+
   it('leaves the storage bar out when the sizes are unknown', () => {
     render(<ArchiveInfoTab archive={archive({ original_size: null, deduplicated_size: null })} />)
     expect(screen.queryByRole('meter')).not.toBeInTheDocument()

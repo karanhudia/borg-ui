@@ -41,8 +41,8 @@
     "@testing-library/user-event": "^14.6.7",
     "@types/qrcode": "^1.5.6",
     "@vitejs/plugin-react": "^6.1.1",
-    "@vitest/coverage-v8": "^4.1.11",
-    "@vitest/ui": "^4.0.18",
+    "@vitest/coverage-v8": "^5.0.0",
+    "@vitest/ui": "^5.0.0",
     "axios-mock-adapter": "^2.1.0",
     "happy-dom": "^20.14.0",
     "husky": "^9.1.7",
@@ -57,7 +57,7 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
     "vite": "^8.2.2",
-    "vitest": "^4.0.18"
+    "vitest": "^5.0.0"
   },
   "scripts": {
     "dev": "vite",

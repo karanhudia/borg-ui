@@ -130,10 +130,11 @@ export default function ArchiveInfoTab({ archive }: ArchiveInfoTabProps) {
 
   const original = archive.original_size
   const stored = archive.deduplicated_size
-  const percent =
-    original != null && stored != null && original > 0
-      ? Math.min(100, Math.round((stored / original) * 100))
-      : null
+  const share = original != null && stored != null && original > 0 ? stored / original : null
+  const percent = share != null ? Math.min(100, Math.round(share * 100)) : null
+  // Rounding a small non-zero share to "0%" or "1%" would contradict the
+  // size next to it; the meter keeps the rounded value.
+  const percentLabel = share != null && share > 0 && share < 0.01 ? '< 1' : percent
 
   return (
     <Stack spacing={3}>
@@ -202,7 +203,10 @@ export default function ArchiveInfoTab({ archive }: ArchiveInfoTabProps) {
               />
             </Box>
             <Typography variant="body2" sx={{ mt: 1 }}>
-              {t('archives.detail.storedShare', { stored: formatBytes(stored), percent })}{' '}
+              {t('archives.detail.storedShare', {
+                stored: formatBytes(stored),
+                percent: percentLabel,
+              })}{' '}
               <Typography component="span" variant="body2" sx={{ color: 'text.secondary' }}>
                 {t('archives.detail.storedSaved', { size: formatBytes(stored) })}
               </Typography>
