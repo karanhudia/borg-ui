@@ -34,6 +34,7 @@ START_SERVICE="true"
 SKIP_BORG2="false"
 DATA_DIR_EXPLICIT="false"
 PREVIOUS_RELEASE=""
+PREVIOUS_SERVICE_USER=""
 PORT_EXPLICIT="false"
 SERVICE_USER_EXPLICIT="false"
 
@@ -242,6 +243,7 @@ load_persisted_settings() {
   # to root, quietly undoing a deliberate --service-user install.
   persisted="$(grep -m1 '^User=' "${UNIT_FILE}" 2>/dev/null | cut -d= -f2- || true)"
   if [[ -n "${persisted}" ]]; then
+    PREVIOUS_SERVICE_USER="${persisted}"
     if [[ "${SERVICE_USER_EXPLICIT}" == "true" ]] && [[ "${SERVICE_USER}" != "${persisted}" ]]; then
       log "Changing the service user from ${persisted} to ${SERVICE_USER}"
     else
@@ -276,6 +278,17 @@ create_directories() {
     "${DATA_DIR}/backups" "${DATA_DIR}/home" "${DATA_DIR}/cache"
   install -d -m 0700 -o "${SERVICE_USER}" -g "${group}" \
     "${DATA_DIR}/ssh_keys" "${DATA_DIR}/borg_keys" "${DATA_DIR}/cache/borg"
+
+  # A changed service user has to take the existing data with it. install -d
+  # above only owns the directory entries, so the database, the secret key and
+  # every deployed SSH and Borg key would keep the old owner and the new
+  # service would fail to open them. Rollback does not cover this either: it
+  # moves the "current" symlink, while the unit keeps the new User=.
+  if [[ -n "${PREVIOUS_SERVICE_USER}" ]] && [[ "${PREVIOUS_SERVICE_USER}" != "${SERVICE_USER}" ]]; then
+    log "Service user changed to ${SERVICE_USER}; re-owning ${DATA_DIR}"
+    log "This walks the whole data directory and can take a while."
+    chown -R "${SERVICE_USER}:${group}" "${DATA_DIR}"
+  fi
 
   # Borg writes keyfiles to $HOME/.config/borg/keys. Point that at the data
   # directory so a repository key survives an upgrade, the same way the Docker
@@ -566,6 +579,7 @@ activate_release() {
 
   PREVIOUS_RELEASE="$(readlink -f "${PREFIX}/current" 2>/dev/null || true)"
   [[ "${PREVIOUS_RELEASE}" != "${RELEASE_DIR}" ]] || PREVIOUS_RELEASE=""
+PREVIOUS_SERVICE_USER=""
 
   # Only when this run will start it again. With --no-start, install_service
   # returns without starting, so stopping here would turn an upgrade into an

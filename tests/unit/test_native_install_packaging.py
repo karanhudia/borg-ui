@@ -436,3 +436,44 @@ def test_the_release_workflow_expands_nothing_ref_derived_into_a_shell_body():
         "pass these through `env:` and reference them as shell variables:\n"
         + "\n".join(offenders)
     )
+
+
+def test_a_changed_service_user_takes_the_existing_data_with_it():
+    """`install -d` owns directory entries, not what is already inside them.
+
+    Switching --service-user would otherwise leave the database, the secret key
+    and every deployed SSH and Borg key owned by the previous user, and the new
+    service cannot open them. Rollback does not cover it either: it moves the
+    `current` symlink while the unit keeps the new `User=`.
+    """
+    installer = INSTALLER.read_text()
+    assert 'PREVIOUS_SERVICE_USER="${persisted}"' in installer, (
+        "the installed unit's User= is no longer captured, so a change in it "
+        "cannot be detected"
+    )
+
+    body = re.search(r"^create_directories\(\) \{.*?^\}", installer, re.M | re.S)
+    assert body, "create_directories is no longer a top-level function"
+    assert 'chown -R "${SERVICE_USER}:${group}" "${DATA_DIR}"' in body.group(0), (
+        "a service-user change must re-own the data directory recursively"
+    )
+
+
+def test_the_unverified_shortcut_says_so_where_it_is_shown():
+    """It sits next to the verified commands, so the label has to travel with
+    the command itself, not only in prose someone may skip."""
+    docs = (REPO_ROOT / "docs" / "installation.md").read_text().splitlines()
+
+    piped = [
+        number
+        for number, line in enumerate(docs)
+        if "install.sh | sudo bash" in line and line.strip().startswith("curl")
+    ]
+    assert piped, "the unverified one-liner is gone; drop this guard with it"
+
+    for number in piped:
+        window = "\n".join(docs[max(0, number - 6) : number + 1]).lower()
+        assert "unverified" in window, (
+            f"docs/installation.md:{number + 1} pipes the installer into a root "
+            "shell without being labelled unverified nearby"
+        )

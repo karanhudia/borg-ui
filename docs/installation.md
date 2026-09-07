@@ -450,9 +450,14 @@ the script before running it as root is worth the minute it takes:
 less install.sh
 ```
 
-If you would rather not stop to verify, the one-liner is:
+### Unverified one-liner
+
+This skips the checksum and pipes the script straight into a root shell, so
+whatever the URL returns is what runs as root. Use the verified commands above
+unless you have a reason not to.
 
 ```bash
+# Unverified: no checksum is checked before this runs as root.
 curl -fsSL https://github.com/karanhudia/borg-ui/releases/latest/download/install.sh | sudo bash
 ```
 
