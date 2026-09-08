@@ -218,6 +218,12 @@ Stored as strings, validated in Python. Defined once in
 **status:** `queued`, `running`, `completed`, `completed_with_warnings`,
 `failed`, `cancelled`, `skipped`.
 
+A deferral is not a status. An operation the repository admission refuses
+(409 `repositoryOperationActive`) goes back to `queued`; the runner keeps
+its bookkeeping in `params.deferrals` (attempts so far) and
+`params.deferred_until` (epoch seconds before which the tick will not
+dispatch it again), see 7.1. Executors cannot return a deferral.
+
 Mapping from existing vocabularies during migration:
 
 | old | new |
@@ -429,15 +435,34 @@ schedulers. It waits on an `asyncio.Event` that `enqueue()` sets, with a
 fallback poll every 5 seconds. Each tick:
 
 1. Load `queued` operations whose `depends_on_id` is null or points at a
-   `completed` or `completed_with_warnings` operation. If the dependency is
-   `failed`, `cancelled`, or `skipped`, mark the dependant `skipped` with
-   `skip_reason = "dependency_failed"` and continue down the chain.
-2. Order by `priority`, then `created_at`.
+   `completed`, `completed_with_warnings`, or `skipped` operation. If the
+   dependency is `failed` or `cancelled`, mark the dependant `skipped` with
+   `skip_reason = "dependency_failed"` and continue down the chain. A
+   skip with `skip_reason = "dependency_failed"` propagates the same skip
+   to its dependants, preserving failure and cancellation through the whole
+   chain. Other skipped dependencies satisfy their dependants: skipping
+   means the stage had
+   nothing to do (agent without diff support, plan without history), not
+   that it broke, and `stats` must not wait behind a `history_index` it
+   does not use (#917).
+2. Order by `priority`, then `created_at`. Skip rows whose
+   `params.deferred_until` is still in the future.
 3. For each candidate, check the lane and the global limits (7.3). Dispatch
    the first that fits, then re-evaluate. Stop when nothing fits.
 4. Dispatch means: set `running`, `started_at`, spawn
    `asyncio.create_task(executor(operation))`, keep the task handle in
    memory for cancellation.
+5. If the executor is refused by the repository admission (409
+   `repositoryOperationActive`: a legacy job or an agent job holds the
+   repository in a state the lane check does not see, such as a prune row
+   still `pending`), the runner returns the row to `queued` instead of
+   failing it, with `params.deferrals` incremented and
+   `params.deferred_until` set to now plus a delay that doubles from 5 s
+   to 5 min. The runner does not wake itself for a deferral, and the
+   not-before time keeps wakes from other completions from burning the
+   attempts. After `MAX_DEFERRALS` (20, about 75 minutes) the operation
+   fails with "repository still busy". A requeue whose commit fails marks
+   the operation `failed` rather than leaving it `running` with no task.
 
 Executors receive an `OperationContext` with the row, a `progress()`
 callback that throttles writes to at most one per second and broadcasts an
@@ -532,7 +557,9 @@ This replaces the per-table startup cleanup for each kind as it migrates.
 `POST /api/operations/{id}/cancel` sets `cancelled` on a `queued` row
 directly. For a `running` row it sets a cancel flag the executor observes
 via `ctx.cancelled()`; Borg executors also terminate the child process, as
-the existing cancel paths do. Dependants become `skipped`.
+the existing cancel paths do. Dependants become `skipped`. A cancel that
+arrives while the admission is refusing the operation wins over the
+deferral (7.1 step 5): the row ends `cancelled` instead of being requeued.
 
 ### 7.8 Retention
 
@@ -557,8 +584,15 @@ as today. Replaces the size half of `update_repository_stats`.
 3. Rows in `archives` not present in the list are collected as
    `result["removed_archive_ids"]` and left in place; `history_merge`
    consumes and deletes them.
-4. For up to `INDEX_ARCHIVE_INFO_PER_RUN` never-seen archives, run
-   per-archive `borg info` and fill sizes.
+4. For up to `INDEX_ARCHIVE_INFO_PER_RUN` archives, oldest first, run
+   per-archive `borg info` and fill sizes, `end`, and duration: archives
+   without stats first, archives missing only `end` into the slots left
+   over. Agent repositories go through the agent's `repository.archive_info`
+   job; a job the agent does not answer within the info timeout is
+   cancelled and the run stops asking. A Borg 1 agent listing needs the
+   agent's reported zone to place its naive times; without one the stage
+   fails and the next reconcile retries. The listing never carries `end`,
+   so a resync leaves a filled `end` alone.
 5. Write `repository.archive_count` and `repository.last_backup`.
 
 ### 8.3 `history_index`
