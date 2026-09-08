@@ -109,9 +109,11 @@ def _mirror_in_flight(db: Session, repository_id: int) -> bool:
 def _enqueue_scheduled_mirror(
     db: Session, *, repository_id: int, direction: str, scheduled_for: datetime
 ) -> bool:
-    """Queue one scheduled mirror sync. The runner dispatches it (spec 7.1),
-    which is also what serialises it against the rclone lock scope (spec 7.2);
-    this scheduler no longer runs syncs itself."""
+    """Add one scheduled mirror sync to the session, uncommitted. The caller
+    commits it together with the schedule advance, so a failure here leaves
+    the slot due rather than losing a run. The runner dispatches it (spec
+    7.1), which is also what serialises it against the rclone lock scope
+    (spec 7.2); this scheduler no longer runs syncs itself."""
     if _scheduled_job_exists(
         db, repository_id=repository_id, scheduled_for=scheduled_for
     ):
@@ -127,8 +129,6 @@ def _enqueue_scheduled_mirror(
     job.direction = direction
     job.operation = "sync"
     job.scheduled_for = scheduled_for
-    db.commit()
-    wake_runner()
     return True
 
 
@@ -173,14 +173,16 @@ def dispatch_due_scheduled_rclone_mirrors(
             continue
         scheduled_for = storage.next_scheduled_sync_at or now
         storage.next_scheduled_sync_at = _calculate_next_sync_run(storage, now)
-        db.commit()
-
-        if _enqueue_scheduled_mirror(
+        queued = _enqueue_scheduled_mirror(
             db,
             repository_id=storage.repository_id,
             direction=storage.sync_direction,
             scheduled_for=scheduled_for,
-        ):
+        )
+        # One transaction for the schedule advance and the operation.
+        db.commit()
+        if queued:
+            wake_runner()
             dispatched += 1
 
     if dispatched:
@@ -212,21 +214,25 @@ async def run_due_scheduled_rclone_mirrors(
         repository_id = storage.repository_id
         direction = storage.sync_direction
         storage.next_scheduled_sync_at = _calculate_next_sync_run(storage, now)
-        db.commit()
         repository = db.query(Repository).filter(Repository.id == repository_id).first()
         if repository is None:
             logger.warning(
                 "Skipping scheduled rclone mirror sync for missing repository",
                 repository_id=repository_id,
             )
+            db.commit()
             continue
 
-        if _enqueue_scheduled_mirror(
+        queued = _enqueue_scheduled_mirror(
             db,
             repository_id=repository_id,
             direction=direction,
             scheduled_for=scheduled_for,
-        ):
+        )
+        # One transaction for the schedule advance and the operation.
+        db.commit()
+        if queued:
+            wake_runner()
             logger.info(
                 "Scheduled rclone mirror sync queued",
                 repository_id=repository_id,

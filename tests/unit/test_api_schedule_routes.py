@@ -742,6 +742,60 @@ class TestScheduleRouteContracts:
         )
         assert storage.next_scheduled_sync_at == due_at.replace(tzinfo=None)
 
+    def test_dispatch_scheduled_rclone_mirror_keeps_the_slot_when_enqueue_fails(
+        self, test_db, monkeypatch
+    ):
+        """The schedule advance and the new operation commit together: if the
+        enqueue raises, the slot is still due on the next tick and no mirror
+        run is lost."""
+        from app.services import rclone_mirror_scheduler
+
+        now = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
+        remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+        repo = Repository(
+            name="Mirror Repo",
+            path="/repos/mirror",
+            encryption="none",
+            repository_type="local",
+            mode="full",
+        )
+        test_db.add_all([remote, repo])
+        test_db.commit()
+        test_db.refresh(remote)
+        test_db.refresh(repo)
+        due_at = now - timedelta(minutes=5)
+        storage = RepositoryStorage(
+            repository_id=repo.id,
+            backend="rclone",
+            rclone_remote_id=remote.id,
+            rclone_remote_path="borg-ui/repositories/mirror",
+            cache_path=repo.path,
+            sync_policy="scheduled",
+            sync_status="current",
+            sync_direction="primary_to_remote",
+            sync_cron_expression="*/15 * * * *",
+            sync_timezone="UTC",
+            next_scheduled_sync_at=due_at,
+        )
+        test_db.add(storage)
+        test_db.commit()
+
+        def _explode(*args, **kwargs):
+            raise RuntimeError("database locked")
+
+        monkeypatch.setattr(rclone_mirror_scheduler, "enqueue", _explode)
+
+        with pytest.raises(RuntimeError, match="database locked"):
+            rclone_mirror_scheduler.dispatch_due_scheduled_rclone_mirrors(test_db, now)
+
+        test_db.rollback()
+        test_db.refresh(storage)
+        assert storage.next_scheduled_sync_at == due_at.replace(tzinfo=None)
+        assert (
+            test_db.query(Operation).filter(Operation.kind == "rclone_sync").count()
+            == 0
+        )
+
     def test_validate_cron_returns_preview_for_valid_expression(
         self, test_client: TestClient, admin_headers
     ):
