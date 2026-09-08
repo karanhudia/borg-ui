@@ -1,7 +1,7 @@
 """add operation wipe and rclone extension tables
 
 Revision ID: e5f6a7b8c9d0
-Revises: c3d5e7f9a1b2
+Revises: a5b7c9d1e3f2
 Create Date: 2026-09-08
 """
 
@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = "e5f6a7b8c9d0"
-down_revision = "c3d5e7f9a1b2"
+down_revision = "a5b7c9d1e3f2"
 branch_labels = None
 depends_on = None
 
