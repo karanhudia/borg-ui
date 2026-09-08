@@ -255,9 +255,23 @@ class OperationRunner:
                     continue
                 if not can_start(db, op, system_settings):
                     continue
-                op.status = "running"
-                op.started_at = utc_now()
+                # Conditional claim: the candidates were loaded before the
+                # awaits above, and a cancel can commit during one of them.
+                # Only a row still queued is taken; otherwise it is left as
+                # whoever changed it wrote it.
+                claimed = (
+                    db.query(Operation)
+                    .filter(Operation.id == op.id, Operation.status == "queued")
+                    .update(
+                        {"status": "running", "started_at": utc_now()},
+                        synchronize_session=False,
+                    )
+                )
                 db.commit()
+                if not claimed:
+                    db.expire(op)
+                    continue
+                db.refresh(op)
                 await broadcast_operation_updated(op, db)
                 self.running_tasks[op.id] = asyncio.create_task(
                     self.run_operation(op.id)

@@ -109,6 +109,22 @@ def test_output_survives_text_that_looks_like_a_sentinel(db, logs_dir):
     assert PackageInstallFacade(db, op).stdout == "STDOUT:\nnot a real marker"
 
 
+def test_output_survives_the_stream_marker_inside_stdout(db, logs_dir):
+    """The file format must not depend on any line apt could print: the
+    streams are length-delimited, so even the old marker text round-trips."""
+    op = _install_operation(db, status="running")
+    stdout = "before\n===== BORG-UI PACKAGE STDERR =====\nafter"
+    stderr = "E: unable to locate package"
+
+    job = PackageInstallFacade(db, op)
+    job.write_output(stdout, stderr)
+    db.commit()
+
+    job = PackageInstallFacade(db, op)
+    assert job.stdout == stdout
+    assert job.stderr == stderr
+
+
 def test_missing_output_reads_as_empty_strings(db):
     op = _install_operation(db)
 

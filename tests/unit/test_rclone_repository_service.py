@@ -721,6 +721,36 @@ async def test_hydrate_repository_persists_failure_when_rclone_raises(
     assert storage.last_sync_error == "rclone timed out"
 
 
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_hydrate_repository_leaves_no_temp_dir_for_an_unknown_job(
+    db_session, tmp_path
+):
+    cache_path = tmp_path / "cache" / "repositories" / "9"
+    remote = RcloneRemote(id=3, name="prod-s3", provider="s3")
+    repository = Repository(id=9, name="App", path=str(cache_path), encryption="none")
+    storage = RepositoryStorage(
+        repository_id=9,
+        backend="rclone",
+        rclone_remote_id=3,
+        rclone_remote_path="borg-ui/repositories/app",
+        cache_path=str(cache_path),
+        sync_policy="after_success",
+        sync_status="pending",
+    )
+    db_session.add_all([remote, repository, storage])
+    db_session.commit()
+    service = RcloneRepositoryService(
+        cache_root=str(tmp_path / "cache"), service=_ExplodingRcloneService()
+    )
+
+    with pytest.raises(ValueError, match="was not found"):
+        await service.hydrate_repository(db_session, repository, job_id=999)
+
+    leftovers = list(cache_path.parent.glob(".hydrate-*"))
+    assert leftovers == []
+
+
 def _rclone_repository_and_storage(db_session, *, cache_path="/srv/borg/app"):
     """Phase 6 helper: a cloud repository ready to sync."""
     remote = RcloneRemote(id=3, name="prod-s3", provider="s3")

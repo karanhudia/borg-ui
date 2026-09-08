@@ -92,6 +92,51 @@ async def test_dispatch_order_priority_then_age(db, repo, runner, registry):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_tick_does_not_dispatch_a_row_cancelled_while_it_awaited(
+    db, repo, runner, registry, session_factory, monkeypatch
+):
+    """The tick loads every queued row up front and awaits between dispatches.
+    A cancel committed during one of those awaits must win: the claim is
+    conditional on the row still being queued."""
+    ran = []
+
+    async def record(ctx: OperationContext):
+        ran.append(ctx.operation_id)
+        return Outcome()
+
+    registry["stats"] = record
+    first = enqueue(db, "stats", repository_id=repo.id, priority=0)
+    second = enqueue(db, "stats", repository_id=repo.id, priority=5)
+
+    import app.services.operations.runner as runner_module
+
+    real_broadcast = runner_module.broadcast_operation_updated
+    calls = []
+
+    async def broadcast_then_cancel(op, session):
+        calls.append(op.id)
+        if len(calls) == 1:
+            other = session_factory()
+            row = other.get(Operation, second.id)
+            row.status = "cancelled"
+            other.commit()
+            other.close()
+        return await real_broadcast(op, session)
+
+    monkeypatch.setattr(
+        runner_module, "broadcast_operation_updated", broadcast_then_cancel
+    )
+
+    await _drain(runner)
+
+    db.expire_all()
+    assert ran == [first.id]
+    assert db.get(Operation, second.id).status == "cancelled"
+    assert db.get(Operation, second.id).started_at is None
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_dependency_gating_and_failure_skips_chain(db, repo, runner, registry):
     async def fail(ctx):
         raise RuntimeError("boom")

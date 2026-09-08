@@ -127,6 +127,52 @@ async def test_run_wipe_reports_a_compaction_failure_as_completed_with_warnings(
 
 
 @pytest.mark.asyncio
+async def test_run_wipe_enqueues_the_index_chain_after_a_partial_delete(
+    db, repository, monkeypatch
+):
+    """A partial wipe fails the row, so the runner creates no follow-ups
+    (spec 7.4), but archives did disappear: the executor enqueues the chain
+    itself so the archive list and stats catch up (Appendix B)."""
+    from app.services.operations.wipe_facade import WipeJobFacade
+
+    load_default_executors()
+    op = _operation(
+        db,
+        repository,
+        "wipe",
+        "maintenance",
+        params={"preview_id": 1, "run_compact": True},
+        run_id="run-wipe-partial",
+    )
+
+    async def _execute_wipe(job_id, repository_id):
+        job = WipeJobFacade(db, db.get(Operation, job_id))
+        job.status = "failed_partial"
+        job.error_message = "2 of 5 archives could not be deleted"
+        db.commit()
+
+    monkeypatch.setattr(
+        "app.services.repository_wipe_service.repository_wipe_service.execute_wipe",
+        _execute_wipe,
+    )
+
+    outcome = await get_executor("wipe")(FakeContext(db, op))
+
+    assert outcome.status == "failed"
+    followups = (
+        db.query(Operation)
+        .filter(Operation.run_id == "run-wipe-partial", Operation.id != op.id)
+        .order_by(Operation.id.asc())
+        .all()
+    )
+    assert [f.kind for f in followups][0] == "archive_sync"
+    assert [f.kind for f in followups][-1] == "stats"
+    assert {f.trigger for f in followups} == {"followup"}
+    assert followups[0].depends_on_id is None
+    assert all(f.status == "queued" for f in followups)
+
+
+@pytest.mark.asyncio
 async def test_run_wipe_fails_when_the_service_records_no_verdict(
     db, repository, monkeypatch
 ):

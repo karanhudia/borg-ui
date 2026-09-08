@@ -543,11 +543,8 @@ class RcloneRepositoryService:
         storage = self.get_storage(db, repository.id)
         remote = self.get_remote(db, storage)
         target = self.compose_target(remote, storage.rclone_remote_path)
-        parent = Path(storage.cache_path).parent
-        parent.mkdir(parents=True, exist_ok=True)
-        temp_dir = tempfile.mkdtemp(
-            prefix=f".hydrate-{repository.id}-", dir=str(parent)
-        )
+        # Resolve the job before creating the temp directory: a bad id raises
+        # here, and every later failure path removes the directory itself.
         if job_id is not None:
             hydrate_job = resolve_rclone_job(db, job_id)
             if hydrate_job is None or hydrate_job.repository_id != repository.id:
@@ -561,6 +558,11 @@ class RcloneRepositoryService:
                 commit=False,
             )
             hydrate_job = RcloneSyncFacade(db, operation)
+        parent = Path(storage.cache_path).parent
+        parent.mkdir(parents=True, exist_ok=True)
+        temp_dir = tempfile.mkdtemp(
+            prefix=f".hydrate-{repository.id}-", dir=str(parent)
+        )
         hydrate_job.direction = "remote_to_cache"
         hydrate_job.operation = "hydrate"
         hydrate_job.status = "running"

@@ -3,14 +3,16 @@
 Spec 6.2 gives `package_install` no extension table, so the input
 (`package_id`) lives in `operations.params`, the exit code in
 `operations.result`, and the captured output in the operation's log file. The
-two streams are separated by sentinel lines this module writes and parses, so
-`GET /api/packages/jobs/{id}` keeps returning `stdout` and `stderr` apart.
+file opens with one header line carrying the length of each stream, so the
+split never depends on what apt printed, and `GET /api/packages/jobs/{id}`
+keeps returning `stdout` and `stderr` apart.
 
 The kind is category `system` with a null `repository_id` (spec 6.3).
 
 Deleted in phase 9 with the legacy table.
 """
 
+import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -18,10 +20,10 @@ from sqlalchemy.orm import Session
 
 from app.database.models import Operation, PackageInstallJob
 
-# Deliberately unlikely to appear in apt output, and written by this module
-# alone, so the split below is deterministic.
-STDOUT_SENTINEL = "===== BORG-UI PACKAGE STDOUT ====="
-STDERR_SENTINEL = "===== BORG-UI PACKAGE STDERR ====="
+# First line of a log file this module wrote. The lengths are in characters
+# of the decoded text, which is what the file holds after the newline.
+_HEADER_PREFIX = "BORG-UI PACKAGE OUTPUT v1"
+_HEADER = re.compile(rf"^{re.escape(_HEADER_PREFIX)} stdout=(\d+) stderr=(\d+)\n")
 
 ACTIVE_STATUSES = ("queued", "running")
 # Pre-phase-6 rows only; goes away with the table in phase 9.
@@ -129,8 +131,11 @@ class PackageInstallFacade:
             self.operation.log_file_path or operation_log_path(self.operation.id)
         )
         path.parent.mkdir(parents=True, exist_ok=True)
+        stdout = stdout or ""
+        stderr = stderr or ""
         path.write_text(
-            f"{STDOUT_SENTINEL}\n{stdout or ''}\n{STDERR_SENTINEL}\n{stderr or ''}",
+            f"{_HEADER_PREFIX} stdout={len(stdout)} stderr={len(stderr)}\n"
+            f"{stdout}{stderr}",
             encoding="utf-8",
         )
         self.operation.log_file_path = str(path)
@@ -143,15 +148,14 @@ class PackageInstallFacade:
             text = Path(path).read_text(encoding="utf-8")
         except OSError:
             return "", ""
-        if not text.startswith(f"{STDOUT_SENTINEL}\n"):
+        header = _HEADER.match(text)
+        if header is None:
             # A log written by something other than write_output (the runner's
             # ctx.log, say). Treat the whole file as stdout.
             return text, ""
-        rest = text[len(STDOUT_SENTINEL) + 1 :]
-        stdout, separator, stderr = rest.partition(f"\n{STDERR_SENTINEL}\n")
-        if not separator:
-            return rest, ""
-        return stdout, stderr
+        body = text[header.end() :]
+        stdout_len, stderr_len = int(header.group(1)), int(header.group(2))
+        return body[:stdout_len], body[stdout_len : stdout_len + stderr_len]
 
     @property
     def stdout(self) -> str:

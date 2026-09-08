@@ -35,7 +35,10 @@ Repository wipe, cloud mirror sync and hydrate, and package install are
 `operations` rows too (kinds `wipe`, `rclone_sync`, `package_install`).
 `repository_wipe_jobs`, `rclone_sync_jobs`, and `package_install_jobs` are
 legacy tables now: they hold history written before the migration and nothing
-writes new rows to them. A job id resolves against `operations` first and falls
+writes new rows to them, with one exception. A wipe preview is not a unit of
+work, so it is still written to `repository_wipe_jobs`; only the confirmed
+wipe becomes an operation, and it names the preview it was confirmed from in
+`params.preview_id`. A job id resolves against `operations` first and falls
 back to its legacy table, so old links keep working.
 
 ## Backup Jobs
@@ -133,8 +136,9 @@ is stored as the trigger `import` and mapped back on read.
 
 **Package install** has no repository and no lane. Its `package_id` lives in
 `operations.params`, its exit code in `operations.result`, and its captured
-output in the operation's log file, with the two streams separated by sentinel
-lines, so `GET /api/packages/jobs/{id}` still returns `stdout` and `stderr`
+output in the operation's log file. That file opens with one header line
+giving the length of each stream, so the split never depends on what apt
+printed, and `GET /api/packages/jobs/{id}` still returns `stdout` and `stderr`
 apart.
 
 ## Restart Cleanup

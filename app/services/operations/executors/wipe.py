@@ -11,8 +11,13 @@ import structlog
 
 from app.database.models import Operation, Repository
 from app.services.operations import executors
+from app.services.operations.enqueue import enqueue_chain
+from app.services.operations.followups import chain_for, history_enabled
 from app.services.operations.runner import Outcome
-from app.services.operations.wipe_facade import WipeJobFacade
+from app.services.operations.wipe_facade import (
+    PHASE_DELETE_FAILED_PARTIAL,
+    WipeJobFacade,
+)
 
 logger = structlog.get_logger()
 
@@ -44,6 +49,26 @@ async def run_wipe(ctx) -> Outcome:
             status=operation.status,
             result={"archive_count": job.archive_count, "phase": job.phase},
         )
+    if operation.status == "failed" and job.phase == PHASE_DELETE_FAILED_PARTIAL:
+        # Spec 7.4 creates no follow-ups for a failed parent, and the runner
+        # honours that. A partial delete is the one failure that changed the
+        # repository, so the index chain is queued here, with no dependency on
+        # the failed row, to keep the archive list and stats honest
+        # (Appendix B, phase 6 review).
+        kinds = chain_for(
+            "wipe",
+            available=executors.registered_kinds(),
+            history=history_enabled(ctx.db),
+        )
+        if kinds:
+            enqueue_chain(
+                ctx.db,
+                kinds,
+                repository_id=operation.repository_id,
+                trigger="followup",
+                run_id=operation.run_id,
+                triggered_by_user_id=operation.triggered_by_user_id,
+            )
     # `Outcome` has no cancelled status (spec 6.3 gives that to the row, not to
     # the executor's verdict); the runner rewrites the row to cancelled itself
     # when it sees its own flag set. Report the failure shape and let the
