@@ -111,7 +111,7 @@ async def run_rclone_sync(ctx) -> Outcome:
     # runner rewrites the row itself when it sees its own cancel flag.
     message = job.error_text or "rclone sync failed"
     _mark_storage_failed(ctx.db, repository.id, message)
-    return Outcome(status="failed", error_message=job.error_text)
+    return Outcome(status="failed", error_message=message)
 
 
 executors.register("rclone_sync", run_rclone_sync)

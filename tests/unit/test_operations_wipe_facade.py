@@ -110,12 +110,17 @@ def test_preview_snapshot_reads_from_the_details_row(db, repository):
 
 def test_resolve_prefers_operations_then_falls_back_to_the_legacy_row(db, repository):
     op = _wipe_operation(db, repository)
-    legacy = RepositoryWipeJob(repository_id=repository.id, status="previewed")
+    # Distinct ids on purpose: on a fresh database both tables start at 1, and
+    # a shared id would resolve to the operation and never exercise the legacy
+    # branch this test is about.
+    legacy = RepositoryWipeJob(
+        id=op.id + 1000, repository_id=repository.id, status="previewed"
+    )
     db.add(legacy)
     db.commit()
 
     assert isinstance(resolve_wipe_job(db, op.id), WipeJobFacade)
-    assert resolve_wipe_job(db, legacy.id) is not None
+    assert resolve_wipe_job(db, legacy.id) is legacy
     assert resolve_wipe_job(db, 9999) is None
 
 
