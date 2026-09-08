@@ -28,6 +28,8 @@ describe('RepositoryCard', () => {
     last_backup: '2024-01-20T10:30:00Z',
     last_check: '2024-01-19T09:00:00Z',
     last_compact: '2024-01-18T08:00:00Z',
+    last_prune: '2024-01-17T12:00:00Z',
+    last_index: '2024-01-20T12:30:00Z',
     total_size: '10.5 GB',
     archive_count: 25,
     created_at: '2024-01-01T00:00:00Z',
@@ -370,6 +372,55 @@ describe('RepositoryCard', () => {
 
       expect(screen.getByText(/^Encryption:/i)).toBeInTheDocument()
       expect(screen.getByText('repokey')).toBeInTheDocument()
+    })
+
+    it('renders last prune and last index in the metadata row', () => {
+      renderWithProviders(
+        <RepositoryCard
+          repository={mockRepository}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(screen.getByText(/^Last Prune:/i).parentElement).toHaveTextContent(/Jan 17, 2024/)
+      expect(screen.getByText(/^Last Index:/i).parentElement).toHaveTextContent(/Jan 20, 2024/)
+    })
+
+    it('shows "Never" for last prune and last index without history', () => {
+      renderWithProviders(
+        <RepositoryCard
+          repository={{ ...mockRepository, last_prune: null, last_index: null }}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      const labels = [screen.getByText(/^Last Prune:/i), screen.getByText(/^Last Index:/i)]
+      for (const label of labels) {
+        expect(label.parentElement).toHaveTextContent(/Never/)
+      }
+    })
+
+    it('omits last prune and last index when the backend does not send them', () => {
+      const olderPayload = { ...mockRepository, last_prune: undefined, last_index: undefined }
+      renderWithProviders(
+        <RepositoryCard
+          repository={olderPayload}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(screen.queryByText(/^Last Prune:/i)).not.toBeInTheDocument()
+      expect(screen.queryByText(/^Last Index:/i)).not.toBeInTheDocument()
+      expect(screen.getByText(/^Last Compact:/i)).toBeInTheDocument()
     })
 
     it('renders compression with label', () => {

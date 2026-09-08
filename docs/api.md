@@ -222,7 +222,7 @@ plan 403 payload otherwise.
 | GET | `/archives/live` | Community | The previous live `borg list` route, kept for the Archives page until it switches to the index. Also served by the v2 router at `/api/v2/repositories/{id}/archives/live`, so one client reaches the live listing on both borg versions |
 | GET | `/archives/heatmap` | Community | Per series, per day counts and sizes; `missed_run` days; outlier flags on Pro |
 | GET | `/archives/{archive_id}` | Community | One archive with history state and neighbours |
-| GET | `/status-strip` | Community | Latest terminal operation per cell; overdue flags on Pro |
+| GET | `/status` | Community | Per-category status from repository evidence (newest archive, detected removals, job rows); overdue flags on Pro. The repositories list payload carries `last_prune` and `last_index` from the same evidence for the card |
 | POST | `/rebuild` | Community (`history` stage is Pro) | Body `{"from": "stats" \| "archives" \| "history"}` |
 | GET | `/archives/{archive_id}/changes` | Pro | Changes against the predecessor or `compare_to`. `incomplete` and `unindexed_archive_ids` flag a fold whose window contains an archive that was never indexed |
 | GET | `/history?path=` | Pro | Every archive that touched a path, with present ranges |

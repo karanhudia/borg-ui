@@ -65,6 +65,7 @@ def _op(
     completed_at=None,
     category=None,
     trigger="manual",
+    params=None,
 ):
     from app.services.operations.vocab import category_for
 
@@ -76,7 +77,10 @@ def _op(
         trigger=trigger,
         priority=0,
         run_id="run",
+        # a row with a completion ran; deletion evidence keys on started_at
+        started_at=(completed_at - timedelta(minutes=1)) if completed_at else None,
         completed_at=completed_at,
+        params=params,
     )
     test_db.add(op)
     test_db.commit()
@@ -258,14 +262,14 @@ def _plan(test_db, repo, **flags):
     return plan
 
 
-def _cells(test_client, admin_headers, repo, route="status-strip"):
+def _cells(test_client, admin_headers, repo, route="status"):
     r = test_client.get(f"/api/repositories/{repo.id}/{route}", headers=admin_headers)
     assert r.status_code == 200
     return r.json(), {c["cell"]: c for c in r.json()["cells"]}
 
 
 @pytest.mark.unit
-class TestStatusStrip:
+class TestRepositoryStatus:
     def test_cells_from_operations_and_legacy(
         self, test_client, test_db, admin_headers
     ):
@@ -297,11 +301,11 @@ class TestStatusStrip:
         assert cells["index"]["age_seconds"] < 4000
         assert body["overdue_available"] is False
 
-    def test_status_strip_prefers_a_new_check_operation_over_the_legacy_row(
+    def test_status_prefers_a_new_check_operation_over_the_legacy_row(
         self, test_client, test_db, admin_headers
     ):
         """Phase 5 moved check to `operations`; a migrated kind's first run
-        must take over its status-strip cell with no route change."""
+        must take over its status cell with no route change."""
         from app.database.models import CheckJob
 
         repo = _repo(test_db)
@@ -311,24 +315,12 @@ class TestStatusStrip:
         test_db.commit()
 
         r = test_client.get(
-            f"/api/repositories/{repo.id}/status-strip", headers=admin_headers
+            f"/api/repositories/{repo.id}/status", headers=admin_headers
         )
 
         cells = {c["cell"]: c for c in r.json()["cells"]}
         assert cells["check"]["status"] == "completed"
         assert cells["check"]["source"] == "operations"
-
-    def test_status_route_serves_the_same_payload(
-        self, test_client, test_db, admin_headers
-    ):
-        repo = _repo(test_db)
-        _archive(test_db, repo, "a1", 1)
-        strip, _ = _cells(test_client, admin_headers, repo)
-        status, _ = _cells(test_client, admin_headers, repo, route="status")
-        for body in (strip, status):
-            for cell in body["cells"]:
-                cell.pop("age_seconds")  # wall clock between the two calls
-        assert strip == status
 
     def test_backup_comes_from_the_archive_list(
         self, test_client, test_db, admin_headers
@@ -383,12 +375,59 @@ class TestStatusStrip:
         assert cells["backup"]["source"] == "archive"
         assert cells["backup"]["completed_at"].startswith(older.start.isoformat()[:19])
 
+    def test_a_prune_preview_is_not_the_last_prune(
+        self, test_client, test_db, admin_headers
+    ):
+        """The Prune dialog's dry run is a completed `prune` operation with
+        `params.dry_run`; the cell keeps the real run and, on Pro with a
+        plan that prunes, stays overdue. A running preview still shows as
+        running."""
+        repo = _repo(test_db)
+        _pro(test_db)
+        _plan(test_db, repo, run_prune_after=True)
+        now = utc_now().replace(tzinfo=None)
+        _op(test_db, repo, "prune", completed_at=now - timedelta(days=20))
+        _op(
+            test_db,
+            repo,
+            "prune",
+            completed_at=now - timedelta(hours=1),
+            params={"keep_daily": 7, "dry_run": True},
+        )
+        _, cells = _cells(test_client, admin_headers, repo)
+        assert cells["prune"]["completed_at"].startswith(
+            (now - timedelta(days=20)).isoformat()[:19]
+        )
+        assert cells["prune"]["overdue"] is True
+        _op(test_db, repo, "prune", status="running", params={"dry_run": True})
+        _, cells = _cells(test_client, admin_headers, repo)
+        assert cells["prune"]["running"] is True
+
+    def test_a_borg_ui_deletion_does_not_read_as_a_prune(
+        self, test_client, test_db, admin_headers
+    ):
+        """An archive deleted from the Archives page disappears from the
+        next listing like a pruned one; the prune cell keeps its job row."""
+        repo = _repo(test_db)
+        now = utc_now().replace(tzinfo=None)
+        _op(test_db, repo, "archive_sync", completed_at=now - timedelta(days=4))
+        _op(test_db, repo, "prune", completed_at=now - timedelta(days=3))
+        _op(test_db, repo, "delete_archive", completed_at=now - timedelta(days=2))
+        sync = _op(test_db, repo, "archive_sync", completed_at=now - timedelta(days=1))
+        sync.result = {"removed_archive_ids": [7]}
+        test_db.commit()
+        _, cells = _cells(test_client, admin_headers, repo)
+        assert cells["prune"]["source"] == "operations"
+        assert cells["prune"]["completed_at"].startswith(
+            (now - timedelta(days=3)).isoformat()[:19]
+        )
+
     def test_archive_evidence_reads_a_bounded_window_per_series(
         self, test_client, test_db, admin_headers
     ):
-        """The strip is polled every 30 s per card; only the newest
-        CADENCE_SAMPLE archives per series are read, and the newest archive
-        (the backup evidence) is among them."""
+        """Only the newest CADENCE_SAMPLE archives per series are read, and
+        the newest archive (the backup evidence) is among them, so a long
+        hourly history is not scanned on every status request."""
         from app.services.operations import anomalies
         from app.services.operations.repository_status import series_starts
 
@@ -670,10 +709,10 @@ class TestStatusStrip:
         _, cells = _cells(test_client, admin_headers, repo)
         assert cells["check"]["overdue"] is False
 
-    def test_latest_removal_stops_at_the_first_listing_with_removals(self, test_db):
+    def test_removal_evidence_is_the_newest_listing_with_removals(self, test_db):
         """The newest listing with removals wins; newer listings without
-        removals do not hide it, and rows past it are not read."""
-        from app.services.operations.repository_status import latest_removal
+        removals do not hide it."""
+        from app.services.operations.repository_status import prune_removal_evidence
 
         repo = _repo(test_db)
         now = utc_now()
@@ -685,7 +724,9 @@ class TestStatusStrip:
         newer = _op(test_db, repo, "archive_sync", completed_at=now - timedelta(days=1))
         newer.result = {"removed_archive_ids": []}
         test_db.commit()
-        assert latest_removal(test_db, repo.id) == removal.completed_at
+        assert (
+            prune_removal_evidence(test_db, [repo.id])[repo.id] == removal.completed_at
+        )
 
 
 @pytest.mark.unit

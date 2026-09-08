@@ -1,5 +1,5 @@
 """Database-backed archive routes (spec section 9.2): list, detail,
-heatmap, status strip, rebuild, and (Pro) changes, history, search."""
+heatmap, status, rebuild, and (Pro) changes, history, search."""
 
 from datetime import datetime, timedelta, timezone
 from typing import Literal, Optional
@@ -291,16 +291,6 @@ async def repository_status_route(
         now=utc_now().replace(tzinfo=None),
         pro=history_enabled(db),
     )
-
-
-@router.get("/{repo_id}/status-strip")
-async def status_strip(
-    repo_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Same payload as /status; kept for the strip until it moves."""
-    return await repository_status_route(repo_id, current_user, db)
 
 
 class RebuildRequest(BaseModel):

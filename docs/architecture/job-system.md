@@ -279,8 +279,8 @@ Rules:
   unknown size leaves the stored value alone, never `0`. Both versions'
   `repository.last_modified` (the last manifest
   write) lands in `repositories.borg_last_modified`.
-- The repository status (`GET /repositories/{id}/status`, also served as
-  `/status-strip`) reads repository evidence first: backup is the newest
+- The repository status (`GET /repositories/{id}/status`) reads
+  repository evidence first: backup is the newest
   archive, whatever created it, unless a failed or cancelled Borg UI
   attempt is newer, and with no archives at all the newest job row; prune
   is the newest successful `archive_sync` that reported removed archives
@@ -292,7 +292,10 @@ Rules:
   enabled, scheduled, dispatchable and linked through an enabled
   association); it is
   null where nothing is expected. Details and the `source` field: spec
-  section 10.2.
+  section 10.2. The repository card shows `Last prune` and `Last index`
+  in its metadata row from the same evidence, delivered with the
+  repositories list (`last_prune`, `last_index`, computed once per page
+  by `repository_status.last_runs`); the status route is not polled.
 - The reconcile scheduler replaces the old stats refresh loop. Every
   `stats_refresh_interval_minutes` it enqueues an index run for each
   repository that has none queued or running. `0` disables it.

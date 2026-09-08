@@ -36,6 +36,8 @@ const sampleRepository: Repository = {
   last_backup: '2026-05-15T16:30:00.000Z',
   last_check: '2026-05-14T09:15:00.000Z',
   last_compact: '2026-05-10T12:00:00.000Z',
+  last_prune: '2026-05-14T09:20:00.000Z',
+  last_index: '2026-05-15T16:35:00.000Z',
   has_schedule: true,
   schedule_enabled: true,
   schedule_name: 'Nightly production backup',
@@ -131,6 +133,24 @@ export const WithUploadLimit: Story = {
       id: 52,
       name: 'Throttled Production Archive',
       upload_ratelimit_kib: 1536,
+    },
+  },
+  render: (args) => (
+    <Box sx={{ width: 620, maxWidth: 'calc(100vw - 32px)' }}>
+      <RepositoryCard {...args} />
+    </Box>
+  ),
+}
+
+export const WithoutRunHistory: Story = {
+  args: {
+    ...defaultArgs,
+    repository: {
+      ...sampleRepository,
+      last_check: null,
+      last_compact: null,
+      last_prune: null,
+      last_index: null,
     },
   },
   render: (args) => (

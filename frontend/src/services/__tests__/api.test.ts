@@ -106,15 +106,7 @@ describe('operationsAPI', () => {
   })
 })
 
-describe('archivesAPI status strip and rebuild', () => {
-  it('requests the status strip for a repository', async () => {
-    const mock = new MockAdapter(api)
-    mock.onGet('/repositories/3/status-strip').reply(200, { cells: [], overdue_available: false })
-    const response = await archivesApiClient.getStatusStrip(3)
-    expect(response.data.overdue_available).toBe(false)
-    mock.restore()
-  })
-
+describe('archivesAPI rebuild', () => {
   it('requests a rebuild from a given stage', async () => {
     const mock = new MockAdapter(api)
     mock.onPost('/repositories/3/rebuild').reply(200, { run_id: 'r1', operations: [1, 2] })

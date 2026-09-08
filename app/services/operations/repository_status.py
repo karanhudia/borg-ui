@@ -10,27 +10,37 @@ falls back to whatever job ran last.
 
 The `source` of a cell is kept for precedence and debugging; the UI does
 not label it.
+
+`last_runs` serves the repository card's metadata row (`Last prune`,
+`Last index`) for a whole page of repositories at once, from the same
+evidence rules; the row counts successful runs only, the route also
+reports a newer failed attempt as such.
 """
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from math import ceil
-from typing import Optional
+from typing import Iterable, Optional
 
-from sqlalchemy import and_, func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy import and_, case, func, or_
+from sqlalchemy.orm import Session, aliased
 
 from app.database.models import (
     Archive,
     BackupPlan,
     BackupPlanRepository,
+    DeleteArchiveJob,
     Operation,
     Repository,
+    RepositoryWipeJob,
     ScheduledJob,
     ScheduledJobRepository,
 )
 from app.services.operations import anomalies
-from app.services.operations.legacy_status import latest_legacy_terminal
+from app.services.operations.legacy_status import (
+    latest_legacy_success_by_repository,
+    latest_legacy_terminal,
+)
 from app.services.operations.vocab import SUCCESS_STATUSES
 
 TERMINAL = ("completed", "completed_with_warnings", "failed", "cancelled")
@@ -74,6 +84,13 @@ class CellStatus:
 # -- evidence ---------------------------------------------------------------------
 
 
+def _not_dry_run():
+    """A prune preview is a completed `prune` operation with
+    `params.dry_run` set; it removed nothing and is not prune evidence."""
+    flag = Operation.params["dry_run"].as_boolean()
+    return func.coalesce(flag, False).is_(False)
+
+
 def _operations(db: Session, repository_id: int, spec: dict):
     q = db.query(Operation).filter(Operation.repository_id == repository_id)
     if "kinds" in spec:
@@ -86,6 +103,10 @@ def job_evidence(db: Session, repository_id: int, cell: str, spec: dict) -> Cell
     tables until phase 9 removes them; plus whether one is running."""
     q = _operations(db, repository_id, spec)
     running = q.filter(Operation.status == "running").first() is not None
+    # a running prune preview still shows as running; a finished one is no
+    # evidence of a prune
+    if "prune" in spec.get("kinds", ()):
+        q = q.filter(_not_dry_run())
     # completed_at is required: PostgreSQL sorts NULL first on DESC, so a
     # terminal row without a timestamp would hide newer evidence.
     latest = (
@@ -140,9 +161,8 @@ def series_starts(
     hosts a minute apart look hourly when mixed).
 
     Bounded to the newest CADENCE_SAMPLE archives per series: the cadence
-    reads no further back and the newest archive is among them, while the
-    strip polls this every 30 s per card, so a long hourly history is not
-    scanned on every poll."""
+    reads no further back and the newest archive is among them, so a long
+    hourly history is not scanned on every status request."""
     rank = (
         func.row_number()
         .over(
@@ -168,33 +188,222 @@ def series_starts(
     return result
 
 
-def latest_removal(db: Session, repository_id: int) -> Optional[datetime]:
-    """When archives were last seen to disappear: the newest successful
-    archive_sync whose result lists removed archives. An upper bound, since
-    the removal happened between that listing and the one before. A sync
-    the runner marked cancelled keeps its listing but gets no follow-ups,
-    so its removals are not applied and the next successful listing
-    reports them again."""
-    # Newest first, streamed in pages and stopped at the first listing with
-    # removals: the JSON result is only loaded up to that row. A SQL-side
-    # filter on the JSON list would need dialect-specific functions (SQLite
-    # and PostgreSQL spell json_array_length differently); retention bounds
-    # how far a repository without removals is scanned.
-    rows = (
-        db.query(Operation.completed_at, Operation.result)
-        .filter(
-            Operation.repository_id == repository_id,
-            Operation.kind == "archive_sync",
-            Operation.status.in_(SUCCESS_STATUSES),
-            Operation.completed_at.isnot(None),
+def _removal_criterion(db: Session, model=Operation):
+    """SQL for "this archive_sync result lists removed archives", so the
+    listings that matter are one query instead of a row-by-row JSON decode
+    in Python. SQLite (JSON1, built into every Python since 3.9's bundled
+    library) and PostgreSQL spell the array length differently; both
+    return NULL for a missing key, which compares false. `model` is an
+    alias of Operation when used inside a correlated subquery."""
+    if db.get_bind().dialect.name == "postgresql":
+        # json_array_length raises on a non-array; CASE evaluates in order
+        removed = model.result.op("->")("removed_archive_ids")
+        length = case(
+            (func.json_typeof(removed) == "array", func.json_array_length(removed)),
+            else_=0,
         )
-        .order_by(Operation.completed_at.desc())
-        .yield_per(100)
+    else:
+        length = func.json_array_length(model.result, "$.removed_archive_ids")
+    return and_(_listing_criterion(model), length > 0)
+
+
+def _listing_criterion(model):
+    return and_(
+        model.kind == "archive_sync",
+        model.status.in_(SUCCESS_STATUSES),
+        model.completed_at.isnot(None),
     )
-    for completed_at, result in rows:
-        if (result or {}).get("removed_archive_ids"):
-            return completed_at
-    return None
+
+
+# Borg UI's own archive removals besides prune: `delete_archive` and (phase
+# 6) `wipe` run as operations, before that as DeleteArchiveJob and
+# RepositoryWipeJob rows; a wipe preview is still a RepositoryWipeJob row.
+# Any of these that started may have removed archives whatever its final
+# status: a deletion cancelled or failed after Borg dropped the manifest
+# entry still removed the archive, a wipe that failed half-way is recorded
+# `failed`. One that never started (a cancelled preview, a queued
+# operation cancelled before its turn) only carries a completed_at stamp.
+DELETION_KINDS = ("delete_archive", "wipe")
+# Removal listings read per repository and page, newest first. Each deletion
+# explains at most one listing; when a whole page is explained the next
+# page is read, so a long cleanup does not turn a cron prune into "never".
+# A repository that is only ever cleaned up by hand would have every page
+# explained, so the pages are capped and the value is unknown beyond them.
+REMOVAL_CANDIDATES = 32
+REMOVAL_PAGES = 4
+
+
+def removal_listings_by_repository(
+    db: Session, repository_ids: list[int], page: int = 0
+) -> dict[int, list[datetime]]:
+    """One page of REMOVAL_CANDIDATES successful listings that reported
+    removed archives, newest first per repository. A sync the runner
+    marked cancelled keeps its listing but gets no follow-ups, so its
+    removals are not applied and the next successful listing reports them
+    again."""
+    rank = (
+        func.row_number()
+        .over(
+            partition_by=Operation.repository_id,
+            order_by=Operation.completed_at.desc(),
+        )
+        .label("rank")
+    )
+    ranked = (
+        db.query(
+            Operation.repository_id.label("repository_id"),
+            Operation.completed_at.label("completed_at"),
+            rank,
+        )
+        .filter(Operation.repository_id.in_(repository_ids), _removal_criterion(db))
+        .subquery()
+    )
+    rows = (
+        db.query(ranked.c.repository_id, ranked.c.completed_at)
+        .filter(
+            ranked.c.rank > page * REMOVAL_CANDIDATES,
+            ranked.c.rank <= (page + 1) * REMOVAL_CANDIDATES,
+        )
+        .order_by(ranked.c.completed_at.desc())
+        .all()
+    )
+    result: dict[int, list[datetime]] = {}
+    for repository_id, completed_at in rows:
+        result.setdefault(repository_id, []).append(completed_at)
+    return result
+
+
+def _removal_listing_before_by_repository(
+    db: Session, before: dict[int, datetime]
+) -> dict[int, datetime]:
+    """The listing with removals before each repository's given one: a
+    deletion explains the first listing with removals at or after it, so
+    deletions up to this one explain listings outside the window."""
+    rows = (
+        db.query(Operation.repository_id, func.max(Operation.completed_at))
+        .filter(
+            _removal_criterion(db),
+            or_(
+                *[
+                    and_(
+                        Operation.repository_id == repository_id,
+                        Operation.completed_at < at,
+                    )
+                    for repository_id, at in before.items()
+                ]
+            ),
+        )
+        .group_by(Operation.repository_id)
+        .all()
+    )
+    return {repository_id: completed_at for repository_id, completed_at in rows}
+
+
+def explained_listings_by_repository(
+    db: Session, candidates: dict[int, list[datetime]]
+) -> dict[int, set[datetime]]:
+    """The listings whose removals Borg UI itself caused: for each deletion
+    (a `delete_archive` operation or legacy job, a wipe that started its
+    delete phase), the first listing at or after it that reported removed
+    archives is the one that reported them gone. Not merely the first
+    listing: a sync already in flight when the deletion ran listed the
+    archive as still present and reports nothing, and the one after it is
+    the one that must not read as a prune. Bounded to the candidates
+    (newest first per repository): a deletion after the newest one
+    explains nothing in the window, one up to the removal listing that
+    precedes the oldest explains a listing outside it. One query per deletion
+    table, each with a correlated minimum."""
+    listing = aliased(Operation)
+    result: dict[int, set[datetime]] = {}
+    since = _removal_listing_before_by_repository(
+        db, {repository_id: at[-1] for repository_id, at in candidates.items()}
+    )
+
+    def window(model):
+        return or_(
+            *[
+                and_(
+                    model.repository_id == repository_id,
+                    model.completed_at <= at[0],
+                    (model.completed_at > since[repository_id])
+                    if repository_id in since
+                    else True,
+                )
+                for repository_id, at in candidates.items()
+            ]
+        )
+
+    sources = (
+        (
+            Operation,
+            and_(
+                Operation.kind.in_(DELETION_KINDS),
+                Operation.status.in_(TERMINAL),
+                Operation.started_at.isnot(None),
+            ),
+        ),
+        (
+            DeleteArchiveJob,
+            and_(
+                DeleteArchiveJob.status.in_(TERMINAL),
+                # the reaper stamps a never-queued job failed with no start
+                DeleteArchiveJob.started_at.isnot(None),
+            ),
+        ),
+        (RepositoryWipeJob, RepositoryWipeJob.started_at.isnot(None)),
+    )
+    for model, done in sources:
+        first_listing = (
+            db.query(func.min(listing.completed_at))
+            .filter(
+                listing.repository_id == model.repository_id,
+                _removal_criterion(db, listing),
+                listing.completed_at >= model.completed_at,
+            )
+            .correlate(model)
+            .scalar_subquery()
+        )
+        rows = (
+            db.query(model.repository_id, first_listing)
+            .filter(done, model.completed_at.isnot(None), window(model))
+            .all()
+        )
+        for repository_id, listed_at in rows:
+            if listed_at is not None:
+                result.setdefault(repository_id, set()).add(listed_at)
+    return result
+
+
+def prune_removal_evidence(
+    db: Session, repository_ids: list[int]
+) -> dict[int, Optional[datetime]]:
+    """When archives were last seen to disappear without Borg UI having
+    deleted them: the newest listing with removals that no deletion or
+    wipe explains. An upper bound, since the removal happened between that
+    listing and the one before. A listing a deletion explains is skipped,
+    not the whole history, so one archive deleted from the Archives page
+    does not turn a nightly cron prune into "never"; a prune outside Borg
+    UI in a deletion's own interval is the one case that is missed. Reads
+    REMOVAL_CANDIDATES listings per repository at a time and turns the
+    page only for repositories whose whole page was explained, up to
+    REMOVAL_PAGES pages."""
+    result: dict[int, Optional[datetime]] = {}
+    pending = list(repository_ids)
+    page = 0
+    while pending and page < REMOVAL_PAGES:
+        listings = removal_listings_by_repository(db, pending, page)
+        if not listings:
+            break
+        explained = explained_listings_by_repository(db, listings)
+        pending = []
+        for repository_id, candidates in listings.items():
+            skip = explained.get(repository_id, set())
+            found = next((at for at in candidates if at not in skip), None)
+            result[repository_id] = found
+            if found is None and len(candidates) == REMOVAL_CANDIDATES:
+                pending.append(repository_id)
+        page += 1
+    return result
 
 
 def backup_cell(
@@ -223,7 +432,7 @@ def backup_cell(
 
 def prune_cell(db: Session, repository: Repository, spec: dict) -> CellStatus:
     jobs = job_evidence(db, repository.id, "prune", spec)
-    removed_at = latest_removal(db, repository.id)
+    removed_at = prune_removal_evidence(db, [repository.id]).get(repository.id)
     if removed_at is None:
         return jobs
     if jobs.completed_at and jobs.completed_at > removed_at:
@@ -344,7 +553,7 @@ def backup_expectation(
 def repository_status(
     db: Session, repository: Repository, *, now: datetime, pro: bool
 ) -> dict:
-    """The strip payload: one cell per applicable category."""
+    """The status payload: one cell per applicable category."""
     pending = pending_removed_ids(db, repository.id)
     by_series = series_starts(db, repository.id, pending)
     starts = sorted(start for group in by_series.values() for start in group)
@@ -396,3 +605,73 @@ def _apply(db, repository, cell, by_series, *, now, pro) -> None:
     if overdue is None:
         overdue = anomalies.overdue_after(cell.completed_at, now, threshold)
     cell.overdue = overdue
+
+
+# -- card metadata row ------------------------------------------------------------
+
+
+@dataclass
+class LastRuns:
+    last_prune: Optional[datetime] = None
+    last_index: Optional[datetime] = None
+
+
+def _latest_success_by_repository(
+    db: Session, repository_ids: list[int], criterion
+) -> dict[int, datetime]:
+    """Newest successful operation completion per repository matching
+    `criterion` (a kind or a category), one grouped query."""
+    rows = (
+        db.query(Operation.repository_id, func.max(Operation.completed_at))
+        .filter(
+            Operation.repository_id.in_(repository_ids),
+            criterion,
+            Operation.status.in_(SUCCESS_STATUSES),
+            Operation.completed_at.isnot(None),
+        )
+        .group_by(Operation.repository_id)
+        .all()
+    )
+    return {repository_id: completed_at for repository_id, completed_at in rows}
+
+
+def last_runs(db: Session, repositories: Iterable[Repository]) -> dict[int, LastRuns]:
+    """`Last prune` and `Last index` for the repository card's metadata row,
+    computed once per page in eight queries (five more per extra page of
+    removal listings, up to REMOVAL_PAGES): prune operations, legacy prune
+    jobs, index operations, the newest listings that reported removed
+    archives, the removal listing before each window, and the deletions
+    (operations, legacy delete jobs, wipes) that explain some of them.
+
+    Prune follows `prune_cell`'s precedence with successful runs only: the
+    newest listing that saw archives disappear without a Borg UI deletion
+    explaining it (`prune_removal_evidence`), or a prune completed through
+    Borg UI when that is newer. A failed attempt or a dry run does not move
+    the value, as neither moves `last_check` or `last_compact`; the status
+    route reports the failure. Index is the newest successful operation of
+    the `index` category, whatever kind ended the chain.
+    """
+    ids = [repository.id for repository in repositories]
+    result = {repository_id: LastRuns() for repository_id in ids}
+    if not ids:
+        return result
+    prune_ops = _latest_success_by_repository(
+        db, ids, and_(Operation.kind == "prune", _not_dry_run())
+    )
+    prune_legacy = latest_legacy_success_by_repository(db, ids, "prune")
+    index_ops = _latest_success_by_repository(db, ids, Operation.category == "index")
+    removals = prune_removal_evidence(db, ids)
+    for repository_id in ids:
+        candidates = [
+            at
+            for at in (prune_ops.get(repository_id), prune_legacy.get(repository_id))
+            if at is not None
+        ]
+        job = max(candidates) if candidates else None
+        removed_at = removals.get(repository_id)
+        if removed_at is not None and (job is None or removed_at >= job):
+            result[repository_id].last_prune = removed_at
+        else:
+            result[repository_id].last_prune = job
+        result[repository_id].last_index = index_ops.get(repository_id)
+    return result

@@ -39,7 +39,6 @@ import { useAnalytics } from '../hooks/useAnalytics'
 import { Repository } from '../types'
 import type { RepoAction } from '../hooks/usePermissions'
 import OperationalCard from './OperationalCard'
-import OperationStatusStrip from './OperationStatusStrip'
 
 interface RepositoryCardProps {
   repository: Repository
@@ -246,6 +245,30 @@ export default function RepositoryCard({
       value: repository.last_compact ? formatDateShort(repository.last_compact) : t('common.never'),
       tooltip: repository.last_compact ? formatDateTimeFull(repository.last_compact) : '',
     },
+    // A backend that predates these fields sends nothing (not null): show no
+    // entry then, rather than claiming "Never" for a repository pruned nightly.
+    ...(repository.last_prune !== undefined
+      ? [
+          {
+            label: t('repositoryCard.lastPrune'),
+            value: repository.last_prune
+              ? formatDateShort(repository.last_prune)
+              : t('common.never'),
+            tooltip: repository.last_prune ? formatDateTimeFull(repository.last_prune) : '',
+          },
+        ]
+      : []),
+    ...(repository.last_index !== undefined
+      ? [
+          {
+            label: t('repositoryCard.lastIndex'),
+            value: repository.last_index
+              ? formatDateShort(repository.last_index)
+              : t('common.never'),
+            tooltip: repository.last_index ? formatDateTimeFull(repository.last_index) : '',
+          },
+        ]
+      : []),
     ...(repository.source_directories?.length
       ? [
           {
@@ -860,8 +883,6 @@ export default function RepositoryCard({
             )
           })}
         </Box>
-
-        <OperationStatusStrip repositoryId={repository.id} />
 
         {/* ── Secondary Metadata ── */}
         <Box

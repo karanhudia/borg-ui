@@ -1,5 +1,5 @@
 """Anomaly rules (spec section 9.5). Pure functions; the heatmap and
-status-strip routes call them and decide which flags the plan may show."""
+repository status routes call them and decide which flags the plan may show."""
 
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional, Sequence

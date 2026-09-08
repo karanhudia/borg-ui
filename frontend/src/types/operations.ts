@@ -93,24 +93,6 @@ export interface QueueResponse {
   paused: boolean
 }
 
-export type StatusStripCellKey = 'backup' | 'check' | 'prune' | 'compact' | 'index' | 'mirror'
-
-export interface StatusStripCell {
-  cell: StatusStripCellKey
-  status: OperationStatus | null
-  completed_at: string | null
-  age_seconds: number | null
-  threshold_days: number
-  overdue: boolean | null
-  running: boolean
-  source: 'archive' | 'removal' | 'operations' | 'legacy' | null
-}
-
-export interface StatusStripResponse {
-  cells: StatusStripCell[]
-  overdue_available: boolean
-}
-
 // GET /operations/repositories: derived data at rest, one row per repository.
 export interface HubHistorySummary {
   indexed: number
