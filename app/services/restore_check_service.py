@@ -700,7 +700,10 @@ class RestoreCheckService:
         self, db, agent_job_id: int, *, job=None, poll_interval_seconds: float = 1.0
     ) -> dict:
         from app.database.models import AgentJob
-        from app.services.repository_executor import TERMINAL_AGENT_STATUSES
+        from app.services.repository_executor import (
+            SUCCESSFUL_AGENT_STATUSES,
+            TERMINAL_AGENT_STATUSES,
+        )
 
         started_at = time.monotonic()
         stale_since = started_at
@@ -714,7 +717,7 @@ class RestoreCheckService:
                     status_code=502,
                     detail={"key": "backend.errors.agents.jobNotFound"},
                 )
-            if agent_job.status == "completed":
+            if agent_job.status in SUCCESSFUL_AGENT_STATUSES:
                 return agent_job.result or {}
             if agent_job.status in TERMINAL_AGENT_STATUSES:
                 raise HTTPException(
@@ -745,7 +748,7 @@ class RestoreCheckService:
             if never_claimed or now - stale_since > _AGENT_OP_STALL_TIMEOUT_SECONDS:
                 # Terminalize the agent job so a still-queued job can't be claimed
                 # and run borg extract after the restore check was already failed.
-                if agent_job.status not in ("completed", "failed", "canceled"):
+                if agent_job.status not in TERMINAL_AGENT_STATUSES:
                     agent_job.status = "failed"
                     agent_job.error_message = (
                         "restore check timed out waiting for the agent"

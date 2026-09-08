@@ -105,6 +105,30 @@ against the backup row holding the lane in `running_prune`. An inline
 operation still gets a real row and the same follow-up chain a
 runner-dispatched one would get, just without the runner's queueing.
 
+A Borg 2 compact runs with `--stats` under `BORG_UNITS=raw` (the server
+adds `--info`, the level Borg prints the lines on there). The repository
+statistics Borg 2 reports only there ("Repository size is N B in M
+objects." and the lines around it, exact byte counts) are stored on the
+operation as `result["stats"]`. On the server the compact service parses
+them from its own output. A managed agent from release 0.1.4 parses the
+tail of its own output and sends them in its completion report; the server
+takes `result["stats"]` from that report and otherwise parses the tail of
+the job log once at completion (an agent that ran `--stats` but reported
+nothing may still have those lines in flight, and then that compact records
+no statistics; an older agent never sends them). A Borg warning exit
+completes an agent compact with warnings, as it does on the server, and
+carries the statistics the same way; the agent's other streamed
+operations keep failing on any non-zero exit (a `check` that exits 1
+found consistency errors). A successful compact also writes the
+repository `total_size` from `repository_size`, by priority of source: a
+size from the chunk index (`borg2_index`) or the Borg 1 cache statistics
+(`borg1_cache_stats`) outranks it and stays; a store walk (`storage_used`)
+or an older compact's figure is replaced by an exact compact figure; a
+rounded one (a compact without `BORG_UNITS=raw`) replaces only an older
+compact's figure or fills an empty size. The `stats` follow-up that runs
+after every compact measures again and, where it can measure, replaces
+the compact's figure (see `storage_usage`).
+
 Use them carefully:
 
 - checks can be expensive on large repositories
@@ -291,11 +315,15 @@ Rules:
   pack headers: rclone for `sftp://` and `rclone:` paths with the prepared
   environment, du for local
   paths and `ssh://`, a REST listing for http; none for `rest://user@host`,
-  whose key is bound to the REST server). The labels name different
-  quantities: `compact --stats` counts pack file bytes, which include data
-  no index entry covers, so it and `borg2_index` agree only on a fully
-  indexed repository. Agent repositories get the same order from the
-  agent's `repository.storage_usage` job (agents from 0.1.4; older agents
+  whose key is bound to the REST server); below the index sum and the
+  cache statistics, a Borg 2 compact's `--stats` figure (`compact_stats`,
+  pack file bytes) fills the size and outranks a store walk when exact,
+  until the next `stats` run measures again. The labels name different
+  quantities: `compact --stats` counts
+  pack file bytes, which include data no index entry covers, so it and
+  `borg2_index` agree only on a fully indexed repository. Agent
+  repositories get the same order from the agent's
+  `repository.storage_usage` job (agents from 0.1.4; older agents
   keep `repository.disk_usage`, which only measures local paths). The
   agent measures local paths with du but has no `ssh://` du path; that
   one exists on the server only, where the SSH key is at hand. An

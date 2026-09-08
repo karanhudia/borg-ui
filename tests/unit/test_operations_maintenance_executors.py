@@ -370,6 +370,73 @@ async def test_compact_stamps_last_compact_on_success(db, repository, monkeypatc
 
 
 @pytest.mark.asyncio
+async def test_compact_returns_the_statistics_the_service_filed(
+    db, repository, monkeypatch
+):
+    """The runner writes the row's result from the outcome, so the `--stats`
+    output the service filed under `result["stats"]` has to come back
+    through it, or the runner's own write would drop it."""
+    from app.services.operations.executors import maintenance
+
+    op = _operation(db, repository, kind="compact")
+    ctx = FakeContext(db, op)
+    stats = {"repository_size": 502_000, "size_precision": "exact"}
+
+    async def fake_compact(self, job_id):
+        job = MaintenanceJobFacade(db, db.get(Operation, job_id))
+        job.stats = stats
+        job.status = "completed"
+        db.commit()
+
+    monkeypatch.setattr(
+        "app.core.borg_router.BorgRouter.compact", fake_compact, raising=True
+    )
+
+    outcome = await maintenance.run_compact(ctx)
+
+    assert outcome.status == "completed"
+    assert outcome.result == {"logs": False, "stats": stats}
+
+
+@pytest.mark.asyncio
+async def test_compact_reads_statistics_another_session_committed(
+    db, repository, monkeypatch
+):
+    """An agent compact is finished from the completion request's session,
+    not the runner's, whose identity map already holds the row: the
+    executor must read the row back after the service returns (the
+    in-memory SQLite engine shares one connection, so this exercises the
+    stale-copy half, not transaction isolation), or the statistics filed
+    there are missing from the outcome and the runner's result write drops
+    them."""
+    from app.services.operations.executors import maintenance
+
+    op = _operation(db, repository, kind="compact")
+    ctx = FakeContext(db, op)
+    stats = {"repository_size": 502_000, "size_precision": "exact"}
+
+    async def fake_compact(self, job_id):
+        # the runner's session already holds the row (FakeContext loaded it)
+        other = sessionmaker(bind=db.get_bind())()
+        try:
+            job = MaintenanceJobFacade(other, other.get(Operation, job_id))
+            job.stats = stats
+            job.status = "completed"
+            other.commit()
+        finally:
+            other.close()
+
+    monkeypatch.setattr(
+        "app.core.borg_router.BorgRouter.compact", fake_compact, raising=True
+    )
+
+    outcome = await maintenance.run_compact(ctx)
+
+    assert outcome.status == "completed"
+    assert outcome.result == {"logs": False, "stats": stats}
+
+
+@pytest.mark.asyncio
 async def test_delete_archive_passes_the_archive_name(db, repository, monkeypatch):
     from app.services.operations.executors import maintenance
 

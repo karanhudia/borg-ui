@@ -65,7 +65,9 @@ def _terminalize_agent_job(agent_job, message: str) -> None:
     """
     if agent_job is None:
         return
-    if agent_job.status in ("completed", "failed", "canceled"):
+    from app.services.repository_executor import TERMINAL_AGENT_STATUSES
+
+    if agent_job.status in TERMINAL_AGENT_STATUSES:
         return
     now = datetime.now(timezone.utc)
     agent_job.status = "failed"
@@ -1141,7 +1143,9 @@ class RestoreService:
             agent_job = db.query(AgentJob).filter(AgentJob.id == agent_job_id).first()
             if agent_job is None:
                 return False
-            if agent_job.status not in {"completed", "failed", "canceled"}:
+            from app.services.repository_executor import TERMINAL_AGENT_STATUSES
+
+            if agent_job.status not in TERMINAL_AGENT_STATUSES:
                 agent_job.status = "cancel_requested"
                 agent_job.updated_at = datetime.now(timezone.utc)
                 db.commit()

@@ -298,7 +298,8 @@ class Repository(Base):
     last_compact = Column(DateTime, nullable=True)  # Last successful compact completion
     total_size = Column(String, nullable=True)
     # Which measurement total_size holds: borg1_cache_stats (deduplicated),
-    # borg2_index (repository object size), storage_used (store file bytes).
+    # borg2_index (repository object size), storage_used (store file bytes),
+    # compact_stats (pack file bytes as `borg compact --stats` reported them).
     total_size_source = Column(String, nullable=True)
     # repository.last_modified as Borg reports it: the last manifest write.
     borg_last_modified = Column(DateTime, nullable=True)

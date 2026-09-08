@@ -20,7 +20,10 @@ from app.services.job_admission import (
 
 EXECUTOR_SERVER = "server"
 EXECUTOR_AGENT = "agent"
-TERMINAL_AGENT_STATUSES = {"completed", "failed", "canceled"}
+# `completed_with_warnings`: the agent ran the command through and the
+# server classified its Borg warning exit code (`_complete_agent_job`).
+TERMINAL_AGENT_STATUSES = {"completed", "completed_with_warnings", "failed", "canceled"}
+SUCCESSFUL_AGENT_STATUSES = {"completed", "completed_with_warnings"}
 REPOSITORY_OPERATION_CAPABILITIES = {
     "repository.init",
     "repository.info",
@@ -409,7 +412,7 @@ async def wait_for_agent_repository_operation_job(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail={"key": "backend.errors.agents.jobNotFound"},
             )
-        if agent_job.status == "completed":
+        if agent_job.status in SUCCESSFUL_AGENT_STATUSES:
             return agent_job.result or {}
         if agent_job.status in TERMINAL_AGENT_STATUSES:
             raise HTTPException(

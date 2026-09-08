@@ -8,7 +8,9 @@ Order for Borg 2, which reports no size through any command:
    backup holds the lock;
 2. a store-level measurement per URL scheme, which counts file bytes
    including pack headers and the index ("storage used");
-3. nothing: the caller leaves the stored size alone.
+3. nothing: the caller leaves the stored size alone, which a Borg 2
+   compact's `--stats` figure then fills (`compact_stats`, written by
+   maintenance_state, never over a measurement from 1).
 
 These are different quantities, which is why the caller records the source
 next to the value. `compact --stats` reports pack file bytes, which include
@@ -41,6 +43,8 @@ logger = structlog.get_logger()
 SOURCE_BORG1_CACHE_STATS = "borg1_cache_stats"
 SOURCE_BORG2_INDEX = "borg2_index"
 SOURCE_STORAGE_USED = "storage_used"
+# Written by the compact paths (maintenance_state), not measured here.
+SOURCE_COMPACT_STATS = "compact_stats"
 
 
 def _port(parts) -> Optional[int]:
