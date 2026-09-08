@@ -1,0 +1,56 @@
+# Borg UI + Redis stack for the Portainer app template (distribution/portainer/templates.json, type 3).
+# Environment variables are supplied by Portainer from the template's "env" list.
+services:
+  borg-ui:
+    image: ainullcode/borg-ui:latest
+    container_name: borg-ui
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8081}:${PORT:-8081}"
+    volumes:
+      - borg_data:/data
+      - borg_cache:/home/borg/.cache/borg
+      - /etc/localtime:/etc/localtime:ro
+      - ${LOCAL_STORAGE_PATH:-/home}:/local:rw
+    environment:
+      - PORT=${PORT:-8081}
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-Etc/UTC}
+      - LOCAL_MOUNT_POINTS=/local
+      - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD:-}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+    # Optional FUSE access for archive mounting / SSHFS pull backups. Uncomment all four lines together.
+    # cap_add:
+    #   - SYS_ADMIN
+    # devices:
+    #   - /dev/fuse:/dev/fuse
+    # security_opt:
+    #   - apparmor:unconfined
+    # (and add BORG_FUSE_IMPL=pyfuse3 to environment)
+    healthcheck:
+      test: ["CMD", "sh", "-c", "curl -f http://localhost:$${PORT:-8081}/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    container_name: borg-ui-redis
+    restart: unless-stopped
+    command: redis-server --maxmemory ${REDIS_MAXMEMORY:-512mb} --maxmemory-policy allkeys-lru --save "" --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  borg_data:
+  borg_cache:

@@ -1,0 +1,59 @@
+{
+  "version": "3",
+  "templates": [
+    {
+      "id": 1,
+      "type": 1,
+      "title": "Borg UI",
+      "name": "borg-ui",
+      "description": "Web interface for BorgBackup. Run backups, browse and restore archives, manage local, SSH and SFTP repositories and automate schedules. Single container, no Redis (in-memory archive cache).",
+      "note": "Login as <b>admin</b> with the initial admin password you set (default admin123) and change it. Map the folders you want to back up to /local. Redis is optional: set REDIS_URL to an existing Redis to enable a persistent archive cache. Archive mounting and SSHFS pull backups need FUSE (SYS_ADMIN + /dev/fuse); use the stack template or docs for that. Docs: https://docs.borgui.com/installation",
+      "categories": ["Backup", "Tools"],
+      "platform": "linux",
+      "logo": "https://raw.githubusercontent.com/karanhudia/borg-ui/main/frontend/public/logo.png",
+      "image": "ainullcode/borg-ui:latest",
+      "restart_policy": "unless-stopped",
+      "ports": ["8081:8081/tcp"],
+      "volumes": [
+        { "container": "/data", "bind": "/opt/borg-ui/data" },
+        { "container": "/home/borg/.cache/borg", "bind": "/opt/borg-ui/cache" },
+        { "container": "/local", "bind": "/home" },
+        { "container": "/etc/localtime", "bind": "/etc/localtime", "readonly": true }
+      ],
+      "env": [
+        { "name": "PORT", "label": "Listen port", "default": "8081", "description": "Must match the container side of the 8081 port mapping." },
+        { "name": "PUID", "label": "PUID", "default": "1000", "description": "User ID that owns backup files." },
+        { "name": "PGID", "label": "PGID", "default": "1000", "description": "Group ID that owns backup files." },
+        { "name": "TZ", "label": "Timezone", "default": "Etc/UTC" },
+        { "name": "LOCAL_MOUNT_POINTS", "label": "Local mount points", "default": "/local", "description": "Comma-separated container paths shown in the file browser." },
+        { "name": "INITIAL_ADMIN_PASSWORD", "label": "Initial admin password", "default": "", "description": "Used on first start only. Leave empty for the app default (admin123)." },
+        { "name": "REDIS_HOST", "label": "Redis host", "default": "disabled", "description": "Leave 'disabled' for the in-memory cache, or set a Redis hostname." },
+        { "name": "REDIS_URL", "label": "Redis URL (optional)", "default": "", "description": "Full Redis URL, e.g. redis://192.168.1.10:6379/0. Overrides REDIS_HOST." }
+      ]
+    },
+    {
+      "id": 2,
+      "type": 3,
+      "title": "Borg UI + Redis",
+      "name": "borg-ui-redis",
+      "description": "Borg UI with a bundled Redis cache for faster, persistent archive browsing. Compose stack (Borg UI + redis:7-alpine).",
+      "note": "Set LOCAL_STORAGE_PATH to the host folder to back up (mounted at /local). Login as <b>admin</b> with INITIAL_ADMIN_PASSWORD (default admin123). To enable FUSE for archive mounting, uncomment the cap_add/devices/security_opt lines in the stack file, see https://docs.borgui.com/installation#optional-fuse-access",
+      "categories": ["Backup", "Tools"],
+      "platform": "linux",
+      "logo": "https://raw.githubusercontent.com/karanhudia/borg-ui/main/frontend/public/logo.png",
+      "repository": {
+        "url": "https://github.com/karanhudia/borg-ui",
+        "stackfile": "distribution/portainer/stacks/borg-ui/docker-compose.yml"
+      },
+      "env": [
+        { "name": "PORT", "label": "Web UI port", "default": "8081" },
+        { "name": "LOCAL_STORAGE_PATH", "label": "Host folder to back up", "default": "/home", "description": "Mounted read-write at /local inside the container." },
+        { "name": "PUID", "label": "PUID", "default": "1000" },
+        { "name": "PGID", "label": "PGID", "default": "1000" },
+        { "name": "TZ", "label": "Timezone", "default": "Etc/UTC" },
+        { "name": "INITIAL_ADMIN_PASSWORD", "label": "Initial admin password", "default": "", "description": "Used on first start only. Leave empty for the app default (admin123)." },
+        { "name": "REDIS_MAXMEMORY", "label": "Redis max memory", "default": "512mb", "description": "Upper bound for the Redis cache (allkeys-lru eviction)." }
+      ]
+    }
+  ]
+}

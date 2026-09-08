@@ -213,7 +213,18 @@ Change the password immediately after first login. You can set a different first
 
 ## Portainer
 
-In Portainer, create a Stack and paste one of the Compose files above.
+Borg UI ships an app template. In Portainer, go to Settings > App Templates and set the URL to:
+
+```text
+https://raw.githubusercontent.com/karanhudia/borg-ui/main/distribution/portainer/templates.json
+```
+
+Two templates appear under App Templates:
+
+- **Borg UI**: one container, no Redis (in-memory archive cache). Edit the bind mounts before deploying; the defaults are placeholders.
+- **Borg UI + Redis**: a Compose stack with a bundled Redis, pulled from this repository. Set `LOCAL_STORAGE_PATH` to the host folder you want to back up.
+
+You can also create a Stack by hand and paste one of the Compose files above.
 
 Use real host paths for volumes. Paths are evaluated on the Docker host, not on your laptop or browser session.
 
@@ -229,31 +240,21 @@ If you mount the Docker socket for hooks, remember that the container may still 
 
 ## Unraid
 
-On Unraid, use either the Docker Compose Manager plugin or the Docker web UI.
-
-Recommended defaults:
+Search for **Borg UI** in Community Applications and install the template from the Borg UI repository (the one by karanhudia). If it is not listed yet, add the template by hand: Docker > Add Container > Template repositories, and paste:
 
 ```text
-PUID=99
-PGID=100
-TZ=<your timezone>
+https://raw.githubusercontent.com/karanhudia/borg-ui/main/distribution/unraid/borg-ui.xml
 ```
 
-Common path mapping:
+The template runs the container non-privileged, uses `PUID=99` / `PGID=100`, stores data under `/mnt/user/appdata/borg-ui`, and mounts `/mnt/user/` at `/local`. Narrow that last mapping to the shares you actually back up.
 
-```text
-/mnt/user/appdata/borg-ui -> /data
-/mnt/user/appdata/borg-ui/cache -> /home/borg/.cache/borg
-/mnt/user/backups -> /local
-```
+Redis is optional and off by default (`REDIS_HOST=disabled`, in-memory cache). For a persistent cache, install any Redis or Valkey container from Community Applications and set `REDIS_URL`.
 
-Then use `/local/...` paths inside Borg UI.
+Archive mounting and SSHFS pull backups need FUSE. Only if you use those, add `--cap-add=SYS_ADMIN --device=/dev/fuse --security-opt apparmor=unconfined` to Extra Parameters and keep `BORG_FUSE_IMPL=pyfuse3`. See [Optional FUSE Access](#optional-fuse-access).
 
-Set `LOCAL_MOUNT_POINTS=/local` unless you use a different container path.
+There is an older third-party template called "Borg-Web-UI" in Community Applications. It runs the container privileged and requires an external Redis; prefer the official one.
 
-For Redis, use the Compose Redis option, an existing Redis container, an external Redis URL, or `REDIS_HOST=disabled`.
-
-If you use the Docker web UI instead of Compose, add the same container paths and environment variables manually. Make sure `/data` points to persistent appdata storage.
+If you use Docker Compose Manager instead, the Compose files above work as-is with the path mappings from the template.
 
 ## Pick the Right Host Path
 
