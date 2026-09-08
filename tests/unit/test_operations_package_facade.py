@@ -35,9 +35,10 @@ def db():
 
 @pytest.fixture()
 def logs_dir(tmp_path, monkeypatch):
-    monkeypatch.setattr(
-        "app.services.operations.runner.app_settings.data_dir", str(tmp_path)
-    )
+    # The runner imports `app.config.settings` as `app_settings`; patch the
+    # shared object rather than the runner's alias, which another test can
+    # have replaced at module level.
+    monkeypatch.setattr("app.config.settings.data_dir", str(tmp_path))
     return tmp_path
 
 
