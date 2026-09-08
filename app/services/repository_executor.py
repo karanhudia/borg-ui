@@ -625,6 +625,61 @@ def get_agent_job_for_backup(db: Session, backup_job_id: int) -> Optional[AgentJ
     )
 
 
+# A job moves queued -> claimed -> running -> terminal, so two lost races are
+# the most a live job can cost; the bound only guards against a pathological
+# writer flipping the row back and forth.
+ABANDON_ATTEMPTS = 4
+
+
+def abandon_agent_repository_operation_job(
+    db: Session, agent_job_id: int, *, now: Optional[datetime] = None
+) -> Optional[AgentJob]:
+    """Take a repository job the caller stopped waiting for out of the
+    admission's way.
+
+    A job nobody claimed is cancelled outright: the reaper only reaps
+    in-flight jobs, so a queued job of an unresponsive agent would count as
+    active work for every later request on the repository until the agent
+    reconnects and runs the stale job. A claimed or running job gets
+    cancel_requested and the agent ends it. Terminal jobs are left alone.
+    Returns the job, or None when it no longer exists.
+    """
+    agent_job = db.query(AgentJob).filter(AgentJob.id == agent_job_id).first()
+    if agent_job is None:
+        return None
+    now = now or datetime.utcnow()
+    # Conditional on the status just read, and retried while the job is
+    # still live: the agent's reports land concurrently. A completion must
+    # not turn back into cancel_requested (admission counts that as
+    # active); a claim or start between read and write must still get the
+    # cancel, so a lost race re-reads and writes for the new state.
+    for _ in range(ABANDON_ATTEMPTS):
+        observed = agent_job.status
+        if observed == "queued":
+            values = {
+                "status": "canceled",
+                "completed_at": now,
+                "error_message": (
+                    "Abandoned by server: the agent did not pick the job up in time"
+                ),
+                "updated_at": now,
+            }
+        elif observed in ("claimed", "running"):
+            values = {"status": "cancel_requested", "updated_at": now}
+        else:
+            return agent_job
+        changed = (
+            db.query(AgentJob)
+            .filter(AgentJob.id == agent_job.id, AgentJob.status == observed)
+            .update(values, synchronize_session=False)
+        )
+        db.commit()
+        db.refresh(agent_job)
+        if changed:
+            return agent_job
+    return agent_job
+
+
 def cancel_agent_backup_job(
     db: Session, backup_job: BackupJob, *, now: Optional[datetime] = None
 ) -> tuple[AgentJob, bool]:

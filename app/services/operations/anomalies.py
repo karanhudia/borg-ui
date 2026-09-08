@@ -135,13 +135,13 @@ def missed_run_days(
     return {d for d in expected if d not in present and d >= first.date()}
 
 
-def overdue(cell: str, last_completed_at: Optional[datetime], now: datetime) -> bool:
-    threshold = OVERDUE_THRESHOLD_DAYS.get(cell)
-    if threshold is None:
-        return False
+def overdue_after(
+    last_completed_at: Optional[datetime], now: datetime, threshold: timedelta
+) -> bool:
+    """Overdue against an explicit threshold; nothing recorded counts as overdue."""
     if last_completed_at is None:
         return True
-    return now - last_completed_at > timedelta(days=threshold)
+    return now - last_completed_at > threshold
 
 
 def series_flags(archives: Sequence) -> dict[int, list[str]]:

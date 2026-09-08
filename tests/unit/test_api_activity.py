@@ -257,6 +257,8 @@ class TestRecentActivityEndpoint:
                 started_at=base + timedelta(minutes=5),
                 completed_at=base + timedelta(minutes=6),
                 scheduled_job_id=schedule.id,
+                archive_name="archive-pruned-since",
+                archive_pruned_at=base + timedelta(minutes=30),
             ),
             RestoreJob(
                 repository=repository.path,
@@ -320,8 +322,11 @@ class TestRecentActivityEndpoint:
         assert activity[0]["schedule_id"] == schedule.id
         assert activity[0]["schedule_name"] == schedule.name
         assert activity[0]["repository"] == repository.name
+        # the run outlives its archive and says so
+        assert activity[0]["archive_pruned_at"] is not None
         check_activity = next(item for item in activity if item["type"] == "check")
         assert check_activity["triggered_by"] == "schedule"
+        assert check_activity["archive_pruned_at"] is None
         restore_check_activity = next(
             item for item in activity if item["type"] == "restore_check"
         )

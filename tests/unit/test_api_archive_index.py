@@ -4,6 +4,9 @@ import pytest
 
 from app.database.models import (
     Archive,
+    BackupPlan,
+    BackupPlanRepository,
+    PruneJob,
     ArchiveChange,
     BackupJob,
     LicensingState,
@@ -233,11 +236,40 @@ class TestHeatmap:
         assert r.json()["flags_available"]["size_outlier"] is True
 
 
+def _plan(test_db, repo, **flags):
+    """An enabled, scheduled plan: only such a plan runs on its own and is
+    an expectation (a manual-only plan is not)."""
+    flags.setdefault("schedule_enabled", True)
+    flags.setdefault("cron_expression", "0 0 * * *")
+    plan = BackupPlan(
+        name=f"plan-{repo.id}", source_directories="[]", enabled=True, **flags
+    )
+    test_db.add(plan)
+    test_db.flush()
+    test_db.add(
+        BackupPlanRepository(
+            backup_plan_id=plan.id,
+            repository_id=repo.id,
+            enabled=True,
+            execution_order=0,
+        )
+    )
+    test_db.commit()
+    return plan
+
+
+def _cells(test_client, admin_headers, repo, route="status-strip"):
+    r = test_client.get(f"/api/repositories/{repo.id}/{route}", headers=admin_headers)
+    assert r.status_code == 200
+    return r.json(), {c["cell"]: c for c in r.json()["cells"]}
+
+
 @pytest.mark.unit
 class TestStatusStrip:
     def test_cells_from_operations_and_legacy(
         self, test_client, test_db, admin_headers
     ):
+        """With no archives the job rows are the only evidence (as before)."""
         repo = _repo(test_db)
         now = utc_now()
         _op(test_db, repo, "prune", completed_at=now - timedelta(days=20))
@@ -251,11 +283,7 @@ class TestStatusStrip:
             )
         )
         test_db.commit()
-        r = test_client.get(
-            f"/api/repositories/{repo.id}/status-strip", headers=admin_headers
-        )
-        assert r.status_code == 200
-        cells = {c["cell"]: c for c in r.json()["cells"]}
+        body, cells = _cells(test_client, admin_headers, repo)
         assert set(cells) == {"backup", "check", "prune", "compact", "index"}
         assert (
             cells["backup"]["source"] == "legacy"
@@ -267,7 +295,7 @@ class TestStatusStrip:
             cells["check"]["running"] is True and cells["check"]["completed_at"] is None
         )
         assert cells["index"]["age_seconds"] < 4000
-        assert r.json()["overdue_available"] is False
+        assert body["overdue_available"] is False
 
     def test_status_strip_prefers_a_new_check_operation_over_the_legacy_row(
         self, test_client, test_db, admin_headers
@@ -290,19 +318,374 @@ class TestStatusStrip:
         assert cells["check"]["status"] == "completed"
         assert cells["check"]["source"] == "operations"
 
-    def test_overdue_flags_for_pro_and_mirror_cell(
+    def test_status_route_serves_the_same_payload(
         self, test_client, test_db, admin_headers
     ):
-        repo = _repo(test_db, repository_type="rclone")
+        repo = _repo(test_db)
+        _archive(test_db, repo, "a1", 1)
+        strip, _ = _cells(test_client, admin_headers, repo)
+        status, _ = _cells(test_client, admin_headers, repo, route="status")
+        for body in (strip, status):
+            for cell in body["cells"]:
+                cell.pop("age_seconds")  # wall clock between the two calls
+        assert strip == status
+
+    def test_backup_comes_from_the_archive_list(
+        self, test_client, test_db, admin_headers
+    ):
+        """An archive created outside Borg UI (cron, CLI) is the backup; an
+        older Borg UI job row does not make it look overdue (#935)."""
+        repo = _repo(test_db)
+        newest = _archive(test_db, repo, "a2", 5)
+        _archive(test_db, repo, "a1", 1)
+        test_db.add(
+            BackupJob(
+                repository_id=repo.id,
+                status="completed",
+                completed_at=datetime(2026, 8, 14, 8, 45),
+            )
+        )
+        test_db.commit()
+        _, cells = _cells(test_client, admin_headers, repo)
+        assert cells["backup"]["source"] == "archive"
+        assert cells["backup"]["status"] == "completed"
+        assert cells["backup"]["completed_at"].startswith(newest.start.isoformat()[:19])
+
+    def test_failed_attempt_newer_than_the_archive_shows_the_failure(
+        self, test_client, test_db, admin_headers
+    ):
+        repo = _repo(test_db)
+        _archive(test_db, repo, "a1", 1)
+        _op(test_db, repo, "backup", status="failed", completed_at=datetime(2026, 9, 3))
+        # a terminal row without completed_at (PostgreSQL sorts NULL first on
+        # DESC) must not hide the timestamped one
+        _op(test_db, repo, "backup", status="cancelled", completed_at=None)
+        _, cells = _cells(test_client, admin_headers, repo)
+        assert cells["backup"]["status"] == "failed"
+        assert cells["backup"]["source"] == "operations"
+        assert cells["backup"]["completed_at"].startswith("2026-09-03")
+
+    def test_removed_archive_pending_history_merge_is_no_backup_evidence(
+        self, test_client, test_db, admin_headers
+    ):
+        """archive_sync reports a removed archive and leaves the row to
+        history_merge; until that runs the row is no evidence, as for
+        last_backup."""
+        repo = _repo(test_db)
+        older = _archive(test_db, repo, "a1", 1)
+        removed = _archive(test_db, repo, "a2", 5)
+        sync = _op(
+            test_db, repo, "archive_sync", completed_at=datetime(2026, 9, 5, 9, 54)
+        )
+        sync.result = {"listed": 1, "removed_archive_ids": [removed.id]}
+        test_db.commit()
+        _, cells = _cells(test_client, admin_headers, repo)
+        assert cells["backup"]["source"] == "archive"
+        assert cells["backup"]["completed_at"].startswith(older.start.isoformat()[:19])
+
+    def test_archive_evidence_reads_a_bounded_window_per_series(
+        self, test_client, test_db, admin_headers
+    ):
+        """The strip is polled every 30 s per card; only the newest
+        CADENCE_SAMPLE archives per series are read, and the newest archive
+        (the backup evidence) is among them."""
+        from app.services.operations import anomalies
+        from app.services.operations.repository_status import series_starts
+
+        repo = _repo(test_db)
+        for day in range(1, 21):
+            _archive(test_db, repo, f"nas-{day}", day)
+        for day in range(1, 4):
+            _archive(test_db, repo, f"db-{day}", day, series="db")
+        by_series = series_starts(test_db, repo.id)
+        assert len(by_series["nas"]) == anomalies.CADENCE_SAMPLE == 14
+        assert by_series["nas"][-1] == datetime(2026, 9, 20, 2)
+        assert by_series["nas"][0] == datetime(2026, 9, 7, 2)
+        assert len(by_series["db"]) == 3
+        _, cells = _cells(test_client, admin_headers, repo)
+        assert cells["backup"]["completed_at"].startswith("2026-09-20T02")
+
+    def test_cancelled_attempt_newer_than_the_archive_shows_the_cancellation(
+        self, test_client, test_db, admin_headers
+    ):
+        repo = _repo(test_db)
+        _archive(test_db, repo, "a1", 1)
+        _op(
+            test_db,
+            repo,
+            "backup",
+            status="cancelled",
+            completed_at=datetime(2026, 9, 3),
+        )
+        _, cells = _cells(test_client, admin_headers, repo)
+        assert cells["backup"]["status"] == "cancelled"
+        assert cells["backup"]["source"] == "operations"
+        assert cells["backup"]["completed_at"].startswith("2026-09-03")
+
+    def test_cancelled_sync_is_no_prune_evidence(
+        self, test_client, test_db, admin_headers
+    ):
+        """The runner keeps the listing of a sync it marks cancelled but
+        enqueues no follow-ups, so its removals are not applied."""
+        repo = _repo(test_db)
+        sync = _op(
+            test_db,
+            repo,
+            "archive_sync",
+            status="cancelled",
+            completed_at=datetime(2026, 9, 5, 9, 54),
+        )
+        sync.result = {"listed": 19, "removed_archive_ids": [99]}
+        test_db.commit()
+        _, cells = _cells(test_client, admin_headers, repo)
+        assert cells["prune"]["source"] != "removal"
+        assert cells["prune"]["status"] is None
+
+    def test_prune_comes_from_detected_removals(
+        self, test_client, test_db, admin_headers
+    ):
+        repo = _repo(test_db)
+        sync = _op(
+            test_db, repo, "archive_sync", completed_at=datetime(2026, 9, 5, 9, 54)
+        )
+        sync.result = {"listed": 19, "removed_archive_ids": [99]}
+        test_db.add(
+            PruneJob(
+                repository_id=repo.id,
+                status="completed",
+                completed_at=datetime(2026, 8, 14, 8, 45),
+            )
+        )
+        test_db.commit()
+        _, cells = _cells(test_client, admin_headers, repo)
+        assert cells["prune"]["source"] == "removal"
+        assert cells["prune"]["completed_at"].startswith("2026-09-05T09:54")
+        # a newer prune run through Borg UI is exact evidence and wins
+        _op(test_db, repo, "prune", completed_at=datetime(2026, 9, 6, 1, 0))
+        _, cells = _cells(test_client, admin_headers, repo)
+        assert cells["prune"]["source"] == "operations"
+
+    def test_overdue_is_judged_against_plans_schedules_and_cadence(
+        self, test_client, test_db, admin_headers
+    ):
+        """Pro: backup against twice the series cadence; prune and compact
+        only when a plan runs them; check only when scheduled."""
+        repo = _repo(test_db, repository_type="rclone", check_schedule_enabled=False)
         _pro(test_db)
         _op(test_db, repo, "prune", completed_at=utc_now() - timedelta(days=20))
-        r = test_client.get(
-            f"/api/repositories/{repo.id}/status-strip", headers=admin_headers
-        )
-        cells = {c["cell"]: c for c in r.json()["cells"]}
+        _, cells = _cells(test_client, admin_headers, repo)
         assert "mirror" in cells
+        # nothing planned: no expectation, no warning
+        assert cells["prune"]["overdue"] is None
+        assert cells["compact"]["overdue"] is None
+        assert cells["check"]["overdue"] is None
+        # no archives at all: the backup is overdue
+        assert cells["backup"]["overdue"] is True
+
+        plan = _plan(test_db, repo, run_prune_after=True, run_compact_after=True)
+        repo.check_schedule_enabled = True
+        test_db.commit()
+        _, cells = _cells(test_client, admin_headers, repo)
+        assert cells["prune"]["overdue"] is True
+        assert cells["compact"]["overdue"] is True
+        assert cells["check"]["overdue"] is True
+
+        # an enabled plan whose association with this repository is disabled
+        # skips it at run time, so it is no expectation either
+        association = (
+            test_db.query(BackupPlanRepository)
+            .filter_by(backup_plan_id=plan.id, repository_id=repo.id)
+            .one()
+        )
+        association.enabled = False
+        test_db.commit()
+        _, cells = _cells(test_client, admin_headers, repo)
+        assert cells["prune"]["overdue"] is None
+        assert cells["compact"]["overdue"] is None
+        association.enabled = True
+        test_db.commit()
+        _, cells = _cells(test_client, admin_headers, repo)
+        assert cells["prune"]["overdue"] is True
+
+        # a cron plan without an expression never gets a due time from the
+        # scheduler, so it is no expectation either; availability mode is
+        plan.cron_expression = None
+        test_db.commit()
+        _, cells = _cells(test_client, admin_headers, repo)
+        assert cells["prune"]["overdue"] is None
+        assert cells["compact"]["overdue"] is None
+        plan.schedule_mode = "availability"
+        test_db.commit()
+        _, cells = _cells(test_client, admin_headers, repo)
+        assert cells["prune"]["overdue"] is True
+        plan.schedule_mode = "cron"
+        plan.cron_expression = "0 0 * * *"
+        test_db.commit()
+
+    def test_backup_cadence_threshold(self, test_client, test_db, admin_headers):
+        """Daily archives: the fixed two-day rule; weekly archives: two weeks."""
+        repo = _repo(test_db)
+        _pro(test_db)
+        now = utc_now().replace(tzinfo=None)
+        for i in range(4):
+            a = _archive(test_db, repo, f"w{i}", 1)
+            a.start = now - timedelta(days=7 * (4 - i))
+        test_db.commit()
+        _, cells = _cells(test_client, admin_headers, repo)
+        assert cells["backup"]["threshold_days"] == 14
+        assert cells["backup"]["overdue"] is False  # 7 days old, cadence 7 days
+
+        for a in test_db.query(Archive).filter_by(repository_id=repo.id):
+            a.start = a.start - timedelta(days=10)
+        test_db.commit()
+        _, cells = _cells(test_client, admin_headers, repo)
+        assert cells["backup"]["overdue"] is True  # 17 days old
+
+    def test_two_daily_series_are_not_one_hourly_cadence(self, test_db):
+        """Review F09: two nightly hosts a minute apart interleave into
+        one-minute gaps; each series is daily and on time at noon."""
+        from app.services.operations.repository_status import repository_status
+
+        repo = _repo(test_db)
+        now = datetime(2026, 9, 6, 12)
+        for day in range(7):
+            for minute, series in enumerate(("host-a", "host-b")):
+                a = _archive(test_db, repo, f"{series}-{day}", 1, series=series)
+                a.start = datetime(2026, 9, 6, 0, minute) - timedelta(days=day)
+        test_db.commit()
+        cell = {
+            c["cell"]: c
+            for c in repository_status(test_db, repo, now=now, pro=True)["cells"]
+        }["backup"]
+        assert cell["overdue"] is False
+        assert cell["threshold_days"] == 2
+
+        # one series falling silent makes the repository overdue even while
+        # the other keeps going
+        for a in test_db.query(Archive).filter_by(series="host-b"):
+            a.start = a.start - timedelta(days=5)
+        test_db.commit()
+        cell = {
+            c["cell"]: c
+            for c in repository_status(test_db, repo, now=now, pro=True)["cells"]
+        }["backup"]
+        assert cell["overdue"] is True
+
+    def test_manual_only_plan_is_no_expectation(
+        self, test_client, test_db, admin_headers
+    ):
+        """Review F10: the dispatcher requires schedule_enabled, so a plan
+        that is only run by hand promises no prune, compact or check."""
+        repo = _repo(test_db, check_schedule_enabled=False)
+        _pro(test_db)
+        _plan(
+            test_db,
+            repo,
+            schedule_enabled=False,
+            run_prune_after=True,
+            run_compact_after=True,
+            run_check_after=True,
+        )
+        _, cells = _cells(test_client, admin_headers, repo)
+        assert cells["prune"]["overdue"] is None
+        assert cells["compact"]["overdue"] is None
+        assert cells["check"]["overdue"] is None
+
+    def test_legacy_schedule_targets_follow_the_scheduler(
+        self, test_client, test_db, admin_headers
+    ):
+        """Review F11: association rows first, else the direct repository,
+        else the path, as app/api/schedule.py dispatches."""
+        from app.database.models import ScheduledJob, ScheduledJobRepository
+
+        repo = _repo(test_db)
+        other = _repo(test_db, name="other")
+        _pro(test_db)
+        direct = ScheduledJob(
+            name="direct",
+            repository_id=repo.id,
+            enabled=True,
+            cron_expression="0 0 * * *",
+            run_prune_after=True,
+            run_compact_after=True,
+        )
+        test_db.add(direct)
+        test_db.commit()
+        _, cells = _cells(test_client, admin_headers, repo)
         assert cells["prune"]["overdue"] is True and cells["compact"]["overdue"] is True
-        assert r.json()["overdue_available"] is True
+
+        # association rows take precedence over a stale direct field
+        test_db.add(
+            ScheduledJobRepository(
+                scheduled_job_id=direct.id, repository_id=other.id, execution_order=0
+            )
+        )
+        test_db.commit()
+        _, cells = _cells(test_client, admin_headers, repo)
+        assert cells["prune"]["overdue"] is None
+        _, cells = _cells(test_client, admin_headers, other)
+        assert cells["prune"]["overdue"] is True
+
+        # an enabled cron job without an expression is never dispatched, so
+        # it is no expectation either (CodeRabbit on the F11 change)
+        idle = ScheduledJob(
+            name="idle",
+            repository_id=repo.id,
+            enabled=True,
+            cron_expression=None,
+            run_compact_after=True,
+        )
+        test_db.add(idle)
+        test_db.commit()
+        _, cells = _cells(test_client, admin_headers, repo)
+        assert cells["compact"]["overdue"] is None
+        test_db.delete(idle)
+        test_db.commit()
+
+        # path-only legacy job
+        by_path = ScheduledJob(
+            name="by-path",
+            repository=repo.path,
+            enabled=True,
+            cron_expression="0 0 * * *",
+            run_compact_after=True,
+        )
+        test_db.add(by_path)
+        test_db.commit()
+        _, cells = _cells(test_client, admin_headers, repo)
+        assert cells["compact"]["overdue"] is True
+        assert cells["prune"]["overdue"] is None
+
+    def test_scheduled_plan_check_after_backup_is_an_expectation(
+        self, test_client, test_db, admin_headers
+    ):
+        """Review F12: the executor runs run_check_after, so it expects a
+        check even with the repository's own check schedule off."""
+        repo = _repo(test_db, check_schedule_enabled=False)
+        _pro(test_db)
+        _plan(test_db, repo, run_check_after=True)
+        _, cells = _cells(test_client, admin_headers, repo)
+        assert cells["check"]["overdue"] is True
+        _op(test_db, repo, "check", completed_at=utc_now() - timedelta(days=1))
+        _, cells = _cells(test_client, admin_headers, repo)
+        assert cells["check"]["overdue"] is False
+
+    def test_latest_removal_stops_at_the_first_listing_with_removals(self, test_db):
+        """The newest listing with removals wins; newer listings without
+        removals do not hide it, and rows past it are not read."""
+        from app.services.operations.repository_status import latest_removal
+
+        repo = _repo(test_db)
+        now = utc_now()
+        _op(test_db, repo, "archive_sync", completed_at=now - timedelta(days=3))
+        removal = _op(
+            test_db, repo, "archive_sync", completed_at=now - timedelta(days=2)
+        )
+        removal.result = {"removed_archive_ids": [7]}
+        newer = _op(test_db, repo, "archive_sync", completed_at=now - timedelta(days=1))
+        newer.result = {"removed_archive_ids": []}
+        test_db.commit()
+        assert latest_removal(test_db, repo.id) == removal.completed_at
 
 
 @pytest.mark.unit

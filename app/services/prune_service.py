@@ -1,9 +1,14 @@
 import asyncio
+import json
 from datetime import datetime
 from pathlib import Path
 import structlog
 from sqlalchemy.orm import Session
 from app.database.models import Repository
+from app.services.job_history_retention import (
+    archive_names_from_prune_output,
+    mark_jobs_of_pruned_archives,
+)
 from app.database.database import SessionLocal
 from app.config import settings
 from app.core.borg import borg
@@ -17,6 +22,21 @@ from app.utils.borg_env import (
 from app.services.operations.job_facade import refresh_job, resolve_maintenance_job
 
 logger = structlog.get_logger()
+
+
+def _log_message(line: str) -> str:
+    """The text of a Borg `--log-json` record, or the line itself.
+
+    Archive names are matched against the record's `message`: in the raw
+    line a name containing `"` or `\\` is JSON-escaped and would not match."""
+    if line.startswith("{"):
+        try:
+            message = json.loads(line).get("message")
+        except (ValueError, AttributeError):
+            return line
+        if isinstance(message, str):
+            return message
+    return line
 
 
 class PruneService:
@@ -195,6 +215,10 @@ class PruneService:
             # In-memory log buffer
             log_buffer = []
             MAX_BUFFER_SIZE = 1000
+            # Collected while streaming: the buffer above is capped, and a
+            # large prune's early "Pruning archive:" lines would fall out of
+            # it before they are parsed.
+            pruned_archive_names: set[str] = set()
 
             async def check_cancellation():
                 """Periodic heartbeat to check for cancellation"""
@@ -233,6 +257,11 @@ class PruneService:
                                 ).strip()
                                 if line_str:
                                     log_buffer.append(f"[{name}] {line_str}")
+                                    pruned_archive_names.update(
+                                        archive_names_from_prune_output(
+                                            _log_message(line_str)
+                                        )
+                                    )
                                     if len(log_buffer) > MAX_BUFFER_SIZE:
                                         log_buffer.pop(0)
                         except asyncio.CancelledError:
@@ -295,18 +324,15 @@ class PruneService:
                     "Prune failed", job_id=job_id, exit_code=process.returncode
                 )
 
-            # Archives that no longer exist take their job records with them:
-            # parse the pruned names from the --list output and cascade.
+            # Archives that no longer exist are recorded on their backup jobs:
+            # the names were collected from the --list output while it streamed.
             if not dry_run and job.status in ("completed", "completed_with_warnings"):
-                from app.services.job_history_retention import (
-                    archive_names_from_prune_output,
-                    purge_jobs_for_pruned_archives,
-                )
-
-                purge_jobs_for_pruned_archives(
+                mark_jobs_of_pruned_archives(
                     db,
                     repository_id,
-                    archive_names_from_prune_output("\n".join(log_buffer)),
+                    pruned_archive_names,
+                    created_before=job.started_at,
+                    pruned_at=job.completed_at,
                 )
 
             # Save logs for all completed/failed/cancelled/warning jobs

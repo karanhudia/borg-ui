@@ -683,6 +683,7 @@ async def get_all_backup_jobs(
                         else "manual"
                     ),
                     "archive_name": getattr(job, "archive_name", None),
+                    "archive_pruned_at": serialize_datetime(job.archive_pruned_at),
                     "execution_mode": job.execution_mode or "local",
                     "route_strategy": job.route_strategy,
                     **_retry_metadata(job),

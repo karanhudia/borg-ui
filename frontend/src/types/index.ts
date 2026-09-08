@@ -173,6 +173,7 @@ export interface BackupJob {
   backup_plan_run_id?: number | null
   backup_plan_name?: string | null
   archive_name?: string | null
+  archive_pruned_at?: string | null
   execution_mode?: 'local' | 'remote_ssh' | 'agent' | string
   route_strategy?: string | null
   retry_attempt?: number | null

@@ -241,8 +241,16 @@ Rules:
   run alongside.
 - Lower priority number runs first: manual and plan work at 0, scheduled at
   5, follow-ups at 10, reconcile at 20.
-- A failed, cancelled, or skipped operation skips everything that depends on
-  it with `skip_reason = dependency_failed`.
+- A failed or cancelled operation skips everything that depends on it with
+  `skip_reason = dependency_failed`, including every subsequent dependant
+  of that skip. An intentional skip means the stage had nothing to do, so
+  dependants (`stats` after an unsupported `history_index`) still run.
+- An operation the repository admission refuses (409, another job holds
+  the repository) goes back to the queue instead of failing, with
+  `params.deferrals` counting the attempts and `params.deferred_until`
+  holding the next attempt's not-before time as epoch seconds (5 s,
+  doubling to 5 min).
+  After 20 deferrals it fails with "repository still busy".
 - Follow-ups are created automatically when an operation succeeds. An
   import enqueues stats and archive listing.
 - `stats` measures the repository read-only through the best source Borg
@@ -260,6 +268,20 @@ Rules:
   indexed repository. An unknown size leaves the stored value alone,
   never `0`. Both versions' `repository.last_modified` (the last manifest
   write) lands in `repositories.borg_last_modified`.
+- The repository status (`GET /repositories/{id}/status`, also served as
+  `/status-strip`) reads repository evidence first: backup is the newest
+  archive, whatever created it, unless a failed or cancelled Borg UI
+  attempt is newer, and with no archives at all the newest job row; prune
+  is the newest successful `archive_sync` that reported removed archives
+  unless a prune run through Borg UI is newer; check and compact keep
+  their job rows. Overdue is judged per series against its own cadence (the
+  repository is overdue when one series is), against the check schedule
+  or a scheduled plan that checks after backups, and against the plans or
+  scheduled jobs that run prune or compact (a plan counts only when
+  enabled, scheduled, dispatchable and linked through an enabled
+  association); it is
+  null where nothing is expected. Details and the `source` field: spec
+  section 10.2.
 - The reconcile scheduler replaces the old stats refresh loop. Every
   `stats_refresh_interval_minutes` it enqueues an index run for each
   repository that has none queued or running. `0` disables it.
@@ -269,6 +291,10 @@ Rules:
 - Operations write their logs to files under `data/logs/`. Retention deletes
   those files at `log_retention_days` and again with the row itself at
   `cleanup_retention_days`.
+- A backup job outlives its archive. When a prune or an archive deletion
+  removes the archive a job created, the job row is marked
+  (`archive_pruned_at`) and kept as the record that the backup ran; it falls
+  with `cleanup_retention_days` like every other job row.
 - A failed listing is never written as derived state: if borg or the agent
   fails, `archive_sync` fails rather than recording the repository as empty.
 - Cancelling a running operation is cooperative: the executor observes the

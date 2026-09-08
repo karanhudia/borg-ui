@@ -561,23 +561,29 @@ def _finish_linked_repository_operation_job(
             repository.last_compact = completed_at
         repository.updated_at = _now_utc()
 
-    # Archives that no longer exist take their job records with them - same
-    # cascade the server-side prune/delete paths run.
+    # Archives that no longer exist are recorded on their backup jobs - the
+    # same mark the server-side prune/delete paths set. The rows stay.
     if status_value in ("completed", "completed_with_warnings"):
         from app.services.job_history_retention import (
             archive_names_from_prune_output,
-            purge_jobs_for_pruned_archives,
+            mark_jobs_of_pruned_archives,
         )
 
         if kind == "prune":
-            purge_jobs_for_pruned_archives(
+            mark_jobs_of_pruned_archives(
                 db,
                 operation_job.repository_id,
                 archive_names_from_prune_output(operation_job.logs or ""),
+                created_before=agent_job.claimed_at,
+                pruned_at=completed_at,
             )
         elif kind == "delete_archive" and getattr(operation_job, "archive_name", None):
-            purge_jobs_for_pruned_archives(
-                db, operation_job.repository_id, {operation_job.archive_name}
+            mark_jobs_of_pruned_archives(
+                db,
+                operation_job.repository_id,
+                {operation_job.archive_name},
+                created_before=agent_job.claimed_at,
+                pruned_at=completed_at,
             )
 
 

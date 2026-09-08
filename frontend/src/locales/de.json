@@ -3100,6 +3100,7 @@
       "delete": "Löschen",
       "viewLogs": "Protokolle anzeigen",
       "viewArchive": "Archiv anzeigen",
+      "viewArchivePruned": "Archiv wurde entfernt",
       "downloadLogs": "Protokolle herunterladen",
       "errorDetails": "Fehlerdetails",
       "cancel": "Abbrechen",

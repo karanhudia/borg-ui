@@ -90,6 +90,7 @@ class ActivityItem(BaseModel):
 
     # Type-specific metadata
     archive_name: Optional[str] = None  # For backup/restore
+    archive_pruned_at: Optional[datetime] = None  # backup: its archive is gone
     package_name: Optional[str] = None  # For package installs
     has_logs: bool = False  # Whether logs are available for download
     repository_path: Optional[str] = (
@@ -737,7 +738,8 @@ async def list_recent_activity(
                     "backup_plan_id": job.backup_plan_id,
                     "backup_plan_run_id": job.backup_plan_run_id,
                     "backup_plan_name": backup_plan_name,
-                    "archive_name": getattr(job, "archive_name", None),
+                    "archive_name": job.archive_name,
+                    "archive_pruned_at": job.archive_pruned_at,
                     "package_name": None,
                     "has_logs": job_has_logs_by_policy(
                         job,

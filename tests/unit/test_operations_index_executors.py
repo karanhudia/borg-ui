@@ -133,6 +133,21 @@ def test_apply_listing_upserts_and_reports_removed(db, repo):
 
 
 @pytest.mark.unit
+def test_apply_listing_keeps_the_info_filled_end(db, repo):
+    """`borg list --json` has no end (only `borg info` does): a resync must
+    not wipe the end fill_archive_info stored, or every run refills it."""
+    index_exec.apply_listing(db, repo, [BORG1_ENTRY], timezone_name="UTC")
+    row = db.query(Archive).filter_by(borg_id="aa11").one()
+    row.end = datetime(2026, 9, 2, 2, 10)
+    db.commit()
+    index_exec.apply_listing(db, repo, [BORG1_ENTRY], timezone_name="UTC")
+    db.expire_all()
+    assert db.query(Archive).filter_by(borg_id="aa11").one().end == datetime(
+        2026, 9, 2, 2, 10
+    )
+
+
+@pytest.mark.unit
 def test_apply_listing_series_change_resets_history_state(db, repo):
     repo.borg_version = 2
     db.commit()
@@ -379,6 +394,418 @@ async def test_fill_archive_info_limits_and_orders_oldest_first(db, repo, monkey
     assert newest.nfiles is None
 
 
+def _agent_info_payload(end="2026-09-01T02:10:00.000000"):
+    return json.dumps(
+        {
+            "archives": [
+                {
+                    "stats": {"nfiles": 7, "original_size": 20},
+                    "end": end,
+                    "duration": 30.0,
+                }
+            ]
+        }
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_fill_archive_info_dispatches_agent_job(db, repo, monkeypatch):
+    """Agent repositories fill per-archive info through the agent's
+    `repository.archive_info` job (#932): Borg 2 archives by `aid:<id>`, the
+    agent's reported zone resolves naive end times, a failed job is skipped."""
+    repo.borg_version = 2
+    db.commit()
+    rows = []
+    for i in range(3):
+        a = Archive(
+            repository_id=repo.id,
+            borg_id=f"id{i}",
+            name="series",
+            series="series",
+            start=datetime(2026, 9, i + 1),
+        )
+        db.add(a)
+        rows.append(a)
+    db.commit()
+    queued = []
+
+    def fake_queue(db_, repository, *, job_kind, operation=None):
+        queued.append((job_kind, operation["archive"]))
+        return SimpleNamespace(id=len(queued))
+
+    async def fake_wait(db_, job_id, *, timeout_seconds):
+        assert timeout_seconds == 42
+        if job_id == 2:
+            return {"return_code": 2, "stdout": "", "stderr": "borg: lock"}
+        return {"return_code": 0, "stdout": _agent_info_payload()}
+
+    monkeypatch.setattr(index_exec, "is_agent_executor", lambda repository: True)
+    monkeypatch.setattr(
+        index_exec, "agent_timezone_for_repository", lambda db_, r: "Europe/Berlin"
+    )
+    monkeypatch.setattr(
+        index_exec, "get_operation_timeouts", lambda db_: {"info_timeout": 42}
+    )
+    monkeypatch.setattr(
+        "app.services.repository_executor.queue_agent_repository_operation_job",
+        fake_queue,
+    )
+    monkeypatch.setattr(
+        "app.services.repository_executor.wait_for_agent_repository_operation_job",
+        fake_wait,
+    )
+    monkeypatch.setattr(
+        "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort",
+        AsyncMock(return_value=True),
+    )
+    filled = await index_exec.fill_archive_info(db, repo, rows, {}, limit=3)
+    assert filled == 2
+    assert queued == [
+        ("repository.archive_info", "aid:id0"),
+        ("repository.archive_info", "aid:id1"),
+        ("repository.archive_info", "aid:id2"),
+    ]
+    db.expire_all()
+    first = db.query(Archive).filter_by(borg_id="id0").one()
+    assert first.nfiles == 7 and first.original_size == 20
+    assert first.compressed_size is None and first.deduplicated_size is None
+    assert first.duration_seconds == 30.0
+    # 02:10 Berlin summer time is 00:10 UTC
+    assert first.end == datetime(2026, 9, 1, 0, 10)
+    failed = db.query(Archive).filter_by(borg_id="id1").one()
+    assert failed.nfiles is None and failed.end is None
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_fill_archive_info_agent_without_zone_leaves_naive_end_unset(
+    db, repo, monkeypatch
+):
+    """An agent that never reported its zone renders Borg 1 end times in an
+    unknown wall clock; storing them in the server's zone would shift them.
+    Offset-carrying (Borg 2) values are still stored."""
+    rows = []
+    for i, end in enumerate(
+        ("2026-09-01T02:10:00.000000", "2026-09-02T02:10:00.000000+02:00")
+    ):
+        a = Archive(
+            repository_id=repo.id,
+            borg_id=f"id{i}",
+            name=f"n{i}",
+            series="n",
+            start=datetime(2026, 9, i + 1),
+        )
+        db.add(a)
+        rows.append((a, end))
+    db.commit()
+    ends = {f"n{i}": end for i, (_, end) in enumerate(rows)}
+
+    def fake_queue(db_, repository, *, job_kind, operation=None):
+        return SimpleNamespace(id=operation["archive"])
+
+    async def fake_wait(db_, job_id, *, timeout_seconds):
+        return {"return_code": 0, "stdout": _agent_info_payload(end=ends[job_id])}
+
+    monkeypatch.setattr(index_exec, "is_agent_executor", lambda repository: True)
+    monkeypatch.setattr(
+        index_exec, "agent_timezone_for_repository", lambda db_, r: None
+    )
+    monkeypatch.setattr(
+        index_exec, "get_operation_timeouts", lambda db_: {"info_timeout": 5}
+    )
+    monkeypatch.setattr(
+        "app.services.repository_executor.queue_agent_repository_operation_job",
+        fake_queue,
+    )
+    monkeypatch.setattr(
+        "app.services.repository_executor.wait_for_agent_repository_operation_job",
+        fake_wait,
+    )
+    monkeypatch.setattr(
+        "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort",
+        AsyncMock(return_value=True),
+    )
+    assert (
+        await index_exec.fill_archive_info(db, repo, [a for a, _ in rows], {}, limit=2)
+        == 2
+    )
+    db.expire_all()
+    naive = db.query(Archive).filter_by(borg_id="id0").one()
+    assert naive.nfiles == 7 and naive.duration_seconds == 30.0
+    assert naive.end is None
+    aware = db.query(Archive).filter_by(borg_id="id1").one()
+    assert aware.end == datetime(2026, 9, 2, 0, 10)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_fill_archive_info_agent_timeout_abandons_job_and_stops(
+    db, repo, monkeypatch
+):
+    """A job the agent never answers is cancelled instead of left queued:
+    queued jobs are never reaped and would count as active repository work
+    for every later archive_info and stats request (a 409 per archive). The
+    remaining archives are not attempted, each would wait out the timeout."""
+    from fastapi import HTTPException
+
+    rows = []
+    for i in range(3):
+        a = Archive(
+            repository_id=repo.id,
+            borg_id=f"id{i}",
+            name=f"n{i}",
+            series="n",
+            start=datetime(2026, 9, i + 1),
+        )
+        db.add(a)
+        rows.append(a)
+    db.commit()
+    queued, abandoned, cancels = [], [], []
+
+    def fake_queue(db_, repository, *, job_kind, operation=None):
+        queued.append(operation["archive"])
+        return SimpleNamespace(id=len(queued))
+
+    async def fake_wait(db_, job_id, *, timeout_seconds):
+        raise HTTPException(
+            status_code=504,
+            detail={"key": "backend.errors.agents.repositoryOperationTimeout"},
+        )
+
+    def fake_abandon(db_, job_id):
+        abandoned.append(job_id)
+        return SimpleNamespace(id=job_id, status="cancel_requested")
+
+    async def fake_cancel(job):
+        cancels.append(job.id)
+        return True
+
+    monkeypatch.setattr(index_exec, "is_agent_executor", lambda repository: True)
+    monkeypatch.setattr(
+        index_exec, "agent_timezone_for_repository", lambda db_, r: "UTC"
+    )
+    monkeypatch.setattr(
+        index_exec, "get_operation_timeouts", lambda db_: {"info_timeout": 5}
+    )
+    monkeypatch.setattr(
+        "app.services.repository_executor.queue_agent_repository_operation_job",
+        fake_queue,
+    )
+    monkeypatch.setattr(
+        "app.services.repository_executor.wait_for_agent_repository_operation_job",
+        fake_wait,
+    )
+    monkeypatch.setattr(
+        "app.services.repository_executor.abandon_agent_repository_operation_job",
+        fake_abandon,
+    )
+    monkeypatch.setattr(
+        "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort",
+        AsyncMock(return_value=True),
+    )
+    monkeypatch.setattr(
+        "app.services.agent_job_dispatcher.dispatch_agent_cancel_if_connected",
+        fake_cancel,
+    )
+    assert await index_exec.fill_archive_info(db, repo, rows, {}, limit=3) == 0
+    assert queued == ["n0"]
+    assert abandoned == [1] and cancels == [1]
+    db.expire_all()
+    assert all(a.nfiles is None for a in db.query(Archive).all())
+
+
+def _three_archives(db, repo):
+    rows = []
+    for i in range(3):
+        a = Archive(
+            repository_id=repo.id,
+            borg_id=f"id{i}",
+            name=f"n{i}",
+            series="n",
+            start=datetime(2026, 9, i + 1),
+        )
+        db.add(a)
+        rows.append(a)
+    db.commit()
+    return rows
+
+
+def _patch_agent_info(monkeypatch, *, queue, wait, zone="UTC"):
+    monkeypatch.setattr(index_exec, "is_agent_executor", lambda repository: True)
+    monkeypatch.setattr(
+        index_exec, "agent_timezone_for_repository", lambda db_, r: zone
+    )
+    monkeypatch.setattr(
+        index_exec, "get_operation_timeouts", lambda db_: {"info_timeout": 5}
+    )
+    monkeypatch.setattr(
+        "app.services.repository_executor.queue_agent_repository_operation_job",
+        queue,
+    )
+    monkeypatch.setattr(
+        "app.services.repository_executor.wait_for_agent_repository_operation_job",
+        wait,
+    )
+    monkeypatch.setattr(
+        "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort",
+        AsyncMock(return_value=True),
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_fill_archive_info_agent_admission_refusal_skips_one_archive(
+    db, repo, monkeypatch
+):
+    """The admission refuses the job for one archive (another job took the
+    repository between two archives): the refusal reaches the runner, which
+    defers the whole operation, instead of one refused job per remaining
+    archive. What the earlier archives wrote stays in the session for the
+    runner's requeue commit. Any other failure still skips just that archive."""
+    from fastapi import HTTPException
+
+    rows = _three_archives(db, repo)
+    queued = []
+
+    def fake_queue(db_, repository, *, job_kind, operation=None):
+        queued.append(operation["archive"])
+        if len(queued) == 2:
+            raise HTTPException(
+                status_code=409,
+                detail={"key": "backend.errors.jobs.repositoryOperationActive"},
+            )
+        if len(queued) == 3:
+            raise HTTPException(status_code=502, detail="agent gone")
+        return SimpleNamespace(id=len(queued))
+
+    async def fake_wait(db_, job_id, *, timeout_seconds):
+        return {"return_code": 0, "stdout": _agent_info_payload()}
+
+    _patch_agent_info(monkeypatch, queue=fake_queue, wait=fake_wait)
+    with pytest.raises(HTTPException) as info:
+        await index_exec.fill_archive_info(db, repo, rows, {}, limit=3)
+    assert info.value.status_code == 409
+    assert queued == ["n0", "n1"]
+    db.commit()
+    db.expire_all()
+    by_id = {a.borg_id: a for a in db.query(Archive).all()}
+    assert by_id["id0"].nfiles == 7
+    assert by_id["id1"].nfiles is None and by_id["id2"].nfiles is None
+
+    # a non-busy failure on one archive still leaves the loop running
+    queued[:] = ["pad", "pad"]  # n1 becomes the third call: the 502
+    assert await index_exec.fill_archive_info(db, repo, rows[1:], {}, limit=2) == 1
+    assert queued == ["pad", "pad", "n1", "n2"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_fill_archive_info_agent_writes_survive_the_next_wait(
+    db, repo, monkeypatch
+):
+    """The real queue commits the session and the real wait expires it on
+    every poll. The previous archive's columns are only safe because that
+    commit happens between the two; a fake that behaves the same way pins it."""
+    rows = _three_archives(db, repo)
+    n = {"queued": 0}
+
+    def fake_queue(db_, repository, *, job_kind, operation=None):
+        n["queued"] += 1
+        db_.commit()
+        return SimpleNamespace(id=n["queued"])
+
+    async def fake_wait(db_, job_id, *, timeout_seconds):
+        db_.expire_all()
+        return {"return_code": 0, "stdout": _agent_info_payload()}
+
+    _patch_agent_info(monkeypatch, queue=fake_queue, wait=fake_wait)
+    assert await index_exec.fill_archive_info(db, repo, rows, {}, limit=3) == 3
+    db.expire_all()
+    assert [a.nfiles for a in db.query(Archive).order_by(Archive.start).all()] == [
+        7,
+        7,
+        7,
+    ]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_fill_archive_info_agent_borg1_uses_archive_name(db, repo, monkeypatch):
+    a = Archive(
+        repository_id=repo.id,
+        borg_id="id0",
+        name="nas-2026-09-01",
+        series="nas",
+        start=datetime(2026, 9, 1),
+    )
+    db.add(a)
+    db.commit()
+    seen = []
+
+    def fake_queue(db_, repository, *, job_kind, operation=None):
+        seen.append(operation["archive"])
+        return SimpleNamespace(id=1)
+
+    async def fake_wait(db_, job_id, *, timeout_seconds):
+        return {"return_code": 0, "stdout": _agent_info_payload()}
+
+    monkeypatch.setattr(index_exec, "is_agent_executor", lambda repository: True)
+    monkeypatch.setattr(
+        index_exec, "agent_timezone_for_repository", lambda db_, r: "UTC"
+    )
+    monkeypatch.setattr(
+        index_exec, "get_operation_timeouts", lambda db_: {"info_timeout": 5}
+    )
+    monkeypatch.setattr(
+        "app.services.repository_executor.queue_agent_repository_operation_job",
+        fake_queue,
+    )
+    monkeypatch.setattr(
+        "app.services.repository_executor.wait_for_agent_repository_operation_job",
+        fake_wait,
+    )
+    monkeypatch.setattr(
+        "app.services.agent_job_dispatcher.dispatch_agent_job_best_effort",
+        AsyncMock(return_value=True),
+    )
+    assert await index_exec.fill_archive_info(db, repo, [a], {}, limit=1) == 1
+    assert seen == ["nas-2026-09-01"]
+    db.expire_all()
+    assert db.query(Archive).filter_by(borg_id="id0").one().end == datetime(
+        2026, 9, 1, 2, 10
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_run_archive_sync_refuses_borg1_agent_listing_without_zone(
+    db, repo, monkeypatch
+):
+    """A Borg 1 listing from an agent that never reported its zone would be
+    stored in the server's zone, and `start` is NOT NULL so nothing can be
+    withheld. The stage fails visibly before any listing runs; Borg 2 renders
+    an offset and is unaffected."""
+    listing = AsyncMock(return_value=(True, [], "UTC"))
+    monkeypatch.setattr(index_exec, "list_archives_for_repository", listing)
+    monkeypatch.setattr(
+        index_exec, "_prepare_repository_borg_env", lambda repository, db: ({}, None)
+    )
+    monkeypatch.setattr(index_exec, "is_agent_executor", lambda repository: True)
+    monkeypatch.setattr(
+        index_exec, "agent_timezone_for_repository", lambda db_, r: None
+    )
+    outcome = await index_exec.run_archive_sync(_ctx(db, repo))
+    assert outcome.status == "failed" and "timezone" in outcome.error_message
+    listing.assert_not_called()
+
+    repo.borg_version = 2
+    db.commit()
+    outcome = await index_exec.run_archive_sync(_ctx(db, repo))
+    assert outcome.status == "completed"
+    listing.assert_called_once()
+
+
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_run_archive_sync_fails_instead_of_wiping_on_failed_listing(
@@ -464,6 +891,68 @@ def test_archives_needing_info_backfills_across_runs(db, repo):
     assert [a.borg_id for a in candidates] == ["id1", "id2"]
     assert index_exec.archives_needing_info(db, repo, limit=1)[0].borg_id == "id1"
     assert index_exec.archives_needing_info(db, repo, limit=0) == []
+
+
+@pytest.mark.unit
+def test_archives_needing_info_revisits_withheld_end(db, repo, monkeypatch):
+    """fill_archive_info sets the sizes but withholds a naive end while the
+    agent's zone is unknown. Once the zone is known those rows must come
+    back, or their end stays NULL forever; while it is unknown they must
+    not, or the same archives are fetched every run for nothing."""
+    db.add(
+        Archive(
+            repository_id=repo.id,
+            borg_id="sized",
+            name="a",
+            series="default",
+            start=datetime(2026, 9, 1),
+            original_size=10,
+            end=None,
+        )
+    )
+    db.add(
+        Archive(
+            repository_id=repo.id,
+            borg_id="done",
+            name="b",
+            series="default",
+            start=datetime(2026, 9, 2),
+            original_size=10,
+            end=datetime(2026, 9, 2, 1),
+        )
+    )
+    db.add(
+        Archive(
+            repository_id=repo.id,
+            borg_id="fresh",
+            name="c",
+            series="default",
+            start=datetime(2026, 9, 3),
+        )
+    )
+    db.commit()
+    ids = lambda rows: [a.borg_id for a in rows]  # noqa: E731
+    assert ids(index_exec.archives_needing_info(db, repo, limit=5)) == ["fresh"]
+    # rows without stats come first, end-only rows take the spare slots: a
+    # row whose end never parses cannot starve an archive without stats
+    assert ids(
+        index_exec.archives_needing_info(db, repo, limit=5, include_missing_end=True)
+    ) == ["fresh", "sized"]
+    assert ids(
+        index_exec.archives_needing_info(db, repo, limit=1, include_missing_end=True)
+    ) == ["fresh"]
+
+    # server repositories always resolve; agent repositories only with a zone
+    assert index_exec.archive_end_resolvable(db, repo) is True
+    monkeypatch.setattr(index_exec, "is_agent_executor", lambda repository: True)
+    monkeypatch.setattr(
+        index_exec, "agent_timezone_for_repository", lambda db_, r: None
+    )
+    assert index_exec.archive_end_resolvable(db, repo) is False
+    monkeypatch.setattr(
+        index_exec, "agent_timezone_for_repository", lambda db_, r: "Europe/Berlin"
+    )
+    assert index_exec.archive_end_resolvable(db, repo) is True
 
 
 @pytest.mark.unit
