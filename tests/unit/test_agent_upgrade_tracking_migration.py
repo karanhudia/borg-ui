@@ -50,26 +50,6 @@ def test_upgrade_adds_and_downgrade_drops_the_columns(tmp_path):
 
 
 @pytest.mark.unit
-def test_upgrade_is_idempotent_when_a_column_already_exists(tmp_path):
-    """A database that ran legacy migration 129 already has them."""
-    url = f"sqlite:///{tmp_path / 'borg.db'}"
-    _migrate(url, PREVIOUS)
-
-    engine = _engine(url)
-    with engine.connect() as connection:
-        from sqlalchemy import text
-
-        connection.execute(
-            text("ALTER TABLE agent_machines ADD COLUMN desired_agent_version VARCHAR")
-        )
-        connection.commit()
-    engine.dispose()
-
-    _migrate(url, REVISION)
-    assert COLUMNS <= _columns(url)
-
-
-@pytest.mark.unit
 def test_revision_chains_on_the_previous_head_and_leaves_one_head():
     from alembic.script import ScriptDirectory
 

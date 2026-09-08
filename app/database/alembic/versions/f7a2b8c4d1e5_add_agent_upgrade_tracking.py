@@ -20,29 +20,22 @@ depends_on = None
 
 
 _COLUMNS = (
-    sa.Column("desired_agent_version", sa.String(), nullable=True),
-    sa.Column("desired_borg_version", sa.String(), nullable=True),
-    sa.Column("upgrade_state", sa.String(), nullable=True),
-    sa.Column("upgrade_requested_at", sa.DateTime(), nullable=True),
-    sa.Column("upgrade_target_version", sa.String(), nullable=True),
-    sa.Column("upgrade_error", sa.Text(), nullable=True),
+    ("desired_agent_version", sa.String()),
+    ("desired_borg_version", sa.String()),
+    ("upgrade_state", sa.String()),
+    ("upgrade_requested_at", sa.DateTime()),
+    ("upgrade_target_version", sa.String()),
+    ("upgrade_error", sa.Text()),
 )
 
 
 def upgrade() -> None:
-    existing = {
-        column["name"]
-        for column in sa.inspect(op.get_bind()).get_columns("agent_machines")
-    }
-    missing = [column for column in _COLUMNS if column.name not in existing]
-    if not missing:
-        return
     with op.batch_alter_table("agent_machines") as batch_op:
-        for column in missing:
-            batch_op.add_column(column)
+        for name, column_type in _COLUMNS:
+            batch_op.add_column(sa.Column(name, column_type, nullable=True))
 
 
 def downgrade() -> None:
     with op.batch_alter_table("agent_machines") as batch_op:
-        for column in _COLUMNS:
-            batch_op.drop_column(column.name)
+        for name, _ in _COLUMNS:
+            batch_op.drop_column(name)
