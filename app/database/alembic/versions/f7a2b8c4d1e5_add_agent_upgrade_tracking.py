@@ -30,12 +30,14 @@ _COLUMNS = (
 
 
 def upgrade() -> None:
+    """Add nullable agent upgrade tracking columns to ``agent_machines``."""
     with op.batch_alter_table("agent_machines") as batch_op:
         for name, column_type in _COLUMNS:
             batch_op.add_column(sa.Column(name, column_type, nullable=True))
 
 
 def downgrade() -> None:
+    """Remove the agent upgrade tracking columns from ``agent_machines``."""
     with op.batch_alter_table("agent_machines") as batch_op:
         for name, _ in _COLUMNS:
             batch_op.drop_column(name)
