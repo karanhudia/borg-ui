@@ -3,6 +3,7 @@ Comprehensive unit tests for restore API endpoints
 """
 
 import pytest
+from pathlib import Path
 from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
 from app.database.models import (
@@ -528,6 +529,60 @@ class TestRestoreStart:
         assert response.status_code == 200
         archives = {job["archive"] for job in response.json()["jobs"]}
         assert archives == {"old", "new"}
+
+    def test_list_reads_each_operation_log_file_once(
+        self, test_client: TestClient, admin_headers, test_db, tmp_path
+    ):
+        """The log lives in a file now, not on the row, so the list route has
+        to read it once per job rather than once per use of it. Archives.tsx
+        polls this route every three seconds at the default limit."""
+        from app.services.operations.details import restore_details
+
+        _set_log_save_policy(test_db, "all_jobs")
+        repo = Repository(
+            name="Restore Repo",
+            path="/test/restore-repo",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+        reads: list[str] = []
+        log_files = []
+        for index in range(3):
+            log_file = tmp_path / f"restore-{index}.log"
+            log_file.write_text("extracted a file\n", encoding="utf-8")
+            log_files.append(log_file)
+            op = Operation(
+                repository_id=repo.id,
+                kind="restore",
+                category="restore",
+                status="completed",
+                trigger="manual",
+                priority=0,
+                run_id=f"run-read-{index}",
+                log_file_path=str(log_file),
+                params={"archive_name": f"archive-{index}"},
+            )
+            test_db.add(op)
+            test_db.flush()
+            restore_details(test_db, op).archive = f"archive-{index}"
+        test_db.commit()
+
+        real_read_text = Path.read_text
+
+        def counting_read_text(self, *args, **kwargs):
+            reads.append(str(self))
+            return real_read_text(self, *args, **kwargs)
+
+        with patch.object(Path, "read_text", counting_read_text):
+            response = test_client.get("/api/restore/jobs", headers=admin_headers)
+
+        assert response.status_code == 200
+        assert len(response.json()["jobs"]) == 3
+        for log_file in log_files:
+            assert reads.count(str(log_file)) == 1
 
     def test_cancel_running_operation_kills_the_process_and_flags_the_runner(
         self, test_client: TestClient, admin_headers, test_db

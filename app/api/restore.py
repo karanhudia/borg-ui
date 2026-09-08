@@ -49,11 +49,11 @@ def _get_restore_job_repository(
     return db.query(Repository).filter(Repository.path == repository_path).first()
 
 
-def _restore_job_logs_visible(job: Any, log_save_policy: str) -> bool:
+def _restore_job_logs_visible(job: Any, log_save_policy: str, logs: Any) -> bool:
     return job_has_logs_by_policy(
         job,
         log_save_policy,
-        output_text=[job.logs, job.error_message],
+        output_text=[logs, job.error_message],
     )
 
 
@@ -276,8 +276,13 @@ async def get_restore_jobs(
                 continue
 
         log_save_policy = get_log_save_policy(db)
-        return {
-            "jobs": [
+        payload = []
+        for job in visible_jobs:
+            # One read per job. An operation keeps its log in a file (spec
+            # 6.1), so every use of `job.logs` is disk IO, and this route is
+            # polled every few seconds while the Archives page is open.
+            logs = job.logs
+            payload.append(
                 {
                     "id": job.id,
                     "repository": job.repository,
@@ -289,8 +294,8 @@ async def get_restore_jobs(
                     "progress": job.progress,
                     "error_message": job.error_message,
                     "logs": (
-                        job.logs
-                        if _restore_job_logs_visible(job, log_save_policy)
+                        logs
+                        if _restore_job_logs_visible(job, log_save_policy, logs)
                         else None
                     ),
                     "progress_details": {
@@ -301,9 +306,8 @@ async def get_restore_jobs(
                         "estimated_time_remaining": job.estimated_time_remaining or 0,
                     },
                 }
-                for job in visible_jobs
-            ]
-        }
+            )
+        return {"jobs": payload}
     except Exception as e:
         logger.error("Failed to get restore jobs", error=str(e))
         raise HTTPException(
@@ -330,6 +334,7 @@ async def get_restore_status(
         if repo:
             check_repo_access(db, current_user, repo, "operator")
         log_save_policy = get_log_save_policy(db)
+        logs = job.logs
 
         return {
             "id": job.id,
@@ -341,8 +346,8 @@ async def get_restore_status(
             "completed_at": serialize_datetime(job.completed_at),
             "progress": job.progress,
             "error_message": job.error_message,
-            "logs": job.logs
-            if _restore_job_logs_visible(job, log_save_policy)
+            "logs": logs
+            if _restore_job_logs_visible(job, log_save_policy, logs)
             else None,
             "progress_details": {
                 "nfiles": job.nfiles or 0,
