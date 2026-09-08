@@ -981,9 +981,7 @@ async def test_execute_backup_uses_rclone_sync_failure_for_hooks_and_notificatio
             new=AsyncMock(),
         ),
         patch.object(backup_service_fixture, "_update_archive_stats", new=AsyncMock()),
-        patch.object(
-            backup_service_fixture, "_update_repository_stats", new=AsyncMock()
-        ),
+        patch.object(backup_service_fixture, "_enqueue_index_followups"),
         patch.object(
             backup_service_fixture,
             "_sync_rclone_after_borg",
@@ -1066,9 +1064,7 @@ async def test_execute_backup_post_hook_failure_sends_single_failure_notificatio
             new=AsyncMock(),
         ),
         patch.object(backup_service_fixture, "_update_archive_stats", new=AsyncMock()),
-        patch.object(
-            backup_service_fixture, "_update_repository_stats", new=AsyncMock()
-        ),
+        patch.object(backup_service_fixture, "_enqueue_index_followups"),
         patch(
             "app.services.backup_service.asyncio.create_subprocess_exec",
             return_value=mock_process,

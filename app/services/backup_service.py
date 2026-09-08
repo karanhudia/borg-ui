@@ -22,6 +22,7 @@ from app.services.notification_service import notification_service
 from app.services.script_executor import execute_script
 from app.services.script_library_executor import ScriptLibraryExecutor
 from app.services.mqtt_service import mqtt_service
+from app.services.operations.followups import enqueue_backup_followups
 from app.services.rclone_repository_service import rclone_repository_service
 from app.services.restore_check_canary import (
     ensure_restore_canary,
@@ -566,98 +567,26 @@ class BackupService:
         except Exception as e:
             logger.error("Failed to update archive stats", job_id=job_id, error=str(e))
 
-    async def _update_repository_stats(
-        self, db: Session, repository_path: str, env: dict
-    ):
-        """Update repository statistics after a successful backup"""
+    def _enqueue_index_followups(self, db: Session, repo_record, job) -> None:
+        """Refresh the archive index through the operations runner after a
+        backup (spec 7.4): archive_sync derives archive_count and last_backup
+        from the listing, stats refreshes the size. Never fails the backup."""
+        if repo_record is None:
+            return
         try:
-            repo_record = (
-                db.query(Repository).filter(Repository.path == repository_path).first()
-            )
-            if not repo_record:
-                logger.warning(
-                    "Repository record not found for stats update",
-                    repository=repository_path,
-                )
-                return
-            router = BorgRouter(repo_record)
-
-            # Get timeouts from DB settings (with fallback to config)
-            timeouts = self._get_operation_timeouts(db)
-
-            async def _operation():
-                list_cmd = router.build_repo_list_command(repository_path)
-                list_process = await asyncio.create_subprocess_exec(
-                    *list_cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    env=env,
-                )
-                list_stdout, list_stderr = await asyncio.wait_for(
-                    list_process.communicate(), timeout=timeouts["list_timeout"]
-                )
-
-                if list_process.returncode == 0:
-                    try:
-                        archives_data = json.loads(list_stdout.decode())
-                        archive_count = len(archives_data.get("archives", []))
-                        repo_record.archive_count = archive_count
-                        logger.info(
-                            "Updated archive count",
-                            repository=repository_path,
-                            count=archive_count,
-                        )
-                    except json.JSONDecodeError as e:
-                        logger.warning("Failed to parse borg list output", error=str(e))
-
-                info_cmd = router.build_repo_info_command(repository_path)
-                info_process = await asyncio.create_subprocess_exec(
-                    *info_cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    env=env,
-                )
-                info_stdout, info_stderr = await asyncio.wait_for(
-                    info_process.communicate(), timeout=timeouts["info_timeout"]
-                )
-
-                if info_process.returncode == 0:
-                    try:
-                        info_data = json.loads(info_stdout.decode())
-                        cache_stats = info_data.get("cache", {}).get("stats", {})
-
-                        # Get total repository size (unique_size is deduplicated size)
-                        unique_size = cache_stats.get("unique_size", 0)
-                        if unique_size > 0:
-                            # Format size to human readable
-                            repo_record.total_size = self._format_bytes(unique_size)
-                            logger.info(
-                                "Updated repository size",
-                                repository=repository_path,
-                                size=repo_record.total_size,
-                            )
-                    except json.JSONDecodeError as e:
-                        logger.warning("Failed to parse borg info output", error=str(e))
-
-                # Update last_backup timestamp
-                repo_record.last_backup = datetime.utcnow()
-
-                db.commit()
-                logger.info("Repository statistics updated", repository=repository_path)
-
-                # Publish a full DB-derived MQTT snapshot immediately after stats changes.
-                mqtt_service.sync_state_with_db(db, reason="repository stats updated")
-
-            await run_serialized_repository_command(repo_record.id, _operation)
-
-        except asyncio.TimeoutError:
-            logger.warning(
-                "Timeout while updating repository stats", repository=repository_path
+            enqueue_backup_followups(
+                db,
+                repo_record.id,
+                scheduled_job_id=getattr(job, "scheduled_job_id", None),
+                backup_plan_run_id=getattr(job, "backup_plan_run_id", None),
             )
         except Exception as e:
-            logger.error(
-                "Failed to update repository stats",
-                repository=repository_path,
+            # enqueue_chain commits; a failed commit leaves the session in
+            # need of a rollback before the finalization below commits again
+            db.rollback()
+            logger.warning(
+                "Failed to enqueue index follow-ups",
+                repository=repo_record.name,
                 error=str(e),
             )
 
@@ -2652,8 +2581,7 @@ class BackupService:
                 await self._update_archive_stats(
                     db, job_id, repository, archive_name, env
                 )
-                # Update repository statistics after successful backup
-                await self._update_repository_stats(db, repository, env)
+                self._enqueue_index_followups(db, repo_record, job)
                 rclone_sync_ok = await self._sync_rclone_after_borg(
                     db, repo_record, job
                 )
@@ -2768,8 +2696,7 @@ class BackupService:
                 await self._update_archive_stats(
                     db, job_id, repository, archive_name, env
                 )
-                # Update repository statistics even with warnings
-                await self._update_repository_stats(db, repository, env)
+                self._enqueue_index_followups(db, repo_record, job)
                 await self._sync_rclone_after_borg(db, repo_record, job)
 
                 # Run post-backup hooks even with warnings (script library or inline)

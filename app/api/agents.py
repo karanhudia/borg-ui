@@ -56,6 +56,10 @@ from app.services.agent_job_notifications import (
     notify_check_job_finished,
     orm_identity_id,
 )
+from app.services.operations.followups import (
+    enqueue_backup_followups,
+    history_enabled,
+)
 from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
@@ -473,14 +477,43 @@ def _finish_linked_backup_job(
         if archive_name:
             backup_job.archive_name = archive_name
 
-        repository = (
-            db.query(Repository)
-            .filter(Repository.path == backup_job.repository)
-            .first()
-        )
+        repository = None
+        if backup_job.repository_id:
+            repository = db.get(Repository, backup_job.repository_id)
+        if repository is None:
+            repository = (
+                db.query(Repository)
+                .filter(Repository.path == backup_job.repository)
+                .first()
+            )
         if repository:
-            repository.last_backup = completed_at
             repository.updated_at = _now_utc()
+            repository_name = repository.name
+            # archive_sync derives last_backup from the listing; the caller
+            # commits, and the runner polls for the new rows. The attempt
+            # runs in a savepoint: a failed flush inside enqueue would
+            # otherwise leave the session needing a rollback, and a plain
+            # rollback here would discard the terminal state the caller has
+            # pending. Only the enqueue is undone; the name and the plan
+            # gate (which commits through the licensing service) are read
+            # before the savepoint opens.
+            history = history_enabled(db)
+            try:
+                with db.begin_nested():
+                    enqueue_backup_followups(
+                        db,
+                        repository.id,
+                        scheduled_job_id=backup_job.scheduled_job_id,
+                        backup_plan_run_id=backup_job.backup_plan_run_id,
+                        commit=False,
+                        history=history,
+                    )
+            except Exception as exc:
+                logger.warning(
+                    "Failed to enqueue index follow-ups",
+                    repository=repository_name,
+                    error=str(exc),
+                )
 
 
 def _get_repository_operation_job(agent_job: AgentJob, db: Session) -> Any | None:

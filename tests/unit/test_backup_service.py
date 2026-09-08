@@ -11,7 +11,15 @@ from unittest.mock import ANY, Mock, patch, AsyncMock, MagicMock
 from sqlalchemy.orm import sessionmaker
 from app.services.backup_service import BackupService
 from app.services.filesystem_snapshot_service import PreparedFilesystemSnapshot
-from app.database.models import BackupJob, Repository, SSHConnection, SystemSettings
+from types import SimpleNamespace
+
+from app.database.models import (
+    BackupJob,
+    Operation,
+    Repository,
+    SSHConnection,
+    SystemSettings,
+)
 
 
 class AsyncLineStream:
@@ -263,10 +271,9 @@ class TestBackupService:
                 test_db, job.id, "/test/repo", "test-archive", {}
             )
 
-    @pytest.mark.asyncio
-    async def test_update_repository_stats_success(self, backup_service, test_db):
-        """Test _update_repository_stats with successful response"""
-        # Create a repository record
+    def test_enqueue_index_followups_creates_operations(self, backup_service, test_db):
+        """After a backup the index refresh goes through the operations
+        runner instead of an inline borg list/info (#933)."""
         repo = Repository(
             name="Test Repo",
             path="/test/repo",
@@ -275,41 +282,27 @@ class TestBackupService:
         )
         test_db.add(repo)
         test_db.commit()
+        job = SimpleNamespace(scheduled_job_id=7, backup_plan_run_id=None)
 
-        # Mock the subprocess to return valid JSON
-        mock_process = AsyncMock()
-        mock_process.communicate = AsyncMock(
-            return_value=(b'{"cache": {"stats": {"total_size": 1000000}}}', b"")
-        )
-        mock_process.returncode = 0
+        with patch("app.services.operations.enqueue.wake_runner", lambda: None):
+            backup_service._enqueue_index_followups(test_db, repo, job)
 
-        with patch("asyncio.create_subprocess_exec", return_value=mock_process):
-            # Should not raise exception
-            await backup_service._update_repository_stats(test_db, "/test/repo", {})
+        ops = test_db.query(Operation).order_by(Operation.id).all()
+        assert [o.kind for o in ops] == ["archive_sync", "history_merge", "stats"]
+        assert all(o.trigger == "followup" for o in ops)
+        assert all(o.scheduled_job_id == 7 for o in ops)
 
-    @pytest.mark.asyncio
-    async def test_update_repository_stats_failure(self, backup_service, test_db):
-        """Test _update_repository_stats when borg command fails"""
-        # Create a repository record
-        repo = Repository(
-            name="Test Repo",
-            path="/test/repo",
-            encryption="none",
-            repository_type="local",
-        )
+    def test_enqueue_index_followups_never_raises(self, backup_service, test_db):
+        repo = Repository(name="Test Repo", path="/test/repo", encryption="none")
         test_db.add(repo)
         test_db.commit()
-
-        # Mock the subprocess to return error
-        mock_process = AsyncMock()
-        mock_process.communicate = AsyncMock(
-            return_value=(b"", b"Repository not found")
-        )
-        mock_process.returncode = 1
-
-        with patch("asyncio.create_subprocess_exec", return_value=mock_process):
-            # Should not raise exception, just log warning
-            await backup_service._update_repository_stats(test_db, "/test/repo", {})
+        with patch(
+            "app.services.backup_service.enqueue_backup_followups",
+            side_effect=RuntimeError("boom"),
+        ):
+            backup_service._enqueue_index_followups(
+                test_db, repo, SimpleNamespace(scheduled_job_id=None)
+            )
 
     def test_get_operation_timeouts_prefers_database_values(
         self, backup_service, test_db
@@ -483,122 +476,6 @@ class TestBackupService:
         assert order[:3] == ["lock-held", "lock-released", "subprocess:info"]
 
     @pytest.mark.asyncio
-    async def test_update_repository_stats_updates_repository_and_publishes_snapshot(
-        self, backup_service, test_db
-    ):
-        repo = Repository(
-            name="Test Repo",
-            path="/test/repo",
-            encryption="none",
-            repository_type="local",
-        )
-        test_db.add(repo)
-        test_db.commit()
-        test_db.refresh(repo)
-
-        list_process = AsyncMock()
-        list_process.communicate = AsyncMock(
-            return_value=(b'{"archives": [{"name": "a"}, {"name": "b"}]}', b"")
-        )
-        list_process.returncode = 0
-        info_process = AsyncMock()
-        info_process.communicate = AsyncMock(
-            return_value=(b'{"cache": {"stats": {"unique_size": 1048576}}}', b"")
-        )
-        info_process.returncode = 0
-        mqtt = Mock()
-        mqtt.sync_state_with_db = Mock()
-
-        with (
-            patch(
-                "asyncio.create_subprocess_exec",
-                side_effect=[list_process, info_process],
-            ),
-            patch("app.services.backup_service.mqtt_service", mqtt),
-        ):
-            await backup_service._update_repository_stats(test_db, "/test/repo", {})
-
-        test_db.refresh(repo)
-        assert repo.archive_count == 2
-        assert repo.total_size == "1.00 MB"
-        assert repo.last_backup is not None
-        mqtt.sync_state_with_db.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_update_repository_stats_waits_for_repository_command_lock(
-        self, backup_service, test_db
-    ):
-        from app.services.repository_command_lock import (
-            run_serialized_repository_command,
-        )
-
-        repo = Repository(
-            name="Test Repo",
-            path="/test/repo",
-            encryption="none",
-            repository_type="local",
-        )
-        test_db.add(repo)
-        test_db.commit()
-        test_db.refresh(repo)
-
-        order: list[str] = []
-        holder_started = asyncio.Event()
-        release_holder = asyncio.Event()
-
-        async def hold_repository_lock():
-            async def operation():
-                order.append("lock-held")
-                holder_started.set()
-                await release_holder.wait()
-                order.append("lock-released")
-
-            await run_serialized_repository_command(repo.id, operation)
-
-        holder_task = asyncio.create_task(hold_repository_lock())
-        await holder_started.wait()
-        stats_task = None
-
-        async def fake_create_subprocess_exec(*cmd, **kwargs):
-            order.append(f"subprocess:{cmd[1]}")
-            process = AsyncMock()
-            stdout = (
-                b'{"archives": []}'
-                if cmd[1] in {"list", "repo-list"}
-                else b'{"cache": {"stats": {"unique_size": 0}}}'
-            )
-            process.communicate = AsyncMock(return_value=(stdout, b""))
-            process.returncode = 0
-            return process
-
-        try:
-            with patch(
-                "asyncio.create_subprocess_exec",
-                side_effect=fake_create_subprocess_exec,
-            ):
-                stats_task = asyncio.create_task(
-                    backup_service._update_repository_stats(test_db, repo.path, {})
-                )
-                await asyncio.sleep(0.01)
-
-                assert not any(item.startswith("subprocess:") for item in order)
-
-                release_holder.set()
-                await asyncio.wait_for(holder_task, timeout=1)
-                await asyncio.wait_for(stats_task, timeout=1)
-        finally:
-            release_holder.set()
-            pending_tasks = [
-                task
-                for task in (holder_task, stats_task)
-                if task is not None and not task.done()
-            ]
-            if pending_tasks:
-                await asyncio.gather(*pending_tasks, return_exceptions=True)
-
-        assert order[:3] == ["lock-held", "lock-released", "subprocess:list"]
-
-    @pytest.mark.asyncio
     async def test_execute_backup_success_saves_logs_and_notifies_success(
         self, backup_service, test_db, tmp_path
     ):
@@ -658,7 +535,7 @@ class TestBackupService:
                 backup_service, "_calculate_and_update_size_background", AsyncMock()
             ),
             patch.object(backup_service, "_update_archive_stats", AsyncMock()),
-            patch.object(backup_service, "_update_repository_stats", AsyncMock()),
+            patch.object(backup_service, "_enqueue_index_followups"),
             patch(
                 "app.services.backup_service.resolve_repo_ssh_key_file",
                 return_value=None,
@@ -772,7 +649,7 @@ class TestBackupService:
                     backup_service, "_calculate_and_update_size_background", AsyncMock()
                 ),
                 patch.object(backup_service, "_update_archive_stats", AsyncMock()),
-                patch.object(backup_service, "_update_repository_stats", AsyncMock()),
+                patch.object(backup_service, "_enqueue_index_followups"),
                 patch(
                     "app.services.backup_service.resolve_repo_ssh_key_file",
                     return_value=None,
@@ -887,7 +764,7 @@ class TestBackupService:
                     backup_service, "_calculate_and_update_size_background", AsyncMock()
                 ),
                 patch.object(backup_service, "_update_archive_stats", AsyncMock()),
-                patch.object(backup_service, "_update_repository_stats", AsyncMock()),
+                patch.object(backup_service, "_enqueue_index_followups"),
                 patch(
                     "app.services.backup_service.resolve_repo_ssh_key_file",
                     return_value=None,
@@ -992,7 +869,7 @@ class TestBackupService:
                 backup_service, "_calculate_and_update_size_background", AsyncMock()
             ) as calculate_size,
             patch.object(backup_service, "_update_archive_stats", AsyncMock()),
-            patch.object(backup_service, "_update_repository_stats", AsyncMock()),
+            patch.object(backup_service, "_enqueue_index_followups"),
             patch(
                 "app.services.backup_service.resolve_repo_ssh_key_file",
                 return_value=None,
@@ -1125,7 +1002,7 @@ class TestBackupService:
                 calculate_size,
             ),
             patch.object(backup_service, "_update_archive_stats", AsyncMock()),
-            patch.object(backup_service, "_update_repository_stats", AsyncMock()),
+            patch.object(backup_service, "_enqueue_index_followups"),
             patch(
                 "app.services.backup_service.resolve_repo_ssh_key_file",
                 return_value=None,
@@ -1482,7 +1359,7 @@ class TestBackupService:
                 backup_service, "_calculate_and_update_size_background", AsyncMock()
             ),
             patch.object(backup_service, "_update_archive_stats", AsyncMock()),
-            patch.object(backup_service, "_update_repository_stats", AsyncMock()),
+            patch.object(backup_service, "_enqueue_index_followups"),
             patch(
                 "app.services.backup_service.resolve_repo_ssh_key_file",
                 return_value=None,
@@ -1580,7 +1457,7 @@ class TestBackupService:
                 "_update_archive_stats",
                 AsyncMock(side_effect=assert_terminal_state_before_stats),
             ),
-            patch.object(backup_service, "_update_repository_stats", AsyncMock()),
+            patch.object(backup_service, "_enqueue_index_followups"),
             patch(
                 "app.services.backup_service.resolve_repo_ssh_key_file",
                 return_value=None,
@@ -1663,7 +1540,7 @@ class TestBackupService:
                 backup_service, "_calculate_and_update_size_background", AsyncMock()
             ),
             patch.object(backup_service, "_update_archive_stats", AsyncMock()),
-            patch.object(backup_service, "_update_repository_stats", AsyncMock()),
+            patch.object(backup_service, "_enqueue_index_followups"),
             patch(
                 "app.services.backup_service.resolve_repo_ssh_key_file",
                 return_value=None,
@@ -1750,7 +1627,7 @@ class TestBackupService:
                 backup_service, "_calculate_and_update_size_background", AsyncMock()
             ),
             patch.object(backup_service, "_update_archive_stats", AsyncMock()),
-            patch.object(backup_service, "_update_repository_stats", AsyncMock()),
+            patch.object(backup_service, "_enqueue_index_followups"),
             patch(
                 "app.services.backup_service.resolve_repo_ssh_key_file",
                 return_value=None,
@@ -1993,7 +1870,7 @@ class TestBackupService:
                 backup_service, "_calculate_and_update_size_background", AsyncMock()
             ),
             patch.object(backup_service, "_update_archive_stats", AsyncMock()),
-            patch.object(backup_service, "_update_repository_stats", AsyncMock()),
+            patch.object(backup_service, "_enqueue_index_followups"),
             patch(
                 "app.services.backup_service.resolve_repo_ssh_key_file",
                 return_value=None,
@@ -2090,7 +1967,7 @@ class TestBackupService:
                 backup_service, "_calculate_and_update_size_background", AsyncMock()
             ),
             patch.object(backup_service, "_update_archive_stats", AsyncMock()),
-            patch.object(backup_service, "_update_repository_stats", AsyncMock()),
+            patch.object(backup_service, "_enqueue_index_followups"),
             patch(
                 "app.services.backup_service.resolve_repo_ssh_key_file",
                 return_value=None,
