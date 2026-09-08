@@ -811,7 +811,7 @@ def test_session_runtime_connects_with_websocket_url_and_sends_hello(monkeypatch
         "type": "hello",
         "agent_id": "agt_123",
         "hostname": "host.local",
-        "agent_version": "0.1.3",
+        "agent_version": "0.1.4",
         "timezone": None,
         "borg_versions": [],
         "capabilities": get_capabilities(),

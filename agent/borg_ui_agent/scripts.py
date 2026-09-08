@@ -163,7 +163,11 @@ def resolve_allowed_script(name: Any) -> Path:
     # hidden (which also excludes the ``..data`` volume internals).
     if name in (".", "..") or name.startswith("."):
         raise ScriptNotAllowed(f"invalid script name: {name!r}")
-    if name != os.path.basename(name) or os.sep in name or (os.altsep and os.altsep in name):
+    if (
+        name != os.path.basename(name)
+        or os.sep in name
+        or (os.altsep and os.altsep in name)
+    ):
         raise ScriptNotAllowed(f"invalid script name: {name!r}")
 
     root = scripts_dir()
@@ -305,10 +309,14 @@ def execute_script_run_job(
                 pass
 
     out_thread = threading.Thread(
-        target=pump, args=("stdout", process.stdout, stdout_buf, stdout_size), daemon=True
+        target=pump,
+        args=("stdout", process.stdout, stdout_buf, stdout_size),
+        daemon=True,
     )
     err_thread = threading.Thread(
-        target=pump, args=("stderr", process.stderr, stderr_buf, stderr_size), daemon=True
+        target=pump,
+        args=("stderr", process.stderr, stderr_buf, stderr_size),
+        daemon=True,
     )
     out_thread.start()
     err_thread.start()

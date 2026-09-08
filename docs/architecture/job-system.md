@@ -212,8 +212,13 @@ Rules:
   whose key is bound to the REST server). The labels name different
   quantities: `compact --stats` counts pack file bytes, which include data
   no index entry covers, so it and `borg2_index` agree only on a fully
-  indexed repository. An unknown size leaves the stored value alone,
-  never `0`. Both versions' `repository.last_modified` (the last manifest
+  indexed repository. Agent repositories get the same order from the
+  agent's `repository.storage_usage` job (agents from 0.1.4; older agents
+  keep `repository.disk_usage`, which only measures local paths). The
+  agent measures local paths with du but has no `ssh://` du path; that
+  one exists on the server only, where the SSH key is at hand. An
+  unknown size leaves the stored value alone, never `0`. Both versions'
+  `repository.last_modified` (the last manifest
   write) lands in `repositories.borg_last_modified`.
 - The repository status (`GET /repositories/{id}/status`, also served as
   `/status-strip`) reads repository evidence first: backup is the newest
