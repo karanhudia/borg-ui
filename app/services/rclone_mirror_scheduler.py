@@ -88,6 +88,24 @@ def _scheduled_job_exists(
     )
 
 
+def _mirror_in_flight(db: Session, repository_id: int) -> bool:
+    """True while a scheduled mirror run for this repository is queued or
+    running. The pre-phase-6 scheduler kept a set of live tasks for the same
+    purpose; the operations table is that set now. A due slot is left as it is
+    and picked up on the first tick after the run finishes."""
+    return (
+        db.query(Operation.id)
+        .filter(
+            Operation.repository_id == repository_id,
+            Operation.kind == "rclone_sync",
+            Operation.trigger == "schedule",
+            Operation.status.in_(("queued", "running")),
+        )
+        .first()
+        is not None
+    )
+
+
 def _enqueue_scheduled_mirror(
     db: Session, *, repository_id: int, direction: str, scheduled_for: datetime
 ) -> bool:
@@ -151,6 +169,8 @@ def dispatch_due_scheduled_rclone_mirrors(
 
     dispatched = 0
     for storage in due_storages:
+        if _mirror_in_flight(db, storage.repository_id):
+            continue
         scheduled_for = storage.next_scheduled_sync_at or now
         storage.next_scheduled_sync_at = _calculate_next_sync_run(storage, now)
         db.commit()
@@ -186,6 +206,8 @@ async def run_due_scheduled_rclone_mirrors(
 
     logger.info("Found due scheduled rclone mirror syncs", count=len(due_storages))
     for storage in due_storages:
+        if _mirror_in_flight(db, storage.repository_id):
+            continue
         scheduled_for = storage.next_scheduled_sync_at or now
         repository_id = storage.repository_id
         direction = storage.sync_direction

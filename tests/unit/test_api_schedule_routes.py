@@ -681,6 +681,67 @@ class TestScheduleRouteContracts:
             == 1
         )
 
+    def test_dispatch_scheduled_rclone_mirror_skips_a_repository_still_in_flight(
+        self, test_db, monkeypatch
+    ):
+        """The pre-phase-6 scheduler skipped a storage whose sync task was still
+        running. A queued or running scheduled run is the same signal now: the
+        slot stays due and is picked up once that run has finished."""
+        from app.services import rclone_mirror_scheduler
+        from app.services.operations.details import rclone_details
+        from app.services.operations.enqueue import enqueue
+
+        now = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
+        remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+        repo = Repository(
+            name="Mirror Repo",
+            path="/repos/mirror",
+            encryption="none",
+            repository_type="local",
+            mode="full",
+        )
+        test_db.add_all([remote, repo])
+        test_db.commit()
+        test_db.refresh(remote)
+        test_db.refresh(repo)
+        due_at = now - timedelta(minutes=5)
+        storage = RepositoryStorage(
+            repository_id=repo.id,
+            backend="rclone",
+            rclone_remote_id=remote.id,
+            rclone_remote_path="borg-ui/repositories/mirror",
+            cache_path=repo.path,
+            sync_policy="scheduled",
+            sync_status="syncing",
+            sync_direction="primary_to_remote",
+            sync_cron_expression="*/15 * * * *",
+            sync_timezone="UTC",
+            next_scheduled_sync_at=due_at,
+        )
+        test_db.add(storage)
+        earlier = enqueue(
+            test_db,
+            "rclone_sync",
+            repository_id=repo.id,
+            trigger="schedule",
+            commit=False,
+        )
+        earlier.status = "running"
+        rclone_details(test_db, earlier).scheduled_for = due_at - timedelta(minutes=15)
+        test_db.commit()
+
+        dispatched = rclone_mirror_scheduler.dispatch_due_scheduled_rclone_mirrors(
+            test_db, now
+        )
+
+        test_db.refresh(storage)
+        assert dispatched == 0
+        assert (
+            test_db.query(Operation).filter(Operation.kind == "rclone_sync").count()
+            == 1
+        )
+        assert storage.next_scheduled_sync_at == due_at.replace(tzinfo=None)
+
     def test_validate_cron_returns_preview_for_valid_expression(
         self, test_client: TestClient, admin_headers
     ):

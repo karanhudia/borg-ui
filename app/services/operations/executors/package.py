@@ -35,8 +35,14 @@ async def run_package_install(ctx) -> Outcome:
     if operation.status == "completed":
         return Outcome(status="completed", result={"exit_code": job.exit_code})
     # `Outcome` has no cancelled status (spec 6.3 gives that to the row); the
-    # runner rewrites the row itself when it sees its own cancel flag.
-    return Outcome(status="failed", error_message=job.error_message)
+    # runner rewrites the row itself when it sees its own cancel flag. The exit
+    # code rides along: the runner replaces `result` with the outcome's, and a
+    # failed install is exactly when a reader wants to see it.
+    return Outcome(
+        status="failed",
+        error_message=job.error_message,
+        result={"exit_code": job.exit_code},
+    )
 
 
 executors.register("package_install", run_package_install)

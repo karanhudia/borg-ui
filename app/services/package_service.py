@@ -52,7 +52,6 @@ class PackageInstallService:
         from app.database.database import SessionLocal
 
         db = SessionLocal()
-        close_db = getattr(SessionLocal, "return_value", None) is not db
         job = None
         # Bound before the try: the failure handler below reads it, and the
         # first statement in the try is what resolves it.
@@ -191,8 +190,7 @@ class PackageInstallService:
                 db.rollback()
 
         finally:
-            if close_db:
-                db.close()
+            db.close()
 
     def get_job_status(self, db: Session, job_id: int):
         """Get the current status of a job. Operations first, then a

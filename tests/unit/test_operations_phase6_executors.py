@@ -314,6 +314,44 @@ async def test_run_rclone_sync_marks_storage_failed_when_the_row_never_finishes(
 
 
 @pytest.mark.asyncio
+async def test_run_rclone_sync_marks_storage_failed_when_the_service_raises(
+    db, repository, monkeypatch
+):
+    """An exception escaping the service reaches the runner, which fails the
+    row; the storage must not be left on "syncing" on the way out."""
+    from app.database.models import RepositoryStorage
+    from app.services.operations.details import rclone_details
+
+    load_default_executors()
+    storage = RepositoryStorage(
+        repository_id=repository.id,
+        backend="rclone",
+        cache_path="/cache/nas",
+        sync_status="syncing",
+    )
+    db.add(storage)
+    op = _operation(db, repository, "rclone_sync", "mirror", run_id="run-8b")
+    rclone_details(db, op).operation = "sync"
+    db.commit()
+
+    async def _sync(session, repo, **kwargs):
+        raise RuntimeError("rclone binary missing")
+
+    monkeypatch.setattr(
+        "app.services.rclone_repository_service.rclone_repository_service"
+        ".sync_repository",
+        _sync,
+    )
+
+    with pytest.raises(RuntimeError, match="rclone binary missing"):
+        await get_executor("rclone_sync")(FakeContext(db, op))
+
+    db.refresh(storage)
+    assert storage.sync_status == "failed"
+    assert storage.last_sync_error == "rclone binary missing"
+
+
+@pytest.mark.asyncio
 async def test_run_rclone_sync_stamps_the_scheduled_run_on_the_storage(
     db, repository, monkeypatch
 ):
@@ -410,6 +448,7 @@ async def test_run_package_install_reports_a_failure(db, monkeypatch):
     async def _run_install_job(job_id):
         job = PackageInstallFacade(db, db.get(Operation, job_id))
         job.status = "failed"
+        job.exit_code = 100
         job.error_message = "Installation failed with exit code 100"
         db.commit()
 
@@ -422,3 +461,6 @@ async def test_run_package_install_reports_a_failure(db, monkeypatch):
 
     assert outcome.status == "failed"
     assert outcome.error_message == "Installation failed with exit code 100"
+    # The runner replaces `result` with the outcome's, so the exit code the
+    # service recorded has to ride along or the failed job loses it.
+    assert outcome.result == {"exit_code": 100}

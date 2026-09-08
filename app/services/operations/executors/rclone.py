@@ -93,6 +93,11 @@ async def run_rclone_sync(ctx) -> Outcome:
     except asyncio.CancelledError:
         _mark_storage_failed(ctx.db, repository.id, "rclone sync was cancelled")
         raise
+    except Exception as exc:
+        # The runner fails the row from the exception; the storage has to
+        # follow, or it reads "syncing" until the next successful run.
+        _mark_storage_failed(ctx.db, repository.id, str(exc) or exc.__class__.__name__)
+        raise
 
     # The service may have run in its own session; expire this one so the
     # verdict it wrote is read back rather than assumed.

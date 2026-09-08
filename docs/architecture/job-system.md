@@ -126,8 +126,10 @@ take the repository lane. It serialises on the `rclone` lock scope instead, as
 it always has, and the executor is what takes that lock now, so the mirror
 scheduler gets it too (it did not before). The scheduler and the initial sync
 queued when a cloud repository is created both only enqueue; the runner starts
-them. The legacy `triggered_by` word `initial` is stored as the trigger
-`import` and mapped back on read.
+them. The scheduler skips a repository whose scheduled run is still queued or
+running and leaves the slot due, so a sync that outlasts its interval is
+followed by one run, not a backlog. The legacy `triggered_by` word `initial`
+is stored as the trigger `import` and mapped back on read.
 
 **Package install** has no repository and no lane. Its `package_id` lives in
 `operations.params`, its exit code in `operations.result`, and its captured
