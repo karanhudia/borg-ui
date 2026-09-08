@@ -101,10 +101,11 @@ def test_overdue_thresholds():
         "index": 2,
         "mirror": 1,
     }
-    assert an.overdue("backup", now - timedelta(days=2, seconds=1), now) is True
-    assert an.overdue("backup", now - timedelta(days=2), now) is False
-    assert an.overdue("check", None, now) is True
-    assert an.overdue("unknown", now, now) is False
+    # the fixed thresholds feed the heatmap and the default cadence; the
+    # strip judges against overdue_after with a schedule-aware threshold
+    assert an.overdue_after(now - timedelta(days=2, seconds=1), now, timedelta(days=2))
+    assert not an.overdue_after(now - timedelta(days=2), now, timedelta(days=2))
+    assert an.overdue_after(None, now, timedelta(days=30))
 
 
 @pytest.mark.unit

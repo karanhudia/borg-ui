@@ -645,7 +645,8 @@ list responses when `collapse_runs=true`).
 | Method | Route | Purpose |
 | --- | --- | --- |
 | POST | `/repositories/{id}/rebuild` | Body `{"from": "stats" \| "archives" \| "history"}`. Invalidates that stage and later ones, enqueues a manual run at priority 20. `history` sets all archives `pending` and deletes their change rows. |
-| GET | `/repositories/{id}/status-strip` | Latest terminal operation per category for this repository, plus age thresholds. |
+| GET | `/repositories/{id}/status` | Repository status per category from repository evidence: one cell per applicable category with status, `completed_at`, `threshold_days`, `overdue`, `running` and `source`; evidence precedence and overdue rules in section 10.2. |
+| GET | `/repositories/{id}/status-strip` | Same payload as `/status` (kept for the status strip component). |
 | GET | `/repositories/{id}/archives` | From `archives`. Query: `series`, `since`, `until`. Includes `sync_state` (`fresh`, `syncing`, `stale`, `never`). |
 | GET | `/repositories/{id}/archives/heatmap` | Per series, per day: count, total deduplicated size, anomaly flags. |
 | GET | `/repositories/{id}/archives/{archive_id}` | One archive with history state. |
@@ -690,7 +691,12 @@ and status-strip routes. Pure functions with unit tests.
   the previous 7.
 - `overdue_<category>`: last terminal operation in a category older than
   the category's threshold. Defaults: backup 2 days, check 30 days, prune
-  14 days, compact 30 days, index 2 days, mirror 1 day.
+  14 days, compact 30 days, index 2 days, mirror 1 day. These fixed
+  thresholds are what `anomalies.overdue` implements and what the heatmap
+  uses. The status strip does not apply them as such: section 10.2
+  judges each cell against what the repository can expect (series cadence
+  for backup, the check schedule, the plans that run prune or compact) and
+  falls back to the fixed defaults only where noted there.
 
 ## 10. Frontend
 
@@ -752,7 +758,35 @@ nas-backup                                     41.2 GB · 38 archives
 Cells render only for categories that apply (no Mirror cell without rclone
 storage). One `CategoryToken` component owns icon and colour per category
 and is reused by Activity, the pipeline board, and the archive page. The
-warning state comes from `overdue_<category>` anomalies.
+warning state comes from the cell's own `overdue` value (below), which
+is null where the repository expects nothing.
+
+Evidence per cell (#935, `app/services/operations/repository_status.py`,
+served by `GET /repositories/{id}/status` and, unchanged in shape, by
+`/status-strip`): backup is the newest archive in the archives table,
+whatever created it (rows the newest listing reported removed and
+`history_merge` has not deleted yet are excluded, as for `last_backup`);
+a failed or cancelled Borg UI attempt newer than that archive shows as
+that attempt; with no archives the newest job row stands. Prune is the
+newest successful `archive_sync` that reported removed archives (a
+cancelled sync gets no follow-ups, so its removals are not applied and
+the next successful listing reports them again), unless a prune run
+through Borg UI is newer. Check and compact have no repository evidence and
+keep their job rows. Overdue: backup per series, each against twice its
+own cadence (median gap of the series' last 14 archives, the fixed 2 days
+with fewer than two); the repository is overdue as soon as one series is,
+and the reported threshold is the strictest one. Timestamps of different
+series are never mixed into one cadence. Check when the repository's check
+schedule is enabled or a scheduled plan runs a check after its backups;
+prune and compact only when a plan or scheduled job runs them. A plan
+counts only when it is enabled, scheduled (not manual-only), dispatchable
+(availability mode or a cron expression; the scheduler yields no due time
+for a cron plan without one) and its association with the repository is
+enabled; a legacy scheduled job counts by the same dispatch rule and the
+scheduler's own target precedence (association rows, else the direct
+repository, else the repository path). Otherwise `overdue` is
+null. The `source` field is kept for precedence and debugging, the UI does
+not label it.
 
 ### 10.3 Archives page
 
