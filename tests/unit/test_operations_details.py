@@ -42,7 +42,7 @@ def _operation(db, repository, kind):
     op = Operation(
         repository_id=repository.id,
         kind=kind,
-        category="maintenance" if kind == "wipe" else "mirror",
+        category={"wipe": "maintenance", "restore": "restore"}.get(kind, "mirror"),
         status="queued",
         trigger="manual",
         priority=0,
@@ -91,3 +91,35 @@ def test_details_rows_are_deleted_with_their_operation(db, repository):
 
     assert db.query(OperationWipeDetails).count() == 0
     assert db.query(OperationRcloneDetails).count() == 0
+
+
+def test_restore_details_is_created_once_per_operation(db, repository):
+    from app.database.models import OperationRestoreDetails
+    from app.services.operations.details import restore_details
+
+    op = _operation(db, repository, "restore")
+
+    first = restore_details(db, op)
+    first.archive = "nas-2026-09-08"
+    first.original_size = 3 * 1024**3
+    second = restore_details(db, op)
+
+    assert first.operation_id == op.id
+    assert second is first
+    assert second.archive == "nas-2026-09-08"
+    assert second.original_size == 3 * 1024**3
+    assert db.query(OperationRestoreDetails).count() == 1
+
+
+def test_restore_details_row_is_deleted_with_its_operation(db, repository):
+    from app.database.models import OperationRestoreDetails
+    from app.services.operations.details import restore_details
+
+    op = _operation(db, repository, "restore")
+    restore_details(db, op)
+    db.commit()
+
+    db.delete(op)
+    db.commit()
+
+    assert db.query(OperationRestoreDetails).count() == 0

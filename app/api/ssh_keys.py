@@ -20,6 +20,7 @@ from app.database.models import (
     SSHConnection,
     Repository,
     BackupJob,
+    OperationRestoreDetails,
     RestoreJob,
     ScheduledJob,
 )
@@ -2388,6 +2389,9 @@ async def delete_ssh_connection(
         ).update({"source_ssh_connection_id": None}, synchronize_session=False)
         db.query(RestoreJob).filter(
             RestoreJob.destination_connection_id == connection_id
+        ).update({"destination_connection_id": None}, synchronize_session=False)
+        db.query(OperationRestoreDetails).filter(
+            OperationRestoreDetails.destination_connection_id == connection_id
         ).update({"destination_connection_id": None}, synchronize_session=False)
         db.query(ScheduledJob).filter(
             ScheduledJob.source_ssh_connection_id == connection_id

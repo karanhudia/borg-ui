@@ -2,13 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 import structlog
-from typing import List, Literal, Optional
-import json
+from typing import Any, List, Literal, Optional
 import os  # noqa: F401
-from datetime import timezone
-import asyncio
+from datetime import datetime, timezone
 
-from app.database.models import User, Repository, RestoreJob
+from app.database.models import User, Repository
 from app.database.database import get_db
 from app.core.borg_router import BorgRouter
 from app.core.security import (
@@ -17,6 +15,16 @@ from app.core.security import (
     require_repository_access_by_path,
 )
 from app.services.log_policy import get_log_save_policy, job_has_logs_by_policy
+from app.services.operations.details import restore_details
+from app.services.operations.enqueue import enqueue, wake_runner
+from app.services.operations.restore_facade import (
+    CANCELLED_BY_USER,
+    CANCELLED_PROCESS_NOT_FOUND,
+    list_restore_jobs,
+    resolve_restore_job,
+)
+from app.services.operations.runner import operation_runner
+from app.services.repository_executor import is_agent_executor
 from app.services.restore_service import restore_service
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.borg_env import (
@@ -41,7 +49,7 @@ def _get_restore_job_repository(
     return db.query(Repository).filter(Repository.path == repository_path).first()
 
 
-def _restore_job_logs_visible(job: RestoreJob, log_save_policy: str) -> bool:
+def _restore_job_logs_visible(job: Any, log_save_policy: str) -> bool:
     return job_has_logs_by_policy(
         job,
         log_save_policy,
@@ -188,55 +196,47 @@ async def start_restore(
             if destination_connection:
                 destination_hostname = destination_connection.host
 
-        # Create restore job record with new fields
-        restore_job = RestoreJob(
-            repository=repository_path,
-            archive=restore_request.archive,
-            destination=restore_request.destination,
-            status="pending",
-            destination_type=restore_request.destination_type,
-            destination_connection_id=restore_request.destination_connection_id,
-            execution_mode=execution_mode,
-            destination_hostname=destination_hostname,
-            repository_type=repository.repository_type,
-        )
-        db.add(restore_job)
-        db.commit()
-        db.refresh(restore_job)
-
-        # Execute restore in background using asyncio.create_task
-        # This ensures the task runs independently and doesn't block the response
-        asyncio.create_task(
-            restore_service.execute_restore(
-                restore_job.id,
-                repository_path,
-                restore_request.archive,
-                restore_request.destination,
-                restore_request.paths,
-                repository_type=repository.repository_type,
-                destination_type=restore_request.destination_type,
-                destination_connection_id=restore_request.destination_connection_id,
-                ssh_connection_id=repository.connection_id
-                if repository.repository_type == "ssh"
-                else None,
-                restore_layout=restore_request.restore_layout,
-                path_metadata=[
+        # Phase 7: the row is an operation (spec 6.1) with its restore columns
+        # on the details row (spec 6.2). The runner dispatches it (spec 7.1);
+        # this route spawns nothing of its own.
+        operation = enqueue(
+            db,
+            "restore",
+            repository_id=repository.id,
+            trigger="manual",
+            params={
+                "archive_name": restore_request.archive,
+                "paths": list(restore_request.paths),
+                "restore_layout": restore_request.restore_layout,
+                "path_metadata": [
                     _restore_path_metadata_to_dict(item)
                     for item in restore_request.path_metadata
                 ],
-            )
+            },
+            triggered_by_user_id=current_user.id,
+            execution_mode="agent" if is_agent_executor(repository) else "server",
+            commit=False,
         )
+        details = restore_details(db, operation)
+        details.archive = restore_request.archive
+        details.destination = restore_request.destination
+        details.destination_type = restore_request.destination_type
+        details.destination_connection_id = restore_request.destination_connection_id
+        details.destination_hostname = destination_hostname
+        details.repository_type = repository.repository_type
+        db.commit()
+        wake_runner()
 
         logger.info(
             "Restore job created",
-            job_id=restore_job.id,
+            job_id=operation.id,
             user=current_user.username,
             execution_mode=execution_mode,
             restore_layout=restore_request.restore_layout,
         )
 
         return {
-            "job_id": restore_job.id,
+            "job_id": operation.id,
             "status": "pending",
             "message": "backend.success.restore.restoreJobStarted",
         }
@@ -261,7 +261,7 @@ async def get_restore_jobs(
 ):
     """Get all restore jobs (most recent first)"""
     try:
-        jobs = db.query(RestoreJob).order_by(RestoreJob.id.desc()).limit(limit).all()
+        jobs = list_restore_jobs(db, limit)
         visible_jobs = []
         for job in jobs:
             repo = _get_restore_job_repository(db, job.repository)
@@ -320,7 +320,7 @@ async def get_restore_status(
 ):
     """Get restore job status"""
     try:
-        job = db.query(RestoreJob).filter(RestoreJob.id == job_id).first()
+        job = resolve_restore_job(db, job_id)
         if not job:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -370,7 +370,7 @@ async def cancel_restore(
 ):
     """Cancel a running restore job"""
     try:
-        job = db.query(RestoreJob).filter(RestoreJob.id == job_id).first()
+        job = resolve_restore_job(db, job_id)
         if not job:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -386,22 +386,20 @@ async def cancel_restore(
                 detail={"key": "backend.errors.restore.canOnlyCancelRunningJobs"},
             )
 
-        # Try to terminate the actual process
-        from datetime import datetime
-
+        # Order matters. The runner's flag has to be raised while the row is
+        # still `running` (request_cancel refuses any other status), and it is
+        # what makes the executor keep `cancelled` if the service writes
+        # `failed` for the killed process a moment later (spec 7.7). A
+        # pre-phase-7 row has no operation and no task; request_cancel
+        # answers False for it and the legacy write below still applies.
+        await operation_runner.request_cancel(job_id)
         process_killed = await restore_service.cancel_restore(job_id)
 
-        # Update job status in database
         job.status = "cancelled"
         job.completed_at = datetime.now(timezone.utc)
-        if process_killed:
-            job.error_message = json.dumps(
-                {"key": "backend.errors.restore.cancelledByUser"}
-            )
-        else:
-            job.error_message = json.dumps(
-                {"key": "backend.errors.restore.cancelledByUserProcessNotFound"}
-            )
+        job.error_message = (
+            CANCELLED_BY_USER if process_killed else CANCELLED_PROCESS_NOT_FOUND
+        )
         db.commit()
 
         logger.info(

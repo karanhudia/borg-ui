@@ -210,6 +210,18 @@ now live in the operation's log file and are parsed back for the response. The
 install is queued and started by the runner, so a fresh job answers `pending`
 before it answers `installing`.
 
+## Restore jobs
+
+As of section 13 phase 7 a restore is an `operations` row as well.
+`POST /api/restore/start` still answers `{"job_id", "status": "pending",
+"message"}`; the id is now an operations row id. `GET /api/restore/jobs`,
+`GET /api/restore/status/{id}`, and `POST /api/restore/cancel/{id}` keep
+their bodies and status words, serve operations first, and fall back to the
+pre-phase-7 row for that id. `progress_details.estimated_time_remaining` is
+computed from the sizes and the speed rather than stored. The restore's
+logs are its operation log file, readable through
+`GET /api/activity/restore/{id}/logs` as before.
+
 ## Archive index and history
 
 Database-backed archive routes under `/api/repositories/{id}`. Routes

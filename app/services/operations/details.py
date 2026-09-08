@@ -1,6 +1,6 @@
 """Get-or-create the spec 6.2 extension row for an operation.
 
-Only wipe and rclone sync have one in this phase. The row is flushed, not
+Wipe, rclone sync, and restore have one. The row is flushed, not
 committed, so a caller composing several writes keeps one transaction.
 """
 
@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.database.models import (
     Operation,
     OperationRcloneDetails,
+    OperationRestoreDetails,
     OperationWipeDetails,
 )
 
@@ -28,3 +29,7 @@ def wipe_details(db: Session, operation: Operation) -> OperationWipeDetails:
 
 def rclone_details(db: Session, operation: Operation) -> OperationRcloneDetails:
     return _get_or_create(db, OperationRcloneDetails, operation)
+
+
+def restore_details(db: Session, operation: Operation) -> OperationRestoreDetails:
+    return _get_or_create(db, OperationRestoreDetails, operation)

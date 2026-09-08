@@ -3,9 +3,15 @@ Comprehensive unit tests for restore API endpoints
 """
 
 import pytest
-from unittest.mock import ANY, patch, AsyncMock
+from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
-from app.database.models import Repository, RestoreJob, SystemSettings
+from app.database.models import (
+    Operation,
+    OperationRestoreDetails,
+    Repository,
+    RestoreJob,
+    SystemSettings,
+)
 from tests.unit.helpers import assert_auth_required
 
 
@@ -329,12 +335,12 @@ class TestRestoreStart:
 
         assert response.status_code == 200
 
-    def test_start_restore_accepts_repository_id_in_repository_field(
+    def test_start_restore_enqueues_an_operation_with_details(
         self, test_client: TestClient, admin_headers, test_db
     ):
         repo = Repository(
-            name="Test Repo",
-            path="/test/repo",
+            name="Restore Repo",
+            path="/test/restore-repo",
             encryption="none",
             repository_type="local",
         )
@@ -342,87 +348,235 @@ class TestRestoreStart:
         test_db.commit()
         test_db.refresh(repo)
 
+        # The live runner may dispatch the row before this test reads it back;
+        # a mocked service keeps that harmless. The assertions below do not
+        # depend on whether it ran.
         with patch(
-            "app.api.restore.asyncio.create_task", return_value=object()
-        ) as mock_create_task:
-            response = test_client.post(
-                "/api/restore/start",
-                json={
-                    "repository_id": repo.id,
-                    "repository": str(repo.id),
-                    "archive": "test-archive",
-                    "paths": ["/file.txt"],
-                    "destination": "/restore",
-                },
-                headers=admin_headers,
-            )
-
-        assert response.status_code == 200
-        job = test_db.query(RestoreJob).order_by(RestoreJob.id.desc()).first()
-        assert job is not None
-        assert job.repository == repo.path
-        scheduled = mock_create_task.call_args.args[0]
-        scheduled.close()
-
-    def test_start_restore_passes_restore_layout_and_path_metadata(
-        self, test_client: TestClient, admin_headers, test_db
-    ):
-        repo = Repository(
-            name="Test Repo",
-            path="/test/repo",
-            encryption="none",
-            repository_type="local",
-        )
-        test_db.add(repo)
-        test_db.commit()
-        test_db.refresh(repo)
-
-        with (
-            patch(
-                "app.api.restore.restore_service.execute_restore",
-                new_callable=AsyncMock,
-            ) as mock_execute_restore,
-            patch(
-                "app.api.restore.asyncio.create_task", return_value=object()
-            ) as mock_create_task,
+            "app.services.restore_service.restore_service.execute_restore",
+            new=AsyncMock(return_value=None),
         ):
             response = test_client.post(
                 "/api/restore/start",
                 json={
-                    "repository_id": repo.id,
                     "repository": repo.path,
+                    "repository_id": repo.id,
                     "archive": "test-archive",
-                    "paths": ["home/username/folder1/folder2"],
-                    "destination": "/recovery/folder1/folder2",
+                    "paths": ["docs/"],
+                    "destination": "/restore/target",
                     "restore_layout": "contents_only",
-                    "path_metadata": [
-                        {
-                            "path": "home/username/folder1/folder2",
-                            "type": "directory",
-                        }
-                    ],
+                    "path_metadata": [{"path": "docs/", "type": "directory"}],
                 },
                 headers=admin_headers,
             )
 
         assert response.status_code == 200
-        mock_execute_restore.assert_called_once_with(
-            ANY,
-            repo.path,
-            "test-archive",
-            "/recovery/folder1/folder2",
-            ["home/username/folder1/folder2"],
+        body = response.json()
+        assert body["status"] == "pending"
+        assert body["message"] == "backend.success.restore.restoreJobStarted"
+
+        operation = test_db.get(Operation, body["job_id"])
+        assert operation.kind == "restore"
+        assert operation.category == "restore"
+        assert operation.trigger == "manual"
+        assert operation.repository_id == repo.id
+        assert operation.execution_mode == "server"
+        assert operation.params == {
+            "archive_name": "test-archive",
+            "paths": ["docs/"],
+            "restore_layout": "contents_only",
+            "path_metadata": [{"path": "docs/", "type": "directory"}],
+        }
+        details = test_db.get(OperationRestoreDetails, operation.id)
+        assert details.archive == "test-archive"
+        assert details.destination == "/restore/target"
+        assert details.destination_type == "local"
+        assert details.repository_type == "local"
+        assert test_db.query(RestoreJob).count() == 0
+
+    def test_start_restore_records_the_ssh_destination_on_the_details_row(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        from app.database.models import SSHConnection
+
+        repo = Repository(
+            name="Restore Repo",
+            path="/test/restore-repo",
+            encryption="none",
             repository_type="local",
-            destination_type="local",
-            destination_connection_id=None,
-            ssh_connection_id=None,
-            restore_layout="contents_only",
-            path_metadata=[
-                {"path": "home/username/folder1/folder2", "type": "directory"}
-            ],
         )
-        scheduled = mock_create_task.call_args.args[0]
-        scheduled.close()
+        connection = SSHConnection(host="backup.example", username="borg", port=22)
+        test_db.add_all([repo, connection])
+        test_db.commit()
+        test_db.refresh(repo)
+        test_db.refresh(connection)
+
+        with patch(
+            "app.services.restore_service.restore_service.execute_restore",
+            new=AsyncMock(return_value=None),
+        ):
+            response = test_client.post(
+                "/api/restore/start",
+                json={
+                    "repository": repo.path,
+                    "repository_id": repo.id,
+                    "archive": "test-archive",
+                    "paths": [],
+                    "destination": "/srv/restore",
+                    "destination_type": "ssh",
+                    "destination_connection_id": connection.id,
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        details = test_db.get(OperationRestoreDetails, response.json()["job_id"])
+        assert details.destination_type == "ssh"
+        assert details.destination_connection_id == connection.id
+        assert details.destination_hostname == "backup.example"
+
+    def test_status_reads_an_operation_with_the_legacy_shape(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        from app.services.operations.details import restore_details
+
+        repo = Repository(
+            name="Restore Repo",
+            path="/test/restore-repo",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+        op = Operation(
+            repository_id=repo.id,
+            kind="restore",
+            category="restore",
+            status="running",
+            trigger="manual",
+            priority=0,
+            run_id="run-status",
+            progress_percent=40.0,
+            params={"archive_name": "test-archive"},
+        )
+        test_db.add(op)
+        test_db.flush()
+        details = restore_details(test_db, op)
+        details.archive = "test-archive"
+        details.destination = "/restore/target"
+        details.original_size = 10 * 1024 * 1024
+        details.restored_size = 4 * 1024 * 1024
+        details.restore_speed = 2.0
+        details.nfiles = 7
+        details.current_file = "docs/report.txt"
+        test_db.commit()
+
+        response = test_client.get(
+            f"/api/restore/status/{op.id}", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["id"] == op.id
+        assert body["repository"] == repo.path
+        assert body["archive"] == "test-archive"
+        assert body["destination"] == "/restore/target"
+        assert body["status"] == "running"
+        assert body["progress"] == 40
+        assert body["progress_details"] == {
+            "nfiles": 7,
+            "current_file": "docs/report.txt",
+            "progress_percent": 40.0,
+            "restore_speed": 2.0,
+            "estimated_time_remaining": 3,
+        }
+
+    def test_list_unions_operations_and_legacy_rows(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        from app.services.operations.details import restore_details
+
+        repo = Repository(
+            name="Restore Repo",
+            path="/test/restore-repo",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+        legacy = RestoreJob(
+            repository=repo.path, archive="old", destination="/x", status="completed"
+        )
+        op = Operation(
+            repository_id=repo.id,
+            kind="restore",
+            category="restore",
+            status="completed",
+            trigger="manual",
+            priority=0,
+            run_id="run-list",
+            params={"archive_name": "new"},
+        )
+        test_db.add_all([legacy, op])
+        test_db.flush()
+        restore_details(test_db, op).archive = "new"
+        test_db.commit()
+
+        response = test_client.get("/api/restore/jobs", headers=admin_headers)
+
+        assert response.status_code == 200
+        archives = {job["archive"] for job in response.json()["jobs"]}
+        assert archives == {"old", "new"}
+
+    def test_cancel_running_operation_kills_the_process_and_flags_the_runner(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        from app.services.operations.restore_facade import CANCELLED_BY_USER
+
+        repo = Repository(
+            name="Restore Repo",
+            path="/test/restore-repo",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+        op = Operation(
+            repository_id=repo.id,
+            kind="restore",
+            category="restore",
+            status="running",
+            trigger="manual",
+            priority=0,
+            run_id="run-cancel",
+        )
+        test_db.add(op)
+        test_db.commit()
+
+        with (
+            patch(
+                "app.api.restore.operation_runner.request_cancel",
+                new=AsyncMock(return_value=True),
+            ) as request_cancel,
+            patch(
+                "app.api.restore.restore_service.cancel_restore",
+                new=AsyncMock(return_value=True),
+            ) as cancel_restore,
+        ):
+            response = test_client.post(
+                f"/api/restore/cancel/{op.id}", headers=admin_headers
+            )
+
+        assert response.status_code == 200
+        assert response.json()["process_terminated"] is True
+        request_cancel.assert_awaited_once_with(op.id)
+        cancel_restore.assert_awaited_once_with(op.id)
+        test_db.expire_all()
+        assert op.status == "cancelled"
+        assert op.error_message == CANCELLED_BY_USER
+        assert op.completed_at is not None
 
 
 @pytest.mark.unit

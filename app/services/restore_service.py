@@ -5,13 +5,14 @@ import os
 import time
 from pathlib import Path
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 from types import SimpleNamespace
 
-from app.database.models import RestoreJob, Repository, SSHConnection
+from app.database.models import Repository, SSHConnection
 from app.database.database import SessionLocal
 from app.core.borg_errors import is_borg_warning_exit_code
 from app.core.borg_router import BorgRouter
+from app.services.operations.restore_facade import resolve_restore_job
 from app.services.notification_service import notification_service
 from app.utils.borg_env import (
     build_repository_borg_env,
@@ -132,7 +133,7 @@ class RestoreService:
         Routes to appropriate execution method based on repository and destination types
 
         Args:
-            job_id: ID of the RestoreJob record
+            job_id: ID of the restore operation (or a pre-phase-7 restore_jobs row)
             repository_path: Path to the borg repository
             archive_name: Name of the archive to restore
             destination: Destination path for restore
@@ -205,9 +206,7 @@ class RestoreService:
             # This should never happen due to API validation, but handle it gracefully
             db_session = SessionLocal()
             try:
-                job = (
-                    db_session.query(RestoreJob).filter(RestoreJob.id == job_id).first()
-                )
+                job = resolve_restore_job(db_session, job_id)
                 if job:
                     job.status = "failed"
                     job.error_message = json.dumps(
@@ -253,7 +252,7 @@ class RestoreService:
 
         Queues a `repository.restore` agent job (borg extract into `destination`
         on the node), then mirrors the agent job's progress/status onto the
-        RestoreJob until it reaches a terminal state.
+        restore row until it reaches a terminal state.
         """
         from fastapi import HTTPException
         from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
@@ -263,7 +262,7 @@ class RestoreService:
 
         db = SessionLocal()
         try:
-            job = db.query(RestoreJob).filter(RestoreJob.id == job_id).first()
+            job = resolve_restore_job(db, job_id)
             if not job:
                 logger.error("Restore job not found", job_id=job_id)
                 return
@@ -336,7 +335,7 @@ class RestoreService:
             )
             try:
                 db.rollback()
-                job = db.query(RestoreJob).filter(RestoreJob.id == job_id).first()
+                job = resolve_restore_job(db, job_id)
                 if job and job.status not in _RESTORE_TERMINAL_STATUSES:
                     job.status = "failed"
                     job.error_message = json.dumps(
@@ -371,7 +370,7 @@ class RestoreService:
 
         while True:
             db.expire_all()
-            job = db.query(RestoreJob).filter(RestoreJob.id == job_id).first()
+            job = resolve_restore_job(db, job_id)
             if job is None:
                 return
             # cancel_restore records the cancellation itself; stop mirroring.
@@ -420,7 +419,7 @@ class RestoreService:
             db.commit()
             await asyncio.sleep(poll_interval_seconds)
 
-    def _fail_agent_restore(self, db, job: RestoreJob, error: str) -> None:
+    def _fail_agent_restore(self, db, job: Any, error: str) -> None:
         job.status = "failed"
         job.error_message = json.dumps(
             {
@@ -431,7 +430,7 @@ class RestoreService:
         job.completed_at = datetime.now(timezone.utc)
         db.commit()
 
-    async def _notify_agent_restore(self, db, job: RestoreJob) -> None:
+    async def _notify_agent_restore(self, db, job: Any) -> None:
         """Mirror the local restore notifications for agent-delegated restores."""
         try:
             if job.status in ("completed", "completed_with_warnings"):
@@ -454,7 +453,7 @@ class RestoreService:
                 error=str(exc),
             )
 
-    def _mirror_agent_progress(self, job: RestoreJob, agent_job) -> None:
+    def _mirror_agent_progress(self, job: Any, agent_job) -> None:
         if agent_job.progress_percent is not None:
             job.progress_percent = agent_job.progress_percent
         if agent_job.current_file:
@@ -464,7 +463,7 @@ class RestoreService:
         if agent_job.original_size is not None:
             job.original_size = agent_job.original_size
 
-    def _apply_agent_restore_terminal(self, db, job: RestoreJob, agent_job) -> None:
+    def _apply_agent_restore_terminal(self, db, job: Any, agent_job) -> None:
         job.logs = self._collect_agent_job_logs(db, agent_job.id)
         job.completed_at = datetime.now(timezone.utc)
 
@@ -536,7 +535,7 @@ class RestoreService:
 
         try:
             # Get job record
-            job = db_session.query(RestoreJob).filter(RestoreJob.id == job_id).first()
+            job = resolve_restore_job(db_session, job_id)
             if not job:
                 logger.error("Restore job not found", job_id=job_id)
                 return
@@ -1041,9 +1040,7 @@ class RestoreService:
 
             # Update job status to failed
             try:
-                job = (
-                    db_session.query(RestoreJob).filter(RestoreJob.id == job_id).first()
-                )
+                job = resolve_restore_job(db_session, job_id)
                 if job:
                     job.status = "failed"
                     job.error_message = json.dumps(
@@ -1207,7 +1204,7 @@ class RestoreService:
 
         try:
             # Get job record
-            job = db_session.query(RestoreJob).filter(RestoreJob.id == job_id).first()
+            job = resolve_restore_job(db_session, job_id)
             if not job:
                 logger.error("Restore job not found", job_id=job_id)
                 return
@@ -1573,9 +1570,7 @@ class RestoreService:
             logger.error("Local→SSH restore failed", job_id=job_id, error=str(e))
 
             try:
-                job = (
-                    db_session.query(RestoreJob).filter(RestoreJob.id == job_id).first()
-                )
+                job = resolve_restore_job(db_session, job_id)
                 if job:
                     job.status = "failed"
                     job.error_message = json.dumps(

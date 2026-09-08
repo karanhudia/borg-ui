@@ -798,6 +798,78 @@ class TestRecentActivityLogPolicy:
         assert activity[0]["id"] == job.id
         assert activity[0]["has_logs"] is True
 
+    def test_restore_operation_appears_in_activity_with_its_archive_and_log(
+        self, test_client, admin_headers, test_db, tmp_path
+    ):
+        from app.database.models import Operation
+        from app.services.operations.details import restore_details
+
+        _set_log_save_policy(test_db, "all_jobs")
+        repo = _create_activity_repository(test_db, "Restore Ops")
+        log_path = tmp_path / "operation_restore.log"
+        log_path.write_text("STDOUT:\nrestored\n\nSTDERR:\n(no output)")
+        op = Operation(
+            repository_id=repo.id,
+            kind="restore",
+            category="restore",
+            status="completed",
+            trigger="manual",
+            priority=0,
+            run_id="run-activity",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            log_file_path=str(log_path),
+            params={"archive_name": "archive-1"},
+        )
+        test_db.add(op)
+        test_db.flush()
+        restore_details(test_db, op).archive = "archive-1"
+        test_db.commit()
+
+        response = test_client.get(
+            "/api/activity/recent?job_type=restore", headers=admin_headers
+        )
+        assert response.status_code == 200
+        item = next(i for i in response.json() if i["id"] == op.id)
+        assert item["type"] == "restore"
+        assert item["status"] == "completed"
+        assert item["archive_name"] == "archive-1"
+        assert item["repository"] == repo.name
+        assert item["repository_path"] == repo.path
+        assert item["triggered_by"] == "manual"
+        assert item["has_logs"] is True
+
+        logs = test_client.get(
+            f"/api/activity/restore/{op.id}/logs", headers=admin_headers
+        )
+        assert logs.status_code == 200
+        assert logs.json()["lines"][0]["content"] == "STDOUT:"
+
+    def test_restore_legacy_row_still_serves_logs_after_phase_7(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.database.models import RestoreJob
+
+        _set_log_save_policy(test_db, "all_jobs")
+        repo = _create_activity_repository(test_db, "Restore Legacy")
+        job = RestoreJob(
+            repository=repo.path,
+            archive="archive-1",
+            destination="/restore",
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            logs="legacy line 1\nlegacy line 2",
+        )
+        test_db.add(job)
+        test_db.commit()
+
+        response = test_client.get(
+            f"/api/activity/restore/{job.id}/logs", headers=admin_headers
+        )
+        assert response.status_code == 200
+        assert response.json()["lines"][1]["content"] == "legacy line 2"
+
     def test_quiet_successful_script_hidden_but_warning_visible_under_failed_and_warnings(
         self, test_client, admin_headers, test_db
     ):

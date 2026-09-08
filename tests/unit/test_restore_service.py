@@ -109,6 +109,34 @@ def restore_job(db_session, restore_repository, tmp_path):
     return job
 
 
+@pytest.fixture
+def restore_operation(db_session, restore_repository, tmp_path, monkeypatch):
+    from app.database.models import Operation
+    from app.services.operations.details import restore_details
+
+    monkeypatch.setattr("app.config.settings.data_dir", str(tmp_path))
+    op = Operation(
+        repository_id=restore_repository.id,
+        kind="restore",
+        category="restore",
+        status="running",
+        trigger="manual",
+        priority=0,
+        run_id="run-service",
+        params={"archive_name": "archive-1", "paths": []},
+    )
+    db_session.add(op)
+    db_session.flush()
+    details = restore_details(db_session, op)
+    details.archive = "archive-1"
+    details.destination = str(tmp_path / "restore-target")
+    details.repository_type = "local"
+    details.destination_type = "local"
+    db_session.commit()
+    db_session.refresh(op)
+    return op
+
+
 class TestRestoreServiceRouting:
     @pytest.mark.unit
     @pytest.mark.asyncio
@@ -657,6 +685,91 @@ class TestRestoreServiceExecution:
         assert "restoreFailedExitCode" in refreshed.error_message
         notification_mock.send_restore_failure.assert_awaited_once()
         verification.close()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_local_restore_on_an_operation_writes_the_row_and_its_log_file(
+        self, testing_session_local, restore_operation, restore_repository, tmp_path
+    ):
+        from app.database.models import Operation, OperationRestoreDetails
+
+        service = RestoreService()
+        process = FakeRestoreProcess(
+            returncode=0,
+            stderr_chunks=[
+                json.dumps(
+                    {
+                        "type": "progress_percent",
+                        "current": 10,
+                        "total": 20,
+                        "info": ["docs/report.txt"],
+                        "finished": False,
+                    }
+                )
+                + "\n"
+            ],
+            stdout_lines=[b"restored\n"],
+        )
+        notification_mock = SimpleNamespace(
+            send_restore_success=AsyncMock(return_value=None),
+            send_restore_failure=AsyncMock(return_value=None),
+        )
+
+        with (
+            patch("app.services.restore_service.SessionLocal", testing_session_local),
+            patch(
+                "app.services.restore_service.asyncio.create_subprocess_exec",
+                return_value=process,
+            ),
+            patch(
+                "app.services.restore_service.notification_service", notification_mock
+            ),
+        ):
+            await service._execute_local_to_local(
+                restore_operation.id,
+                restore_repository.path,
+                "archive-1",
+                str(tmp_path / "restore-target"),
+                None,
+            )
+
+        verification = testing_session_local()
+        op = verification.get(Operation, restore_operation.id)
+        details = verification.get(OperationRestoreDetails, restore_operation.id)
+        assert op.status == "completed"
+        assert op.progress_percent == 100.0
+        assert op.log_file_path == str(tmp_path / "logs" / f"operation_{op.id}.log")
+        assert "STDOUT:" in (tmp_path / "logs" / f"operation_{op.id}.log").read_text()
+        assert details.original_size == 20
+        assert details.restored_size == 10
+        assert details.nfiles == 1
+        assert details.current_file == "docs/report.txt"
+        assert verification.query(RestoreJob).count() == 0
+        notification_mock.send_restore_success.assert_awaited_once()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_agent_terminal_state_lands_on_the_operation(
+        self, db_session, restore_operation
+    ):
+        from app.database.models import Operation
+        from app.services.operations.restore_facade import RestoreJobFacade
+
+        service = RestoreService()
+        job = RestoreJobFacade(db_session, restore_operation)
+        agent_job = SimpleNamespace(
+            id=1, status="completed", result={"warning": True, "return_code": 1}
+        )
+        with patch.object(service, "_collect_agent_job_logs", return_value="agent log"):
+            service._apply_agent_restore_terminal(db_session, job, agent_job)
+        db_session.commit()
+
+        op = db_session.get(Operation, restore_operation.id)
+        assert op.status == "completed_with_warnings"
+        assert op.progress_percent == 100.0
+        assert json.loads(op.error_message)["params"]["exitCode"] == 1
+        assert op.log_file_path is not None
+        assert job.logs == "agent log"
 
 
 class TestRestoreServiceCancellation:

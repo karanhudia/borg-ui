@@ -690,7 +690,11 @@ def cleanup_orphaned_jobs(db: Session):
 
     # Process restore jobs
     for job in running_restore_jobs:
-        # Restore jobs don't have process_pid tracking, so we mark them all as failed on restart
+        # Rows written before phase 7 moved restore to `operations`. New
+        # restores are recovered by OperationRunner.recover_on_startup (spec
+        # 7.6), which fails them the same way: a restore records no pid to
+        # reattach to. Empty after the first restart past the upgrade; goes
+        # away with the table in phase 9.
         job.status = "failed"
         job.error_message = json.dumps(
             {"key": "backend.errors.service.containerRestartedDuringRestore"}
