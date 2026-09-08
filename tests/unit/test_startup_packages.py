@@ -112,3 +112,116 @@ def test_missing_schema_is_handled_not_raised(startup_packages, tmp_path, monkey
     monkeypatch.setattr(startup_packages, "_database_absent", lambda: False)
 
     assert startup_packages.get_packages_to_install() == []
+
+
+def test_packages_with_an_in_flight_install_operation_are_skipped(
+    startup_packages, tmp_path, monkeypatch
+):
+    """Phase 6: an install queued before the restart lives in `operations`, so
+    the startup script must not queue a second one for the same package."""
+    import json
+
+    from app.database.models import Operation
+
+    engine = create_engine(f"sqlite:///{tmp_path}/ops.db")
+    Base.metadata.create_all(
+        engine,
+        tables=[
+            InstalledPackage.__table__,
+            PackageInstallJob.__table__,
+            Operation.__table__,
+        ],
+    )
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO installed_packages"
+                " (name, install_command, status, created_at, updated_at)"
+                " VALUES ('htop', 'apt-get install -y htop', 'pending',"
+                " '2026-09-08 00:00:00', '2026-09-08 00:00:00')"
+            )
+        )
+        package_id = conn.execute(
+            text("SELECT id FROM installed_packages WHERE name = 'htop'")
+        ).scalar()
+        conn.execute(
+            text(
+                "INSERT INTO operations"
+                " (kind, category, status, trigger, priority, run_id, params,"
+                " created_at)"
+                " VALUES ('package_install', 'system', 'queued', 'manual', 0,"
+                " 'run-1', :params, '2026-09-08 00:00:00')"
+            ),
+            {"params": json.dumps({"package_id": package_id})},
+        )
+
+    monkeypatch.setattr(startup_packages, "engine", engine)
+    monkeypatch.setattr(startup_packages, "_database_absent", lambda: False)
+    monkeypatch.setattr(
+        startup_packages, "is_package_actually_installed", lambda name: False
+    )
+
+    assert startup_packages.get_packages_to_install() == []
+
+
+def test_a_completed_install_operation_does_not_block_a_reinstall(
+    startup_packages, tmp_path, monkeypatch
+):
+    import json
+
+    from app.database.models import Operation
+
+    engine = create_engine(f"sqlite:///{tmp_path}/ops-done.db")
+    Base.metadata.create_all(
+        engine,
+        tables=[
+            InstalledPackage.__table__,
+            PackageInstallJob.__table__,
+            Operation.__table__,
+        ],
+    )
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO installed_packages"
+                " (name, install_command, status, created_at, updated_at)"
+                " VALUES ('htop', 'apt-get install -y htop', 'pending',"
+                " '2026-09-08 00:00:00', '2026-09-08 00:00:00')"
+            )
+        )
+        package_id = conn.execute(
+            text("SELECT id FROM installed_packages WHERE name = 'htop'")
+        ).scalar()
+        conn.execute(
+            text(
+                "INSERT INTO operations"
+                " (kind, category, status, trigger, priority, run_id, params,"
+                " created_at)"
+                " VALUES ('package_install', 'system', 'completed', 'manual', 0,"
+                " 'run-1', :params, '2026-09-08 00:00:00')"
+            ),
+            {"params": json.dumps({"package_id": package_id})},
+        )
+
+    monkeypatch.setattr(startup_packages, "engine", engine)
+    monkeypatch.setattr(startup_packages, "_database_absent", lambda: False)
+    monkeypatch.setattr(
+        startup_packages, "is_package_actually_installed", lambda name: False
+    )
+
+    assert [row[1] for row in startup_packages.get_packages_to_install()] == ["htop"]
+
+
+def test_a_database_without_the_operations_table_still_works(
+    startup_packages, engine, monkeypatch
+):
+    """A pre-phase-1 database has no operations table; the check degrades to
+    the legacy one rather than crashing the boot."""
+    _seed_package(engine, "pending")
+    monkeypatch.setattr(startup_packages, "engine", engine)
+    monkeypatch.setattr(startup_packages, "_database_absent", lambda: False)
+    monkeypatch.setattr(
+        startup_packages, "is_package_actually_installed", lambda name: False
+    )
+
+    assert len(startup_packages.get_packages_to_install()) == 1

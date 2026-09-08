@@ -46,6 +46,41 @@ def is_package_actually_installed(package_name):
         return False
 
 
+def _in_flight_operation_package_ids(conn):
+    """Package ids with a queued or running `package_install` operation.
+
+    Phase 6 moved install jobs to `operations` (spec 6.2), where the package id
+    lives in the `params` JSON. That is read in Python rather than in SQL,
+    because JSON extraction is spelled differently in SQLite and PostgreSQL and
+    this script runs against whichever the install uses.
+    """
+    import json
+
+    ids = set()
+    try:
+        rows = conn.execute(
+            text("""
+                SELECT params FROM operations
+                WHERE kind = 'package_install'
+                AND status IN ('queued', 'running')
+            """)
+        ).fetchall()
+    except Exception as exc:
+        # A database that predates the operations table (pre-phase-1) has
+        # nothing in flight there by definition.
+        print(f"ℹ️  Skipping operations check: {exc}")
+        return ids
+    for (params,) in rows:
+        if isinstance(params, str):
+            try:
+                params = json.loads(params)
+            except ValueError:
+                continue
+        if isinstance(params, dict) and params.get("package_id") is not None:
+            ids.add(params["package_id"])
+    return ids
+
+
 def get_packages_to_install():
     """
     Get list of packages that need to be installed.
@@ -70,6 +105,8 @@ def get_packages_to_install():
                     )
                 """)
             ).fetchall()
+            in_flight = _in_flight_operation_package_ids(conn)
+        all_packages = [row for row in all_packages if row[0] not in in_flight]
 
         # Filter packages: only install if NOT actually installed in OS
         packages_to_install = []

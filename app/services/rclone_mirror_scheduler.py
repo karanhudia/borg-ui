@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -8,9 +7,15 @@ import structlog
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app.database.database import SessionLocal
-from app.database.models import Repository, RepositoryStorage, RcloneSyncJob
-from app.services.rclone_repository_service import rclone_repository_service
+from app.database.models import (
+    Operation,
+    OperationRcloneDetails,
+    RcloneSyncJob,
+    Repository,
+    RepositoryStorage,
+)
+from app.services.operations.enqueue import enqueue, wake_runner
+from app.services.operations.rclone_facade import RcloneSyncFacade
 from app.utils.schedule_time import (
     DEFAULT_SCHEDULE_TIMEZONE,
     calculate_next_cron_run,
@@ -18,7 +23,6 @@ from app.utils.schedule_time import (
 )
 
 logger = structlog.get_logger()
-_active_scheduled_mirror_tasks: set[int] = set()
 
 
 def _scheduler_time(now: Optional[datetime] = None) -> datetime:
@@ -53,8 +57,27 @@ def _scheduled_job_exists(
     repository_id: int,
     scheduled_for: datetime,
 ) -> bool:
+    """True when this repository already has a mirror run for this slot, so a
+    second scheduler tick does not enqueue a duplicate."""
+    exists = (
+        db.query(Operation.id)
+        .join(
+            OperationRcloneDetails,
+            OperationRcloneDetails.operation_id == Operation.id,
+        )
+        .filter(
+            Operation.repository_id == repository_id,
+            Operation.kind == "rclone_sync",
+            Operation.trigger == "schedule",
+            OperationRcloneDetails.scheduled_for == scheduled_for,
+        )
+        .first()
+    )
+    if exists is not None:
+        return True
+    # Pre-phase-6 rows only; goes away with the table in phase 9.
     return (
-        db.query(RcloneSyncJob)
+        db.query(RcloneSyncJob.id)
         .filter(
             RcloneSyncJob.repository_id == repository_id,
             RcloneSyncJob.triggered_by == "schedule",
@@ -63,6 +86,50 @@ def _scheduled_job_exists(
         .first()
         is not None
     )
+
+
+def _mirror_in_flight(db: Session, repository_id: int) -> bool:
+    """True while a scheduled mirror run for this repository is queued or
+    running. The pre-phase-6 scheduler kept a set of live tasks for the same
+    purpose; the operations table is that set now. A due slot is left as it is
+    and picked up on the first tick after the run finishes."""
+    return (
+        db.query(Operation.id)
+        .filter(
+            Operation.repository_id == repository_id,
+            Operation.kind == "rclone_sync",
+            Operation.trigger == "schedule",
+            Operation.status.in_(("queued", "running")),
+        )
+        .first()
+        is not None
+    )
+
+
+def _enqueue_scheduled_mirror(
+    db: Session, *, repository_id: int, direction: str, scheduled_for: datetime
+) -> bool:
+    """Add one scheduled mirror sync to the session, uncommitted. The caller
+    commits it together with the schedule advance, so a failure here leaves
+    the slot due rather than losing a run. The runner dispatches it (spec
+    7.1), which is also what serialises it against the rclone lock scope
+    (spec 7.2); this scheduler no longer runs syncs itself."""
+    if _scheduled_job_exists(
+        db, repository_id=repository_id, scheduled_for=scheduled_for
+    ):
+        return False
+    operation = enqueue(
+        db,
+        "rclone_sync",
+        repository_id=repository_id,
+        trigger="schedule",
+        commit=False,
+    )
+    job = RcloneSyncFacade(db, operation)
+    job.direction = direction
+    job.operation = "sync"
+    job.scheduled_for = scheduled_for
+    return True
 
 
 def _due_scheduled_storage_query(db: Session, now: datetime):
@@ -89,123 +156,10 @@ def _due_scheduled_storage_query(db: Session, now: datetime):
     return query
 
 
-def _track_scheduled_mirror_task(task: asyncio.Task, storage_id: int) -> None:
-    _active_scheduled_mirror_tasks.add(storage_id)
-
-    def _cleanup(_task: asyncio.Task) -> None:
-        _active_scheduled_mirror_tasks.discard(storage_id)
-
-    task.add_done_callback(_cleanup)
-
-
-def _record_scheduler_failure(
-    db: Session,
-    *,
-    storage_id: int,
-    repository_id: int,
-    direction: str,
-    scheduled_for: datetime,
-    finished_at: datetime,
-    message: str,
-) -> None:
-    db.rollback()
-    storage = (
-        db.query(RepositoryStorage).filter(RepositoryStorage.id == storage_id).first()
-    )
-    if storage:
-        storage.sync_status = "failed"
-        storage.last_sync_error = message
-        storage.last_scheduled_sync_at = finished_at
-        storage.next_scheduled_sync_at = _calculate_next_sync_run(storage, finished_at)
-
-    if not _scheduled_job_exists(
-        db,
-        repository_id=repository_id,
-        scheduled_for=scheduled_for,
-    ):
-        db.add(
-            RcloneSyncJob(
-                repository_id=repository_id,
-                direction=direction,
-                status="failed",
-                triggered_by="schedule",
-                scheduled_for=scheduled_for,
-                started_at=finished_at,
-                completed_at=finished_at,
-                error_text=message,
-                log_text=message,
-            )
-        )
-    db.commit()
-
-
-async def _run_scheduled_rclone_mirror_task(
-    *,
-    storage_id: int,
-    repository_id: int,
-    scheduled_for: datetime,
-    direction: str,
-) -> None:
-    db = SessionLocal()
-    try:
-        storage = (
-            db.query(RepositoryStorage)
-            .filter(RepositoryStorage.id == storage_id)
-            .first()
-        )
-        repository = db.query(Repository).filter(Repository.id == repository_id).first()
-        if storage is None or repository is None:
-            logger.warning(
-                "Skipping scheduled rclone mirror sync for missing storage or repository",
-                repository_id=repository_id,
-                storage_id=storage_id,
-            )
-            return
-
-        try:
-            await rclone_repository_service.sync_repository(
-                db,
-                repository,
-                triggered_by="schedule",
-                scheduled_for=scheduled_for,
-            )
-            db.refresh(storage)
-            finished_at = _scheduler_time()
-            storage.last_scheduled_sync_at = finished_at
-            storage.next_scheduled_sync_at = _calculate_next_sync_run(
-                storage, finished_at
-            )
-            db.commit()
-            logger.info(
-                "Scheduled rclone mirror sync completed",
-                repository_id=repository_id,
-                status=storage.sync_status,
-                next_scheduled_sync_at=storage.next_scheduled_sync_at,
-            )
-        except Exception as exc:
-            message = str(exc) or exc.__class__.__name__
-            logger.error(
-                "Scheduled rclone mirror sync failed",
-                repository_id=repository_id,
-                error=message,
-            )
-            _record_scheduler_failure(
-                db,
-                storage_id=storage_id,
-                repository_id=repository_id,
-                direction=direction,
-                scheduled_for=scheduled_for,
-                finished_at=_scheduler_time(),
-                message=message,
-            )
-    finally:
-        db.close()
-
-
 def dispatch_due_scheduled_rclone_mirrors(
     db: Session, now: Optional[datetime] = None
 ) -> int:
-    """Claim and dispatch due repository cloud mirror syncs in background tasks."""
+    """Queue due repository cloud mirror syncs. The runner starts them."""
     now = _scheduler_time(now)
     due_storages = _due_scheduled_storage_query(db, now).all()
 
@@ -215,33 +169,36 @@ def dispatch_due_scheduled_rclone_mirrors(
 
     dispatched = 0
     for storage in due_storages:
-        if storage.id in _active_scheduled_mirror_tasks:
+        if _mirror_in_flight(db, storage.repository_id):
             continue
         scheduled_for = storage.next_scheduled_sync_at or now
         storage.next_scheduled_sync_at = _calculate_next_sync_run(storage, now)
-        db.commit()
-
-        task = asyncio.create_task(
-            _run_scheduled_rclone_mirror_task(
-                storage_id=storage.id,
-                repository_id=storage.repository_id,
-                scheduled_for=scheduled_for,
-                direction=storage.sync_direction,
-            )
+        queued = _enqueue_scheduled_mirror(
+            db,
+            repository_id=storage.repository_id,
+            direction=storage.sync_direction,
+            scheduled_for=scheduled_for,
         )
-        _track_scheduled_mirror_task(task, storage.id)
-        dispatched += 1
+        # One transaction for the schedule advance and the operation.
+        db.commit()
+        if queued:
+            wake_runner()
+            dispatched += 1
 
     if dispatched:
-        logger.info("Dispatched scheduled rclone mirror syncs", count=dispatched)
+        logger.info("Queued scheduled rclone mirror syncs", count=dispatched)
     return dispatched
 
 
 async def run_due_scheduled_rclone_mirrors(
     db: Session, now: Optional[datetime] = None
 ) -> None:
-    """Run due repository cloud mirror syncs through the shared scheduler loop."""
-    injected_now = now
+    """Queue due repository cloud mirror syncs from the shared scheduler loop.
+
+    Since phase 6 this only enqueues; the runner owns dispatch, the rclone lock
+    scope, and failure recording. Kept async because the scheduler loop awaits
+    it.
+    """
     now = _scheduler_time(now)
     due_storages = _due_scheduled_storage_query(db, now).all()
 
@@ -251,59 +208,33 @@ async def run_due_scheduled_rclone_mirrors(
 
     logger.info("Found due scheduled rclone mirror syncs", count=len(due_storages))
     for storage in due_storages:
+        if _mirror_in_flight(db, storage.repository_id):
+            continue
         scheduled_for = storage.next_scheduled_sync_at or now
-        storage_id = storage.id
         repository_id = storage.repository_id
         direction = storage.sync_direction
         storage.next_scheduled_sync_at = _calculate_next_sync_run(storage, now)
-        db.commit()
-        repository = (
-            db.query(Repository).filter(Repository.id == storage.repository_id).first()
-        )
+        repository = db.query(Repository).filter(Repository.id == repository_id).first()
         if repository is None:
             logger.warning(
                 "Skipping scheduled rclone mirror sync for missing repository",
                 repository_id=repository_id,
             )
+            db.commit()
             continue
 
-        try:
-            await rclone_repository_service.sync_repository(
-                db,
-                repository,
-                triggered_by="schedule",
-                scheduled_for=scheduled_for,
-            )
-            db.refresh(storage)
-            finished_at = (
-                _scheduler_time(injected_now) if injected_now else _scheduler_time()
-            )
-            storage.last_scheduled_sync_at = finished_at
-            storage.next_scheduled_sync_at = _calculate_next_sync_run(
-                storage, finished_at
-            )
-            db.commit()
+        queued = _enqueue_scheduled_mirror(
+            db,
+            repository_id=repository_id,
+            direction=direction,
+            scheduled_for=scheduled_for,
+        )
+        # One transaction for the schedule advance and the operation.
+        db.commit()
+        if queued:
+            wake_runner()
             logger.info(
-                "Scheduled rclone mirror sync completed",
+                "Scheduled rclone mirror sync queued",
                 repository_id=repository_id,
-                status=storage.sync_status,
                 next_scheduled_sync_at=storage.next_scheduled_sync_at,
-            )
-        except Exception as exc:
-            message = str(exc) or exc.__class__.__name__
-            logger.error(
-                "Scheduled rclone mirror sync failed",
-                repository_id=repository_id,
-                error=message,
-            )
-            _record_scheduler_failure(
-                db,
-                storage_id=storage_id,
-                repository_id=repository_id,
-                direction=direction,
-                scheduled_for=scheduled_for,
-                finished_at=(
-                    _scheduler_time(injected_now) if injected_now else _scheduler_time()
-                ),
-                message=message,
             )

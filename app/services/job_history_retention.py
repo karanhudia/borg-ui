@@ -76,6 +76,8 @@ from app.database.models import (
     SystemSettings,
     utc_now,
     Operation,
+    OperationRcloneDetails,
+    OperationWipeDetails,
 )
 
 logger = structlog.get_logger()
@@ -208,6 +210,42 @@ def purge_agent_job_logs(db: Session, filters) -> int:
         )
         db.commit()
         total += len(ids)
+
+
+# The spec 6.2 extension rows that hold captured output. Their age is their
+# operation's, so they cannot ride in _JOB_TABLES (whose age filter needs the
+# row's own timestamps); spec 7.8's "rows do not outlive retention" is met for
+# them by the ondelete=CASCADE on operations.id, and the log window is applied
+# by _clear_operation_detail_logs below.
+_OPERATION_DETAIL_LOG_COLUMNS = (
+    (OperationRcloneDetails, ("log_text", "error_text")),
+    (OperationWipeDetails, ("dry_run_output",)),
+)
+
+
+def clear_operation_detail_logs(db: Session, make_filters) -> int:
+    """NULL the captured output on operation extension rows whose operation
+    matches make_filters(Operation)."""
+    total = 0
+    for model, log_columns in _OPERATION_DETAIL_LOG_COLUMNS:
+        values = {column: None for column in log_columns}
+        any_set = or_(*[getattr(model, column).isnot(None) for column in log_columns])
+        while True:
+            ids = [
+                row[0]
+                for row in db.query(model.operation_id)
+                .join(Operation, Operation.id == model.operation_id)
+                .filter(*make_filters(Operation), any_set)
+                .limit(CHUNK_SIZE)
+            ]
+            if not ids:
+                break
+            db.query(model).filter(model.operation_id.in_(ids)).update(
+                values, synchronize_session=False
+            )
+            db.commit()
+            total += len(ids)
+    return total
 
 
 def clear_inline_job_logs(db: Session, make_filters) -> int:
@@ -536,6 +574,9 @@ def run_retention(db: Session, settings: Optional[SystemSettings] = None) -> Dic
         "operation_log_files_deleted": purge_operation_log_files(
             db, _older_than(Operation, log_cutoff)
         ),
+        "operation_detail_logs_cleared": clear_operation_detail_logs(
+            db, lambda model: _older_than(model, log_cutoff)
+        ),
         # The log save policy applies to the database exactly as it does to
         # the log files: content the policy does not want is dropped at the
         # next pass, no matter how young.
@@ -551,6 +592,13 @@ def run_retention(db: Session, settings: Optional[SystemSettings] = None) -> Dic
         ),
         "policy_operation_log_files_deleted": (
             purge_operation_log_files(db, (Operation.status.in_(discarded),))
+            if discarded
+            else 0
+        ),
+        "policy_operation_detail_logs_cleared": (
+            clear_operation_detail_logs(
+                db, lambda model: (model.status.in_(discarded),)
+            )
             if discarded
             else 0
         ),

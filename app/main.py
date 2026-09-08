@@ -378,9 +378,12 @@ async def startup_event():
     except Exception as e:
         logger.error("Failed to cleanup orphaned mounts", error=str(e))
 
+    # Must run before OperationRunner.recover_on_startup below: spec 7.6 would
+    # mark an interrupted mirror sync failed, and an rclone sync is a
+    # reconciliation that is safe to re-run, so it is requeued instead.
     try:
         resumed_cloud_syncs = (
-            repositories.resume_pending_initial_cloud_mirror_sync_jobs()
+            repositories.resume_pending_initial_cloud_mirror_sync_operations()
         )
         if resumed_cloud_syncs:
             logger.info(

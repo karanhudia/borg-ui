@@ -432,3 +432,54 @@ class TestGlobalLogManagerInstance:
         # The global instance should have created the log directory
         assert log_manager.log_dir.exists()
         assert log_manager.log_dir.is_dir()
+
+
+@pytest.mark.unit
+class TestRunningOperationLogProtection:
+    """Phase 6: every migrated kind writes its log through `operations`."""
+
+    def test_running_operation_log_is_protected(self, log_manager_with_temp_dir):
+        from app.database.models import Operation
+
+        running_operation = Mock(spec=Operation)
+        running_operation.log_file_path = "/data/logs/operation_7.log"
+        running_operation.status = "running"
+
+        mock_db = Mock()
+
+        def mock_query(model):
+            query_mock = Mock()
+            if model is Operation:
+                query_mock.filter.return_value.all.return_value = [running_operation]
+            else:
+                query_mock.filter.return_value.all.return_value = []
+            return query_mock
+
+        mock_db.query = mock_query
+
+        result = log_manager_with_temp_dir.get_running_job_log_paths(mock_db)
+
+        assert "/data/logs/operation_7.log" in result
+
+    def test_an_operation_without_a_log_file_is_skipped(
+        self, log_manager_with_temp_dir
+    ):
+        from app.database.models import Operation
+
+        running_operation = Mock(spec=Operation)
+        running_operation.log_file_path = None
+        running_operation.status = "running"
+
+        mock_db = Mock()
+
+        def mock_query(model):
+            query_mock = Mock()
+            if model is Operation:
+                query_mock.filter.return_value.all.return_value = [running_operation]
+            else:
+                query_mock.filter.return_value.all.return_value = []
+            return query_mock
+
+        mock_db.query = mock_query
+
+        assert log_manager_with_temp_dir.get_running_job_log_paths(mock_db) == set()

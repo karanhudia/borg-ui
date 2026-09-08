@@ -182,6 +182,34 @@ The corresponding status and list routes (`GET .../check-jobs/{id}`,
 operations first and fall back to the pre-phase-5 row for that id, so a link
 or activity entry from before the upgrade keeps resolving.
 
+## Repository wipe, cloud mirror, and package install jobs
+
+As of section 13 phase 6 these three kinds are `operations` rows too, and the
+same rule applies as for maintenance jobs: a job id resolves against
+`operations` first and falls back to the pre-phase-6 row for that id, so links
+and activity entries from before the upgrade keep resolving. Every response
+body and every status word is unchanged.
+
+`POST /api/repositories/{id}/wipe` still answers
+`{"id", "status", "phase", ...}` with `status: "pending"`, but the wipe is now
+queued behind the repository's other exclusive work rather than started
+immediately, and `GET /api/repositories/{id}/wipe-jobs/{job_id}` polls it as
+before. The preview from `POST .../wipe-preview` keeps its own id space in
+`repository_wipe_jobs`; both id spaces resolve on the status and cancel
+routes. The statuses `completed_compaction_failed` and `failed_partial` are
+still returned, reconstructed from the operation's wipe details.
+
+The cloud mirror `latest_sync_job` block on the repository payload keeps its
+shape, including `triggered_by: "initial"` for the sync queued when a cloud
+repository is created, and `operation: "sync" | "hydrate"`. Activity still
+reports the two as types `rclone_sync` and `rclone_hydrate`.
+
+`POST /api/packages/{id}/install` and `GET /api/packages/jobs/{job_id}` keep
+their bodies, including `stdout`, `stderr`, and `exit_code`: the two streams
+now live in the operation's log file and are parsed back for the response. The
+install is queued and started by the runner, so a fresh job answers `pending`
+before it answers `installing`.
+
 ## Archive index and history
 
 Database-backed archive routes under `/api/repositories/{id}`. Routes

@@ -16,12 +16,21 @@ from app.database.models import (
     CheckJob,
     CompactJob,
     DeleteArchiveJob,
+    Operation,
     PruneJob,
     Repository,
     RepositoryWipeJob,
     RestoreCheckJob,
     RestoreJob,
     User,
+    utc_now,
+)
+from app.services.operations.details import wipe_details
+from app.services.operations.enqueue import enqueue, wake_runner
+from app.services.operations.wipe_facade import (
+    WipeJobFacade,
+    active_wipe_operation,
+    resolve_wipe_job,
 )
 from app.services.log_policy import DEFAULT_LOG_SAVE_POLICY, job_has_logs_by_policy
 from app.services.repository_command_lock import run_serialized_repository_command
@@ -31,6 +40,20 @@ from app.utils.datetime_utils import serialize_borg_archive_time, serialize_date
 logger = structlog.get_logger()
 
 RUNNING_STATUSES = ("pending", "running")
+
+# Kinds whose queued or running operation blocks a wipe. `restore` is here
+# because the legacy check blocked on a running RestoreJob; `rclone_sync` is
+# not, because it takes the rclone lock scope, not the repository lane
+# (spec 7.2), and mirrors a repository nobody is writing to.
+CONFLICTING_KINDS = (
+    "backup",
+    "check",
+    "prune",
+    "compact",
+    "delete_archive",
+    "restore",
+    "restore_check",
+)
 TERMINAL_EXECUTION_STATUSES = {
     "completed",
     "completed_compaction_failed",
@@ -129,6 +152,18 @@ def _command_output(result: dict[str, Any]) -> str:
     return "\n".join(part for part in [stdout, stderr] if part)
 
 
+def _preview_already_consumed(db: Session, preview_id: int) -> bool:
+    """True once a wipe operation names this preview. Replaces the legacy
+    `status != "previewed"` gate: the preview row keeps its own status and the
+    operation is the record of the confirmed run. Scanned in Python because a
+    JSON column is not portably queryable across SQLite and PostgreSQL, the
+    same shape phase 5 used for `active_delete_for_archive`."""
+    for operation in db.query(Operation).filter(Operation.kind == "wipe").all():
+        if (operation.params or {}).get("preview_id") == preview_id:
+            return True
+    return False
+
+
 def _partial_delete_signal(output: str) -> bool:
     lowered = output.lower()
     return any(
@@ -148,34 +183,60 @@ class RepositoryWipeService:
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
     def _ensure_no_conflicting_operations(
-        self,
-        db: Session,
-        repository: Repository,
-        *,
-        exclude_wipe_job_id: int | None = None,
+        self, db: Session, repository: Repository
     ) -> None:
-        repo_id = repository.id
-        running_by_repository_id = [
-            (BackupJob, "backend.errors.repo.operationAlreadyRunning"),
-            (CheckJob, "backend.errors.repo.operationAlreadyRunning"),
-            (CompactJob, "backend.errors.repo.operationAlreadyRunning"),
-            (PruneJob, "backend.errors.repo.operationAlreadyRunning"),
-            (RestoreCheckJob, "backend.errors.repo.operationAlreadyRunning"),
-            (DeleteArchiveJob, "backend.errors.repo.operationAlreadyRunning"),
-        ]
+        """Refuse to preview or wipe while other work holds the repository.
 
-        for model, error_key in running_by_repository_id:
+        Operations first: phases 5 and 6 moved every exclusive kind onto that
+        table, and a queued row counts, because the runner will start it. The
+        legacy queries below only ever see a row a pre-upgrade install left
+        active; they go away with the tables in phase 9.
+        """
+        repo_id = repository.id
+
+        if (
+            db.query(Operation.id)
+            .filter(
+                Operation.repository_id == repo_id,
+                Operation.kind.in_(CONFLICTING_KINDS),
+                Operation.status.in_(("queued", "running")),
+            )
+            .first()
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail={"key": "backend.errors.repo.operationAlreadyRunning"},
+            )
+
+        if active_wipe_operation(db, repo_id) is not None:
+            raise HTTPException(
+                status_code=409,
+                detail={"key": "backend.errors.repo.wipeAlreadyRunning"},
+            )
+
+        legacy_models = (
+            BackupJob,
+            CheckJob,
+            CompactJob,
+            PruneJob,
+            RestoreCheckJob,
+            DeleteArchiveJob,
+        )
+        for model in legacy_models:
             if (
-                db.query(model)
+                db.query(model.id)
                 .filter(
                     model.repository_id == repo_id, model.status.in_(RUNNING_STATUSES)
                 )
                 .first()
             ):
-                raise HTTPException(status_code=409, detail={"key": error_key})
+                raise HTTPException(
+                    status_code=409,
+                    detail={"key": "backend.errors.repo.operationAlreadyRunning"},
+                )
 
         if (
-            db.query(RestoreJob)
+            db.query(RestoreJob.id)
             .filter(
                 RestoreJob.repository == repository.path,
                 RestoreJob.status.in_(RUNNING_STATUSES),
@@ -185,18 +246,6 @@ class RepositoryWipeService:
             raise HTTPException(
                 status_code=409,
                 detail={"key": "backend.errors.repo.operationAlreadyRunning"},
-            )
-
-        wipe_query = db.query(RepositoryWipeJob).filter(
-            RepositoryWipeJob.repository_id == repo_id,
-            RepositoryWipeJob.status.in_(RUNNING_STATUSES),
-        )
-        if exclude_wipe_job_id is not None:
-            wipe_query = wipe_query.filter(RepositoryWipeJob.id != exclude_wipe_job_id)
-        if wipe_query.first():
-            raise HTTPException(
-                status_code=409,
-                detail={"key": "backend.errors.repo.wipeAlreadyRunning"},
             )
 
     async def create_preview(
@@ -282,7 +331,7 @@ class RepositoryWipeService:
         confirmation_phrase: str,
         understood: bool,
         run_compact: bool,
-    ) -> RepositoryWipeJob:
+    ) -> Any:
         preview = (
             db.query(RepositoryWipeJob)
             .filter(
@@ -295,7 +344,7 @@ class RepositoryWipeService:
             raise WipeValidationError(
                 "backend.errors.repo.wipePreviewNotFound", status_code=404
             )
-        if preview.status != "previewed":
+        if _preview_already_consumed(db, preview.id):
             raise WipeValidationError(
                 "backend.errors.repo.wipePreviewNotFresh", status_code=409
             )
@@ -313,10 +362,8 @@ class RepositoryWipeService:
                 "backend.errors.repo.wipePreviewNotFresh", status_code=409
             )
 
-        async def operation() -> RepositoryWipeJob:
-            self._ensure_no_conflicting_operations(
-                db, repository, exclude_wipe_job_id=preview.id
-            )
+        async def operation() -> Any:
+            self._ensure_no_conflicting_operations(db, repository)
             temp_key_file = None
             try:
                 env, temp_key_file = build_repository_borg_env(
@@ -336,24 +383,44 @@ class RepositoryWipeService:
                 db.commit()
                 raise WipeArchiveSetChanged()
 
-            preview.status = "pending"
-            preview.phase = "queued"
-            preview.confirmed_by_user_id = current_user.id
-            preview.confirmed_at = datetime.utcnow()
-            preview.run_compact = bool(run_compact)
-            preview.progress = 0
-            preview.progress_message = "Repository wipe queued"
+            # The preview stays where it is: it is not a unit of work and has
+            # no spec 6.3 status. The confirmed run is the operation, and it
+            # carries the preview snapshot in its details row (spec 6.2).
+            op = enqueue(
+                db,
+                "wipe",
+                repository_id=repository.id,
+                trigger="manual",
+                params={"preview_id": preview.id, "run_compact": bool(run_compact)},
+                triggered_by_user_id=current_user.id,
+                commit=False,
+            )
+            details = wipe_details(db, op)
+            details.phase = "queued"
+            details.archive_count = preview.archive_count
+            details.archive_fingerprint = preview.archive_fingerprint
+            details.archive_manifest_json = preview.archive_manifest_json
+            details.dry_run_output = preview.dry_run_output
+            details.blocking_reason = preview.blocking_reason
+            details.protected_archives_json = preview.protected_archives_json
+            details.run_compact = bool(run_compact)
+            details.requested_by_user_id = preview.requested_by_user_id
+            details.confirmed_by_user_id = current_user.id
+            details.confirmed_at = utc_now()
+            op.progress_percent = 0
+            op.progress_message = "Repository wipe queued"
             db.commit()
-            db.refresh(preview)
+            db.refresh(op)
+            wake_runner()
             logger.warning(
                 "Repository wipe execution queued",
                 repository_id=repository.id,
-                job_id=preview.id,
+                operation_id=op.id,
                 archive_count=preview.archive_count,
                 run_compact=bool(run_compact),
                 actor=current_user.username,
             )
-            return preview
+            return WipeJobFacade(db, op)
 
         return await run_serialized_repository_command(
             repository.id, operation, scope="wipe"
@@ -364,13 +431,9 @@ class RepositoryWipeService:
         close_db = getattr(SessionLocal, "return_value", None) is not db
         temp_key_file = None
         log_lines: list[str] = []
-        job: RepositoryWipeJob | None = None
+        job: Any = None
         try:
-            job = (
-                db.query(RepositoryWipeJob)
-                .filter(RepositoryWipeJob.id == job_id)
-                .first()
-            )
+            job = resolve_wipe_job(db, job_id)
             repository = (
                 db.query(Repository).filter(Repository.id == repository_id).first()
             )
@@ -397,12 +460,12 @@ class RepositoryWipeService:
                     log_lines.append(delete_output)
 
                 if not delete_result.get("success"):
-                    job.status = (
-                        "failed_partial"
-                        if _partial_delete_signal(delete_output)
-                        else "failed"
-                    )
-                    job.phase = "delete_failed"
+                    partial = _partial_delete_signal(delete_output)
+                    job.status = "failed_partial" if partial else "failed"
+                    # The facade writes `delete_failed_partial` itself from the
+                    # status above; this is the non-partial half, kept beside it
+                    # so both phases read together.
+                    job.phase = "delete_failed_partial" if partial else "delete_failed"
                     job.error_message = delete_output or "Repository wipe delete failed"
                     job.progress_message = "Repository wipe delete failed"
                     job.progress = 100
@@ -470,14 +533,9 @@ class RepositoryWipeService:
     async def _best_effort_post_wipe_refresh(
         self, db: Session, repository: Repository
     ) -> None:
-        try:
-            await BorgRouter(repository).update_stats(db)
-        except Exception as exc:
-            logger.warning(
-                "Failed to refresh repository stats after wipe",
-                repository_id=repository.id,
-                error=str(exc),
-            )
+        # No stats refresh here: spec 7.4 gives wipe the follow-up chain
+        # archive_sync, history_merge, stats, which the runner enqueues when
+        # the operation reaches a success state.
         try:
             from app.services.cache_service import archive_cache
 
@@ -507,15 +565,8 @@ class RepositoryWipeService:
         *,
         job_id: int,
     ) -> dict[str, Any]:
-        job = (
-            db.query(RepositoryWipeJob)
-            .filter(
-                RepositoryWipeJob.id == job_id,
-                RepositoryWipeJob.repository_id == repository.id,
-            )
-            .first()
-        )
-        if not job:
+        job = resolve_wipe_job(db, job_id)
+        if not job or job.repository_id != repository.id:
             raise HTTPException(
                 status_code=404,
                 detail={"key": "backend.errors.repo.wipeJobNotFound"},
@@ -525,16 +576,19 @@ class RepositoryWipeService:
                 status_code=409,
                 detail={"key": "backend.errors.repo.wipeCannotCancelRunning"},
             )
+        # The facade maps "pending" back to "queued", so a queued operation is
+        # cancelled in place. The runner never dispatches a row that is no
+        # longer queued (spec 7.1). No db.refresh(): a facade is not a mapped
+        # instance, its mapped object is `.operation`.
         job.status = "cancelled"
         job.phase = "cancelled"
-        job.completed_at = datetime.utcnow()
+        job.completed_at = utc_now()
         job.progress_message = "Wipe preview cancelled"
         db.commit()
-        db.refresh(job)
         logger.info(
-            "Repository wipe preview cancelled",
+            "Repository wipe cancelled",
             repository_id=repository.id,
-            job_id=job.id,
+            job_id=job_id,
             actor=current_user.username,
         )
         return self.serialize_job(job, include_preview=True)

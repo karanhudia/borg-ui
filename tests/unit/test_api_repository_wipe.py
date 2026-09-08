@@ -77,7 +77,7 @@ class TestRepositoryWipeApi:
         assert response.json() == preview_payload
         create_preview.assert_awaited_once()
 
-    def test_execute_validates_preview_and_starts_background_job(
+    def test_execute_validates_preview_and_queues_the_wipe(
         self, test_client: TestClient, admin_headers, test_db
     ):
         repo = _create_repository(test_db)
@@ -142,7 +142,9 @@ class TestRepositoryWipeApi:
         assert response.status_code == 200
         assert response.json() == serialized
         start_execution.assert_awaited_once()
-        create_task.assert_called_once()
+        # Phase 6: the confirm route only enqueues. The runner dispatches the
+        # wipe (spec 7.1), so the route spawns nothing of its own.
+        create_task.assert_not_called()
 
     def test_status_returns_logs_for_admin(
         self, test_client: TestClient, admin_headers, test_db
@@ -282,3 +284,225 @@ class TestRepositoryWipeApi:
         assert response.status_code == 200
         assert response.json() == cancelled
         cancel_preview.assert_called_once()
+
+
+def _operation(test_db, repo, *, kind, status, run_id="run-1", params=None):
+    from app.database.models import Operation
+    from app.services.operations.vocab import category_for
+
+    op = Operation(
+        repository_id=repo.id,
+        kind=kind,
+        category=category_for(kind),
+        status=status,
+        trigger="manual",
+        priority=0,
+        run_id=run_id,
+        params=params or {},
+    )
+    test_db.add(op)
+    test_db.commit()
+    test_db.refresh(op)
+    return op
+
+
+@pytest.mark.unit
+class TestRepositoryWipeOperations:
+    """Phase 6: wipe on the operations table (spec 6.2, 6.3, 7.1)."""
+
+    def test_preview_is_rejected_while_a_check_operation_runs(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repository(test_db)
+        _operation(test_db, repo, kind="check", status="running")
+
+        response = test_client.post(
+            f"/api/repositories/{repo.id}/wipe-preview",
+            json={"run_compact": True},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 409
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.repo.operationAlreadyRunning"
+        )
+
+    def test_preview_is_rejected_while_a_check_operation_is_queued(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repository(test_db)
+        _operation(test_db, repo, kind="check", status="queued")
+
+        response = test_client.post(
+            f"/api/repositories/{repo.id}/wipe-preview",
+            json={"run_compact": True},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 409
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.repo.operationAlreadyRunning"
+        )
+
+    def test_preview_is_rejected_while_a_wipe_operation_is_queued(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repository(test_db)
+        _operation(test_db, repo, kind="wipe", status="queued")
+
+        response = test_client.post(
+            f"/api/repositories/{repo.id}/wipe-preview",
+            json={"run_compact": True},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 409
+        assert (
+            response.json()["detail"]["key"] == "backend.errors.repo.wipeAlreadyRunning"
+        )
+
+    def test_an_rclone_sync_operation_does_not_block_a_wipe(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """rclone_sync takes the rclone lock scope, not the repository lane
+        (spec 7.2), so it is not a conflicting kind."""
+        repo = _create_repository(test_db)
+        _operation(test_db, repo, kind="rclone_sync", status="running")
+
+        with (
+            patch.object(
+                __import__("app.core.borg_router", fromlist=["BorgRouter"]).BorgRouter,
+                "list_archives",
+                new=AsyncMock(return_value=[]),
+            ),
+        ):
+            response = test_client.post(
+                f"/api/repositories/{repo.id}/wipe-preview",
+                json={"run_compact": True},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+
+    def test_wipe_job_route_serves_an_operation(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        from app.services.operations.details import wipe_details
+
+        repo = _create_repository(test_db)
+        op = _operation(
+            test_db,
+            repo,
+            kind="wipe",
+            status="running",
+            params={"preview_id": 1, "run_compact": True},
+        )
+        op.progress_percent = 75
+        op.progress_message = "Compacting repository after wipe"
+        details = wipe_details(test_db, op)
+        details.phase = "compact"
+        details.archive_count = 4
+        details.archive_fingerprint = "sha256:abc"
+        details.archive_manifest_json = '[{"identity": "a"}]'
+        details.protected_archives_json = "[]"
+        test_db.commit()
+
+        response = test_client.get(
+            f"/api/repositories/{repo.id}/wipe-jobs/{op.id}",
+            headers=admin_headers,
+        )
+
+        body = response.json()
+        assert response.status_code == 200
+        assert body["id"] == op.id
+        assert body["status"] == "running"
+        assert body["phase"] == "compact"
+        assert body["progress"] == 75
+        assert body["archive_count"] == 4
+        assert body["archive_fingerprint"] == "sha256:abc"
+        assert body["archives"] == [{"identity": "a"}]
+
+    def test_wipe_job_route_still_serves_a_pre_phase_6_row(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repository(test_db)
+        job = RepositoryWipeJob(
+            repository_id=repo.id,
+            status="completed",
+            phase="completed",
+            archive_count=2,
+            archive_manifest_json="[]",
+            protected_archives_json="[]",
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.get(
+            f"/api/repositories/{repo.id}/wipe-jobs/{job.id}",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "completed"
+
+    def test_cancelling_a_queued_wipe_operation_cancels_the_operation(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repository(test_db)
+        op = _operation(
+            test_db, repo, kind="wipe", status="queued", params={"preview_id": 1}
+        )
+
+        response = test_client.post(
+            f"/api/repositories/{repo.id}/wipe-jobs/{op.id}/cancel",
+            headers=admin_headers,
+        )
+
+        test_db.refresh(op)
+        assert response.status_code == 200
+        assert op.status == "cancelled"
+
+    def test_cancelling_a_running_wipe_operation_is_refused(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repository(test_db)
+        op = _operation(
+            test_db, repo, kind="wipe", status="running", params={"preview_id": 1}
+        )
+
+        response = test_client.post(
+            f"/api/repositories/{repo.id}/wipe-jobs/{op.id}/cancel",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 409
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.repo.wipeCannotCancelRunning"
+        )
+
+    def test_running_jobs_summary_reports_a_wipe_operation(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        from app.services.operations.details import wipe_details
+
+        repo = _create_repository(test_db)
+        op = _operation(
+            test_db, repo, kind="wipe", status="running", params={"preview_id": 1}
+        )
+        wipe_details(test_db, op).phase = "delete"
+        test_db.commit()
+
+        response = test_client.get(
+            f"/api/repositories/{repo.id}/running-jobs", headers=admin_headers
+        )
+
+        body = response.json()
+        assert response.status_code == 200
+        assert body["has_running_jobs"] is True
+        assert body["wipe_job"]["id"] == op.id
+        assert body["wipe_job"]["status"] == "running"
+        assert body["wipe_job"]["phase"] == "delete"

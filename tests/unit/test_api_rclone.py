@@ -1,4 +1,3 @@
-import asyncio
 import json
 from collections import deque
 from datetime import datetime, timedelta, timezone
@@ -4829,18 +4828,30 @@ def test_update_local_repository_cloud_mirror_default_policy_queues_initial_sync
         .filter(RepositoryStorage.repository_id == repository.id)
         .one()
     )
-    sync_job = (
-        test_db.query(RcloneSyncJob)
-        .filter(RcloneSyncJob.repository_id == repository.id)
+    from app.database.models import Operation, OperationRcloneDetails
+
+    operation = (
+        test_db.query(Operation)
+        .filter(
+            Operation.kind == "rclone_sync",
+            Operation.repository_id == repository.id,
+        )
         .one()
     )
+    details = test_db.get(OperationRcloneDetails, operation.id)
     assert repository.path == "/repositories/app"
     assert storage.sync_policy == "after_success"
     assert storage.sync_status == "pending"
-    assert sync_job.status == "pending"
-    assert sync_job.triggered_by == "initial"
-    assert sync_job.operation == "sync"
-    assert len(scheduled_tasks) == 1
+    # Created queued; the app fixture runs a live OperationRunner, so it may
+    # already have been dispatched by the time this assertion runs.
+    assert operation.status in ("queued", "running")
+    assert operation.trigger == "import"
+    assert details.operation == "sync"
+    assert details.direction == storage.sync_direction
+    assert test_db.query(RcloneSyncJob).count() == 0
+    # Phase 6: the route only enqueues, which `sync_repository` never being
+    # awaited proves. `scheduled_tasks` is no longer a signal: patching
+    # asyncio.create_task catches the live runner's own dispatch too.
     sync_repository.assert_not_awaited()
 
 
@@ -4958,10 +4969,15 @@ def test_update_local_repository_cloud_mirror_manual_or_scheduled_policy_does_no
 
 
 @pytest.mark.unit
-def test_resume_pending_initial_cloud_mirror_sync_jobs_dispatches_stale_jobs(
+def test_resume_pending_initial_cloud_mirror_sync_operations_requeues_stale_runs(
     test_db, monkeypatch
 ):
+    """Phase 6: an interrupted initial sync is requeued, not failed. Spec 7.6
+    would fail it, which is right for a Borg command holding a lock and wrong
+    for a mirror sync, which is itself a reconciliation."""
     from app.api import repositories as repositories_api
+    from app.database.models import Operation
+    from app.services.operations.details import rclone_details
 
     remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
     repository = Repository(name="App", path="/repositories/app", encryption="none")
@@ -4977,125 +4993,61 @@ def test_resume_pending_initial_cloud_mirror_sync_jobs_dispatches_stale_jobs(
         sync_policy="after_success",
         sync_status="syncing",
     )
-    job = RcloneSyncJob(
+    operation = Operation(
         repository_id=repository.id,
-        direction="primary_to_remote",
-        operation="sync",
+        kind="rclone_sync",
+        category="mirror",
         status="running",
-        triggered_by="initial",
-        error_text="previous process exited",
+        trigger="import",
+        priority=0,
+        run_id="run-initial",
+        started_at=datetime.now(timezone.utc),
     )
-    test_db.add_all([storage, job])
+    test_db.add_all([storage, operation])
     test_db.commit()
-    test_db.refresh(job)
-    scheduled_tasks = []
+    details = rclone_details(test_db, operation)
+    details.operation = "sync"
+    details.direction = "primary_to_remote"
+    details.error_text = "previous process exited"
+    test_db.commit()
 
-    def fake_create_task(coro):
-        scheduled_tasks.append(coro)
-        if hasattr(coro, "close"):
-            coro.close()
-        return SimpleNamespace(add_done_callback=lambda callback: None)
-
-    monkeypatch.setattr("app.api.repositories.asyncio.create_task", fake_create_task)
-
-    dispatched = repositories_api.resume_pending_initial_cloud_mirror_sync_jobs()
+    resumed = repositories_api.resume_pending_initial_cloud_mirror_sync_operations()
 
     test_db.expire_all()
-    assert dispatched == 1
-    assert len(scheduled_tasks) == 1
-    assert job.status == "pending"
-    assert job.completed_at is None
-    assert job.error_text is None
+    assert resumed == 1
+    assert operation.status == "queued"
+    assert operation.started_at is None
+    assert operation.completed_at is None
+    assert details.error_text is None
     assert storage.sync_status == "pending"
 
 
 @pytest.mark.unit
-def test_mark_background_rclone_sync_failed_preserves_existing_log_text(test_db):
+def test_resume_leaves_a_manual_mirror_sync_alone(test_db):
+    """Only the initial sync (trigger `import`) is resumed; a manual or
+    scheduled run that was interrupted is the runner's business."""
     from app.api import repositories as repositories_api
+    from app.database.models import Operation
 
-    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
     repository = Repository(name="App", path="/repositories/app", encryption="none")
-    test_db.add_all([remote, repository])
+    test_db.add(repository)
     test_db.commit()
-    test_db.refresh(remote)
     test_db.refresh(repository)
-    storage = RepositoryStorage(
+    operation = Operation(
         repository_id=repository.id,
-        backend="rclone",
-        rclone_remote_id=remote.id,
-        rclone_remote_path="borg-ui/repositories/app",
-        sync_policy="after_success",
-        sync_status="syncing",
-    )
-    job = RcloneSyncJob(
-        repository_id=repository.id,
-        direction="primary_to_remote",
-        operation="sync",
+        kind="rclone_sync",
+        category="mirror",
         status="running",
-        triggered_by="initial",
-        log_text="partial rclone output",
+        trigger="manual",
+        priority=0,
+        run_id="run-manual",
     )
-    test_db.add_all([storage, job])
+    test_db.add(operation)
     test_db.commit()
-    test_db.refresh(job)
 
-    repositories_api._mark_background_rclone_sync_failed(job.id, "task failed")
-
+    assert repositories_api.resume_pending_initial_cloud_mirror_sync_operations() == 0
     test_db.expire_all()
-    assert job.status == "failed"
-    assert job.error_text == "task failed"
-    assert job.log_text == "partial rclone output\ntask failed"
-    assert storage.sync_status == "failed"
-    assert storage.last_sync_error == "task failed"
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_background_rclone_sync_job_marks_cancelled_jobs_failed(
-    test_db, monkeypatch
-):
-    from app.api import repositories as repositories_api
-
-    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
-    repository = Repository(name="App", path="/repositories/app", encryption="none")
-    test_db.add_all([remote, repository])
-    test_db.commit()
-    test_db.refresh(remote)
-    test_db.refresh(repository)
-    storage = RepositoryStorage(
-        repository_id=repository.id,
-        backend="rclone",
-        rclone_remote_id=remote.id,
-        rclone_remote_path="borg-ui/repositories/app",
-        sync_policy="after_success",
-        sync_status="syncing",
-    )
-    job = RcloneSyncJob(
-        repository_id=repository.id,
-        direction="primary_to_remote",
-        operation="sync",
-        status="running",
-        triggered_by="initial",
-    )
-    test_db.add_all([storage, job])
-    test_db.commit()
-    test_db.refresh(job)
-
-    async def raise_cancelled(repository_id, runner, *, scope=None):
-        raise asyncio.CancelledError()
-
-    monkeypatch.setattr(
-        "app.api.repositories.run_serialized_repository_command",
-        raise_cancelled,
-    )
-
-    with pytest.raises(asyncio.CancelledError):
-        await repositories_api._run_background_rclone_sync_job(job.id)
-
-    test_db.expire_all()
-    assert job.status == "failed"
-    assert job.error_text == "Background rclone sync job was cancelled"
-    assert storage.sync_status == "failed"
+    assert operation.status == "running"
 
 
 @pytest.mark.unit
@@ -5187,13 +5139,18 @@ def test_manual_rclone_sync_records_job_without_clearing_schedule(
 
     assert response.status_code == 200
     test_db.refresh(storage)
-    sync_job = (
-        test_db.query(RcloneSyncJob)
+    from app.database.models import Operation
+    from app.services.operations.rclone_facade import RcloneSyncFacade
+
+    sync_job = RcloneSyncFacade(
+        test_db,
+        test_db.query(Operation)
         .filter(
-            RcloneSyncJob.repository_id == repository.id,
-            RcloneSyncJob.triggered_by == "manual",
+            Operation.kind == "rclone_sync",
+            Operation.repository_id == repository.id,
+            Operation.trigger == "manual",
         )
-        .one()
+        .one(),
     )
     assert response.json()["sync_status"] == "current"
     assert storage.next_scheduled_sync_at == next_run
