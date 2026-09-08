@@ -33,6 +33,7 @@ from app.database.models import (
     Repository,
     RcloneSyncJob,
     InstalledPackage,
+    RepositoryWipeJob,
     Operation,
     ScheduledJob,
     ScriptExecution,
@@ -134,23 +135,59 @@ def _paginate_log_text(log_text: str, offset: int, limit: int) -> dict:
     }
 
 
+# Activity type names that are not operation kind names. `package` predates
+# the operations vocabulary; the two rclone names share one kind (spec 6.2).
+_ACTIVITY_TYPE_TO_KIND = {"package": "package_install"}
+_KIND_TO_ACTIVITY_TYPE = {"package_install": "package"}
+
+
+def operation_kind_for_activity_type(job_type: str) -> str:
+    return _ACTIVITY_TYPE_TO_KIND.get(job_type, job_type)
+
+
 def _is_operation_only_kind(job_type: str, job_models: dict) -> bool:
     """True for kinds that live only in the operations table in this phase.
     Kinds that still have a legacy table keep resolving that table here; the
     /api/operations routes serve their operations rows by id."""
     return (
-        job_type in op_vocab.KINDS
+        operation_kind_for_activity_type(job_type) in op_vocab.KINDS
         and job_type not in job_models
         and job_type not in RCLONE_ACTIVITY_OPERATIONS
     )
 
 
+def _operation_log_sources(db: Session, job_type: str, op) -> dict:
+    """How an operation-only kind's logs are read and policy-gated.
+
+    `package` keeps the two-stream shape its route contract promises: the
+    facade parses them back out of the operation's log file (spec 6.2 gives
+    the kind no extension table), and a pre-phase-6 row still has its columns.
+    """
+    if job_type == "package":
+        from app.services.operations.package_facade import PackageInstallFacade
+
+        job = PackageInstallFacade(db, op) if isinstance(op, Operation) else op
+        return {
+            "output_text": [job.stdout, job.stderr, job.error_message],
+            "file_path": getattr(job, "log_file_path", None),
+            "exit_code": job.exit_code,
+            "text": _format_package_install_logs(job),
+        }
+    return {
+        "output_text": [getattr(op, "logs", None), op.error_message],
+        "file_path": getattr(op, "log_file_path", None),
+        "exit_code": None,
+        "text": _read_operation_log(op),
+    }
+
+
 def _get_operation_or_404(
     db: Session, job_type: str, job_id: int, current_user: Optional[User] = None
 ) -> Operation:
+    kind = operation_kind_for_activity_type(job_type)
     op = (
         db.query(Operation)
-        .filter(Operation.id == job_id, Operation.kind == job_type)
+        .filter(Operation.id == job_id, Operation.kind == kind)
         .first()
     )
     if op is None:
@@ -159,7 +196,10 @@ def _get_operation_or_404(
         # and log-path attributes every branch below reads.
         from app.services.operations.job_facade import LEGACY_MODELS
 
-        legacy_model = LEGACY_MODELS.get(job_type)
+        # Phase 6 kinds keep their own legacy tables until phase 9 too.
+        legacy_model = LEGACY_MODELS.get(job_type) or _PHASE6_LEGACY_MODELS.get(
+            job_type
+        )
         if legacy_model is not None:
             op = db.query(legacy_model).filter(legacy_model.id == job_id).first()
     if not op:
@@ -170,7 +210,9 @@ def _get_operation_or_404(
                 "params": {"jobType": job_type},
             },
         )
-    if current_user is not None and op.repository_id is not None:
+    # A legacy fallback row need not carry a repository (package installs do
+    # not), so this reads defensively rather than by attribute.
+    if current_user is not None and getattr(op, "repository_id", None) is not None:
         repo = db.get(Repository, op.repository_id)
         if repo is not None:
             check_repo_access(db, current_user, repo, "viewer")
@@ -267,6 +309,13 @@ RCLONE_ACTIVITY_OPERATIONS = {
     "rclone_hydrate": "hydrate",
 }
 
+# Legacy tables for the kinds phase 6 migrated, keyed by Activity type name.
+# `app.services.operations.job_facade.LEGACY_MODELS` covers the phase 5 kinds.
+_PHASE6_LEGACY_MODELS = {
+    "wipe": RepositoryWipeJob,
+    "package": PackageInstallJob,
+}
+
 
 def _no_logs_available_exception() -> HTTPException:
     return HTTPException(
@@ -303,12 +352,12 @@ def _format_package_install_logs(job: PackageInstallJob) -> str:
     return "\n".join(lines)
 
 
-def _get_rclone_job(db: Session, job_type: str, job_id: int) -> RcloneSyncJob | None:
-    operation = RCLONE_ACTIVITY_OPERATIONS[job_type]
-    return (
-        db.query(RcloneSyncJob)
-        .filter(RcloneSyncJob.id == job_id, RcloneSyncJob.operation == operation)
-        .first()
+def _get_rclone_job(db: Session, job_type: str, job_id: int):
+    """Operations first, then a pre-phase-6 legacy row (spec 6.2)."""
+    from app.services.operations.rclone_facade import resolve_rclone_job
+
+    return resolve_rclone_job(
+        db, job_id, operation=RCLONE_ACTIVITY_OPERATIONS[job_type]
     )
 
 
@@ -408,6 +457,52 @@ def _legacy_trigger(item: dict) -> str:
     return "schedule" if item.get("triggered_by") == "schedule" else "manual"
 
 
+def _apply_legacy_activity_shape(
+    db: Session, op: Operation, item: dict, *, log_save_policy: str
+) -> None:
+    """Give a migrated operation the Activity vocabulary its legacy table used.
+
+    Activity's `type` is not always the operation kind: one `rclone_sync` kind
+    serves two activity names (spec 6.2 puts the sub-type on the details row),
+    and its `triggered_by` keeps the legacy word `initial` the frontend reads.
+    """
+    if op.kind == "package_install":
+        item["type"] = _KIND_TO_ACTIVITY_TYPE[op.kind]
+        package_id = (op.params or {}).get("package_id")
+        package = (
+            db.get(InstalledPackage, package_id) if package_id is not None else None
+        )
+        item["package_name"] = package.name if package else f"Package #{package_id}"
+        from app.services.operations.package_facade import PackageInstallFacade
+
+        job = PackageInstallFacade(db, op)
+        item["has_logs"] = job_has_logs_by_policy(
+            op,
+            log_save_policy,
+            output_text=[job.stdout, job.stderr, op.error_message],
+            file_path=op.log_file_path,
+            exit_code=job.exit_code,
+        )
+        return
+    if op.kind != "rclone_sync":
+        return
+    from app.services.operations.rclone_facade import (
+        RcloneSyncFacade,
+        rclone_activity_type,
+    )
+
+    job = RcloneSyncFacade(db, op)
+    item["type"] = rclone_activity_type(job)
+    item["triggered_by"] = job.triggered_by
+    item["error_message"] = op.error_message or job.error_text
+    item["has_logs"] = job_has_logs_by_policy(
+        op,
+        log_save_policy,
+        output_text=[job.log_text, job.error_text],
+        file_path=op.log_file_path,
+    )
+
+
 def _operation_activity_items(
     db: Session,
     *,
@@ -438,9 +533,15 @@ def _operation_activity_items(
     if repository_id is not None:
         q = q.filter(Operation.repository_id == repository_id)
     if job_type:
-        if job_type not in op_vocab.KINDS:
+        job_type_kind = operation_kind_for_activity_type(job_type)
+        if job_type in RCLONE_ACTIVITY_OPERATIONS:
+            # Both activity names live in one kind (spec 6.2); the sub-type is
+            # on the details row, so filter the built items below instead.
+            q = q.filter(Operation.kind == "rclone_sync")
+        elif job_type_kind not in op_vocab.KINDS:
             return []
-        q = q.filter(Operation.kind == job_type)
+        else:
+            q = q.filter(Operation.kind == job_type_kind)
     if status:
         wanted = {status, op_vocab.LEGACY_STATUS_MAP.get(status, status)}
         q = q.filter(Operation.status.in_(tuple(wanted)))
@@ -470,6 +571,13 @@ def _operation_activity_items(
                 file_path=op.log_file_path,
             ),
         )
+        _apply_legacy_activity_shape(db, op, item, log_save_policy=log_save_policy)
+        if (
+            job_type
+            and item["type"] != job_type
+            and job_type in (RCLONE_ACTIVITY_OPERATIONS)
+        ):
+            continue
         item["_sort_at"] = op.started_at or op.created_at
         item["_depends_on_id"] = op.depends_on_id
         item["_trigger"] = op.trigger
@@ -1169,21 +1277,21 @@ async def get_job_logs(
     job_models = {
         "backup": BackupJob,
         "restore": RestoreJob,
-        "package": PackageInstallJob,
         "script_execution": ScriptExecution,
     }
 
     if _is_operation_only_kind(job_type, job_models):
         op = _get_operation_or_404(db, job_type, job_id, current_user)
-        policy = get_log_save_policy(db)
+        sources = _operation_log_sources(db, job_type, op)
         if not job_has_logs_by_policy(
             op,
-            policy,
-            output_text=[getattr(op, "logs", None), op.error_message],
-            file_path=op.log_file_path,
+            get_log_save_policy(db),
+            output_text=sources["output_text"],
+            file_path=sources["file_path"],
+            exit_code=sources["exit_code"],
         ):
             raise _no_logs_available_exception()
-        return _paginate_log_text(_read_operation_log(op), offset, limit)
+        return _paginate_log_text(sources["text"], offset, limit)
 
     if job_type == "script_execution":
         execution = (
@@ -1494,7 +1602,6 @@ async def download_job_logs(
     job_models = {
         "backup": BackupJob,
         "restore": RestoreJob,
-        "package": PackageInstallJob,
         "script_execution": ScriptExecution,
     }
 
@@ -1502,29 +1609,33 @@ async def download_job_logs(
         op = _get_operation_or_404(db, job_type, job_id, current_user)
         # Same policy gate as the paginated route above, so a download cannot
         # serve logs the log view reports as absent.
+        sources = _operation_log_sources(db, job_type, op)
         if not job_has_logs_by_policy(
             op,
             get_log_save_policy(db),
-            output_text=[getattr(op, "logs", None), op.error_message],
-            file_path=op.log_file_path,
+            output_text=sources["output_text"],
+            file_path=sources["file_path"],
+            exit_code=sources["exit_code"],
         ):
             raise _no_logs_available_exception()
-        if op.status == "running":
+        if op.status in ("running", "installing"):
             raise HTTPException(
                 status_code=400,
                 detail={
                     "key": "backend.errors.activity.cannotDownloadLogsForRunningJob"
                 },
             )
-        if op.log_file_path and os.path.exists(op.log_file_path):
+        file_path = sources["file_path"]
+        if job_type != "package" and file_path and os.path.exists(file_path):
             return FileResponse(
-                op.log_file_path,
+                file_path,
                 media_type="text/plain",
                 filename=f"operation_{op.id}.log",
             )
         # A pre-phase-5 legacy row mirrored its output into `logs` with no
-        # file at all; `_read_operation_log` already falls back to that.
-        text = _read_operation_log(op)
+        # file at all, and a package log file holds both streams behind
+        # sentinels, so the rendered text is what a reader wants.
+        text = sources["text"]
         if not text:
             raise _no_logs_available_exception()
         return _text_download_response(text, filename=f"operation_{op.id}_logs.txt")
@@ -1705,7 +1816,6 @@ async def delete_job(
     job_models = {
         "backup": BackupJob,
         "restore": RestoreJob,
-        "package": PackageInstallJob,
         "script_execution": ScriptExecution,
     }
 
@@ -1716,13 +1826,14 @@ async def delete_job(
                 status_code=400,
                 detail={"key": "backend.errors.activity.cannotDeleteRunningJob"},
             )
-        if op.log_file_path and os.path.exists(op.log_file_path):
+        op_log_path = getattr(op, "log_file_path", None)
+        if op_log_path and os.path.exists(op_log_path):
             try:
-                os.remove(op.log_file_path)
+                os.remove(op_log_path)
             except Exception as e:
                 logger.warning(
                     f"Failed to delete log file for operation {job_id}",
-                    path=op.log_file_path,
+                    path=op_log_path,
                     error=str(e),
                 )
         db.delete(op)

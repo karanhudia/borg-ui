@@ -762,3 +762,103 @@ def test_shared_log_file_survives_when_a_live_row_still_references_it(db, tmp_pa
     db.expunge_all()
     assert shared.exists()
     assert not solo.exists()
+
+
+def _phase6_operation(db, kind, *, age_days, status="completed"):
+    from app.database.models import Operation
+
+    completed = utc_now() - timedelta(days=age_days)
+    op = Operation(
+        repository_id=None,
+        kind=kind,
+        category="maintenance" if kind == "wipe" else "mirror",
+        status=status,
+        trigger="manual",
+        priority=0,
+        run_id=f"run-{kind}-{age_days}",
+        created_at=completed,
+        started_at=completed,
+        completed_at=completed,
+    )
+    db.add(op)
+    db.commit()
+    return op
+
+
+@pytest.mark.unit
+def test_deleting_an_operation_takes_its_extension_rows(db):
+    """Spec 7.8: extension rows must not outlive their operation. They have no
+    timestamp of their own, so the cascade on operations.id is what enforces
+    it; this pins that the cascade is actually configured."""
+    from app.database.models import (
+        Operation,
+        OperationRcloneDetails,
+        OperationWipeDetails,
+    )
+    from app.services.operations.details import rclone_details, wipe_details
+
+    settings = _settings(db)
+    wipe_op = _phase6_operation(db, "wipe", age_days=400)
+    rclone_op = _phase6_operation(db, "rclone_sync", age_days=400)
+    wipe_details(db, wipe_op).archive_count = 2
+    rclone_details(db, rclone_op).operation = "sync"
+    db.commit()
+
+    run_retention(db, settings)
+
+    db.expunge_all()
+    assert db.query(Operation).count() == 0
+    assert db.query(OperationWipeDetails).count() == 0
+    assert db.query(OperationRcloneDetails).count() == 0
+
+
+@pytest.mark.unit
+def test_extension_log_columns_are_cleared_at_the_log_window(db):
+    """Inside the cleanup window but outside the log window: the row stays and
+    its captured output goes, matching what the legacy columns did."""
+    from app.database.models import (
+        Operation,
+        OperationRcloneDetails,
+        OperationWipeDetails,
+    )
+    from app.services.operations.details import rclone_details, wipe_details
+
+    settings = _settings(db)
+    wipe_op = _phase6_operation(db, "wipe", age_days=60)
+    rclone_op = _phase6_operation(db, "rclone_sync", age_days=60)
+    wipe_row = wipe_details(db, wipe_op)
+    wipe_row.dry_run_output = "would delete archive-a"
+    wipe_row.archive_count = 3
+    rclone_row = rclone_details(db, rclone_op)
+    rclone_row.log_text = "copied 2 files"
+    rclone_row.error_text = "a warning"
+    db.commit()
+    wipe_id, rclone_id = wipe_op.id, rclone_op.id
+
+    results = run_retention(db, settings)
+
+    db.expunge_all()
+    assert db.query(Operation).count() == 2
+    assert results["operation_detail_logs_cleared"] == 2
+    assert db.get(OperationRcloneDetails, rclone_id).log_text is None
+    assert db.get(OperationRcloneDetails, rclone_id).error_text is None
+    assert db.get(OperationWipeDetails, wipe_id).dry_run_output is None
+    # History stays: only the bulky captured output goes.
+    assert db.get(OperationWipeDetails, wipe_id).archive_count == 3
+
+
+@pytest.mark.unit
+def test_recent_extension_log_columns_are_kept(db):
+    from app.database.models import OperationRcloneDetails
+    from app.services.operations.details import rclone_details
+
+    settings = _settings(db)
+    rclone_op = _phase6_operation(db, "rclone_sync", age_days=2)
+    rclone_details(db, rclone_op).log_text = "copied 2 files"
+    db.commit()
+    rclone_id = rclone_op.id
+
+    run_retention(db, settings)
+
+    db.expunge_all()
+    assert db.get(OperationRcloneDetails, rclone_id).log_text == "copied 2 files"

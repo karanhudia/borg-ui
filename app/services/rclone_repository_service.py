@@ -14,11 +14,16 @@ from urllib.parse import urlparse
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.services.operations.enqueue import enqueue
+from app.services.operations.rclone_facade import (
+    LEGACY_TO_TRIGGER,
+    RcloneSyncFacade,
+    resolve_rclone_job,
+)
 from app.database.models import (
     Repository,
     RepositoryStorage,
     RcloneRemote,
-    RcloneSyncJob,
 )
 from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
 from app.services.repository_executor import (
@@ -432,41 +437,32 @@ class RcloneRepositoryService:
         target = self.compose_target(remote, storage.rclone_remote_path)
         started_at = datetime.now(timezone.utc)
         if job_id is not None:
-            sync_job = (
-                db.query(RcloneSyncJob)
-                .filter(
-                    RcloneSyncJob.id == job_id,
-                    RcloneSyncJob.repository_id == repository.id,
-                )
-                .first()
-            )
-            if sync_job is None:
+            # The runner dispatched this one and passed its own operation id.
+            sync_job = resolve_rclone_job(db, job_id)
+            if sync_job is None or sync_job.repository_id != repository.id:
                 raise ValueError(f"rclone sync job {job_id} was not found")
-            sync_job.direction = storage.sync_direction
-            sync_job.operation = "sync"
-            sync_job.status = "running"
-            sync_job.triggered_by = triggered_by
-            sync_job.scheduled_for = (
-                to_utc_naive(scheduled_for) if scheduled_for else None
-            )
-            sync_job.started_at = started_at
-            sync_job.completed_at = None
-            sync_job.error_text = None
         else:
-            sync_job = RcloneSyncJob(
+            operation = enqueue(
+                db,
+                "rclone_sync",
                 repository_id=repository.id,
-                direction=storage.sync_direction,
-                operation="sync",
-                status="running",
-                triggered_by=triggered_by,
-                scheduled_for=to_utc_naive(scheduled_for) if scheduled_for else None,
-                started_at=started_at,
+                trigger=LEGACY_TO_TRIGGER.get(triggered_by, "manual"),
+                commit=False,
             )
-            db.add(sync_job)
+            sync_job = RcloneSyncFacade(db, operation)
+        sync_job.direction = storage.sync_direction
+        sync_job.operation = "sync"
+        sync_job.status = "running"
+        sync_job.triggered_by = triggered_by
+        sync_job.scheduled_for = to_utc_naive(scheduled_for) if scheduled_for else None
+        sync_job.started_at = started_at
+        sync_job.completed_at = None
+        sync_job.error_text = None
         storage.sync_status = "syncing"
         storage.last_sync_error = None
+        # No db.refresh(sync_job): a facade is not a mapped instance, its
+        # mapped object is the operation it wraps.
         db.commit()
-        db.refresh(sync_job)
         mount_id = None
         mount_service = None
         try:
@@ -542,6 +538,7 @@ class RcloneRepositoryService:
         repository: Repository,
         *,
         timeout: int | None = None,
+        job_id: int | None = None,
     ) -> dict[str, Any]:
         storage = self.get_storage(db, repository.id)
         remote = self.get_remote(db, storage)
@@ -551,19 +548,29 @@ class RcloneRepositoryService:
         temp_dir = tempfile.mkdtemp(
             prefix=f".hydrate-{repository.id}-", dir=str(parent)
         )
-        hydrate_job = RcloneSyncJob(
-            repository_id=repository.id,
-            direction="remote_to_cache",
-            operation="hydrate",
-            status="running",
-            triggered_by="manual",
-            started_at=datetime.now(timezone.utc),
-        )
-        db.add(hydrate_job)
+        if job_id is not None:
+            hydrate_job = resolve_rclone_job(db, job_id)
+            if hydrate_job is None or hydrate_job.repository_id != repository.id:
+                raise ValueError(f"rclone hydrate job {job_id} was not found")
+        else:
+            operation = enqueue(
+                db,
+                "rclone_sync",
+                repository_id=repository.id,
+                trigger="manual",
+                commit=False,
+            )
+            hydrate_job = RcloneSyncFacade(db, operation)
+        hydrate_job.direction = "remote_to_cache"
+        hydrate_job.operation = "hydrate"
+        hydrate_job.status = "running"
+        hydrate_job.triggered_by = "manual"
+        hydrate_job.started_at = datetime.now(timezone.utc)
+        hydrate_job.completed_at = None
+        hydrate_job.error_text = None
         storage.sync_status = "hydrating"
         storage.last_sync_error = None
         db.commit()
-        db.refresh(hydrate_job)
         try:
             result = await self.service.sync(
                 target,

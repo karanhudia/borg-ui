@@ -1,15 +1,23 @@
 """
-Package installation service - handles async package installation jobs
+Package installation service - handles async package installation jobs.
+
+Phase 6 moved the job row to `operations` (spec 6.2, 6.3): `start_install_job`
+only enqueues, the runner dispatches `run_install_job`, and the captured output
+lives in the operation's log file rather than two columns.
 """
 
 import asyncio
 import os
 from datetime import datetime
-from typing import Optional
 import structlog
 from sqlalchemy.orm import Session
 
-from app.database.models import InstalledPackage, PackageInstallJob
+from app.database.models import InstalledPackage, Operation, PackageInstallJob
+from app.services.operations.enqueue import enqueue
+from app.services.operations.package_facade import (
+    PackageInstallFacade,
+    resolve_package_job,
+)
 
 logger = structlog.get_logger()
 
@@ -17,62 +25,51 @@ logger = structlog.get_logger()
 class PackageInstallService:
     """Service for handling background package installation"""
 
-    def __init__(self):
-        self.running_jobs = {}  # job_id -> asyncio.Task
-
-    async def start_install_job(
-        self, db: Session, package_id: int
-    ) -> PackageInstallJob:
-        """
-        Start a package installation job in the background.
-        Returns the job immediately (non-blocking).
-        """
+    async def start_install_job(self, db: Session, package_id: int):
+        """Queue a package installation. The runner starts it (spec 7.1);
+        nothing is spawned here. Returns the job immediately."""
         package = (
             db.query(InstalledPackage).filter(InstalledPackage.id == package_id).first()
         )
         if not package:
             raise ValueError(f"Package {package_id} not found")
 
-        # Create job record
-        job = PackageInstallJob(package_id=package_id, status="pending")
-        db.add(job)
-        db.commit()
-        db.refresh(job)
-
-        logger.info("Created package install job", job_id=job.id, package=package.name)
-
-        # Start background task
-        task = asyncio.create_task(
-            self._run_install_job(
-                job.id, package_id, package.install_command, package.name
-            )
+        operation = enqueue(
+            db,
+            "package_install",
+            trigger="manual",
+            params={"package_id": package_id},
         )
-        self.running_jobs[job.id] = task
+        logger.info(
+            "Queued package install operation",
+            job_id=operation.id,
+            package=package.name,
+        )
+        return PackageInstallFacade(db, operation)
 
-        return job
-
-    async def _run_install_job(
-        self, job_id: int, package_id: int, install_command: str, package_name: str
-    ):
-        """
-        Background task that actually runs the package installation.
-        """
+    async def run_install_job(self, job_id: int):
+        """Run the installation. Called by the operations runner."""
         from app.database.database import SessionLocal
 
         db = SessionLocal()
+        close_db = getattr(SessionLocal, "return_value", None) is not db
         job = None
+        # Bound before the try: the failure handler below reads it, and the
+        # first statement in the try is what resolves it.
+        package_id = None
 
         try:
-            job = (
-                db.query(PackageInstallJob)
-                .filter(PackageInstallJob.id == job_id)
-                .first()
-            )
+            job = resolve_package_job(db, job_id)
+            package_id = job.package_id if job else None
             package = (
                 db.query(InstalledPackage)
                 .filter(InstalledPackage.id == package_id)
                 .first()
+                if package_id is not None
+                else None
             )
+            install_command = package.install_command if package else None
+            package_name = package.name if package else None
 
             if not job or not package:
                 logger.error(
@@ -134,8 +131,7 @@ class PackageInstallService:
 
             # Update job and package status
             job.exit_code = exit_code
-            job.stdout = stdout_str
-            job.stderr = stderr_str
+            job.write_output(stdout_str, stderr_str)
             job.completed_at = datetime.utcnow()
 
             if exit_code == 0:
@@ -195,24 +191,32 @@ class PackageInstallService:
                 db.rollback()
 
         finally:
-            db.close()
-            # Remove from running jobs
-            if job_id in self.running_jobs:
-                del self.running_jobs[job_id]
+            if close_db:
+                db.close()
 
-    def get_job_status(self, db: Session, job_id: int) -> Optional[PackageInstallJob]:
-        """Get the current status of a job"""
-        return (
-            db.query(PackageInstallJob).filter(PackageInstallJob.id == job_id).first()
-        )
+    def get_job_status(self, db: Session, job_id: int):
+        """Get the current status of a job. Operations first, then a
+        pre-phase-6 legacy row."""
+        return resolve_package_job(db, job_id)
 
     def get_running_jobs(self, db: Session) -> list:
         """Get all currently running/pending jobs"""
-        return (
+        jobs = [
+            PackageInstallFacade(db, op)
+            for op in db.query(Operation)
+            .filter(
+                Operation.kind == "package_install",
+                Operation.status.in_(("queued", "running")),
+            )
+            .all()
+        ]
+        # Pre-phase-6 rows only; goes away with the table in phase 9.
+        jobs.extend(
             db.query(PackageInstallJob)
             .filter(PackageInstallJob.status.in_(["pending", "installing"]))
             .all()
         )
+        return jobs
 
 
 # Global service instance

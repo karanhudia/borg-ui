@@ -10,7 +10,12 @@ import structlog
 from sqlalchemy.orm import Session
 from app.core.authorization import authorize_request
 from app.core.security import get_current_user
-from app.database.models import User, InstalledPackage, PackageInstallJob
+from app.database.models import User, InstalledPackage, Operation, PackageInstallJob
+from app.services.operations.package_facade import (
+    PackageInstallFacade,
+    active_package_install,
+    resolve_package_job,
+)
 from app.database.database import get_db
 from app.services.package_service import package_service
 from app.utils.datetime_utils import serialize_datetime
@@ -103,15 +108,9 @@ async def install_package(package_id: int, db: Session = Depends(get_db)):
             status_code=404, detail={"key": "backend.errors.packages.packageNotFound"}
         )
 
-    # Check if there's already a running job for this package
-    existing_job = (
-        db.query(PackageInstallJob)
-        .filter(
-            PackageInstallJob.package_id == package_id,
-            PackageInstallJob.status.in_(["pending", "installing"]),
-        )
-        .first()
-    )
+    # Check if there's already a running job for this package. Operations
+    # first, then a row a pre-phase-6 install left in flight.
+    existing_job = active_package_install(db, package_id)
 
     if existing_job:
         return {
@@ -252,7 +251,7 @@ async def reinstall_package(
 @router.get("/jobs/{job_id}")
 async def get_job_status(job_id: int, db: Session = Depends(get_db)):
     """Get the status of a package installation job"""
-    job = db.query(PackageInstallJob).filter(PackageInstallJob.id == job_id).first()
+    job = resolve_package_job(db, job_id)
     if not job:
         raise HTTPException(
             status_code=404, detail={"key": "backend.errors.packages.jobNotFound"}
@@ -274,12 +273,24 @@ async def get_job_status(job_id: int, db: Session = Depends(get_db)):
 @router.get("/jobs")
 async def list_jobs(db: Session = Depends(get_db)):
     """List all package installation jobs"""
-    jobs = (
+    # Both tables until phase 9 deletes the legacy one: operations for new
+    # work, package_install_jobs for pre-phase-6 history.
+    jobs = [
+        PackageInstallFacade(db, op)
+        for op in db.query(Operation)
+        .filter(Operation.kind == "package_install")
+        .order_by(Operation.created_at.desc())
+        .limit(50)
+        .all()
+    ]
+    jobs.extend(
         db.query(PackageInstallJob)
         .order_by(PackageInstallJob.created_at.desc())
         .limit(50)
         .all()
     )
+    jobs.sort(key=lambda job: job.created_at, reverse=True)
+    jobs = jobs[:50]
 
     return [
         {

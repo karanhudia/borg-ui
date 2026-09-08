@@ -26,7 +26,6 @@ from app.database.models import (
     RcloneSyncJob,
     Repository,
     RepositoryStorage,
-    RepositoryWipeJob,
     ScheduledJob,
     ScheduledJobRepository,
     SystemSettings,
@@ -48,6 +47,8 @@ from app.services.operations.maintenance_start import (
     start_maintenance,
 )
 from app.services.operations.job_facade import MaintenanceJobFacade
+from app.services.operations.enqueue import enqueue, wake_runner
+from app.services.operations.rclone_facade import RcloneSyncFacade
 from app.core.authorization import authorize_request
 from app.core.security import get_current_user, check_repo_access, decrypt_secret
 from app.core.borg import BorgInterface
@@ -62,6 +63,11 @@ from app.core.features import (
 )
 from app.config import settings
 from app.services.mqtt_service import mqtt_service
+from app.services.operations.wipe_facade import (
+    WipeJobFacade,
+    active_wipe_operation,
+    resolve_wipe_job,
+)
 from app.services.repository_wipe_service import (
     WipeArchiveSetChanged,
     WipeValidationError,
@@ -1963,12 +1969,22 @@ def _serialize_rclone_storage(
     )
     status = rclone_repository_service.serialize_status(repository, storage, remote)
     status.update(_agent_machine_summary(repository, db))
-    latest_job = (
+    latest_operation = (
+        db.query(Operation)
+        .filter(
+            Operation.repository_id == repository.id,
+            Operation.kind == "rclone_sync",
+        )
+        .order_by(Operation.created_at.desc(), Operation.id.desc())
+        .first()
+    )
+    latest_legacy = (
         db.query(RcloneSyncJob)
         .filter(RcloneSyncJob.repository_id == repository.id)
         .order_by(RcloneSyncJob.created_at.desc(), RcloneSyncJob.id.desc())
         .first()
     )
+    latest_job = _newer_rclone_job(db, latest_operation, latest_legacy)
     if log_save_policy is None:
         log_save_policy = get_log_save_policy(db)
     status["latest_sync_job"] = (
@@ -1994,83 +2010,21 @@ def _serialize_rclone_storage(
     return status
 
 
-def _mark_background_rclone_sync_failed(job_id: int, message: str) -> None:
-    db = SessionLocal()
-    try:
-        job = db.query(RcloneSyncJob).filter(RcloneSyncJob.id == job_id).first()
-        if not job:
-            return
-        storage = (
-            db.query(RepositoryStorage)
-            .filter(RepositoryStorage.repository_id == job.repository_id)
-            .first()
-        )
-        if storage:
-            storage.sync_status = "failed"
-            storage.last_sync_error = message
-        job.status = "failed"
-        job.completed_at = datetime.now(timezone.utc)
-        job.error_text = message
-        job.log_text = (
-            f"{job.log_text.rstrip()}\n{message}" if job.log_text else message
-        )
-        db.commit()
-    finally:
-        db.close()
-
-
-async def _run_background_rclone_sync_job(job_id: int) -> None:
-    db = SessionLocal()
-    try:
-        job = db.query(RcloneSyncJob).filter(RcloneSyncJob.id == job_id).first()
-        if job is None:
-            logger.warning("Skipping missing background rclone sync job", job_id=job_id)
-            return
-        repository = (
-            db.query(Repository).filter(Repository.id == job.repository_id).first()
-        )
-        if repository is None:
-            raise ValueError(f"repository {job.repository_id} was not found")
-
-        async def run_sync():
-            return await rclone_repository_service.sync_repository(
-                db,
-                repository,
-                triggered_by=job.triggered_by,
-                scheduled_for=job.scheduled_for,
-                job_id=job.id,
-            )
-
-        await run_serialized_repository_command(repository.id, run_sync, scope="rclone")
-    except asyncio.CancelledError:
-        message = "Background rclone sync job was cancelled"
-        logger.info(message, job_id=job_id)
-        db.rollback()
-        _mark_background_rclone_sync_failed(job_id, message)
-        raise
-    except Exception as exc:
-        message = str(exc) or exc.__class__.__name__
-        logger.error(
-            "Background rclone sync job failed",
-            job_id=job_id,
-            error=message,
-        )
-        db.rollback()
-        _mark_background_rclone_sync_failed(job_id, message)
-    finally:
-        db.close()
-
-
-def _log_background_rclone_sync_task_result(task: asyncio.Task) -> None:
-    try:
-        task.result()
-    except asyncio.CancelledError:
-        logger.info("Background rclone sync job was cancelled")
-    except Exception as exc:
-        logger.error("Background rclone sync task raised", error=str(exc))
+def _newer_rclone_job(db: Session, operation, legacy):
+    """The newer of an operations row and a pre-phase-6 legacy row. Both
+    tables can hold mirror history for the same repository until phase 9."""
+    if operation is None:
+        return legacy
+    if legacy is None:
+        return RcloneSyncFacade(db, operation)
+    if legacy.created_at and operation.created_at < legacy.created_at:
+        return legacy
+    return RcloneSyncFacade(db, operation)
 
 
 def _queue_initial_cloud_mirror_sync(db: Session, repository: Repository) -> None:
+    """Queue the first mirror sync for a newly created cloud repository. The
+    runner dispatches it (spec 7.1); nothing is spawned here."""
     storage = (
         db.query(RepositoryStorage)
         .filter(RepositoryStorage.repository_id == repository.id)
@@ -2078,53 +2032,63 @@ def _queue_initial_cloud_mirror_sync(db: Session, repository: Repository) -> Non
     )
     if not storage or storage.backend != "rclone":
         return
-    sync_job = RcloneSyncJob(
+    operation = enqueue(
+        db,
+        "rclone_sync",
         repository_id=repository.id,
-        direction=storage.sync_direction,
-        operation="sync",
-        status="pending",
-        triggered_by="initial",
+        trigger="import",
+        commit=False,
     )
-    db.add(sync_job)
+    job = RcloneSyncFacade(db, operation)
+    job.direction = storage.sync_direction
+    job.operation = "sync"
     storage.sync_status = "pending"
     storage.last_sync_error = None
     db.commit()
-    db.refresh(sync_job)
-    task = asyncio.create_task(_run_background_rclone_sync_job(sync_job.id))
-    task.add_done_callback(_log_background_rclone_sync_task_result)
+    wake_runner()
 
 
-def resume_pending_initial_cloud_mirror_sync_jobs() -> int:
+def resume_pending_initial_cloud_mirror_sync_operations() -> int:
+    """Requeue an initial mirror sync a restart interrupted.
+
+    Spec 7.6 would mark a `running` non-index operation failed, which is right
+    for a Borg command holding a lock and wrong for a mirror sync: `rclone
+    sync` is itself a reconciliation, so re-running it is safe and is what the
+    pre-phase-6 code did. Runs before `OperationRunner.recover_on_startup`, so
+    recovery sees a `queued` row and leaves it alone.
+    """
     db = SessionLocal()
     try:
-        jobs = (
-            db.query(RcloneSyncJob)
+        operations = (
+            db.query(Operation)
             .filter(
-                RcloneSyncJob.operation == "sync",
-                RcloneSyncJob.triggered_by == "initial",
-                RcloneSyncJob.status.in_(("pending", "running")),
+                Operation.kind == "rclone_sync",
+                Operation.trigger == "import",
+                Operation.status.in_(("queued", "running")),
             )
-            .order_by(RcloneSyncJob.id.asc())
+            .order_by(Operation.id.asc())
             .all()
         )
-        dispatched = 0
-        for job in jobs:
+        resumed = 0
+        for operation in operations:
             storage = (
                 db.query(RepositoryStorage)
-                .filter(RepositoryStorage.repository_id == job.repository_id)
+                .filter(RepositoryStorage.repository_id == operation.repository_id)
                 .first()
             )
             if storage:
                 storage.sync_status = "pending"
                 storage.last_sync_error = None
+            job = RcloneSyncFacade(db, operation)
             job.status = "pending"
+            job.started_at = None
             job.completed_at = None
             job.error_text = None
-            db.commit()
-            task = asyncio.create_task(_run_background_rclone_sync_job(job.id))
-            task.add_done_callback(_log_background_rclone_sync_task_result)
-            dispatched += 1
-        return dispatched
+            resumed += 1
+        db.commit()
+        if resumed:
+            wake_runner()
+        return resumed
     finally:
         db.close()
 
@@ -5663,7 +5627,7 @@ async def execute_repository_wipe(
             understood=request.understood,
             run_compact=request.run_compact,
         )
-        asyncio.create_task(repository_wipe_service.execute_wipe(job.id, repo_id))
+        # The runner dispatches it (spec 7.1); nothing is spawned here.
         return repository_wipe_service.serialize_job(job)
     except WipeArchiveSetChanged:
         raise HTTPException(
@@ -5693,15 +5657,8 @@ async def get_repository_wipe_job(
         repository = get_repository_with_access(
             db, current_user, repo_id, required_role="operator"
         )
-        job = (
-            db.query(RepositoryWipeJob)
-            .filter(
-                RepositoryWipeJob.id == job_id,
-                RepositoryWipeJob.repository_id == repository.id,
-            )
-            .first()
-        )
-        if not job:
+        job = resolve_wipe_job(db, job_id)
+        if not job or job.repository_id != repository.id:
             raise HTTPException(
                 status_code=404,
                 detail={"key": "backend.errors.repo.wipeJobNotFound"},
@@ -6619,13 +6576,14 @@ async def get_running_jobs(
         prune_job = _job_or_legacy("prune")
         restore_check_job = _job_or_legacy("restore_check")
 
+        # Phase 6 moved wipe to `operations` too; `active_wipe_operation`
+        # checks that table first and falls back to a legacy row a pre-phase-6
+        # install left active.
+        wipe_operation = active_wipe_operation(db, repo_id)
         wipe_job = (
-            db.query(RepositoryWipeJob)
-            .filter(
-                RepositoryWipeJob.repository_id == repo_id,
-                RepositoryWipeJob.status.in_(("pending", "running")),
-            )
-            .first()
+            WipeJobFacade(db, wipe_operation)
+            if isinstance(wipe_operation, Operation)
+            else wipe_operation
         )
 
         result = {

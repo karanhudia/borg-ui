@@ -12,6 +12,8 @@ from app.database.models import (
     Repository,
     RepositoryStorage,
     RcloneRemote,
+    Operation,
+    OperationRcloneDetails,
     RcloneSyncJob,
     ScheduledJob,
     ScheduledJobRepository,
@@ -595,27 +597,29 @@ class TestScheduleRouteContracts:
 
         test_db.refresh(repo)
         test_db.refresh(storage)
-        sync_job = (
-            test_db.query(RcloneSyncJob)
+        # Phase 6: the scheduler only queues. The runner starts the sync, and
+        # the executor records the outcome and the storage failure, so this
+        # test now pins the queued row and the schedule bookkeeping only.
+        operation = (
+            test_db.query(Operation)
             .filter(
-                RcloneSyncJob.repository_id == repo.id,
-                RcloneSyncJob.triggered_by == "schedule",
+                Operation.repository_id == repo.id,
+                Operation.kind == "rclone_sync",
+                Operation.trigger == "schedule",
             )
             .one()
         )
+        details = test_db.get(OperationRcloneDetails, operation.id)
         assert repo.path == "/repos/mirror"
         assert storage.rclone_remote_path == "borg-ui/repositories/mirror"
-        assert storage.sync_status == "failed"
-        assert storage.last_sync_error == "remote unavailable"
-        assert storage.last_scheduled_sync_at == now.replace(tzinfo=None)
         assert storage.next_scheduled_sync_at > now.replace(tzinfo=None)
-        assert sync_job.triggered_by == "schedule"
-        assert sync_job.status == "failed"
-        assert sync_job.scheduled_for == now.replace(tzinfo=None) - timedelta(minutes=5)
-        assert sync_job.error_text == "remote unavailable"
-        assert sync_job.log_text == "remote unavailable"
+        assert operation.status == "queued"
+        assert details.operation == "sync"
+        assert details.direction == "primary_to_remote"
+        assert details.scheduled_for == now.replace(tzinfo=None) - timedelta(minutes=5)
+        assert test_db.query(RcloneSyncJob).count() == 0
 
-    def test_dispatch_scheduled_rclone_mirror_claims_before_background_task(
+    def test_dispatch_scheduled_rclone_mirror_queues_one_run_per_slot(
         self, test_db, monkeypatch
     ):
         from app.services import rclone_mirror_scheduler
@@ -648,32 +652,34 @@ class TestScheduleRouteContracts:
         )
         test_db.add(storage)
         test_db.commit()
-        created_coroutines = []
-
-        class FakeTask:
-            def add_done_callback(self, callback):
-                callback(self)
-
-        def fake_create_task(coro):
-            created_coroutines.append(coro)
-            coro.close()
-            return FakeTask()
-
-        monkeypatch.setattr(
-            rclone_mirror_scheduler.asyncio,
-            "create_task",
-            fake_create_task,
-        )
-
         dispatched = rclone_mirror_scheduler.dispatch_due_scheduled_rclone_mirrors(
             test_db, now
         )
 
         test_db.refresh(storage)
+        operation = (
+            test_db.query(Operation)
+            .filter(
+                Operation.kind == "rclone_sync",
+                Operation.repository_id == repo.id,
+            )
+            .one()
+        )
         assert dispatched == 1
-        assert len(created_coroutines) == 1
+        assert operation.status == "queued"
+        assert operation.trigger == "schedule"
         assert storage.last_scheduled_sync_at is None
         assert storage.next_scheduled_sync_at > now.replace(tzinfo=None)
+
+        # A second tick over the same slot must not queue a duplicate.
+        second = rclone_mirror_scheduler.dispatch_due_scheduled_rclone_mirrors(
+            test_db, now
+        )
+        assert second == 0
+        assert (
+            test_db.query(Operation).filter(Operation.kind == "rclone_sync").count()
+            == 1
+        )
 
     def test_validate_cron_returns_preview_for_valid_expression(
         self, test_client: TestClient, admin_headers

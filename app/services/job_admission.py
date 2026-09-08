@@ -297,6 +297,27 @@ def list_active_repository_work(
             )
         )
 
+    for op in (
+        db.query(Operation)
+        .filter(
+            Operation.repository_id == repository.id,
+            Operation.kind == "wipe",
+            Operation.status.in_(ACTIVE_OPERATION_STATUSES),
+        )
+        .all()
+    ):
+        active.append(
+            _active_work(
+                repository,
+                OPERATION_REPOSITORY_WIPE,
+                Operation.__tablename__,
+                op,
+                status=legacy_status(op.status),
+            )
+        )
+
+    # Legacy rows only: nothing writes repository_wipe_jobs execution rows
+    # after phase 6. Goes away with the table in phase 9.
     wipe_jobs = (
         db.query(RepositoryWipeJob)
         .filter(

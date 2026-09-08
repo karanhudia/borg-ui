@@ -19,7 +19,7 @@ from app.database.models import (
     CheckJob,
     CompactJob,
     PruneJob,
-    PackageInstallJob,
+    Operation,
 )
 
 logger = structlog.get_logger()
@@ -135,14 +135,16 @@ class LogManager:
         try:
             protected_paths = set()
 
-            # Query all job types for running status
+            # Legacy job tables, for rows written before their kind moved to
+            # `operations`. PackageInstallJob is not here: its running word was
+            # "installing", so it never matched, and new installs are
+            # operations. The legacy list goes away with the tables in phase 9.
             job_models = [
                 BackupJob,
                 RestoreJob,
                 CheckJob,
                 CompactJob,
                 PruneJob,
-                PackageInstallJob,
             ]
 
             for model in job_models:
@@ -150,6 +152,11 @@ class LogManager:
                 for job in running_jobs:
                     if hasattr(job, "log_file_path") and job.log_file_path:
                         protected_paths.add(str(job.log_file_path))
+
+            # Every migrated kind writes here now (spec 6.1).
+            for op in db.query(Operation).filter(Operation.status == "running").all():
+                if op.log_file_path:
+                    protected_paths.add(str(op.log_file_path))
 
             logger.info(
                 "Found running job logs to protect",

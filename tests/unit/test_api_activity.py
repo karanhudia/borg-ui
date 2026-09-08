@@ -2317,3 +2317,211 @@ class TestRecentActivityStatusFilter:
         assert response.status_code == 200
         items = response.json()
         assert items and all(item["status"] == "skipped" for item in items)
+
+
+@pytest.mark.unit
+class TestActivityRcloneOperations:
+    """Phase 6: mirror work reads from `operations` (spec 6.2, 9.3)."""
+
+    def _repository(self, test_db):
+        from app.database.models import Repository
+
+        repo = Repository(
+            name="App", path="/repos/app", encryption="none", repository_type="local"
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+        return repo
+
+    def _mirror_operation(self, test_db, repo, *, operation, trigger="manual"):
+        from app.database.models import Operation
+        from app.services.operations.details import rclone_details
+
+        op = Operation(
+            repository_id=repo.id,
+            kind="rclone_sync",
+            category="mirror",
+            status="completed",
+            trigger=trigger,
+            priority=0,
+            run_id=f"run-{operation}-{trigger}",
+        )
+        test_db.add(op)
+        test_db.commit()
+        details = rclone_details(test_db, op)
+        details.operation = operation
+        details.log_text = "copied 2 files"
+        test_db.commit()
+        return op
+
+    def test_a_hydrate_operation_reads_as_the_hydrate_activity_type(
+        self, test_client, admin_headers, test_db
+    ):
+        repo = self._repository(test_db)
+        self._mirror_operation(test_db, repo, operation="hydrate")
+
+        response = test_client.get(
+            "/api/activity/recent?category=mirror", headers=admin_headers
+        )
+
+        types = [item["type"] for item in response.json()]
+        assert response.status_code == 200
+        assert types == ["rclone_hydrate"]
+
+    def test_filtering_by_hydrate_hides_the_sync_operation(
+        self, test_client, admin_headers, test_db
+    ):
+        repo = self._repository(test_db)
+        self._mirror_operation(test_db, repo, operation="sync")
+        hydrate = self._mirror_operation(test_db, repo, operation="hydrate")
+
+        response = test_client.get(
+            "/api/activity/recent?job_type=rclone_hydrate&category=mirror",
+            headers=admin_headers,
+        )
+
+        items = response.json()
+        assert response.status_code == 200
+        assert [(item["id"], item["type"]) for item in items] == [
+            (hydrate.id, "rclone_hydrate")
+        ]
+
+    def test_an_initial_sync_keeps_the_legacy_triggered_by_word(
+        self, test_client, admin_headers, test_db
+    ):
+        repo = self._repository(test_db)
+        self._mirror_operation(test_db, repo, operation="sync", trigger="import")
+
+        response = test_client.get(
+            "/api/activity/recent?category=mirror", headers=admin_headers
+        )
+
+        items = response.json()
+        assert response.status_code == 200
+        assert items[0]["triggered_by"] == "initial"
+
+    def test_logs_route_serves_a_mirror_operation(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.services.operations.details import rclone_details
+
+        repo = self._repository(test_db)
+        op = self._mirror_operation(test_db, repo, operation="sync")
+        # The default policy (failed_and_warnings) shows logs for a failed run,
+        # exactly as it did for the legacy row.
+        op.status = "failed"
+        rclone_details(test_db, op).error_text = "remote unavailable"
+        test_db.commit()
+
+        response = test_client.get(
+            f"/api/activity/rclone_sync/{op.id}/logs", headers=admin_headers
+        )
+
+        assert response.status_code == 200, response.json()
+        assert "copied 2 files" in "".join(
+            line["content"] for line in response.json()["lines"]
+        )
+
+
+@pytest.mark.unit
+class TestActivityPackageOperations:
+    """Phase 6: package installs read from `operations` (spec 6.2, 9.3)."""
+
+    def _package_operation(self, test_db, *, status="completed", stdout="installed"):
+        from app.database.models import InstalledPackage, Operation
+        from app.services.operations.package_facade import PackageInstallFacade
+
+        package = InstalledPackage(
+            name="ripgrep", install_command="apt-get install -y ripgrep"
+        )
+        test_db.add(package)
+        test_db.flush()
+        op = Operation(
+            repository_id=None,
+            kind="package_install",
+            category="system",
+            status=status,
+            trigger="manual",
+            priority=0,
+            run_id="run-package",
+            params={"package_id": package.id},
+        )
+        test_db.add(op)
+        test_db.commit()
+        job = PackageInstallFacade(test_db, op)
+        job.exit_code = 0
+        job.write_output(stdout, "")
+        test_db.commit()
+        return package, op
+
+    def test_an_install_operation_reads_as_the_package_activity_type(
+        self, test_client, admin_headers, test_db
+    ):
+        package, op = self._package_operation(test_db)
+
+        response = test_client.get(
+            "/api/activity/recent?category=system", headers=admin_headers
+        )
+
+        items = [item for item in response.json() if item["id"] == op.id]
+        assert response.status_code == 200
+        assert items[0]["type"] == "package"
+        assert items[0]["package_name"] == package.name
+
+    def test_filtering_by_package_returns_the_operation(
+        self, test_client, admin_headers, test_db
+    ):
+        package, op = self._package_operation(test_db)
+
+        response = test_client.get(
+            "/api/activity/recent?job_type=package", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        assert [item["id"] for item in response.json()] == [op.id]
+
+    def test_logs_route_serves_both_streams_of_an_install_operation(
+        self, test_client, admin_headers, test_db
+    ):
+        _set_log_save_policy(test_db, "all_jobs")
+        package, op = self._package_operation(
+            test_db, stdout="WARNING: already installed"
+        )
+
+        response = test_client.get(
+            f"/api/activity/package/{op.id}/logs", headers=admin_headers
+        )
+
+        body = "".join(line["content"] for line in response.json()["lines"])
+        assert response.status_code == 200, response.json()
+        assert "WARNING: already installed" in body
+        assert "EXIT CODE: 0" in body
+
+    def test_logs_route_still_serves_a_pre_phase_6_row(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.database.models import InstalledPackage, PackageInstallJob
+
+        _set_log_save_policy(test_db, "all_jobs")
+        package = InstalledPackage(
+            name="legacy-pkg", install_command="apt-get install -y legacy-pkg"
+        )
+        test_db.add(package)
+        test_db.flush()
+        job = PackageInstallJob(
+            package_id=package.id,
+            status="completed",
+            exit_code=0,
+            stdout="legacy output",
+        )
+        test_db.add(job)
+        test_db.commit()
+
+        response = test_client.get(
+            f"/api/activity/package/{job.id}/logs", headers=admin_headers
+        )
+
+        body = "".join(line["content"] for line in response.json()["lines"])
+        assert response.status_code == 200, response.json()
+        assert "legacy output" in body

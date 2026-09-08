@@ -25,8 +25,18 @@ Job records store status, timestamps, progress, errors, and log file references.
 | Prune | Apply retention policy |
 | Archive delete | Delete an archive |
 | Restore check | Verify that selected paths can be restored |
+| Repository wipe | Delete every archive in a repository |
+| Cloud mirror sync | Copy a repository to (or from) an rclone remote |
+| Package install | Install an OS package on the server |
 
 Schedules are configuration records. When a schedule fires, it creates backup/check/restore-check jobs.
+
+Repository wipe, cloud mirror sync and hydrate, and package install are
+`operations` rows too (kinds `wipe`, `rclone_sync`, `package_install`).
+`repository_wipe_jobs`, `rclone_sync_jobs`, and `package_install_jobs` are
+legacy tables now: they hold history written before the migration and nothing
+writes new rows to them. A job id resolves against `operations` first and falls
+back to its legacy table, so old links keep working.
 
 ## Backup Jobs
 
@@ -97,6 +107,34 @@ System settings control:
 - total log size cap
 - cleanup on startup
 
+## Repository Wipe, Cloud Mirror Sync, and Package Install
+
+**Repository wipe** is exclusive, so a confirmed wipe queues behind whatever
+holds the repository lane instead of being rejected with a 409. The preview
+stays in `repository_wipe_jobs`: it is not a unit of work, it holds no lock,
+and it blocks nothing. Confirming the preview creates the `wipe` operation and
+copies the preview snapshot (fingerprint, manifest, dry-run output, protected
+archives) into `operation_wipe_details`; a preview is spent once an
+operation's `params.preview_id` names it. Two wipe statuses the UI shows,
+`completed_compaction_failed` and `failed_partial`, are not operation
+statuses: they are stored as `completed_with_warnings` and `failed` and
+reconstructed from the details row's `phase`.
+
+**Cloud mirror sync** is one kind, `rclone_sync`, for both the mirror sync and
+the cache hydrate; `operation_rclone_details.operation` says which. It does not
+take the repository lane. It serialises on the `rclone` lock scope instead, as
+it always has, and the executor is what takes that lock now, so the mirror
+scheduler gets it too (it did not before). The scheduler and the initial sync
+queued when a cloud repository is created both only enqueue; the runner starts
+them. The legacy `triggered_by` word `initial` is stored as the trigger
+`import` and mapped back on read.
+
+**Package install** has no repository and no lane. Its `package_id` lives in
+`operations.params`, its exit code in `operations.result`, and its captured
+output in the operation's log file, with the two streams separated by sentinel
+lines, so `GET /api/packages/jobs/{id}` still returns `stdout` and `stderr`
+apart.
+
 ## Restart Cleanup
 
 On application startup, Borg UI checks for jobs that were left in `running` states by a container restart or crash.
@@ -128,7 +166,16 @@ What happens:
 
 For local check and compact jobs, Borg UI attempts to break the repository lock after detecting an orphaned process. For remote repositories, it does not automatically break the lock because the remote Borg process may still be running.
 
-Archive-delete and package-install jobs are not part of this startup orphan-job cleanup path.
+Archive-delete and package-install jobs are not part of this startup orphan-job
+cleanup path.
+
+One mirror case is handled before recovery runs: an initial cloud mirror sync
+(trigger `import`) left `running` by a restart is put back to `queued` rather
+than failed. Recovery would fail it, which is right for a Borg command holding
+a lock and wrong for `rclone sync`, which is itself a reconciliation and safe
+to re-run. The requeue happens earlier in startup than
+`OperationRunner.recover_on_startup`, so recovery sees a queued row and leaves
+it alone.
 
 ## Stale Scheduled Checks
 

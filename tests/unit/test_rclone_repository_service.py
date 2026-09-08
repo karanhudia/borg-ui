@@ -330,13 +330,18 @@ async def test_sync_repository_records_manual_job_without_advancing_schedule(
     )
 
     db_session.refresh(storage)
-    sync_job = (
-        db_session.query(RcloneSyncJob)
+    from app.database.models import Operation
+    from app.services.operations.rclone_facade import RcloneSyncFacade
+
+    sync_job = RcloneSyncFacade(
+        db_session,
+        db_session.query(Operation)
         .filter(
-            RcloneSyncJob.repository_id == repository.id,
-            RcloneSyncJob.triggered_by == "manual",
+            Operation.kind == "rclone_sync",
+            Operation.repository_id == repository.id,
+            Operation.trigger == "manual",
         )
-        .one()
+        .one(),
     )
     assert status["sync_status"] == "current"
     assert storage.next_scheduled_sync_at == original_next_run
@@ -665,13 +670,16 @@ async def test_hydrate_repository_records_completed_hydrate_job(db_session, tmp_
     status = await service.hydrate_repository(db_session, repository)
 
     db_session.refresh(storage)
-    hydrate_job = (
-        db_session.query(RcloneSyncJob)
-        .filter(
-            RcloneSyncJob.repository_id == repository.id,
-            RcloneSyncJob.operation == "hydrate",
-        )
+    from app.database.models import Operation, OperationRcloneDetails
+    from app.services.operations.rclone_facade import RcloneSyncFacade
+
+    hydrate_details = (
+        db_session.query(OperationRcloneDetails)
+        .filter(OperationRcloneDetails.operation == "hydrate")
         .one()
+    )
+    hydrate_job = RcloneSyncFacade(
+        db_session, db_session.get(Operation, hydrate_details.operation_id)
     )
     assert status["sync_status"] == "current"
     assert storage.last_hydrated_at is not None
@@ -711,3 +719,117 @@ async def test_hydrate_repository_persists_failure_when_rclone_raises(
     assert status["sync_status"] == "failed"
     assert storage.sync_status == "failed"
     assert storage.last_sync_error == "rclone timed out"
+
+
+def _rclone_repository_and_storage(db_session, *, cache_path="/srv/borg/app"):
+    """Phase 6 helper: a cloud repository ready to sync."""
+    remote = RcloneRemote(id=3, name="prod-s3", provider="s3")
+    repository = Repository(id=9, name="App", path=cache_path, encryption="none")
+    storage = RepositoryStorage(
+        repository_id=9,
+        backend="rclone",
+        rclone_remote_id=3,
+        rclone_remote_path="borg-ui/repositories/app",
+        cache_path=cache_path,
+        sync_policy="manual",
+        sync_status="pending",
+        sync_direction="primary_to_remote",
+    )
+    db_session.add_all([remote, repository, storage])
+    db_session.commit()
+    return repository, storage
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_sync_repository_writes_an_operation_and_its_details(db_session):
+    from app.database.models import Operation, OperationRcloneDetails
+
+    repository, storage = _rclone_repository_and_storage(db_session)
+    service = RcloneRepositoryService(
+        cache_root="/cache", service=_VerboseRecordingRcloneService()
+    )
+
+    await service.sync_repository(db_session, repository, triggered_by="manual")
+
+    op = db_session.query(Operation).filter(Operation.kind == "rclone_sync").one()
+    details = db_session.get(OperationRcloneDetails, op.id)
+    assert op.category == "mirror"
+    assert op.trigger == "manual"
+    assert op.status == "completed"
+    assert op.repository_id == repository.id
+    assert details.operation == "sync"
+    assert details.direction == "primary_to_remote"
+    assert details.log_text == "copied 2 files"
+    assert db_session.query(RcloneSyncJob).count() == 0
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_sync_repository_records_an_initial_sync_as_the_import_trigger(
+    db_session,
+):
+    from app.database.models import Operation
+
+    repository, storage = _rclone_repository_and_storage(db_session)
+    service = RcloneRepositoryService(
+        cache_root="/cache", service=_RecordingRcloneService()
+    )
+
+    await service.sync_repository(db_session, repository, triggered_by="initial")
+
+    op = db_session.query(Operation).filter(Operation.kind == "rclone_sync").one()
+    assert op.trigger == "import"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_sync_repository_reuses_the_operation_the_runner_dispatched(db_session):
+    """The executor passes its own operation id; the service must drive that
+    row rather than create a second one."""
+    from app.database.models import Operation
+    from app.services.operations.enqueue import enqueue
+
+    repository, storage = _rclone_repository_and_storage(db_session)
+    op = enqueue(
+        db_session,
+        "rclone_sync",
+        repository_id=repository.id,
+        trigger="schedule",
+    )
+    service = RcloneRepositoryService(
+        cache_root="/cache", service=_RecordingRcloneService()
+    )
+
+    await service.sync_repository(
+        db_session, repository, triggered_by="schedule", job_id=op.id
+    )
+
+    assert (
+        db_session.query(Operation).filter(Operation.kind == "rclone_sync").count() == 1
+    )
+    db_session.refresh(op)
+    assert op.status == "completed"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_sync_repository_records_a_failure_on_the_operation(db_session):
+    from app.database.models import Operation, OperationRcloneDetails
+
+    repository, storage = _rclone_repository_and_storage(db_session)
+
+    class _FailingRcloneService:
+        async def sync(self, source, destination, **kwargs):
+            raise RuntimeError("remote refused the connection")
+
+    service = RcloneRepositoryService(
+        cache_root="/cache", service=_FailingRcloneService()
+    )
+
+    await service.sync_repository(db_session, repository, triggered_by="manual")
+
+    op = db_session.query(Operation).filter(Operation.kind == "rclone_sync").one()
+    details = db_session.get(OperationRcloneDetails, op.id)
+    assert op.status == "failed"
+    assert "remote refused" in (details.error_text or "")

@@ -28,4 +28,7 @@ def load_default_executors() -> None:
         history,
         index,
         maintenance,
+        package,
+        rclone,
+        wipe,
     )

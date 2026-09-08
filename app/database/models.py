@@ -1515,6 +1515,56 @@ class Operation(Base):
     )
 
 
+class OperationWipeDetails(Base):
+    """Wipe-specific columns for an `operations` row. Spec section 6.2."""
+
+    __tablename__ = "operation_wipe_details"
+
+    operation_id = Column(
+        Integer,
+        ForeignKey("operations.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    phase = Column(String, nullable=True)
+    archive_count = Column(Integer, default=0)
+    archive_fingerprint = Column(String, nullable=True)
+    archive_manifest_json = Column(Text, nullable=True)
+    dry_run_output = Column(Text, nullable=True)
+    blocking_reason = Column(String, nullable=True)
+    protected_archives_json = Column(Text, nullable=True)
+    run_compact = Column(Boolean, default=True, nullable=False)
+    requested_by_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    confirmed_by_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    confirmed_at = Column(DateTime, nullable=True)
+
+
+class OperationRcloneDetails(Base):
+    """Rclone-specific columns for an `operations` row. Spec section 6.2.
+
+    The legacy `log_path` is not here: an operation's log lives in
+    `operations.log_file_path` (spec 6.1).
+    """
+
+    __tablename__ = "operation_rclone_details"
+
+    operation_id = Column(
+        Integer,
+        ForeignKey("operations.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    direction = Column(String, nullable=True)
+    operation = Column(String, default="sync", nullable=False)
+    scheduled_for = Column(DateTime, nullable=True)
+    bytes_transferred = Column(BigInteger, nullable=True)
+    files_transferred = Column(Integer, nullable=True)
+    log_text = Column(Text, nullable=True)
+    error_text = Column(Text, nullable=True)
+
+
 class Archive(Base):
     """Persisted archive list per repository. Spec section 6.4."""
 

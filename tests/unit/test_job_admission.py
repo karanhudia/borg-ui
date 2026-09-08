@@ -189,3 +189,34 @@ def test_a_queued_check_operation_reports_the_legacy_pending_word(db_session):
     work = list_active_repository_work(db_session, repo)
 
     assert [(w.operation, w.status) for w in work] == [("check", "pending")]
+
+
+def test_a_running_wipe_operation_is_active_repository_work(db_session):
+    """Phase 6: wipe moved to `operations`, so admission must see it there."""
+    from app.database.models import Operation
+    from app.services.job_admission import list_active_repository_work
+
+    repo = Repository(
+        name="Repo",
+        path="/repos/running-wipe",
+        encryption="none",
+        repository_type="local",
+    )
+    db_session.add(repo)
+    db_session.flush()
+    db_session.add(
+        Operation(
+            repository_id=repo.id,
+            kind="wipe",
+            category="maintenance",
+            status="running",
+            trigger="manual",
+            priority=0,
+            run_id="run-wipe",
+        )
+    )
+    db_session.commit()
+
+    work = list_active_repository_work(db_session, repo)
+
+    assert [(w.operation, w.status) for w in work] == [("repository_wipe", "running")]
