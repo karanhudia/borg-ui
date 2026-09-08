@@ -3100,6 +3100,7 @@
       "delete": "Delete",
       "viewLogs": "View Logs",
       "viewArchive": "View Archive",
+      "viewArchivePruned": "Archive pruned",
       "downloadLogs": "Download Logs",
       "errorDetails": "Error Details",
       "cancel": "Cancel",

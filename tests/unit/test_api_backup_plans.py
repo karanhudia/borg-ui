@@ -5238,3 +5238,28 @@ class TestUniquePlanName:
         self._plan(test_db, "NIGHTLY (2)")
 
         assert _unique_backup_plan_name(test_db, "Nightly") == "Nightly (2)"
+
+
+@pytest.mark.unit
+def test_serialize_backup_job_reports_a_pruned_archive():
+    from datetime import datetime
+
+    from app.api.backup_plans import _serialize_backup_job
+    from app.database.models import BackupJob
+
+    job = BackupJob(
+        id=7,
+        repository="/srv/repo",
+        status="completed",
+        archive_name="host-old",
+        archive_pruned_at=datetime(2026, 9, 7, 12, 30),
+    )
+    payload = _serialize_backup_job(job, None)
+    assert payload["archive_name"] == "host-old"
+    assert payload["archive_pruned_at"] == "2026-09-07T12:30:00+00:00"
+    assert (
+        _serialize_backup_job(BackupJob(id=8, status="completed"), None)[
+            "archive_pruned_at"
+        ]
+        is None
+    )

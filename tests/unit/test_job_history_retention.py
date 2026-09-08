@@ -30,7 +30,8 @@ from app.database.models import (
 )
 from app.services.job_history_retention import (
     archive_names_from_prune_output,
-    purge_jobs_for_pruned_archives,
+    mark_jobs_of_pruned_archives,
+    purge_job_rows,
     run_retention,
     sweep_pruned_archive_records,
 )
@@ -357,7 +358,9 @@ def _repo(db, borg_version=1):
 
 
 @pytest.mark.unit
-def test_pruned_archives_take_their_job_records_along(db, tmp_path):
+def test_pruned_archives_mark_their_job_records_and_keep_them(db, tmp_path):
+    """The job row is the record that the backup ran: a prune marks it and
+    leaves it, its agent job, its log rows and its log file alone."""
     _settings(db)
     machine = _machine(db)
     repo = _repo(db)
@@ -384,18 +387,59 @@ def test_pruned_archives_take_their_job_records_along(db, tmp_path):
     agent_run = _agent_job(db, machine, "completed", age_days=3, log_lines=2)
     agent_run.backup_job_id = pruned.id
     db.commit()
+    repo_id = repo.id
     pruned_id, kept_id, agent_id = pruned.id, kept.id, agent_run.id
 
-    removed = purge_jobs_for_pruned_archives(db, repo.id, {"host-old"})
+    marked = mark_jobs_of_pruned_archives(db, repo_id, {"host-old"})
 
     db.expunge_all()
-    assert removed == 1
-    assert db.get(BackupJob, pruned_id) is None
-    assert db.get(BackupJob, kept_id) is not None
-    # The linked agent job dies with its backup job, its log rows cascade.
-    assert db.get(AgentJob, agent_id) is None
-    assert db.query(AgentJobLog).count() == 0
-    assert not log_file.exists()
+    assert marked == 1
+    pruned_row = db.get(BackupJob, pruned_id)
+    assert pruned_row is not None and pruned_row.archive_pruned_at is not None
+    assert pruned_row.status == "completed"
+    assert db.get(BackupJob, kept_id).archive_pruned_at is None
+    assert db.get(AgentJob, agent_id) is not None
+    assert db.query(AgentJobLog).count() == 2
+    assert log_file.exists()
+    # A second prune report for the same archive changes nothing.
+    first_mark = pruned_row.archive_pruned_at
+    assert mark_jobs_of_pruned_archives(db, repo_id, {"host-old"}) == 0
+    db.expunge_all()
+    assert db.get(BackupJob, pruned_id).archive_pruned_at == first_mark
+
+
+@pytest.mark.unit
+def test_marked_rows_fall_with_cleanup_retention_like_any_other(db):
+    _settings(db, cleanup_retention_days=30)
+    repo = _repo(db)
+    old = utc_now() - timedelta(days=40)
+    recent = utc_now() - timedelta(days=3)
+    db.add_all(
+        [
+            BackupJob(
+                repository_id=repo.id,
+                status="completed",
+                archive_name="host-a",
+                completed_at=old,
+                created_at=old,
+            ),
+            BackupJob(
+                repository_id=repo.id,
+                status="completed",
+                archive_name="host-b",
+                completed_at=recent,
+                created_at=recent,
+            ),
+        ]
+    )
+    db.commit()
+    repo_id = repo.id
+    assert mark_jobs_of_pruned_archives(db, repo_id, {"host-a", "host-b"}) == 2
+
+    # The mark is not "activity": age comes from the job's own timestamps.
+    assert purge_job_rows(db, utc_now() - timedelta(days=30)) == 1
+    db.expunge_all()
+    assert [j.archive_name for j in db.query(BackupJob).all()] == ["host-b"]
 
 
 @pytest.mark.unit
@@ -415,15 +459,15 @@ def test_borg2_repositories_are_skipped(db):
 
     # An archive series shares one name across archives: a name match would
     # hit jobs whose archives still exist, so borg2 is skipped for now.
-    assert purge_jobs_for_pruned_archives(db, repo.id, {"series-name"}) == 0
-    assert db.query(BackupJob).count() == 1
+    assert mark_jobs_of_pruned_archives(db, repo.id, {"series-name"}) == 0
+    db.expunge_all()
+    assert db.query(BackupJob).one().archive_pruned_at is None
 
 
-@pytest.mark.unit
-def test_sweep_cascades_from_late_arriving_prune_logs(db, tmp_path):
-    # The completion hook races log ingestion and can see an empty log; the
-    # sweep re-parses the full agent log later and cascades idempotently.
-    _settings(db)
+def _late_prune_log_scenario(db):
+    """An agent prune whose 'Pruning archive:' line arrived after the
+    completion hook ran (the hook saw a truncated log). Returns the ids of
+    the pruned backup's job and of the prune job, and when the prune finished."""
     machine = _machine(db)
     repo = _repo(db)
     when = utc_now() - timedelta(hours=6)
@@ -431,15 +475,17 @@ def test_sweep_cascades_from_late_arriving_prune_logs(db, tmp_path):
         repository_id=repo.id,
         status="completed",
         archive_name="host-old",
-        completed_at=when,
-        created_at=when,
+        completed_at=when - timedelta(hours=1),
+        created_at=when - timedelta(hours=1),
     )
     db.add(pruned_backup)
     db.flush()
+    finished = when + timedelta(minutes=5)
     prune_row = PruneJob(
         repository_id=repo.id,
         status="completed",
-        completed_at=when,
+        started_at=when,
+        completed_at=finished,
         created_at=when,
         logs="Starting repository.prune",  # truncated by the race
         has_logs=True,
@@ -454,7 +500,8 @@ def test_sweep_cascades_from_late_arriving_prune_logs(db, tmp_path):
             "job_kind": "repository.prune",
             "operation": {"maintenance_job": {"kind": "prune", "id": prune_row.id}},
         },
-        completed_at=when,
+        claimed_at=when,
+        completed_at=finished,
         created_at=when,
         updated_at=when,
     )
@@ -477,13 +524,21 @@ def test_sweep_cascades_from_late_arriving_prune_logs(db, tmp_path):
             )
         )
     db.commit()
-    pruned_id, prune_row_id = pruned_backup.id, prune_row.id
+    return pruned_backup.id, prune_row.id, finished
 
-    removed = sweep_pruned_archive_records(db)
+
+@pytest.mark.unit
+def test_sweep_marks_from_late_arriving_prune_logs(db):
+    _settings(db)
+    pruned_id, prune_row_id, prune_finished = _late_prune_log_scenario(db)
+
+    # The daily pass is what runs the sweep; it reports the count.
+    assert run_retention(db)["pruned_archive_records_marked"] == 1
 
     db.expunge_all()
-    assert removed == 1
-    assert db.get(BackupJob, pruned_id) is None
+    row = db.get(BackupJob, pruned_id)
+    # the recorded time is when the prune finished, not when the pass ran
+    assert row is not None and row.archive_pruned_at == prune_finished
     # The truncated stored log got repaired from the full agent log.
     assert "Pruning archive" in db.get(PruneJob, prune_row_id).logs
     # Idempotent: a second sweep finds nothing left to do.
@@ -508,6 +563,158 @@ def test_retention_covers_operations_and_the_legacy_maintenance_tables():
     assert {CheckJob, PruneJob, CompactJob, RestoreCheckJob, DeleteArchiveJob} <= models
 
 
+def test_sweep_runs_before_the_save_policy_drops_the_logs_it_reads(db):
+    """Under the default policy the pass deletes the log rows of every
+    completed agent job regardless of age; the sweep must read the prune
+    log first or it never marks anything."""
+    _settings(db, log_save_policy="failed_and_warnings")
+    pruned_id, _, _ = _late_prune_log_scenario(db)
+
+    results = run_retention(db)
+
+    assert results["pruned_archive_records_marked"] == 1
+    assert results["policy_log_rows_deleted"] == 2  # the logs did go afterwards
+    db.expunge_all()
+    assert db.get(BackupJob, pruned_id).archive_pruned_at is not None
+
+
+@pytest.mark.unit
+def test_jobs_that_carry_only_the_repository_path_are_marked_too(db):
+    """Rows written before repository_id existed (or after the FK was
+    nulled) match by path, as every other job-to-repository lookup does."""
+    _settings(db)
+    repo = _repo(db)
+    when = utc_now() - timedelta(days=3)
+    db.add(
+        BackupJob(
+            repository=repo.path + "/",
+            status="completed",
+            archive_name="host-old",
+            completed_at=when,
+            created_at=when,
+        )
+    )
+    db.commit()
+    assert mark_jobs_of_pruned_archives(db, repo.id, {"host-old"}) == 1
+    db.expunge_all()
+    assert db.query(BackupJob).one().archive_pruned_at is not None
+
+
+@pytest.mark.unit
+def test_a_backup_that_ran_after_the_prune_keeps_its_reused_name(db):
+    """Borg 1 lets a name be reused once its archive is gone: a job created
+    once the prune was under way made a different archive and must not be
+    marked, even when a late sweep re-reads that prune's log."""
+    _settings(db)
+    repo = _repo(db)
+    prune_started = utc_now() - timedelta(hours=6)
+    prune_finished = prune_started + timedelta(minutes=5)
+    before_prune = prune_started - timedelta(hours=1)
+    # queued while the prune ran, created its archive once the lock was free
+    during_prune = prune_started + timedelta(minutes=2)
+    after_prune = prune_started + timedelta(hours=1)
+    db.add_all(
+        [
+            BackupJob(
+                repository_id=repo.id,
+                status="completed",
+                archive_name="weekly",
+                completed_at=before_prune,
+                created_at=before_prune,
+            ),
+            BackupJob(
+                repository_id=repo.id,
+                status="completed",
+                archive_name="weekly",
+                completed_at=prune_finished + timedelta(minutes=1),
+                created_at=during_prune,
+            ),
+            BackupJob(
+                repository_id=repo.id,
+                status="completed",
+                archive_name="weekly",
+                completed_at=after_prune,
+                created_at=after_prune,
+            ),
+        ]
+    )
+    db.commit()
+    marked = mark_jobs_of_pruned_archives(
+        db,
+        repo.id,
+        {"weekly"},
+        created_before=prune_started,
+        pruned_at=prune_finished,
+    )
+    assert marked == 1
+    db.expunge_all()
+    rows = db.query(BackupJob).order_by(BackupJob.created_at).all()
+    # the recorded time is when the prune finished, not when it started
+    assert rows[0].archive_pruned_at == prune_finished
+    assert rows[1].archive_pruned_at is None
+    assert rows[2].archive_pruned_at is None
+
+
+@pytest.mark.unit
+def test_agent_prune_completion_marks_the_pruned_archives_jobs(db):
+    """The agents API completion hook is a production call site."""
+    from app.api.agents import _finish_linked_repository_operation_job
+
+    _settings(db)
+    machine = _machine(db)
+    repo = _repo(db)
+    when = utc_now() - timedelta(hours=1)
+    backup = BackupJob(
+        repository_id=repo.id,
+        status="completed",
+        archive_name="host-old",
+        completed_at=when,
+        created_at=when,
+    )
+    prune_row = PruneJob(
+        repository_id=repo.id, status="running", started_at=utc_now(), created_at=when
+    )
+    db.add_all([backup, prune_row])
+    db.flush()
+    agent_job = AgentJob(
+        agent_machine_id=machine.id,
+        job_type="repository",
+        status="completed",
+        payload={
+            "job_kind": "repository.prune",
+            "operation": {"maintenance_job": {"kind": "prune", "id": prune_row.id}},
+        },
+        claimed_at=utc_now(),
+        started_at=utc_now(),
+        created_at=when,
+        updated_at=when,
+    )
+    db.add(agent_job)
+    db.flush()
+    db.add(
+        AgentJobLog(
+            agent_job_id=agent_job.id,
+            sequence=0,
+            stream="stderr",
+            message="Pruning archive: host-old"
+            "                     Mon, 2026-07-20 03:00:00 [aa00] (1/1)",
+            created_at=when,
+        )
+    )
+    db.commit()
+    backup_id = backup.id
+
+    _finish_linked_repository_operation_job(
+        agent_job, db, status_value="completed", completed_at=utc_now()
+    )
+    db.commit()
+
+    db.expunge_all()
+    row = db.get(BackupJob, backup_id)
+    assert row is not None and row.archive_pruned_at is not None
+
+
+@pytest.mark.unit
 def test_operations_rows_fall_with_cleanup_retention(db):
     from app.database.models import Operation
     from app.services.operations.enqueue import enqueue

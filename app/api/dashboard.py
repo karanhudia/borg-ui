@@ -1098,6 +1098,7 @@ async def get_dashboard_overview(
                     "timestamp": serialize_datetime(job.started_at),
                     "message": f"Backup {job.status}",
                     "error": job.error_message if job.status == "failed" else None,
+                    "archive_pruned_at": serialize_datetime(job.archive_pruned_at),
                 }
             )
 
@@ -1132,6 +1133,7 @@ async def get_dashboard_overview(
                     "timestamp": serialize_datetime(job.started_at),
                     "message": f"Check {job.status}",
                     "error": job.error_message if job.status == "failed" else None,
+                    "archive_pruned_at": None,
                 }
             )
 
@@ -1166,6 +1168,7 @@ async def get_dashboard_overview(
                     "timestamp": serialize_datetime(job.started_at),
                     "message": f"Compact {job.status}",
                     "error": job.error_message if job.status == "failed" else None,
+                    "archive_pruned_at": None,
                 }
             )
 
@@ -1200,6 +1203,7 @@ async def get_dashboard_overview(
                     "timestamp": serialize_datetime(job.started_at),
                     "message": f"Prune {job.status}",
                     "error": job.error_message if job.status == "failed" else None,
+                    "archive_pruned_at": None,
                 }
             )
 
@@ -1229,6 +1233,7 @@ async def get_dashboard_overview(
                     "timestamp": serialize_datetime(job.started_at),
                     "message": f"Restore check {job.status}",
                     "error": job.error_message if job.status == "failed" else None,
+                    "archive_pruned_at": None,
                 }
             )
 

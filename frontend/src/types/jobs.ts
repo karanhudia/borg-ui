@@ -23,6 +23,7 @@ export interface Job {
   error_message?: string | null
   skip_reason?: 'minimum_interval_not_elapsed' | 'source_unavailable' | null
   archive_name?: string | null
+  archive_pruned_at?: string | null
   package_name?: string | null
   has_logs?: boolean
   triggered_by?: string

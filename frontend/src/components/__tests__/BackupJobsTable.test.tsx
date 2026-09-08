@@ -713,6 +713,36 @@ describe('BackupJobsTable', () => {
     })
   })
 
+  describe('View Archive action', () => {
+    const completedJob = {
+      id: 41,
+      type: 'backup',
+      repository: '/backup/repo1',
+      status: 'completed',
+      archive_name: 'host-2026-09-01',
+      started_at: '2026-09-01T02:00:00Z',
+      completed_at: '2026-09-01T02:10:00Z',
+    }
+
+    it('is offered while the archive exists', () => {
+      renderWithProviders(<BackupJobsTable jobs={[completedJob]} repositories={mockRepositories} />)
+      expect(screen.getByRole('button', { name: /View Archive/i })).toBeInTheDocument()
+    })
+
+    it('stays visible but disabled once the archive was pruned, and says so', () => {
+      renderWithProviders(
+        <BackupJobsTable
+          jobs={[{ ...completedJob, archive_pruned_at: '2026-09-02T03:00:00Z' }]}
+          repositories={mockRepositories}
+        />
+      )
+      expect(screen.getAllByText('/backup/repo1').length).toBeGreaterThan(0)
+      const button = screen.getByRole('button', { name: /Archive pruned/i })
+      expect(button).toBeDisabled()
+      expect(screen.queryByRole('button', { name: /^View Archive$/i })).not.toBeInTheDocument()
+    })
+  })
+
   describe('Action Configuration', () => {
     it('shows actions with internal handlers when callbacks are not provided', () => {
       renderWithProviders(<BackupJobsTable jobs={mockJobs} actions={{ viewLogs: true }} />)

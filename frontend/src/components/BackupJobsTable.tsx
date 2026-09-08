@@ -733,7 +733,12 @@ export const BackupJobsTable = <T extends Job = Job>({
         })
       },
       color: 'success',
-      tooltip: t('backupJobsTable.actions.viewArchive'),
+      // the row outlives its archive: the button stays, greyed out, and says why
+      disabled: (job) => !!job.archive_pruned_at,
+      tooltip: (job) =>
+        job.archive_pruned_at
+          ? t('backupJobsTable.actions.viewArchivePruned')
+          : t('backupJobsTable.actions.viewArchive'),
       show: (job) =>
         !!job.archive_name &&
         (job.type === 'backup' || !job.type) &&

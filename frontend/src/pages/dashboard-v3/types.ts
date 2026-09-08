@@ -73,6 +73,8 @@ export interface DashboardOverview {
     timestamp: string
     message: string
     error: string | null
+    // backup entries: set once the archive this run created was pruned
+    archive_pruned_at?: string | null
   }>
   system_metrics: {
     cpu_usage: number

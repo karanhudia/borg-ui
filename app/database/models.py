@@ -723,6 +723,10 @@ class BackupJob(Base):
     archive_name = Column(
         String, nullable=True
     )  # Name of the archive created (e.g., "manual-backup-2024-04-13T10:30:00")
+    # Set when the archive this run created was pruned or deleted. The row
+    # stays: it is the record that the backup ran, and it falls with
+    # cleanup_retention_days like every other job row.
+    archive_pruned_at = Column(DateTime, nullable=True)
 
     # Maintenance status tracking
     maintenance_status = Column(

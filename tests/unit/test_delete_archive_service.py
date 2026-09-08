@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, mock_open, patch
 
 import pytest
 
-from app.database.models import DeleteArchiveJob, Repository
+from app.database.models import BackupJob, DeleteArchiveJob, Repository
 from app.services.delete_archive_service import (
     DeleteArchiveService,
     get_process_start_time,
@@ -104,10 +104,14 @@ async def test_execute_delete_completes_and_persists_logs(
     job = DeleteArchiveJob(
         repository_id=repo.id, archive_name="daily-1", status="pending"
     )
-    db_session_commit.add(job)
+    # the backup that created the archive: its row must survive the delete
+    backup = BackupJob(
+        repository_id=repo.id, status="completed", archive_name="daily-1"
+    )
+    db_session_commit.add_all([job, backup])
     db_session_commit.commit()
     db_session_commit.refresh(job)
-    job_id = job.id
+    job_id, backup_id = job.id, backup.id
 
     process = FakeProcess(returncode=0, stderr_lines=[b"deleting archive\n", b"done\n"])
 
@@ -136,6 +140,8 @@ async def test_execute_delete_completes_and_persists_logs(
     assert refreshed.progress == 100
     assert refreshed.has_logs is True
     assert refreshed.log_file_path is not None
+    backup_row = db_session_commit.get(BackupJob, backup_id)
+    assert backup_row is not None and backup_row.archive_pruned_at is not None
 
 
 @pytest.mark.unit
