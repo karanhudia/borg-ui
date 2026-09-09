@@ -3,7 +3,6 @@
 services:
   borg-ui:
     image: ainullcode/borg-ui:latest
-    container_name: borg-ui
     restart: unless-stopped
     ports:
       - "${PORT:-8081}:${PORT:-8081}"
@@ -18,7 +17,7 @@ services:
       - PGID=${PGID:-1000}
       - TZ=${TZ:-Etc/UTC}
       - LOCAL_MOUNT_POINTS=/local
-      - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD:-}
+      - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD:?Set INITIAL_ADMIN_PASSWORD to the password for the admin user}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_DB=0
@@ -42,7 +41,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: borg-ui-redis
     restart: unless-stopped
     command: redis-server --maxmemory ${REDIS_MAXMEMORY:-512mb} --maxmemory-policy allkeys-lru --save "" --appendonly no
     healthcheck:
