@@ -78,7 +78,6 @@ class RestoreRequest(BaseModel):
     archive: str
     paths: List[str]
     destination: str
-    dry_run: bool = False
     repository_id: int  # Repository ID for fetching repository details
     destination_type: str = "local"  # 'local' or 'ssh'
     destination_connection_id: Optional[int] = (

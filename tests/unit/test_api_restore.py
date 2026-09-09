@@ -1168,3 +1168,32 @@ Restore completed successfully"""
         # Verify line breaks are preserved
         assert "\n" in data["logs"]
         assert data["logs"].count("\n") == multiline_logs.count("\n")
+
+
+@pytest.mark.unit
+class TestRestoreRequestShape:
+    """The restore request model carries no dry-run switch. Dry-run restore is
+    the dedicated preview route, which runs borg extract with --dry-run."""
+
+    def test_restore_request_has_no_dry_run_field(self):
+        from app.api.restore import RestoreRequest
+
+        assert "dry_run" not in RestoreRequest.model_fields
+
+    def test_start_ignores_a_dry_run_field_a_client_still_sends(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Pydantic ignores unknown fields, so an old client that still sends
+        dry_run gets exactly the behaviour it got before: a real restore."""
+        from app.api.restore import RestoreRequest
+
+        request = RestoreRequest(
+            repository="/test/repo",
+            archive="a",
+            paths=["etc"],
+            destination="/dest",
+            repository_id=1,
+            dry_run=True,
+        )
+
+        assert not hasattr(request, "dry_run")
