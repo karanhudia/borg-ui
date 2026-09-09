@@ -403,10 +403,17 @@ def _permanent_delete_target(repository: Repository) -> FilesystemPath:
             detail={"key": "backend.errors.repo.permanentDeleteUnsafePath"},
         )
 
-    if (
-        not (resolved_target / "config").is_file()
-        or not (resolved_target / "data").is_dir()
-    ):
+    borg1_layout = (resolved_target / "config").is_file() and (
+        resolved_target / "data"
+    ).is_dir()
+    borg2_config = resolved_target / "config"
+    borg2_layout = (
+        borg2_config.is_dir()
+        and (borg2_config / "version").is_file()
+        and (borg2_config / "id").is_file()
+        and (borg2_config / "readme").is_file()
+    )
+    if not (borg1_layout or borg2_layout):
         raise HTTPException(
             status_code=400,
             detail={"key": "backend.errors.repo.permanentDeleteNotBorgRepository"},

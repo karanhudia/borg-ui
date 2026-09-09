@@ -100,6 +100,14 @@ def _create_borg_like_repository_dir(path: Path) -> None:
     (path / "data").mkdir()
 
 
+def _create_borg2_like_repository_dir(path: Path) -> None:
+    config_path = path / "config"
+    config_path.mkdir(parents=True)
+    (config_path / "version").write_text("3\n")
+    (config_path / "id").write_text("repository-id\n")
+    (config_path / "readme").write_text("Borg repository\n")
+
+
 @pytest.mark.unit
 @pytest.mark.parametrize(
     ("ssh_path_prefix", "raw_path", "expected_path"),
@@ -2648,6 +2656,38 @@ class TestRepositoriesDelete:
         response = test_client.post(
             f"/api/repositories/{repo_id}/permanent-delete",
             json={"confirmation_phrase": "Delete Files", "understood": True},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        assert not repo_path.exists()
+        assert (
+            test_db.query(Repository).filter(Repository.id == repo_id).first() is None
+        )
+
+    def test_permanent_delete_repository_removes_borg2_layout_and_record(
+        self, test_client: TestClient, admin_headers, test_db, tmp_path
+    ):
+        """Permanent deletion recognizes Borg 2's directory-based config layout."""
+        repo_path = tmp_path / "delete-borg2-repo-files"
+        _create_borg2_like_repository_dir(repo_path)
+        repo = Repository(
+            name="Delete Borg 2 Files",
+            path=str(repo_path),
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+            execution_target="local",
+            borg_version=2,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+        repo_id = repo.id
+
+        response = test_client.post(
+            f"/api/repositories/{repo_id}/permanent-delete",
+            json={"confirmation_phrase": "Delete Borg 2 Files", "understood": True},
             headers=admin_headers,
         )
 
