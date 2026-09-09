@@ -238,15 +238,27 @@ def resolve_restore_job(db: Session, job_id: int) -> Any:
 def list_restore_jobs(db: Session, limit: int) -> list:
     """The newest `limit` restore jobs across both tables, newest first, for
     the list route. Each table contributes its own newest `limit` rows, then
-    the merge cuts to `limit`, so the answer is exact either way."""
+    the merge cuts to `limit`, so the answer is exact either way.
+
+    Both cuts rank by `created_at`, the same key the merge below uses. Ranking
+    a source by id instead would drop a row the merge would have kept wherever
+    a table's id order and its `created_at` order disagree, which two restores
+    started concurrently can produce: `created_at` is stamped in Python at
+    flush time and the id is assigned at insert. The id is the tie-break, so
+    rows sharing a timestamp still come back in a stable order."""
     operations = (
         db.query(Operation)
         .filter(Operation.kind == "restore")
-        .order_by(Operation.id.desc())
+        .order_by(Operation.created_at.desc(), Operation.id.desc())
         .limit(limit)
         .all()
     )
-    legacy = db.query(RestoreJob).order_by(RestoreJob.id.desc()).limit(limit).all()
+    legacy = (
+        db.query(RestoreJob)
+        .order_by(RestoreJob.created_at.desc(), RestoreJob.id.desc())
+        .limit(limit)
+        .all()
+    )
     jobs = [RestoreJobFacade(db, op) for op in operations] + list(legacy)
     jobs.sort(key=lambda job: job.created_at, reverse=True)
     return jobs[:limit]

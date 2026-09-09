@@ -203,3 +203,33 @@ def test_list_restore_jobs_unions_both_tables_newest_first(db, repository):
     assert [j.archive for j in jobs] == ["b", "nas-2026-09-08"]
     assert isinstance(jobs[1], RestoreJobFacade)
     assert len(list_restore_jobs(db, limit=10)) == 3
+
+
+def test_list_restore_jobs_limits_each_source_by_created_at_not_id(db, repository):
+    """The merge ranks by created_at, so each source has to cut by created_at
+    too. Cutting by id drops the newer row whenever a source's id order and
+    its created_at order disagree."""
+    from datetime import datetime, timedelta
+
+    base = datetime(2026, 9, 8, 12, 0, 0)
+    older_but_higher_id = RestoreJob(
+        repository=repository.path,
+        archive="stale",
+        status="completed",
+        created_at=base,
+    )
+    newer_but_lower_id = RestoreJob(
+        repository=repository.path,
+        archive="fresh",
+        status="completed",
+        created_at=base + timedelta(minutes=10),
+    )
+    db.add(newer_but_lower_id)
+    db.commit()
+    db.add(older_but_higher_id)
+    db.commit()
+    assert newer_but_lower_id.id < older_but_higher_id.id
+
+    jobs = list_restore_jobs(db, limit=1)
+
+    assert [j.archive for j in jobs] == ["fresh"]
